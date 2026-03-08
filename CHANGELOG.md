@@ -1,3 +1,10 @@
+## [2.7.0] - 2026-03-08
+
+Feature: Multibyte path support
+Feature: Add multibyte statistics to statistics pane
+Feature: Add path bittage to contact info pane
+Feature: Put tools in a collapsible
+
 ## [2.6.1] - 2026-03-08
 
 Misc: Fix busted docker builds; we don't have a 2.6.0 build sorry
