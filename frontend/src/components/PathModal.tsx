@@ -52,7 +52,7 @@ export function PathModal({
   const resolvedPaths = hasPaths
     ? paths.map((p) => ({
         ...p,
-        resolved: resolvePath(p.path, senderInfo, contacts, config),
+        resolved: resolvePath(p.path, senderInfo, contacts, config, p.path_len),
       }))
     : [];
 
@@ -90,7 +90,7 @@ export function PathModal({
             {/* Raw path summary */}
             <div className="text-sm">
               {paths.map((p, index) => {
-                const hops = parsePathHops(p.path);
+                const hops = parsePathHops(p.path, p.path_len);
                 const rawPath = hops.length > 0 ? hops.join('->') : 'direct';
                 return (
                   <div key={index}>

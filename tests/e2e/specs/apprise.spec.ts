@@ -33,7 +33,7 @@ test.describe('Apprise integration settings', () => {
 
   test('create apprise via UI, configure URLs, save as enabled', async ({ page }) => {
     await openFanoutSettings(page);
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Open add menu and pick Apprise
     await page.getByRole('button', { name: 'Add Integration' }).click();
@@ -89,7 +89,7 @@ test.describe('Apprise integration settings', () => {
     createdAppriseId = apprise.id;
 
     await openFanoutSettings(page);
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Click Edit on our apprise config
     const row = fanoutHeader(page, 'API Apprise');
@@ -129,7 +129,7 @@ test.describe('Apprise integration settings', () => {
     createdAppriseId = apprise.id;
 
     await openFanoutSettings(page);
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     const row = fanoutHeader(page, 'Scope Apprise');
     await expect(row).toBeVisible();
@@ -163,7 +163,7 @@ test.describe('Apprise integration settings', () => {
     createdAppriseId = apprise.id;
 
     await openFanoutSettings(page);
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Should show "Disabled" status text
     const row = fanoutHeader(page, 'Disabled Apprise');
@@ -192,7 +192,7 @@ test.describe('Apprise integration settings', () => {
     createdAppriseId = apprise.id;
 
     await openFanoutSettings(page);
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     const row = fanoutHeader(page, 'Delete Me Apprise');
     await expect(row).toBeVisible();

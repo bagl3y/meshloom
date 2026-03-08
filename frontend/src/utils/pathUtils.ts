@@ -1,8 +1,10 @@
 import type { Contact, RadioConfig, MessagePath } from '../types';
 import { CONTACT_TYPE_REPEATER } from '../types';
 
+const MAX_PATH_BYTES = 64;
+
 export interface PathHop {
-  prefix: string; // 2-char hex prefix (e.g., "1A")
+  prefix: string; // Hex hop identifier (e.g., "1A" for 1-byte, "1A2B" for 2-byte)
   matches: Contact[]; // Matched repeaters (empty=unknown, multiple=ambiguous)
   distanceFromPrev: number | null; // km from previous hop
 }
@@ -27,26 +29,136 @@ export interface SenderInfo {
   publicKeyOrPrefix: string;
   lat: number | null;
   lon: number | null;
+  pathHashMode?: number | null;
+}
+
+function normalizePathHashMode(mode: number | null | undefined): number | null {
+  if (mode == null || !Number.isInteger(mode) || mode < 0 || mode > 2) {
+    return null;
+  }
+  return mode;
+}
+
+function inferPathHashMode(
+  path: string | null | undefined,
+  hopCount?: number | null
+): number | null {
+  if (!path || path.length === 0 || hopCount == null || hopCount <= 0) {
+    return null;
+  }
+
+  const charsPerHop = path.length / hopCount;
+  if (
+    charsPerHop < 2 ||
+    charsPerHop > 6 ||
+    charsPerHop % 2 !== 0 ||
+    charsPerHop * hopCount !== path.length
+  ) {
+    return null;
+  }
+
+  return charsPerHop / 2 - 1;
+}
+
+function formatEndpointPrefix(key: string | null | undefined, pathHashMode: number | null): string {
+  if (!key) {
+    return '??';
+  }
+
+  const normalized = key.toUpperCase();
+  const hashMode = normalizePathHashMode(pathHashMode) ?? 0;
+  const chars = (hashMode + 1) * 2;
+  return normalized.slice(0, Math.min(chars, normalized.length));
 }
 
 /**
- * Split hex string into 2-char hops
+ * Split hex path string into per-hop chunks.
+ *
+ * When hopCount is provided (from path_len metadata), the bytes-per-hop is
+ * derived from the hex length divided by the hop count. This correctly handles
+ * multi-byte hop identifiers (1, 2, or 3 bytes per hop).
+ *
+ * Falls back to 2-char (1-byte) chunks when hopCount is missing or doesn't
+ * divide evenly — matching legacy behavior.
  */
-export function parsePathHops(path: string | null | undefined): string[] {
+export function parsePathHops(path: string | null | undefined, hopCount?: number | null): string[] {
   if (!path || path.length === 0) {
     return [];
   }
 
   const normalized = path.toUpperCase();
-  const hops: string[] = [];
 
-  for (let i = 0; i < normalized.length; i += 2) {
-    if (i + 1 < normalized.length) {
-      hops.push(normalized.slice(i, i + 2));
+  // Derive chars-per-hop from metadata when available
+  let charsPerHop = 2; // default: 1-byte hops
+  if (hopCount && hopCount > 0) {
+    const derived = normalized.length / hopCount;
+    // Accept only valid even widths (2, 4, 6) that divide evenly
+    if (derived >= 2 && derived % 2 === 0 && derived * hopCount === normalized.length) {
+      charsPerHop = derived;
     }
   }
 
+  const hops: string[] = [];
+  for (let i = 0; i + charsPerHop <= normalized.length; i += charsPerHop) {
+    hops.push(normalized.slice(i, i + charsPerHop));
+  }
+
   return hops;
+}
+
+/**
+ * Extract the payload portion from a raw packet hex string using firmware-equivalent
+ * path-byte validation. Returns null for malformed or payload-less packets.
+ */
+export function extractPacketPayloadHex(packetHex: string): string | null {
+  if (packetHex.length < 4) {
+    return null;
+  }
+
+  try {
+    const normalized = packetHex.toUpperCase();
+    const header = parseInt(normalized.slice(0, 2), 16);
+    const routeType = header & 0x03;
+    let offset = 2;
+
+    if (routeType === 0x00 || routeType === 0x03) {
+      if (normalized.length < offset + 8) {
+        return null;
+      }
+      offset += 8;
+    }
+
+    if (normalized.length < offset + 2) {
+      return null;
+    }
+    const pathByte = parseInt(normalized.slice(offset, offset + 2), 16);
+    offset += 2;
+
+    const hashMode = (pathByte >> 6) & 0x03;
+    if (hashMode === 0x03) {
+      return null;
+    }
+    const hopCount = pathByte & 0x3f;
+    const hashSize = hashMode + 1;
+    const pathByteLen = hopCount * hashSize;
+    if (pathByteLen > MAX_PATH_BYTES) {
+      return null;
+    }
+
+    const pathHexChars = pathByteLen * 2;
+    if (normalized.length < offset + pathHexChars) {
+      return null;
+    }
+    offset += pathHexChars;
+
+    if (offset >= normalized.length) {
+      return null;
+    }
+
+    return normalized.slice(offset);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -146,12 +258,16 @@ function sortContactsByDistance(
 }
 
 /**
- * Get simple hop count from path string
+ * Get hop count from path, using explicit metadata when available.
  */
-function getHopCount(path: string | null | undefined): number {
+function getHopCount(path: string | null | undefined, hopCount?: number | null): number {
+  if (hopCount != null && hopCount >= 0) {
+    return hopCount;
+  }
   if (!path || path.length === 0) {
     return 0;
   }
+  // Legacy fallback: assume 1-byte (2 hex chars) per hop
   return Math.floor(path.length / 2);
 }
 
@@ -170,7 +286,7 @@ export function formatHopCounts(paths: MessagePath[] | null | undefined): {
   }
 
   // Get hop counts for all paths and sort ascending
-  const hopCounts = paths.map((p) => getHopCount(p.path)).sort((a, b) => a - b);
+  const hopCounts = paths.map((p) => getHopCount(p.path, p.path_len)).sort((a, b) => a - b);
 
   const allDirect = hopCounts.every((h) => h === 0);
   const hasMultiple = paths.length > 1;
@@ -189,12 +305,17 @@ export function resolvePath(
   path: string | null | undefined,
   sender: SenderInfo,
   contacts: Contact[],
-  config: RadioConfig | null
+  config: RadioConfig | null,
+  hopCount?: number | null
 ): ResolvedPath {
-  const hopPrefixes = parsePathHops(path);
+  const hopPrefixes = parsePathHops(path, hopCount);
+  const inferredPathHashMode = inferPathHashMode(path, hopCount);
 
   // Build sender info
-  const senderPrefix = sender.publicKeyOrPrefix.toUpperCase().slice(0, 2);
+  const senderPrefix = formatEndpointPrefix(
+    sender.publicKeyOrPrefix,
+    normalizePathHashMode(sender.pathHashMode) ?? inferredPathHashMode
+  );
   const resolvedSender = {
     name: sender.name,
     prefix: senderPrefix,
@@ -203,7 +324,10 @@ export function resolvePath(
   };
 
   // Build receiver info from radio config
-  const receiverPrefix = config?.public_key?.toUpperCase().slice(0, 2) || '??';
+  const receiverPrefix = formatEndpointPrefix(
+    config?.public_key,
+    normalizePathHashMode(config?.path_hash_mode) ?? inferredPathHashMode
+  );
   const resolvedReceiver = {
     name: config?.name || 'Unknown',
     prefix: receiverPrefix,

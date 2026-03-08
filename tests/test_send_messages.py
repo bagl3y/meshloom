@@ -56,24 +56,24 @@ def _make_mc(name="TestNode"):
     return mc
 
 
-async def _insert_contact(public_key, name="Alice"):
+async def _insert_contact(public_key, name="Alice", **overrides):
     """Insert a contact into the test database."""
-    await ContactRepository.upsert(
-        {
-            "public_key": public_key,
-            "name": name,
-            "type": 0,
-            "flags": 0,
-            "last_path": None,
-            "last_path_len": -1,
-            "last_advert": None,
-            "lat": None,
-            "lon": None,
-            "last_seen": None,
-            "on_radio": False,
-            "last_contacted": None,
-        }
-    )
+    data = {
+        "public_key": public_key,
+        "name": name,
+        "type": 0,
+        "flags": 0,
+        "last_path": None,
+        "last_path_len": -1,
+        "last_advert": None,
+        "lat": None,
+        "lon": None,
+        "last_seen": None,
+        "on_radio": False,
+        "last_contacted": None,
+    }
+    data.update(overrides)
+    await ContactRepository.upsert(data)
 
 
 class TestOutgoingDMBroadcast:
@@ -124,6 +124,33 @@ class TestOutgoingDMBroadcast:
 
         assert exc_info.value.status_code == 409
         assert "ambiguous" in exc_info.value.detail.lower()
+
+    @pytest.mark.asyncio
+    async def test_send_dm_preserves_stored_out_path_hash_mode(self, test_db):
+        """Direct-message send pushes the persisted path hash mode back to the radio."""
+        mc = _make_mc()
+        pub_key = "cd" * 32
+        await _insert_contact(
+            pub_key,
+            "Alice",
+            last_path="aa00bb00",
+            last_path_len=2,
+            out_path_hash_mode=1,
+        )
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event"),
+        ):
+            request = SendDirectMessageRequest(destination=pub_key, text="Hello")
+            await send_direct_message(request)
+
+        contact_payload = mc.commands.add_contact.call_args.args[0]
+        assert contact_payload["public_key"] == pub_key
+        assert contact_payload["out_path"] == "aa00bb00"
+        assert contact_payload["out_path_len"] == 2
+        assert contact_payload["out_path_hash_mode"] == 1
 
 
 class TestOutgoingChannelBroadcast:

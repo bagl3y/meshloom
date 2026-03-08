@@ -13,6 +13,8 @@ export interface RadioConfig {
   tx_power: number;
   max_tx_power: number;
   radio: RadioSettings;
+  path_hash_mode: number;
+  path_hash_mode_supported: boolean;
 }
 
 export interface RadioConfigUpdate {
@@ -21,6 +23,7 @@ export interface RadioConfigUpdate {
   lon?: number;
   tx_power?: number;
   radio?: RadioSettings;
+  path_hash_mode?: number;
 }
 
 export interface FanoutStatusEntry {
@@ -63,6 +66,7 @@ export interface Contact {
   flags: number;
   last_path: string | null;
   last_path_len: number;
+  out_path_hash_mode: number;
   last_advert: number | null;
   lat: number | null;
   lon: number | null;
@@ -150,10 +154,12 @@ export interface ChannelDetail {
 
 /** A single path that a message took to reach us */
 export interface MessagePath {
-  /** Hex-encoded routing path (2 chars per hop) */
+  /** Hex-encoded routing path */
   path: string;
   /** Unix timestamp when this path was received */
   received_at: number;
+  /** Hop count (number of intermediate nodes). Null for legacy data (infer as len(path)/2). */
+  path_len?: number | null;
 }
 
 export interface Message {
@@ -393,4 +399,13 @@ export interface StatisticsResponse {
   total_outgoing: number;
   contacts_heard: ContactActivityCounts;
   repeaters_heard: ContactActivityCounts;
+  path_hash_width_24h: {
+    total_packets: number;
+    single_byte: number;
+    double_byte: number;
+    triple_byte: number;
+    single_byte_pct: number;
+    double_byte_pct: number;
+    triple_byte_pct: number;
+  };
 }

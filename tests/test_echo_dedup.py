@@ -586,6 +586,7 @@ class TestDirectMessageDirectionDetection:
         packet_info = MagicMock()
         packet_info.payload = bytes([0xFA, 0xA1, 0x00, 0x00]) + b"\x00" * 20
         packet_info.path = b""
+        packet_info.path_length = 0
 
         # Create the contact so decryption can find a candidate
         await ContactRepository.upsert(
@@ -637,6 +638,7 @@ class TestDirectMessageDirectionDetection:
         packet_info = MagicMock()
         packet_info.payload = bytes([0xFA, 0xA1, 0x00, 0x00]) + b"\x00" * 20
         packet_info.path = b""
+        packet_info.path_length = 0
 
         await ContactRepository.upsert(
             {
@@ -682,7 +684,7 @@ class TestDirectMessageDirectionDetection:
         message_broadcasts = [b for b in broadcasts if b["type"] == "message"]
         assert len(message_broadcasts) == 1
         assert message_broadcasts[0]["data"]["paths"] == [
-            {"path": "", "received_at": SENDER_TIMESTAMP}
+            {"path": "", "received_at": SENDER_TIMESTAMP, "path_len": 0}
         ]
 
     @pytest.mark.asyncio
@@ -694,6 +696,7 @@ class TestDirectMessageDirectionDetection:
         # dest_hash=a1 (contact), src_hash=fa (us)
         packet_info.payload = bytes([0xA1, 0xFA, 0x00, 0x00]) + b"\x00" * 20
         packet_info.path = b""
+        packet_info.path_length = 0
 
         await ContactRepository.upsert(
             {
@@ -743,6 +746,7 @@ class TestDirectMessageDirectionDetection:
         # Both dest_hash and src_hash are 0xFA (our first byte)
         packet_info.payload = bytes([0xFA, 0xFA, 0x00, 0x00]) + b"\x00" * 20
         packet_info.path = b""
+        packet_info.path_length = 0
 
         # Contact whose first byte also starts with "fa"
         await ContactRepository.upsert(
@@ -793,6 +797,7 @@ class TestDirectMessageDirectionDetection:
         # Neither byte matches our first byte (0xFA)
         packet_info.payload = bytes([0x11, 0x22, 0x00, 0x00]) + b"\x00" * 20
         packet_info.path = b""
+        packet_info.path_length = 0
 
         pkt_id, _ = await RawPacketRepository.create(b"dir_test_none", SENDER_TIMESTAMP)
 

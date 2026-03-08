@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Statistics page', () => {
   test('statistics section shows data', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Open settings
     await page.getByText('Settings').click();

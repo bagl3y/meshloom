@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 from meshcore import EventType
+from pydantic import ValidationError
 
 from app.radio import RadioManager, radio_manager
 from app.routers.radio import (
@@ -130,6 +131,56 @@ class TestUpdateRadioConfig:
         mc.commands.send_appstart.assert_awaited_once()
         mock_sync_time.assert_awaited_once()
         assert result == expected
+
+    def test_model_rejects_negative_path_hash_mode(self):
+        with pytest.raises(ValidationError):
+            RadioConfigUpdate(path_hash_mode=-1)
+
+    def test_model_rejects_too_large_path_hash_mode(self):
+        with pytest.raises(ValidationError):
+            RadioConfigUpdate(path_hash_mode=3)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("path_hash_mode", [-1, 3, 999])
+    async def test_endpoint_rejects_invalid_path_hash_mode(self, client, path_hash_mode):
+        response = await client.patch("/api/radio/config", json={"path_hash_mode": path_hash_mode})
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_rejects_path_hash_mode_when_firmware_does_not_support_it(self):
+        mc = _mock_meshcore_with_info()
+
+        with (
+            patch("app.routers.radio.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch.object(radio_manager, "path_hash_mode_supported", False),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await update_radio_config(RadioConfigUpdate(path_hash_mode=1))
+
+        assert exc.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_propagates_radio_error_when_setting_path_hash_mode(self):
+        mc = _mock_meshcore_with_info()
+        mc.commands.set_path_hash_mode = AsyncMock(
+            return_value=_radio_result(EventType.ERROR, {"error": "nope"})
+        )
+
+        with (
+            patch("app.routers.radio.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch.object(radio_manager, "path_hash_mode_supported", True),
+            patch.object(radio_manager, "path_hash_mode", 0),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await update_radio_config(RadioConfigUpdate(path_hash_mode=1))
+
+        assert exc.value.status_code == 500
+        assert "Failed to set path hash mode" in str(exc.value.detail)
+        assert radio_manager.path_hash_mode == 0
+        mc.commands.send_appstart.assert_not_awaited()
 
 
 class TestPrivateKeyImport:

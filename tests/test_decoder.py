@@ -19,6 +19,7 @@ from app.decoder import (
     decrypt_group_text,
     derive_public_key,
     derive_shared_secret,
+    extract_payload,
     parse_packet,
     try_decrypt_dm,
     try_decrypt_packet_with_channel_key,
@@ -108,6 +109,125 @@ class TestPacketParsing:
         header = bytes([0x15, 0x0A])
 
         assert parse_packet(header) is None
+
+    def test_parse_packet_with_no_payload_returns_none(self):
+        """Firmware rejects packets that end exactly after the path."""
+        packet = bytes([0x15, 0x02, 0xAA, 0xBB])
+        assert parse_packet(packet) is None
+
+
+class TestMultiBytePathParsing:
+    """Test packet parsing with multi-byte hop path encoding."""
+
+    def test_parse_two_byte_hops(self):
+        """Parse packet with 2-byte hops: path_byte=0x42 → 2 hops × 2 bytes."""
+        # Header: FLOOD GROUP_TEXT = 0x15
+        # Path byte: 0x42 = mode 1 (2-byte), 2 hops → 4 bytes of path
+        path_data = bytes([0xAA, 0xBB, 0xCC, 0xDD])
+        packet = bytes([0x15, 0x42]) + path_data + b"payload"
+
+        result = parse_packet(packet)
+
+        assert result is not None
+        assert result.path_length == 2  # hop count
+        assert result.path_hash_size == 2
+        assert result.path == path_data
+        assert result.payload == b"payload"
+
+    def test_parse_three_byte_hops(self):
+        """Parse packet with 3-byte hops: path_byte=0x81 → 1 hop × 3 bytes."""
+        path_data = bytes([0x11, 0x22, 0x33])
+        packet = bytes([0x15, 0x81]) + path_data + b"pay"
+
+        result = parse_packet(packet)
+
+        assert result is not None
+        assert result.path_length == 1
+        assert result.path_hash_size == 3
+        assert result.path == path_data
+        assert result.payload == b"pay"
+
+    def test_parse_reserved_mode3_returns_none(self):
+        """Reserved mode 3 (upper bits = 0b11) should be rejected."""
+        # path_byte = 0xC1 → mode 3, 1 hop
+        packet = bytes([0x15, 0xC1]) + bytes(10)
+
+        result = parse_packet(packet)
+        assert result is None
+
+    def test_parse_oversize_path_len_returns_none(self):
+        """Oversized-but-well-formed path bytes are invalid per firmware."""
+        packet = bytes([0x15, 0xBF]) + bytes(189) + b"payload"
+        assert parse_packet(packet) is None
+
+    def test_parse_two_byte_hops_truncated_returns_none(self):
+        """Truncated path data for multi-byte hops returns None."""
+        # path_byte = 0x42 → 2 hops × 2 bytes = 4 bytes needed, only 2 provided
+        packet = bytes([0x15, 0x42, 0xAA, 0xBB])
+
+        result = parse_packet(packet)
+        assert result is None
+
+    def test_backward_compat_one_byte_hops(self):
+        """Old-style 1-byte hop packets still parse correctly with hash_size=1."""
+        packet = bytes([0x0A, 0x03, 0x01, 0x02, 0x03]) + b"msg"
+
+        result = parse_packet(packet)
+
+        assert result is not None
+        assert result.path_length == 3
+        assert result.path_hash_size == 1
+        assert result.path == bytes([0x01, 0x02, 0x03])
+
+    def test_extract_payload_two_byte_hops(self):
+        """extract_payload correctly skips multi-byte path data."""
+        path_data = bytes([0xAA, 0xBB, 0xCC, 0xDD])
+        packet = bytes([0x15, 0x42]) + path_data + b"the_payload"
+
+        result = extract_payload(packet)
+        assert result == b"the_payload"
+
+    def test_extract_payload_reserved_mode_returns_none(self):
+        """extract_payload rejects reserved mode 3."""
+        packet = bytes([0x15, 0xC1]) + bytes(10)
+
+        result = extract_payload(packet)
+        assert result is None
+
+    def test_extract_payload_no_payload_returns_none(self):
+        """extract_payload matches firmware and rejects payload-less packets."""
+        packet = bytes([0x15, 0x02, 0xAA, 0xBB])
+        assert extract_payload(packet) is None
+
+    def test_parse_direct_two_byte_hops_with_transport(self):
+        """TRANSPORT_DIRECT with 2-byte hops parses correctly."""
+        # Header: TRANSPORT_DIRECT = 0x03, GROUP_TEXT = 5 → (5<<2)|3 = 0x17
+        transport_code = bytes([0x11, 0x22, 0x33, 0x44])
+        # path_byte = 0x41 → mode 1, 1 hop → 2 bytes of path
+        path_data = bytes([0xAB, 0xCD])
+        packet = bytes([0x17]) + transport_code + bytes([0x41]) + path_data + b"data"
+
+        result = parse_packet(packet)
+
+        assert result is not None
+        assert result.route_type == RouteType.TRANSPORT_DIRECT
+        assert result.path_length == 1
+        assert result.path_hash_size == 2
+        assert result.path == path_data
+        assert result.payload == b"data"
+
+    def test_zero_hops_mode1(self):
+        """Zero hops with mode 1 (2-byte) → direct path, no path bytes."""
+        # path_byte = 0x40 → mode 1, 0 hops
+        packet = bytes([0x15, 0x40]) + b"payload"
+
+        result = parse_packet(packet)
+
+        assert result is not None
+        assert result.path_length == 0
+        assert result.path_hash_size == 2
+        assert result.path == b""
+        assert result.payload == b"payload"
 
 
 class TestGroupTextDecryption:

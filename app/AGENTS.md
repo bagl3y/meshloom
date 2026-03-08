@@ -72,6 +72,13 @@ app/
 
 ## Important Behaviors
 
+### Multibyte routing
+
+- Packet `path_len` values are hop counts, not byte counts.
+- Hop width comes from the packet or radio `path_hash_mode`: `0` = 1-byte, `1` = 2-byte, `2` = 3-byte.
+- Contacts persist `out_path_hash_mode` in the database so contact sync and outbound DM routing reuse the exact stored mode instead of inferring from path bytes.
+- `contact_advert_paths` identity is `(public_key, path_hex, path_len)` because the same hex bytes can represent different routes at different hop widths.
+
 ### Read/unread state
 
 - Server is source of truth (`contacts.last_read_at`, `channels.last_read_at`).
@@ -107,6 +114,7 @@ app/
 - Configs stored in `fanout_configs` table, managed via `GET/POST/PATCH/DELETE /api/fanout`.
 - `broadcast_event()` in `websocket.py` dispatches to the fanout manager for `message` and `raw_packet` events.
 - Each integration is a `FanoutModule` with scope-based filtering.
+- Community MQTT publishes raw packets only, but its derived `path` field for direct packets is emitted as comma-separated hop identifiers, not flat path bytes.
 - See `app/fanout/AGENTS_fanout.md` for full architecture details.
 
 ## API Surface (all under `/api`)
@@ -115,8 +123,8 @@ app/
 - `GET /health`
 
 ### Radio
-- `GET /radio/config`
-- `PATCH /radio/config`
+- `GET /radio/config` — includes `path_hash_mode` and `path_hash_mode_supported`
+- `PATCH /radio/config` — may update `path_hash_mode` (`0..2`) when firmware supports it
 - `PUT /radio/private-key`
 - `POST /radio/advertise`
 - `POST /radio/reboot`
@@ -209,11 +217,11 @@ Client sends `"ping"` text; server replies `{"type":"pong"}`.
 ## Data Model Notes
 
 Main tables:
-- `contacts` (includes `first_seen` for contact age tracking)
+- `contacts` (includes `first_seen` for contact age tracking and `out_path_hash_mode` for route round-tripping)
 - `channels`
 - `messages` (includes `sender_name`, `sender_key` for per-contact channel message attribution)
 - `raw_packets`
-- `contact_advert_paths` (recent unique advertisement paths per contact)
+- `contact_advert_paths` (recent unique advertisement paths per contact, keyed by contact + path bytes + hop count)
 - `contact_name_history` (tracks name changes over time)
 - `app_settings`
 

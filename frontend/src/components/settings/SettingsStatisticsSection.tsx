@@ -3,6 +3,10 @@ import { Separator } from '../ui/separator';
 import { api } from '../../api';
 import type { StatisticsResponse } from '../../types';
 
+function formatPercent(value: number): string {
+  return `${value.toFixed(1)}%`;
+}
+
 export function SettingsStatisticsSection({ className }: { className?: string }) {
   const [stats, setStats] = useState<StatisticsResponse | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -34,7 +38,9 @@ export function SettingsStatisticsSection({ className }: { className?: string })
   return (
     <div className={className}>
       {statsLoading && !stats ? (
-        <div className="py-8 text-center text-muted-foreground">Loading statistics...</div>
+        <div className="py-8 text-center text-muted-foreground">
+          Loading statistics... this can take a while if you have a lot of stored packets.
+        </div>
       ) : stats ? (
         <div className="space-y-6">
           {/* Network */}
@@ -94,6 +100,39 @@ export function SettingsStatisticsSection({ className }: { className?: string })
               <div className="flex justify-between items-center">
                 <span className="text-sm text-warning">Undecrypted</span>
                 <span className="font-medium text-warning">{stats.undecrypted_packets}</span>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div>
+            <h4 className="text-sm font-medium mb-2">Path Hash Width (24h)</h4>
+            <div className="mb-2 text-xs text-muted-foreground">
+              Parsed stored raw packets from the last 24 hours:{' '}
+              {stats.path_hash_width_24h.total_packets}
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-sm">
+                <span>1-byte hops</span>
+                <span className="text-muted-foreground">
+                  {stats.path_hash_width_24h.single_byte} (
+                  {formatPercent(stats.path_hash_width_24h.single_byte_pct)})
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span>2-byte hops</span>
+                <span className="text-muted-foreground">
+                  {stats.path_hash_width_24h.double_byte} (
+                  {formatPercent(stats.path_hash_width_24h.double_byte_pct)})
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span>3-byte hops</span>
+                <span className="text-muted-foreground">
+                  {stats.path_hash_width_24h.triple_byte} (
+                  {formatPercent(stats.path_hash_width_24h.triple_byte_pct)})
+                </span>
               </div>
             </div>
           </div>

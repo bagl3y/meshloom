@@ -18,6 +18,7 @@ from app.fanout.community_mqtt import (
     _build_radio_info,
     _build_status_topic,
     _calculate_packet_hash,
+    _decode_packet_fields,
     _ed25519_sign_expanded,
     _format_raw_packet,
     _generate_jwt_token,
@@ -225,7 +226,7 @@ class TestPacketFormatConversion:
 
     def test_packet_type_extraction(self):
         # Header 0x14 = type 5, route 0 (TRANSPORT_FLOOD): header + 4 transport + path_len.
-        data = {"timestamp": 0, "data": "140102030400", "snr": None, "rssi": None}
+        data = {"timestamp": 0, "data": "140102030400AA", "snr": None, "rssi": None}
         result = _format_raw_packet(data, "Node", "AA" * 32)
         assert result["packet_type"] == "5"
         assert result["route"] == "F"
@@ -234,10 +235,10 @@ class TestPacketFormatConversion:
         # Test all 4 route types (matches meshcore-packet-capture)
         # TRANSPORT_FLOOD=0 -> "F", FLOOD=1 -> "F", DIRECT=2 -> "D", TRANSPORT_DIRECT=3 -> "T"
         samples = [
-            ("000102030400", "F"),  # TRANSPORT_FLOOD: header + transport + path_len
-            ("0100", "F"),  # FLOOD: header + path_len
-            ("0200", "D"),  # DIRECT: header + path_len
-            ("030102030400", "T"),  # TRANSPORT_DIRECT: header + transport + path_len
+            ("000102030400AA", "F"),  # TRANSPORT_FLOOD: header + transport + path_len + payload
+            ("0100AA", "F"),  # FLOOD: header + path_len + payload
+            ("0200AA", "D"),  # DIRECT: header + path_len + payload
+            ("030102030400AA", "T"),  # TRANSPORT_DIRECT: header + transport + path_len + payload
         ]
         for raw_hex, expected in samples:
             data = {"timestamp": 0, "data": raw_hex, "snr": None, "rssi": None}
@@ -273,11 +274,26 @@ class TestPacketFormatConversion:
         assert result["path"] == "aa,bb"
 
     def test_direct_route_includes_empty_path_field(self):
-        data = {"timestamp": 0, "data": "0200", "snr": 1.0, "rssi": -70}
+        data = {"timestamp": 0, "data": "0200AA", "snr": 1.0, "rssi": -70}
         result = _format_raw_packet(data, "Node", "AA" * 32)
         assert result["route"] == "D"
         assert "path" in result
         assert result["path"] == ""
+
+    def test_direct_multibyte_route_formats_path_as_hop_identifiers(self):
+        # route=2 (DIRECT), payload_type=2, path_byte=0x82 -> 2 hops x 3 bytes
+        data = {"timestamp": 0, "data": "0A82AABBCCDDEEFF11", "snr": 1.0, "rssi": -70}
+        result = _format_raw_packet(data, "Node", "AA" * 32)
+        assert result["route"] == "D"
+        assert result["payload_len"] == "1"
+        assert result["path"] == "aabbcc,ddeeff"
+
+    def test_flood_multibyte_route_omits_path_field(self):
+        # route=1 (FLOOD), payload_type=2, path_byte=0x82 -> 2 hops x 3 bytes
+        data = {"timestamp": 0, "data": "0982AABBCCDDEEFF11", "snr": 1.0, "rssi": -70}
+        result = _format_raw_packet(data, "Node", "AA" * 32)
+        assert result["route"] == "F"
+        assert "path" not in result
 
     def test_unknown_version_uses_defaults(self):
         # version=1 in high bits, type=5, route=1
@@ -375,6 +391,183 @@ class TestCalculatePacketHash:
         # Header says TRANSPORT_FLOOD, but missing path_len at required offset.
         raw = bytes([0x10, 0x01, 0x02])
         assert _calculate_packet_hash(raw) == "0" * 16
+
+    def test_multibyte_2byte_hops_skips_correct_path_length(self):
+        """Mode 1 (2-byte hops), 2 hops → 4 bytes of path data to skip."""
+        import hashlib
+
+        # FLOOD route, payload_type=2 (TXT_MSG): (2<<2)|1 = 0x09
+        # path_byte = 0x42 → mode=1, hop_count=2 → path_wire_len = 2*2 = 4
+        path_data = b"\xaa\xbb\xcc\xdd"
+        payload = b"\x48\x65\x6c\x6c\x6f"  # "Hello"
+        raw = bytes([0x09, 0x42]) + path_data + payload
+        result = _calculate_packet_hash(raw)
+
+        expected = hashlib.sha256(bytes([2]) + payload).hexdigest()[:16].upper()
+        assert result == expected
+
+    def test_multibyte_3byte_hops_skips_correct_path_length(self):
+        """Mode 2 (3-byte hops), 1 hop → 3 bytes of path data to skip."""
+        import hashlib
+
+        # FLOOD route, payload_type=4 (ADVERT): (4<<2)|1 = 0x11
+        # path_byte = 0x81 → mode=2, hop_count=1 → path_wire_len = 1*3 = 3
+        path_data = b"\xaa\xbb\xcc"
+        payload = b"\xde\xad"
+        raw = bytes([0x11, 0x81]) + path_data + payload
+        result = _calculate_packet_hash(raw)
+
+        expected = hashlib.sha256(bytes([4]) + payload).hexdigest()[:16].upper()
+        assert result == expected
+
+    def test_trace_multibyte_uses_raw_wire_byte_in_hash(self):
+        """TRACE with multi-byte hops uses raw path_byte (not decoded hop count) in hash."""
+        import hashlib
+
+        # TRACE with FLOOD route: (9<<2)|1 = 0x25
+        # path_byte = 0x42 → mode=1, hop_count=2 → path_wire_len = 4
+        path_byte = 0x42
+        path_data = b"\xaa\xbb\xcc\xdd"
+        payload = b"\x01\x02"
+        raw = bytes([0x25, path_byte]) + path_data + payload
+        result = _calculate_packet_hash(raw)
+
+        # TRACE hash includes raw path_byte as uint16_t LE (0x42, 0x00)
+        expected = (
+            hashlib.sha256(bytes([9]) + path_byte.to_bytes(2, byteorder="little") + payload)
+            .hexdigest()[:16]
+            .upper()
+        )
+        assert result == expected
+
+    def test_multibyte_truncated_path_returns_zeroes(self):
+        """Packet claiming multi-byte path but truncated before path ends → zero hash."""
+        # FLOOD route, payload_type=2: (2<<2)|1 = 0x09
+        # path_byte = 0x42 → mode=1, hop_count=2 → needs 4 bytes of path, only 2 present
+        raw = bytes([0x09, 0x42, 0xAA, 0xBB])
+        assert _calculate_packet_hash(raw) == "0" * 16
+
+    def test_reserved_mode_returns_zeroes(self):
+        raw = bytes([0x09, 0xC1, 0xAA, 0xBB, 0xCC])
+        assert _calculate_packet_hash(raw) == "0" * 16
+
+    def test_oversize_path_len_returns_zeroes(self):
+        raw = bytes([0x09, 0xBF]) + bytes(189) + b"payload"
+        assert _calculate_packet_hash(raw) == "0" * 16
+
+    def test_no_payload_returns_zeroes(self):
+        raw = bytes([0x09, 0x02, 0xAA, 0xBB])
+        assert _calculate_packet_hash(raw) == "0" * 16
+
+    def test_multibyte_transport_flood_with_2byte_hops(self):
+        """TRANSPORT_FLOOD with 2-byte hops correctly skips transport codes + path."""
+        import hashlib
+
+        # TRANSPORT_FLOOD (0x00), payload_type=4: (4<<2)|0 = 0x10
+        transport_codes = b"\x01\x02\x03\x04"
+        # path_byte = 0x41 → mode=1, hop_count=1 → path_wire_len = 2
+        path_data = b"\xaa\xbb"
+        payload = b"\xca\xfe"
+        raw = bytes([0x10]) + transport_codes + bytes([0x41]) + path_data + payload
+        result = _calculate_packet_hash(raw)
+
+        expected = hashlib.sha256(bytes([4]) + payload).hexdigest()[:16].upper()
+        assert result == expected
+
+
+class TestDecodePacketFieldsMultibyte:
+    """Test _decode_packet_fields with multi-byte hop paths."""
+
+    def test_1byte_hops_legacy(self):
+        """Legacy packet with mode=0, 3 hops → 3 path bytes."""
+        # FLOOD route, payload_type=2 (TXT_MSG): (2<<2)|1 = 0x09
+        path_data = b"\xaa\xbb\xcc"
+        payload = b"\x48\x65\x6c\x6c\x6f"
+        raw = bytes([0x09, 0x03]) + path_data + payload
+
+        route, ptype, plen, path_values, payload_type = _decode_packet_fields(raw)
+        assert route == "F"
+        assert ptype == "2"
+        assert path_values == ["aa", "bb", "cc"]
+        assert payload_type == 2
+
+    def test_2byte_hops(self):
+        """Mode 1, 2 hops → 4 path bytes split into 2 two-byte identifiers."""
+        # FLOOD route, payload_type=2: (2<<2)|1 = 0x09
+        # path_byte = 0x42 → mode=1, hop_count=2
+        path_data = b"\xaa\xbb\xcc\xdd"
+        payload = b"\x48\x65\x6c\x6c\x6f"
+        raw = bytes([0x09, 0x42]) + path_data + payload
+
+        route, ptype, plen, path_values, payload_type = _decode_packet_fields(raw)
+        assert route == "F"
+        assert ptype == "2"
+        assert path_values == ["aabb", "ccdd"]
+        assert payload_type == 2
+        assert plen == str(len(payload))
+
+    def test_3byte_hops(self):
+        """Mode 2, 1 hop → 3 path bytes as a single three-byte identifier."""
+        # FLOOD route, payload_type=4 (ADVERT): (4<<2)|1 = 0x11
+        # path_byte = 0x81 → mode=2, hop_count=1
+        path_data = b"\xaa\xbb\xcc"
+        payload = b"\xde\xad"
+        raw = bytes([0x11, 0x81]) + path_data + payload
+
+        route, ptype, plen, path_values, payload_type = _decode_packet_fields(raw)
+        assert route == "F"
+        assert ptype == "4"
+        assert path_values == ["aabbcc"]
+        assert payload_type == 4
+
+    def test_direct_packet_no_path(self):
+        """Direct packet (0 hops) → empty path list."""
+        # FLOOD route, payload_type=2: (2<<2)|1 = 0x09
+        # path_byte = 0x00 → mode=0, hop_count=0
+        payload = b"\x48\x65\x6c\x6c\x6f"
+        raw = bytes([0x09, 0x00]) + payload
+
+        route, ptype, plen, path_values, payload_type = _decode_packet_fields(raw)
+        assert path_values == []
+        assert plen == str(len(payload))
+
+    def test_transport_flood_2byte_hops(self):
+        """TRANSPORT_FLOOD with 2-byte hops: skip 4 transport bytes, then decode path."""
+        # TRANSPORT_FLOOD (0x00), payload_type=2: (2<<2)|0 = 0x08
+        transport_codes = b"\x01\x02\x03\x04"
+        # path_byte = 0x42 → mode=1, hop_count=2
+        path_data = b"\xaa\xbb\xcc\xdd"
+        payload = b"\xca\xfe"
+        raw = bytes([0x08]) + transport_codes + bytes([0x42]) + path_data + payload
+
+        route, ptype, plen, path_values, payload_type = _decode_packet_fields(raw)
+        assert route == "F"
+        assert path_values == ["aabb", "ccdd"]
+
+    def test_truncated_multibyte_path_returns_defaults(self):
+        """Packet claiming 2-byte hops but truncated → defaults."""
+        # FLOOD route, payload_type=2: (2<<2)|1 = 0x09
+        # path_byte = 0x42 → mode=1, hop_count=2 → needs 4 bytes, only 1
+        raw = bytes([0x09, 0x42, 0xAA])
+
+        route, ptype, plen, path_values, payload_type = _decode_packet_fields(raw)
+        assert path_values == []
+        assert plen == "0"
+
+    def test_reserved_mode_returns_defaults(self):
+        raw = bytes([0x09, 0xC1, 0xAA, 0xBB, 0xCC])
+        route, ptype, plen, path_values, payload_type = _decode_packet_fields(raw)
+        assert (route, ptype, plen, path_values, payload_type) == ("U", "0", "0", [], None)
+
+    def test_oversize_path_len_returns_defaults(self):
+        raw = bytes([0x09, 0xBF]) + bytes(189) + b"payload"
+        route, ptype, plen, path_values, payload_type = _decode_packet_fields(raw)
+        assert (route, ptype, plen, path_values, payload_type) == ("U", "0", "0", [], None)
+
+    def test_no_payload_returns_defaults(self):
+        raw = bytes([0x09, 0x02, 0xAA, 0xBB])
+        route, ptype, plen, path_values, payload_type = _decode_packet_fields(raw)
+        assert (route, ptype, plen, path_values, payload_type) == ("U", "0", "0", [], None)
 
 
 class TestCommunityMqttPublisher:

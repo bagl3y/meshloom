@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Sidebar sort toggle', () => {
   test('toggle sort order between A-Z and recent', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // There are multiple sort toggles (Channels, Contacts, Repeaters sections).
     // Use .first() to target the Channels sort toggle.

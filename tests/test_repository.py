@@ -274,6 +274,56 @@ class TestContactAdvertPathRepository:
         assert paths[0].heard_count == 2
 
     @pytest.mark.asyncio
+    async def test_record_observation_preserves_full_multibyte_next_hop(self, test_db):
+        repeater_key = "ab" * 32
+        await ContactRepository.upsert({"public_key": repeater_key, "name": "Rmulti", "type": 2})
+
+        await ContactAdvertPathRepository.record_observation(
+            repeater_key, "aa11bb22", 1000, hop_count=2
+        )
+
+        paths = await ContactAdvertPathRepository.get_recent_for_contact(repeater_key, limit=10)
+        assert len(paths) == 1
+        assert paths[0].next_hop == "aa11"
+
+    @pytest.mark.asyncio
+    async def test_same_path_hex_with_different_path_len_is_stored_separately(self, test_db):
+        repeater_key = "ac" * 32
+        await ContactRepository.upsert({"public_key": repeater_key, "name": "Rsplit", "type": 2})
+
+        await ContactAdvertPathRepository.record_observation(
+            repeater_key, "aa00", 1000, hop_count=1
+        )
+        await ContactAdvertPathRepository.record_observation(
+            repeater_key, "aa00", 1010, hop_count=2
+        )
+
+        paths = await ContactAdvertPathRepository.get_recent_for_contact(repeater_key, limit=10)
+        assert len(paths) == 2
+        assert [(p.path, p.path_len, p.next_hop) for p in paths] == [
+            ("aa00", 2, "aa"),
+            ("aa00", 1, "aa00"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_prune_distinguishes_same_path_hex_with_different_path_len(self, test_db):
+        repeater_key = "ad" * 32
+        await ContactRepository.upsert({"public_key": repeater_key, "name": "Rprune", "type": 2})
+
+        await ContactAdvertPathRepository.record_observation(
+            repeater_key, "aa00", 1000, max_paths=2, hop_count=1
+        )
+        await ContactAdvertPathRepository.record_observation(
+            repeater_key, "aa00", 1001, max_paths=2, hop_count=2
+        )
+        await ContactAdvertPathRepository.record_observation(
+            repeater_key, "bb00", 1002, max_paths=2, hop_count=1
+        )
+
+        paths = await ContactAdvertPathRepository.get_recent_for_contact(repeater_key, limit=10)
+        assert [(p.path, p.path_len) for p in paths] == [("bb00", 1), ("aa00", 2)]
+
+    @pytest.mark.asyncio
     async def test_prunes_to_most_recent_n_unique_paths(self, test_db):
         repeater_key = "bb" * 32
         await ContactRepository.upsert({"public_key": repeater_key, "name": "R2", "type": 2})

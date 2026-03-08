@@ -75,6 +75,25 @@ CHANNEL_MESSAGE_BODY = (
     "MeshCore has great crypto; use private rooms or DMs for private comms instead!"
 )
 
+# Channel messages in #bot using multi-byte path encodings
+BOT_CHANNEL_NAME = "#bot"
+BOT_CHANNEL_KEY = bytes.fromhex("eb50a1bcb3e4e5d7bf69a57c9dada211")
+
+BOT_PACKET_3BYTE_3HOPS_HEX = "15833fa002860ccae0eed9ca78b9ab0775d477c1f6490a398bf4edc75240"
+BOT_PACKET_3BYTE_3HOPS = bytes.fromhex(BOT_PACKET_3BYTE_3HOPS_HEX)
+BOT_PACKET_3BYTE_3HOPS_PATH_HEX = "3fa002860ccae0eed9"
+BOT_PACKET_3BYTE_3HOPS_SENDER = "Roy B V4"
+BOT_PACKET_3BYTE_3HOPS_MESSAGE = "P"
+BOT_PACKET_3BYTE_3HOPS_FULL = f"{BOT_PACKET_3BYTE_3HOPS_SENDER}: {BOT_PACKET_3BYTE_3HOPS_MESSAGE}"
+
+BOT_PACKET_2BYTE_0HOPS_HEX = (
+    "1540cab3b15626481a5ba64247ab25766e410b026e0678a32da9f0c3946fae5b714cab170f"
+)
+BOT_PACKET_2BYTE_0HOPS = bytes.fromhex(BOT_PACKET_2BYTE_0HOPS_HEX)
+BOT_PACKET_2BYTE_0HOPS_SENDER = "Howl 👾"
+BOT_PACKET_2BYTE_0HOPS_MESSAGE = "prefix 0101"
+BOT_PACKET_2BYTE_0HOPS_FULL = f"{BOT_PACKET_2BYTE_0HOPS_SENDER}: {BOT_PACKET_2BYTE_0HOPS_MESSAGE}"
+
 
 # ============================================================================
 # Direct Message Decryption
@@ -212,6 +231,42 @@ class TestChannelDecryption:
         # Key should decrypt our packet
         result = try_decrypt_packet_with_channel_key(CHANNEL_PACKET, key)
         assert result is not None
+
+    def test_parse_multibyte_channel_packet_with_3byte_hops(self):
+        """Real #bot packet with path_len=0x83 parses as 3 hops × 3 bytes."""
+        info = parse_packet(BOT_PACKET_3BYTE_3HOPS)
+        assert info is not None
+        assert info.route_type == RouteType.FLOOD
+        assert info.payload_type == PayloadType.GROUP_TEXT
+        assert info.path_hash_size == 3
+        assert info.path_length == 3
+        assert info.path.hex() == BOT_PACKET_3BYTE_3HOPS_PATH_HEX
+
+    def test_decrypt_multibyte_channel_packet_with_3byte_hops(self):
+        """Real #bot packet with 3-byte hop identifiers decrypts correctly."""
+        result = try_decrypt_packet_with_channel_key(BOT_PACKET_3BYTE_3HOPS, BOT_CHANNEL_KEY)
+        assert result is not None
+        assert result.sender == BOT_PACKET_3BYTE_3HOPS_SENDER
+        assert result.message == BOT_PACKET_3BYTE_3HOPS_MESSAGE
+        assert f"{result.sender}: {result.message}" == BOT_PACKET_3BYTE_3HOPS_FULL
+
+    def test_parse_multibyte_channel_packet_with_2byte_zero_hops(self):
+        """Real #bot packet with path_len=0x40 keeps hash-size=2 despite zero hops."""
+        info = parse_packet(BOT_PACKET_2BYTE_0HOPS)
+        assert info is not None
+        assert info.route_type == RouteType.FLOOD
+        assert info.payload_type == PayloadType.GROUP_TEXT
+        assert info.path_hash_size == 2
+        assert info.path_length == 0
+        assert info.path == b""
+
+    def test_decrypt_multibyte_channel_packet_with_2byte_zero_hops(self):
+        """Real #bot packet with zero-hop 2-byte mode decrypts correctly."""
+        result = try_decrypt_packet_with_channel_key(BOT_PACKET_2BYTE_0HOPS, BOT_CHANNEL_KEY)
+        assert result is not None
+        assert result.sender == BOT_PACKET_2BYTE_0HOPS_SENDER
+        assert result.message == BOT_PACKET_2BYTE_0HOPS_MESSAGE
+        assert f"{result.sender}: {result.message}" == BOT_PACKET_2BYTE_0HOPS_FULL
 
 
 # ============================================================================
@@ -570,3 +625,49 @@ class TestHistoricalChannelDecryptionPipeline:
         msg_broadcasts = [b for b in broadcasts if b["type"] == "message"]
         assert len(msg_broadcasts) == 1
         assert msg_broadcasts[0]["data"]["text"] == CHANNEL_PLAINTEXT_FULL
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("packet", "expected_text", "expected_sender"),
+        [
+            (
+                BOT_PACKET_3BYTE_3HOPS,
+                BOT_PACKET_3BYTE_3HOPS_FULL,
+                BOT_PACKET_3BYTE_3HOPS_SENDER,
+            ),
+            (
+                BOT_PACKET_2BYTE_0HOPS,
+                BOT_PACKET_2BYTE_0HOPS_FULL,
+                BOT_PACKET_2BYTE_0HOPS_SENDER,
+            ),
+        ],
+    )
+    async def test_process_multibyte_bot_channel_packets_end_to_end(
+        self, test_db, captured_broadcasts, packet, expected_text, expected_sender
+    ):
+        """Real multibyte #bot packets decrypt and store correctly through the live pipeline."""
+        from app.packet_processor import process_raw_packet
+        from app.repository import ChannelRepository
+
+        channel_key_hex = BOT_CHANNEL_KEY.hex().upper()
+        await ChannelRepository.upsert(key=channel_key_hex, name=BOT_CHANNEL_NAME, is_hashtag=True)
+
+        broadcasts, mock_broadcast = captured_broadcasts
+
+        with patch("app.packet_processor.broadcast_event", mock_broadcast):
+            result = await process_raw_packet(raw_bytes=packet)
+
+        assert result is not None
+        assert result["decrypted"] is True
+        assert result["channel_name"] == BOT_CHANNEL_NAME
+        assert result["sender"] == expected_sender
+
+        messages = await MessageRepository.get_all(
+            msg_type="CHAN", conversation_key=channel_key_hex, limit=10
+        )
+        assert len(messages) == 1
+        assert messages[0].text == expected_text
+
+        msg_broadcasts = [b for b in broadcasts if b["type"] == "message"]
+        assert len(msg_broadcasts) == 1
+        assert msg_broadcasts[0]["data"]["text"] == expected_text

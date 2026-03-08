@@ -608,6 +608,37 @@ class TestOnPathUpdate:
         assert contact is not None
         assert contact.last_path == "0102"
         assert contact.last_path_len == 2
+        assert contact.out_path_hash_mode == 0
+
+    @pytest.mark.asyncio
+    async def test_updates_path_hash_mode_when_present(self, test_db):
+        """PATH_UPDATE persists explicit multibyte path hash mode."""
+        from app.event_handlers import on_path_update
+
+        await ContactRepository.upsert(
+            {
+                "public_key": "ab" * 32,
+                "name": "Alice",
+                "type": 1,
+                "flags": 0,
+            }
+        )
+
+        class MockEvent:
+            payload = {
+                "public_key": "ab" * 32,
+                "path": "aa00bb00",
+                "path_len": 2,
+                "path_hash_mode": 1,
+            }
+
+        await on_path_update(MockEvent())
+
+        contact = await ContactRepository.get_by_key("ab" * 32)
+        assert contact is not None
+        assert contact.last_path == "aa00bb00"
+        assert contact.last_path_len == 2
+        assert contact.out_path_hash_mode == 1
 
     @pytest.mark.asyncio
     async def test_does_nothing_when_contact_not_found(self, test_db):

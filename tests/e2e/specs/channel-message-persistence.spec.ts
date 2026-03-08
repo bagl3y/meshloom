@@ -33,7 +33,7 @@ test.describe('Channel message persistence across delete/re-add', () => {
 
     // Verify message appears in UI
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
     await page.getByText(channelName, { exact: true }).first().click();
     await expect(page.getByText(testMessage)).toBeVisible({ timeout: 15_000 });
 
@@ -42,7 +42,7 @@ test.describe('Channel message persistence across delete/re-add', () => {
 
     // Verify channel is gone from sidebar
     await page.reload();
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
     await expect(page.getByText(channelName, { exact: true })).not.toBeVisible({ timeout: 10_000 });
 
     // Re-create the same hashtag channel (derives same key)
@@ -51,7 +51,7 @@ test.describe('Channel message persistence across delete/re-add', () => {
 
     // Navigate to it
     await page.reload();
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
     await page.getByText(channelName, { exact: true }).first().click();
 
     // Verify original message is still visible as outgoing

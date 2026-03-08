@@ -90,6 +90,7 @@ export interface Contact {
   flags: number;
   last_path: string | null;
   last_path_len: number;
+  out_path_hash_mode: number;
   last_advert: number | null;
   lat: number | null;
   lon: number | null;

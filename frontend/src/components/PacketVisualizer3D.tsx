@@ -32,6 +32,8 @@ import {
   type Particle,
   type PendingPacket,
   type RepeaterTrafficData,
+  buildAmbiguousRepeaterLabel,
+  buildAmbiguousRepeaterNodeId,
   COLORS,
   PARTICLE_COLOR_MAP,
   PARTICLE_SPEED,
@@ -538,7 +540,8 @@ function useVisualizerData3D({
       }
 
       // type === 'prefix'
-      const matches = contactIndex.byPrefix.get(source.value.toLowerCase()) ?? [];
+      const lookupValue = source.value.toLowerCase();
+      const matches = contactIndex.byPrefix.get(lookupValue) ?? [];
       const contact = matches.length === 1 ? matches[0] : null;
       if (contact) {
         const nodeId = contact.public_key.slice(0, 12).toLowerCase();
@@ -584,13 +587,14 @@ function useVisualizerData3D({
             null as number | null
           );
 
-          let nodeId = `?${source.value.toLowerCase()}`;
-          let displayName = source.value.toUpperCase();
+          let nodeId = buildAmbiguousRepeaterNodeId(lookupValue);
+          let displayName = buildAmbiguousRepeaterLabel(lookupValue);
           let probableIdentity: string | null = null;
           let ambiguousNames = names.length > 0 ? names : undefined;
 
           if (useAdvertPathHints && isRepeater && trafficContext) {
-            const likely = pickLikelyRepeaterByAdvertPath(filtered, trafficContext.nextPrefix);
+            const normalizedNext = trafficContext.nextPrefix?.toLowerCase() ?? null;
+            const likely = pickLikelyRepeaterByAdvertPath(filtered, normalizedNext);
             if (likely) {
               const likelyName = likely.name || likely.public_key.slice(0, 12).toUpperCase();
               probableIdentity = likelyName;
@@ -602,25 +606,24 @@ function useVisualizerData3D({
           }
 
           if (splitAmbiguousByTraffic && isRepeater && trafficContext) {
-            const prefix = source.value.toLowerCase();
+            const normalizedNext = trafficContext.nextPrefix?.toLowerCase() ?? null;
 
             if (trafficContext.packetSource) {
               recordTrafficObservation(
                 trafficPatternsRef.current,
-                prefix,
+                lookupValue,
                 trafficContext.packetSource,
-                trafficContext.nextPrefix
+                normalizedNext
               );
             }
 
-            const trafficData = trafficPatternsRef.current.get(prefix);
+            const trafficData = trafficPatternsRef.current.get(lookupValue);
             if (trafficData) {
               const analysis = analyzeRepeaterTraffic(trafficData);
-              if (analysis.shouldSplit && trafficContext.nextPrefix) {
-                const nextShort = trafficContext.nextPrefix.slice(0, 2).toLowerCase();
-                nodeId = `?${prefix}:>${nextShort}`;
+              if (analysis.shouldSplit && normalizedNext) {
+                nodeId = buildAmbiguousRepeaterNodeId(lookupValue, normalizedNext);
                 if (!probableIdentity) {
-                  displayName = `${source.value.toUpperCase()}:>${nextShort}`;
+                  displayName = buildAmbiguousRepeaterLabel(lookupValue, normalizedNext);
                 }
               }
             }

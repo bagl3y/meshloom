@@ -9,7 +9,7 @@ test.describe('Unread badge/pip', () => {
     seedChannelUnread({ channelName: CHANNEL_NAME, unreadCount: 3 });
 
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Find the channel in the sidebar
     const channelRow = page.getByText(CHANNEL_NAME, { exact: true }).first();

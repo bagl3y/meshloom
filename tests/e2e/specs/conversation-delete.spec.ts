@@ -14,7 +14,7 @@ test.describe('Conversation deletion flow', () => {
     const channel = await createChannel(channelName);
 
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     await page.getByText(channelName, { exact: true }).first().click();
     await expect(page.getByPlaceholder(new RegExp(`message\\s+${channelName}`, 'i'))).toBeVisible();
@@ -40,7 +40,7 @@ test.describe('Conversation deletion flow', () => {
     const channel = await createChannel(channelName);
 
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     await page.getByText(channelName, { exact: true }).first().click();
     await expect(page.getByPlaceholder(new RegExp(`message\\s+${channelName}`, 'i'))).toBeVisible();

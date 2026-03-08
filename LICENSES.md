@@ -144,7 +144,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 </details>
 
-### meshcore (2.2.5) — MIT
+### meshcore (2.2.29) — MIT
 
 <details>
 <summary>Full license text</summary>
@@ -779,7 +779,7 @@ SOFTWARE.
 
 </details>
 
-### @uiw/react-codemirror (4.25.7) — MIT
+### @uiw/react-codemirror (4.25.8) — MIT
 
 *License file not found in package.*
 

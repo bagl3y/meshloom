@@ -59,7 +59,7 @@ test.describe('Incoming mesh messages', () => {
     await nudgeEchoBot();
 
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Record existing message counts per channel so we can detect new ones
     const channels = await getChannels();
@@ -110,7 +110,7 @@ test.describe('Incoming mesh messages', () => {
     await nudgeEchoBot();
 
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Record baselines
     const channels = await getChannels();

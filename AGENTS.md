@@ -112,9 +112,19 @@ Frontend packet-feed consumers should treat `observation_id` as the dedup/render
 To improve repeater disambiguation in the network visualizer, the backend stores recent unique advertisement paths per contact in a dedicated table (`contact_advert_paths`).
 
 - This is independent of raw-packet payload deduplication.
-- Paths are keyed per contact + path, with `heard_count`, `first_seen`, and `last_seen`.
+- Paths are keyed per contact + path + hop count, with `heard_count`, `first_seen`, and `last_seen`.
 - Only the N most recent unique paths are retained per contact (currently 10).
 - See `frontend/src/components/AGENTS_packet_visualizer.md` § "Advert-Path Identity Hints" for how the visualizer consumes this data.
+
+## Path Hash Modes
+
+MeshCore firmware can encode path hops as 1-byte, 2-byte, or 3-byte identifiers.
+
+- `path_hash_mode` values are `0` = 1-byte, `1` = 2-byte, `2` = 3-byte.
+- `GET /api/radio/config` exposes both the current `path_hash_mode` and `path_hash_mode_supported`.
+- `PATCH /api/radio/config` may update `path_hash_mode` only when the connected firmware supports it.
+- Contacts persist `out_path_hash_mode` separately from `last_path` so contact sync and DM send paths can round-trip correctly even when hop bytes are ambiguous.
+- `path_len` in API payloads is always hop count, not byte count. The actual path byte length is `hop_count * hash_size`.
 
 ## Data Flow
 
@@ -239,6 +249,7 @@ Key test files:
 - `tests/test_ack_tracking_wiring.py` - DM ACK tracking extraction and wiring
 - `tests/test_health_mqtt_status.py` - Health endpoint MQTT status field
 - `tests/test_community_mqtt.py` - Community MQTT publisher (JWT, packet format, hash, broadcast)
+- `tests/test_radio_sync.py` - Radio sync, periodic tasks, and contact offload back to the radio
 - `tests/test_real_crypto.py` - Real cryptographic operations
 - `tests/test_disable_bots.py` - MESHCORE_DISABLE_BOTS=true feature
 
@@ -260,8 +271,8 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/health` | Connection status, fanout statuses, bots_disabled flag |
-| GET | `/api/radio/config` | Radio configuration |
-| PATCH | `/api/radio/config` | Update name, location, radio params |
+| GET | `/api/radio/config` | Radio configuration, including `path_hash_mode` and `path_hash_mode_supported` |
+| PATCH | `/api/radio/config` | Update name, location, radio params, and `path_hash_mode` when supported |
 | PUT | `/api/radio/private-key` | Import private key to radio |
 | POST | `/api/radio/advertise` | Send advertisement |
 | POST | `/api/radio/reboot` | Reboot radio or reconnect if disconnected |
@@ -367,6 +378,8 @@ All external integrations are managed through the fanout bus (`app/fanout/`). Ea
 
 `broadcast_event()` in `websocket.py` dispatches `message` and `raw_packet` events to the fanout manager. See `app/fanout/AGENTS_fanout.md` for full architecture details.
 
+Community MQTT forwards raw packets only. Its derived `path` field, when present on direct packets, is a comma-separated list of hop identifiers as reported by the packet format. Token width therefore varies with the packet's path hash mode; it is intentionally not a flat per-byte rendering.
+
 ### Server-Side Decryption
 
 The server can decrypt packets using stored keys, both in real-time and for historical packets.
@@ -414,3 +427,11 @@ mc.subscribe(EventType.ACK, handler)
 Byte-perfect channel retries are user-triggered via `POST /api/messages/channel/{message_id}/resend` and are allowed for 30 seconds after the original send.
 
 **Transport mutual exclusivity:** Only one of `MESHCORE_SERIAL_PORT`, `MESHCORE_TCP_HOST`, or `MESHCORE_BLE_ADDRESS` may be set. If none are set, serial auto-detection is used.
+
+## Errata & Known Non-Issues
+
+### `meshcore_py` advert parsing can crash on malformed/truncated RF log packets
+
+The vendored MeshCore Python reader's `LOG_DATA` advert path assumes the decoded advert payload always contains at least 101 bytes of advert body and reads the flags byte with `pk_buf.read(1)[0]` without a length guard. If a malformed or truncated RF log frame slips through, `MessageReader.handle_rx()` can fail with `IndexError: index out of range` from `meshcore/reader.py` while parsing payload type `0x04` (advert).
+
+This does not indicate database corruption or a message-store bug. It is a parser-hardening gap in `meshcore_py`: the reader does not fully mirror firmware-side packet/path validation before attempting advert decode. The practical effect is usually a one-off asyncio task failure for that packet while later packets continue processing normally.

@@ -29,6 +29,15 @@ class TestStatisticsEmpty:
         assert result["repeaters_heard"]["last_hour"] == 0
         assert result["repeaters_heard"]["last_24_hours"] == 0
         assert result["repeaters_heard"]["last_week"] == 0
+        assert result["path_hash_width_24h"] == {
+            "total_packets": 0,
+            "single_byte": 0,
+            "double_byte": 0,
+            "triple_byte": 0,
+            "single_byte_pct": 0.0,
+            "double_byte_pct": 0.0,
+            "triple_byte_pct": 0.0,
+        }
 
 
 class TestStatisticsCounts:
@@ -246,3 +255,47 @@ class TestActivityWindows:
         assert result["repeaters_heard"]["last_hour"] == 1
         assert result["repeaters_heard"]["last_24_hours"] == 1
         assert result["repeaters_heard"]["last_week"] == 1
+
+
+class TestPathHashWidthStats:
+    @pytest.mark.asyncio
+    async def test_counts_last_24h_packets_by_hash_width(self, test_db):
+        """Recent raw packets are bucketed by parsed path hash width."""
+        now = int(time.time())
+        conn = test_db.conn
+
+        packets = [
+            (now, bytes.fromhex("0100AA"), b"\x11" * 32),
+            (
+                now,
+                bytes.fromhex(
+                    "1540cab3b15626481a5ba64247ab25766e410b026e0678a32da9f0c3946fae5b714cab170f"
+                ),
+                b"\x22" * 32,
+            ),
+            (
+                now,
+                bytes.fromhex("15833fa002860ccae0eed9ca78b9ab0775d477c1f6490a398bf4edc75240"),
+                b"\x33" * 32,
+            ),
+            (now, bytes.fromhex("09C1AABBCC"), b"\x44" * 32),
+            (now - 90000, bytes.fromhex("0140AA"), b"\x55" * 32),
+        ]
+
+        for timestamp, data, payload_hash in packets:
+            await conn.execute(
+                "INSERT INTO raw_packets (timestamp, data, payload_hash) VALUES (?, ?, ?)",
+                (timestamp, data, payload_hash),
+            )
+        await conn.commit()
+
+        result = await StatisticsRepository.get_all()
+        breakdown = result["path_hash_width_24h"]
+
+        assert breakdown["total_packets"] == 3
+        assert breakdown["single_byte"] == 1
+        assert breakdown["double_byte"] == 1
+        assert breakdown["triple_byte"] == 1
+        assert breakdown["single_byte_pct"] == pytest.approx(100 / 3, rel=1e-3)
+        assert breakdown["double_byte_pct"] == pytest.approx(100 / 3, rel=1e-3)
+        assert breakdown["triple_byte_pct"] == pytest.approx(100 / 3, rel=1e-3)

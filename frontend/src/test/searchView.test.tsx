@@ -228,6 +228,7 @@ describe('SearchView', () => {
             flags: 0,
             last_path: null,
             last_path_len: -1,
+            out_path_hash_mode: 0,
             last_advert: null,
             lat: null,
             lon: null,

@@ -110,6 +110,7 @@ async def create_contact(
                     "flags": existing.flags,
                     "last_path": existing.last_path,
                     "last_path_len": existing.last_path_len,
+                    "out_path_hash_mode": existing.out_path_hash_mode,
                     "last_advert": existing.last_advert,
                     "lat": existing.lat,
                     "lon": existing.lon,
@@ -139,6 +140,7 @@ async def create_contact(
         "flags": 0,
         "last_path": None,
         "last_path_len": -1,
+        "out_path_hash_mode": -1,
         "last_advert": None,
         "lat": None,
         "lon": None,
@@ -204,8 +206,8 @@ async def get_contact_detail(public_key: str) -> ContactDetail:
     # Compute nearest repeaters from first-hop prefixes in advert paths
     first_hop_stats: dict[str, dict] = {}  # prefix -> {heard_count, path_len, last_seen}
     for p in advert_paths:
-        if p.path and len(p.path) >= 2:
-            prefix = p.path[:2].lower()
+        prefix = p.next_hop
+        if prefix:
             if prefix not in first_hop_stats:
                 first_hop_stats[prefix] = {
                     "heard_count": 0,
@@ -462,7 +464,7 @@ async def reset_contact_path(public_key: str) -> dict:
     """Reset a contact's routing path to flood."""
     contact = await _resolve_contact_or_404(public_key)
 
-    await ContactRepository.update_path(contact.public_key, "", -1)
+    await ContactRepository.update_path(contact.public_key, "", -1, -1)
     logger.info("Reset path to flood for %s", contact.public_key[:12])
 
     # Push the updated path to radio if connected and contact is on radio

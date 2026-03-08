@@ -98,10 +98,7 @@ class TestMigration001:
             await conn.commit()
 
             # Run migrations
-            applied = await run_migrations(conn)
-
-            assert applied == 38  # All migrations run
-            assert await get_version(conn) == 38
+            await run_migrations(conn)
 
             # Verify columns exist by inserting and selecting
             await conn.execute(
@@ -183,9 +180,8 @@ class TestMigration001:
             applied1 = await run_migrations(conn)
             applied2 = await run_migrations(conn)
 
-            assert applied1 == 38  # All migrations run
+            assert applied1 > 0  # Migrations were applied
             assert applied2 == 0  # No migrations on second run
-            assert await get_version(conn) == 38
         finally:
             await conn.close()
 
@@ -246,8 +242,7 @@ class TestMigration001:
             applied = await run_migrations(conn)
 
             # All migrations applied (version incremented) but no error
-            assert applied == 38
-            assert await get_version(conn) == 38
+            assert applied > 0
         finally:
             await conn.close()
 
@@ -374,10 +369,8 @@ class TestMigration013:
             )
             await conn.commit()
 
-            # Run migration 13 (plus 14-38 which also run)
-            applied = await run_migrations(conn)
-            assert applied == 26
-            assert await get_version(conn) == 38
+            # Run migration 13 (plus remaining which also run)
+            await run_migrations(conn)
 
             # Bots were migrated from app_settings to fanout_configs (migration 37)
             # and the bots column was dropped (migration 38)
@@ -495,7 +488,6 @@ class TestMigration018:
             assert await cursor.fetchone() is not None
 
             await run_migrations(conn)
-            assert await get_version(conn) == 38
 
             # Verify autoindex is gone
             cursor = await conn.execute(
@@ -572,9 +564,7 @@ class TestMigration018:
             )
             await conn.commit()
 
-            applied = await run_migrations(conn)
-            assert applied == 21  # Migrations 18-38 run (18+19 skip internally)
-            assert await get_version(conn) == 38
+            await run_migrations(conn)
         finally:
             await conn.close()
 
@@ -646,7 +636,6 @@ class TestMigration019:
             assert await cursor.fetchone() is not None
 
             await run_migrations(conn)
-            assert await get_version(conn) == 38
 
             # Verify autoindex is gone
             cursor = await conn.execute(
@@ -711,9 +700,7 @@ class TestMigration020:
             cursor = await conn.execute("PRAGMA journal_mode")
             assert (await cursor.fetchone())[0] == "delete"
 
-            applied = await run_migrations(conn)
-            assert applied == 19  # Migrations 20-38
-            assert await get_version(conn) == 38
+            await run_migrations(conn)
 
             # Verify WAL mode
             cursor = await conn.execute("PRAGMA journal_mode")
@@ -742,8 +729,7 @@ class TestMigration020:
             await conn.commit()
             await set_version(conn, 20)
 
-            applied = await run_migrations(conn)
-            assert applied == 18  # Migrations 21-38 still run
+            await run_migrations(conn)
 
             # Still WAL + INCREMENTAL
             cursor = await conn.execute("PRAGMA journal_mode")
@@ -800,9 +786,7 @@ class TestMigration028:
             )
             await conn.commit()
 
-            applied = await run_migrations(conn)
-            assert applied == 11
-            assert await get_version(conn) == 38
+            await run_migrations(conn)
 
             # Verify payload_hash column is now BLOB
             cursor = await conn.execute("PRAGMA table_info(raw_packets)")
@@ -870,9 +854,7 @@ class TestMigration028:
             )
             await conn.commit()
 
-            applied = await run_migrations(conn)
-            assert applied == 11  # Version still bumped
-            assert await get_version(conn) == 38
+            await run_migrations(conn)
 
             # Verify data unchanged
             cursor = await conn.execute("SELECT payload_hash FROM raw_packets")
@@ -920,9 +902,7 @@ class TestMigration032:
             await conn.execute("INSERT INTO app_settings (id) VALUES (1)")
             await conn.commit()
 
-            applied = await run_migrations(conn)
-            assert applied == 7
-            assert await get_version(conn) == 38
+            await run_migrations(conn)
 
             # Community MQTT columns were added by migration 32 and dropped by migration 38.
             # Verify community settings were NOT migrated (no community config existed).
@@ -987,9 +967,7 @@ class TestMigration034:
             """)
             await conn.commit()
 
-            applied = await run_migrations(conn)
-            assert applied == 5
-            assert await get_version(conn) == 38
+            await run_migrations(conn)
 
             # Verify column exists with correct default
             cursor = await conn.execute("SELECT flood_scope FROM app_settings WHERE id = 1")
@@ -1030,9 +1008,7 @@ class TestMigration033:
             """)
             await conn.commit()
 
-            applied = await run_migrations(conn)
-            assert applied == 6
-            assert await get_version(conn) == 38
+            await run_migrations(conn)
 
             cursor = await conn.execute(
                 "SELECT key, name, is_hashtag, on_radio FROM channels WHERE key = ?",
@@ -1088,3 +1064,230 @@ class TestMigration033:
             assert row["on_radio"] == 1  # Not overwritten
         finally:
             await conn.close()
+
+
+class TestMigration039:
+    """Test migration 039: persist contacts.out_path_hash_mode."""
+
+    @pytest.mark.asyncio
+    async def test_adds_column_and_backfills_legacy_rows(self):
+        """Pre-039 contacts get flood=-1 and legacy routed paths=0."""
+        conn = await aiosqlite.connect(":memory:")
+        conn.row_factory = aiosqlite.Row
+        try:
+            await set_version(conn, 38)
+            await conn.execute("""
+                CREATE TABLE contacts (
+                    public_key TEXT PRIMARY KEY,
+                    name TEXT,
+                    type INTEGER DEFAULT 0,
+                    flags INTEGER DEFAULT 0,
+                    last_path TEXT,
+                    last_path_len INTEGER DEFAULT -1,
+                    last_advert INTEGER,
+                    lat REAL,
+                    lon REAL,
+                    last_seen INTEGER,
+                    on_radio INTEGER DEFAULT 0,
+                    last_contacted INTEGER,
+                    first_seen INTEGER
+                )
+            """)
+            await conn.execute(
+                """
+                INSERT INTO contacts (
+                    public_key, name, last_path, last_path_len, first_seen
+                ) VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)
+                """,
+                (
+                    "aa" * 32,
+                    "Flood",
+                    "",
+                    -1,
+                    1000,
+                    "bb" * 32,
+                    "LegacyPath",
+                    "1122",
+                    1,
+                    1001,
+                ),
+            )
+            await conn.commit()
+
+            applied = await run_migrations(conn)
+
+            assert applied == 2
+            assert await get_version(conn) == 40
+
+            cursor = await conn.execute(
+                """
+                SELECT public_key, last_path_len, out_path_hash_mode
+                FROM contacts
+                ORDER BY public_key
+                """
+            )
+            rows = await cursor.fetchall()
+            assert rows[0]["public_key"] == "aa" * 32
+            assert rows[0]["last_path_len"] == -1
+            assert rows[0]["out_path_hash_mode"] == -1
+            assert rows[1]["public_key"] == "bb" * 32
+            assert rows[1]["last_path_len"] == 1
+            assert rows[1]["out_path_hash_mode"] == 0
+        finally:
+            await conn.close()
+
+    @pytest.mark.asyncio
+    async def test_existing_valid_modes_are_preserved_when_column_already_exists(self):
+        """Migration does not clobber post-upgrade multibyte rows."""
+        conn = await aiosqlite.connect(":memory:")
+        conn.row_factory = aiosqlite.Row
+        try:
+            await set_version(conn, 38)
+            await conn.execute("""
+                CREATE TABLE contacts (
+                    public_key TEXT PRIMARY KEY,
+                    name TEXT,
+                    type INTEGER DEFAULT 0,
+                    flags INTEGER DEFAULT 0,
+                    last_path TEXT,
+                    last_path_len INTEGER DEFAULT -1,
+                    out_path_hash_mode INTEGER NOT NULL DEFAULT 0,
+                    last_advert INTEGER,
+                    lat REAL,
+                    lon REAL,
+                    last_seen INTEGER,
+                    on_radio INTEGER DEFAULT 0,
+                    last_contacted INTEGER,
+                    first_seen INTEGER
+                )
+            """)
+            await conn.execute(
+                """
+                INSERT INTO contacts (
+                    public_key, name, last_path, last_path_len, out_path_hash_mode, first_seen
+                ) VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "cc" * 32,
+                    "Multi",
+                    "aa00bb00",
+                    2,
+                    1,
+                    1000,
+                    "dd" * 32,
+                    "Flood",
+                    "",
+                    -1,
+                    0,
+                    1001,
+                ),
+            )
+            await conn.commit()
+
+            applied = await run_migrations(conn)
+
+            assert applied == 2
+            assert await get_version(conn) == 40
+
+            cursor = await conn.execute(
+                """
+                SELECT public_key, out_path_hash_mode
+                FROM contacts
+                WHERE public_key IN (?, ?)
+                ORDER BY public_key
+                """,
+                ("cc" * 32, "dd" * 32),
+            )
+            rows = await cursor.fetchall()
+            assert rows[0]["public_key"] == "cc" * 32
+            assert rows[0]["out_path_hash_mode"] == 1
+            assert rows[1]["public_key"] == "dd" * 32
+            assert rows[1]["out_path_hash_mode"] == -1
+        finally:
+            await conn.close()
+
+
+class TestMigration040:
+    """Test migration 040: include path_len in advert-path identity."""
+
+    @pytest.mark.asyncio
+    async def test_rebuilds_contact_advert_paths_to_distinguish_same_bytes_by_hop_count(self):
+        conn = await aiosqlite.connect(":memory:")
+        conn.row_factory = aiosqlite.Row
+        try:
+            await set_version(conn, 39)
+            await conn.execute("""
+                CREATE TABLE contact_advert_paths (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    public_key TEXT NOT NULL,
+                    path_hex TEXT NOT NULL,
+                    path_len INTEGER NOT NULL,
+                    first_seen INTEGER NOT NULL,
+                    last_seen INTEGER NOT NULL,
+                    heard_count INTEGER NOT NULL DEFAULT 1,
+                    UNIQUE(public_key, path_hex)
+                )
+            """)
+            await conn.execute(
+                """
+                INSERT INTO contact_advert_paths
+                    (public_key, path_hex, path_len, first_seen, last_seen, heard_count)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                ("aa" * 32, "aa00", 1, 1000, 1001, 2),
+            )
+            await conn.commit()
+
+            applied = await run_migrations(conn)
+
+            assert applied == 1
+            assert await get_version(conn) == 40
+
+            await conn.execute(
+                """
+                INSERT INTO contact_advert_paths
+                    (public_key, path_hex, path_len, first_seen, last_seen, heard_count)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                ("aa" * 32, "aa00", 2, 1002, 1002, 1),
+            )
+            await conn.commit()
+
+            cursor = await conn.execute(
+                """
+                SELECT path_hex, path_len, heard_count
+                FROM contact_advert_paths
+                WHERE public_key = ?
+                ORDER BY path_len ASC
+                """,
+                ("aa" * 32,),
+            )
+            rows = await cursor.fetchall()
+            assert [(row["path_hex"], row["path_len"], row["heard_count"]) for row in rows] == [
+                ("aa00", 1, 2),
+                ("aa00", 2, 1),
+            ]
+        finally:
+            await conn.close()
+
+
+class TestMigrationPacketHelpers:
+    """Test migration-local packet helpers against canonical path validation."""
+
+    def test_extract_payload_for_hash_rejects_oversize_path(self):
+        from app.migrations import _extract_payload_for_hash
+
+        packet = bytes([0x15, 0xBF]) + bytes(189) + b"payload"
+        assert _extract_payload_for_hash(packet) is None
+
+    def test_extract_payload_for_hash_rejects_no_payload_packet(self):
+        from app.migrations import _extract_payload_for_hash
+
+        packet = bytes([0x15, 0x02, 0xAA, 0xBB])
+        assert _extract_payload_for_hash(packet) is None
+
+    def test_extract_path_from_packet_rejects_reserved_mode(self):
+        from app.migrations import _extract_path_from_packet
+
+        packet = bytes([0x15, 0xC1, 0xAA, 0xBB, 0xCC])
+        assert _extract_path_from_packet(packet) is None

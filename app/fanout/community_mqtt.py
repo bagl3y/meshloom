@@ -24,6 +24,7 @@ import aiomqtt
 import nacl.bindings
 
 from app.fanout.mqtt_base import BaseMqttPublisher
+from app.path_utils import parse_packet_envelope, split_path_hex
 
 logger = logging.getLogger(__name__)
 
@@ -142,35 +143,17 @@ def _calculate_packet_hash(raw_bytes: bytes) -> str:
         return "0" * 16
 
     try:
-        header = raw_bytes[0]
-        payload_type = (header >> 2) & 0x0F
-        route_type = header & 0x03
-
-        # Transport codes present for TRANSPORT_FLOOD (0) and TRANSPORT_DIRECT (3)
-        has_transport = route_type in (0x00, 0x03)
-
-        offset = 1  # Past header
-        if has_transport:
-            offset += 4  # Skip 4 bytes of transport codes
-
-        # Read path_len (1 byte on wire). Invalid/truncated packets map to zero hash.
-        if offset >= len(raw_bytes):
+        envelope = parse_packet_envelope(raw_bytes)
+        if envelope is None:
             return "0" * 16
-        path_len = raw_bytes[offset]
-        offset += 1
 
-        # Skip past path to get to payload. Invalid/truncated packets map to zero hash.
-        if len(raw_bytes) < offset + path_len:
-            return "0" * 16
-        payload_start = offset + path_len
-        payload_data = raw_bytes[payload_start:]
-
-        # Hash: payload_type(1 byte) [+ path_len as uint16_t LE for TRACE] + payload_data
+        # Hash: payload_type(1 byte) [+ path_byte as uint16_t LE for TRACE] + payload_data
+        # IMPORTANT: TRACE hash uses the raw wire byte (not decoded hop count) to match firmware.
         hash_obj = hashlib.sha256()
-        hash_obj.update(bytes([payload_type]))
-        if payload_type == 9:  # PAYLOAD_TYPE_TRACE
-            hash_obj.update(path_len.to_bytes(2, byteorder="little"))
-        hash_obj.update(payload_data)
+        hash_obj.update(bytes([envelope.payload_type]))
+        if envelope.payload_type == 9:  # PAYLOAD_TYPE_TRACE
+            hash_obj.update(envelope.path_byte.to_bytes(2, byteorder="little"))
+        hash_obj.update(envelope.payload)
 
         return hash_obj.hexdigest()[:16].upper()
     except Exception:
@@ -191,38 +174,15 @@ def _decode_packet_fields(raw_bytes: bytes) -> tuple[str, str, str, list[str], i
     payload_type: int | None = None
 
     try:
-        if len(raw_bytes) < 2:
+        envelope = parse_packet_envelope(raw_bytes)
+        if envelope is None or envelope.payload_version != 0:
             return route, packet_type, payload_len, path_values, payload_type
 
-        header = raw_bytes[0]
-        payload_version = (header >> 6) & 0x03
-        if payload_version != 0:
-            return route, packet_type, payload_len, path_values, payload_type
-
-        route_type = header & 0x03
-        has_transport = route_type in (0x00, 0x03)
-
-        offset = 1
-        if has_transport:
-            offset += 4
-
-        if len(raw_bytes) <= offset:
-            return route, packet_type, payload_len, path_values, payload_type
-
-        path_len = raw_bytes[offset]
-        offset += 1
-
-        if len(raw_bytes) < offset + path_len:
-            return route, packet_type, payload_len, path_values, payload_type
-
-        path_bytes = raw_bytes[offset : offset + path_len]
-        offset += path_len
-
-        payload_type = (header >> 2) & 0x0F
-        route = _ROUTE_MAP.get(route_type, "U")
+        payload_type = envelope.payload_type
+        route = _ROUTE_MAP.get(envelope.route_type, "U")
         packet_type = str(payload_type)
-        payload_len = str(max(0, len(raw_bytes) - offset))
-        path_values = [f"{b:02x}" for b in path_bytes]
+        payload_len = str(len(envelope.payload))
+        path_values = split_path_hex(envelope.path.hex(), envelope.hop_count)
 
         return route, packet_type, payload_len, path_values, payload_type
     except Exception:

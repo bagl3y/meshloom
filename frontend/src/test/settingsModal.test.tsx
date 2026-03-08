@@ -30,6 +30,8 @@ const baseConfig: RadioConfig = {
     sf: 7,
     cr: 5,
   },
+  path_hash_mode: 0,
+  path_hash_mode_supported: false,
 };
 
 const baseHealth: HealthStatus = {
@@ -376,6 +378,15 @@ describe('SettingsModal', () => {
       total_outgoing: 30,
       contacts_heard: { last_hour: 2, last_24_hours: 7, last_week: 10 },
       repeaters_heard: { last_hour: 1, last_24_hours: 3, last_week: 3 },
+      path_hash_width_24h: {
+        total_packets: 120,
+        single_byte: 60,
+        double_byte: 36,
+        triple_byte: 24,
+        single_byte_pct: 50,
+        double_byte_pct: 30,
+        triple_byte_pct: 20,
+      },
     };
 
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -403,6 +414,14 @@ describe('SettingsModal', () => {
     expect(screen.getByText('Total stored')).toBeInTheDocument();
     expect(screen.getByText('Decrypted')).toBeInTheDocument();
     expect(screen.getByText('Undecrypted')).toBeInTheDocument();
+    expect(screen.getByText('Path Hash Width (24h)')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Parsed stored raw packets from the last 24 hours: 120/)
+    ).toBeInTheDocument();
+    expect(screen.getByText('1-byte hops')).toBeInTheDocument();
+    expect(screen.getByText('60 (50.0%)')).toBeInTheDocument();
+    expect(screen.getByText('36 (30.0%)')).toBeInTheDocument();
+    expect(screen.getByText('24 (20.0%)')).toBeInTheDocument();
     expect(screen.getByText('Contacts heard')).toBeInTheDocument();
     expect(screen.getByText('Repeaters heard')).toBeInTheDocument();
 
@@ -425,6 +444,15 @@ describe('SettingsModal', () => {
       total_outgoing: 30,
       contacts_heard: { last_hour: 2, last_24_hours: 7, last_week: 10 },
       repeaters_heard: { last_hour: 1, last_24_hours: 3, last_week: 3 },
+      path_hash_width_24h: {
+        total_packets: 120,
+        single_byte: 60,
+        double_byte: 36,
+        triple_byte: 24,
+        single_byte_pct: 50,
+        double_byte_pct: 30,
+        triple_byte_pct: 20,
+      },
     };
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(

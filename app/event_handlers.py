@@ -106,13 +106,16 @@ async def on_contact_message(event: "Event") -> None:
     ts = payload.get("sender_timestamp")
     sender_timestamp = ts if ts is not None else received_at
     sender_name = contact.name if contact else None
+    path = payload.get("path")
+    path_len = payload.get("path_len")
     msg_id = await MessageRepository.create(
         msg_type="PRIV",
         text=payload.get("text", ""),
         conversation_key=sender_pubkey,
         sender_timestamp=sender_timestamp,
         received_at=received_at,
-        path=payload.get("path"),
+        path=path,
+        path_len=path_len,
         txt_type=txt_type,
         signature=payload.get("signature"),
         sender_key=sender_pubkey,
@@ -129,8 +132,11 @@ async def on_contact_message(event: "Event") -> None:
     logger.debug("DM from %s handled by event handler (fallback path)", sender_pubkey[:12])
 
     # Build paths array for broadcast
-    path = payload.get("path")
-    paths = [MessagePath(path=path or "", received_at=received_at)] if path is not None else None
+    paths = (
+        [MessagePath(path=path or "", received_at=received_at, path_len=path_len)]
+        if path is not None
+        else None
+    )
 
     # Broadcast the new message
     broadcast_event(
@@ -205,6 +211,7 @@ async def on_path_update(event: "Event") -> None:
     # so if path fields are absent here we treat this as informational only.
     path = payload.get("path")
     path_len = payload.get("path_len")
+    path_hash_mode = payload.get("path_hash_mode")
     if path is None or path_len is None:
         logger.debug(
             "PATH_UPDATE for %s has no path payload, skipping DB update", contact.public_key[:12]
@@ -219,7 +226,28 @@ async def on_path_update(event: "Event") -> None:
         )
         return
 
-    await ContactRepository.update_path(contact.public_key, str(path), normalized_path_len)
+    normalized_path_hash_mode: int | None
+    if path_hash_mode is None:
+        # Legacy firmware/library payloads only support 1-byte hop hashes.
+        normalized_path_hash_mode = -1 if normalized_path_len == -1 else 0
+    else:
+        normalized_path_hash_mode = None
+        try:
+            normalized_path_hash_mode = int(path_hash_mode)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid path_hash_mode in PATH_UPDATE for %s: %r",
+                contact.public_key[:12],
+                path_hash_mode,
+            )
+            normalized_path_hash_mode = None
+
+    await ContactRepository.update_path(
+        contact.public_key,
+        str(path),
+        normalized_path_len,
+        normalized_path_hash_mode,
+    )
 
 
 async def on_new_contact(event: "Event") -> None:

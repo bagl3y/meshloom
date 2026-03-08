@@ -39,7 +39,7 @@ test.describe('Favorites persistence', () => {
 
   test('add and remove favorite channel with persistence across reload', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     await page.getByText(channelName, { exact: true }).first().click();
 
@@ -57,7 +57,7 @@ test.describe('Favorites persistence', () => {
       .toBe(true);
 
     await page.reload();
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
     await page.getByText(channelName, { exact: true }).first().click();
     await expect(page.getByTitle('Remove from favorites')).toBeVisible();
     await expect(page.getByText('Favorites')).toBeVisible();

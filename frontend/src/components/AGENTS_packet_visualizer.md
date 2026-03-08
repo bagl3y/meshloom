@@ -172,15 +172,15 @@ function resolveNode(source, isRepeater, showAmbiguous): string | null {
 
 ### Ambiguous Nodes
 
-When only a 1-byte prefix is known (from packet path bytes), the node is marked ambiguous and shown with a `?` prefix and gray styling. However, if the node is identified as a repeater (via advert or path hop), it shows blue regardless of ambiguity.
+When only a partial hop token is known (for example a 1-byte hop from an older radio), the node is marked ambiguous and shown with a `?` prefix and gray styling. Full 2-byte and 3-byte hop tokens are preserved as distinct identities and are not collapsed back to their first byte. However, if the node is identified as a repeater (via advert or path hop), it shows blue regardless of ambiguity.
 
 ### Advert-Path Identity Hints
 
-**Problem:** When multiple repeaters share a 1-byte prefix, the visualizer can't tell which physical repeater a path hop refers to.
+**Problem:** During mixed-radio operation, some observations may only carry a 1-byte hop while others carry a full 2-byte or 3-byte hop token. The visualizer must not collapse the full token back to the first byte, but it also cannot over-resolve the short token.
 
 **Solution:** The backend tracks recent unique advertisement paths per contact in `contact_advert_paths` (see root `AGENTS.md` § "Contact Advert Path Memory"). On mount (and when new contacts appear), the visualizer fetches this data via `GET /api/contacts/repeaters/advert-paths` and builds an index keyed by 12-char prefix.
 
-**Scoring:** `pickLikelyRepeaterByAdvertPath(candidates, nextPrefix)` scores each candidate repeater by how often its stored advert paths' `next_hop` matches the packet's actual next-hop prefix. It requires:
+**Scoring:** `pickLikelyRepeaterByAdvertPath(candidates, nextPrefix)` scores each candidate repeater by how often its stored advert paths' `next_hop` matches the packet's actual next-hop token. It requires:
 
 - At least 2 matching observations (stronger-than-trivial evidence)
 - The top candidate's match score must be at least 2x the runner-up's
@@ -193,7 +193,7 @@ When a winner is found, the ambiguous node gets a `probableIdentity` label (the 
 
 ### Traffic Pattern Splitting (Experimental)
 
-**Problem:** Multiple physical repeaters can share the same 1-byte prefix (collision). Since packet paths only contain 1-byte hashes, we can't directly distinguish them. However, traffic patterns provide a heuristic.
+**Problem:** Multiple physical repeaters can share the same short hop token emitted by older radios. Since those packets only carry the short token, we can't directly distinguish them. However, traffic patterns provide a heuristic.
 
 **Key Insight:** A single physical repeater (even acting as a hub) will have the same sources routing through it regardless of next-hop. But if prefix `32` has completely disjoint sets of sources for different next-hops, those are likely different physical nodes sharing the same prefix.
 
@@ -234,9 +234,9 @@ Here source `ae` routes through `32` to BOTH `ba` and `60`. This proves `32` is 
 
 **Node ID format:**
 
-- Without splitting (default): `?XX` (e.g., `?32`)
-- With splitting (after evidence threshold met): `?XX:>YY` (e.g., `?32:>ba`)
-- Final repeater: `?XX` (unchanged, no suffix)
+- Without splitting (default): `?{hop}` (examples: `?32`, `?aa11`, `?bb22cc`)
+- With splitting (after evidence threshold met): `?{hop}:>{nextHop}` (example: `?32:>ba`, `?aa11:>bb22`)
+- Final repeater: `?{hop}` (unchanged, no suffix)
 
 ## Path Building
 

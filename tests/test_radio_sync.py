@@ -57,6 +57,9 @@ async def _insert_contact(
     contact_type=0,
     last_contacted=None,
     last_advert=None,
+    last_path=None,
+    last_path_len=-1,
+    out_path_hash_mode=0,
 ):
     """Insert a contact into the test database."""
     await ContactRepository.upsert(
@@ -65,8 +68,9 @@ async def _insert_contact(
             "name": name,
             "type": contact_type,
             "flags": 0,
-            "last_path": None,
-            "last_path_len": -1,
+            "last_path": last_path,
+            "last_path_len": last_path_len,
+            "out_path_hash_mode": out_path_hash_mode,
             "last_advert": last_advert,
             "lat": None,
             "lon": None,
@@ -344,6 +348,34 @@ class TestSyncRecentContactsToRadio:
 
         assert result["loaded"] == 0
         assert result["failed"] == 1
+
+    @pytest.mark.asyncio
+    async def test_add_contact_preserves_explicit_multibyte_hash_mode(self, test_db):
+        """Radio offload uses the stored hash mode rather than inferring from path bytes."""
+        await _insert_contact(
+            KEY_A,
+            "Alice",
+            last_contacted=2000,
+            last_path="aa00bb00",
+            last_path_len=2,
+            out_path_hash_mode=1,
+        )
+
+        mock_mc = MagicMock()
+        mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
+        mock_result = MagicMock()
+        mock_result.type = EventType.OK
+        mock_mc.commands.add_contact = AsyncMock(return_value=mock_result)
+
+        radio_manager._meshcore = mock_mc
+        result = await sync_recent_contacts_to_radio()
+
+        assert result["loaded"] == 1
+        payload = mock_mc.commands.add_contact.call_args.args[0]
+        assert payload["public_key"] == KEY_A
+        assert payload["out_path"] == "aa00bb00"
+        assert payload["out_path_len"] == 2
+        assert payload["out_path_hash_mode"] == 1
 
     @pytest.mark.asyncio
     async def test_mc_param_bypasses_lock_acquisition(self, test_db):

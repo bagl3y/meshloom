@@ -52,7 +52,7 @@ interface TrafficObservation {
 }
 
 export interface RepeaterTrafficData {
-  prefix: string; // The 1-byte hex prefix (e.g., "32")
+  hopKey: string; // The observed hop token (e.g. "32", "aa11", or "bbccdd")
   observations: TrafficObservation[];
 }
 
@@ -109,6 +109,31 @@ export const PACKET_LEGEND_ITEMS = [
   { label: 'RS', color: COLORS.particleRS, description: 'Response' },
   { label: '?', color: COLORS.particleUnknown, description: 'Other' },
 ] as const;
+
+export function normalizeHopToken(hop: string | null | undefined): string | null {
+  const normalized = hop?.trim().toLowerCase() ?? '';
+  return normalized.length > 0 ? normalized : null;
+}
+
+export function buildAmbiguousRepeaterNodeId(hop: string, nextHop?: string | null): string {
+  const hopKey = normalizeHopToken(hop);
+  if (!hopKey) {
+    return '?';
+  }
+
+  const nextHopKey = normalizeHopToken(nextHop);
+  return nextHopKey ? `?${hopKey}:>${nextHopKey}` : `?${hopKey}`;
+}
+
+export function buildAmbiguousRepeaterLabel(hop: string, nextHop?: string | null): string {
+  const hopKey = normalizeHopToken(hop)?.toUpperCase();
+  if (!hopKey) {
+    return '?';
+  }
+
+  const nextHopKey = normalizeHopToken(nextHop)?.toUpperCase();
+  return nextHopKey ? `${hopKey}:>${nextHopKey}` : hopKey;
+}
 
 // =============================================================================
 // UTILITY FUNCTIONS (Data Layer)
@@ -274,21 +299,26 @@ export function analyzeRepeaterTraffic(data: RepeaterTrafficData): RepeaterSplit
  */
 export function recordTrafficObservation(
   trafficData: Map<string, RepeaterTrafficData>,
-  prefix: string,
+  hopKey: string,
   source: string,
   nextHop: string | null
 ): void {
-  const normalizedPrefix = prefix.toLowerCase();
-  const now = Date.now();
-
-  if (!trafficData.has(normalizedPrefix)) {
-    trafficData.set(normalizedPrefix, { prefix: normalizedPrefix, observations: [] });
+  const normalizedHopKey = normalizeHopToken(hopKey);
+  if (!normalizedHopKey) {
+    return;
   }
 
-  const data = trafficData.get(normalizedPrefix)!;
+  const normalizedNextHop = normalizeHopToken(nextHop);
+  const now = Date.now();
+
+  if (!trafficData.has(normalizedHopKey)) {
+    trafficData.set(normalizedHopKey, { hopKey: normalizedHopKey, observations: [] });
+  }
+
+  const data = trafficData.get(normalizedHopKey)!;
 
   // Add new observation
-  data.observations.push({ source, nextHop, timestamp: now });
+  data.observations.push({ source, nextHop: normalizedNextHop, timestamp: now });
 
   // Prune old observations
   data.observations = data.observations.filter(

@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { formatTime } from '../utils/messageParser';
-import { isValidLocation, calculateDistance, formatDistance } from '../utils/pathUtils';
+import {
+  isValidLocation,
+  calculateDistance,
+  formatDistance,
+  parsePathHops,
+} from '../utils/pathUtils';
 import { getMapFocusHash } from '../utils/urlHash';
 import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
@@ -17,6 +22,13 @@ const CONTACT_TYPE_LABELS: Record<number, string> = {
   3: 'Room',
   4: 'Sensor',
 };
+
+function formatPathHashMode(mode: number): string | null {
+  if (mode < 0 || mode > 2) {
+    return null;
+  }
+  return `${mode + 1}-byte IDs`;
+}
 
 interface ContactInfoPaneProps {
   contactKey: string | null;
@@ -94,6 +106,7 @@ export function ContactInfoPane({
     isValidLocation(contact.lat, contact.lon)
       ? calculateDistance(config.lat, config.lon, contact.lat, contact.lon)
       : null;
+  const pathHashModeLabel = contact ? formatPathHashMode(contact.out_path_hash_mode) : null;
 
   return (
     <Sheet open={contactKey !== null} onOpenChange={(open) => !open && onClose()}>
@@ -218,6 +231,7 @@ export function ContactInfoPane({
                   />
                 )}
                 {contact.last_path_len === -1 && <InfoItem label="Routing" value="Flood" />}
+                {pathHashModeLabel && <InfoItem label="Hop Width" value={pathHashModeLabel} />}
               </div>
             </div>
 
@@ -413,7 +427,7 @@ export function ContactInfoPane({
                       className="flex justify-between items-center text-sm"
                     >
                       <span className="font-mono text-xs truncate">
-                        {p.path ? p.path.match(/.{2}/g)!.join(' → ') : '(direct)'}
+                        {p.path ? parsePathHops(p.path, p.path_len).join(' → ') : '(direct)'}
                       </span>
                       <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
                         {p.heard_count}x · {formatTime(p.last_seen)}

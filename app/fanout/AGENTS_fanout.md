@@ -57,6 +57,8 @@ Wraps `MqttPublisher` from `app/fanout/mqtt.py`. Config blob:
 Wraps `CommunityMqttPublisher` from `app/fanout/community_mqtt.py`. Config blob:
 - `broker_host`, `broker_port`, `iata`, `email`
 - Only publishes raw packets (on_message is a no-op)
+- The published `raw` field is always the original packet hex.
+- When a direct packet includes a `path` field, it is emitted as comma-separated hop identifiers exactly as the packet reports them. Token width varies with the packet's path hash mode (`1`, `2`, or `3` bytes per hop); there is no legacy flat per-byte companion field.
 
 ### bot (bot.py)
 Wraps bot code execution via `app/fanout/bot_exec.py`. Config blob:

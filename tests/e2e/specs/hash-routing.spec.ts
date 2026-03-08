@@ -61,7 +61,7 @@ test.describe('Hash routing and conversation identity', () => {
     const legacyToken = channelName.slice(1); // no leading '#'
     await page.goto(`/#channel/${encodeURIComponent(legacyToken)}`);
 
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
     await expect(
       page.getByPlaceholder(new RegExp(`message\\s+${escapeRegex(channelName)}`, 'i'))
     ).toBeVisible();
@@ -72,7 +72,7 @@ test.describe('Hash routing and conversation identity', () => {
   test('full-key contact hash selects the exact contact even with shared prefixes', async ({ page }) => {
     await page.goto(`/#contact/${contactBKey}`);
 
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
     await expect(
       page.getByPlaceholder(new RegExp(`message\\s+${escapeRegex(contactBName)}`, 'i'))
     ).toBeVisible();
@@ -84,7 +84,7 @@ test.describe('Hash routing and conversation identity', () => {
   test('legacy contact-name hash resolves and rewrites to stable full-key hash', async ({ page }) => {
     await page.goto(`/#contact/${encodeURIComponent(contactAName)}`);
 
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
     await expect(
       page.getByPlaceholder(new RegExp(`message\\s+${escapeRegex(contactAName)}`, 'i'))
     ).toBeVisible();

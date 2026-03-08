@@ -14,6 +14,7 @@ Keep it aligned with `frontend/src` source code.
 - Leaflet / react-leaflet (map)
 - Vendored `@michaelhart/meshcore-decoder` in `frontend/lib/meshcore-decoder` (local file dependency for multibyte-support build)
 - `meshcore-hashtag-cracker` + `nosleep.js` (channel cracker)
+- `@michaelhart/meshcore-decoder` pinned to the multibyte-aware `jkingsman/meshcore-decoder-multibyte` fork
 
 ## Frontend Map
 
@@ -179,10 +180,16 @@ frontend/lib/
 - `VisualizerView.tsx` hosts `PacketVisualizer3D.tsx` (desktop split-pane and mobile tabs).
 - `PacketVisualizer3D` uses persistent Three.js geometries for links/highlights/particles and updates typed-array buffers in-place per frame.
 - Packet repeat aggregation keys prefer decoder `messageHash` (path-insensitive), with hash fallback for malformed packets.
+- Raw-packet decoding in `RawPacketList.tsx` and `visualizerUtils.ts` relies on the multibyte-aware decoder fork; keep frontend packet parsing aligned with backend `path_utils.py`.
 - Raw packet events carry both:
   - `id`: backend storage row identity (payload-level dedup)
   - `observation_id`: realtime per-arrival identity (session fidelity)
 - Packet feed/visualizer render keys and dedup logic should use `observation_id` (fallback to `id` only for older payloads).
+
+### Radio settings behavior
+
+- `SettingsRadioSection.tsx` surfaces `path_hash_mode` only when `config.path_hash_mode_supported` is true.
+- Frontend `path_len` fields are hop counts, not raw byte lengths; multibyte path rendering must use the accompanying metadata before splitting hop identifiers.
 
 ## WebSocket (`useWebSocket.ts`)
 

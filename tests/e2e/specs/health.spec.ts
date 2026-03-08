@@ -4,8 +4,8 @@ test.describe('Health & UI basics', () => {
   test('page loads and shows connected status', async ({ page }) => {
     await page.goto('/');
 
-    // Status bar shows "Connected"
-    await expect(page.getByText('Connected')).toBeVisible();
+    // Status bar shows the connected-ready label
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Sidebar is visible with key sections
     await expect(page.getByRole('heading', { name: 'Conversations' })).toBeVisible();

@@ -33,7 +33,7 @@ test.describe('Webhook integration settings', () => {
 
   test('create webhook via UI, configure, save as enabled, verify in list', async ({ page }) => {
     await openFanoutSettings(page);
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Open add menu and pick Webhook
     await page.getByRole('button', { name: 'Add Integration' }).click();
@@ -75,7 +75,7 @@ test.describe('Webhook integration settings', () => {
     const existingIds = new Set(existingConfigs.map((cfg) => cfg.id));
 
     await openFanoutSettings(page);
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Add Integration' }).click();
     await page.getByRole('menuitem', { name: 'Webhook' }).click();
@@ -105,7 +105,7 @@ test.describe('Webhook integration settings', () => {
     createdWebhookId = webhook.id;
 
     await openFanoutSettings(page);
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Click Edit on our webhook
     const row = fanoutHeader(page, 'API Webhook');
@@ -139,7 +139,7 @@ test.describe('Webhook integration settings', () => {
     createdWebhookId = webhook.id;
 
     await openFanoutSettings(page);
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Click Edit
     const row = fanoutHeader(page, 'Scope Webhook');
@@ -173,7 +173,7 @@ test.describe('Webhook integration settings', () => {
     createdWebhookId = webhook.id;
 
     await openFanoutSettings(page);
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Click Edit
     const row = fanoutHeader(page, 'Delete Me Webhook');

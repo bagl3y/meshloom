@@ -34,7 +34,7 @@ test.describe('Historical packet decryption', () => {
 
     // Open the UI
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Open new message modal → Hashtag tab
     await page.getByTitle('New Message').click();

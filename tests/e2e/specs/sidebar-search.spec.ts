@@ -27,7 +27,7 @@ test.describe('Sidebar search/filter', () => {
 
   test('search filters conversations by name', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Both channels should be visible
     await expect(page.getByText(nameA, { exact: true })).toBeVisible();

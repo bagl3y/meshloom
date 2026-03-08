@@ -303,6 +303,20 @@ async def run_migrations(conn: aiosqlite.Connection) -> int:
         await set_version(conn, 38)
         applied += 1
 
+    # Migration 39: Persist contacts.out_path_hash_mode for multibyte path round-tripping
+    if version < 39:
+        logger.info("Applying migration 39: add contacts.out_path_hash_mode")
+        await _migrate_039_add_contact_out_path_hash_mode(conn)
+        await set_version(conn, 39)
+        applied += 1
+
+    # Migration 40: Distinguish advert paths by hop count as well as bytes
+    if version < 40:
+        logger.info("Applying migration 40: rebuild contact_advert_paths uniqueness with path_len")
+        await _migrate_040_rebuild_contact_advert_paths_identity(conn)
+        await set_version(conn, 40)
+        applied += 1
+
     if applied > 0:
         logger.info(
             "Applied %d migration(s), schema now at version %d", applied, await get_version(conn)
@@ -438,39 +452,14 @@ async def _migrate_004_add_payload_hash_column(conn: aiosqlite.Connection) -> No
 
 def _extract_payload_for_hash(raw_packet: bytes) -> bytes | None:
     """
-    Extract payload from a raw packet for hashing (migration-local copy of decoder logic).
+    Extract payload from a raw packet for hashing using canonical framing validation.
 
     Returns the payload bytes, or None if packet is malformed.
     """
-    if len(raw_packet) < 2:
-        return None
+    from app.path_utils import parse_packet_envelope
 
-    try:
-        header = raw_packet[0]
-        route_type = header & 0x03
-        offset = 1
-
-        # Skip transport codes if present (TRANSPORT_FLOOD=0, TRANSPORT_DIRECT=3)
-        if route_type in (0x00, 0x03):
-            if len(raw_packet) < offset + 4:
-                return None
-            offset += 4
-
-        # Get path length
-        if len(raw_packet) < offset + 1:
-            return None
-        path_length = raw_packet[offset]
-        offset += 1
-
-        # Skip path bytes
-        if len(raw_packet) < offset + path_length:
-            return None
-        offset += path_length
-
-        # Rest is payload (may be empty, matching decoder.py behavior)
-        return raw_packet[offset:]
-    except (IndexError, ValueError):
-        return None
+    envelope = parse_packet_envelope(raw_packet)
+    return envelope.payload if envelope is not None else None
 
 
 async def _migrate_005_backfill_payload_hashes(conn: aiosqlite.Connection) -> None:
@@ -620,38 +609,14 @@ async def _migrate_006_replace_path_len_with_path(conn: aiosqlite.Connection) ->
 
 def _extract_path_from_packet(raw_packet: bytes) -> str | None:
     """
-    Extract path hex string from a raw packet (migration-local copy of decoder logic).
+    Extract path hex string from a raw packet using canonical framing validation.
 
     Returns the path as a hex string, or None if packet is malformed.
     """
-    if len(raw_packet) < 2:
-        return None
+    from app.path_utils import parse_packet_envelope
 
-    try:
-        header = raw_packet[0]
-        route_type = header & 0x03
-        offset = 1
-
-        # Skip transport codes if present (TRANSPORT_FLOOD=0, TRANSPORT_DIRECT=3)
-        if route_type in (0x00, 0x03):
-            if len(raw_packet) < offset + 4:
-                return None
-            offset += 4
-
-        # Get path length
-        if len(raw_packet) < offset + 1:
-            return None
-        path_length = raw_packet[offset]
-        offset += 1
-
-        # Extract path bytes
-        if len(raw_packet) < offset + path_length:
-            return None
-        path_bytes = raw_packet[offset : offset + path_length]
-
-        return path_bytes.hex()
-    except (IndexError, ValueError):
-        return None
+    envelope = parse_packet_envelope(raw_packet)
+    return envelope.path.hex() if envelope is not None else None
 
 
 async def _migrate_007_backfill_message_paths(conn: aiosqlite.Connection) -> None:
@@ -1678,7 +1643,7 @@ async def _migrate_026_rename_advert_paths_table(conn: aiosqlite.Connection) -> 
                 first_seen INTEGER NOT NULL,
                 last_seen INTEGER NOT NULL,
                 heard_count INTEGER NOT NULL DEFAULT 1,
-                UNIQUE(public_key, path_hex),
+                UNIQUE(public_key, path_hex, path_len),
                 FOREIGN KEY (public_key) REFERENCES contacts(public_key)
             )
             """
@@ -1702,7 +1667,7 @@ async def _migrate_026_rename_advert_paths_table(conn: aiosqlite.Connection) -> 
             first_seen INTEGER NOT NULL,
             last_seen INTEGER NOT NULL,
             heard_count INTEGER NOT NULL DEFAULT 1,
-            UNIQUE(public_key, path_hex),
+            UNIQUE(public_key, path_hex, path_len),
             FOREIGN KEY (public_key) REFERENCES contacts(public_key)
         )
         """
@@ -2279,4 +2244,141 @@ async def _migrate_038_drop_legacy_columns(conn: aiosqlite.Connection) -> None:
             else:
                 raise
 
+    await conn.commit()
+
+
+async def _migrate_039_add_contact_out_path_hash_mode(conn: aiosqlite.Connection) -> None:
+    """Add contacts.out_path_hash_mode and backfill legacy rows.
+
+    Historical databases predate multibyte routing support. Backfill rules:
+    - contacts with last_path_len = -1 are flood routes -> out_path_hash_mode = -1
+    - all other existing contacts default to 0 (1-byte legacy hop identifiers)
+    """
+    cursor = await conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='contacts'"
+    )
+    if await cursor.fetchone() is None:
+        await conn.commit()
+        return
+
+    column_cursor = await conn.execute("PRAGMA table_info(contacts)")
+    columns = {row[1] for row in await column_cursor.fetchall()}
+
+    added_column = False
+
+    try:
+        await conn.execute(
+            "ALTER TABLE contacts ADD COLUMN out_path_hash_mode INTEGER NOT NULL DEFAULT 0"
+        )
+        added_column = True
+        logger.debug("Added out_path_hash_mode to contacts table")
+    except aiosqlite.OperationalError as e:
+        if "duplicate column name" in str(e).lower():
+            logger.debug("contacts.out_path_hash_mode already exists, skipping add")
+        else:
+            raise
+
+    if "last_path_len" not in columns:
+        await conn.commit()
+        return
+
+    if added_column:
+        await conn.execute(
+            """
+            UPDATE contacts
+            SET out_path_hash_mode = CASE
+                WHEN last_path_len = -1 THEN -1
+                ELSE 0
+            END
+            """
+        )
+    else:
+        await conn.execute(
+            """
+            UPDATE contacts
+            SET out_path_hash_mode = CASE
+                WHEN last_path_len = -1 THEN -1
+                ELSE 0
+            END
+            WHERE out_path_hash_mode NOT IN (-1, 0, 1, 2)
+               OR (last_path_len = -1 AND out_path_hash_mode != -1)
+            """
+        )
+    await conn.commit()
+
+
+async def _migrate_040_rebuild_contact_advert_paths_identity(
+    conn: aiosqlite.Connection,
+) -> None:
+    """Rebuild contact_advert_paths so uniqueness includes path_len.
+
+    Multi-byte routing can produce the same path_hex bytes with a different hop count,
+    which changes the hop boundaries and therefore the semantic next-hop identity.
+    """
+    cursor = await conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='contact_advert_paths'"
+    )
+    if await cursor.fetchone() is None:
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS contact_advert_paths (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                public_key TEXT NOT NULL,
+                path_hex TEXT NOT NULL,
+                path_len INTEGER NOT NULL,
+                first_seen INTEGER NOT NULL,
+                last_seen INTEGER NOT NULL,
+                heard_count INTEGER NOT NULL DEFAULT 1,
+                UNIQUE(public_key, path_hex, path_len),
+                FOREIGN KEY (public_key) REFERENCES contacts(public_key)
+            )
+            """
+        )
+        await conn.execute("DROP INDEX IF EXISTS idx_contact_advert_paths_recent")
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_contact_advert_paths_recent "
+            "ON contact_advert_paths(public_key, last_seen DESC)"
+        )
+        await conn.commit()
+        return
+
+    await conn.execute(
+        """
+        CREATE TABLE contact_advert_paths_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            public_key TEXT NOT NULL,
+            path_hex TEXT NOT NULL,
+            path_len INTEGER NOT NULL,
+            first_seen INTEGER NOT NULL,
+            last_seen INTEGER NOT NULL,
+            heard_count INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(public_key, path_hex, path_len),
+            FOREIGN KEY (public_key) REFERENCES contacts(public_key)
+        )
+        """
+    )
+
+    await conn.execute(
+        """
+        INSERT INTO contact_advert_paths_new
+            (public_key, path_hex, path_len, first_seen, last_seen, heard_count)
+        SELECT
+            public_key,
+            path_hex,
+            path_len,
+            MIN(first_seen),
+            MAX(last_seen),
+            SUM(heard_count)
+        FROM contact_advert_paths
+        GROUP BY public_key, path_hex, path_len
+        """
+    )
+
+    await conn.execute("DROP TABLE contact_advert_paths")
+    await conn.execute("ALTER TABLE contact_advert_paths_new RENAME TO contact_advert_paths")
+    await conn.execute("DROP INDEX IF EXISTS idx_contact_advert_paths_recent")
+    await conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_contact_advert_paths_recent "
+        "ON contact_advert_paths(public_key, last_seen DESC)"
+    )
     await conn.commit()

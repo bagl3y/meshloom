@@ -35,7 +35,7 @@ test.describe('Channel info pane', () => {
 
   test('opens channel info pane and shows message activity', async ({ page }) => {
     await page.goto(`/#channel/${channelKey}/flightless`);
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Wait for messages to load
     await expect(page.getByText('seed-0')).toBeVisible({ timeout: 15_000 });
@@ -83,7 +83,7 @@ test.describe('Message search and jump-to-message', () => {
 
   test('search finds seeded messages', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Open search view via sidebar
     await page.getByText('Message Search').click();
@@ -109,7 +109,7 @@ test.describe('Message search and jump-to-message', () => {
 
   test('clicking a search result jumps to the message in conversation', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Open search
     await page.getByText('Message Search').click();
@@ -135,7 +135,7 @@ test.describe('Message search and jump-to-message', () => {
 
   test('search returns no results for nonsense query', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     await page.getByText('Message Search').click();
 

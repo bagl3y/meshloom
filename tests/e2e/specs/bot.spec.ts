@@ -42,7 +42,7 @@ test.describe('Bot functionality', () => {
 
     // --- Step 2: Verify bot appears in settings UI ---
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     await page.getByText('Settings').click();
     await page.getByRole('button', { name: /MQTT.*Automation/ }).click();

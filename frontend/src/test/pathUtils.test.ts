@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parsePathHops,
+  extractPacketPayloadHex,
   findContactsByPrefix,
   calculateDistance,
   resolvePath,
@@ -28,6 +29,7 @@ function createContact(overrides: Partial<Contact> = {}): Contact {
     last_read_at: null,
     first_seen: null,
     ...overrides,
+    out_path_hash_mode: overrides.out_path_hash_mode ?? 0,
   };
 }
 
@@ -41,6 +43,8 @@ function createConfig(overrides: Partial<RadioConfig> = {}): RadioConfig {
     tx_power: 10,
     max_tx_power: 20,
     radio: { freq: 915, bw: 250, sf: 10, cr: 8 },
+    path_hash_mode: 0,
+    path_hash_mode_supported: false,
     ...overrides,
   };
 }
@@ -66,6 +70,64 @@ describe('parsePathHops', () => {
 
   it('handles odd length by ignoring last character', () => {
     expect(parsePathHops('1A2B3')).toEqual(['1A', '2B']);
+  });
+
+  it('parses 2-byte hops when hopCount is provided', () => {
+    // 8 hex chars / 2 hops = 4 chars per hop (2 bytes)
+    expect(parsePathHops('AABBCCDD', 2)).toEqual(['AABB', 'CCDD']);
+  });
+
+  it('parses 3-byte hops when hopCount is provided', () => {
+    // 12 hex chars / 2 hops = 6 chars per hop (3 bytes)
+    expect(parsePathHops('AABBCCDDEEFF', 2)).toEqual(['AABBCC', 'DDEEFF']);
+  });
+
+  it('parses single 2-byte hop', () => {
+    expect(parsePathHops('AABB', 1)).toEqual(['AABB']);
+  });
+
+  it('parses single 3-byte hop', () => {
+    expect(parsePathHops('AABBCC', 1)).toEqual(['AABBCC']);
+  });
+
+  it('falls back to 2-char chunks when hopCount does not divide evenly', () => {
+    // 6 hex chars / 2 hops = 3 chars per hop (odd, invalid)
+    expect(parsePathHops('1A2B3C', 2)).toEqual(['1A', '2B', '3C']);
+  });
+
+  it('falls back to 2-char chunks when hopCount is null', () => {
+    expect(parsePathHops('AABBCCDD', null)).toEqual(['AA', 'BB', 'CC', 'DD']);
+  });
+
+  it('falls back to 2-char chunks when hopCount is 0', () => {
+    expect(parsePathHops('AABB', 0)).toEqual(['AA', 'BB']);
+  });
+
+  it('handles 2-byte hops with many hops', () => {
+    // 3 hops × 4 chars = 12 hex chars
+    expect(parsePathHops('AABB11223344', 3)).toEqual(['AABB', '1122', '3344']);
+  });
+});
+
+describe('extractPacketPayloadHex', () => {
+  it('extracts payload from legacy 1-byte-hop packet', () => {
+    expect(extractPacketPayloadHex('0902AABB48656C6C6F')).toBe('48656C6C6F');
+  });
+
+  it('extracts payload from 2-byte-hop packet', () => {
+    expect(extractPacketPayloadHex('0942AABBCCDD48656C6C6F')).toBe('48656C6C6F');
+  });
+
+  it('rejects reserved mode 3', () => {
+    expect(extractPacketPayloadHex('09C1AABBCCDDEEFF')).toBeNull();
+  });
+
+  it('rejects oversized path encoding', () => {
+    expect(extractPacketPayloadHex(`09BF${'AA'.repeat(189)}4869`)).toBeNull();
+  });
+
+  it('rejects packets with no payload after path', () => {
+    expect(extractPacketPayloadHex('0902AABB')).toBeNull();
   });
 });
 
@@ -260,6 +322,33 @@ describe('resolvePath', () => {
     expect(result.hops).toHaveLength(0);
     expect(result.sender.name).toBe('Sender');
     expect(result.receiver.name).toBe('MyRadio');
+  });
+
+  it('uses explicit sender and receiver multibyte modes for endpoint prefixes', () => {
+    const result = resolvePath(
+      '',
+      { ...sender, pathHashMode: 1 },
+      contacts,
+      createConfig({
+        public_key: 'ABCDEF' + 'F'.repeat(58),
+        path_hash_mode: 2,
+      })
+    );
+
+    expect(result.sender.prefix).toBe('5EEE');
+    expect(result.receiver.prefix).toBe('ABCDEF');
+  });
+
+  it('derives sender multibyte width from path metadata when sender mode is unknown', () => {
+    const result = resolvePath(
+      '1A2B3C4D',
+      { ...sender, publicKeyOrPrefix: 'AABBCCDDEEFF' + '0'.repeat(52), pathHashMode: null },
+      contacts,
+      config,
+      2
+    );
+
+    expect(result.sender.prefix).toBe('AABB');
   });
 
   it('handles null config gracefully', () => {
@@ -494,6 +583,47 @@ describe('resolvePath', () => {
 
     expect(result.receiver.publicKey).toBeNull();
   });
+
+  it('resolves 2-byte hop path using hopCount parameter', () => {
+    // Create repeaters whose public keys match 4-char prefixes
+    const repeater2byte1 = createContact({
+      public_key: '1A2B' + 'A'.repeat(60),
+      name: 'Repeater2B1',
+      type: CONTACT_TYPE_REPEATER,
+      lat: 40.75,
+      lon: -74.0,
+    });
+    const repeater2byte2 = createContact({
+      public_key: '3C4D' + 'B'.repeat(60),
+      name: 'Repeater2B2',
+      type: CONTACT_TYPE_REPEATER,
+      lat: 40.8,
+      lon: -73.95,
+    });
+    const contacts2byte = [repeater2byte1, repeater2byte2];
+
+    // Path "1A2B3C4D" with hopCount=2 → two 4-char hops: "1A2B", "3C4D"
+    const result = resolvePath('1A2B3C4D', sender, contacts2byte, config, 2);
+
+    expect(result.hops).toHaveLength(2);
+    expect(result.hops[0].prefix).toBe('1A2B');
+    expect(result.hops[0].matches).toHaveLength(1);
+    expect(result.hops[0].matches[0].name).toBe('Repeater2B1');
+    expect(result.hops[1].prefix).toBe('3C4D');
+    expect(result.hops[1].matches).toHaveLength(1);
+    expect(result.hops[1].matches[0].name).toBe('Repeater2B2');
+  });
+
+  it('resolves same path differently without hopCount (legacy fallback)', () => {
+    // Without hopCount, "1A2B3C4D" → four 2-char hops: "1A", "2B", "3C", "4D"
+    const result = resolvePath('1A2B3C4D', sender, contacts, config);
+
+    expect(result.hops).toHaveLength(4);
+    expect(result.hops[0].prefix).toBe('1A');
+    expect(result.hops[1].prefix).toBe('2B');
+    expect(result.hops[2].prefix).toBe('3C');
+    expect(result.hops[3].prefix).toBe('4D');
+  });
 });
 
 describe('formatDistance', () => {
@@ -574,6 +704,38 @@ describe('formatHopCounts', () => {
       { path: '', received_at: 1700000002 }, // direct
     ]);
     expect(result.display).toBe('d/d/1');
+    expect(result.allDirect).toBe(false);
+    expect(result.hasMultiple).toBe(true);
+  });
+
+  it('uses path_len metadata for 2-byte hops instead of hex length', () => {
+    // 8 hex chars with path_len=2 → 2 hops (not 4 as legacy would infer)
+    const result = formatHopCounts([{ path: 'AABBCCDD', path_len: 2, received_at: 1700000000 }]);
+    expect(result.display).toBe('2');
+    expect(result.allDirect).toBe(false);
+  });
+
+  it('uses path_len metadata for 3-byte hops', () => {
+    // 12 hex chars with path_len=2 → 2 hops (not 6 as legacy)
+    const result = formatHopCounts([
+      { path: 'AABBCCDDEEFF', path_len: 2, received_at: 1700000000 },
+    ]);
+    expect(result.display).toBe('2');
+  });
+
+  it('falls back to legacy count when path_len is null', () => {
+    // 8 hex chars, no path_len → legacy: 8/2 = 4 hops
+    const result = formatHopCounts([{ path: 'AABBCCDD', received_at: 1700000000 }]);
+    expect(result.display).toBe('4');
+  });
+
+  it('mixes paths with and without path_len metadata', () => {
+    const result = formatHopCounts([
+      { path: 'AABBCCDD', path_len: 2, received_at: 1700000000 }, // 2 hops (2-byte)
+      { path: '1A2B', received_at: 1700000001 }, // 2 hops (legacy)
+      { path: '', received_at: 1700000002 }, // direct
+    ]);
+    expect(result.display).toBe('d/2/2');
     expect(result.allDirect).toBe(false);
     expect(result.hasMultiple).toBe(true);
   });

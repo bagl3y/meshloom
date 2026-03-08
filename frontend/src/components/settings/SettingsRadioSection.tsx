@@ -47,6 +47,7 @@ export function SettingsRadioSection({
   const [bw, setBw] = useState('');
   const [sf, setSf] = useState('');
   const [cr, setCr] = useState('');
+  const [pathHashMode, setPathHashMode] = useState('0');
   const [gettingLocation, setGettingLocation] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rebooting, setRebooting] = useState(false);
@@ -77,6 +78,7 @@ export function SettingsRadioSection({
     setBw(String(config.radio.bw));
     setSf(String(config.radio.sf));
     setCr(String(config.radio.cr));
+    setPathHashMode(String(config.path_hash_mode));
   }, [config]);
 
   useEffect(() => {
@@ -159,6 +161,8 @@ export function SettingsRadioSection({
       return null;
     }
 
+    const parsedPathHashMode = parseInt(pathHashMode, 10);
+
     return {
       name,
       lat: parsedLat,
@@ -170,6 +174,11 @@ export function SettingsRadioSection({
         sf: parsedSf,
         cr: parsedCr,
       },
+      ...(config.path_hash_mode_supported &&
+      !isNaN(parsedPathHashMode) &&
+      parsedPathHashMode !== config.path_hash_mode
+        ? { path_hash_mode: parsedPathHashMode }
+        : {}),
     };
   };
 
@@ -426,6 +435,33 @@ export function SettingsRadioSection({
           </div>
         </div>
       </div>
+
+      {config.path_hash_mode_supported && (
+        <>
+          <Separator />
+          <div className="space-y-2">
+            <Label htmlFor="path-hash-mode">Path Hash Mode</Label>
+            <select
+              id="path-hash-mode"
+              value={pathHashMode}
+              onChange={(e) => setPathHashMode(e.target.value)}
+              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              <option value="0">1 byte (default)</option>
+              <option value="1">2 bytes</option>
+              <option value="2">3 bytes</option>
+            </select>
+            <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-200">
+              <p className="font-semibold mb-1">Compatibility Warning</p>
+              <p>
+                ALL nodes along a message&apos;s route &mdash; your radio, every repeater, and the
+                recipient &mdash; must be running firmware that supports the selected mode. Messages
+                sent with 2-byte or 3-byte hops will be dropped by any node on older firmware.
+              </p>
+            </div>
+          </div>
+        </>
+      )}
 
       {error && (
         <div className="text-sm text-destructive" role="alert">

@@ -215,6 +215,28 @@ class TestAdvertPaths:
         assert data[0]["next_hop"] is None
 
     @pytest.mark.asyncio
+    async def test_get_contact_advert_paths_distinguishes_same_bytes_by_hop_count(
+        self, test_db, client
+    ):
+        repeater_key = KEY_A
+        await _insert_contact(repeater_key, "R1", type=2)
+        await ContactAdvertPathRepository.record_observation(
+            repeater_key, "aa00", 1000, hop_count=1
+        )
+        await ContactAdvertPathRepository.record_observation(
+            repeater_key, "aa00", 1010, hop_count=2
+        )
+
+        response = await client.get(f"/api/contacts/{repeater_key}/advert-paths")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert [(item["path"], item["path_len"], item["next_hop"]) for item in data] == [
+            ("aa00", 2, "aa"),
+            ("aa00", 1, "aa00"),
+        ]
+
+    @pytest.mark.asyncio
     async def test_get_contact_advert_paths_works_for_non_repeater(self, test_db, client):
         await _insert_contact(KEY_A, "Alice", type=1)
 
@@ -324,6 +346,28 @@ class TestContactDetail:
         repeater = data["nearest_repeaters"][0]
         assert repeater["public_key"] == KEY_B
         assert repeater["name"] == "Relay1"
+        assert repeater["heard_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_detail_nearest_repeaters_use_full_multibyte_next_hop(self, test_db, client):
+        """Nearest repeater resolution should distinguish multi-byte hops with the same first byte."""
+        await _insert_contact(KEY_A, "Alice", type=1)
+        repeater_1 = "bb11" + "aa" * 30
+        repeater_2 = "bb22" + "cc" * 30
+        await _insert_contact(repeater_1, "Relay11", type=2)
+        await _insert_contact(repeater_2, "Relay22", type=2)
+
+        await ContactAdvertPathRepository.record_observation(KEY_A, "bb221122", 1000, hop_count=2)
+        await ContactAdvertPathRepository.record_observation(KEY_A, "bb223344", 1010, hop_count=2)
+
+        response = await client.get(f"/api/contacts/{KEY_A}/detail")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["nearest_repeaters"]) == 1
+        repeater = data["nearest_repeaters"][0]
+        assert repeater["public_key"] == repeater_2
+        assert repeater["name"] == "Relay22"
         assert repeater["heard_count"] == 2
 
     @pytest.mark.asyncio
@@ -629,6 +673,7 @@ class TestResetPath:
         contact = await ContactRepository.get_by_key(KEY_A)
         assert contact.last_path == ""
         assert contact.last_path_len == -1
+        assert contact.out_path_hash_mode == -1
 
     @pytest.mark.asyncio
     async def test_reset_path_not_found(self, test_db, client):
@@ -639,7 +684,13 @@ class TestResetPath:
     @pytest.mark.asyncio
     async def test_reset_path_pushes_to_radio(self, test_db, client):
         """When radio connected and contact on_radio, pushes updated path."""
-        await _insert_contact(KEY_A, on_radio=True, last_path="1122", last_path_len=1)
+        await _insert_contact(
+            KEY_A,
+            on_radio=True,
+            last_path="1122",
+            last_path_len=1,
+            out_path_hash_mode=0,
+        )
 
         mock_mc = MagicMock()
         mock_result = MagicMock()
@@ -656,6 +707,10 @@ class TestResetPath:
 
         assert response.status_code == 200
         mock_mc.commands.add_contact.assert_called_once()
+        contact_payload = mock_mc.commands.add_contact.call_args.args[0]
+        assert contact_payload["out_path"] == ""
+        assert contact_payload["out_path_len"] == -1
+        assert contact_payload["out_path_hash_mode"] == -1
 
     @pytest.mark.asyncio
     async def test_reset_path_broadcasts_websocket_event(self, test_db, client):
@@ -703,6 +758,34 @@ class TestAddRemoveRadio:
         # Verify on_radio flag updated in DB
         contact = await ContactRepository.get_by_key(KEY_A)
         assert contact.on_radio is True
+
+    @pytest.mark.asyncio
+    async def test_add_to_radio_preserves_stored_out_path_hash_mode(self, test_db, client):
+        await _insert_contact(
+            KEY_A,
+            last_path="aa00bb00",
+            last_path_len=2,
+            out_path_hash_mode=1,
+        )
+
+        mock_mc = MagicMock()
+        mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
+        mock_result = MagicMock()
+        mock_result.type = EventType.OK
+        mock_mc.commands.add_contact = AsyncMock(return_value=mock_result)
+
+        radio_manager._meshcore = mock_mc
+        with patch("app.dependencies.radio_manager") as mock_dep_rm:
+            mock_dep_rm.is_connected = True
+            mock_dep_rm.meshcore = mock_mc
+
+            response = await client.post(f"/api/contacts/{KEY_A}/add-to-radio")
+
+        assert response.status_code == 200
+        payload = mock_mc.commands.add_contact.call_args.args[0]
+        assert payload["out_path"] == "aa00bb00"
+        assert payload["out_path_len"] == 2
+        assert payload["out_path_hash_mode"] == 1
 
     @pytest.mark.asyncio
     async def test_add_already_on_radio(self, test_db, client):

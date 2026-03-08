@@ -16,7 +16,7 @@ test.describe('Create contact flow', () => {
 
   test('create a new contact via the new message modal', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Open new message modal
     await page.getByTitle('New Message').click();

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS contacts (
     flags INTEGER DEFAULT 0,
     last_path TEXT,
     last_path_len INTEGER DEFAULT -1,
+    out_path_hash_mode INTEGER DEFAULT 0,
     last_advert INTEGER,
     lat REAL,
     lon REAL,
@@ -70,7 +71,7 @@ CREATE TABLE IF NOT EXISTS contact_advert_paths (
     first_seen INTEGER NOT NULL,
     last_seen INTEGER NOT NULL,
     heard_count INTEGER NOT NULL DEFAULT 1,
-    UNIQUE(public_key, path_hex),
+    UNIQUE(public_key, path_hex, path_len),
     FOREIGN KEY (public_key) REFERENCES contacts(public_key)
 );
 

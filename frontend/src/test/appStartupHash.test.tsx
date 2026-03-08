@@ -158,6 +158,8 @@ describe('App startup hash resolution', () => {
       tx_power: 17,
       max_tx_power: 22,
       radio: { freq: 910.525, bw: 62.5, sf: 7, cr: 5 },
+      path_hash_mode: 0,
+      path_hash_mode_supported: false,
     });
     mocks.api.getSettings.mockResolvedValue({
       max_radio_contacts: 200,

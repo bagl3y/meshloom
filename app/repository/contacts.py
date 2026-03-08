@@ -8,6 +8,7 @@ from app.models import (
     ContactAdvertPathSummary,
     ContactNameHistory,
 )
+from app.path_utils import first_hop_hex
 
 
 class AmbiguousPublicKeyPrefixError(ValueError):
@@ -22,18 +23,24 @@ class AmbiguousPublicKeyPrefixError(ValueError):
 class ContactRepository:
     @staticmethod
     async def upsert(contact: dict[str, Any]) -> None:
+        out_path_hash_mode = contact.get("out_path_hash_mode")
+        if out_path_hash_mode is None:
+            out_path_hash_mode = -1 if contact.get("last_path_len", -1) == -1 else 0
+
         await db.conn.execute(
             """
             INSERT INTO contacts (public_key, name, type, flags, last_path, last_path_len,
-                                  last_advert, lat, lon, last_seen, on_radio, last_contacted,
-                                  first_seen)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                  out_path_hash_mode,
+                                  last_advert, lat, lon, last_seen,
+                                  on_radio, last_contacted, first_seen)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(public_key) DO UPDATE SET
                 name = COALESCE(excluded.name, contacts.name),
                 type = CASE WHEN excluded.type = 0 THEN contacts.type ELSE excluded.type END,
                 flags = excluded.flags,
                 last_path = COALESCE(excluded.last_path, contacts.last_path),
                 last_path_len = excluded.last_path_len,
+                out_path_hash_mode = excluded.out_path_hash_mode,
                 last_advert = COALESCE(excluded.last_advert, contacts.last_advert),
                 lat = COALESCE(excluded.lat, contacts.lat),
                 lon = COALESCE(excluded.lon, contacts.lon),
@@ -49,6 +56,7 @@ class ContactRepository:
                 contact.get("flags", 0),
                 contact.get("last_path"),
                 contact.get("last_path_len", -1),
+                out_path_hash_mode,
                 contact.get("last_advert"),
                 contact.get("lat"),
                 contact.get("lon"),
@@ -70,6 +78,7 @@ class ContactRepository:
             flags=row["flags"],
             last_path=row["last_path"],
             last_path_len=row["last_path_len"],
+            out_path_hash_mode=row["out_path_hash_mode"],
             last_advert=row["last_advert"],
             lat=row["lat"],
             lon=row["lon"],
@@ -200,10 +209,17 @@ class ContactRepository:
         return [ContactRepository._row_to_contact(row) for row in rows]
 
     @staticmethod
-    async def update_path(public_key: str, path: str, path_len: int) -> None:
+    async def update_path(
+        public_key: str,
+        path: str,
+        path_len: int,
+        out_path_hash_mode: int | None = None,
+    ) -> None:
         await db.conn.execute(
-            "UPDATE contacts SET last_path = ?, last_path_len = ?, last_seen = ? WHERE public_key = ?",
-            (path, path_len, int(time.time()), public_key.lower()),
+            """UPDATE contacts SET last_path = ?, last_path_len = ?,
+               out_path_hash_mode = COALESCE(?, out_path_hash_mode),
+               last_seen = ? WHERE public_key = ?""",
+            (path, path_len, out_path_hash_mode, int(time.time()), public_key.lower()),
         )
         await db.conn.commit()
 
@@ -287,10 +303,11 @@ class ContactAdvertPathRepository:
     @staticmethod
     def _row_to_path(row) -> ContactAdvertPath:
         path = row["path_hex"] or ""
-        next_hop = path[:2].lower() if len(path) >= 2 else None
+        path_len = row["path_len"]
+        next_hop = first_hop_hex(path, path_len)
         return ContactAdvertPath(
             path=path,
-            path_len=row["path_len"],
+            path_len=path_len,
             next_hop=next_hop,
             first_seen=row["first_seen"],
             last_seen=row["last_seen"],
@@ -303,6 +320,7 @@ class ContactAdvertPathRepository:
         path_hex: str,
         timestamp: int,
         max_paths: int = 10,
+        hop_count: int | None = None,
     ) -> None:
         """
         Upsert a unique advert path observation for a contact and prune to N most recent.
@@ -312,16 +330,15 @@ class ContactAdvertPathRepository:
 
         normalized_key = public_key.lower()
         normalized_path = path_hex.lower()
-        path_len = len(normalized_path) // 2
+        path_len = hop_count if hop_count is not None else len(normalized_path) // 2
 
         await db.conn.execute(
             """
             INSERT INTO contact_advert_paths
                 (public_key, path_hex, path_len, first_seen, last_seen, heard_count)
             VALUES (?, ?, ?, ?, ?, 1)
-            ON CONFLICT(public_key, path_hex) DO UPDATE SET
+            ON CONFLICT(public_key, path_hex, path_len) DO UPDATE SET
                 last_seen = MAX(contact_advert_paths.last_seen, excluded.last_seen),
-                path_len = excluded.path_len,
                 heard_count = contact_advert_paths.heard_count + 1
             """,
             (normalized_key, normalized_path, path_len, timestamp, timestamp),
@@ -332,8 +349,8 @@ class ContactAdvertPathRepository:
             """
             DELETE FROM contact_advert_paths
             WHERE public_key = ?
-              AND path_hex NOT IN (
-                  SELECT path_hex
+              AND id NOT IN (
+                  SELECT id
                   FROM contact_advert_paths
                   WHERE public_key = ?
                   ORDER BY last_seen DESC, heard_count DESC, path_len ASC, path_hex ASC

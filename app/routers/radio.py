@@ -28,6 +28,12 @@ class RadioConfigResponse(BaseModel):
     tx_power: int = Field(description="Transmit power in dBm")
     max_tx_power: int = Field(description="Maximum transmit power in dBm")
     radio: RadioSettings
+    path_hash_mode: int = Field(
+        default=0, description="Path hash mode (0=1-byte, 1=2-byte, 2=3-byte)"
+    )
+    path_hash_mode_supported: bool = Field(
+        default=False, description="Whether firmware supports path hash mode setting"
+    )
 
 
 class RadioConfigUpdate(BaseModel):
@@ -36,6 +42,12 @@ class RadioConfigUpdate(BaseModel):
     lon: float | None = None
     tx_power: int | None = Field(default=None, description="Transmit power in dBm")
     radio: RadioSettings | None = None
+    path_hash_mode: int | None = Field(
+        default=None,
+        ge=0,
+        le=2,
+        description="Path hash mode (0=1-byte, 1=2-byte, 2=3-byte)",
+    )
 
 
 class PrivateKeyUpdate(BaseModel):
@@ -64,6 +76,8 @@ async def get_radio_config() -> RadioConfigResponse:
             sf=info.get("radio_sf", 0),
             cr=info.get("radio_cr", 0),
         ),
+        path_hash_mode=radio_manager.path_hash_mode,
+        path_hash_mode_supported=radio_manager.path_hash_mode_supported,
     )
 
 
@@ -102,6 +116,20 @@ async def update_radio_config(update: RadioConfigUpdate) -> RadioConfigResponse:
                 sf=update.radio.sf,
                 cr=update.radio.cr,
             )
+
+        if update.path_hash_mode is not None:
+            if not radio_manager.path_hash_mode_supported:
+                raise HTTPException(
+                    status_code=400, detail="Firmware does not support path hash mode setting"
+                )
+            logger.info("Setting path hash mode to %d", update.path_hash_mode)
+            result = await mc.commands.set_path_hash_mode(update.path_hash_mode)
+            if result is not None and result.type == EventType.ERROR:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to set path hash mode: {result.payload}",
+                )
+            radio_manager.path_hash_mode = update.path_hash_mode
 
         # Sync time with system clock
         await sync_radio_time(mc)

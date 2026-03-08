@@ -58,6 +58,7 @@ async def _handle_duplicate_message(
     sender_timestamp: int,
     path: str | None,
     received: int,
+    path_len: int | None = None,
 ) -> None:
     """Handle a duplicate message by updating paths/acks on the existing record.
 
@@ -90,7 +91,7 @@ async def _handle_duplicate_message(
 
     # Add path if provided
     if path is not None:
-        paths = await MessageRepository.add_path(existing_msg.id, path, received)
+        paths = await MessageRepository.add_path(existing_msg.id, path, received, path_len)
     else:
         # Get current paths for broadcast
         paths = existing_msg.paths or []
@@ -128,6 +129,7 @@ async def create_message_from_decrypted(
     timestamp: int,
     received_at: int | None = None,
     path: str | None = None,
+    path_len: int | None = None,
     channel_name: str | None = None,
     realtime: bool = True,
 ) -> int | None:
@@ -172,6 +174,7 @@ async def create_message_from_decrypted(
         sender_timestamp=timestamp,
         received_at=received,
         path=path,
+        path_len=path_len,
         sender_name=sender,
         sender_key=resolved_sender_key,
     )
@@ -182,7 +185,7 @@ async def create_message_from_decrypted(
         # 2. Same message arrives via multiple paths before first is committed
         # In either case, add the path to the existing message.
         await _handle_duplicate_message(
-            packet_id, "CHAN", channel_key_normalized, text, timestamp, path, received
+            packet_id, "CHAN", channel_key_normalized, text, timestamp, path, received, path_len
         )
         return None
 
@@ -193,7 +196,11 @@ async def create_message_from_decrypted(
 
     # Build paths array for broadcast
     # Use "is not None" to include empty string (direct/0-hop messages)
-    paths = [MessagePath(path=path or "", received_at=received)] if path is not None else None
+    paths = (
+        [MessagePath(path=path or "", received_at=received, path_len=path_len)]
+        if path is not None
+        else None
+    )
 
     # Broadcast new message to connected clients (and fanout modules when realtime)
     broadcast_event(
@@ -223,6 +230,7 @@ async def create_dm_message_from_decrypted(
     our_public_key: str | None,
     received_at: int | None = None,
     path: str | None = None,
+    path_len: int | None = None,
     outgoing: bool = False,
     realtime: bool = True,
 ) -> int | None:
@@ -270,6 +278,7 @@ async def create_dm_message_from_decrypted(
         sender_timestamp=decrypted.timestamp,
         received_at=received,
         path=path,
+        path_len=path_len,
         outgoing=outgoing,
         sender_key=conversation_key if not outgoing else None,
         sender_name=sender_name,
@@ -285,6 +294,7 @@ async def create_dm_message_from_decrypted(
             decrypted.timestamp,
             path,
             received,
+            path_len,
         )
         return None
 
@@ -299,7 +309,11 @@ async def create_dm_message_from_decrypted(
     await RawPacketRepository.mark_decrypted(packet_id, msg_id)
 
     # Build paths array for broadcast
-    paths = [MessagePath(path=path or "", received_at=received)] if path is not None else None
+    paths = (
+        [MessagePath(path=path or "", received_at=received, path_len=path_len)]
+        if path is not None
+        else None
+    )
 
     # Broadcast new message to connected clients (and fanout modules when realtime)
     sender_name = contact.name if contact and not outgoing else None
@@ -383,6 +397,7 @@ async def run_historical_dm_decryption(
             # Extract path from the raw packet for storage
             packet_info = parse_packet(packet_data)
             path_hex = packet_info.path.hex() if packet_info else None
+            path_len = packet_info.path_length if packet_info else None
 
             msg_id = await create_dm_message_from_decrypted(
                 packet_id=packet_id,
@@ -391,6 +406,7 @@ async def run_historical_dm_decryption(
                 our_public_key=our_public_key_bytes.hex(),
                 received_at=packet_timestamp,
                 path=path_hex,
+                path_len=path_len,
                 outgoing=outgoing,
                 realtime=False,  # Historical decryption should not trigger fanout
             )
@@ -606,6 +622,7 @@ async def _process_group_text(
             timestamp=decrypted.timestamp,
             received_at=timestamp,
             path=packet_info.path.hex() if packet_info else None,
+            path_len=packet_info.path_length if packet_info else None,
         )
 
         return {
@@ -674,9 +691,11 @@ async def _process_advertisement(
         assert existing is not None  # Guaranteed by the conditions that set use_existing_path
         path_len = existing.last_path_len if existing.last_path_len is not None else -1
         path_hex = existing.last_path or ""
+        out_path_hash_mode = existing.out_path_hash_mode
     else:
         path_len = new_path_len
         path_hex = new_path_hex
+        out_path_hash_mode = packet_info.path_hash_size - 1
 
     logger.debug(
         "Parsed advertisement from %s: %s (role=%d, lat=%s, lon=%s, path_len=%d)",
@@ -700,6 +719,7 @@ async def _process_advertisement(
         path_hex=new_path_hex,
         timestamp=timestamp,
         max_paths=10,
+        hop_count=new_path_len,
     )
 
     # Record name history
@@ -720,6 +740,7 @@ async def _process_advertisement(
         "last_seen": timestamp,
         "last_path": path_hex,
         "last_path_len": path_len,
+        "out_path_hash_mode": out_path_hash_mode,
         "first_seen": timestamp,  # COALESCE in upsert preserves existing value
     }
 
@@ -872,6 +893,7 @@ async def _process_direct_message(
                 our_public_key=our_public_key.hex(),
                 received_at=timestamp,
                 path=packet_info.path.hex() if packet_info else None,
+                path_len=packet_info.path_length if packet_info else None,
                 outgoing=is_outgoing,
             )
 

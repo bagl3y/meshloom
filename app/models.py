@@ -10,6 +10,7 @@ class Contact(BaseModel):
     flags: int = 0
     last_path: str | None = None
     last_path_len: int = -1
+    out_path_hash_mode: int = 0
     last_advert: int | None = None
     lat: float | None = None
     lon: float | None = None
@@ -32,6 +33,7 @@ class Contact(BaseModel):
             "flags": self.flags,
             "out_path": self.last_path or "",
             "out_path_len": self.last_path_len,
+            "out_path_hash_mode": self.out_path_hash_mode,
             "adv_lat": self.lat if self.lat is not None else 0.0,
             "adv_lon": self.lon if self.lon is not None else 0.0,
             "last_advert": self.last_advert if self.last_advert is not None else 0,
@@ -51,6 +53,10 @@ class Contact(BaseModel):
             "flags": radio_data.get("flags", 0),
             "last_path": radio_data.get("out_path"),
             "last_path_len": radio_data.get("out_path_len", -1),
+            "out_path_hash_mode": radio_data.get(
+                "out_path_hash_mode",
+                -1 if radio_data.get("out_path_len", -1) == -1 else 0,
+            ),
             "lat": radio_data.get("adv_lat"),
             "lon": radio_data.get("adv_lon"),
             "last_advert": radio_data.get("last_advert"),
@@ -79,7 +85,8 @@ class ContactAdvertPath(BaseModel):
     path: str = Field(description="Hex-encoded routing path (empty string for direct)")
     path_len: int = Field(description="Number of hops in the path")
     next_hop: str | None = Field(
-        default=None, description="First hop toward us (2-char hex), or null for direct"
+        default=None,
+        description="First hop toward us as a full hop identifier, or null for direct",
     )
     first_seen: int = Field(description="Unix timestamp of first observation")
     last_seen: int = Field(description="Unix timestamp of most recent observation")
@@ -176,8 +183,12 @@ class ChannelDetail(BaseModel):
 class MessagePath(BaseModel):
     """A single path that a message took to reach us."""
 
-    path: str = Field(description="Hex-encoded routing path (2 chars per hop)")
+    path: str = Field(description="Hex-encoded routing path")
     received_at: int = Field(description="Unix timestamp when this path was received")
+    path_len: int | None = Field(
+        default=None,
+        description="Hop count. None = legacy (infer as len(path)//2, i.e. 1-byte hops)",
+    )
 
 
 class Message(BaseModel):
@@ -490,6 +501,16 @@ class ContactActivityCounts(BaseModel):
     last_week: int
 
 
+class PathHashWidthStats(BaseModel):
+    total_packets: int
+    single_byte: int
+    double_byte: int
+    triple_byte: int
+    single_byte_pct: float
+    double_byte_pct: float
+    triple_byte_pct: float
+
+
 class StatisticsResponse(BaseModel):
     busiest_channels_24h: list[BusyChannel]
     contact_count: int
@@ -503,3 +524,4 @@ class StatisticsResponse(BaseModel):
     total_outgoing: int
     contacts_heard: ContactActivityCounts
     repeaters_heard: ContactActivityCounts
+    path_hash_width_24h: PathHashWidthStats

@@ -661,6 +661,75 @@ class TestAppriseFormatBody:
         )
         assert "`direct`" in body
 
+    def test_dm_with_2byte_hop_path(self):
+        """Multi-byte (2-byte) hops are correctly split using path_len metadata."""
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {
+                "type": "PRIV",
+                "text": "hi",
+                "sender_name": "Alice",
+                "paths": [{"path": "aabbccdd", "path_len": 2}],
+            },
+            include_path=True,
+        )
+        assert "**via:**" in body
+        assert "`aabb`" in body
+        assert "`ccdd`" in body
+
+    def test_dm_with_3byte_hop_path(self):
+        """Multi-byte (3-byte) hops are correctly split using path_len metadata."""
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {
+                "type": "PRIV",
+                "text": "hi",
+                "sender_name": "Alice",
+                "paths": [{"path": "aabbccddeeff", "path_len": 2}],
+            },
+            include_path=True,
+        )
+        assert "**via:**" in body
+        assert "`aabbcc`" in body
+        assert "`ddeeff`" in body
+
+    def test_channel_with_multibyte_path(self):
+        """Channel message with 2-byte hop path_len metadata."""
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {
+                "type": "CHAN",
+                "text": "hi",
+                "sender_name": "Bob",
+                "channel_name": "#general",
+                "paths": [{"path": "aabbccdd", "path_len": 2}],
+            },
+            include_path=True,
+        )
+        assert "**#general:**" in body
+        assert "`aabb`" in body
+        assert "`ccdd`" in body
+
+    def test_legacy_path_without_path_len(self):
+        """Legacy path (no path_len) falls back to 2-char chunks."""
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {
+                "type": "PRIV",
+                "text": "hi",
+                "sender_name": "Alice",
+                "paths": [{"path": "aabb"}],
+            },
+            include_path=True,
+        )
+        assert "**via:**" in body
+        assert "`aa`" in body
+        assert "`bb`" in body
+
 
 class TestAppriseNormalizeDiscordUrl:
     def test_discord_scheme(self):

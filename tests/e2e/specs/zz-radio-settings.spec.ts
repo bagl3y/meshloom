@@ -15,7 +15,7 @@ test.describe('Radio settings', () => {
 
     try {
       await page.goto('/');
-      await expect(page.getByText('Connected')).toBeVisible();
+      await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
       // --- Step 1: Change the name via settings UI ---
       await page.getByText('Settings').click();
@@ -36,7 +36,9 @@ test.describe('Radio settings', () => {
 
       // --- Step 3: Verify persistence across page reload ---
       await page.reload();
-      await expect(page.getByText('Connected')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible({
+        timeout: 15_000,
+      });
 
       await page.getByText('Settings').click();
       await expect(page.locator('#name')).toHaveValue(testName, { timeout: 10_000 });

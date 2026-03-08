@@ -23,7 +23,7 @@ test.describe('Create hashtag channel flow', () => {
 
   test('create a hashtag channel via UI', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Open new message modal
     await page.getByTitle('New Message').click();
@@ -47,7 +47,7 @@ test.describe('Create hashtag channel flow', () => {
 
   test('create & add another keeps modal open', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     await page.getByTitle('New Message').click();
     const dialog = page.getByRole('dialog');

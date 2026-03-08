@@ -26,6 +26,7 @@ class MessageRepository:
         conversation_key: str,
         sender_timestamp: int | None = None,
         path: str | None = None,
+        path_len: int | None = None,
         txt_type: int = 0,
         signature: str | None = None,
         outgoing: bool = False,
@@ -43,7 +44,10 @@ class MessageRepository:
         # Convert single path to paths array format
         paths_json = None
         if path is not None:
-            paths_json = json.dumps([{"path": path, "received_at": received_at}])
+            entry: dict = {"path": path, "received_at": received_at}
+            if path_len is not None:
+                entry["path_len"] = path_len
+            paths_json = json.dumps([entry])
 
         cursor = await db.conn.execute(
             """
@@ -74,7 +78,10 @@ class MessageRepository:
 
     @staticmethod
     async def add_path(
-        message_id: int, path: str, received_at: int | None = None
+        message_id: int,
+        path: str,
+        received_at: int | None = None,
+        path_len: int | None = None,
     ) -> list[MessagePath]:
         """Add a new path to an existing message.
 
@@ -85,7 +92,10 @@ class MessageRepository:
 
         # Atomic append: use json_insert to avoid read-modify-write race when
         # multiple duplicate packets arrive concurrently for the same message.
-        new_entry = json.dumps({"path": path, "received_at": ts})
+        entry: dict = {"path": path, "received_at": ts}
+        if path_len is not None:
+            entry["path_len"] = path_len
+        new_entry = json.dumps(entry)
         await db.conn.execute(
             """UPDATE messages SET paths = json_insert(
                 COALESCE(paths, '[]'), '$[#]', json(?)

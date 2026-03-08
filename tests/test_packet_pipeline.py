@@ -309,6 +309,7 @@ class TestAdvertisementPipeline:
         short_packet_info = MagicMock()
         short_packet_info.path_length = 1
         short_packet_info.path = bytes.fromhex("aa")
+        short_packet_info.path_hash_size = 1
         short_packet_info.payload = b""  # Will be parsed by parse_advertisement
 
         # Mock parse_advertisement to return our test contact
@@ -333,6 +334,7 @@ class TestAdvertisementPipeline:
         long_packet_info = MagicMock()
         long_packet_info.path_length = 5
         long_packet_info.path = bytes.fromhex("aabbccddee")
+        long_packet_info.path_hash_size = 1
 
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
             with patch("app.packet_processor.parse_advertisement") as mock_parse:
@@ -381,6 +383,7 @@ class TestAdvertisementPipeline:
         packet_info = MagicMock()
         packet_info.path_length = 3
         packet_info.path = bytes.fromhex("aabbcc")
+        packet_info.path_hash_size = 1
 
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
             with patch("app.packet_processor.parse_advertisement") as mock_parse:
@@ -433,6 +436,7 @@ class TestAdvertisementPipeline:
         long_packet_info = MagicMock()
         long_packet_info.path_length = 4
         long_packet_info.path = bytes.fromhex("aabbccdd")
+        long_packet_info.path_hash_size = 1
         long_packet_info.payload = b""
 
         with patch("app.packet_processor.broadcast_event", mock_broadcast):

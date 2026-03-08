@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 from app.database import db
 from app.models import AppSettings, Favorite
+from app.path_utils import parse_packet_envelope
 
 logger = logging.getLogger(__name__)
 
@@ -270,6 +271,53 @@ class StatisticsRepository:
         }
 
     @staticmethod
+    async def _path_hash_width_24h() -> dict[str, int | float]:
+        """Count parsed raw packets from the last 24h by hop hash width."""
+        now = int(time.time())
+        cursor = await db.conn.execute(
+            "SELECT data FROM raw_packets WHERE timestamp >= ?",
+            (now - SECONDS_24H,),
+        )
+        rows = await cursor.fetchall()
+
+        single_byte = 0
+        double_byte = 0
+        triple_byte = 0
+
+        for row in rows:
+            envelope = parse_packet_envelope(bytes(row["data"]))
+            if envelope is None:
+                continue
+            if envelope.hash_size == 1:
+                single_byte += 1
+            elif envelope.hash_size == 2:
+                double_byte += 1
+            elif envelope.hash_size == 3:
+                triple_byte += 1
+
+        total_packets = single_byte + double_byte + triple_byte
+        if total_packets == 0:
+            return {
+                "total_packets": 0,
+                "single_byte": 0,
+                "double_byte": 0,
+                "triple_byte": 0,
+                "single_byte_pct": 0.0,
+                "double_byte_pct": 0.0,
+                "triple_byte_pct": 0.0,
+            }
+
+        return {
+            "total_packets": total_packets,
+            "single_byte": single_byte,
+            "double_byte": double_byte,
+            "triple_byte": triple_byte,
+            "single_byte_pct": (single_byte / total_packets) * 100,
+            "double_byte_pct": (double_byte / total_packets) * 100,
+            "triple_byte_pct": (triple_byte / total_packets) * 100,
+        }
+
+    @staticmethod
     async def get_all() -> dict:
         """Aggregate all statistics from existing tables."""
         now = int(time.time())
@@ -348,6 +396,7 @@ class StatisticsRepository:
         # Activity windows
         contacts_heard = await StatisticsRepository._activity_counts(contact_type=2, exclude=True)
         repeaters_heard = await StatisticsRepository._activity_counts(contact_type=2)
+        path_hash_width_24h = await StatisticsRepository._path_hash_width_24h()
 
         return {
             "busiest_channels_24h": busiest_channels_24h,
@@ -362,4 +411,5 @@ class StatisticsRepository:
             "total_outgoing": total_outgoing,
             "contacts_heard": contacts_heard,
             "repeaters_heard": repeaters_heard,
+            "path_hash_width_24h": path_hash_width_24h,
         }

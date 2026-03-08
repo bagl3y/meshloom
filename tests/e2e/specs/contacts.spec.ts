@@ -25,7 +25,7 @@ test.describe('Contacts sidebar & info pane', () => {
     }
 
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Click the contact in the sidebar
     await page.getByText(named.name!, { exact: true }).first().click();
@@ -46,7 +46,7 @@ test.describe('Contacts sidebar & info pane', () => {
     }
 
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     // Open contact conversation
     await page.getByText(named.name!, { exact: true }).first().click();
@@ -74,7 +74,7 @@ test.describe('Contacts sidebar & info pane', () => {
     }
 
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     await page.getByText(named.name!, { exact: true }).first().click();
     const escapedName = escapeRegex(named.name!.trim());

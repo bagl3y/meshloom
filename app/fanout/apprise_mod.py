@@ -7,6 +7,7 @@ import logging
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from app.fanout.base import FanoutModule
+from app.path_utils import split_path_hex
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +46,12 @@ def _format_body(data: dict, *, include_path: bool) -> str:
     if include_path:
         paths = data.get("paths")
         if paths and isinstance(paths, list) and len(paths) > 0:
-            path_str = paths[0].get("path", "") if isinstance(paths[0], dict) else ""
+            first_path = paths[0] if isinstance(paths[0], dict) else {}
+            path_str = first_path.get("path", "")
+            path_len = first_path.get("path_len")
         else:
             path_str = None
+            path_len = None
 
         if msg_type == "PRIV" and path_str is None:
             via = " **via:** [`direct`]"
@@ -56,7 +60,8 @@ def _format_body(data: dict, *, include_path: bool) -> str:
             if path_str == "":
                 via = " **via:** [`direct`]"
             else:
-                hops = [path_str[i : i + 2] for i in range(0, len(path_str), 2)]
+                hop_count = path_len if isinstance(path_len, int) else len(path_str) // 2
+                hops = split_path_hex(path_str, hop_count)
                 if hops:
                     hop_list = ", ".join(f"`{h}`" for h in hops)
                     via = f" **via:** [{hop_list}]"

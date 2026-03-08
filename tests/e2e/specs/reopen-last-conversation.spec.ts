@@ -28,7 +28,7 @@ test.describe('Reopen last conversation (device-local)', () => {
 
   test('reopens last viewed conversation on startup when enabled', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
     await expect.poll(() => new URL(page.url()).hash).toBe('');
 
     await page.getByText(channelName, { exact: true }).first().click();
@@ -51,7 +51,7 @@ test.describe('Reopen last conversation (device-local)', () => {
 
   test('clears local storage and falls back to default when disabled', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
     await page.getByText(channelName, { exact: true }).first().click();
     await expect(

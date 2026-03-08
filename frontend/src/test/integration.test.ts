@@ -288,6 +288,7 @@ function makeContact(overrides: Partial<Contact> = {}): Contact {
     last_read_at: null,
     first_seen: null,
     ...overrides,
+    out_path_hash_mode: overrides.out_path_hash_mode ?? 0,
   };
 }
 
