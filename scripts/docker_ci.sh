@@ -10,7 +10,8 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 NODE_VERSIONS=("20" "22" "24")
-NPM_VERSIONS=("9" "10")
+# Use explicit npm patch versions so resolver regressions are caught.
+NPM_VERSIONS=("9.1.1" "9.9.4" "10.9.5" "11.6.2")
 
 echo -e "${YELLOW}=== Frontend Docker CI Matrix ===${NC}"
 echo -e "${BLUE}Repo:${NC} $SCRIPT_DIR"

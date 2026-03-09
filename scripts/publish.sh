@@ -168,6 +168,24 @@ docker push jkingsman/remoteterm-meshcore:$GIT_HASH
 echo -e "${GREEN}Docker push complete!${NC}"
 echo
 
+# Create GitHub release using the changelog notes for this version.
+echo -e "${YELLOW}Creating GitHub release...${NC}"
+RELEASE_NOTES_FILE=$(mktemp)
+{
+    echo "$CHANGELOG_HEADER"
+    echo
+    echo "$CHANGELOG_ENTRY"
+} > "$RELEASE_NOTES_FILE"
+
+gh release create "$VERSION" \
+    --title "$VERSION" \
+    --notes-file "$RELEASE_NOTES_FILE" \
+    --target HEAD
+
+rm -f "$RELEASE_NOTES_FILE"
+echo -e "${GREEN}GitHub release created!${NC}"
+echo
+
 echo -e "${GREEN}=== Publish complete! ===${NC}"
 echo -e "Version: ${YELLOW}$VERSION${NC}"
 echo -e "Git hash: ${YELLOW}$GIT_HASH${NC}"
@@ -175,3 +193,5 @@ echo -e "Docker tags pushed:"
 echo -e "  - jkingsman/remoteterm-meshcore:latest"
 echo -e "  - jkingsman/remoteterm-meshcore:$VERSION"
 echo -e "  - jkingsman/remoteterm-meshcore:$GIT_HASH"
+echo -e "GitHub release:"
+echo -e "  - $VERSION"

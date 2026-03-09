@@ -1141,7 +1141,7 @@ SOFTWARE.
 
 </details>
 
-### meshcore-hashtag-cracker (1.10.0) — MIT
+### meshcore-hashtag-cracker (1.11.0) — MIT
 
 <details>
 <summary>Full license text</summary>
