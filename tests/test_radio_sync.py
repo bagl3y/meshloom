@@ -378,6 +378,33 @@ class TestSyncRecentContactsToRadio:
         assert payload["out_path_hash_mode"] == 1
 
     @pytest.mark.asyncio
+    async def test_add_contact_decodes_legacy_packed_path_len(self, test_db):
+        """Legacy signed packed path bytes are normalized before add_contact."""
+        await _insert_contact(
+            KEY_A,
+            "Alice",
+            last_contacted=2000,
+            last_path="3f3f69de1c7b7e7662",
+            last_path_len=-125,
+            out_path_hash_mode=2,
+        )
+
+        mock_mc = MagicMock()
+        mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
+        mock_result = MagicMock()
+        mock_result.type = EventType.OK
+        mock_mc.commands.add_contact = AsyncMock(return_value=mock_result)
+
+        radio_manager._meshcore = mock_mc
+        result = await sync_recent_contacts_to_radio()
+
+        assert result["loaded"] == 1
+        payload = mock_mc.commands.add_contact.call_args.args[0]
+        assert payload["out_path"] == "3f3f69de1c7b7e7662"
+        assert payload["out_path_len"] == 3
+        assert payload["out_path_hash_mode"] == 2
+
+    @pytest.mark.asyncio
     async def test_mc_param_bypasses_lock_acquisition(self, test_db):
         """When mc is passed, the function uses it directly without acquiring radio_operation.
 

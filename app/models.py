@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.path_utils import normalize_contact_route
+
 
 class Contact(BaseModel):
     public_key: str = Field(description="Public key (64-char hex)")
@@ -26,14 +28,19 @@ class Contact(BaseModel):
         The radio API uses different field names (adv_name, out_path, etc.)
         than our database schema (name, last_path, etc.).
         """
+        last_path, last_path_len, out_path_hash_mode = normalize_contact_route(
+            self.last_path,
+            self.last_path_len,
+            self.out_path_hash_mode,
+        )
         return {
             "public_key": self.public_key,
             "adv_name": self.name or "",
             "type": self.type,
             "flags": self.flags,
-            "out_path": self.last_path or "",
-            "out_path_len": self.last_path_len,
-            "out_path_hash_mode": self.out_path_hash_mode,
+            "out_path": last_path,
+            "out_path_len": last_path_len,
+            "out_path_hash_mode": out_path_hash_mode,
             "adv_lat": self.lat if self.lat is not None else 0.0,
             "adv_lon": self.lon if self.lon is not None else 0.0,
             "last_advert": self.last_advert if self.last_advert is not None else 0,
@@ -46,17 +53,22 @@ class Contact(BaseModel):
         This is the inverse of to_radio_dict(), used when syncing contacts
         from radio to database.
         """
+        last_path, last_path_len, out_path_hash_mode = normalize_contact_route(
+            radio_data.get("out_path"),
+            radio_data.get("out_path_len", -1),
+            radio_data.get(
+                "out_path_hash_mode",
+                -1 if radio_data.get("out_path_len", -1) == -1 else 0,
+            ),
+        )
         return {
             "public_key": public_key,
             "name": radio_data.get("adv_name"),
             "type": radio_data.get("type", 0),
             "flags": radio_data.get("flags", 0),
-            "last_path": radio_data.get("out_path"),
-            "last_path_len": radio_data.get("out_path_len", -1),
-            "out_path_hash_mode": radio_data.get(
-                "out_path_hash_mode",
-                -1 if radio_data.get("out_path_len", -1) == -1 else 0,
-            ),
+            "last_path": last_path,
+            "last_path_len": last_path_len,
+            "out_path_hash_mode": out_path_hash_mode,
             "lat": radio_data.get("adv_lat"),
             "lon": radio_data.get("adv_lon"),
             "last_advert": radio_data.get("last_advert"),

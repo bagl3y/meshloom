@@ -5,6 +5,7 @@ import pytest
 from app.path_utils import (
     decode_path_byte,
     first_hop_hex,
+    normalize_contact_route,
     parse_packet_envelope,
     path_wire_len,
     split_path_hex,
@@ -153,6 +154,26 @@ class TestFirstHopHex:
         assert first_hop_hex("", 0) is None
 
 
+class TestNormalizeContactRoute:
+    def test_decodes_legacy_signed_packed_len(self):
+        path_hex, path_len, hash_mode = normalize_contact_route("3f3f69de1c7b7e7662", -125, 2)
+        assert path_hex == "3f3f69de1c7b7e7662"
+        assert path_len == 3
+        assert hash_mode == 2
+
+    def test_decodes_legacy_unsigned_packed_len(self):
+        path_hex, path_len, hash_mode = normalize_contact_route("7e7662ae9258", 130, None)
+        assert path_hex == "7e7662ae9258"
+        assert path_len == 2
+        assert hash_mode == 2
+
+    def test_normalizes_flood_to_empty_path(self):
+        path_hex, path_len, hash_mode = normalize_contact_route("abcd", -1, 2)
+        assert path_hex == ""
+        assert path_len == -1
+        assert hash_mode == -1
+
+
 class TestContactToRadioDictHashMode:
     """Test that Contact.to_radio_dict() preserves the stored out_path_hash_mode."""
 
@@ -215,6 +236,20 @@ class TestContactToRadioDictHashMode:
         )
         d = c.to_radio_dict()
         assert d["out_path_hash_mode"] == 1
+
+    def test_decodes_legacy_signed_packed_len_before_radio_sync(self):
+        from app.models import Contact
+
+        c = Contact(
+            public_key="ff" * 32,
+            last_path="3f3f69de1c7b7e7662",
+            last_path_len=-125,
+            out_path_hash_mode=2,
+        )
+        d = c.to_radio_dict()
+        assert d["out_path"] == "3f3f69de1c7b7e7662"
+        assert d["out_path_len"] == 3
+        assert d["out_path_hash_mode"] == 2
 
 
 class TestContactFromRadioDictHashMode:

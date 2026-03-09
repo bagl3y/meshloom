@@ -8,7 +8,7 @@ from app.models import (
     ContactAdvertPathSummary,
     ContactNameHistory,
 )
-from app.path_utils import first_hop_hex
+from app.path_utils import first_hop_hex, normalize_contact_route
 
 
 class AmbiguousPublicKeyPrefixError(ValueError):
@@ -23,9 +23,11 @@ class AmbiguousPublicKeyPrefixError(ValueError):
 class ContactRepository:
     @staticmethod
     async def upsert(contact: dict[str, Any]) -> None:
-        out_path_hash_mode = contact.get("out_path_hash_mode")
-        if out_path_hash_mode is None:
-            out_path_hash_mode = -1 if contact.get("last_path_len", -1) == -1 else 0
+        last_path, last_path_len, out_path_hash_mode = normalize_contact_route(
+            contact.get("last_path"),
+            contact.get("last_path_len", -1),
+            contact.get("out_path_hash_mode"),
+        )
 
         await db.conn.execute(
             """
@@ -54,8 +56,8 @@ class ContactRepository:
                 contact.get("name"),
                 contact.get("type", 0),
                 contact.get("flags", 0),
-                contact.get("last_path"),
-                contact.get("last_path_len", -1),
+                last_path,
+                last_path_len,
                 out_path_hash_mode,
                 contact.get("last_advert"),
                 contact.get("lat"),
@@ -71,14 +73,19 @@ class ContactRepository:
     @staticmethod
     def _row_to_contact(row) -> Contact:
         """Convert a database row to a Contact model."""
+        last_path, last_path_len, out_path_hash_mode = normalize_contact_route(
+            row["last_path"],
+            row["last_path_len"],
+            row["out_path_hash_mode"],
+        )
         return Contact(
             public_key=row["public_key"],
             name=row["name"],
             type=row["type"],
             flags=row["flags"],
-            last_path=row["last_path"],
-            last_path_len=row["last_path_len"],
-            out_path_hash_mode=row["out_path_hash_mode"],
+            last_path=last_path,
+            last_path_len=last_path_len,
+            out_path_hash_mode=out_path_hash_mode,
             last_advert=row["last_advert"],
             lat=row["lat"],
             lon=row["lon"],
@@ -215,11 +222,22 @@ class ContactRepository:
         path_len: int,
         out_path_hash_mode: int | None = None,
     ) -> None:
+        normalized_path, normalized_path_len, normalized_hash_mode = normalize_contact_route(
+            path,
+            path_len,
+            out_path_hash_mode,
+        )
         await db.conn.execute(
             """UPDATE contacts SET last_path = ?, last_path_len = ?,
                out_path_hash_mode = COALESCE(?, out_path_hash_mode),
                last_seen = ? WHERE public_key = ?""",
-            (path, path_len, out_path_hash_mode, int(time.time()), public_key.lower()),
+            (
+                normalized_path,
+                normalized_path_len,
+                normalized_hash_mode,
+                int(time.time()),
+                public_key.lower(),
+            ),
         )
         await db.conn.commit()
 

@@ -148,3 +148,53 @@ def first_hop_hex(path_hex: str, hop_count: int) -> str | None:
     """
     hops = split_path_hex(path_hex, hop_count)
     return hops[0] if hops else None
+
+
+def normalize_contact_route(
+    path_hex: str | None,
+    path_len: int | None,
+    out_path_hash_mode: int | None,
+) -> tuple[str, int, int]:
+    """Normalize stored contact route fields.
+
+    Handles legacy/bad rows where the packed wire path byte was stored directly
+    in `last_path_len` (sometimes as a signed byte, e.g. `-125` for `0x83`).
+    Returns `(path_hex, hop_count, hash_mode)`.
+    """
+    normalized_path = path_hex or ""
+
+    try:
+        normalized_len = int(path_len) if path_len is not None else -1
+    except (TypeError, ValueError):
+        normalized_len = -1
+
+    try:
+        normalized_mode = int(out_path_hash_mode) if out_path_hash_mode is not None else None
+    except (TypeError, ValueError):
+        normalized_mode = None
+
+    if normalized_len < -1 or normalized_len > 63:
+        packed = normalized_len & 0xFF
+        if packed == 0xFF:
+            return "", -1, -1
+        decoded_mode = (packed >> 6) & 0x03
+        if decoded_mode != 0x03:
+            normalized_len = packed & 0x3F
+            normalized_mode = decoded_mode
+
+    if normalized_len == -1:
+        return "", -1, -1
+
+    if normalized_mode not in (0, 1, 2):
+        normalized_mode = 0
+
+    if normalized_path:
+        bytes_per_hop = normalized_mode + 1
+        actual_bytes = len(normalized_path) // 2
+        expected_bytes = normalized_len * bytes_per_hop
+        if actual_bytes > expected_bytes >= 0:
+            normalized_path = normalized_path[: expected_bytes * 2]
+        elif actual_bytes < expected_bytes and bytes_per_hop > 0 and actual_bytes % bytes_per_hop == 0:
+            normalized_len = actual_bytes // bytes_per_hop
+
+    return normalized_path, normalized_len, normalized_mode

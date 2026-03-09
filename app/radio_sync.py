@@ -30,6 +30,21 @@ from app.repository import (
 logger = logging.getLogger(__name__)
 
 
+def _contact_sync_debug_fields(contact: Contact) -> dict[str, object]:
+    """Return key contact fields for sync failure diagnostics."""
+    return {
+        "type": contact.type,
+        "flags": contact.flags,
+        "last_path": contact.last_path,
+        "last_path_len": contact.last_path_len,
+        "out_path_hash_mode": contact.out_path_hash_mode,
+        "last_advert": contact.last_advert,
+        "lat": contact.lat,
+        "lon": contact.lon,
+        "on_radio": contact.on_radio,
+    }
+
+
 async def upsert_channel_from_radio_slot(payload: dict, *, on_radio: bool) -> str | None:
     """Parse a radio channel-slot payload and upsert to the database.
 
@@ -664,7 +679,8 @@ async def _sync_contacts_to_radio_inner(mc: MeshCore) -> dict:
             continue
 
         try:
-            result = await mc.commands.add_contact(contact.to_radio_dict())
+            radio_contact_payload = contact.to_radio_dict()
+            result = await mc.commands.add_contact(radio_contact_payload)
             if result.type == EventType.OK:
                 loaded += 1
                 await ContactRepository.set_on_radio(contact.public_key, True)
@@ -687,7 +703,14 @@ async def _sync_contacts_to_radio_inner(mc: MeshCore) -> dict:
                 )
         except Exception as e:
             failed += 1
-            logger.warning("Error loading contact %s: %s", contact.public_key[:12], e)
+            logger.warning(
+                "Error loading contact %s with fields=%s radio_payload=%s: %s",
+                contact.public_key[:12],
+                _contact_sync_debug_fields(contact),
+                locals().get("radio_contact_payload"),
+                e,
+                exc_info=True,
+            )
 
     if loaded > 0 or failed > 0:
         logger.info(
