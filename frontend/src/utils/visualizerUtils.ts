@@ -143,11 +143,17 @@ export function parsePacket(hexData: string): ParsedPacket | null {
   try {
     const decoded = MeshCoreDecoder.decode(hexData);
     if (!decoded.isValid) return null;
+    const tracePayload =
+      decoded.payloadType === PayloadType.Trace && decoded.payload.decoded
+        ? (decoded.payload.decoded as { pathHashes?: string[] })
+        : null;
 
     const result: ParsedPacket = {
       payloadType: decoded.payloadType,
       messageHash: decoded.messageHash || null,
-      pathBytes: decoded.path || [],
+      // TRACE reuses the outer packet path field for SNR samples, not hop identities.
+      // For visualization, use the trace payload's actual node hashes instead.
+      pathBytes: tracePayload?.pathHashes || decoded.path || [],
       srcHash: null,
       dstHash: null,
       advertPubkey: null,

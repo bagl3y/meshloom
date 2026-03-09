@@ -49,9 +49,14 @@ function decodePacketSummary(
 
     const routeType = Utils.getRouteTypeName(decoded.routeType);
     const payloadTypeName = Utils.getPayloadTypeName(decoded.payloadType);
+    const tracePayload =
+      decoded.payloadType === PayloadType.Trace && decoded.payload.decoded
+        ? (decoded.payload.decoded as { pathHashes?: string[] })
+        : null;
+    const pathTokens = tracePayload?.pathHashes || decoded.path || [];
 
     // Build path string if available
-    const pathStr = decoded.path && decoded.path.length > 0 ? ` via ${decoded.path.join('-')}` : '';
+    const pathStr = pathTokens.length > 0 ? ` via ${pathTokens.join('-')}` : '';
 
     // Generate summary based on payload type
     let summary = payloadTypeName;

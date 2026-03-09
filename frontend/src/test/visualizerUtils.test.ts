@@ -4,9 +4,11 @@ import {
   analyzeRepeaterTraffic,
   buildAmbiguousRepeaterLabel,
   buildAmbiguousRepeaterNodeId,
+  parsePacket,
   recordTrafficObservation,
   type RepeaterTrafficData,
 } from '../utils/visualizerUtils';
+import { PayloadType } from '@michaelhart/meshcore-decoder';
 
 describe('visualizer multibyte hop identity helpers', () => {
   it('preserves the full hop token in ambiguous node ids', () => {
@@ -47,5 +49,15 @@ describe('visualizer traffic pattern grouping', () => {
     const second = analyzeRepeaterTraffic(secondTraffic!);
     expect(first.shouldSplit).toBe(false);
     expect(second.shouldSplit).toBe(false);
+  });
+});
+
+describe('visualizer packet parsing', () => {
+  it('uses trace payload hashes instead of outer SNR bytes for TRACE packets', () => {
+    const parsed = parsePacket('260233277e17b0f300000000007df6');
+
+    expect(parsed).not.toBeNull();
+    expect(parsed?.payloadType).toBe(PayloadType.Trace);
+    expect(parsed?.pathBytes).toEqual(['7D', 'F6']);
   });
 });
