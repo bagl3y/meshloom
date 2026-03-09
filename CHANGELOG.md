@@ -1,3 +1,7 @@
+## [2.7.9] - 2026-03-08
+
+Bugfix: Don't obscure new integration dropdown on session boundary
+
 ## [2.7.8] - 2026-03-08
 
 
