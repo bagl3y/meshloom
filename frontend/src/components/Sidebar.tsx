@@ -625,7 +625,7 @@ export function Sidebar({
 
   return (
     <nav
-      className="sidebar w-60 h-full min-h-0 bg-card border-r border-border flex flex-col"
+      className="sidebar w-60 h-full min-h-0 overflow-hidden bg-card border-r border-border flex flex-col"
       aria-label="Conversations"
     >
       {/* Header */}
@@ -668,7 +668,7 @@ export function Sidebar({
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto [contain:layout_paint]">
         {/* Tools */}
         {toolRows.length > 0 && (
           <>

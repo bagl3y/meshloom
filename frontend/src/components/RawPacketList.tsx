@@ -202,14 +202,17 @@ export function RawPacketList({ packets }: RawPacketListProps) {
 
   if (packets.length === 0) {
     return (
-      <div className="h-full overflow-y-auto p-5 text-center text-muted-foreground">
+      <div className="h-full overflow-y-auto p-5 text-center text-muted-foreground [contain:layout_paint]">
         No packets received yet. Packets will appear here in real-time.
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto p-4 flex flex-col gap-2" ref={listRef}>
+    <div
+      className="h-full overflow-y-auto p-4 flex flex-col gap-2 [contain:layout_paint]"
+      ref={listRef}
+    >
       {sortedPackets.map(({ packet, decoded }) => (
         <div
           key={getRawPacketObservationKey(packet)}

@@ -614,7 +614,7 @@ export function App() {
 
   const settingsSidebarContent = (
     <nav
-      className="sidebar w-60 h-full min-h-0 bg-card border-r border-border flex flex-col"
+      className="sidebar w-60 h-full min-h-0 overflow-hidden bg-card border-r border-border flex flex-col"
       aria-label="Settings"
     >
       <div className="flex justify-between items-center px-3 py-2.5 border-b border-border">
@@ -631,7 +631,7 @@ export function App() {
           &larr; Back to Chat
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto py-1">
+      <div className="flex-1 min-h-0 overflow-y-auto py-1 [contain:layout_paint]">
         {SETTINGS_SECTION_ORDER.map((section) => (
           <button
             key={section}
@@ -681,7 +681,7 @@ export function App() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop sidebar - hidden on mobile */}
-        <div className="hidden md:block">{activeSidebarContent}</div>
+        <div className="hidden md:block min-h-0 overflow-hidden">{activeSidebarContent}</div>
 
         {/* Mobile sidebar - Sheet that slides in */}
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
