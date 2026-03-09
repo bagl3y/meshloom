@@ -6,7 +6,6 @@ ARG COMMIT_HASH=unknown
 WORKDIR /build
 
 COPY frontend/package.json frontend/.npmrc ./
-COPY frontend/lib/meshcore-decoder ./lib/meshcore-decoder
 RUN npm install
 
 COPY frontend/ ./

@@ -12,9 +12,9 @@ Keep it aligned with `frontend/src` source code.
 - Tailwind utility classes + local CSS (`index.css`, `styles.css`)
 - Sonner (toasts)
 - Leaflet / react-leaflet (map)
-- Vendored `@michaelhart/meshcore-decoder` in `frontend/lib/meshcore-decoder` (local file dependency for multibyte-support build)
+- `@michaelhart/meshcore-decoder` installed via npm alias to `meshcore-decoder-multibyte-patch`
 - `meshcore-hashtag-cracker` + `nosleep.js` (channel cracker)
-- `@michaelhart/meshcore-decoder` pinned to the multibyte-aware `jkingsman/meshcore-decoder-multibyte` fork
+- Multibyte-aware decoder build published as `meshcore-decoder-multibyte-patch`
 
 ## Frontend Map
 
@@ -141,8 +141,6 @@ frontend/src/
     ├── useWebSocket.dispatch.test.ts
     └── useWebSocket.lifecycle.test.ts
 
-frontend/lib/
-└── meshcore-decoder/      # Vendored local decoder package used by app + hashtag cracker
 ```
 
 ## Architecture Notes
