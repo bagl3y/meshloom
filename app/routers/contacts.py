@@ -11,11 +11,13 @@ from app.models import (
     ContactAdvertPath,
     ContactAdvertPathSummary,
     ContactDetail,
+    ContactRoutingOverrideRequest,
     CreateContactRequest,
     NearestRepeater,
     TraceResponse,
 )
 from app.packet_processor import start_historical_dm_decryption
+from app.path_utils import parse_explicit_hop_route
 from app.radio import radio_manager
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
@@ -57,6 +59,34 @@ async def _ensure_on_radio(mc, contact: Contact) -> None:
         raise HTTPException(
             status_code=500, detail=f"Failed to add contact to radio: {add_result.payload}"
         )
+
+
+async def _best_effort_push_contact_to_radio(contact: Contact, operation_name: str) -> None:
+    """Push the current effective route to the radio when the contact is already loaded."""
+    if not radio_manager.is_connected or not contact.on_radio:
+        return
+
+    try:
+        async with radio_manager.radio_operation(operation_name) as mc:
+            result = await mc.commands.add_contact(contact.to_radio_dict())
+        if result is not None and result.type == EventType.ERROR:
+            logger.warning(
+                "Failed to push updated routing to radio for %s: %s",
+                contact.public_key[:12],
+                result.payload,
+            )
+    except Exception:
+        logger.warning(
+            "Failed to push updated routing to radio for %s",
+            contact.public_key[:12],
+            exc_info=True,
+        )
+
+
+async def _broadcast_contact_update(contact: Contact) -> None:
+    from app.websocket import broadcast_event
+
+    broadcast_event("contact", contact.model_dump())
 
 
 @router.get("", response_model=list[Contact])
@@ -459,29 +489,49 @@ async def request_trace(public_key: str) -> TraceResponse:
     return TraceResponse(remote_snr=remote_snr, local_snr=local_snr, path_len=path_len)
 
 
-@router.post("/{public_key}/reset-path")
-async def reset_contact_path(public_key: str) -> dict:
-    """Reset a contact's routing path to flood."""
+@router.post("/{public_key}/routing-override")
+async def set_contact_routing_override(
+    public_key: str, request: ContactRoutingOverrideRequest
+) -> dict:
+    """Set, force, or clear an explicit routing override for a contact."""
     contact = await _resolve_contact_or_404(public_key)
 
-    await ContactRepository.update_path(contact.public_key, "", -1, -1)
-    logger.info("Reset path to flood for %s", contact.public_key[:12])
-
-    # Push the updated path to radio if connected and contact is on radio
-    if radio_manager.is_connected and contact.on_radio:
+    route_text = request.route.strip()
+    if route_text == "":
+        await ContactRepository.clear_routing_override(contact.public_key)
+        await ContactRepository.update_path(contact.public_key, "", -1, -1)
+        logger.info(
+            "Cleared routing override and reset learned path to flood for %s",
+            contact.public_key[:12],
+        )
+    elif route_text == "-1":
+        await ContactRepository.set_routing_override(contact.public_key, "", -1, -1)
+        logger.info("Set forced flood routing override for %s", contact.public_key[:12])
+    elif route_text == "0":
+        await ContactRepository.set_routing_override(contact.public_key, "", 0, 0)
+        logger.info("Set forced direct routing override for %s", contact.public_key[:12])
+    else:
         try:
-            updated = await ContactRepository.get_by_key(contact.public_key)
-            if updated:
-                async with radio_manager.radio_operation("reset_path_on_radio") as mc:
-                    await mc.commands.add_contact(updated.to_radio_dict())
-        except Exception:
-            logger.warning("Failed to push flood path to radio for %s", contact.public_key[:12])
+            path_hex, path_len, hash_mode = parse_explicit_hop_route(route_text)
+        except ValueError as err:
+            raise HTTPException(status_code=400, detail=str(err)) from err
 
-    # Broadcast updated contact so frontend refreshes
-    from app.websocket import broadcast_event
+        await ContactRepository.set_routing_override(
+            contact.public_key,
+            path_hex,
+            path_len,
+            hash_mode,
+        )
+        logger.info(
+            "Set explicit routing override for %s: %d hop(s), %d-byte IDs",
+            contact.public_key[:12],
+            path_len,
+            hash_mode + 1,
+        )
 
     updated_contact = await ContactRepository.get_by_key(contact.public_key)
     if updated_contact:
-        broadcast_event("contact", updated_contact.model_dump())
+        await _best_effort_push_contact_to_radio(updated_contact, "set_routing_override_on_radio")
+        await _broadcast_contact_update(updated_contact)
 
     return {"status": "ok", "public_key": contact.public_key}

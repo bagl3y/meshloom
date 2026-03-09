@@ -152,6 +152,34 @@ class TestOutgoingDMBroadcast:
         assert contact_payload["out_path_len"] == 2
         assert contact_payload["out_path_hash_mode"] == 1
 
+    @pytest.mark.asyncio
+    async def test_send_dm_prefers_route_override_over_learned_path(self, test_db):
+        mc = _make_mc()
+        pub_key = "ef" * 32
+        await _insert_contact(
+            pub_key,
+            "Alice",
+            last_path="aabb",
+            last_path_len=1,
+            out_path_hash_mode=0,
+            route_override_path="cc00dd00",
+            route_override_len=2,
+            route_override_hash_mode=1,
+        )
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event"),
+        ):
+            request = SendDirectMessageRequest(destination=pub_key, text="Hello")
+            await send_direct_message(request)
+
+        contact_payload = mc.commands.add_contact.call_args.args[0]
+        assert contact_payload["out_path"] == "cc00dd00"
+        assert contact_payload["out_path_len"] == 2
+        assert contact_payload["out_path_hash_mode"] == 1
+
 
 class TestOutgoingChannelBroadcast:
     """Test that outgoing channel messages are broadcast via broadcast_event for fanout dispatch."""

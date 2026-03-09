@@ -137,9 +137,10 @@ export const api = {
     fetchJson<TraceResponse>(`/contacts/${publicKey}/trace`, {
       method: 'POST',
     }),
-  resetContactPath: (publicKey: string) =>
-    fetchJson<{ status: string; public_key: string }>(`/contacts/${publicKey}/reset-path`, {
+  setContactRoutingOverride: (publicKey: string, route: string) =>
+    fetchJson<{ status: string; public_key: string }>(`/contacts/${publicKey}/routing-override`, {
       method: 'POST',
+      body: JSON.stringify({ route }),
     }),
 
   // Channels

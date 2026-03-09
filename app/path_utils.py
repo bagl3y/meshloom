@@ -202,3 +202,45 @@ def normalize_contact_route(
             normalized_len = actual_bytes // bytes_per_hop
 
     return normalized_path, normalized_len, normalized_mode
+
+
+def normalize_route_override(
+    path_hex: str | None,
+    path_len: int | None,
+    out_path_hash_mode: int | None,
+) -> tuple[str | None, int | None, int | None]:
+    """Normalize optional route-override fields while preserving the unset state."""
+    if path_len is None:
+        return None, None, None
+
+    normalized_path, normalized_len, normalized_mode = normalize_contact_route(
+        path_hex,
+        path_len,
+        out_path_hash_mode,
+    )
+    return normalized_path, normalized_len, normalized_mode
+
+
+def parse_explicit_hop_route(route_text: str) -> tuple[str, int, int]:
+    """Parse a comma-separated explicit hop route into stored contact fields."""
+    hops = [hop.strip().lower() for hop in route_text.split(",") if hop.strip()]
+    if not hops:
+        raise ValueError("Explicit path must include at least one hop")
+
+    hop_chars = len(hops[0])
+    if hop_chars not in (2, 4, 6):
+        raise ValueError("Each hop must be 1, 2, or 3 bytes of hex")
+
+    for hop in hops:
+        if len(hop) != hop_chars:
+            raise ValueError("All hops must use the same width")
+        try:
+            bytes.fromhex(hop)
+        except ValueError as exc:
+            raise ValueError("Each hop must be valid hex") from exc
+
+    hash_size = hop_chars // 2
+    if path_wire_len(len(hops), hash_size) > MAX_PATH_SIZE:
+        raise ValueError(f"Explicit path exceeds MAX_PATH_SIZE={MAX_PATH_SIZE} bytes")
+
+    return "".join(hops), len(hops), hash_size - 1

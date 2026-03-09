@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { api } from '../api';
 import { formatTime } from '../utils/messageParser';
 import {
   isValidLocation,
   calculateDistance,
   formatDistance,
+  formatRouteLabel,
+  getEffectiveContactRoute,
+  hasRoutingOverride,
   parsePathHops,
 } from '../utils/pathUtils';
 import { getMapFocusHash } from '../utils/urlHash';
@@ -106,7 +109,12 @@ export function ContactInfoPane({
     isValidLocation(contact.lat, contact.lon)
       ? calculateDistance(config.lat, config.lon, contact.lat, contact.lon)
       : null;
-  const pathHashModeLabel = contact ? formatPathHashMode(contact.out_path_hash_mode) : null;
+  const effectiveRoute = contact ? getEffectiveContactRoute(contact) : null;
+  const pathHashModeLabel =
+    effectiveRoute && effectiveRoute.pathLen >= 0
+      ? formatPathHashMode(effectiveRoute.pathHashMode)
+      : null;
+  const learnedRouteLabel = contact ? formatRouteLabel(contact.last_path_len, true) : null;
 
   return (
     <Sheet open={contactKey !== null} onOpenChange={(open) => !open && onClose()}>
@@ -220,17 +228,24 @@ export function ContactInfoPane({
                 {distFromUs !== null && (
                   <InfoItem label="Distance" value={formatDistance(distFromUs)} />
                 )}
-                {contact.last_path_len >= 0 && (
+                {effectiveRoute && (
                   <InfoItem
-                    label="Hops"
+                    label="Routing"
                     value={
-                      contact.last_path_len === 0
-                        ? 'Direct'
-                        : `${contact.last_path_len} hop${contact.last_path_len > 1 ? 's' : ''}`
+                      effectiveRoute.forced ? (
+                        <span>
+                          {formatRouteLabel(effectiveRoute.pathLen, true)}{' '}
+                          <span className="text-destructive">(forced)</span>
+                        </span>
+                      ) : (
+                        formatRouteLabel(effectiveRoute.pathLen, true)
+                      )
                     }
                   />
                 )}
-                {contact.last_path_len === -1 && <InfoItem label="Routing" value="Flood" />}
+                {contact && hasRoutingOverride(contact) && learnedRouteLabel && (
+                  <InfoItem label="Learned Route" value={learnedRouteLabel} />
+                )}
                 {pathHashModeLabel && <InfoItem label="Hop Width" value={pathHashModeLabel} />}
               </div>
             </div>
@@ -468,7 +483,7 @@ function ChannelAttributionWarning() {
   );
 }
 
-function InfoItem({ label, value }: { label: string; value: string }) {
+function InfoItem({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
       <span className="text-muted-foreground text-xs">{label}</span>

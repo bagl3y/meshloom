@@ -78,6 +78,7 @@ app/
 - Packet `path_len` values are hop counts, not byte counts.
 - Hop width comes from the packet or radio `path_hash_mode`: `0` = 1-byte, `1` = 2-byte, `2` = 3-byte.
 - Contacts persist `out_path_hash_mode` in the database so contact sync and outbound DM routing reuse the exact stored mode instead of inferring from path bytes.
+- Contacts may also persist `route_override_path`, `route_override_len`, and `route_override_hash_mode`. `Contact.to_radio_dict()` gives these override fields precedence over learned `last_path*`, while advert processing still updates the learned route for telemetry/fallback.
 - `contact_advert_paths` identity is `(public_key, path_hex, path_len)` because the same hex bytes can represent different routes at different hop widths.
 
 ### Read/unread state
@@ -144,7 +145,7 @@ app/
 - `POST /contacts/{public_key}/remove-from-radio`
 - `POST /contacts/{public_key}/mark-read`
 - `POST /contacts/{public_key}/command`
-- `POST /contacts/{public_key}/reset-path`
+- `POST /contacts/{public_key}/routing-override`
 - `POST /contacts/{public_key}/trace`
 - `POST /contacts/{public_key}/repeater/login`
 - `POST /contacts/{public_key}/repeater/status`

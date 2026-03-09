@@ -91,6 +91,9 @@ export interface Contact {
   last_path: string | null;
   last_path_len: number;
   out_path_hash_mode: number;
+  route_override_path?: string | null;
+  route_override_len?: number | null;
+  route_override_hash_mode?: number | null;
   last_advert: number | null;
   lat: number | null;
   lon: number | null;

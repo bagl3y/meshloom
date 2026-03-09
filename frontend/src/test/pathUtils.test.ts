@@ -4,6 +4,9 @@ import {
   extractPacketPayloadHex,
   findContactsByPrefix,
   calculateDistance,
+  formatRouteLabel,
+  formatRoutingOverrideInput,
+  getEffectiveContactRoute,
   resolvePath,
   formatDistance,
   formatHopCounts,
@@ -128,6 +131,42 @@ describe('extractPacketPayloadHex', () => {
 
   it('rejects packets with no payload after path', () => {
     expect(extractPacketPayloadHex('0902AABB')).toBeNull();
+  });
+});
+
+describe('contact routing helpers', () => {
+  it('prefers routing override over learned route', () => {
+    const effective = getEffectiveContactRoute(
+      createContact({
+        last_path: 'AABB',
+        last_path_len: 1,
+        out_path_hash_mode: 0,
+        route_override_path: 'AE92F13E',
+        route_override_len: 2,
+        route_override_hash_mode: 1,
+      })
+    );
+
+    expect(effective.path).toBe('AE92F13E');
+    expect(effective.pathLen).toBe(2);
+    expect(effective.pathHashMode).toBe(1);
+    expect(effective.forced).toBe(true);
+  });
+
+  it('formats route labels and override input', () => {
+    expect(formatRouteLabel(-1)).toBe('flood');
+    expect(formatRouteLabel(0)).toBe('direct');
+    expect(formatRouteLabel(2, true)).toBe('2 hops');
+
+    expect(
+      formatRoutingOverrideInput(
+        createContact({
+          route_override_path: 'AE92F13E',
+          route_override_len: 2,
+          route_override_hash_mode: 1,
+        })
+      )
+    ).toBe('ae92,f13e');
   });
 });
 

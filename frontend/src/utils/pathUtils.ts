@@ -32,6 +32,13 @@ export interface SenderInfo {
   pathHashMode?: number | null;
 }
 
+export interface EffectiveContactRoute {
+  path: string | null;
+  pathLen: number;
+  pathHashMode: number;
+  forced: boolean;
+}
+
 function normalizePathHashMode(mode: number | null | undefined): number | null {
   if (mode == null || !Number.isInteger(mode) || mode < 0 || mode > 2) {
     return null;
@@ -104,6 +111,58 @@ export function parsePathHops(path: string | null | undefined, hopCount?: number
   }
 
   return hops;
+}
+
+export function hasRoutingOverride(contact: Contact): boolean {
+  return contact.route_override_len !== null && contact.route_override_len !== undefined;
+}
+
+export function getEffectiveContactRoute(contact: Contact): EffectiveContactRoute {
+  const forced = hasRoutingOverride(contact);
+  const pathLen = forced ? (contact.route_override_len ?? -1) : contact.last_path_len;
+  const path = forced ? (contact.route_override_path ?? '') : (contact.last_path ?? '');
+
+  let pathHashMode = forced
+    ? (contact.route_override_hash_mode ?? null)
+    : (contact.out_path_hash_mode ?? null);
+
+  if (pathLen === -1) {
+    pathHashMode = -1;
+  } else if (pathHashMode == null || pathHashMode < 0 || pathHashMode > 2) {
+    pathHashMode = inferPathHashMode(path, pathLen) ?? 0;
+  }
+
+  return {
+    path: path || null,
+    pathLen,
+    pathHashMode,
+    forced,
+  };
+}
+
+export function formatRouteLabel(pathLen: number, capitalize: boolean = false): string {
+  const label =
+    pathLen === -1
+      ? 'flood'
+      : pathLen === 0
+        ? 'direct'
+        : `${pathLen} hop${pathLen === 1 ? '' : 's'}`;
+  return capitalize ? label.charAt(0).toUpperCase() + label.slice(1) : label;
+}
+
+export function formatRoutingOverrideInput(contact: Contact): string {
+  if (!hasRoutingOverride(contact)) {
+    return '';
+  }
+  if (contact.route_override_len === -1) {
+    return '-1';
+  }
+  if (contact.route_override_len === 0) {
+    return '0';
+  }
+  return parsePathHops(contact.route_override_path, contact.route_override_len)
+    .map((hop) => hop.toLowerCase())
+    .join(',');
 }
 
 /**

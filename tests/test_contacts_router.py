@@ -649,45 +649,39 @@ class TestCreateContactWithHistorical:
         mock_start.assert_not_awaited()
 
 
-class TestResetPath:
-    """Test POST /api/contacts/{public_key}/reset-path."""
+class TestRoutingOverride:
+    """Test POST /api/contacts/{public_key}/routing-override."""
 
     @pytest.mark.asyncio
-    async def test_reset_path_to_flood(self, test_db, client):
-        """Happy path: resets path to flood and returns ok."""
-        await _insert_contact(KEY_A, last_path="1122", last_path_len=1)
+    async def test_set_explicit_routing_override(self, test_db, client):
+        await _insert_contact(KEY_A, last_path="11", last_path_len=1, out_path_hash_mode=0)
 
         with (
             patch("app.routers.contacts.radio_manager") as mock_rm,
-            patch("app.websocket.broadcast_event"),
+            patch("app.websocket.broadcast_event") as mock_broadcast,
         ):
             mock_rm.is_connected = False
-            response = await client.post(f"/api/contacts/{KEY_A}/reset-path")
+            response = await client.post(
+                f"/api/contacts/{KEY_A}/routing-override",
+                json={"route": "ae92,f13e"},
+            )
 
         assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "ok"
-        assert data["public_key"] == KEY_A
-
-        # Verify path was reset in DB
         contact = await ContactRepository.get_by_key(KEY_A)
-        assert contact.last_path == ""
-        assert contact.last_path_len == -1
-        assert contact.out_path_hash_mode == -1
+        assert contact is not None
+        assert contact.last_path == "11"
+        assert contact.last_path_len == 1
+        assert contact.route_override_path == "ae92f13e"
+        assert contact.route_override_len == 2
+        assert contact.route_override_hash_mode == 1
+        mock_broadcast.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_reset_path_not_found(self, test_db, client):
-        response = await client.post(f"/api/contacts/{KEY_A}/reset-path")
-
-        assert response.status_code == 404
-
-    @pytest.mark.asyncio
-    async def test_reset_path_pushes_to_radio(self, test_db, client):
-        """When radio connected and contact on_radio, pushes updated path."""
+    async def test_force_flood_routing_override_pushes_effective_route(self, test_db, client):
         await _insert_contact(
             KEY_A,
             on_radio=True,
-            last_path="1122",
+            last_path="11",
             last_path_len=1,
             out_path_hash_mode=0,
         )
@@ -703,33 +697,64 @@ class TestResetPath:
         ):
             mock_rm.is_connected = True
             mock_rm.radio_operation = _noop_radio_operation(mock_mc)
-            response = await client.post(f"/api/contacts/{KEY_A}/reset-path")
+            response = await client.post(
+                f"/api/contacts/{KEY_A}/routing-override",
+                json={"route": "-1"},
+            )
 
         assert response.status_code == 200
-        mock_mc.commands.add_contact.assert_called_once()
-        contact_payload = mock_mc.commands.add_contact.call_args.args[0]
-        assert contact_payload["out_path"] == ""
-        assert contact_payload["out_path_len"] == -1
-        assert contact_payload["out_path_hash_mode"] == -1
+        payload = mock_mc.commands.add_contact.call_args.args[0]
+        assert payload["out_path"] == ""
+        assert payload["out_path_len"] == -1
+        assert payload["out_path_hash_mode"] == -1
+
+        contact = await ContactRepository.get_by_key(KEY_A)
+        assert contact is not None
+        assert contact.route_override_len == -1
+        assert contact.last_path == "11"
+        assert contact.last_path_len == 1
 
     @pytest.mark.asyncio
-    async def test_reset_path_broadcasts_websocket_event(self, test_db, client):
-        """After resetting, broadcasts updated contact via WebSocket."""
-        await _insert_contact(KEY_A, last_path="1122", last_path_len=1)
+    async def test_blank_route_clears_override_and_resets_learned_path(self, test_db, client):
+        await _insert_contact(
+            KEY_A,
+            last_path="11",
+            last_path_len=1,
+            out_path_hash_mode=0,
+            route_override_path="ae92f13e",
+            route_override_len=2,
+            route_override_hash_mode=1,
+        )
 
         with (
             patch("app.routers.contacts.radio_manager") as mock_rm,
-            patch("app.websocket.broadcast_event") as mock_broadcast,
+            patch("app.websocket.broadcast_event"),
         ):
             mock_rm.is_connected = False
-            response = await client.post(f"/api/contacts/{KEY_A}/reset-path")
+            response = await client.post(
+                f"/api/contacts/{KEY_A}/routing-override",
+                json={"route": ""},
+            )
 
         assert response.status_code == 200
-        mock_broadcast.assert_called_once()
-        event_type, event_data = mock_broadcast.call_args[0]
-        assert event_type == "contact"
-        assert event_data["public_key"] == KEY_A
-        assert event_data["last_path_len"] == -1
+        contact = await ContactRepository.get_by_key(KEY_A)
+        assert contact is not None
+        assert contact.route_override_len is None
+        assert contact.last_path == ""
+        assert contact.last_path_len == -1
+        assert contact.out_path_hash_mode == -1
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_explicit_route(self, test_db, client):
+        await _insert_contact(KEY_A)
+
+        response = await client.post(
+            f"/api/contacts/{KEY_A}/routing-override",
+            json={"route": "ae,f13e"},
+        )
+
+        assert response.status_code == 400
+        assert "same width" in response.json()["detail"].lower()
 
 
 class TestAddRemoveRadio:

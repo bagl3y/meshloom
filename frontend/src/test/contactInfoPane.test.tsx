@@ -106,4 +106,25 @@ describe('ContactInfoPane', () => {
       expect(screen.getByText('Flood')).toBeInTheDocument();
     });
   });
+
+  it('shows forced routing override and learned route separately', async () => {
+    const contact = createContact({
+      last_path_len: 1,
+      out_path_hash_mode: 0,
+      route_override_path: 'ae92f13e',
+      route_override_len: 2,
+      route_override_hash_mode: 1,
+    });
+    getContactDetail.mockResolvedValue(createDetail(contact));
+
+    render(<ContactInfoPane {...baseProps} contactKey={contact.public_key} />);
+
+    await screen.findByText('Alice');
+    await waitFor(() => {
+      expect(screen.getByText('Routing')).toBeInTheDocument();
+      expect(screen.getByText('(forced)')).toBeInTheDocument();
+      expect(screen.getByText('Learned Route')).toBeInTheDocument();
+      expect(screen.getByText('1 hop')).toBeInTheDocument();
+    });
+  });
 });

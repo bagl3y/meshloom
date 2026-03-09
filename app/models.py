@@ -13,6 +13,9 @@ class Contact(BaseModel):
     last_path: str | None = None
     last_path_len: int = -1
     out_path_hash_mode: int = 0
+    route_override_path: str | None = None
+    route_override_len: int | None = None
+    route_override_hash_mode: int | None = None
     last_advert: int | None = None
     lat: float | None = None
     lon: float | None = None
@@ -22,17 +25,29 @@ class Contact(BaseModel):
     last_read_at: int | None = None  # Server-side read state tracking
     first_seen: int | None = None
 
+    def has_route_override(self) -> bool:
+        return self.route_override_len is not None
+
+    def effective_route(self) -> tuple[str, int, int]:
+        if self.has_route_override():
+            return normalize_contact_route(
+                self.route_override_path,
+                self.route_override_len,
+                self.route_override_hash_mode,
+            )
+        return normalize_contact_route(
+            self.last_path,
+            self.last_path_len,
+            self.out_path_hash_mode,
+        )
+
     def to_radio_dict(self) -> dict:
         """Convert to the dict format expected by meshcore radio commands.
 
         The radio API uses different field names (adv_name, out_path, etc.)
         than our database schema (name, last_path, etc.).
         """
-        last_path, last_path_len, out_path_hash_mode = normalize_contact_route(
-            self.last_path,
-            self.last_path_len,
-            self.out_path_hash_mode,
-        )
+        last_path, last_path_len, out_path_hash_mode = self.effective_route()
         return {
             "public_key": self.public_key,
             "adv_name": self.name or "",
@@ -84,6 +99,18 @@ class CreateContactRequest(BaseModel):
     try_historical: bool = Field(
         default=False,
         description="Attempt to decrypt historical DM packets for this contact",
+    )
+
+
+class ContactRoutingOverrideRequest(BaseModel):
+    """Request to set, force, or clear a contact routing override."""
+
+    route: str = Field(
+        description=(
+            "Blank clears the override and resets learned routing to flood, "
+            '"-1" forces flood, "0" forces direct, and explicit routes are '
+            "comma-separated 1/2/3-byte hop hex values"
+        )
     )
 
 

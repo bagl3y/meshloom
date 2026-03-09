@@ -8,7 +8,7 @@ from app.models import (
     ContactAdvertPathSummary,
     ContactNameHistory,
 )
-from app.path_utils import first_hop_hex, normalize_contact_route
+from app.path_utils import first_hop_hex, normalize_contact_route, normalize_route_override
 
 
 class AmbiguousPublicKeyPrefixError(ValueError):
@@ -28,14 +28,23 @@ class ContactRepository:
             contact.get("last_path_len", -1),
             contact.get("out_path_hash_mode"),
         )
+        route_override_path, route_override_len, route_override_hash_mode = (
+            normalize_route_override(
+                contact.get("route_override_path"),
+                contact.get("route_override_len"),
+                contact.get("route_override_hash_mode"),
+            )
+        )
 
         await db.conn.execute(
             """
             INSERT INTO contacts (public_key, name, type, flags, last_path, last_path_len,
                                   out_path_hash_mode,
+                                  route_override_path, route_override_len,
+                                  route_override_hash_mode,
                                   last_advert, lat, lon, last_seen,
                                   on_radio, last_contacted, first_seen)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(public_key) DO UPDATE SET
                 name = COALESCE(excluded.name, contacts.name),
                 type = CASE WHEN excluded.type = 0 THEN contacts.type ELSE excluded.type END,
@@ -43,6 +52,15 @@ class ContactRepository:
                 last_path = COALESCE(excluded.last_path, contacts.last_path),
                 last_path_len = excluded.last_path_len,
                 out_path_hash_mode = excluded.out_path_hash_mode,
+                route_override_path = COALESCE(
+                    excluded.route_override_path, contacts.route_override_path
+                ),
+                route_override_len = COALESCE(
+                    excluded.route_override_len, contacts.route_override_len
+                ),
+                route_override_hash_mode = COALESCE(
+                    excluded.route_override_hash_mode, contacts.route_override_hash_mode
+                ),
                 last_advert = COALESCE(excluded.last_advert, contacts.last_advert),
                 lat = COALESCE(excluded.lat, contacts.lat),
                 lon = COALESCE(excluded.lon, contacts.lon),
@@ -59,6 +77,9 @@ class ContactRepository:
                 last_path,
                 last_path_len,
                 out_path_hash_mode,
+                route_override_path,
+                route_override_len,
+                route_override_hash_mode,
                 contact.get("last_advert"),
                 contact.get("lat"),
                 contact.get("lon"),
@@ -78,6 +99,25 @@ class ContactRepository:
             row["last_path_len"],
             row["out_path_hash_mode"],
         )
+        available_columns = set(row.keys())
+        route_override_path = (
+            row["route_override_path"] if "route_override_path" in available_columns else None
+        )
+        route_override_len = (
+            row["route_override_len"] if "route_override_len" in available_columns else None
+        )
+        route_override_hash_mode = (
+            row["route_override_hash_mode"]
+            if "route_override_hash_mode" in available_columns
+            else None
+        )
+        route_override_path, route_override_len, route_override_hash_mode = (
+            normalize_route_override(
+                route_override_path,
+                route_override_len,
+                route_override_hash_mode,
+            )
+        )
         return Contact(
             public_key=row["public_key"],
             name=row["name"],
@@ -86,6 +126,9 @@ class ContactRepository:
             last_path=last_path,
             last_path_len=last_path_len,
             out_path_hash_mode=out_path_hash_mode,
+            route_override_path=route_override_path,
+            route_override_len=route_override_len,
+            route_override_hash_mode=route_override_hash_mode,
             last_advert=row["last_advert"],
             lat=row["lat"],
             lon=row["lon"],
@@ -238,6 +281,47 @@ class ContactRepository:
                 int(time.time()),
                 public_key.lower(),
             ),
+        )
+        await db.conn.commit()
+
+    @staticmethod
+    async def set_routing_override(
+        public_key: str,
+        path: str | None,
+        path_len: int | None,
+        out_path_hash_mode: int | None = None,
+    ) -> None:
+        normalized_path, normalized_len, normalized_hash_mode = normalize_route_override(
+            path,
+            path_len,
+            out_path_hash_mode,
+        )
+        await db.conn.execute(
+            """
+            UPDATE contacts
+            SET route_override_path = ?, route_override_len = ?, route_override_hash_mode = ?
+            WHERE public_key = ?
+            """,
+            (
+                normalized_path,
+                normalized_len,
+                normalized_hash_mode,
+                public_key.lower(),
+            ),
+        )
+        await db.conn.commit()
+
+    @staticmethod
+    async def clear_routing_override(public_key: str) -> None:
+        await db.conn.execute(
+            """
+            UPDATE contacts
+            SET route_override_path = NULL,
+                route_override_len = NULL,
+                route_override_hash_mode = NULL
+            WHERE public_key = ?
+            """,
+            (public_key.lower(),),
         )
         await db.conn.commit()
 

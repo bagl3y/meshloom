@@ -6,6 +6,8 @@ from app.path_utils import (
     decode_path_byte,
     first_hop_hex,
     normalize_contact_route,
+    normalize_route_override,
+    parse_explicit_hop_route,
     parse_packet_envelope,
     path_wire_len,
     split_path_hex,
@@ -174,6 +176,29 @@ class TestNormalizeContactRoute:
         assert hash_mode == -1
 
 
+class TestNormalizeRouteOverride:
+    def test_preserves_unset_override(self):
+        assert normalize_route_override(None, None, None) == (None, None, None)
+
+    def test_normalizes_forced_direct_override(self):
+        path_hex, path_len, hash_mode = normalize_route_override(None, 0, None)
+        assert path_hex == ""
+        assert path_len == 0
+        assert hash_mode == 0
+
+
+class TestParseExplicitHopRoute:
+    def test_parses_one_byte_hops(self):
+        assert parse_explicit_hop_route("ae,f1") == ("aef1", 2, 0)
+
+    def test_parses_two_byte_hops(self):
+        assert parse_explicit_hop_route("ae92,f13e") == ("ae92f13e", 2, 1)
+
+    def test_rejects_mixed_width_hops(self):
+        with pytest.raises(ValueError, match="same width"):
+            parse_explicit_hop_route("ae,f13e")
+
+
 class TestContactToRadioDictHashMode:
     """Test that Contact.to_radio_dict() preserves the stored out_path_hash_mode."""
 
@@ -250,6 +275,23 @@ class TestContactToRadioDictHashMode:
         assert d["out_path"] == "3f3f69de1c7b7e7662"
         assert d["out_path_len"] == 3
         assert d["out_path_hash_mode"] == 2
+
+    def test_route_override_takes_precedence_over_learned_route(self):
+        from app.models import Contact
+
+        c = Contact(
+            public_key="11" * 32,
+            last_path="aabb",
+            last_path_len=1,
+            out_path_hash_mode=0,
+            route_override_path="cc00dd00",
+            route_override_len=2,
+            route_override_hash_mode=1,
+        )
+        d = c.to_radio_dict()
+        assert d["out_path"] == "cc00dd00"
+        assert d["out_path_len"] == 2
+        assert d["out_path_hash_mode"] == 1
 
 
 class TestContactFromRadioDictHashMode:

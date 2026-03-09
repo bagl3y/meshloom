@@ -317,6 +317,13 @@ async def run_migrations(conn: aiosqlite.Connection) -> int:
         await set_version(conn, 40)
         applied += 1
 
+    # Migration 41: Persist optional routing overrides separately from learned paths
+    if version < 41:
+        logger.info("Applying migration 41: add contacts routing override columns")
+        await _migrate_041_add_contact_routing_override_columns(conn)
+        await set_version(conn, 41)
+        applied += 1
+
     if applied > 0:
         logger.info(
             "Applied %d migration(s), schema now at version %d", applied, await get_version(conn)
@@ -2381,4 +2388,30 @@ async def _migrate_040_rebuild_contact_advert_paths_identity(
         "CREATE INDEX IF NOT EXISTS idx_contact_advert_paths_recent "
         "ON contact_advert_paths(public_key, last_seen DESC)"
     )
+    await conn.commit()
+
+
+async def _migrate_041_add_contact_routing_override_columns(conn: aiosqlite.Connection) -> None:
+    """Add nullable routing-override columns to contacts."""
+    cursor = await conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='contacts'"
+    )
+    if await cursor.fetchone() is None:
+        await conn.commit()
+        return
+
+    for column_name, column_type in (
+        ("route_override_path", "TEXT"),
+        ("route_override_len", "INTEGER"),
+        ("route_override_hash_mode", "INTEGER"),
+    ):
+        try:
+            await conn.execute(f"ALTER TABLE contacts ADD COLUMN {column_name} {column_type}")
+            logger.debug("Added %s to contacts table", column_name)
+        except aiosqlite.OperationalError as e:
+            if "duplicate column name" in str(e).lower():
+                logger.debug("contacts.%s already exists, skipping", column_name)
+            else:
+                raise
+
     await conn.commit()

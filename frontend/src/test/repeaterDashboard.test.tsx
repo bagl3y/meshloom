@@ -307,67 +307,82 @@ describe('RepeaterDashboard', () => {
       expect(screen.getByText('1 hop')).toBeInTheDocument();
     });
 
-    it('direct path is clickable with reset title', () => {
+    it('direct path is clickable with routing override title', () => {
       const directContacts: Contact[] = [
         { ...contacts[0], last_path_len: 0, last_seen: 1700000000 },
       ];
 
       render(<RepeaterDashboard {...defaultProps} contacts={directContacts} />);
 
-      const directEl = screen.getByTitle('Click to reset path to flood');
+      const directEl = screen.getByTitle('Click to edit routing override');
       expect(directEl).toBeInTheDocument();
       expect(directEl.textContent).toBe('direct');
     });
 
-    it('clicking direct path calls resetContactPath on confirm', async () => {
-      const directContacts: Contact[] = [
-        { ...contacts[0], last_path_len: 0, last_seen: 1700000000 },
+    it('shows forced decorator when a routing override is active', () => {
+      const forcedContacts: Contact[] = [
+        {
+          ...contacts[0],
+          last_path_len: 1,
+          last_seen: 1700000000,
+          route_override_path: 'ae92f13e',
+          route_override_len: 2,
+          route_override_hash_mode: 1,
+        },
       ];
 
-      // Mock window.confirm to return true
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      render(<RepeaterDashboard {...defaultProps} contacts={forcedContacts} />);
 
-      // Mock the api module
-      const { api } = await import('../api');
-      const resetSpy = vi.spyOn(api, 'resetContactPath').mockResolvedValue({
-        status: 'ok',
-        public_key: REPEATER_KEY,
-      });
-
-      render(<RepeaterDashboard {...defaultProps} contacts={directContacts} />);
-
-      fireEvent.click(screen.getByTitle('Click to reset path to flood'));
-
-      expect(confirmSpy).toHaveBeenCalledWith('Reset path to flood?');
-      expect(resetSpy).toHaveBeenCalledWith(REPEATER_KEY);
-
-      confirmSpy.mockRestore();
-      resetSpy.mockRestore();
+      expect(screen.getByText('2 hops')).toBeInTheDocument();
+      expect(screen.getByText('(forced)')).toBeInTheDocument();
     });
 
-    it('clicking path does not call API when confirm is cancelled', async () => {
+    it('clicking direct path opens prompt and updates routing override', async () => {
       const directContacts: Contact[] = [
         { ...contacts[0], last_path_len: 0, last_seen: 1700000000 },
       ];
 
-      // Mock window.confirm to return false
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('0');
 
       const { api } = await import('../api');
-      const resetSpy = vi.spyOn(api, 'resetContactPath').mockResolvedValue({
+      const overrideSpy = vi.spyOn(api, 'setContactRoutingOverride').mockResolvedValue({
         status: 'ok',
         public_key: REPEATER_KEY,
       });
 
       render(<RepeaterDashboard {...defaultProps} contacts={directContacts} />);
 
-      fireEvent.click(screen.getByTitle('Click to reset path to flood'));
+      fireEvent.click(screen.getByTitle('Click to edit routing override'));
 
-      expect(confirmSpy).toHaveBeenCalledWith('Reset path to flood?');
-      expect(resetSpy).not.toHaveBeenCalled();
+      expect(promptSpy).toHaveBeenCalled();
+      expect(overrideSpy).toHaveBeenCalledWith(REPEATER_KEY, '0');
 
-      confirmSpy.mockRestore();
-      resetSpy.mockRestore();
+      promptSpy.mockRestore();
+      overrideSpy.mockRestore();
+    });
+
+    it('clicking path does not call API when prompt is cancelled', async () => {
+      const directContacts: Contact[] = [
+        { ...contacts[0], last_path_len: 0, last_seen: 1700000000 },
+      ];
+
+      const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue(null);
+
+      const { api } = await import('../api');
+      const overrideSpy = vi.spyOn(api, 'setContactRoutingOverride').mockResolvedValue({
+        status: 'ok',
+        public_key: REPEATER_KEY,
+      });
+
+      render(<RepeaterDashboard {...defaultProps} contacts={directContacts} />);
+
+      fireEvent.click(screen.getByTitle('Click to edit routing override'));
+
+      expect(promptSpy).toHaveBeenCalled();
+      expect(overrideSpy).not.toHaveBeenCalled();
+
+      promptSpy.mockRestore();
+      overrideSpy.mockRestore();
     });
   });
 });

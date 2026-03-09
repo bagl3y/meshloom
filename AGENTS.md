@@ -124,6 +124,7 @@ MeshCore firmware can encode path hops as 1-byte, 2-byte, or 3-byte identifiers.
 - `GET /api/radio/config` exposes both the current `path_hash_mode` and `path_hash_mode_supported`.
 - `PATCH /api/radio/config` may update `path_hash_mode` only when the connected firmware supports it.
 - Contacts persist `out_path_hash_mode` separately from `last_path` so contact sync and DM send paths can round-trip correctly even when hop bytes are ambiguous.
+- Contacts may also persist an explicit routing override (`route_override_*`). When set, radio-bound operations use the override instead of the learned `last_path*`, but learned paths still keep updating from adverts.
 - `path_len` in API payloads is always hop count, not byte count. The actual path byte length is `hop_count * hash_size`.
 
 ## Data Flow
@@ -289,7 +290,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | POST | `/api/contacts/{public_key}/remove-from-radio` | Remove contact from radio |
 | POST | `/api/contacts/{public_key}/mark-read` | Mark contact conversation as read |
 | POST | `/api/contacts/{public_key}/command` | Send CLI command to repeater |
-| POST | `/api/contacts/{public_key}/reset-path` | Reset contact path to flood |
+| POST | `/api/contacts/{public_key}/routing-override` | Set or clear a forced routing override |
 | POST | `/api/contacts/{public_key}/trace` | Trace route to contact |
 | POST | `/api/contacts/{public_key}/repeater/login` | Log in to a repeater |
 | POST | `/api/contacts/{public_key}/repeater/status` | Fetch repeater status telemetry |
