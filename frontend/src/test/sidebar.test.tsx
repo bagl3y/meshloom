@@ -37,6 +37,7 @@ function makeContact(public_key: string, name: string, type = 1): Contact {
 
 function renderSidebar(overrides?: {
   unreadCounts?: Record<string, number>;
+  mentions?: Record<string, boolean>;
   favorites?: Favorite[];
   lastMessageTimes?: ConversationTimes;
   channels?: Channel[];
@@ -67,7 +68,7 @@ function renderSidebar(overrides?: {
       onNewMessage={vi.fn()}
       lastMessageTimes={overrides?.lastMessageTimes ?? {}}
       unreadCounts={unreadCounts}
-      mentions={{}}
+      mentions={overrides?.mentions ?? {}}
       showCracker={false}
       crackerRunning={false}
       onToggleCracker={vi.fn()}
@@ -100,6 +101,40 @@ describe('Sidebar section summaries', () => {
     expect(within(getSectionHeaderContainer('Channels')).getByText('1')).toBeInTheDocument();
     expect(within(getSectionHeaderContainer('Contacts')).getByText('3')).toBeInTheDocument();
     expect(within(getSectionHeaderContainer('Repeaters')).getByText('4')).toBeInTheDocument();
+  });
+
+  it('turns favorites and channels rollups red when they contain a mention', () => {
+    renderSidebar({
+      mentions: {
+        [getStateKey('channel', 'BB'.repeat(16))]: true,
+        [getStateKey('channel', 'CC'.repeat(16))]: true,
+      },
+    });
+
+    expect(within(getSectionHeaderContainer('Favorites')).getByText('2')).toHaveClass(
+      'bg-badge-mention',
+      'text-badge-mention-foreground'
+    );
+    expect(within(getSectionHeaderContainer('Channels')).getByText('1')).toHaveClass(
+      'bg-badge-mention',
+      'text-badge-mention-foreground'
+    );
+  });
+
+  it('keeps contact row badges normal while the contacts rollup is always red', () => {
+    const { aliceName } = renderSidebar();
+
+    expect(within(getSectionHeaderContainer('Contacts')).getByText('3')).toHaveClass(
+      'bg-badge-mention',
+      'text-badge-mention-foreground'
+    );
+
+    const aliceRow = screen.getByText(aliceName).closest('div');
+    if (!aliceRow) throw new Error('Missing Alice row');
+    expect(within(aliceRow).getByText('3')).toHaveClass(
+      'bg-badge-unread/90',
+      'text-badge-unread-foreground'
+    );
   });
 
   it('expands collapsed sections during search and restores collapse state after clearing search', async () => {

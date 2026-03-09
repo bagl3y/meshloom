@@ -485,6 +485,8 @@ export function Sidebar({
   const getSectionUnreadCount = (rows: ConversationRow[]): number =>
     rows.reduce((total, row) => total + row.unreadCount, 0);
 
+  const sectionHasMention = (rows: ConversationRow[]): boolean => rows.some((row) => row.isMention);
+
   const favoriteRows = favoriteItems.map((item) =>
     item.type === 'channel'
       ? buildChannelRow(item.channel, 'fav-chan')
@@ -498,6 +500,8 @@ export function Sidebar({
   const channelsUnreadCount = getSectionUnreadCount(channelRows);
   const contactsUnreadCount = getSectionUnreadCount(contactRows);
   const repeatersUnreadCount = getSectionUnreadCount(repeaterRows);
+  const favoritesHasMention = sectionHasMention(favoriteRows);
+  const channelsHasMention = sectionHasMention(channelRows);
   const toolRows = !query
     ? [
         renderSidebarActionRow({
@@ -575,7 +579,8 @@ export function Sidebar({
     collapsed: boolean,
     onToggle: () => void,
     showSortToggle = false,
-    unreadCount = 0
+    unreadCount = 0,
+    highlightUnread = false
   ) => {
     const effectiveCollapsed = isSearching ? false : collapsed;
 
@@ -611,7 +616,12 @@ export function Sidebar({
             )}
             {unreadCount > 0 && (
               <span
-                className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground"
+                className={cn(
+                  'text-[10px] font-medium px-1.5 py-0.5 rounded-full',
+                  highlightUnread
+                    ? 'bg-badge-mention text-badge-mention-foreground'
+                    : 'bg-secondary text-muted-foreground'
+                )}
                 aria-label={`${unreadCount} unread`}
               >
                 {unreadCount}
@@ -701,7 +711,8 @@ export function Sidebar({
               favoritesCollapsed,
               () => setFavoritesCollapsed((prev) => !prev),
               false,
-              favoritesUnreadCount
+              favoritesUnreadCount,
+              favoritesHasMention
             )}
             {(isSearching || !favoritesCollapsed) &&
               favoriteRows.map((row) => renderConversationRow(row))}
@@ -716,7 +727,8 @@ export function Sidebar({
               channelsCollapsed,
               () => setChannelsCollapsed((prev) => !prev),
               true,
-              channelsUnreadCount
+              channelsUnreadCount,
+              channelsHasMention
             )}
             {(isSearching || !channelsCollapsed) &&
               channelRows.map((row) => renderConversationRow(row))}
@@ -731,7 +743,8 @@ export function Sidebar({
               contactsCollapsed,
               () => setContactsCollapsed((prev) => !prev),
               true,
-              contactsUnreadCount
+              contactsUnreadCount,
+              contactsUnreadCount > 0
             )}
             {(isSearching || !contactsCollapsed) &&
               contactRows.map((row) => renderConversationRow(row))}

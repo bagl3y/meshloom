@@ -138,11 +138,11 @@ export function ChatHeader({
             {conversation.type === 'channel' ? conversation.id.toLowerCase() : conversation.id}
           </span>
         )}
-          {conversation.type === 'channel' && activeChannel?.flood_scope_override && (
-            <span className="basis-full sm:basis-auto text-[11px] text-amber-700 dark:text-amber-300 truncate">
-              Regional override active: {activeChannel.flood_scope_override}
-            </span>
-          )}
+        {conversation.type === 'channel' && activeChannel?.flood_scope_override && (
+          <span className="basis-full sm:basis-auto text-[11px] text-amber-700 dark:text-amber-300 truncate">
+            Regional override active: {activeChannel.flood_scope_override}
+          </span>
+        )}
         {conversation.type === 'contact' &&
           (() => {
             const contact = contacts.find((c) => c.public_key === conversation.id);
