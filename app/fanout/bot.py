@@ -52,10 +52,17 @@ class BotModule(FanoutModule):
 
         msg_type = data.get("type", "")
         is_dm = msg_type == "PRIV"
+        conversation_key = data.get("conversation_key", "")
+        logger.debug(
+            "Bot '%s' starting for type=%s conversation=%s outgoing=%s",
+            self.name,
+            msg_type or "unknown",
+            conversation_key[:12] if conversation_key else "(none)",
+            bool(data.get("outgoing", False)),
+        )
 
         # Extract bot parameters from broadcast data
         if is_dm:
-            conversation_key = data.get("conversation_key", "")
             sender_key = data.get("sender_key") or conversation_key
             is_outgoing = data.get("outgoing", False)
             message_text = data.get("text", "")
@@ -73,7 +80,6 @@ class BotModule(FanoutModule):
                     contact = await ContactRepository.get_by_key(conversation_key)
                     sender_name = contact.name if contact else None
         else:
-            conversation_key = data.get("conversation_key", "")
             sender_key = None
             is_outgoing = bool(data.get("outgoing", False))
             sender_name = data.get("sender_name")
