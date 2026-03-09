@@ -157,9 +157,9 @@ function getRouteTypeColor(routeType: string): string {
       return 'bg-info/20 text-info';
     case 'Direct':
       return 'bg-success/20 text-success';
-    case 'Transport Flood':
+    case 'TransportFlood':
       return 'bg-purple-500/20 text-purple-400';
-    case 'Transport Direct':
+    case 'TransportDirect':
       return 'bg-orange-500/20 text-orange-400';
     default:
       return 'bg-muted text-muted-foreground';
@@ -173,9 +173,9 @@ function getRouteTypeLabel(routeType: string): string {
       return 'F';
     case 'Direct':
       return 'D';
-    case 'Transport Flood':
+    case 'TransportFlood':
       return 'TF';
-    case 'Transport Direct':
+    case 'TransportDirect':
       return 'TD';
     default:
       return '?';

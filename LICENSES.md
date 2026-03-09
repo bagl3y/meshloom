@@ -562,7 +562,7 @@ THE SOFTWARE.
 
 </details>
 
-### @michaelhart/meshcore-decoder (0.2.7) — MIT
+### @michaelhart/meshcore-decoder (0.3.0) — MIT
 
 <details>
 <summary>Full license text</summary>
