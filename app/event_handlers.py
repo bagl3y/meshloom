@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from meshcore import EventType
 
-from app.models import CONTACT_TYPE_REPEATER, Contact, Message, MessagePath
+from app.models import CONTACT_TYPE_REPEATER, Contact
 from app.packet_processor import process_raw_packet
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
@@ -12,6 +12,7 @@ from app.repository import (
     ContactRepository,
     MessageRepository,
 )
+from app.services.messages import create_fallback_direct_message, increment_ack_and_broadcast
 from app.websocket import broadcast_event
 
 if TYPE_CHECKING:
@@ -108,21 +109,21 @@ async def on_contact_message(event: "Event") -> None:
     sender_name = contact.name if contact else None
     path = payload.get("path")
     path_len = payload.get("path_len")
-    msg_id = await MessageRepository.create(
-        msg_type="PRIV",
-        text=payload.get("text", ""),
+    message = await create_fallback_direct_message(
         conversation_key=sender_pubkey,
+        text=payload.get("text", ""),
         sender_timestamp=sender_timestamp,
         received_at=received_at,
         path=path,
         path_len=path_len,
         txt_type=txt_type,
         signature=payload.get("signature"),
-        sender_key=sender_pubkey,
         sender_name=sender_name,
+        sender_key=sender_pubkey,
+        broadcast_fn=broadcast_event,
     )
 
-    if msg_id is None:
+    if message is None:
         # Already handled by packet processor (or exact duplicate) - nothing more to do
         logger.debug("DM from %s already processed by packet processor", sender_pubkey[:12])
         return
@@ -130,31 +131,6 @@ async def on_contact_message(event: "Event") -> None:
     # If we get here, the packet processor didn't handle this message
     # (likely because private key export is not available)
     logger.debug("DM from %s handled by event handler (fallback path)", sender_pubkey[:12])
-
-    # Build paths array for broadcast
-    paths = (
-        [MessagePath(path=path or "", received_at=received_at, path_len=path_len)]
-        if path is not None
-        else None
-    )
-
-    # Broadcast the new message
-    broadcast_event(
-        "message",
-        Message(
-            id=msg_id,
-            type="PRIV",
-            conversation_key=sender_pubkey,
-            text=payload.get("text", ""),
-            sender_timestamp=sender_timestamp,
-            received_at=received_at,
-            paths=paths,
-            txt_type=txt_type,
-            signature=payload.get("signature"),
-            sender_key=sender_pubkey,
-            sender_name=sender_name,
-        ).model_dump(),
-    )
 
     # Update contact last_contacted (contact was already fetched above)
     if contact:
@@ -307,12 +283,10 @@ async def on_ack(event: "Event") -> None:
     if ack_code in _pending_acks:
         message_id, _, _ = _pending_acks.pop(ack_code)
         logger.info("ACK received for message %d", message_id)
-
-        ack_count = await MessageRepository.increment_ack_count(message_id)
         # DM ACKs don't carry path data, so paths is intentionally omitted.
         # The frontend's mergePendingAck handles the missing field correctly,
         # preserving any previously known paths.
-        broadcast_event("message_acked", {"message_id": message_id, "ack_count": ack_count})
+        await increment_ack_and_broadcast(message_id=message_id, broadcast_fn=broadcast_event)
     else:
         logger.debug("ACK code %s does not match any pending messages", ack_code)
 

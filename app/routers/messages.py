@@ -16,6 +16,11 @@ from app.models import (
 from app.radio import radio_manager
 from app.region_scope import normalize_region_scope
 from app.repository import AmbiguousPublicKeyPrefixError, AppSettingsRepository, MessageRepository
+from app.services.messages import (
+    build_message_model,
+    create_outgoing_channel_message,
+    create_outgoing_direct_message,
+)
 from app.websocket import broadcast_error, broadcast_event
 
 logger = logging.getLogger(__name__)
@@ -239,15 +244,15 @@ async def send_direct_message(request: SendDirectMessageRequest) -> Message:
         raise HTTPException(status_code=500, detail=f"Failed to send message: {result.payload}")
 
     # Store outgoing message
-    message_id = await MessageRepository.create(
-        msg_type="PRIV",
-        text=request.text,
+    message = await create_outgoing_direct_message(
         conversation_key=db_contact.public_key.lower(),
+        text=request.text,
         sender_timestamp=now,
         received_at=now,
-        outgoing=True,
+        broadcast_fn=broadcast_event,
+        message_repository=MessageRepository,
     )
-    if message_id is None:
+    if message is None:
         raise HTTPException(
             status_code=500,
             detail="Failed to store outgoing message - unexpected duplicate",
@@ -261,23 +266,8 @@ async def send_direct_message(request: SendDirectMessageRequest) -> Message:
     suggested_timeout: int = result.payload.get("suggested_timeout", 10000)  # default 10s
     if expected_ack:
         ack_code = expected_ack.hex() if isinstance(expected_ack, bytes) else expected_ack
-        track_pending_ack(ack_code, message_id, suggested_timeout)
-        logger.debug("Tracking ACK %s for message %d", ack_code, message_id)
-
-    message = Message(
-        id=message_id,
-        type="PRIV",
-        conversation_key=db_contact.public_key.lower(),
-        text=request.text,
-        sender_timestamp=now,
-        received_at=now,
-        outgoing=True,
-        acked=0,
-    )
-
-    # Broadcast so all connected clients (not just sender) see the outgoing message immediately.
-    # Fanout modules (including bots) are triggered via broadcast_event's realtime dispatch.
-    broadcast_event("message", message.model_dump())
+        track_pending_ack(ack_code, message.id, suggested_timeout)
+        logger.debug("Tracking ACK %s for message %d", ack_code, message.id)
 
     return message
 
@@ -351,57 +341,39 @@ async def send_channel_message(request: SendChannelMessageRequest) -> Message:
 
         # Store outgoing immediately after send to avoid a race where
         # our own echo lands before persistence.
-        message_id = await MessageRepository.create(
-            msg_type="CHAN",
-            text=text_with_sender,
+        outgoing_message = await create_outgoing_channel_message(
             conversation_key=channel_key_upper,
+            text=text_with_sender,
             sender_timestamp=now,
             received_at=now,
-            outgoing=True,
             sender_name=radio_name or None,
             sender_key=our_public_key,
+            channel_name=db_channel.name,
+            broadcast_fn=broadcast_event,
+            message_repository=MessageRepository,
         )
-        if message_id is None:
+        if outgoing_message is None:
             raise HTTPException(
                 status_code=500,
                 detail="Failed to store outgoing message - unexpected duplicate",
             )
-
-        # Broadcast immediately so all connected clients see the message promptly.
-        # This ensures the message exists in frontend state when echo-driven
-        # `message_acked` events arrive.
-        broadcast_event(
-            "message",
-            Message(
-                id=message_id,
-                type="CHAN",
-                conversation_key=channel_key_upper,
-                text=text_with_sender,
-                sender_timestamp=now,
-                received_at=now,
-                outgoing=True,
-                acked=0,
-                sender_name=radio_name or None,
-                sender_key=our_public_key,
-                channel_name=db_channel.name,
-            ).model_dump(),
-        )
+        message_id = outgoing_message.id
 
     if message_id is None or now is None:
         raise HTTPException(status_code=500, detail="Failed to store outgoing message")
 
     acked_count, paths = await MessageRepository.get_ack_and_paths(message_id)
 
-    message = Message(
-        id=message_id,
-        type="CHAN",
+    message = build_message_model(
+        message_id=message_id,
+        msg_type="CHAN",
         conversation_key=channel_key_upper,
         text=text_with_sender,
         sender_timestamp=now,
         received_at=now,
+        paths=paths,
         outgoing=True,
         acked=acked_count,
-        paths=paths,
         sender_name=radio_name or None,
         sender_key=our_public_key,
         channel_name=db_channel.name,
@@ -492,17 +464,18 @@ async def resend_channel_message(
 
     # For new-timestamp resend, create a new message row and broadcast it
     if new_timestamp:
-        new_msg_id = await MessageRepository.create(
-            msg_type="CHAN",
-            text=msg.text,
+        new_message = await create_outgoing_channel_message(
             conversation_key=msg.conversation_key,
+            text=msg.text,
             sender_timestamp=now,
             received_at=now,
-            outgoing=True,
             sender_name=radio_name or None,
             sender_key=resend_public_key,
+            channel_name=db_channel.name,
+            broadcast_fn=broadcast_event,
+            message_repository=MessageRepository,
         )
-        if new_msg_id is None:
+        if new_message is None:
             # Timestamp-second collision (same text+channel within the same second).
             # The radio already transmitted, so log and return the original ID rather
             # than surfacing a 500 for a message that was successfully sent over the air.
@@ -512,30 +485,13 @@ async def resend_channel_message(
             )
             return {"status": "ok", "message_id": message_id}
 
-        broadcast_event(
-            "message",
-            Message(
-                id=new_msg_id,
-                type="CHAN",
-                conversation_key=msg.conversation_key,
-                text=msg.text,
-                sender_timestamp=now,
-                received_at=now,
-                outgoing=True,
-                acked=0,
-                sender_name=radio_name or None,
-                sender_key=resend_public_key,
-                channel_name=db_channel.name,
-            ).model_dump(),
-        )
-
         logger.info(
             "Resent channel message %d as new message %d to %s",
             message_id,
-            new_msg_id,
+            new_message.id,
             db_channel.name,
         )
-        return {"status": "ok", "message_id": new_msg_id}
+        return {"status": "ok", "message_id": new_message.id}
 
     logger.info("Resent channel message %d to %s", message_id, db_channel.name)
     return {"status": "ok", "message_id": message_id}
