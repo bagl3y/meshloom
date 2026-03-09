@@ -54,7 +54,7 @@ export function ChatHeader({
   const handleEditFloodScopeOverride = () => {
     if (conversation.type !== 'channel' || !onSetChannelFloodScopeOverride) return;
     const nextValue = window.prompt(
-      'Enter regional override flood scope for this room. This temporarily changes the radio flood scope before send and restores it after, which significantly slows room sends. Leave blank to clear.',
+      'Enter regional override flood scope for this room. This temporarily changes the radio flood scope before send and restores it after, which significantly slows room sends. Leave blank to clear.\n\nNote: some radio clients (including the official ones) implicitly add a "#" character to the beginning of a region specifier. That needs to be manually added here, so if you use the official app with region "Anytown", you should enter it here as "#Anytown".',
       activeChannel?.flood_scope_override ?? ''
     );
     if (nextValue === null) return;
