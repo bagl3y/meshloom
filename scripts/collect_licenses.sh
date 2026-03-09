@@ -7,6 +7,9 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${1:-$REPO_ROOT/LICENSES.md}"
+FRONTEND_DOCKER_LOCK="$REPO_ROOT/frontend/package-lock.docker.json"
+FRONTEND_LICENSE_IMAGE="${FRONTEND_LICENSE_IMAGE:-node:20-slim}"
+FRONTEND_LICENSE_NPM="${FRONTEND_LICENSE_NPM:-10.9.5}"
 
 # ── Backend (Python) — uses pip-licenses ─────────────────────────────
 backend_licenses() {
@@ -55,56 +58,33 @@ for d in data:
 }
 
 # ── Frontend (npm) ───────────────────────────────────────────────────
-frontend_licenses() {
+frontend_licenses_local() {
     cd "$REPO_ROOT/frontend"
-
-    node -e "
-const fs = require('fs');
-const path = require('path');
-
-const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-const depNames = Object.keys(pkg.dependencies || {}).sort((a, b) =>
-    a.toLowerCase().localeCompare(b.toLowerCase())
-);
-
-for (const name of depNames) {
-    const pkgDir = path.join('node_modules', name);
-    let version = 'unknown';
-    let licenseType = 'Unknown';
-    let licenseText = null;
-
-    // Read package.json for version + license type
-    try {
-        const depPkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'));
-        version = depPkg.version || version;
-        licenseType = depPkg.license || licenseType;
-    } catch {}
-
-    // Find license file (case-insensitive search)
-    try {
-        const files = fs.readdirSync(pkgDir);
-        const licFile = files.find(f => /^(licen[sc]e|copying)/i.test(f));
-        if (licFile) {
-            licenseText = fs.readFileSync(path.join(pkgDir, licFile), 'utf8').trim();
-        }
-    } catch {}
-
-    console.log('### ' + name + ' (' + version + ') — ' + licenseType + '\n');
-    if (licenseText) {
-        console.log('<details>');
-        console.log('<summary>Full license text</summary>');
-        console.log();
-        console.log('\`\`\`');
-        console.log(licenseText);
-        console.log('\`\`\`');
-        console.log();
-        console.log('</details>');
-    } else {
-        console.log('*License file not found in package.*');
-    }
-    console.log();
+    node "$REPO_ROOT/scripts/print_frontend_licenses.cjs"
 }
-"
+
+frontend_licenses_docker() {
+    docker run --rm \
+        -v "$REPO_ROOT:/src:ro" \
+        -w /tmp \
+        "$FRONTEND_LICENSE_IMAGE" \
+        bash -lc "
+            set -euo pipefail
+            cp -a /src/frontend ./frontend
+            cd frontend
+            cp package-lock.docker.json package-lock.json
+            npm i -g npm@$FRONTEND_LICENSE_NPM >/dev/null
+            npm ci --ignore-scripts >/dev/null
+            node /src/scripts/print_frontend_licenses.cjs
+        "
+}
+
+frontend_licenses() {
+    if [ -f "$FRONTEND_DOCKER_LOCK" ]; then
+        frontend_licenses_docker
+    else
+        frontend_licenses_local
+    fi
 }
 
 # ── Assemble ─────────────────────────────────────────────────────────
