@@ -88,10 +88,12 @@ export function useUnreadCounts(
   // On mount, consume the prefetched promise (started in index.html before
   // React loaded) or fall back to a fresh fetch.
   // Re-fetch when channel/contact count changes mid-session (new sync, cracker
-  // channel created, etc.) but skip the initial 0→N load to avoid double calls.
+  // channel created, etc.). Skip only the very first run of this effect; after
+  // that, any count change should trigger a refresh, even if the other
+  // collection is still empty.
   const channelsLen = channels.length;
   const contactsLen = contacts.length;
-  const prevLens = useRef({ channels: 0, contacts: 0 });
+  const hasObservedCountsRef = useRef(false);
   useEffect(() => {
     takePrefetchOrFetch('unreads', api.getUnreads)
       .then(applyUnreads)
@@ -100,10 +102,10 @@ export function useUnreadCounts(
       });
   }, [applyUnreads]);
   useEffect(() => {
-    const prev = prevLens.current;
-    prevLens.current = { channels: channelsLen, contacts: contactsLen };
-    // Skip the initial load (0→N); only refetch on mid-session count changes
-    if (prev.channels === 0 || prev.contacts === 0) return;
+    if (!hasObservedCountsRef.current) {
+      hasObservedCountsRef.current = true;
+      return;
+    }
     fetchUnreads();
   }, [channelsLen, contactsLen, fetchUnreads]);
 

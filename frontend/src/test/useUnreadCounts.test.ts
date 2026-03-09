@@ -228,6 +228,62 @@ describe('useUnreadCounts', () => {
     expect(result.current.unreadCounts[`channel-${CHANNEL_KEY}`]).toBeUndefined();
   });
 
+  it('re-fetches when channels change while contacts remain empty', async () => {
+    const mocks = await getMockedApi();
+    const initialChannels = [makeChannel(CHANNEL_KEY, 'Test')];
+    const addedChannelKey = '11223344556677889900AABBCCDDEEFF';
+
+    const { rerender } = renderWith({ channels: initialChannels, contacts: [] });
+
+    await act(async () => {
+      await vi.waitFor(() => expect(mocks.getUnreads).toHaveBeenCalledTimes(1));
+    });
+
+    mocks.getUnreads.mockResolvedValueOnce({
+      counts: { [`channel-${addedChannelKey}`]: 2 },
+      mentions: {},
+      last_message_times: {},
+    });
+
+    rerender({
+      channels: [...initialChannels, makeChannel(addedChannelKey, 'Added')],
+      contacts: [],
+      activeConversation: null,
+    });
+
+    await act(async () => {
+      await vi.waitFor(() => expect(mocks.getUnreads).toHaveBeenCalledTimes(2));
+    });
+  });
+
+  it('re-fetches when contacts change while channels remain empty', async () => {
+    const mocks = await getMockedApi();
+    const initialContact = makeContact(CONTACT_KEY);
+    const addedContactKey = 'ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100';
+
+    const { rerender } = renderWith({ channels: [], contacts: [initialContact] });
+
+    await act(async () => {
+      await vi.waitFor(() => expect(mocks.getUnreads).toHaveBeenCalledTimes(1));
+    });
+
+    mocks.getUnreads.mockResolvedValueOnce({
+      counts: { [`contact-${addedContactKey}`]: 1 },
+      mentions: {},
+      last_message_times: {},
+    });
+
+    rerender({
+      channels: [],
+      contacts: [initialContact, makeContact(addedContactKey)],
+      activeConversation: null,
+    });
+
+    await act(async () => {
+      await vi.waitFor(() => expect(mocks.getUnreads).toHaveBeenCalledTimes(2));
+    });
+  });
+
   it('does not filter when no active conversation', async () => {
     const mocks = await getMockedApi();
     mocks.getUnreads.mockResolvedValue({

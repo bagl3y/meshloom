@@ -300,6 +300,7 @@ export function App() {
         // Silently recover any data missed during the disconnect window
         triggerReconcile();
         refreshUnreads();
+        api.getChannels().then(setChannels).catch(console.error);
         fetchAllContacts()
           .then((data) => setContacts(data))
           .catch(console.error);

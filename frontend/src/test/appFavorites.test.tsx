@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -36,9 +36,11 @@ const mocks = vi.hoisted(() => ({
     fetchOlderMessages: vi.fn(async () => {}),
     addMessageIfNew: vi.fn(),
     updateMessageAck: vi.fn(),
+    triggerReconcile: vi.fn(),
     incrementUnread: vi.fn(),
     markAllRead: vi.fn(),
     trackNewMessage: vi.fn(),
+    refreshUnreads: vi.fn(async () => {}),
   },
 }));
 
@@ -59,11 +61,17 @@ vi.mock('../hooks', async (importOriginal) => {
       messagesLoading: false,
       loadingOlder: false,
       hasOlderMessages: false,
+      hasNewerMessages: false,
+      loadingNewer: false,
+      hasNewerMessagesRef: { current: false },
       setMessages: mocks.hookFns.setMessages,
       fetchMessages: mocks.hookFns.fetchMessages,
       fetchOlderMessages: mocks.hookFns.fetchOlderMessages,
+      fetchNewerMessages: vi.fn(async () => {}),
+      jumpToBottom: vi.fn(),
       addMessageIfNew: mocks.hookFns.addMessageIfNew,
       updateMessageAck: mocks.hookFns.updateMessageAck,
+      triggerReconcile: mocks.hookFns.triggerReconcile,
     }),
     useUnreadCounts: () => ({
       unreadCounts: {},
@@ -72,6 +80,7 @@ vi.mock('../hooks', async (importOriginal) => {
       incrementUnread: mocks.hookFns.incrementUnread,
       markAllRead: mocks.hookFns.markAllRead,
       trackNewMessage: mocks.hookFns.trackNewMessage,
+      refreshUnreads: mocks.hookFns.refreshUnreads,
     }),
     getMessageContentKey: () => 'content-key',
   };
@@ -165,6 +174,7 @@ vi.mock('../utils/urlHash', () => ({
 }));
 
 import { App } from '../App';
+import { useWebSocket } from '../useWebSocket';
 
 const baseConfig = {
   public_key: 'aa'.repeat(32),
@@ -262,6 +272,28 @@ describe('App favorite toggle flow', () => {
     await waitFor(() => {
       expect(screen.getByTitle('Add to favorites')).toBeInTheDocument();
     });
+  });
+
+  it('re-fetches channels after WebSocket reconnect', async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(mocks.api.getChannels).toHaveBeenCalledTimes(1);
+    });
+
+    const wsHandlers = vi.mocked(useWebSocket).mock.calls[0]?.[0];
+    expect(wsHandlers?.onReconnect).toBeTypeOf('function');
+
+    await act(async () => {
+      wsHandlers?.onReconnect?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(mocks.api.getChannels).toHaveBeenCalledTimes(2);
+    });
+    expect(mocks.hookFns.triggerReconcile).toHaveBeenCalledTimes(1);
+    expect(mocks.hookFns.refreshUnreads).toHaveBeenCalledTimes(1);
   });
 
   it('toggles settings page mode and syncs selected section into SettingsModal', async () => {
