@@ -90,8 +90,8 @@ def execute_bot_code(
     try:
         # Execute the user's code to define the bot function
         exec(code, namespace)
-    except Exception as e:
-        logger.warning("Bot code compilation failed: %s", e)
+    except Exception:
+        logger.exception("Bot code compilation failed")
         return None
 
     # Check if bot function was defined
@@ -172,8 +172,8 @@ def execute_bot_code(
         logger.debug("Bot function returned unsupported type: %s", type(result))
         return None
 
-    except Exception as e:
-        logger.warning("Bot function execution failed: %s", e)
+    except Exception:
+        logger.exception("Bot function execution failed")
         return None
 
 
@@ -249,10 +249,10 @@ async def _send_single_bot_message(
                 logger.warning("Cannot send bot response: no destination")
                 return  # Don't update timestamp if we didn't send
         except HTTPException as e:
-            logger.error("Bot failed to send response: %s", e.detail)
+            logger.error("Bot failed to send response: %s", e.detail, exc_info=True)
             return  # Don't update timestamp on failure
-        except Exception as e:
-            logger.error("Bot failed to send response: %s", e)
+        except Exception:
+            logger.exception("Bot failed to send response")
             return  # Don't update timestamp on failure
 
         # Update last send time after successful send

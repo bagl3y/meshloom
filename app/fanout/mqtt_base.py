@@ -89,7 +89,13 @@ class BaseMqttPublisher(ABC):
         try:
             await self._client.publish(topic, json.dumps(payload), retain=retain)
         except Exception as e:
-            logger.warning("%s publish failed on %s: %s", self._log_prefix, topic, e)
+            logger.warning(
+                "%s publish failed on %s: %s",
+                self._log_prefix,
+                topic,
+                e,
+                exc_info=True,
+            )
             self.connected = False
             # Wake the connection loop so it exits the wait and reconnects
             self._settings_version += 1
@@ -223,6 +229,7 @@ class BaseMqttPublisher(ABC):
                     self._log_prefix,
                     e,
                     backoff,
+                    exc_info=True,
                 )
 
                 try:

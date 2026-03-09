@@ -135,4 +135,4 @@ async def _publish_community_packet(
         await publisher.publish(topic, packet)
 
     except Exception as e:
-        logger.warning("Community MQTT broadcast error: %s", e)
+        logger.warning("Community MQTT broadcast error: %s", e, exc_info=True)

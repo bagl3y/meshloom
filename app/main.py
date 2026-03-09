@@ -47,8 +47,8 @@ async def _startup_radio_connect_and_setup() -> None:
             logger.info("Connected to radio")
         else:
             logger.warning("Failed to connect to radio on startup")
-    except Exception as e:
-        logger.warning("Failed to connect to radio on startup: %s", e)
+    except Exception:
+        logger.exception("Failed to connect to radio on startup")
 
 
 @asynccontextmanager
@@ -72,8 +72,8 @@ async def lifespan(app: FastAPI):
 
     try:
         await fanout_manager.load_from_db()
-    except Exception as e:
-        logger.warning("Failed to start fanout modules: %s", e)
+    except Exception:
+        logger.exception("Failed to start fanout modules")
 
     startup_radio_task = asyncio.create_task(_startup_radio_connect_and_setup())
     app.state.startup_radio_task = startup_radio_task

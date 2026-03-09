@@ -509,7 +509,7 @@ class RadioManager:
                     return False
 
             except Exception as e:
-                logger.warning("Reconnection failed: %s", e)
+                logger.warning("Reconnection failed: %s", e, exc_info=True)
                 broadcast_error("Reconnection failed", str(e))
                 return False
 

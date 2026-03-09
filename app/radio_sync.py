@@ -483,7 +483,7 @@ async def send_advertisement(mc: MeshCore, *, force: bool = False) -> bool:
             logger.warning("Failed to send advertisement: %s", result.payload)
             return False
     except Exception as e:
-        logger.warning("Error sending advertisement: %s", e)
+        logger.warning("Error sending advertisement: %s", e, exc_info=True)
         return False
 
 
@@ -514,7 +514,7 @@ async def _periodic_advert_loop():
             logger.info("Periodic advertisement task cancelled")
             break
         except Exception as e:
-            logger.error("Error in periodic advertisement loop: %s", e)
+            logger.error("Error in periodic advertisement loop: %s", e, exc_info=True)
             await asyncio.sleep(ADVERT_CHECK_INTERVAL)
 
 
@@ -554,7 +554,7 @@ async def sync_radio_time(mc: MeshCore) -> bool:
         logger.debug("Synced radio time to %d", now)
         return True
     except Exception as e:
-        logger.warning("Failed to sync radio time: %s", e)
+        logger.warning("Failed to sync radio time: %s", e, exc_info=True)
         return False
 
 
@@ -580,7 +580,7 @@ async def _periodic_sync_loop():
             logger.info("Periodic sync task cancelled")
             break
         except Exception as e:
-            logger.error("Error in periodic sync: %s", e)
+            logger.error("Error in periodic sync: %s", e, exc_info=True)
 
 
 def start_periodic_sync():
@@ -772,5 +772,5 @@ async def sync_recent_contacts_to_radio(force: bool = False, mc: MeshCore | None
         return {"loaded": 0, "busy": True}
 
     except Exception as e:
-        logger.error("Error syncing contacts to radio: %s", e)
+        logger.error("Error syncing contacts to radio: %s", e, exc_info=True)
         return {"loaded": 0, "error": str(e)}

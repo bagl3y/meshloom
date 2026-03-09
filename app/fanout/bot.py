@@ -130,8 +130,8 @@ class BotModule(FanoutModule):
             except asyncio.TimeoutError:
                 logger.warning("Bot '%s' execution timed out", self.name)
                 return
-            except Exception as e:
-                logger.warning("Bot '%s' execution error: %s", self.name, e)
+            except Exception:
+                logger.exception("Bot '%s' execution error", self.name)
                 return
 
         if response and self._active:
