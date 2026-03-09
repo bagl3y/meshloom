@@ -1,3 +1,9 @@
+## [2.7.1] - 2026-03-08
+
+Bugfix: Fix historical DM packet length passing
+Misc: Follow better inclusion patterns for the patched meshcore-decoder and just publish the dang package
+Misc: Patch a bewildering browser quirk that cause large raw packet lists to extend past the bottom of the page
+
 ## [2.7.0] - 2026-03-08
 
 Feature: Multibyte path support
