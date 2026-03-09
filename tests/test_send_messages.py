@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from fastapi import HTTPException
@@ -14,6 +14,7 @@ from app.models import (
 )
 from app.radio import radio_manager
 from app.repository import (
+    AppSettingsRepository,
     ChannelRepository,
     ContactRepository,
     MessageRepository,
@@ -48,6 +49,7 @@ def _make_mc(name="TestNode"):
     mc = MagicMock()
     mc.self_info = {"name": name}
     mc.commands = MagicMock()
+    mc.commands.set_flood_scope = AsyncMock(return_value=_make_radio_result())
     mc.commands.send_msg = AsyncMock(return_value=_make_radio_result())
     mc.commands.send_chan_msg = AsyncMock(return_value=_make_radio_result())
     mc.commands.add_contact = AsyncMock(return_value=_make_radio_result())
@@ -272,6 +274,75 @@ class TestOutgoingChannelBroadcast:
         assert db_msg is not None
         assert db_msg.sender_key == our_pubkey
 
+    @pytest.mark.asyncio
+    async def test_send_channel_msg_uses_channel_flood_scope_override(self, test_db):
+        mc = _make_mc(name="MyNode")
+        chan_key = "de" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#flightless")
+        await ChannelRepository.update_flood_scope_override(chan_key, "#Esperance")
+        await AppSettingsRepository.update(flood_scope="#Baseline")
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.decoder.calculate_channel_hash", return_value="abcd"),
+            patch("app.routers.messages.broadcast_event"),
+        ):
+            request = SendChannelMessageRequest(channel_key=chan_key, text="hello")
+            await send_channel_message(request)
+
+        assert mc.commands.set_flood_scope.await_args_list == [
+            call("#Esperance"),
+            call("#Baseline"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_send_channel_msg_skips_temporary_scope_when_override_matches_global(
+        self, test_db
+    ):
+        mc = _make_mc(name="MyNode")
+        chan_key = "df" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#matching")
+        await ChannelRepository.update_flood_scope_override(chan_key, "#Esperance")
+        await AppSettingsRepository.update(flood_scope="#Esperance")
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.decoder.calculate_channel_hash", return_value="abcd"),
+            patch("app.routers.messages.broadcast_event"),
+        ):
+            request = SendChannelMessageRequest(channel_key=chan_key, text="hello")
+            await send_channel_message(request)
+
+        mc.commands.set_flood_scope.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_send_channel_msg_aborts_when_override_apply_fails(self, test_db):
+        mc = _make_mc(name="MyNode")
+        chan_key = "a1" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#flightless")
+        await ChannelRepository.update_flood_scope_override(chan_key, "#Esperance")
+        await AppSettingsRepository.update(flood_scope="#Baseline")
+        mc.commands.set_flood_scope = AsyncMock(
+            return_value=MagicMock(type=EventType.ERROR, payload="unsupported")
+        )
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.decoder.calculate_channel_hash", return_value="abcd"),
+            patch("app.routers.messages.broadcast_event"),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            request = SendChannelMessageRequest(channel_key=chan_key, text="hello")
+            await send_channel_message(request)
+
+        assert exc_info.value.status_code == 500
+        assert "regional override" in exc_info.value.detail.lower()
+        mc.commands.set_channel.assert_not_awaited()
+        mc.commands.send_chan_msg.assert_not_awaited()
+
 
 class TestResendChannelMessage:
     """Test the user-triggered resend endpoint."""
@@ -335,6 +406,73 @@ class TestResendChannelMessage:
 
         assert exc_info.value.status_code == 400
         assert "expired" in exc_info.value.detail.lower()
+
+    @pytest.mark.asyncio
+    async def test_resend_uses_current_channel_flood_scope_override(self, test_db):
+        mc = _make_mc(name="MyNode")
+        chan_key = "be" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#flightless")
+        await ChannelRepository.update_flood_scope_override(chan_key, "#CurrentRegion")
+        await AppSettingsRepository.update(flood_scope="#Baseline")
+
+        now = int(time.time()) - 10
+        msg_id = await MessageRepository.create(
+            msg_type="CHAN",
+            text="MyNode: hello",
+            conversation_key=chan_key.upper(),
+            sender_timestamp=now,
+            received_at=now,
+            outgoing=True,
+        )
+        assert msg_id is not None
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+        ):
+            await resend_channel_message(msg_id, new_timestamp=False)
+
+        assert mc.commands.set_flood_scope.await_args_list == [
+            call("#CurrentRegion"),
+            call("#Baseline"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_resend_restore_failure_broadcasts_warning(self, test_db):
+        mc = _make_mc(name="MyNode")
+        chan_key = "b1" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#flightless")
+        await ChannelRepository.update_flood_scope_override(chan_key, "#CurrentRegion")
+        await AppSettingsRepository.update(flood_scope="#Baseline")
+
+        now = int(time.time()) - 10
+        msg_id = await MessageRepository.create(
+            msg_type="CHAN",
+            text="MyNode: hello",
+            conversation_key=chan_key.upper(),
+            sender_timestamp=now,
+            received_at=now,
+            outgoing=True,
+        )
+        assert msg_id is not None
+
+        mc.commands.set_flood_scope = AsyncMock(
+            side_effect=[
+                _make_radio_result(),
+                MagicMock(type=EventType.ERROR, payload="restore failed"),
+            ]
+        )
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_error") as mock_broadcast_error,
+        ):
+            result = await resend_channel_message(msg_id, new_timestamp=False)
+
+        assert result["status"] == "ok"
+        mock_broadcast_error.assert_called_once()
+        assert "restore failed" in mock_broadcast_error.call_args.args[0].lower()
 
     @pytest.mark.asyncio
     async def test_resend_new_timestamp_collision_returns_original_id(self, test_db):

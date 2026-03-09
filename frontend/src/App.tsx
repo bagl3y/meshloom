@@ -69,7 +69,15 @@ import { mergeContactIntoList } from './utils/contactMerge';
 import { getLocalLabel, getContrastTextColor } from './utils/localLabel';
 import { cn } from '@/lib/utils';
 import type { SearchNavigateTarget } from './components/SearchView';
-import type { Contact, Conversation, HealthStatus, Message, MessagePath, RawPacket } from './types';
+import type {
+  Channel,
+  Contact,
+  Conversation,
+  HealthStatus,
+  Message,
+  MessagePath,
+  RawPacket,
+} from './types';
 
 const MAX_RAW_PACKETS = 500;
 
@@ -225,6 +233,21 @@ export function App() {
     return contact?.type === CONTACT_TYPE_REPEATER;
   }, [activeConversation, contacts]);
 
+  const mergeChannelIntoList = useCallback(
+    (updated: Channel) => {
+      setChannels((prev) => {
+        const existingIndex = prev.findIndex((channel) => channel.key === updated.key);
+        if (existingIndex === -1) {
+          return [...prev, updated].sort((a, b) => a.name.localeCompare(b.name));
+        }
+        const next = [...prev];
+        next[existingIndex] = updated;
+        return next;
+      });
+    },
+    [setChannels]
+  );
+
   // WebSocket handlers - memoized to prevent reconnection loops
   const wsHandlers = useMemo(
     () => ({
@@ -353,6 +376,9 @@ export function App() {
       onContact: (contact: Contact) => {
         setContacts((prev) => mergeContactIntoList(prev, contact));
       },
+      onChannel: (channel: Channel) => {
+        mergeChannelIntoList(channel);
+      },
       onContactDeleted: (publicKey: string) => {
         setContacts((prev) => prev.filter((c) => c.public_key !== publicKey));
         messageCache.remove(publicKey);
@@ -386,6 +412,7 @@ export function App() {
       updateMessageAck,
       checkMention,
       fetchConfig,
+      mergeChannelIntoList,
       prevHealthRef,
       setHealth,
       activeConversationRef,
@@ -465,6 +492,23 @@ export function App() {
       }
     },
     []
+  );
+
+  const handleSetChannelFloodScopeOverride = useCallback(
+    async (channelKey: string, floodScopeOverride: string) => {
+      try {
+        const updated = await api.setChannelFloodScopeOverride(channelKey, floodScopeOverride);
+        mergeChannelIntoList(updated);
+        toast.success(
+          updated.flood_scope_override ? 'Regional override saved' : 'Regional override cleared'
+        );
+      } catch (err) {
+        toast.error('Failed to update regional override', {
+          description: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    },
+    [mergeChannelIntoList]
   );
 
   // Handle sender click to add mention
@@ -769,6 +813,7 @@ export function App() {
                     favorites={favorites}
                     onTrace={handleTrace}
                     onToggleFavorite={handleToggleFavorite}
+                    onSetChannelFloodScopeOverride={handleSetChannelFloodScopeOverride}
                     onDeleteChannel={handleDeleteChannel}
                     onDeleteContact={handleDeleteContact}
                     onOpenContactInfo={handleOpenContactInfo}

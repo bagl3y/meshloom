@@ -16,6 +16,7 @@ const baseProps = {
   favorites: [] as Favorite[],
   onTrace: noop,
   onToggleFavorite: noop,
+  onSetChannelFloodScopeOverride: noop,
   onDeleteChannel: noop,
   onDeleteContact: noop,
 };
@@ -104,5 +105,41 @@ describe('ChatHeader key visibility', () => {
     fireEvent.click(screen.getByText(key.toLowerCase()));
 
     expect(writeText).toHaveBeenCalledWith(key);
+  });
+
+  it('shows active regional override banner for channels', () => {
+    const key = 'AB'.repeat(16);
+    const channel = {
+      ...makeChannel(key, '#flightless', true),
+      flood_scope_override: '#Esperance',
+    };
+    const conversation: Conversation = { type: 'channel', id: key, name: '#flightless' };
+
+    render(<ChatHeader {...baseProps} conversation={conversation} channels={[channel]} />);
+
+    expect(screen.getByText('Regional override active: #Esperance')).toBeInTheDocument();
+  });
+
+  it('prompts for regional override when globe button is clicked', () => {
+    const key = 'CD'.repeat(16);
+    const channel = makeChannel(key, '#flightless', true);
+    const conversation: Conversation = { type: 'channel', id: key, name: '#flightless' };
+    const onSetChannelFloodScopeOverride = vi.fn();
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('#Esperance');
+
+    render(
+      <ChatHeader
+        {...baseProps}
+        conversation={conversation}
+        channels={[channel]}
+        onSetChannelFloodScopeOverride={onSetChannelFloodScopeOverride}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle('Set regional override'));
+
+    expect(promptSpy).toHaveBeenCalled();
+    expect(onSetChannelFloodScopeOverride).toHaveBeenCalledWith(key, '#Esperance');
+    promptSpy.mockRestore();
   });
 });

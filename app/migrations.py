@@ -324,6 +324,13 @@ async def run_migrations(conn: aiosqlite.Connection) -> int:
         await set_version(conn, 41)
         applied += 1
 
+    # Migration 42: Persist optional per-channel flood-scope overrides
+    if version < 42:
+        logger.info("Applying migration 42: add channels flood_scope_override column")
+        await _migrate_042_add_channel_flood_scope_override(conn)
+        await set_version(conn, 42)
+        applied += 1
+
     if applied > 0:
         logger.info(
             "Applied %d migration(s), schema now at version %d", applied, await get_version(conn)
@@ -2413,5 +2420,26 @@ async def _migrate_041_add_contact_routing_override_columns(conn: aiosqlite.Conn
                 logger.debug("contacts.%s already exists, skipping", column_name)
             else:
                 raise
+
+    await conn.commit()
+
+
+async def _migrate_042_add_channel_flood_scope_override(conn: aiosqlite.Connection) -> None:
+    """Add nullable per-channel flood-scope override column."""
+    cursor = await conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='channels'"
+    )
+    if await cursor.fetchone() is None:
+        await conn.commit()
+        return
+
+    try:
+        await conn.execute("ALTER TABLE channels ADD COLUMN flood_scope_override TEXT")
+        logger.debug("Added flood_scope_override to channels table")
+    except aiosqlite.OperationalError as e:
+        if "duplicate column name" in str(e).lower():
+            logger.debug("channels.flood_scope_override already exists, skipping")
+        else:
+            raise
 
     await conn.commit()

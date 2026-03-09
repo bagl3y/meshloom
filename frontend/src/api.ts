@@ -157,6 +157,11 @@ export const api = {
     fetchJson<{ status: string; key: string }>(`/channels/${key}/mark-read`, {
       method: 'POST',
     }),
+  setChannelFloodScopeOverride: (key: string, floodScopeOverride: string) =>
+    fetchJson<Channel>(`/channels/${key}/flood-scope-override`, {
+      method: 'POST',
+      body: JSON.stringify({ flood_scope_override: floodScopeOverride }),
+    }),
 
   // Messages
   getMessages: (

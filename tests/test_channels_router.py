@@ -228,6 +228,80 @@ class TestSyncChannelsFromRadio:
         channel = await ChannelRepository.get_by_key("AABBCCDDAABBCCDDAABBCCDDAABBCCDD")
         assert channel is not None
 
+    @pytest.mark.asyncio
+    async def test_sync_preserves_existing_flood_scope_override(self, test_db, client):
+        secret = bytes.fromhex("cafebabecafebabecafebabecafebabe")
+        key = secret.hex().upper()
+        await ChannelRepository.upsert(key=key, name="#flightless", is_hashtag=True, on_radio=False)
+        await ChannelRepository.update_flood_scope_override(key, "#Esperance")
+
+        mock_mc = MagicMock()
+
+        async def mock_get_channel(idx):
+            if idx == 0:
+                return _make_channel_info("#flightless", secret)
+            return _make_empty_channel()
+
+        mock_mc.commands.get_channel = AsyncMock(side_effect=mock_get_channel)
+        radio_manager._meshcore = mock_mc
+
+        with (
+            patch("app.dependencies.radio_manager") as mock_dep_rm,
+            patch("app.routers.channels.radio_manager") as mock_ch_rm,
+        ):
+            mock_dep_rm.is_connected = True
+            mock_dep_rm.meshcore = mock_mc
+            mock_ch_rm.radio_operation = lambda desc: _noop_radio_operation(mock_mc)
+
+            response = await client.post("/api/channels/sync?max_channels=3")
+
+        assert response.status_code == 200
+        channel = await ChannelRepository.get_by_key(key)
+        assert channel is not None
+        assert channel.flood_scope_override == "#Esperance"
+
+
+class TestChannelFloodScopeOverride:
+    @pytest.mark.asyncio
+    async def test_sets_channel_flood_scope_override(self, test_db, client):
+        key = "AA" * 16
+        await ChannelRepository.upsert(key=key, name="#flightless", is_hashtag=True)
+
+        with patch("app.routers.channels.broadcast_event") as mock_broadcast:
+            response = await client.post(
+                f"/api/channels/{key}/flood-scope-override",
+                json={"flood_scope_override": "#Esperance"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["flood_scope_override"] == "#Esperance"
+
+        channel = await ChannelRepository.get_by_key(key)
+        assert channel is not None
+        assert channel.flood_scope_override == "#Esperance"
+        mock_broadcast.assert_called_once()
+        assert mock_broadcast.call_args.args[0] == "channel"
+
+    @pytest.mark.asyncio
+    async def test_blank_override_clears_channel_flood_scope_override(self, test_db, client):
+        key = "BB" * 16
+        await ChannelRepository.upsert(key=key, name="#flightless", is_hashtag=True)
+        await ChannelRepository.update_flood_scope_override(key, "#Esperance")
+
+        response = await client.post(
+            f"/api/channels/{key}/flood-scope-override",
+            json={"flood_scope_override": "   "},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["flood_scope_override"] is None
+
+        channel = await ChannelRepository.get_by_key(key)
+        assert channel is not None
+        assert channel.flood_scope_override is None
+
 
 class TestChannelDetail:
     """Test GET /api/channels/{key}/detail."""

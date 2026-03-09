@@ -188,6 +188,10 @@ class Channel(BaseModel):
     name: str
     is_hashtag: bool = False
     on_radio: bool = False
+    flood_scope_override: str | None = Field(
+        default=None,
+        description="Per-channel outbound flood scope override (null = use global app setting)",
+    )
     last_read_at: int | None = None  # Server-side read state tracking
 
 

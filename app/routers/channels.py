@@ -10,6 +10,7 @@ from app.models import Channel, ChannelDetail, ChannelMessageCounts, ChannelTopS
 from app.radio import radio_manager
 from app.radio_sync import upsert_channel_from_radio_slot
 from app.repository import ChannelRepository, MessageRepository
+from app.websocket import broadcast_event
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/channels", tags=["channels"])
@@ -20,6 +21,12 @@ class CreateChannelRequest(BaseModel):
     key: str | None = Field(
         default=None,
         description="Channel key as hex string (32 chars = 16 bytes). If omitted or name starts with #, key is derived from name hash.",
+    )
+
+
+class ChannelFloodScopeOverrideRequest(BaseModel):
+    flood_scope_override: str = Field(
+        description="Blank clears the override; non-empty values temporarily override flood scope"
     )
 
 
@@ -95,6 +102,7 @@ async def create_channel(request: CreateChannelRequest) -> Channel:
         name=request.name,
         is_hashtag=is_hashtag,
         on_radio=False,
+        flood_scope_override=None,
     )
 
 
@@ -136,6 +144,28 @@ async def mark_channel_read(key: str) -> dict:
     return {"status": "ok", "key": channel.key}
 
 
+@router.post("/{key}/flood-scope-override", response_model=Channel)
+async def set_channel_flood_scope_override(
+    key: str, request: ChannelFloodScopeOverrideRequest
+) -> Channel:
+    """Set or clear a per-channel flood-scope override."""
+    channel = await ChannelRepository.get_by_key(key)
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    override = request.flood_scope_override.strip() or None
+    updated = await ChannelRepository.update_flood_scope_override(channel.key, override)
+    if not updated:
+        raise HTTPException(status_code=500, detail="Failed to update flood-scope override")
+
+    refreshed = await ChannelRepository.get_by_key(channel.key)
+    if refreshed is None:
+        raise HTTPException(status_code=500, detail="Channel disappeared after update")
+
+    broadcast_event("channel", refreshed.model_dump())
+    return refreshed
+
+
 @router.delete("/{key}")
 async def delete_channel(key: str) -> dict:
     """Delete a channel from the database by key.
@@ -145,8 +175,6 @@ async def delete_channel(key: str) -> dict:
     """
     logger.info("Deleting channel %s from database", key)
     await ChannelRepository.delete(key)
-
-    from app.websocket import broadcast_event
 
     broadcast_event("channel_deleted", {"key": key})
 

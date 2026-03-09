@@ -14,6 +14,7 @@ interface ChatHeaderProps {
   favorites: Favorite[];
   onTrace: () => void;
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
+  onSetChannelFloodScopeOverride?: (key: string, floodScopeOverride: string) => void;
   onDeleteChannel: (key: string) => void;
   onDeleteContact: (publicKey: string) => void;
   onOpenContactInfo?: (publicKey: string) => void;
@@ -28,6 +29,7 @@ export function ChatHeader({
   favorites,
   onTrace,
   onToggleFavorite,
+  onSetChannelFloodScopeOverride,
   onDeleteChannel,
   onDeleteContact,
   onOpenContactInfo,
@@ -39,12 +41,26 @@ export function ChatHeader({
     setShowKey(false);
   }, [conversation.id]);
 
-  const isPrivateChannel =
-    conversation.type === 'channel' && !channels.find((c) => c.key === conversation.id)?.is_hashtag;
+  const activeChannel =
+    conversation.type === 'channel'
+      ? channels.find((channel) => channel.key === conversation.id)
+      : undefined;
+  const isPrivateChannel = conversation.type === 'channel' && !activeChannel?.is_hashtag;
 
   const titleClickable =
     (conversation.type === 'contact' && onOpenContactInfo) ||
     (conversation.type === 'channel' && onOpenChannelInfo);
+
+  const handleEditFloodScopeOverride = () => {
+    if (conversation.type !== 'channel' || !onSetChannelFloodScopeOverride) return;
+    const nextValue = window.prompt(
+      'Enter regional override flood scope for this room. This temporarily changes the radio flood scope before send and restores it after, which significantly slows room sends. Leave blank to clear.',
+      activeChannel?.flood_scope_override ?? ''
+    );
+    if (nextValue === null) return;
+    onSetChannelFloodScopeOverride(conversation.id, nextValue);
+  };
+
   return (
     <header className="flex justify-between items-center px-4 py-2.5 border-b border-border gap-2">
       <span className="flex flex-wrap items-baseline gap-x-2 min-w-0 flex-1">
@@ -87,7 +103,7 @@ export function ChatHeader({
         >
           {conversation.type === 'channel' &&
           !conversation.name.startsWith('#') &&
-          channels.find((c) => c.key === conversation.id)?.is_hashtag
+          activeChannel?.is_hashtag
             ? '#'
             : ''}
           {conversation.name}
@@ -122,6 +138,11 @@ export function ChatHeader({
             {conversation.type === 'channel' ? conversation.id.toLowerCase() : conversation.id}
           </span>
         )}
+          {conversation.type === 'channel' && activeChannel?.flood_scope_override && (
+            <span className="basis-full sm:basis-auto text-[11px] text-amber-700 dark:text-amber-300 truncate">
+              Regional override active: {activeChannel.flood_scope_override}
+            </span>
+          )}
         {conversation.type === 'contact' &&
           (() => {
             const contact = contacts.find((c) => c.public_key === conversation.id);
@@ -136,7 +157,6 @@ export function ChatHeader({
           })()}
       </span>
       <div className="flex items-center gap-0.5 flex-shrink-0">
-        {/* Direct trace button (contacts only) */}
         {conversation.type === 'contact' && (
           <button
             className="p-1.5 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -147,7 +167,16 @@ export function ChatHeader({
             <span aria-hidden="true">&#x1F6CE;</span>
           </button>
         )}
-        {/* Favorite button */}
+        {conversation.type === 'channel' && onSetChannelFloodScopeOverride && (
+          <button
+            className="p-1.5 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={handleEditFloodScopeOverride}
+            title="Set regional override"
+            aria-label="Set regional override"
+          >
+            <span aria-hidden="true">&#127758;</span>
+          </button>
+        )}
         {(conversation.type === 'channel' || conversation.type === 'contact') && (
           <button
             className="p-1.5 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -172,7 +201,6 @@ export function ChatHeader({
             )}
           </button>
         )}
-        {/* Delete button */}
         {!(conversation.type === 'channel' && conversation.name === 'Public') && (
           <button
             className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

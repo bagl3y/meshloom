@@ -163,6 +163,7 @@ app/
 - `POST /channels`
 - `DELETE /channels/{key}`
 - `POST /channels/sync`
+- `POST /channels/{key}/flood-scope-override`
 - `POST /channels/{key}/mark-read`
 
 ### Messages
@@ -209,6 +210,7 @@ app/
 - `message_acked` — ACK/echo update for existing message (ack count + paths)
 - `raw_packet` — every incoming RF packet (for real-time packet feed UI)
 - `contact_deleted` — contact removed from database (payload: `{ public_key }`)
+- `channel` — single channel upsert/update (payload: full `Channel`)
 - `channel_deleted` — channel removed from database (payload: `{ key }`)
 - `error` — toast notification (reconnect failure, missing private key, etc.)
 - `success` — toast notification (historical decrypt complete, etc.)
@@ -221,6 +223,7 @@ Client sends `"ping"` text; server replies `{"type":"pong"}`.
 Main tables:
 - `contacts` (includes `first_seen` for contact age tracking and `out_path_hash_mode` for route round-tripping)
 - `channels`
+  Includes optional `flood_scope_override` for channel-specific regional sends.
 - `messages` (includes `sender_name`, `sender_key` for per-contact channel message attribution)
 - `raw_packets`
 - `contact_advert_paths` (recent unique advertisement paths per contact, keyed by contact + path bytes + hop count)

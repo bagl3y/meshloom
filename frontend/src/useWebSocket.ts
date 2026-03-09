@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import type { HealthStatus, Contact, Message, MessagePath, RawPacket } from './types';
+import type { Channel, HealthStatus, Contact, Message, MessagePath, RawPacket } from './types';
 
 interface WebSocketMessage {
   type: string;
@@ -21,6 +21,7 @@ interface UseWebSocketOptions {
   onMessage?: (message: Message) => void;
   onContact?: (contact: Contact) => void;
   onContactDeleted?: (publicKey: string) => void;
+  onChannel?: (channel: Channel) => void;
   onChannelDeleted?: (key: string) => void;
   onRawPacket?: (packet: RawPacket) => void;
   onMessageAcked?: (messageId: number, ackCount: number, paths?: MessagePath[]) => void;
@@ -104,6 +105,9 @@ export function useWebSocket(options: UseWebSocketOptions) {
             break;
           case 'contact':
             handlers.onContact?.(msg.data as Contact);
+            break;
+          case 'channel':
+            handlers.onChannel?.(msg.data as Channel);
             break;
           case 'contact_deleted':
             handlers.onContactDeleted?.((msg.data as { public_key: string }).public_key);

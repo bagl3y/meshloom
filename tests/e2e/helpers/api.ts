@@ -64,6 +64,7 @@ export interface Channel {
   name: string;
   is_hashtag: boolean;
   on_radio: boolean;
+  flood_scope_override?: string | null;
 }
 
 export function getChannels(): Promise<Channel[]> {

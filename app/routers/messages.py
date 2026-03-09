@@ -1,5 +1,6 @@
 import logging
 import time
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from meshcore import EventType
@@ -14,10 +15,109 @@ from app.models import (
 )
 from app.radio import radio_manager
 from app.repository import AmbiguousPublicKeyPrefixError, AppSettingsRepository, MessageRepository
-from app.websocket import broadcast_event
+from app.websocket import broadcast_error, broadcast_event
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/messages", tags=["messages"])
+
+
+async def _send_channel_message_with_effective_scope(
+    *,
+    mc,
+    channel,
+    key_bytes: bytes,
+    text: str,
+    timestamp_bytes: bytes,
+    action_label: str,
+) -> Any:
+    """Send a channel message, temporarily overriding flood scope when configured."""
+    override_scope = (channel.flood_scope_override or "").strip()
+    baseline_scope = ""
+
+    if override_scope:
+        settings = await AppSettingsRepository.get()
+        baseline_scope = settings.flood_scope
+
+    if override_scope and override_scope != baseline_scope:
+        logger.info(
+            "Temporarily applying channel flood_scope override for %s: %r",
+            channel.name,
+            override_scope,
+        )
+        override_result = await mc.commands.set_flood_scope(override_scope)
+        if override_result is not None and override_result.type == EventType.ERROR:
+            logger.warning(
+                "Failed to apply channel flood_scope override for %s: %s",
+                channel.name,
+                override_result.payload,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Failed to apply regional override {override_scope!r} before {action_label}: "
+                    f"{override_result.payload}"
+                ),
+            )
+
+    try:
+        set_result = await mc.commands.set_channel(
+            channel_idx=TEMP_RADIO_SLOT,
+            channel_name=channel.name,
+            channel_secret=key_bytes,
+        )
+        if set_result.type == EventType.ERROR:
+            logger.warning(
+                "Failed to set channel on radio slot %d before %s: %s",
+                TEMP_RADIO_SLOT,
+                action_label,
+                set_result.payload,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to configure channel on radio before {action_label}",
+            )
+
+        return await mc.commands.send_chan_msg(
+            chan=TEMP_RADIO_SLOT,
+            msg=text,
+            timestamp=timestamp_bytes,
+        )
+    finally:
+        if override_scope and override_scope != baseline_scope:
+            try:
+                restore_result = await mc.commands.set_flood_scope(
+                    baseline_scope if baseline_scope else ""
+                )
+                if restore_result is not None and restore_result.type == EventType.ERROR:
+                    logger.error(
+                        "Failed to restore baseline flood_scope after sending to %s: %s",
+                        channel.name,
+                        restore_result.payload,
+                    )
+                    broadcast_error(
+                        "Regional override restore failed",
+                        (
+                            f"Sent to {channel.name}, but restoring flood scope failed. "
+                            "The radio may still be region-scoped. Consider rebooting the radio."
+                        ),
+                    )
+                else:
+                    logger.debug(
+                        "Restored baseline flood_scope after channel send: %r",
+                        baseline_scope or "(disabled)",
+                    )
+            except Exception:
+                logger.exception(
+                    "Failed to restore baseline flood_scope after sending to %s",
+                    channel.name,
+                )
+                broadcast_error(
+                    "Regional override restore failed",
+                    (
+                        f"Sent to {channel.name}, but restoring flood scope failed. "
+                        "The radio may still be region-scoped. Consider rebooting the radio."
+                    ),
+                )
 
 
 @router.get("/around/{message_id}", response_model=MessagesAroundResponse)
@@ -228,23 +328,6 @@ async def send_channel_message(request: SendChannelMessageRequest) -> Message:
         radio_name = mc.self_info.get("name", "") if mc.self_info else ""
         our_public_key = (mc.self_info.get("public_key") or None) if mc.self_info else None
         text_with_sender = f"{radio_name}: {request.text}" if radio_name else request.text
-        # Load the channel to a temporary radio slot before sending
-        set_result = await mc.commands.set_channel(
-            channel_idx=TEMP_RADIO_SLOT,
-            channel_name=db_channel.name,
-            channel_secret=key_bytes,
-        )
-        if set_result.type == EventType.ERROR:
-            logger.warning(
-                "Failed to set channel on radio slot %d before sending: %s",
-                TEMP_RADIO_SLOT,
-                set_result.payload,
-            )
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to configure channel on radio before sending message",
-            )
-
         logger.info("Sending channel message to %s: %s", db_channel.name, request.text[:50])
 
         # Capture timestamp BEFORE sending so we can pass the same value to both the radio
@@ -253,10 +336,13 @@ async def send_channel_message(request: SendChannelMessageRequest) -> Message:
         now = int(time.time())
         timestamp_bytes = now.to_bytes(4, "little")
 
-        result = await mc.commands.send_chan_msg(
-            chan=TEMP_RADIO_SLOT,
-            msg=request.text,
-            timestamp=timestamp_bytes,
+        result = await _send_channel_message_with_effective_scope(
+            mc=mc,
+            channel=db_channel,
+            key_bytes=key_bytes,
+            text=request.text,
+            timestamp_bytes=timestamp_bytes,
+            action_label="sending message",
         )
 
         if result.type == EventType.ERROR:
@@ -390,21 +476,13 @@ async def resend_channel_message(
         if radio_name and text_to_send.startswith(f"{radio_name}: "):
             text_to_send = text_to_send[len(f"{radio_name}: ") :]
 
-        set_result = await mc.commands.set_channel(
-            channel_idx=TEMP_RADIO_SLOT,
-            channel_name=db_channel.name,
-            channel_secret=key_bytes,
-        )
-        if set_result.type == EventType.ERROR:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to configure channel on radio before resending",
-            )
-
-        result = await mc.commands.send_chan_msg(
-            chan=TEMP_RADIO_SLOT,
-            msg=text_to_send,
-            timestamp=timestamp_bytes,
+        result = await _send_channel_message_with_effective_scope(
+            mc=mc,
+            channel=db_channel,
+            key_bytes=key_bytes,
+            text=text_to_send,
+            timestamp_bytes=timestamp_bytes,
+            action_label="resending message",
         )
         if result.type == EventType.ERROR:
             raise HTTPException(

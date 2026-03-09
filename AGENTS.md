@@ -107,6 +107,8 @@ Raw packet handling uses two identities by design:
 
 Frontend packet-feed consumers should treat `observation_id` as the dedup/render key, while `id` remains the storage reference.
 
+Channel metadata updates may also fan out as `channel` WebSocket events (full `Channel` payload) so clients can reflect local-only channel state such as regional flood-scope overrides without a full refetch.
+
 ## Contact Advert Path Memory
 
 To improve repeater disambiguation in the network visualizer, the backend stores recent unique advertisement paths per contact in a dedicated table (`contact_advert_paths`).
@@ -307,6 +309,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | POST | `/api/channels` | Create channel |
 | DELETE | `/api/channels/{key}` | Delete channel |
 | POST | `/api/channels/sync` | Pull from radio |
+| POST | `/api/channels/{key}/flood-scope-override` | Set or clear a per-channel regional flood-scope override |
 | POST | `/api/channels/{key}/mark-read` | Mark channel as read |
 | GET | `/api/messages` | List with filters (`q`, `after`/`after_id` for forward pagination) |
 | GET | `/api/messages/around/{id}` | Get messages around a specific message (for jump-to-message) |
@@ -352,6 +355,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 - Stored as 32-character hex string (TEXT PRIMARY KEY)
 - Hashtag channels: `SHA256("#name")[:16]` converted to hex
 - Custom channels: User-provided or generated
+- Channels may also persist `flood_scope_override`; when set, channel sends temporarily switch the radio flood scope to that value for the duration of the send, then restore the global app setting.
 
 ### Message Types
 

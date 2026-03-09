@@ -10,8 +10,8 @@ class ChannelRepository:
         """Upsert a channel. Key is 32-char hex string."""
         await db.conn.execute(
             """
-            INSERT INTO channels (key, name, is_hashtag, on_radio)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO channels (key, name, is_hashtag, on_radio, flood_scope_override)
+            VALUES (?, ?, ?, ?, NULL)
             ON CONFLICT(key) DO UPDATE SET
                 name = excluded.name,
                 is_hashtag = excluded.is_hashtag,
@@ -25,7 +25,11 @@ class ChannelRepository:
     async def get_by_key(key: str) -> Channel | None:
         """Get a channel by its key (32-char hex string)."""
         cursor = await db.conn.execute(
-            "SELECT key, name, is_hashtag, on_radio, last_read_at FROM channels WHERE key = ?",
+            """
+            SELECT key, name, is_hashtag, on_radio, flood_scope_override, last_read_at
+            FROM channels
+            WHERE key = ?
+            """,
             (key.upper(),),
         )
         row = await cursor.fetchone()
@@ -35,6 +39,7 @@ class ChannelRepository:
                 name=row["name"],
                 is_hashtag=bool(row["is_hashtag"]),
                 on_radio=bool(row["on_radio"]),
+                flood_scope_override=row["flood_scope_override"],
                 last_read_at=row["last_read_at"],
             )
         return None
@@ -42,7 +47,11 @@ class ChannelRepository:
     @staticmethod
     async def get_all() -> list[Channel]:
         cursor = await db.conn.execute(
-            "SELECT key, name, is_hashtag, on_radio, last_read_at FROM channels ORDER BY name"
+            """
+            SELECT key, name, is_hashtag, on_radio, flood_scope_override, last_read_at
+            FROM channels
+            ORDER BY name
+            """
         )
         rows = await cursor.fetchall()
         return [
@@ -51,6 +60,7 @@ class ChannelRepository:
                 name=row["name"],
                 is_hashtag=bool(row["is_hashtag"]),
                 on_radio=bool(row["on_radio"]),
+                flood_scope_override=row["flood_scope_override"],
                 last_read_at=row["last_read_at"],
             )
             for row in rows
@@ -75,6 +85,16 @@ class ChannelRepository:
         cursor = await db.conn.execute(
             "UPDATE channels SET last_read_at = ? WHERE key = ?",
             (ts, key.upper()),
+        )
+        await db.conn.commit()
+        return cursor.rowcount > 0
+
+    @staticmethod
+    async def update_flood_scope_override(key: str, flood_scope_override: str | None) -> bool:
+        """Set or clear a channel's flood-scope override."""
+        cursor = await db.conn.execute(
+            "UPDATE channels SET flood_scope_override = ? WHERE key = ?",
+            (flood_scope_override, key.upper()),
         )
         await db.conn.commit()
         return cursor.rowcount > 0

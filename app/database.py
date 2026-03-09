@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS channels (
     key TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     is_hashtag INTEGER DEFAULT 0,
-    on_radio INTEGER DEFAULT 0
+    on_radio INTEGER DEFAULT 0,
+    flood_scope_override TEXT
 );
 
 CREATE TABLE IF NOT EXISTS messages (
