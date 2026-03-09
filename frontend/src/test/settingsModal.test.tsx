@@ -231,6 +231,17 @@ describe('SettingsModal', () => {
     expect(screen.queryByLabelText('Preset')).not.toBeInTheDocument();
   });
 
+  it('does not clip the fanout add-integration menu in external desktop mode', () => {
+    renderModal({
+      externalSidebarNav: true,
+      desktopSection: 'fanout',
+    });
+
+    const addIntegrationButton = screen.getByRole('button', { name: 'Add Integration' });
+    const wrapperSection = addIntegrationButton.closest('section');
+    expect(wrapperSection).not.toHaveClass('overflow-hidden');
+  });
+
   it('applies the centered 800px column layout to non-fanout settings content', () => {
     renderModal({
       externalSidebarNav: true,

@@ -194,7 +194,11 @@ def normalize_contact_route(
         expected_bytes = normalized_len * bytes_per_hop
         if actual_bytes > expected_bytes >= 0:
             normalized_path = normalized_path[: expected_bytes * 2]
-        elif actual_bytes < expected_bytes and bytes_per_hop > 0 and actual_bytes % bytes_per_hop == 0:
+        elif (
+            actual_bytes < expected_bytes
+            and bytes_per_hop > 0
+            and actual_bytes % bytes_per_hop == 0
+        ):
             normalized_len = actual_bytes // bytes_per_hop
 
     return normalized_path, normalized_len, normalized_mode

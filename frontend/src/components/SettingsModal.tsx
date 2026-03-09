@@ -123,7 +123,7 @@ export function SettingsModal(props: SettingsModalProps) {
   const shouldRenderSection = (section: SettingsSection) =>
     !externalDesktopSidebarMode || desktopSection === section;
 
-  const sectionWrapperClass = 'overflow-hidden';
+  const sectionWrapperClass = '';
 
   const sectionContentClass = externalDesktopSidebarMode
     ? 'mx-auto w-full max-w-[800px] space-y-4 p-4'
