@@ -9,6 +9,7 @@ from app.dependencies import require_connected
 from app.models import Channel, ChannelDetail, ChannelMessageCounts, ChannelTopSender
 from app.radio import radio_manager
 from app.radio_sync import upsert_channel_from_radio_slot
+from app.region_scope import normalize_region_scope
 from app.repository import ChannelRepository, MessageRepository
 from app.websocket import broadcast_event
 
@@ -153,7 +154,7 @@ async def set_channel_flood_scope_override(
     if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")
 
-    override = request.flood_scope_override.strip() or None
+    override = normalize_region_scope(request.flood_scope_override) or None
     updated = await ChannelRepository.update_flood_scope_override(channel.key, override)
     if not updated:
         raise HTTPException(status_code=500, detail="Failed to update flood-scope override")

@@ -262,10 +262,11 @@ class RadioManager:
 
                     # Apply flood scope from settings (best-effort; older firmware
                     # may not support set_flood_scope)
+                    from app.region_scope import normalize_region_scope
                     from app.repository import AppSettingsRepository
 
                     app_settings = await AppSettingsRepository.get()
-                    scope = app_settings.flood_scope
+                    scope = normalize_region_scope(app_settings.flood_scope)
                     try:
                         await mc.commands.set_flood_scope(scope if scope else "")
                         logger.info("Applied flood_scope=%r", scope or "(disabled)")

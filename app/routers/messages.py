@@ -14,6 +14,7 @@ from app.models import (
     SendDirectMessageRequest,
 )
 from app.radio import radio_manager
+from app.region_scope import normalize_region_scope
 from app.repository import AmbiguousPublicKeyPrefixError, AppSettingsRepository, MessageRepository
 from app.websocket import broadcast_error, broadcast_event
 
@@ -31,12 +32,12 @@ async def _send_channel_message_with_effective_scope(
     action_label: str,
 ) -> Any:
     """Send a channel message, temporarily overriding flood scope when configured."""
-    override_scope = (channel.flood_scope_override or "").strip()
+    override_scope = normalize_region_scope(channel.flood_scope_override)
     baseline_scope = ""
 
     if override_scope:
         settings = await AppSettingsRepository.get()
-        baseline_scope = settings.flood_scope
+        baseline_scope = normalize_region_scope(settings.flood_scope)
 
     if override_scope and override_scope != baseline_scope:
         logger.info(

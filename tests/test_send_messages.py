@@ -279,8 +279,8 @@ class TestOutgoingChannelBroadcast:
         mc = _make_mc(name="MyNode")
         chan_key = "de" * 16
         await ChannelRepository.upsert(key=chan_key, name="#flightless")
-        await ChannelRepository.update_flood_scope_override(chan_key, "#Esperance")
-        await AppSettingsRepository.update(flood_scope="#Baseline")
+        await ChannelRepository.update_flood_scope_override(chan_key, "Esperance")
+        await AppSettingsRepository.update(flood_scope="Baseline")
 
         with (
             patch("app.routers.messages.require_connected", return_value=mc),
@@ -303,8 +303,8 @@ class TestOutgoingChannelBroadcast:
         mc = _make_mc(name="MyNode")
         chan_key = "df" * 16
         await ChannelRepository.upsert(key=chan_key, name="#matching")
-        await ChannelRepository.update_flood_scope_override(chan_key, "#Esperance")
-        await AppSettingsRepository.update(flood_scope="#Esperance")
+        await ChannelRepository.update_flood_scope_override(chan_key, "Esperance")
+        await AppSettingsRepository.update(flood_scope="Esperance")
 
         with (
             patch("app.routers.messages.require_connected", return_value=mc),

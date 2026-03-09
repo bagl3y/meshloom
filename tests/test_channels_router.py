@@ -270,7 +270,7 @@ class TestChannelFloodScopeOverride:
         with patch("app.routers.channels.broadcast_event") as mock_broadcast:
             response = await client.post(
                 f"/api/channels/{key}/flood-scope-override",
-                json={"flood_scope_override": "#Esperance"},
+                json={"flood_scope_override": "Esperance"},
             )
 
         assert response.status_code == 200
@@ -282,6 +282,20 @@ class TestChannelFloodScopeOverride:
         assert channel.flood_scope_override == "#Esperance"
         mock_broadcast.assert_called_once()
         assert mock_broadcast.call_args.args[0] == "channel"
+
+    @pytest.mark.asyncio
+    async def test_existing_hash_is_not_doubled(self, test_db, client):
+        key = "CC" * 16
+        await ChannelRepository.upsert(key=key, name="#flightless", is_hashtag=True)
+
+        response = await client.post(
+            f"/api/channels/{key}/flood-scope-override",
+            json={"flood_scope_override": "#Esperance"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["flood_scope_override"] == "#Esperance"
 
     @pytest.mark.asyncio
     async def test_blank_override_clears_channel_flood_scope_override(self, test_db, client):

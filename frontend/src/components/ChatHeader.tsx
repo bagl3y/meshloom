@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { toast } from './ui/sonner';
 import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
+import { stripRegionScopePrefix } from '../utils/regionScope';
 import { ContactAvatar } from './ContactAvatar';
 import { ContactStatusInfo } from './ContactStatusInfo';
 import type { Channel, Contact, Conversation, Favorite, RadioConfig } from '../types';
@@ -54,8 +55,8 @@ export function ChatHeader({
   const handleEditFloodScopeOverride = () => {
     if (conversation.type !== 'channel' || !onSetChannelFloodScopeOverride) return;
     const nextValue = window.prompt(
-      'Enter regional override flood scope for this room. This temporarily changes the radio flood scope before send and restores it after, which significantly slows room sends. Leave blank to clear.\n\nNote: some radio clients (including the official ones) implicitly add a "#" character to the beginning of a region specifier. That needs to be manually added here, so if you use the official app with region "Anytown", you should enter it here as "#Anytown".',
-      activeChannel?.flood_scope_override ?? ''
+      'Enter regional override flood scope for this room. This temporarily changes the radio flood scope before send and restores it after, which significantly slows room sends. Leave blank to clear.',
+      stripRegionScopePrefix(activeChannel?.flood_scope_override)
     );
     if (nextValue === null) return;
     onSetChannelFloodScopeOverride(conversation.id, nextValue);
@@ -140,7 +141,7 @@ export function ChatHeader({
         )}
         {conversation.type === 'channel' && activeChannel?.flood_scope_override && (
           <span className="basis-full sm:basis-auto text-[11px] text-amber-700 dark:text-amber-300 truncate">
-            Regional override active: {activeChannel.flood_scope_override}
+            Regional override active: {stripRegionScopePrefix(activeChannel.flood_scope_override)}
           </span>
         )}
         {conversation.type === 'contact' &&

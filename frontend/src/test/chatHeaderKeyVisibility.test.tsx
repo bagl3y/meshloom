@@ -117,7 +117,7 @@ describe('ChatHeader key visibility', () => {
 
     render(<ChatHeader {...baseProps} conversation={conversation} channels={[channel]} />);
 
-    expect(screen.getByText('Regional override active: #Esperance')).toBeInTheDocument();
+    expect(screen.getByText('Regional override active: Esperance')).toBeInTheDocument();
   });
 
   it('prompts for regional override when globe button is clicked', () => {
@@ -125,7 +125,7 @@ describe('ChatHeader key visibility', () => {
     const channel = makeChannel(key, '#flightless', true);
     const conversation: Conversation = { type: 'channel', id: key, name: '#flightless' };
     const onSetChannelFloodScopeOverride = vi.fn();
-    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('#Esperance');
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('Esperance');
 
     render(
       <ChatHeader
@@ -139,7 +139,7 @@ describe('ChatHeader key visibility', () => {
     fireEvent.click(screen.getByTitle('Set regional override'));
 
     expect(promptSpy).toHaveBeenCalled();
-    expect(onSetChannelFloodScopeOverride).toHaveBeenCalledWith(key, '#Esperance');
+    expect(onSetChannelFloodScopeOverride).toHaveBeenCalledWith(key, 'Esperance');
     promptSpy.mockRestore();
   });
 });

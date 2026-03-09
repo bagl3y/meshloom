@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.models import AppSettings
+from app.region_scope import normalize_region_scope
 from app.repository import AppSettingsRepository
 
 logger = logging.getLogger(__name__)
@@ -123,8 +124,7 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
     # Flood scope
     flood_scope_changed = False
     if update.flood_scope is not None:
-        stripped = update.flood_scope.strip()
-        kwargs["flood_scope"] = stripped
+        kwargs["flood_scope"] = normalize_region_scope(update.flood_scope)
         flood_scope_changed = True
 
     if kwargs:

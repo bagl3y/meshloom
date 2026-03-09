@@ -656,6 +656,40 @@ class TestPostConnectSetupOrdering:
         mock_mc.commands.set_flood_scope.assert_awaited_once_with("#TestRegion")
 
     @pytest.mark.asyncio
+    async def test_plain_flood_scope_is_normalized_during_setup(self):
+        """Legacy/plain stored flood_scope is normalized before applying to radio."""
+        from app.models import AppSettings
+        from app.radio import RadioManager
+
+        rm = RadioManager()
+        mock_mc = MagicMock()
+        mock_mc.start_auto_message_fetching = AsyncMock()
+        mock_mc.commands.set_flood_scope = AsyncMock()
+        rm._meshcore = mock_mc
+
+        mock_settings = AppSettings(flood_scope="TestRegion")
+
+        with (
+            patch("app.event_handlers.register_event_handlers"),
+            patch("app.keystore.export_and_store_private_key", new_callable=AsyncMock),
+            patch("app.radio_sync.sync_radio_time", new_callable=AsyncMock),
+            patch(
+                "app.repository.AppSettingsRepository.get",
+                new_callable=AsyncMock,
+                return_value=mock_settings,
+            ),
+            patch("app.radio_sync.sync_and_offload_all", new_callable=AsyncMock, return_value={}),
+            patch("app.radio_sync.start_periodic_sync"),
+            patch("app.radio_sync.send_advertisement", new_callable=AsyncMock, return_value=False),
+            patch("app.radio_sync.start_periodic_advert"),
+            patch("app.radio_sync.drain_pending_messages", new_callable=AsyncMock, return_value=0),
+            patch("app.radio_sync.start_message_polling"),
+        ):
+            await rm.post_connect_setup()
+
+        mock_mc.commands.set_flood_scope.assert_awaited_once_with("#TestRegion")
+
+    @pytest.mark.asyncio
     async def test_flood_scope_empty_resets_during_setup(self):
         """Empty flood_scope calls set_flood_scope("") during post_connect_setup."""
         from app.models import AppSettings

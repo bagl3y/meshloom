@@ -5,6 +5,7 @@ import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
 import { toast } from '../ui/sonner';
 import { RADIO_PRESETS } from '../../utils/radioPresets';
+import { stripRegionScopePrefix } from '../../utils/regionScope';
 import type {
   AppSettings,
   AppSettingsUpdate,
@@ -83,7 +84,7 @@ export function SettingsRadioSection({
 
   useEffect(() => {
     setAdvertIntervalHours(String(Math.round(appSettings.advert_interval / 3600)));
-    setFloodScope(appSettings.flood_scope);
+    setFloodScope(stripRegionScopePrefix(appSettings.flood_scope));
     setMaxRadioContacts(String(appSettings.max_radio_contacts));
   }, [appSettings]);
 
@@ -256,7 +257,7 @@ export function SettingsRadioSection({
       if (newAdvertInterval !== appSettings.advert_interval) {
         update.advert_interval = newAdvertInterval;
       }
-      if (floodScope !== appSettings.flood_scope) {
+      if (floodScope !== stripRegionScopePrefix(appSettings.flood_scope)) {
         update.flood_scope = floodScope;
       }
       const newMaxRadioContacts = parseInt(maxRadioContacts, 10);
@@ -554,10 +555,10 @@ export function SettingsRadioSection({
           id="flood-scope"
           value={floodScope}
           onChange={(e) => setFloodScope(e.target.value)}
-          placeholder="#MyRegion"
+          placeholder="MyRegion"
         />
         <p className="text-xs text-muted-foreground">
-          Tag outgoing flood messages with a region name (e.g. #MyRegion). Repeaters configured for
+          Tag outgoing flood messages with a region name (e.g. MyRegion). Repeaters configured for
           that region can forward the traffic, while repeaters configured to deny other regions may
           drop it. Leave empty to disable.
         </p>

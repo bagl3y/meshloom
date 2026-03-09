@@ -55,7 +55,7 @@ class TestUpdateSettings:
     @pytest.mark.asyncio
     async def test_flood_scope_round_trip(self, test_db):
         """Flood scope should be saved and retrieved correctly."""
-        result = await update_settings(AppSettingsUpdate(flood_scope="#MyRegion"))
+        result = await update_settings(AppSettingsUpdate(flood_scope="MyRegion"))
         assert result.flood_scope == "#MyRegion"
 
         fresh = await AppSettingsRepository.get()
@@ -70,7 +70,13 @@ class TestUpdateSettings:
     @pytest.mark.asyncio
     async def test_flood_scope_whitespace_stripped(self, test_db):
         """Flood scope should be stripped of whitespace."""
-        result = await update_settings(AppSettingsUpdate(flood_scope="  #MyRegion  "))
+        result = await update_settings(AppSettingsUpdate(flood_scope="  MyRegion  "))
+        assert result.flood_scope == "#MyRegion"
+
+    @pytest.mark.asyncio
+    async def test_flood_scope_existing_hash_is_not_doubled(self, test_db):
+        """Existing leading hash should be preserved for backward compatibility."""
+        result = await update_settings(AppSettingsUpdate(flood_scope="#MyRegion"))
         assert result.flood_scope == "#MyRegion"
 
     @pytest.mark.asyncio
@@ -92,7 +98,7 @@ class TestUpdateSettings:
         mock_rm.radio_operation = mock_radio_op
 
         with patch("app.radio.radio_manager", mock_rm):
-            await update_settings(AppSettingsUpdate(flood_scope="#TestRegion"))
+            await update_settings(AppSettingsUpdate(flood_scope="TestRegion"))
 
         mock_mc.commands.set_flood_scope.assert_awaited_once_with("#TestRegion")
 
