@@ -13,7 +13,7 @@ services:
     # Set your serial device for passthrough here! #
     ################################################
     devices:
-      - /dev/ttyUSB0:/dev/ttyUSB0
+      - /dev/ttyACM0:/dev/ttyUSB0
 
     environment:
       MESHCORE_DATABASE_PATH: data/meshcore.db

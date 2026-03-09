@@ -1,5 +1,9 @@
 ## [2.7.8] - 2026-03-08
 
+
+
+## [2.7.8] - 2026-03-08
+
 Bugfix: Improve frontend asset resolution and fixup the build/push script
 
 ## [2.7.1] - 2026-03-08

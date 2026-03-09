@@ -148,8 +148,9 @@ git push
 echo -e "${GREEN}Changes committed!${NC}"
 echo
 
-# Get git short hash (after commit so it reflects the new commit)
+# Get git hashes (after commit so they reflect the new commit)
 GIT_HASH=$(git rev-parse --short HEAD)
+FULL_GIT_HASH=$(git rev-parse HEAD)
 
 # Build docker image
 echo -e "${YELLOW}Building Docker image...${NC}"
@@ -177,10 +178,24 @@ RELEASE_NOTES_FILE=$(mktemp)
     echo "$CHANGELOG_ENTRY"
 } > "$RELEASE_NOTES_FILE"
 
+# Create and push the release tag first so GitHub release creation does not
+# depend on resolving a symbolic ref like HEAD on the remote side.
+if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+    echo -e "${YELLOW}Tag $VERSION already exists locally; reusing it.${NC}"
+else
+    git tag "$VERSION" "$FULL_GIT_HASH"
+fi
+
+if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
+    echo -e "${YELLOW}Tag $VERSION already exists on origin; not pushing it again.${NC}"
+else
+    git push origin "$VERSION"
+fi
+
 gh release create "$VERSION" \
     --title "$VERSION" \
     --notes-file "$RELEASE_NOTES_FILE" \
-    --target HEAD
+    --verify-tag
 
 rm -f "$RELEASE_NOTES_FILE"
 echo -e "${GREEN}GitHub release created!${NC}"
