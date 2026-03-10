@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 from meshcore import EventType
 
 from app.radio import radio_manager
@@ -29,6 +30,15 @@ def _noop_radio_operation(mc=None):
         yield mc
 
     return _ctx
+
+
+def _patch_require_connected(mc=None, *, detail="Radio not connected"):
+    if mc is None:
+        return patch(
+            "app.dependencies.radio_manager.require_connected",
+            side_effect=HTTPException(status_code=503, detail=detail),
+        )
+    return patch("app.dependencies.radio_manager.require_connected", return_value=mc)
 
 
 @pytest.fixture(autouse=True)
@@ -505,10 +515,7 @@ class TestSyncContacts:
         mock_mc.commands.get_contacts = AsyncMock(return_value=mock_result)
 
         radio_manager._meshcore = mock_mc
-        with patch("app.dependencies.radio_manager") as mock_dep_rm:
-            mock_dep_rm.is_connected = True
-            mock_dep_rm.meshcore = mock_mc
-
+        with _patch_require_connected(mock_mc):
             response = await client.post("/api/contacts/sync")
 
         assert response.status_code == 200
@@ -521,10 +528,7 @@ class TestSyncContacts:
 
     @pytest.mark.asyncio
     async def test_sync_requires_connection(self, test_db, client):
-        with patch("app.dependencies.radio_manager") as mock_rm:
-            mock_rm.is_connected = False
-            mock_rm.meshcore = None
-
+        with _patch_require_connected():
             response = await client.post("/api/contacts/sync")
 
         assert response.status_code == 503
@@ -547,10 +551,7 @@ class TestSyncContacts:
         mock_mc.commands.get_contacts = AsyncMock(return_value=mock_result)
 
         radio_manager._meshcore = mock_mc
-        with patch("app.dependencies.radio_manager") as mock_dep_rm:
-            mock_dep_rm.is_connected = True
-            mock_dep_rm.meshcore = mock_mc
-
+        with _patch_require_connected(mock_mc):
             response = await client.post("/api/contacts/sync")
 
         assert response.status_code == 200
@@ -771,10 +772,7 @@ class TestAddRemoveRadio:
         mock_mc.commands.add_contact = AsyncMock(return_value=mock_result)
 
         radio_manager._meshcore = mock_mc
-        with patch("app.dependencies.radio_manager") as mock_dep_rm:
-            mock_dep_rm.is_connected = True
-            mock_dep_rm.meshcore = mock_mc
-
+        with _patch_require_connected(mock_mc):
             response = await client.post(f"/api/contacts/{KEY_A}/add-to-radio")
 
         assert response.status_code == 200
@@ -800,10 +798,7 @@ class TestAddRemoveRadio:
         mock_mc.commands.add_contact = AsyncMock(return_value=mock_result)
 
         radio_manager._meshcore = mock_mc
-        with patch("app.dependencies.radio_manager") as mock_dep_rm:
-            mock_dep_rm.is_connected = True
-            mock_dep_rm.meshcore = mock_mc
-
+        with _patch_require_connected(mock_mc):
             response = await client.post(f"/api/contacts/{KEY_A}/add-to-radio")
 
         assert response.status_code == 200
@@ -821,10 +816,7 @@ class TestAddRemoveRadio:
         mock_mc.get_contact_by_key_prefix = MagicMock(return_value=MagicMock())  # On radio
 
         radio_manager._meshcore = mock_mc
-        with patch("app.dependencies.radio_manager") as mock_dep_rm:
-            mock_dep_rm.is_connected = True
-            mock_dep_rm.meshcore = mock_mc
-
+        with _patch_require_connected(mock_mc):
             response = await client.post(f"/api/contacts/{KEY_A}/add-to-radio")
 
         assert response.status_code == 200
@@ -842,10 +834,7 @@ class TestAddRemoveRadio:
         mock_mc.commands.remove_contact = AsyncMock(return_value=mock_result)
 
         radio_manager._meshcore = mock_mc
-        with patch("app.dependencies.radio_manager") as mock_dep_rm:
-            mock_dep_rm.is_connected = True
-            mock_dep_rm.meshcore = mock_mc
-
+        with _patch_require_connected(mock_mc):
             response = await client.post(f"/api/contacts/{KEY_A}/remove-from-radio")
 
         assert response.status_code == 200
@@ -857,10 +846,7 @@ class TestAddRemoveRadio:
 
     @pytest.mark.asyncio
     async def test_add_requires_connection(self, test_db, client):
-        with patch("app.dependencies.radio_manager") as mock_rm:
-            mock_rm.is_connected = False
-            mock_rm.meshcore = None
-
+        with _patch_require_connected():
             response = await client.post(f"/api/contacts/{KEY_A}/add-to-radio")
 
         assert response.status_code == 503
@@ -869,10 +855,7 @@ class TestAddRemoveRadio:
     async def test_remove_not_found(self, test_db, client):
         mock_mc = MagicMock()
 
-        with patch("app.dependencies.radio_manager") as mock_dep_rm:
-            mock_dep_rm.is_connected = True
-            mock_dep_rm.meshcore = mock_mc
-
+        with _patch_require_connected(mock_mc):
             response = await client.post(f"/api/contacts/{KEY_A}/remove-from-radio")
 
         assert response.status_code == 404

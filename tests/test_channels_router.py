@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 from meshcore import EventType
 
 from app.radio import radio_manager
@@ -55,6 +56,15 @@ def _make_error_response():
     return result
 
 
+def _patch_require_connected(mc=None, *, detail="Radio not connected"):
+    if mc is None:
+        return patch(
+            "app.dependencies.radio_manager.require_connected",
+            side_effect=HTTPException(status_code=503, detail=detail),
+        )
+    return patch("app.dependencies.radio_manager.require_connected", return_value=mc)
+
+
 @asynccontextmanager
 async def _noop_radio_operation(mc):
     """No-op radio_operation context manager that yields mc."""
@@ -83,11 +93,9 @@ class TestSyncChannelsFromRadio:
         radio_manager._meshcore = mock_mc
 
         with (
-            patch("app.dependencies.radio_manager") as mock_dep_rm,
+            _patch_require_connected(mock_mc),
             patch("app.routers.channels.radio_manager") as mock_ch_rm,
         ):
-            mock_dep_rm.is_connected = True
-            mock_dep_rm.meshcore = mock_mc
             mock_ch_rm.radio_operation = lambda desc: _noop_radio_operation(mock_mc)
 
             response = await client.post("/api/channels/sync?max_channels=5")
@@ -119,11 +127,9 @@ class TestSyncChannelsFromRadio:
         radio_manager._meshcore = mock_mc
 
         with (
-            patch("app.dependencies.radio_manager") as mock_dep_rm,
+            _patch_require_connected(mock_mc),
             patch("app.routers.channels.radio_manager") as mock_ch_rm,
         ):
-            mock_dep_rm.is_connected = True
-            mock_dep_rm.meshcore = mock_mc
             mock_ch_rm.radio_operation = lambda desc: _noop_radio_operation(mock_mc)
 
             response = await client.post("/api/channels/sync?max_channels=5")
@@ -146,11 +152,9 @@ class TestSyncChannelsFromRadio:
         radio_manager._meshcore = mock_mc
 
         with (
-            patch("app.dependencies.radio_manager") as mock_dep_rm,
+            _patch_require_connected(mock_mc),
             patch("app.routers.channels.radio_manager") as mock_ch_rm,
         ):
-            mock_dep_rm.is_connected = True
-            mock_dep_rm.meshcore = mock_mc
             mock_ch_rm.radio_operation = lambda desc: _noop_radio_operation(mock_mc)
 
             response = await client.post("/api/channels/sync?max_channels=3")
@@ -178,11 +182,9 @@ class TestSyncChannelsFromRadio:
         radio_manager._meshcore = mock_mc
 
         with (
-            patch("app.dependencies.radio_manager") as mock_dep_rm,
+            _patch_require_connected(mock_mc),
             patch("app.routers.channels.radio_manager") as mock_ch_rm,
         ):
-            mock_dep_rm.is_connected = True
-            mock_dep_rm.meshcore = mock_mc
             mock_ch_rm.radio_operation = lambda desc: _noop_radio_operation(mock_mc)
 
             await client.post("/api/channels/sync?max_channels=3")
@@ -193,10 +195,7 @@ class TestSyncChannelsFromRadio:
     @pytest.mark.asyncio
     async def test_sync_requires_connection(self, test_db, client):
         """Sync returns 503 when radio is not connected."""
-        with patch("app.dependencies.radio_manager") as mock_rm:
-            mock_rm.is_connected = False
-            mock_rm.meshcore = None
-
+        with _patch_require_connected():
             response = await client.post("/api/channels/sync")
 
         assert response.status_code == 503
@@ -216,11 +215,9 @@ class TestSyncChannelsFromRadio:
         radio_manager._meshcore = mock_mc
 
         with (
-            patch("app.dependencies.radio_manager") as mock_dep_rm,
+            _patch_require_connected(mock_mc),
             patch("app.routers.channels.radio_manager") as mock_ch_rm,
         ):
-            mock_dep_rm.is_connected = True
-            mock_dep_rm.meshcore = mock_mc
             mock_ch_rm.radio_operation = lambda desc: _noop_radio_operation(mock_mc)
 
             await client.post("/api/channels/sync?max_channels=3")
@@ -246,11 +243,9 @@ class TestSyncChannelsFromRadio:
         radio_manager._meshcore = mock_mc
 
         with (
-            patch("app.dependencies.radio_manager") as mock_dep_rm,
+            _patch_require_connected(mock_mc),
             patch("app.routers.channels.radio_manager") as mock_ch_rm,
         ):
-            mock_dep_rm.is_connected = True
-            mock_dep_rm.meshcore = mock_mc
             mock_ch_rm.radio_operation = lambda desc: _noop_radio_operation(mock_mc)
 
             response = await client.post("/api/channels/sync?max_channels=3")

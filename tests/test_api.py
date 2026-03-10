@@ -9,6 +9,7 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from app.radio import radio_manager
 from app.repository import (
@@ -27,6 +28,15 @@ def _reset_radio_state():
     yield
     radio_manager._meshcore = prev
     radio_manager._operation_lock = prev_lock
+
+
+def _patch_require_connected(mc=None, *, detail="Radio not connected"):
+    if mc is None:
+        return patch(
+            "app.dependencies.radio_manager.require_connected",
+            side_effect=HTTPException(status_code=503, detail=detail),
+        )
+    return patch("app.dependencies.radio_manager.require_connected", return_value=mc)
 
 
 async def _insert_contact(public_key, name="Alice", **overrides):
@@ -102,10 +112,7 @@ class TestRadioDisconnectedHandler:
 
         # require_connected() passes, but _meshcore is None when radio_operation() checks
         radio_manager._meshcore = None
-        with patch("app.dependencies.radio_manager") as mock_rm:
-            mock_rm.is_connected = True
-            mock_rm.meshcore = MagicMock()
-
+        with _patch_require_connected(MagicMock()):
             response = await client.post(
                 "/api/messages/direct", json={"destination": pub_key, "text": "Hi"}
             )
@@ -120,10 +127,7 @@ class TestMessagesEndpoint:
     @pytest.mark.asyncio
     async def test_send_direct_message_requires_connection(self, test_db, client):
         """Sending message when disconnected returns 503."""
-        with patch("app.dependencies.radio_manager") as mock_rm:
-            mock_rm.is_connected = False
-            mock_rm.meshcore = None
-
+        with _patch_require_connected():
             response = await client.post(
                 "/api/messages/direct", json={"destination": "abc123", "text": "Hello"}
             )
@@ -134,10 +138,7 @@ class TestMessagesEndpoint:
     @pytest.mark.asyncio
     async def test_send_channel_message_requires_connection(self, test_db, client):
         """Sending channel message when disconnected returns 503."""
-        with patch("app.dependencies.radio_manager") as mock_rm:
-            mock_rm.is_connected = False
-            mock_rm.meshcore = None
-
+        with _patch_require_connected():
             response = await client.post(
                 "/api/messages/channel",
                 json={"channel_key": "0123456789ABCDEF0123456789ABCDEF", "text": "Hello"},
@@ -164,12 +165,9 @@ class TestMessagesEndpoint:
 
         radio_manager._meshcore = mock_mc
         with (
-            patch("app.dependencies.radio_manager") as mock_rm,
+            _patch_require_connected(mock_mc),
             patch("app.routers.messages.broadcast_event") as mock_broadcast,
         ):
-            mock_rm.is_connected = True
-            mock_rm.meshcore = mock_mc
-
             response = await client.post(
                 "/api/messages/direct",
                 json={"destination": pub_key, "text": "Hello"},
@@ -202,13 +200,10 @@ class TestMessagesEndpoint:
 
         radio_manager._meshcore = mock_mc
         with (
-            patch("app.dependencies.radio_manager") as mock_rm,
+            _patch_require_connected(mock_mc),
             patch("app.decoder.calculate_channel_hash", return_value="abcd"),
             patch("app.routers.messages.broadcast_event") as mock_broadcast,
         ):
-            mock_rm.is_connected = True
-            mock_rm.meshcore = mock_mc
-
             response = await client.post(
                 "/api/messages/channel",
                 json={"channel_key": chan_key, "text": "Hello room"},
@@ -226,10 +221,7 @@ class TestMessagesEndpoint:
         mock_mc = MagicMock()
         mock_mc.get_contact_by_key_prefix.return_value = None
 
-        with patch("app.dependencies.radio_manager") as mock_rm:
-            mock_rm.is_connected = True
-            mock_rm.meshcore = mock_mc
-
+        with _patch_require_connected(mock_mc):
             response = await client.post(
                 "/api/messages/direct", json={"destination": "nonexistent", "text": "Hello"}
             )
@@ -257,11 +249,9 @@ class TestMessagesEndpoint:
 
         radio_manager._meshcore = mock_mc
         with (
-            patch("app.dependencies.radio_manager") as mock_rm,
+            _patch_require_connected(mock_mc),
             patch("app.routers.messages.MessageRepository") as mock_msg_repo,
         ):
-            mock_rm.is_connected = True
-            mock_rm.meshcore = mock_mc
             # Simulate duplicate - create returns None
             mock_msg_repo.create = AsyncMock(return_value=None)
 
@@ -294,11 +284,9 @@ class TestMessagesEndpoint:
 
         radio_manager._meshcore = mock_mc
         with (
-            patch("app.dependencies.radio_manager") as mock_rm,
+            _patch_require_connected(mock_mc),
             patch("app.routers.messages.MessageRepository") as mock_msg_repo,
         ):
-            mock_rm.is_connected = True
-            mock_rm.meshcore = mock_mc
             # Simulate duplicate - create returns None
             mock_msg_repo.create = AsyncMock(return_value=None)
 
@@ -315,10 +303,7 @@ class TestMessagesEndpoint:
     @pytest.mark.asyncio
     async def test_resend_channel_message_requires_connection(self, test_db, client):
         """Resend endpoint returns 503 when radio is disconnected."""
-        with patch("app.dependencies.radio_manager") as mock_rm:
-            mock_rm.is_connected = False
-            mock_rm.meshcore = None
-
+        with _patch_require_connected():
             response = await client.post("/api/messages/channel/1/resend")
 
             assert response.status_code == 503
@@ -353,10 +338,7 @@ class TestMessagesEndpoint:
         )
 
         radio_manager._meshcore = mock_mc
-        with patch("app.dependencies.radio_manager") as mock_rm:
-            mock_rm.is_connected = True
-            mock_rm.meshcore = mock_mc
-
+        with _patch_require_connected(mock_mc):
             response = await client.post(f"/api/messages/channel/{msg_id}/resend")
 
         assert response.status_code == 200
@@ -394,10 +376,7 @@ class TestMessagesEndpoint:
         mock_mc.commands.set_channel = AsyncMock()
         mock_mc.commands.send_chan_msg = AsyncMock()
 
-        with patch("app.dependencies.radio_manager") as mock_rm:
-            mock_rm.is_connected = True
-            mock_rm.meshcore = mock_mc
-
+        with _patch_require_connected(mock_mc):
             response = await client.post(f"/api/messages/channel/{msg_id}/resend")
 
         assert response.status_code == 400
@@ -414,10 +393,7 @@ class TestMessagesEndpoint:
         mock_mc.commands.set_channel = AsyncMock()
         mock_mc.commands.send_chan_msg = AsyncMock()
 
-        with patch("app.dependencies.radio_manager") as mock_rm:
-            mock_rm.is_connected = True
-            mock_rm.meshcore = mock_mc
-
+        with _patch_require_connected(mock_mc):
             response = await client.post("/api/messages/channel/999999/resend")
 
         assert response.status_code == 404
