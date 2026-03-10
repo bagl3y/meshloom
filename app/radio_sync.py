@@ -18,7 +18,7 @@ from meshcore import EventType, MeshCore
 
 from app.event_handlers import cleanup_expired_acks
 from app.models import Contact
-from app.radio import RadioOperationBusyError, radio_manager
+from app.radio import RadioOperationBusyError
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
     AppSettingsRepository,
@@ -26,6 +26,7 @@ from app.repository import (
     ContactRepository,
 )
 from app.services.contact_reconciliation import reconcile_contact_messages
+from app.services.radio_runtime import radio_runtime as radio_manager
 
 logger = logging.getLogger(__name__)
 
@@ -744,6 +745,7 @@ async def sync_recent_contacts_to_radio(force: bool = False, mc: MeshCore | None
     # If caller provided a MeshCore instance, use it directly (caller holds the lock)
     if mc is not None:
         _last_contact_sync = now
+        assert mc is not None
         return await _sync_contacts_to_radio_inner(mc)
 
     if not radio_manager.is_connected or radio_manager.meshcore is None:
@@ -756,6 +758,7 @@ async def sync_recent_contacts_to_radio(force: bool = False, mc: MeshCore | None
             blocking=False,
         ) as mc:
             _last_contact_sync = now
+            assert mc is not None
             return await _sync_contacts_to_radio_inner(mc)
     except RadioOperationBusyError:
         logger.debug("Skipping contact sync to radio: radio busy")
