@@ -36,7 +36,8 @@ frontend/src/
 ├── hooks/
 │   ├── index.ts            # Central re-export of all hooks
 │   ├── useConversationActions.ts   # Send/navigation/info-pane conversation actions
-│   ├── useConversationMessages.ts  # Fetch, pagination, dedup, ACK buffering
+│   ├── useConversationMessages.ts  # Dedup/update helpers over the conversation timeline
+│   ├── useConversationTimeline.ts  # Fetch, cache restore, jump-target loading, pagination, reconcile
 │   ├── useUnreadCounts.ts          # Unread counters, mentions, recent-sort timestamps
 │   ├── useRealtimeAppState.ts      # WebSocket event application and reconnect recovery
 │   ├── useRepeaterDashboard.ts      # Repeater dashboard state (login, panes, console, retries)
@@ -159,7 +160,8 @@ frontend/src/
 - `useContactsAndChannels`: contact/channel lists, creation, deletion
 - `useConversationRouter`: URL hash → active conversation routing
 - `useConversationActions`: send/resend/trace/navigation handlers and info-pane state
-- `useConversationMessages`: fetch, pagination, dedup/update helpers
+- `useConversationMessages`: dedup/update helpers and pending ACK buffering
+- `useConversationTimeline`: conversation switch loading, cache restore, jump-target loading, pagination, reconcile
 - `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps
 - `useRealtimeAppState`: typed WS event application, reconnect recovery, cache/unread coordination
 - `useRepeaterDashboard`: repeater dashboard state (login, pane data/retries, console, actions)
@@ -319,8 +321,9 @@ All state is managed by `useRepeaterDashboard` hook. State resets on conversatio
 The `SearchView` component (`components/SearchView.tsx`) provides full-text search across all DMs and channel messages. Key behaviors:
 
 - **State**: `targetMessageId` is shared between `App.tsx`, `useConversationActions`, and `useConversationMessages`. When a search result is clicked, `handleNavigateToMessage` sets the target ID and switches to the target conversation.
+- **Same-conversation clear**: when `targetMessageId` is cleared after the target is reached, the hook preserves the around-loaded mid-history view instead of replacing it with the latest page.
 - **Persistence**: `SearchView` stays mounted after first open using the same `hidden` class pattern as `CrackerPanel`, preserving search state when navigating to results.
-- **Jump-to-message**: `useConversationMessages` accepts optional `targetMessageId`. When set, it calls `api.getMessagesAround()` instead of normal fetch, loading context around the target message. `MessageList` scrolls to the target via `data-message-id` attribute and applies a `message-highlight` CSS animation.
+- **Jump-to-message**: `useConversationTimeline` handles optional `targetMessageId` by calling `api.getMessagesAround()` instead of the normal latest-page fetch, loading context around the target message. `MessageList` scrolls to the target via `data-message-id` attribute and applies a `message-highlight` CSS animation.
 - **Bidirectional pagination**: After jumping mid-history, `hasNewerMessages` enables forward pagination via `fetchNewerMessages`. The scroll-to-bottom button calls `jumpToBottom` (re-fetches latest page) instead of just scrolling.
 - **WS message suppression**: When `hasNewerMessages` is true, incoming WS messages for the active conversation are not added to the message list (the user is viewing historical context, not the latest page).
 

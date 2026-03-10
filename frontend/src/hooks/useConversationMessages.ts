@@ -1,10 +1,13 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { toast } from '../components/ui/sonner';
-import { api, isAbortError } from '../api';
-import * as messageCache from '../messageCache';
+import {
+  useCallback,
+  useRef,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+} from 'react';
+import { useConversationTimeline } from './useConversationTimeline';
 import type { Conversation, Message, MessagePath } from '../types';
 
-const MESSAGE_PAGE_SIZE = 200;
 const MAX_PENDING_ACKS = 500;
 
 interface PendingAckUpdate {
@@ -64,8 +67,8 @@ interface UseConversationMessagesResult {
   hasOlderMessages: boolean;
   hasNewerMessages: boolean;
   loadingNewer: boolean;
-  hasNewerMessagesRef: React.MutableRefObject<boolean>;
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  hasNewerMessagesRef: MutableRefObject<boolean>;
+  setMessages: Dispatch<SetStateAction<Message[]>>;
   fetchOlderMessages: () => Promise<void>;
   fetchNewerMessages: () => Promise<void>;
   jumpToBottom: () => void;
@@ -78,44 +81,12 @@ export function useConversationMessages(
   activeConversation: Conversation | null,
   targetMessageId?: number | null
 ): UseConversationMessagesResult {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [messagesLoading, setMessagesLoading] = useState(false);
-  const [loadingOlder, setLoadingOlder] = useState(false);
-  const [hasOlderMessages, setHasOlderMessages] = useState(false);
-  const [hasNewerMessages, setHasNewerMessages] = useState(false);
-  const [loadingNewer, setLoadingNewer] = useState(false);
-
   // Track seen message content for deduplication
   const seenMessageContent = useRef<Set<string>>(new Set());
 
   // ACK events can arrive before the corresponding message event/response.
   // Buffer latest ACK state by message_id and apply when the message arrives.
   const pendingAcksRef = useRef<Map<number, PendingAckUpdate>>(new Map());
-
-  // AbortController for cancelling in-flight requests on conversation change
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  // Ref to track the conversation ID being fetched to prevent stale responses
-  const fetchingConversationIdRef = useRef<string | null>(null);
-
-  // --- Cache integration refs ---
-  // Keep refs in sync with state so we can read current values in the switch effect
-  const messagesRef = useRef<Message[]>([]);
-  const hasOlderMessagesRef = useRef(false);
-  const hasNewerMessagesRef = useRef(false);
-  const prevConversationIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
-
-  useEffect(() => {
-    hasOlderMessagesRef.current = hasOlderMessages;
-  }, [hasOlderMessages]);
-
-  useEffect(() => {
-    hasNewerMessagesRef.current = hasNewerMessages;
-  }, [hasNewerMessages]);
 
   const setPendingAck = useCallback(
     (messageId: number, ackCount: number, paths?: MessagePath[]) => {
@@ -149,379 +120,27 @@ export function useConversationMessages(
     };
   }, []);
 
-  // Fetch messages for active conversation
-  // Note: This is called manually and from the useEffect. The useEffect handles
-  // cancellation via AbortController; manual calls (e.g., after sending a message)
-  // don't need cancellation.
-  const fetchMessages = useCallback(
-    async (showLoading = false, signal?: AbortSignal) => {
-      if (
-        !activeConversation ||
-        activeConversation.type === 'raw' ||
-        activeConversation.type === 'map' ||
-        activeConversation.type === 'visualizer' ||
-        activeConversation.type === 'search'
-      ) {
-        setMessages([]);
-        setHasOlderMessages(false);
-        return;
-      }
-
-      // Track which conversation we're fetching for
-      const conversationId = activeConversation.id;
-
-      if (showLoading) {
-        setMessagesLoading(true);
-        // Clear messages first so MessageList resets scroll state for new conversation
-        setMessages([]);
-      }
-      try {
-        const data = await api.getMessages(
-          {
-            type: activeConversation.type === 'channel' ? 'CHAN' : 'PRIV',
-            conversation_key: activeConversation.id,
-            limit: MESSAGE_PAGE_SIZE,
-          },
-          signal
-        );
-
-        // Check if this response is still for the current conversation
-        // This handles the race where the conversation changed while awaiting
-        if (fetchingConversationIdRef.current !== conversationId) {
-          // Stale response - conversation changed while we were fetching
-          return;
-        }
-
-        const messagesWithPendingAck = data.map((msg) => applyPendingAck(msg));
-        setMessages(messagesWithPendingAck);
-        // Track seen content for new messages
-        seenMessageContent.current.clear();
-        for (const msg of messagesWithPendingAck) {
-          seenMessageContent.current.add(getMessageContentKey(msg));
-        }
-        // If we got a full page, there might be more
-        setHasOlderMessages(messagesWithPendingAck.length >= MESSAGE_PAGE_SIZE);
-      } catch (err) {
-        // Don't show error toast for aborted requests (user switched conversations)
-        if (isAbortError(err)) {
-          return;
-        }
-        console.error('Failed to fetch messages:', err);
-        toast.error('Failed to load messages', {
-          description: err instanceof Error ? err.message : 'Check your connection',
-        });
-      } finally {
-        if (showLoading) {
-          setMessagesLoading(false);
-        }
-      }
-    },
-    [activeConversation, applyPendingAck]
-  );
-
-  // Fetch older messages (cursor-based pagination)
-  const fetchOlderMessages = useCallback(async () => {
-    if (
-      !activeConversation ||
-      activeConversation.type === 'raw' ||
-      loadingOlder ||
-      !hasOlderMessages
-    )
-      return;
-
-    const conversationId = activeConversation.id;
-
-    // Get the true oldest message as cursor for the next page
-    const oldestMessage = messages.reduce(
-      (oldest, msg) => {
-        if (!oldest) return msg;
-        if (msg.received_at < oldest.received_at) return msg;
-        if (msg.received_at === oldest.received_at && msg.id < oldest.id) return msg;
-        return oldest;
-      },
-      null as Message | null
-    );
-    if (!oldestMessage) return;
-
-    setLoadingOlder(true);
-    try {
-      const data = await api.getMessages({
-        type: activeConversation.type === 'channel' ? 'CHAN' : 'PRIV',
-        conversation_key: conversationId,
-        limit: MESSAGE_PAGE_SIZE,
-        before: oldestMessage.received_at,
-        before_id: oldestMessage.id,
-      });
-
-      // Guard against stale response if the user switched conversations mid-request
-      if (fetchingConversationIdRef.current !== conversationId) return;
-
-      const dataWithPendingAck = data.map((msg) => applyPendingAck(msg));
-
-      if (dataWithPendingAck.length > 0) {
-        // Prepend older messages (they come sorted DESC, so older are at the end)
-        setMessages((prev) => [...prev, ...dataWithPendingAck]);
-        // Track seen content
-        for (const msg of dataWithPendingAck) {
-          seenMessageContent.current.add(getMessageContentKey(msg));
-        }
-      }
-      // If we got less than a full page, no more messages
-      setHasOlderMessages(dataWithPendingAck.length >= MESSAGE_PAGE_SIZE);
-    } catch (err) {
-      console.error('Failed to fetch older messages:', err);
-      toast.error('Failed to load older messages', {
-        description: err instanceof Error ? err.message : 'Check your connection',
-      });
-    } finally {
-      setLoadingOlder(false);
-    }
-  }, [activeConversation, loadingOlder, hasOlderMessages, messages, applyPendingAck]);
-
-  // Fetch newer messages (forward cursor pagination)
-  const fetchNewerMessages = useCallback(async () => {
-    if (
-      !activeConversation ||
-      activeConversation.type === 'raw' ||
-      loadingNewer ||
-      !hasNewerMessages
-    )
-      return;
-
-    const conversationId = activeConversation.id;
-
-    // Get the newest message as forward cursor
-    const newestMessage = messages.reduce(
-      (newest, msg) => {
-        if (!newest) return msg;
-        if (msg.received_at > newest.received_at) return msg;
-        if (msg.received_at === newest.received_at && msg.id > newest.id) return msg;
-        return newest;
-      },
-      null as Message | null
-    );
-    if (!newestMessage) return;
-
-    setLoadingNewer(true);
-    try {
-      const data = await api.getMessages({
-        type: activeConversation.type === 'channel' ? 'CHAN' : 'PRIV',
-        conversation_key: conversationId,
-        limit: MESSAGE_PAGE_SIZE,
-        after: newestMessage.received_at,
-        after_id: newestMessage.id,
-      });
-
-      if (fetchingConversationIdRef.current !== conversationId) return;
-
-      const dataWithPendingAck = data.map((msg) => applyPendingAck(msg));
-
-      // Deduplicate against already-seen messages (WS race)
-      const newMessages = dataWithPendingAck.filter(
-        (msg) => !seenMessageContent.current.has(getMessageContentKey(msg))
-      );
-      if (newMessages.length > 0) {
-        setMessages((prev) => [...prev, ...newMessages]);
-        for (const msg of newMessages) {
-          seenMessageContent.current.add(getMessageContentKey(msg));
-        }
-      }
-      setHasNewerMessages(dataWithPendingAck.length >= MESSAGE_PAGE_SIZE);
-    } catch (err) {
-      console.error('Failed to fetch newer messages:', err);
-      toast.error('Failed to load newer messages', {
-        description: err instanceof Error ? err.message : 'Check your connection',
-      });
-    } finally {
-      setLoadingNewer(false);
-    }
-  }, [activeConversation, loadingNewer, hasNewerMessages, messages, applyPendingAck]);
-
-  // Jump to bottom: re-fetch latest page, clear hasNewerMessages
-  const jumpToBottom = useCallback(() => {
-    if (!activeConversation) return;
-    setHasNewerMessages(false);
-    // Invalidate cache so fetchMessages does a fresh load
-    messageCache.remove(activeConversation.id);
-    fetchMessages(true);
-  }, [activeConversation, fetchMessages]);
-
-  // Trigger a background reconciliation for the current conversation.
-  // Used after WebSocket reconnects to silently recover any missed messages.
-  const triggerReconcile = useCallback(() => {
-    const conv = activeConversation;
-    if (
-      !conv ||
-      conv.type === 'raw' ||
-      conv.type === 'map' ||
-      conv.type === 'visualizer' ||
-      conv.type === 'search'
-    )
-      return;
-    const controller = new AbortController();
-    reconcileFromBackend(conv, controller.signal);
-  }, [activeConversation]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Background reconciliation: silently fetch from backend after a cache restore
-  // and only update state if something differs (missed WS message, stale ack, etc.).
-  // No-ops on the happy path — zero rerenders when cache is already consistent.
-  function reconcileFromBackend(conversation: Conversation, signal: AbortSignal) {
-    const conversationId = conversation.id;
-    api
-      .getMessages(
-        {
-          type: conversation.type === 'channel' ? 'CHAN' : 'PRIV',
-          conversation_key: conversationId,
-          limit: MESSAGE_PAGE_SIZE,
-        },
-        signal
-      )
-      .then((data) => {
-        // Stale check — conversation may have changed while awaiting
-        if (fetchingConversationIdRef.current !== conversationId) return;
-
-        const dataWithPendingAck = data.map((msg) => applyPendingAck(msg));
-        const merged = messageCache.reconcile(messagesRef.current, dataWithPendingAck);
-        if (!merged) return; // Cache was consistent — no rerender
-
-        setMessages(merged);
-        seenMessageContent.current.clear();
-        for (const msg of merged) {
-          seenMessageContent.current.add(getMessageContentKey(msg));
-        }
-        if (dataWithPendingAck.length >= MESSAGE_PAGE_SIZE) {
-          setHasOlderMessages(true);
-        }
-      })
-      .catch((err) => {
-        if (isAbortError(err)) return;
-        // Silent failure — we already have cached data
-        console.debug('Background reconciliation failed:', err);
-      });
-  }
-
-  // Fetch messages when conversation changes, with proper cancellation and caching
-  useEffect(() => {
-    // Abort any previous in-flight request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    const prevId = prevConversationIdRef.current;
-
-    // Track which conversation we're now on
-    const newId = activeConversation?.id ?? null;
-    const conversationChanged = prevId !== newId;
-    fetchingConversationIdRef.current = newId;
-    prevConversationIdRef.current = newId;
-
-    // When targetMessageId goes from a value to null (onTargetReached cleared it)
-    // but the conversation hasn't changed, the around-loaded messages are already
-    // displayed — do nothing. Without this guard the effect would re-enter the
-    // normal fetch path and replace the mid-history view with the latest page.
-    if (!conversationChanged && !targetMessageId) {
-      return;
-    }
-
-    // Reset loadingOlder/loadingNewer — the previous conversation's in-flight
-    // fetch is irrelevant now (its stale-check will discard the response).
-    setLoadingOlder(false);
-    setLoadingNewer(false);
-    if (conversationChanged) {
-      setHasNewerMessages(false);
-    }
-
-    // Save outgoing conversation to cache only when actually leaving it, and
-    // only if we were on the latest page (mid-history views would restore stale
-    // partial data on switch-back).
-    if (
-      conversationChanged &&
-      prevId &&
-      messagesRef.current.length > 0 &&
-      !hasNewerMessagesRef.current
-    ) {
-      messageCache.set(prevId, {
-        messages: messagesRef.current,
-        seenContent: new Set(seenMessageContent.current),
-        hasOlderMessages: hasOlderMessagesRef.current,
-      });
-    }
-
-    // Clear state for non-message views
-    if (
-      !activeConversation ||
-      activeConversation.type === 'raw' ||
-      activeConversation.type === 'map' ||
-      activeConversation.type === 'visualizer' ||
-      activeConversation.type === 'search'
-    ) {
-      setMessages([]);
-      setHasOlderMessages(false);
-      return;
-    }
-
-    // Create AbortController for this conversation's fetch (cache reconcile or full fetch)
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    // Jump-to-message: skip cache and load messages around the target
-    if (targetMessageId) {
-      setMessagesLoading(true);
-      setMessages([]);
-      const msgType = activeConversation.type === 'channel' ? 'CHAN' : 'PRIV';
-      api
-        .getMessagesAround(
-          targetMessageId,
-          msgType as 'PRIV' | 'CHAN',
-          activeConversation.id,
-          controller.signal
-        )
-        .then((response) => {
-          if (fetchingConversationIdRef.current !== activeConversation.id) return;
-          const withAcks = response.messages.map((msg) => applyPendingAck(msg));
-          setMessages(withAcks);
-          seenMessageContent.current.clear();
-          for (const msg of withAcks) {
-            seenMessageContent.current.add(getMessageContentKey(msg));
-          }
-          setHasOlderMessages(response.has_older);
-          setHasNewerMessages(response.has_newer);
-        })
-        .catch((err) => {
-          if (isAbortError(err)) return;
-          console.error('Failed to fetch messages around target:', err);
-          toast.error('Failed to jump to message');
-        })
-        .finally(() => {
-          setMessagesLoading(false);
-        });
-    } else {
-      // Check cache for the new conversation
-      const cached = messageCache.get(activeConversation.id);
-      if (cached) {
-        // Restore from cache instantly — no spinner
-        setMessages(cached.messages);
-        seenMessageContent.current = new Set(cached.seenContent);
-        setHasOlderMessages(cached.hasOlderMessages);
-        setMessagesLoading(false);
-        // Silently reconcile with backend in case we missed a WS message
-        reconcileFromBackend(activeConversation, controller.signal);
-      } else {
-        // Not cached — full fetch with spinner
-        fetchMessages(true, controller.signal);
-      }
-    }
-
-    // Cleanup: abort request if conversation changes or component unmounts
-    return () => {
-      controller.abort();
-    };
-    // NOTE: Intentionally omitting fetchMessages and activeConversation from deps:
-    // - fetchMessages is recreated when activeConversation changes, which would cause infinite loops
-    // - activeConversation object identity changes on every render; we only care about id/type
-    // - We use fetchingConversationIdRef and AbortController to handle stale responses safely
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeConversation?.id, activeConversation?.type, targetMessageId]);
+  const {
+    messages,
+    messagesRef,
+    messagesLoading,
+    loadingOlder,
+    hasOlderMessages,
+    hasNewerMessages,
+    loadingNewer,
+    hasNewerMessagesRef,
+    setMessages,
+    fetchOlderMessages,
+    fetchNewerMessages,
+    jumpToBottom,
+    triggerReconcile,
+  } = useConversationTimeline({
+    activeConversation,
+    targetMessageId,
+    applyPendingAck,
+    getMessageContentKey,
+    seenMessageContentRef: seenMessageContent,
+  });
 
   // Add a message if it's new (deduplication)
   // Returns true if the message was added, false if it was a duplicate
@@ -555,7 +174,7 @@ export function useConversationMessages(
 
       return true;
     },
-    [applyPendingAck]
+    [applyPendingAck, messagesRef, setMessages]
   );
 
   // Update a message's ack count and paths
@@ -592,7 +211,7 @@ export function useConversationMessages(
         return prev;
       });
     },
-    [setPendingAck]
+    [messagesRef, setMessages, setPendingAck]
   );
 
   return {

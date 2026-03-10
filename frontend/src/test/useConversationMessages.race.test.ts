@@ -392,4 +392,65 @@ describe('useConversationMessages forward pagination', () => {
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].text).toBe('latest-msg');
   });
+
+  it('preserves around-loaded messages when the jump target is cleared in the same conversation', async () => {
+    const conv: Conversation = { type: 'channel', id: 'ch1', name: 'Channel' };
+
+    const aroundMessages = [
+      createMessage({
+        id: 4,
+        conversation_key: 'ch1',
+        text: 'older-context',
+        sender_timestamp: 1700000004,
+        received_at: 1700000004,
+      }),
+      createMessage({
+        id: 5,
+        conversation_key: 'ch1',
+        text: 'target-message',
+        sender_timestamp: 1700000005,
+        received_at: 1700000005,
+      }),
+      createMessage({
+        id: 6,
+        conversation_key: 'ch1',
+        text: 'newer-context',
+        sender_timestamp: 1700000006,
+        received_at: 1700000006,
+      }),
+    ];
+
+    mockGetMessagesAround.mockResolvedValueOnce({
+      messages: aroundMessages,
+      has_older: true,
+      has_newer: true,
+    });
+
+    const { result, rerender } = renderHook<
+      ReturnType<typeof useConversationMessages>,
+      { conv: Conversation; target: number | null }
+    >(({ conv, target }) => useConversationMessages(conv, target), {
+      initialProps: { conv, target: 5 },
+    });
+
+    await waitFor(() => expect(result.current.messagesLoading).toBe(false));
+    expect(result.current.messages.map((message) => message.text)).toEqual([
+      'older-context',
+      'target-message',
+      'newer-context',
+    ]);
+    expect(mockGetMessages).not.toHaveBeenCalled();
+
+    rerender({ conv, target: null });
+
+    await waitFor(() =>
+      expect(result.current.messages.map((message) => message.text)).toEqual([
+        'older-context',
+        'target-message',
+        'newer-context',
+      ])
+    );
+    expect(mockGetMessages).not.toHaveBeenCalled();
+    expect(result.current.hasNewerMessages).toBe(true);
+  });
 });
