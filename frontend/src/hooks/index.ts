@@ -9,3 +9,4 @@ export { useContactsAndChannels } from './useContactsAndChannels';
 export { useRealtimeAppState } from './useRealtimeAppState';
 export { useConversationActions } from './useConversationActions';
 export { useConversationNavigation } from './useConversationNavigation';
+export { useAppShellProps } from './useAppShellProps';

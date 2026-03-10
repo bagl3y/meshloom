@@ -42,6 +42,7 @@ frontend/src/
 │   ├── useUnreadCounts.ts          # Unread counters, mentions, recent-sort timestamps
 │   ├── useRealtimeAppState.ts      # WebSocket event application and reconnect recovery
 │   ├── useAppShell.ts              # App-shell view state (settings/sidebar/modals/cracker)
+│   ├── useAppShellProps.ts         # AppShell child prop assembly + cracker create/decrypt flow
 │   ├── useRepeaterDashboard.ts      # Repeater dashboard state (login, panes, console, retries)
 │   ├── useRadioControl.ts          # Radio health/config state, reconnection
 │   ├── useAppSettings.ts           # Settings, favorites, preferences migration
@@ -147,6 +148,7 @@ frontend/src/
     ├── useConversationMessages.test.ts
     ├── useConversationMessages.race.test.ts
     ├── useConversationNavigation.test.ts
+    ├── useAppShellProps.test.ts
     ├── useAppShell.test.ts
     ├── useRepeaterDashboard.test.ts
     ├── useContactsAndChannels.test.ts
@@ -178,6 +180,7 @@ High-level state is delegated to hooks:
 - `useConversationRouter`: URL hash → active conversation routing
 - `useConversationNavigation`: search target, conversation selection reset, and info-pane state
 - `useConversationActions`: send/resend/trace/block handlers and channel override updates
+- `useAppShellProps`: assembles the prop bundles passed into `AppShell` children, including the cracker-created-channel historical decrypt flow
 - `useConversationMessages`: dedup/update helpers and pending ACK buffering
 - `useConversationTimeline`: conversation switch loading, cache restore, jump-target loading, pagination, reconcile
 - `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps

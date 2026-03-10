@@ -4,6 +4,7 @@ import { takePrefetchOrFetch } from './prefetch';
 import { useWebSocket } from './useWebSocket';
 import {
   useAppShell,
+  useAppShellProps,
   useUnreadCounts,
   useConversationMessages,
   useRadioControl,
@@ -222,6 +223,81 @@ export function App() {
     messageInputRef,
   });
 
+  const {
+    statusProps,
+    sidebarProps,
+    conversationPaneProps,
+    searchProps,
+    settingsProps,
+    crackerProps,
+    newMessageModalProps,
+    contactInfoPaneProps,
+    channelInfoPaneProps,
+  } = useAppShellProps({
+    contacts,
+    channels,
+    rawPackets,
+    undecryptedCount,
+    activeConversation,
+    config,
+    health,
+    favorites,
+    appSettings,
+    unreadCounts,
+    mentions,
+    lastMessageTimes,
+    showCracker,
+    crackerRunning,
+    messageInputRef,
+    targetMessageId,
+    infoPaneContactKey,
+    infoPaneFromChannel,
+    infoPaneChannelKey,
+    messages,
+    messagesLoading,
+    loadingOlder,
+    hasOlderMessages,
+    hasNewerMessages,
+    loadingNewer,
+    handleOpenNewMessage,
+    handleToggleCracker,
+    markAllRead,
+    handleSortOrderChange,
+    handleSelectConversationWithTargetReset,
+    handleNavigateToMessage,
+    handleSaveConfig,
+    handleSaveAppSettings,
+    handleSetPrivateKey,
+    handleReboot,
+    handleAdvertise,
+    handleHealthRefresh,
+    fetchAppSettings,
+    setChannels,
+    fetchUndecryptedCount,
+    handleCreateContact,
+    handleCreateChannel,
+    handleCreateHashtagChannel,
+    handleDeleteContact,
+    handleDeleteChannel,
+    handleToggleFavorite,
+    handleSetChannelFloodScopeOverride,
+    handleOpenContactInfo,
+    handleOpenChannelInfo,
+    handleCloseContactInfo,
+    handleCloseChannelInfo,
+    handleSenderClick,
+    handleResendChannelMessage,
+    handleTrace,
+    handleSendMessage,
+    fetchOlderMessages,
+    fetchNewerMessages,
+    jumpToBottom,
+    setTargetMessageId,
+    handleNavigateToChannel,
+    handleBlockKey,
+    handleBlockName,
+  });
+
   // Connect to WebSocket
   useWebSocket(wsHandlers);
 
@@ -266,119 +342,15 @@ export function App() {
       onCloseSettingsView={handleCloseSettingsView}
       onCloseNewMessage={handleCloseNewMessage}
       onLocalLabelChange={setLocalLabel}
-      statusProps={{ health, config }}
-      sidebarProps={{
-        contacts,
-        channels,
-        activeConversation,
-        onSelectConversation: handleSelectConversationWithTargetReset,
-        onNewMessage: handleOpenNewMessage,
-        lastMessageTimes,
-        unreadCounts,
-        mentions,
-        showCracker,
-        crackerRunning,
-        onToggleCracker: handleToggleCracker,
-        onMarkAllRead: markAllRead,
-        favorites,
-        sortOrder: appSettings?.sidebar_sort_order ?? 'recent',
-        onSortOrderChange: handleSortOrderChange,
-      }}
-      conversationPaneProps={{
-        activeConversation,
-        contacts,
-        channels,
-        rawPackets,
-        config,
-        health,
-        favorites,
-        messages,
-        messagesLoading,
-        loadingOlder,
-        hasOlderMessages,
-        targetMessageId,
-        hasNewerMessages,
-        loadingNewer,
-        messageInputRef,
-        onTrace: handleTrace,
-        onToggleFavorite: handleToggleFavorite,
-        onDeleteContact: handleDeleteContact,
-        onDeleteChannel: handleDeleteChannel,
-        onSetChannelFloodScopeOverride: handleSetChannelFloodScopeOverride,
-        onOpenContactInfo: handleOpenContactInfo,
-        onOpenChannelInfo: handleOpenChannelInfo,
-        onSenderClick: handleSenderClick,
-        onLoadOlder: fetchOlderMessages,
-        onResendChannelMessage: handleResendChannelMessage,
-        onTargetReached: () => setTargetMessageId(null),
-        onLoadNewer: fetchNewerMessages,
-        onJumpToBottom: jumpToBottom,
-        onSendMessage: handleSendMessage,
-      }}
-      searchProps={{
-        contacts,
-        channels,
-        onNavigateToMessage: handleNavigateToMessage,
-      }}
-      settingsProps={{
-        config,
-        health,
-        appSettings,
-        onSave: handleSaveConfig,
-        onSaveAppSettings: handleSaveAppSettings,
-        onSetPrivateKey: handleSetPrivateKey,
-        onReboot: handleReboot,
-        onAdvertise: handleAdvertise,
-        onHealthRefresh: handleHealthRefresh,
-        onRefreshAppSettings: fetchAppSettings,
-        blockedKeys: appSettings?.blocked_keys,
-        blockedNames: appSettings?.blocked_names,
-        onToggleBlockedKey: handleBlockKey,
-        onToggleBlockedName: handleBlockName,
-      }}
-      crackerProps={{
-        packets: rawPackets,
-        channels,
-        onChannelCreate: async (name, key) => {
-          const created = await api.createChannel(name, key);
-          const data = await api.getChannels();
-          setChannels(data);
-          await api.decryptHistoricalPackets({
-            key_type: 'channel',
-            channel_key: created.key,
-          });
-          fetchUndecryptedCount();
-        },
-      }}
-      newMessageModalProps={{
-        contacts,
-        undecryptedCount,
-        onSelectConversation: handleSelectConversationWithTargetReset,
-        onCreateContact: handleCreateContact,
-        onCreateChannel: handleCreateChannel,
-        onCreateHashtagChannel: handleCreateHashtagChannel,
-      }}
-      contactInfoPaneProps={{
-        contactKey: infoPaneContactKey,
-        fromChannel: infoPaneFromChannel,
-        onClose: handleCloseContactInfo,
-        contacts,
-        config,
-        favorites,
-        onToggleFavorite: handleToggleFavorite,
-        onNavigateToChannel: handleNavigateToChannel,
-        blockedKeys: appSettings?.blocked_keys,
-        blockedNames: appSettings?.blocked_names,
-        onToggleBlockedKey: handleBlockKey,
-        onToggleBlockedName: handleBlockName,
-      }}
-      channelInfoPaneProps={{
-        channelKey: infoPaneChannelKey,
-        onClose: handleCloseChannelInfo,
-        channels,
-        favorites,
-        onToggleFavorite: handleToggleFavorite,
-      }}
+      statusProps={statusProps}
+      sidebarProps={sidebarProps}
+      conversationPaneProps={conversationPaneProps}
+      searchProps={searchProps}
+      settingsProps={settingsProps}
+      crackerProps={crackerProps}
+      newMessageModalProps={newMessageModalProps}
+      contactInfoPaneProps={contactInfoPaneProps}
+      channelInfoPaneProps={channelInfoPaneProps}
     />
   );
 }
