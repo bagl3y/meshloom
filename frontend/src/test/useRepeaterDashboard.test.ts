@@ -248,12 +248,10 @@ describe('useRepeaterDashboard', () => {
     expect(mockApi.sendRepeaterCommand).toHaveBeenCalledWith(REPEATER_KEY, 'reboot');
   });
 
-  it('syncClock sends "clock <epoch>" command', async () => {
-    const fakeNow = 1700000000000;
-    vi.spyOn(Date, 'now').mockReturnValue(fakeNow);
-
+  it('syncClock sends "time <epoch>" command', async () => {
+    const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
     mockApi.sendRepeaterCommand.mockResolvedValueOnce({
-      command: 'clock 1700000000',
+      command: 'time 1700000000',
       response: 'ok',
       sender_timestamp: 1000,
     });
@@ -264,9 +262,8 @@ describe('useRepeaterDashboard', () => {
       await result.current.syncClock();
     });
 
-    expect(mockApi.sendRepeaterCommand).toHaveBeenCalledWith(REPEATER_KEY, 'clock 1700000000');
-
-    vi.restoreAllMocks();
+    expect(mockApi.sendRepeaterCommand).toHaveBeenCalledWith(REPEATER_KEY, 'time 1700000000');
+    dateNowSpy.mockRestore();
   });
 
   it('loadAll calls refreshPane for all panes serially', async () => {

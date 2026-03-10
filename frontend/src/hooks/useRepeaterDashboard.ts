@@ -379,8 +379,8 @@ export function useRepeaterDashboard(
   }, [sendConsoleCommand]);
 
   const syncClock = useCallback(async () => {
-    const epoch = Math.floor(Date.now() / 1000);
-    await sendConsoleCommand(`clock ${epoch}`);
+    const epochSeconds = Math.floor(Date.now() / 1000);
+    await sendConsoleCommand(`time ${epochSeconds}`);
   }, [sendConsoleCommand]);
 
   return {

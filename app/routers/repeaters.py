@@ -451,7 +451,7 @@ async def send_repeater_command(public_key: str, request: CommandRequest) -> Com
     - get radio, set radio <freq,bw,sf,cr>
     - tempradio <freq,bw,sf,cr,minutes>
     - setperm <pubkey> <permission>  (0=guest, 1=read-only, 2=read-write, 3=admin)
-    - clock, clock sync
+    - clock, clock sync, time <epoch_seconds>
     - reboot
     - ver
     """
