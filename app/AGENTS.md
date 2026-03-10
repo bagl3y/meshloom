@@ -87,7 +87,8 @@ app/
 - `RadioManager.post_connect_setup()` delegates to `services/radio_lifecycle.py`.
 - Routers, startup/lifespan code, fanout helpers, and `radio_sync.py` should reach radio state through `services/radio_runtime.py`, not by importing `app.radio.radio_manager` directly.
 - Shared reconnect/setup helpers in `services/radio_lifecycle.py` are used by startup, the monitor, and manual reconnect/reboot flows before broadcasting healthy state.
-- Setup still includes handler registration, key export, time sync, contact/channel sync, polling/advert tasks.
+- Setup still includes handler registration, key export, time sync, contact/channel sync, and advertisement tasks. Fallback message polling starts only when `MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK=true`.
+- Post-connect setup is timeout-bounded. If initial radio offload/setup hangs too long, the backend logs the failure and broadcasts an `error` toast telling the operator to reboot the radio and restart the server.
 
 ## Important Behaviors
 
@@ -230,7 +231,7 @@ app/
 - `contact_deleted` — contact removed from database (payload: `{ public_key }`)
 - `channel` — single channel upsert/update (payload: full `Channel`)
 - `channel_deleted` — channel removed from database (payload: `{ key }`)
-- `error` — toast notification (reconnect failure, missing private key, etc.)
+- `error` — toast notification (reconnect failure, missing private key, stuck radio startup, etc.)
 - `success` — toast notification (historical decrypt complete, etc.)
 
 Backend WS sends go through typed serialization in `events.py`. Initial WS connect sends `health` only. Contacts/channels are loaded by REST.
@@ -249,6 +250,8 @@ Main tables:
 - `app_settings`
 
 Repository writes should prefer typed models such as `ContactUpsert` over ad hoc dict payloads when adding or updating schema-coupled data.
+
+`max_radio_contacts` now controls how many favorite contacts are kept loaded on the radio for ACK support. The app no longer rotates recent non-favorite contacts onto the radio during normal background maintenance.
 
 `app_settings` fields in active model:
 - `max_radio_contacts`

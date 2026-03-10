@@ -253,17 +253,28 @@ class ContactRepository:
         return [ContactRepository._row_to_contact(row) for row in rows]
 
     @staticmethod
-    async def get_recent_non_repeaters(limit: int = 200) -> list[Contact]:
-        """Get the most recently active non-repeater contacts.
-
-        Orders by most recent activity (last_contacted or last_advert),
-        excluding repeaters (type=2).
-        """
+    async def get_recently_contacted_non_repeaters(limit: int = 200) -> list[Contact]:
+        """Get recently interacted-with non-repeater contacts."""
         cursor = await db.conn.execute(
             """
             SELECT * FROM contacts
-            WHERE type != 2
-            ORDER BY COALESCE(last_contacted, 0) DESC, COALESCE(last_advert, 0) DESC
+            WHERE type != 2 AND last_contacted IS NOT NULL
+            ORDER BY last_contacted DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = await cursor.fetchall()
+        return [ContactRepository._row_to_contact(row) for row in rows]
+
+    @staticmethod
+    async def get_recently_advertised_non_repeaters(limit: int = 200) -> list[Contact]:
+        """Get recently advert-heard non-repeater contacts."""
+        cursor = await db.conn.execute(
+            """
+            SELECT * FROM contacts
+            WHERE type != 2 AND last_advert IS NOT NULL
+            ORDER BY last_advert DESC
             LIMIT ?
             """,
             (limit,),

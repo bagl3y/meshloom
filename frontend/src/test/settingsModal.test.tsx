@@ -179,13 +179,13 @@ describe('SettingsModal', () => {
     expect(screen.queryByLabelText('Preset')).not.toBeInTheDocument();
   });
 
-  it('shows favorite-first contact sync helper text in radio tab', async () => {
+  it('shows favorite-contact radio sync helper text in radio tab', async () => {
     renderModal();
     openRadioSection();
 
     expect(
       screen.getByText(
-        /Favorite contacts load first, then recent non-repeater contacts until this\s+limit is reached/i
+        /Favorite contacts stay loaded on the radio for DM ACK support up to this limit/i
       )
     ).toBeInTheDocument();
   });

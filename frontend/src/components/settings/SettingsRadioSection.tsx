@@ -575,8 +575,7 @@ export function SettingsRadioSection({
           onChange={(e) => setMaxRadioContacts(e.target.value)}
         />
         <p className="text-xs text-muted-foreground">
-          Favorite contacts load first, then recent non-repeater contacts until this limit is
-          reached (1-1000)
+          Favorite contacts stay loaded on the radio for DM ACK support up to this limit (1-1000)
         </p>
       </div>
 

@@ -29,7 +29,6 @@ from app.decoder import (
 )
 from app.keystore import get_private_key, get_public_key, has_private_key
 from app.models import (
-    CONTACT_TYPE_REPEATER,
     Contact,
     ContactUpsert,
     RawPacketBroadcast,
@@ -415,7 +414,6 @@ async def _process_advertisement(
     Process an advertisement packet.
 
     Extracts contact info and updates the database/broadcasts to clients.
-    For non-repeater contacts, triggers sync of recent contacts to radio for DM ACK support.
     """
     # Parse packet to get path info if not already provided
     if packet_info is None:
@@ -532,14 +530,6 @@ async def _process_advertisement(
         settings = await AppSettingsRepository.get()
         if settings.auto_decrypt_dm_on_advert:
             await start_historical_dm_decryption(None, advert.public_key.lower(), advert.name)
-
-    # If this is not a repeater, trigger recent contacts sync to radio
-    # This ensures we can auto-ACK DMs from recent contacts
-    if contact_type != CONTACT_TYPE_REPEATER:
-        # Import here to avoid circular import
-        from app.radio_sync import sync_recent_contacts_to_radio
-
-        asyncio.create_task(sync_recent_contacts_to_radio())
 
 
 async def _process_direct_message(

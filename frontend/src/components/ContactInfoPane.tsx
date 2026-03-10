@@ -279,6 +279,7 @@ export function ContactInfoPane({
                 type="button"
                 className="text-sm flex items-center gap-2 hover:text-primary transition-colors"
                 onClick={() => onToggleFavorite('contact', contact.public_key)}
+                title="Favorite contacts stay loaded on the radio for ACK support"
               >
                 {isFavorite(favorites, 'contact', contact.public_key) ? (
                   <>

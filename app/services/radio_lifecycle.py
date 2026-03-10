@@ -1,7 +1,12 @@
 import asyncio
 import logging
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
+
+POST_CONNECT_SETUP_TIMEOUT_SECONDS = 300
+POST_CONNECT_SETUP_MAX_ATTEMPTS = 2
 
 
 async def run_post_connect_setup(radio_manager) -> None:
@@ -24,7 +29,7 @@ async def run_post_connect_setup(radio_manager) -> None:
     if radio_manager._setup_lock is None:
         radio_manager._setup_lock = asyncio.Lock()
 
-    async with radio_manager._setup_lock:
+    async def _setup_body() -> None:
         if not radio_manager.meshcore:
             return
         radio_manager._setup_in_progress = True
@@ -132,20 +137,51 @@ async def run_post_connect_setup(radio_manager) -> None:
             # These tasks acquire their own locks when they need radio access.
             start_periodic_sync()
             start_periodic_advert()
-            start_message_polling()
+            if settings.enable_message_poll_fallback:
+                start_message_polling()
+            else:
+                logger.info("Fallback message polling disabled; relying on radio events")
 
             radio_manager._setup_complete = True
         finally:
             radio_manager._setup_in_progress = False
+
+    async with radio_manager._setup_lock:
+        await asyncio.wait_for(_setup_body(), timeout=POST_CONNECT_SETUP_TIMEOUT_SECONDS)
 
     logger.info("Post-connect setup complete")
 
 
 async def prepare_connected_radio(radio_manager, *, broadcast_on_success: bool = True) -> None:
     """Finish setup for an already-connected radio and optionally broadcast health."""
-    from app.websocket import broadcast_health
+    from app.websocket import broadcast_error, broadcast_health
 
-    await radio_manager.post_connect_setup()
+    for attempt in range(1, POST_CONNECT_SETUP_MAX_ATTEMPTS + 1):
+        try:
+            await radio_manager.post_connect_setup()
+            break
+        except asyncio.TimeoutError as exc:
+            if attempt < POST_CONNECT_SETUP_MAX_ATTEMPTS:
+                logger.warning(
+                    "Post-connect setup timed out after %ds on attempt %d/%d; retrying once",
+                    POST_CONNECT_SETUP_TIMEOUT_SECONDS,
+                    attempt,
+                    POST_CONNECT_SETUP_MAX_ATTEMPTS,
+                )
+                continue
+
+            logger.error(
+                "Post-connect setup timed out after %ds on %d attempts. Initial radio offload "
+                "took too long; something is probably wrong.",
+                POST_CONNECT_SETUP_TIMEOUT_SECONDS,
+                POST_CONNECT_SETUP_MAX_ATTEMPTS,
+            )
+            broadcast_error(
+                "Radio startup appears stuck",
+                "Initial radio offload took too long. Reboot the radio and restart the server.",
+            )
+            raise RuntimeError("Post-connect setup timed out") from exc
+
     radio_manager._last_connected = True
     if broadcast_on_success:
         broadcast_health(True, radio_manager.connection_info)
@@ -197,7 +233,11 @@ async def connection_monitor_loop(radio_manager) -> None:
                 await prepare_connected_radio(radio_manager, broadcast_on_success=True)
                 consecutive_setup_failures = 0
 
-            elif current_connected and not radio_manager.is_setup_complete:
+            elif (
+                current_connected
+                and not radio_manager.is_setup_complete
+                and not radio_manager.is_setup_in_progress
+            ):
                 logger.info("Retrying post-connect setup...")
                 await prepare_connected_radio(radio_manager, broadcast_on_success=True)
                 consecutive_setup_failures = 0

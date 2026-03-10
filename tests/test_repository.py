@@ -525,6 +525,49 @@ class TestContactRepositoryResolvePrefixes:
         assert result == {}
 
 
+class TestContactRepositoryRecentQueries:
+    """Test recent-contact selection helpers used for radio fill."""
+
+    @pytest.mark.asyncio
+    async def test_recently_advertised_includes_contacted_contacts(self, test_db):
+        stale_contacted_fresh_advert = "ab" * 32
+        advert_only = "cd" * 32
+        repeater = "ef" * 32
+
+        await ContactRepository.upsert(
+            {
+                "public_key": stale_contacted_fresh_advert,
+                "name": "SeenAgain",
+                "type": 1,
+                "last_contacted": 100,
+                "last_advert": 5000,
+            }
+        )
+        await ContactRepository.upsert(
+            {
+                "public_key": advert_only,
+                "name": "AdvertOnly",
+                "type": 1,
+                "last_advert": 4000,
+            }
+        )
+        await ContactRepository.upsert(
+            {
+                "public_key": repeater,
+                "name": "Repeater",
+                "type": 2,
+                "last_advert": 6000,
+            }
+        )
+
+        contacts = await ContactRepository.get_recently_advertised_non_repeaters()
+
+        assert [contact.public_key for contact in contacts] == [
+            stale_contacted_fresh_advert,
+            advert_only,
+        ]
+
+
 class TestAppSettingsRepository:
     """Test AppSettingsRepository parsing and migration edge cases."""
 

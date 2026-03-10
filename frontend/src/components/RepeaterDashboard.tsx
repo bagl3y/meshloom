@@ -111,7 +111,11 @@ export function RepeaterDashboard({
           <button
             className="p-1.5 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => onToggleFavorite('contact', conversation.id)}
-            title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+            title={
+              isFav
+                ? 'Remove from favorites. Favorite contacts stay loaded on the radio for ACK support.'
+                : 'Add to favorites. Favorite contacts stay loaded on the radio for ACK support.'
+            }
             aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
           >
             {isFav ? (

@@ -51,6 +51,14 @@ export function ChatHeader({
   const titleClickable =
     (conversation.type === 'contact' && onOpenContactInfo) ||
     (conversation.type === 'channel' && onOpenChannelInfo);
+  const favoriteTitle =
+    conversation.type === 'contact'
+      ? isFavorite(favorites, 'contact', conversation.id)
+        ? 'Remove from favorites. Favorite contacts stay loaded on the radio for ACK support.'
+        : 'Add to favorites. Favorite contacts stay loaded on the radio for ACK support.'
+      : isFavorite(favorites, conversation.type as 'channel' | 'contact', conversation.id)
+        ? 'Remove from favorites'
+        : 'Add to favorites';
 
   const handleEditFloodScopeOverride = () => {
     if (conversation.type !== 'channel' || !onSetChannelFloodScopeOverride) return;
@@ -184,11 +192,7 @@ export function ChatHeader({
             onClick={() =>
               onToggleFavorite(conversation.type as 'channel' | 'contact', conversation.id)
             }
-            title={
-              isFavorite(favorites, conversation.type as 'channel' | 'contact', conversation.id)
-                ? 'Remove from favorites'
-                : 'Add to favorites'
-            }
+            title={favoriteTitle}
             aria-label={
               isFavorite(favorites, conversation.type as 'channel' | 'contact', conversation.id)
                 ? 'Remove from favorites'

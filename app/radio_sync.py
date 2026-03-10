@@ -4,7 +4,7 @@ Radio sync and offload management.
 This module handles syncing contacts and channels from the radio to the database,
 then removing them from the radio to free up space for new discoveries.
 
-Also handles loading recent non-repeater contacts TO the radio for DM ACK support.
+Also handles loading favorites plus recently active contacts TO the radio for DM ACK support.
 Also handles periodic message polling as a fallback for platforms where push events
 don't work reliably.
 """
@@ -47,6 +47,26 @@ def _contact_sync_debug_fields(contact: Contact) -> dict[str, object]:
         "lon": contact.lon,
         "on_radio": contact.on_radio,
     }
+
+
+async def _reconcile_contact_messages_background(
+    public_key: str,
+    contact_name: str | None,
+) -> None:
+    """Run contact/message reconciliation outside the radio critical path."""
+    try:
+        await reconcile_contact_messages(
+            public_key=public_key,
+            contact_name=contact_name,
+            log=logger,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Background contact reconciliation failed for %s: %s",
+            public_key[:12],
+            exc,
+            exc_info=True,
+        )
 
 
 async def upsert_channel_from_radio_slot(payload: dict, *, on_radio: bool) -> str | None:
@@ -119,8 +139,8 @@ async def pause_polling():
 # Background task handle
 _sync_task: asyncio.Task | None = None
 
-# Sync interval in seconds (5 minutes)
-SYNC_INTERVAL = 300
+# Sync interval in seconds (10 minutes)
+SYNC_INTERVAL = 600
 
 
 async def sync_and_offload_contacts(mc: MeshCore) -> dict:
@@ -157,10 +177,11 @@ async def sync_and_offload_contacts(mc: MeshCore) -> dict:
             await ContactRepository.upsert(
                 ContactUpsert.from_radio_dict(public_key, contact_data, on_radio=False)
             )
-            await reconcile_contact_messages(
-                public_key=public_key,
-                contact_name=contact_data.get("adv_name"),
-                log=logger,
+            asyncio.create_task(
+                _reconcile_contact_messages_background(
+                    public_key,
+                    contact_data.get("adv_name"),
+                )
             )
             synced += 1
 
@@ -290,10 +311,10 @@ async def sync_and_offload_all(mc: MeshCore) -> dict:
     # Ensure default channels exist
     await ensure_default_channels()
 
-    # Reload favorites and recent contacts back onto the radio immediately
-    # so favorited contacts don't stay in the on_radio=False limbo until the
-    # next advertisement arrives.  Pass mc directly since the caller already
-    # holds the radio operation lock (asyncio.Lock is not reentrant).
+    # Reload favorites back onto the radio immediately so they do not stay
+    # in on_radio=False limbo after offload. Pass mc directly since the
+    # caller already holds the radio operation lock (asyncio.Lock is not
+    # reentrant).
     reload_result = await sync_recent_contacts_to_radio(force=True, mc=mc)
 
     return {
@@ -375,10 +396,6 @@ async def _message_poll_loop():
     while True:
         try:
             await asyncio.sleep(MESSAGE_POLL_INTERVAL)
-
-            # Clean up expired pending ACKs every poll cycle so they don't
-            # accumulate when no ACKs arrive (e.g. all recipients out of range).
-            cleanup_expired_acks()
 
             if radio_manager.is_connected and not is_polling_paused():
                 try:
@@ -554,6 +571,7 @@ async def _periodic_sync_loop():
     while True:
         try:
             await asyncio.sleep(SYNC_INTERVAL)
+            cleanup_expired_acks()
             if not radio_manager.is_connected:
                 continue
 
@@ -604,8 +622,12 @@ async def _sync_contacts_to_radio_inner(mc: MeshCore) -> dict:
     """
     Core logic for loading contacts onto the radio.
 
-    Favorite contacts are prioritized first, then recent non-repeater contacts
-    fill remaining slots up to max_radio_contacts.
+    Fill order is:
+    1. Favorite contacts
+    2. Most recently interacted-with non-repeaters
+    3. Most recently advert-heard non-repeaters without interaction history
+
+    Contacts are loaded up to max_radio_contacts.
 
     Caller must hold the radio operation lock and pass a valid MeshCore instance.
     """
@@ -638,8 +660,21 @@ async def _sync_contacts_to_radio_inner(mc: MeshCore) -> dict:
             break
 
     if len(selected_contacts) < max_contacts:
-        recent_contacts = await ContactRepository.get_recent_non_repeaters(limit=max_contacts)
-        for contact in recent_contacts:
+        for contact in await ContactRepository.get_recently_contacted_non_repeaters(
+            limit=max_contacts
+        ):
+            key = contact.public_key.lower()
+            if key in selected_keys:
+                continue
+            selected_keys.add(key)
+            selected_contacts.append(contact)
+            if len(selected_contacts) >= max_contacts:
+                break
+
+    if len(selected_contacts) < max_contacts:
+        for contact in await ContactRepository.get_recently_advertised_non_repeaters(
+            limit=max_contacts
+        ):
             key = contact.public_key.lower()
             if key in selected_keys:
                 continue
@@ -649,22 +684,75 @@ async def _sync_contacts_to_radio_inner(mc: MeshCore) -> dict:
                 break
 
     logger.debug(
-        "Selected %d contacts to sync (%d favorite contacts first, limit=%d)",
+        "Selected %d contacts to sync (%d favorites, limit=%d)",
         len(selected_contacts),
         favorite_contacts_loaded,
         max_contacts,
     )
+    return await _load_contacts_to_radio(mc, selected_contacts)
 
+
+async def ensure_contact_on_radio(
+    public_key: str,
+    *,
+    force: bool = False,
+    mc: MeshCore | None = None,
+) -> dict:
+    """Ensure one contact is loaded on the radio for ACK/routing support."""
+    global _last_contact_sync
+
+    now = time.time()
+    if not force and (now - _last_contact_sync) < CONTACT_SYNC_THROTTLE_SECONDS:
+        logger.debug(
+            "Single-contact sync throttled (last sync %ds ago)",
+            int(now - _last_contact_sync),
+        )
+        return {"loaded": 0, "throttled": True}
+
+    try:
+        contact = await ContactRepository.get_by_key_or_prefix(public_key)
+    except AmbiguousPublicKeyPrefixError:
+        logger.warning("Cannot sync favorite contact '%s': ambiguous key prefix", public_key)
+        return {"loaded": 0, "error": "Ambiguous contact key prefix"}
+
+    if not contact:
+        logger.debug("Cannot sync favorite contact %s: not found", public_key[:12])
+        return {"loaded": 0, "error": "Contact not found"}
+
+    if mc is not None:
+        _last_contact_sync = now
+        return await _load_contacts_to_radio(mc, [contact])
+
+    if not radio_manager.is_connected or radio_manager.meshcore is None:
+        logger.debug("Cannot sync favorite contact to radio: not connected")
+        return {"loaded": 0, "error": "Radio not connected"}
+
+    try:
+        async with radio_manager.radio_operation(
+            "ensure_contact_on_radio",
+            blocking=False,
+        ) as mc:
+            _last_contact_sync = now
+            assert mc is not None
+            return await _load_contacts_to_radio(mc, [contact])
+    except RadioOperationBusyError:
+        logger.debug("Skipping favorite contact sync: radio busy")
+        return {"loaded": 0, "busy": True}
+    except Exception as e:
+        logger.error("Error syncing favorite contact to radio: %s", e, exc_info=True)
+        return {"loaded": 0, "error": str(e)}
+
+
+async def _load_contacts_to_radio(mc: MeshCore, contacts: list[Contact]) -> dict:
+    """Load the provided contacts onto the radio."""
     loaded = 0
     already_on_radio = 0
     failed = 0
 
-    for contact in selected_contacts:
-        # Check if already on radio
+    for contact in contacts:
         radio_contact = mc.get_contact_by_key_prefix(contact.public_key[:12])
         if radio_contact:
             already_on_radio += 1
-            # Update DB if not marked as on_radio
             if not contact.on_radio:
                 await ContactRepository.set_on_radio(contact.public_key, True)
             continue
@@ -722,8 +810,8 @@ async def sync_recent_contacts_to_radio(force: bool = False, mc: MeshCore | None
     """
     Load contacts to the radio for DM ACK support.
 
-    Favorite contacts are prioritized first, then recent non-repeater contacts
-    fill remaining slots up to max_radio_contacts.
+    Fill order is favorites, then recently contacted non-repeaters,
+    then recently advert-heard non-repeaters until max_radio_contacts.
     Only runs at most once every CONTACT_SYNC_THROTTLE_SECONDS unless forced.
 
     Args:

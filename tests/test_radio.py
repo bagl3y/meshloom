@@ -273,6 +273,33 @@ class TestConnectionMonitor:
         mock_broadcast.assert_any_call(True, "TCP: test:4000")
         assert rm._setup_complete is True
 
+    @pytest.mark.asyncio
+    async def test_monitor_does_not_retry_while_setup_already_running(self):
+        """Monitor leaves an in-progress setup alone instead of queueing another one."""
+        from app.radio import RadioManager
+
+        rm = RadioManager()
+        mock_mc = MagicMock()
+        mock_mc.is_connected = True
+        rm._meshcore = mock_mc
+        rm._connection_info = "TCP: test:4000"
+        rm._last_connected = True
+        rm._setup_complete = False
+        rm._setup_in_progress = True
+        rm.post_connect_setup = AsyncMock()
+
+        async def _sleep(_seconds: float):
+            raise asyncio.CancelledError()
+
+        with patch("app.radio.asyncio.sleep", side_effect=_sleep):
+            await rm.start_connection_monitor()
+            try:
+                await rm._reconnect_task
+            finally:
+                await rm.stop_connection_monitor()
+
+        rm.post_connect_setup.assert_not_called()
+
 
 class TestReconnectLock:
     """Tests for reconnect() lock serialization — no duplicate reconnections."""
@@ -722,3 +749,121 @@ class TestPostConnectSetupOrdering:
             await rm.post_connect_setup()
 
         mock_mc.commands.set_flood_scope.assert_awaited_once_with("")
+
+    @pytest.mark.asyncio
+    async def test_message_polling_disabled_by_default(self):
+        """Post-connect setup does not start fallback polling unless explicitly enabled."""
+        from app.models import AppSettings
+        from app.radio import RadioManager
+
+        rm = RadioManager()
+        mock_mc = MagicMock()
+        mock_mc.start_auto_message_fetching = AsyncMock()
+        mock_mc.commands.set_flood_scope = AsyncMock()
+        rm._meshcore = mock_mc
+
+        with (
+            patch("app.event_handlers.register_event_handlers"),
+            patch("app.keystore.export_and_store_private_key", new_callable=AsyncMock),
+            patch("app.radio_sync.sync_radio_time", new_callable=AsyncMock),
+            patch(
+                "app.repository.AppSettingsRepository.get",
+                new_callable=AsyncMock,
+                return_value=AppSettings(),
+            ),
+            patch("app.radio_sync.sync_and_offload_all", new_callable=AsyncMock, return_value={}),
+            patch("app.radio_sync.start_periodic_sync"),
+            patch("app.radio_sync.send_advertisement", new_callable=AsyncMock, return_value=False),
+            patch("app.radio_sync.start_periodic_advert"),
+            patch("app.radio_sync.drain_pending_messages", new_callable=AsyncMock, return_value=0),
+            patch("app.radio_sync.start_message_polling") as mock_start_message_polling,
+        ):
+            await rm.post_connect_setup()
+
+        mock_start_message_polling.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_message_polling_starts_when_env_flag_enabled(self):
+        """Post-connect setup starts fallback polling when the env-backed setting is enabled."""
+        from app.models import AppSettings
+        from app.radio import RadioManager
+
+        rm = RadioManager()
+        mock_mc = MagicMock()
+        mock_mc.start_auto_message_fetching = AsyncMock()
+        mock_mc.commands.set_flood_scope = AsyncMock()
+        rm._meshcore = mock_mc
+
+        with (
+            patch("app.event_handlers.register_event_handlers"),
+            patch("app.keystore.export_and_store_private_key", new_callable=AsyncMock),
+            patch("app.radio_sync.sync_radio_time", new_callable=AsyncMock),
+            patch(
+                "app.repository.AppSettingsRepository.get",
+                new_callable=AsyncMock,
+                return_value=AppSettings(),
+            ),
+            patch("app.radio_sync.sync_and_offload_all", new_callable=AsyncMock, return_value={}),
+            patch("app.radio_sync.start_periodic_sync"),
+            patch("app.radio_sync.send_advertisement", new_callable=AsyncMock, return_value=False),
+            patch("app.radio_sync.start_periodic_advert"),
+            patch("app.radio_sync.drain_pending_messages", new_callable=AsyncMock, return_value=0),
+            patch("app.radio_sync.start_message_polling") as mock_start_message_polling,
+            patch("app.services.radio_lifecycle.settings.enable_message_poll_fallback", True),
+        ):
+            await rm.post_connect_setup()
+
+        mock_start_message_polling.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_prepare_connected_radio_retries_timeout_once_before_failing(self):
+        """Hung post-connect setup gets one retry before surfacing an operator error."""
+        from app.radio import RadioManager
+        from app.services.radio_lifecycle import prepare_connected_radio
+
+        rm = RadioManager()
+        rm._connection_info = "Serial: /dev/ttyUSB0"
+        rm.post_connect_setup = AsyncMock(
+            side_effect=[asyncio.TimeoutError(), asyncio.TimeoutError()]
+        )
+
+        with (
+            patch("app.services.radio_lifecycle.logger") as mock_logger,
+            patch("app.websocket.broadcast_error") as mock_broadcast_error,
+            patch("app.websocket.broadcast_health") as mock_broadcast_health,
+        ):
+            with pytest.raises(RuntimeError, match="Post-connect setup timed out"):
+                await prepare_connected_radio(rm, broadcast_on_success=True)
+
+        assert rm.post_connect_setup.await_count == 2
+        mock_logger.warning.assert_called_once()
+        mock_logger.error.assert_called_once()
+        mock_broadcast_error.assert_called_once_with(
+            "Radio startup appears stuck",
+            "Initial radio offload took too long. Reboot the radio and restart the server.",
+        )
+        mock_broadcast_health.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_prepare_connected_radio_succeeds_on_retry_after_timeout(self):
+        """A slow first attempt can time out once without failing the reconnect flow."""
+        from app.radio import RadioManager
+        from app.services.radio_lifecycle import prepare_connected_radio
+
+        rm = RadioManager()
+        rm._connection_info = "Serial: /dev/ttyUSB0"
+        rm.post_connect_setup = AsyncMock(side_effect=[asyncio.TimeoutError(), None])
+
+        with (
+            patch("app.services.radio_lifecycle.logger") as mock_logger,
+            patch("app.websocket.broadcast_error") as mock_broadcast_error,
+            patch("app.websocket.broadcast_health") as mock_broadcast_health,
+        ):
+            await prepare_connected_radio(rm, broadcast_on_success=True)
+
+        assert rm.post_connect_setup.await_count == 2
+        assert rm._last_connected is True
+        mock_logger.warning.assert_called_once()
+        mock_logger.error.assert_not_called()
+        mock_broadcast_error.assert_not_called()
+        mock_broadcast_health.assert_called_once_with(True, "Serial: /dev/ttyUSB0")

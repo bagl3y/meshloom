@@ -84,6 +84,8 @@ Ancillary AGENTS.md files which should generally not be reviewed unless specific
 
 **Background tasks** (WebSocket broadcasts, periodic sync, contact auto-loading, etc.) use fire-and-forget `asyncio.create_task`. Exceptions in these tasks are logged to the backend logs, which is sufficient for debugging. There is no need to track task references or add done-callbacks purely for error visibility. If there's a convenient way to bubble an error to the frontend (e.g., via `broadcast_error` for user-actionable problems), do so, but this is minor and best-effort.
 
+Radio startup/setup is one place where that frontend bubbling is intentional: if post-connect setup hangs past its timeout, the backend both logs the failure and pushes a toast instructing the operator to reboot the radio and restart the server.
+
 ## Key Design Principles
 
 1. **Store-and-serve**: Backend stores all packets even when no client is connected
@@ -440,8 +442,9 @@ mc.subscribe(EventType.ACK, handler)
 | `MESHCORE_LOG_LEVEL` | `INFO` | Logging level (`DEBUG`/`INFO`/`WARNING`/`ERROR`) |
 | `MESHCORE_DATABASE_PATH` | `data/meshcore.db` | SQLite database location |
 | `MESHCORE_DISABLE_BOTS` | `false` | Disable bot system entirely (blocks execution and config) |
+| `MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK` | `false` | Enable periodic `get_msg()` fallback polling if radio events are not reliably surfacing messages |
 
-**Note:** Runtime app settings are stored in the database (`app_settings` table), not environment variables. These include `max_radio_contacts`, `auto_decrypt_dm_on_advert`, `sidebar_sort_order`, `advert_interval`, `last_advert_time`, `favorites`, `last_message_times`, `flood_scope`, `blocked_keys`, and `blocked_names`. They are configured via `GET/PATCH /api/settings`. MQTT, bot, webhook, and Apprise configs are stored in the `fanout_configs` table, managed via `/api/fanout`.
+**Note:** Runtime app settings are stored in the database (`app_settings` table), not environment variables. These include `max_radio_contacts`, `auto_decrypt_dm_on_advert`, `sidebar_sort_order`, `advert_interval`, `last_advert_time`, `favorites`, `last_message_times`, `flood_scope`, `blocked_keys`, and `blocked_names`. `max_radio_contacts` now means favorite contacts kept loaded on the radio for ACK support, not a recent-contact rotation pool. They are configured via `GET/PATCH /api/settings`. MQTT, bot, webhook, and Apprise configs are stored in the `fanout_configs` table, managed via `/api/fanout`.
 
 Byte-perfect channel retries are user-triggered via `POST /api/messages/channel/{message_id}/resend` and are allowed for 30 seconds after the original send.
 
