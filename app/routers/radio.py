@@ -13,18 +13,20 @@ from app.services.radio_commands import (
     apply_radio_config_update,
     import_private_key_and_refresh_keystore,
 )
-from app.services.radio_lifecycle import prepare_connected_radio, reconnect_and_prepare_radio
-from app.services.radio_runtime import RadioRuntime
 from app.services.radio_runtime import radio_runtime as radio_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/radio", tags=["radio"])
 
 
-def _unwrap_radio_manager():
-    if isinstance(radio_manager, RadioRuntime):
-        return radio_manager.manager
-    return radio_manager
+async def _prepare_connected(*, broadcast_on_success: bool) -> None:
+    await radio_manager.prepare_connected(broadcast_on_success=broadcast_on_success)
+
+
+async def _reconnect_and_prepare(*, broadcast_on_success: bool) -> bool:
+    return await radio_manager.reconnect_and_prepare(
+        broadcast_on_success=broadcast_on_success,
+    )
 
 
 class RadioSettings(BaseModel):
@@ -176,10 +178,7 @@ async def _attempt_reconnect() -> dict:
         }
 
     try:
-        success = await reconnect_and_prepare_radio(
-            _unwrap_radio_manager(),
-            broadcast_on_success=True,
-        )
+        success = await _reconnect_and_prepare(broadcast_on_success=True)
     except Exception as e:
         logger.exception("Post-connect setup failed after reconnect")
         raise HTTPException(
@@ -229,10 +228,7 @@ async def reconnect_radio() -> dict:
 
         logger.info("Radio connected but setup incomplete, retrying setup")
         try:
-            await prepare_connected_radio(
-                _unwrap_radio_manager(),
-                broadcast_on_success=True,
-            )
+            await _prepare_connected(broadcast_on_success=True)
             return {"status": "ok", "message": "Setup completed", "connected": True}
         except Exception as e:
             logger.exception("Post-connect setup failed")
