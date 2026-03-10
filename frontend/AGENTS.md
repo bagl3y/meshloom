@@ -16,6 +16,15 @@ Keep it aligned with `frontend/src` source code.
 - `meshcore-hashtag-cracker` + `nosleep.js` (channel cracker)
 - Multibyte-aware decoder build published as `meshcore-decoder-multibyte-patch`
 
+## Code Ethos
+
+- Prefer fewer, stronger modules over many thin wrappers.
+- Split code only when the new hook/component owns a real invariant or workflow.
+- Keep one reasoning unit readable in one place, even if that file is moderately large.
+- Avoid dedicated files whose main job is pass-through, prop bundling, or renaming.
+- For this repo, "locally dense but semantically obvious" is better than indirection-heavy "clean architecture".
+- When refactoring, preserve behavior first and add tests around the seam being moved.
+
 ## Frontend Map
 
 ```text
@@ -37,12 +46,10 @@ frontend/src/
 │   ├── index.ts            # Central re-export of all hooks
 │   ├── useConversationActions.ts   # Send/resend/trace/block conversation actions
 │   ├── useConversationNavigation.ts # Search target, selection reset, and info-pane navigation state
-│   ├── useConversationMessages.ts  # Dedup/update helpers over the conversation timeline
-│   ├── useConversationTimeline.ts  # Fetch, cache restore, jump-target loading, pagination, reconcile
+│   ├── useConversationMessages.ts  # Conversation timeline loading, cache restore, jump-target loading, pagination, dedup, pending ACK buffering
 │   ├── useUnreadCounts.ts          # Unread counters, mentions, recent-sort timestamps
 │   ├── useRealtimeAppState.ts      # WebSocket event application and reconnect recovery
 │   ├── useAppShell.ts              # App-shell view state (settings/sidebar/modals/cracker)
-│   ├── useAppShellProps.ts         # AppShell child prop assembly + cracker create/decrypt flow
 │   ├── useRepeaterDashboard.ts      # Repeater dashboard state (login, panes, console, retries)
 │   ├── useRadioControl.ts          # Radio health/config state, reconnection
 │   ├── useAppSettings.ts           # Settings, favorites, preferences migration
@@ -154,7 +161,6 @@ frontend/src/
     ├── useConversationMessages.test.ts
     ├── useConversationMessages.race.test.ts
     ├── useConversationNavigation.test.ts
-    ├── useAppShellProps.test.ts
     ├── useAppShell.test.ts
     ├── useRepeaterDashboard.test.ts
     ├── useContactsAndChannels.test.ts
@@ -186,12 +192,12 @@ High-level state is delegated to hooks:
 - `useConversationRouter`: URL hash → active conversation routing
 - `useConversationNavigation`: search target, conversation selection reset, and info-pane state
 - `useConversationActions`: send/resend/trace/block handlers and channel override updates
-- `useAppShellProps`: assembles the prop bundles passed into `AppShell` children, including the cracker-created-channel historical decrypt flow
-- `useConversationMessages`: dedup/update helpers and pending ACK buffering
-- `useConversationTimeline`: conversation switch loading, cache restore, jump-target loading, pagination, reconcile
+- `useConversationMessages`: conversation switch loading, cache restore, jump-target loading, pagination, dedup/update helpers, and pending ACK buffering
 - `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps
 - `useRealtimeAppState`: typed WS event application, reconnect recovery, cache/unread coordination
 - `useRepeaterDashboard`: repeater dashboard state (login, pane data/retries, console, actions)
+
+`App.tsx` intentionally still does the final `AppShell` prop assembly. That composition layer is considered acceptable here because it keeps the shell contract visible in one place and avoids a prop-bundling hook with little original logic.
 
 `ConversationPane.tsx` owns the main active-conversation surface branching:
 - empty state
@@ -359,7 +365,7 @@ The `SearchView` component (`components/SearchView.tsx`) provides full-text sear
 - **State**: `targetMessageId` is shared between `useConversationNavigation` and `useConversationMessages`. When a search result is clicked, `handleNavigateToMessage` sets the target ID and switches to the target conversation.
 - **Same-conversation clear**: when `targetMessageId` is cleared after the target is reached, the hook preserves the around-loaded mid-history view instead of replacing it with the latest page.
 - **Persistence**: `SearchView` stays mounted after first open using the same `hidden` class pattern as `CrackerPanel`, preserving search state when navigating to results.
-- **Jump-to-message**: `useConversationTimeline` handles optional `targetMessageId` by calling `api.getMessagesAround()` instead of the normal latest-page fetch, loading context around the target message. `MessageList` scrolls to the target via `data-message-id` attribute and applies a `message-highlight` CSS animation.
+- **Jump-to-message**: `useConversationMessages` handles optional `targetMessageId` by calling `api.getMessagesAround()` instead of the normal latest-page fetch, loading context around the target message. `MessageList` scrolls to the target via `data-message-id` attribute and applies a `message-highlight` CSS animation.
 - **Bidirectional pagination**: After jumping mid-history, `hasNewerMessages` enables forward pagination via `fetchNewerMessages`. The scroll-to-bottom button calls `jumpToBottom` (re-fetches latest page) instead of just scrolling.
 - **WS message suppression**: When `hasNewerMessages` is true, incoming WS messages for the active conversation are not added to the message list (the user is viewing historical context, not the latest page).
 

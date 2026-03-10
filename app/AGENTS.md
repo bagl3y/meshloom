@@ -11,6 +11,14 @@ Keep it aligned with `app/` source files and router behavior.
 - MeshCore Python library (`meshcore` from PyPI)
 - PyCryptodome
 
+## Code Ethos
+
+- Prefer strong domain modules over layers of pass-through helpers.
+- Split code when the new module owns real policy, not just a nicer name.
+- Avoid wrapper services around globals unless they materially improve testability or reduce coupling.
+- Keep workflows locally understandable; do not scatter one reasoning unit across several files without a clear contract.
+- Typed write/read contracts are preferred over loose dict-shaped repository inputs.
+
 ## Backend Map
 
 ```text
@@ -19,7 +27,7 @@ app/
 ├── config.py            # Env-driven runtime settings
 ├── database.py          # SQLite connection + base schema + migration runner
 ├── migrations.py        # Schema migrations (SQLite user_version)
-├── models.py            # Pydantic request/response models
+├── models.py            # Pydantic request/response models and typed write contracts (for example ContactUpsert)
 ├── repository/          # Data access layer (contacts, channels, messages, raw_packets, settings, fanout)
 ├── services/            # Shared orchestration/domain services
 │   ├── messages.py              # Shared message creation, dedup, ACK application
@@ -239,6 +247,8 @@ Main tables:
 - `contact_advert_paths` (recent unique advertisement paths per contact, keyed by contact + path bytes + hop count)
 - `contact_name_history` (tracks name changes over time)
 - `app_settings`
+
+Repository writes should prefer typed models such as `ContactUpsert` over ad hoc dict payloads when adding or updating schema-coupled data.
 
 `app_settings` fields in active model:
 - `max_radio_contacts`

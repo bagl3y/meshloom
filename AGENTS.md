@@ -93,6 +93,15 @@ Ancillary AGENTS.md files which should generally not be reviewed unless specific
 5. **Offline-capable**: Radio operates independently; server syncs when connected
 6. **Auto-reconnect**: Background monitor detects disconnection and attempts reconnection
 
+## Code Ethos
+
+- Prefer fewer, stronger modules over many tiny wrapper files.
+- Split code only when the new module owns a real invariant, workflow, or contract.
+- Avoid "enterprise" indirection layers whose main job is forwarding, renaming, or prop bundling.
+- For this repo, "locally dense but semantically obvious" is better than context scattered across many files.
+- Use typed contracts at important boundaries such as API payloads, WebSocket events, and repository writes.
+- Refactors should be behavior-preserving slices with tests around the moved seam, not aesthetic reshuffles.
+
 ## Intentional Security Design Decisions
 
 The following are **deliberate design choices**, not bugs. They are documented in the README with appropriate warnings. Do not "fix" these or flag them as vulnerabilities.
