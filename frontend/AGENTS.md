@@ -21,7 +21,7 @@ Keep it aligned with `frontend/src` source code.
 ```text
 frontend/src/
 ├── main.tsx                # React entry point (StrictMode, root render)
-├── App.tsx                 # App shell and orchestration
+├── App.tsx                 # Data/orchestration entry that wires hooks into AppShell
 ├── api.ts                  # Typed REST client
 ├── types.ts                # Shared TS contracts
 ├── useWebSocket.ts         # WS lifecycle + event dispatch
@@ -40,12 +40,14 @@ frontend/src/
 │   ├── useConversationTimeline.ts  # Fetch, cache restore, jump-target loading, pagination, reconcile
 │   ├── useUnreadCounts.ts          # Unread counters, mentions, recent-sort timestamps
 │   ├── useRealtimeAppState.ts      # WebSocket event application and reconnect recovery
+│   ├── useAppShell.ts              # App-shell view state (settings/sidebar/modals/cracker)
 │   ├── useRepeaterDashboard.ts      # Repeater dashboard state (login, panes, console, retries)
 │   ├── useRadioControl.ts          # Radio health/config state, reconnection
 │   ├── useAppSettings.ts           # Settings, favorites, preferences migration
 │   ├── useConversationRouter.ts    # URL hash → active conversation routing
 │   └── useContactsAndChannels.ts   # Contact/channel loading, creation, deletion
 ├── components/
+│   ├── AppShell.tsx            # App-shell layout: status, sidebar, search/settings panes, cracker, modals
 │   ├── ConversationPane.tsx    # Active conversation surface selection (map/raw/repeater/chat/empty)
 │   └── ...
 ├── utils/
@@ -143,6 +145,7 @@ frontend/src/
     ├── searchView.test.tsx
     ├── useConversationMessages.test.ts
     ├── useConversationMessages.race.test.ts
+    ├── useAppShell.test.ts
     ├── useRepeaterDashboard.test.ts
     ├── useContactsAndChannels.test.ts
     ├── useRealtimeAppState.test.ts
@@ -157,7 +160,16 @@ frontend/src/
 
 ### State ownership
 
-`App.tsx` orchestrates high-level state and delegates to hooks:
+`App.tsx` is now a thin composition entrypoint over the hook layer. `AppShell.tsx` owns shell layout/composition:
+- local label banner
+- status bar
+- desktop/mobile sidebar container
+- search/settings surface switching
+- global cracker mount/focus behavior
+- new-message modal and info panes
+
+High-level state is delegated to hooks:
+- `useAppShell`: app-shell view state (settings section, sidebar, cracker, new-message modal, target message)
 - `useRadioControl`: radio health/config state, reconnect/reboot polling
 - `useAppSettings`: settings CRUD, favorites, preferences migration
 - `useContactsAndChannels`: contact/channel lists, creation, deletion
@@ -181,7 +193,7 @@ frontend/src/
 
 - Initial data: REST fetches (`api.ts`) for config/settings/channels/contacts/unreads.
 - WebSocket: realtime deltas/events.
-- On reconnect, `App.tsx` refetches channels and contacts, refreshes unread counts, and reconciles the active conversation to recover disconnect-window drift.
+- On reconnect, the app refetches channels and contacts, refreshes unread counts, and reconciles the active conversation to recover disconnect-window drift.
 - On WS connect, backend sends `health` only; contacts/channels still come from REST.
 
 ### New Message modal
@@ -315,7 +327,7 @@ State: `useConversationActions` controls open/close via `infoPaneChannelKey`. Li
 
 ## Repeater Dashboard
 
-For repeater contacts (`type=2`), App.tsx renders `RepeaterDashboard` instead of the normal chat UI (ChatHeader + MessageList + MessageInput).
+For repeater contacts (`type=2`), `ConversationPane.tsx` renders `RepeaterDashboard` instead of the normal chat UI (ChatHeader + MessageList + MessageInput).
 
 **Login**: `RepeaterLogin` component — password or guest login via `POST /api/contacts/{key}/repeater/login`.
 
@@ -331,7 +343,7 @@ All state is managed by `useRepeaterDashboard` hook. State resets on conversatio
 
 The `SearchView` component (`components/SearchView.tsx`) provides full-text search across all DMs and channel messages. Key behaviors:
 
-- **State**: `targetMessageId` is shared between `App.tsx`, `useConversationActions`, and `useConversationMessages`. When a search result is clicked, `handleNavigateToMessage` sets the target ID and switches to the target conversation.
+- **State**: `targetMessageId` is shared between `useAppShell`, `useConversationActions`, and `useConversationMessages`. When a search result is clicked, `handleNavigateToMessage` sets the target ID and switches to the target conversation.
 - **Same-conversation clear**: when `targetMessageId` is cleared after the target is reached, the hook preserves the around-loaded mid-history view instead of replacing it with the latest page.
 - **Persistence**: `SearchView` stays mounted after first open using the same `hidden` class pattern as `CrackerPanel`, preserving search state when navigating to results.
 - **Jump-to-message**: `useConversationTimeline` handles optional `targetMessageId` by calling `api.getMessagesAround()` instead of the normal latest-page fetch, loading context around the target message. `MessageList` scrolls to the target via `data-message-id` attribute and applies a `message-highlight` CSS animation.

@@ -26,7 +26,7 @@ export interface SearchNavigateTarget {
   conversation_name: string;
 }
 
-interface SearchViewProps {
+export interface SearchViewProps {
   contacts: Contact[];
   channels: Channel[];
   onNavigateToMessage: (target: SearchNavigateTarget) => void;

@@ -173,7 +173,7 @@ This message-layer echo/path handling is independent of raw-packet storage dedup
 ├── frontend/               # React frontend
 │   ├── AGENTS.md           # Frontend documentation
 │   ├── src/
-│   │   ├── App.tsx         # Main component
+│   │   ├── App.tsx         # Frontend composition entry (hooks → AppShell)
 │   │   ├── api.ts          # REST client
 │   │   ├── useWebSocket.ts # WebSocket hook
 │   │   └── components/
