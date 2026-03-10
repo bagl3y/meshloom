@@ -1,10 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { Channel, HealthStatus, Contact, Message, MessagePath, RawPacket } from './types';
-
-interface WebSocketMessage {
-  type: string;
-  data: unknown;
-}
+import { parseWsEvent } from './wsEvents';
 
 interface ErrorEvent {
   message: string;
@@ -92,7 +88,7 @@ export function useWebSocket(options: UseWebSocketOptions) {
 
     ws.onmessage = (event) => {
       try {
-        const msg: WebSocketMessage = JSON.parse(event.data);
+        const msg = parseWsEvent(event.data);
         // Access handlers through ref to always use current versions
         const handlers = optionsRef.current;
 
@@ -136,8 +132,8 @@ export function useWebSocket(options: UseWebSocketOptions) {
           case 'pong':
             // Heartbeat response, ignore
             break;
-          default:
-            console.warn('Unknown WebSocket message type:', msg.type);
+          case 'unknown':
+            console.warn('Unknown WebSocket message type:', msg.rawType);
         }
       } catch (e) {
         console.error('Failed to parse WebSocket message:', e);
