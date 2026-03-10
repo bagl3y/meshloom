@@ -58,6 +58,11 @@ echo -e "${GREEN}Frontend build complete!${NC}"
 cd "$SCRIPT_DIR"
 echo
 
+echo -e "${YELLOW}Regenerating LICENSES.md...${NC}"
+bash scripts/collect_licenses.sh LICENSES.md
+echo -e "${GREEN}LICENSES.md updated!${NC}"
+echo
+
 # Prompt for version
 echo -e "${YELLOW}Current versions:${NC}"
 echo -n "  pyproject.toml: "

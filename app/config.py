@@ -1,4 +1,5 @@
 import logging
+import logging.config
 from typing import Literal
 
 from pydantic import model_validator
@@ -84,10 +85,64 @@ class _RepeatSquelch(logging.Filter):
 
 def setup_logging() -> None:
     """Configure logging for the application."""
-    logging.basicConfig(
-        level=settings.log_level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+    logging.config.dictConfig(
+        {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "default": {
+                    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                },
+                "uvicorn_default": {
+                    "()": "uvicorn.logging.DefaultFormatter",
+                    "fmt": "%(asctime)s - %(levelprefix)s %(message)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                    "use_colors": None,
+                },
+                "uvicorn_access": {
+                    "()": "uvicorn.logging.AccessFormatter",
+                    "fmt": '%(asctime)s - %(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s',
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                    "use_colors": None,
+                },
+            },
+            "handlers": {
+                "default": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "default",
+                },
+                "uvicorn_default": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "uvicorn_default",
+                },
+                "uvicorn_access": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "uvicorn_access",
+                },
+            },
+            "root": {
+                "level": settings.log_level,
+                "handlers": ["default"],
+            },
+            "loggers": {
+                "uvicorn": {
+                    "level": settings.log_level,
+                    "handlers": ["uvicorn_default"],
+                    "propagate": False,
+                },
+                "uvicorn.error": {
+                    "level": settings.log_level,
+                    "handlers": ["uvicorn_default"],
+                    "propagate": False,
+                },
+                "uvicorn.access": {
+                    "level": settings.log_level,
+                    "handlers": ["uvicorn_access"],
+                    "propagate": False,
+                },
+            },
+        }
     )
     # Squelch repeated messages from the meshcore library (e.g. rapid-fire
     # "Serial Connection started" when the port is contended).
