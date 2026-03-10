@@ -77,7 +77,7 @@ app/
 
 - `RadioManager.start_connection_monitor()` checks health every 5s.
 - `RadioManager.post_connect_setup()` delegates to `services/radio_lifecycle.py`.
-- Routers and shared dependencies should reach radio state through `services/radio_runtime.py`, not by importing `app.radio.radio_manager` directly.
+- Routers, startup/lifespan code, and fanout helpers should reach radio state through `services/radio_runtime.py`, not by importing `app.radio.radio_manager` directly.
 - Shared reconnect/setup helpers in `services/radio_lifecycle.py` are used by startup, the monitor, and manual reconnect/reboot flows before broadcasting healthy state.
 - Setup still includes handler registration, key export, time sync, contact/channel sync, polling/advert tasks.
 

@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from app.config import setup_logging
 from app.database import db
 from app.frontend_static import register_frontend_missing_fallback, register_frontend_static_routes
-from app.radio import RadioDisconnectedError, radio_manager
+from app.radio import RadioDisconnectedError
 from app.radio_sync import (
     stop_message_polling,
     stop_periodic_advert,
@@ -30,6 +30,7 @@ from app.routers import (
     statistics,
     ws,
 )
+from app.services.radio_runtime import radio_runtime as radio_manager
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -37,13 +38,8 @@ logger = logging.getLogger(__name__)
 
 async def _startup_radio_connect_and_setup() -> None:
     """Connect/setup the radio in the background so HTTP serving can start immediately."""
-    from app.services.radio_lifecycle import reconnect_and_prepare_radio
-
     try:
-        connected = await reconnect_and_prepare_radio(
-            radio_manager,
-            broadcast_on_success=True,
-        )
+        connected = await radio_manager.reconnect_and_prepare(broadcast_on_success=True)
         if connected:
             logger.info("Connected to radio")
         else:

@@ -83,6 +83,15 @@ class RadioRuntime:
         async with self.manager.radio_operation(name, **kwargs) as mc:
             yield mc
 
+    async def start_connection_monitor(self) -> None:
+        await self.manager.start_connection_monitor()
+
+    async def stop_connection_monitor(self) -> None:
+        await self.manager.stop_connection_monitor()
+
+    async def disconnect(self) -> None:
+        await self.manager.disconnect()
+
     async def prepare_connected(self, *, broadcast_on_success: bool = True) -> None:
         from app.services.radio_lifecycle import prepare_connected_radio
 

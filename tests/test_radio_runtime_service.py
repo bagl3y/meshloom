@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
@@ -73,3 +74,20 @@ async def test_radio_operation_delegates_to_current_manager():
         assert mc == "meshcore"
 
     assert manager.calls == [("sync_contacts", {"pause_polling": True})]
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_passthrough_methods_delegate_to_current_manager():
+    manager = _Manager(meshcore="meshcore", is_connected=True)
+    manager.start_connection_monitor = AsyncMock()
+    manager.stop_connection_monitor = AsyncMock()
+    manager.disconnect = AsyncMock()
+    runtime = RadioRuntime(manager)
+
+    await runtime.start_connection_monitor()
+    await runtime.stop_connection_monitor()
+    await runtime.disconnect()
+
+    manager.start_connection_monitor.assert_awaited_once()
+    manager.stop_connection_monitor.assert_awaited_once()
+    manager.disconnect.assert_awaited_once()
