@@ -1,7 +1,10 @@
 import { StrictMode, createElement, type ReactNode } from 'react';
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useRepeaterDashboard } from '../hooks/useRepeaterDashboard';
+import {
+  resetRepeaterDashboardCacheForTests,
+  useRepeaterDashboard,
+} from '../hooks/useRepeaterDashboard';
 import type { Conversation } from '../types';
 
 // Mock the api module
@@ -43,6 +46,7 @@ const repeaterConversation: Conversation = {
 describe('useRepeaterDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetRepeaterDashboardCacheForTests();
   });
 
   it('starts with logged out state', () => {
@@ -123,6 +127,7 @@ describe('useRepeaterDashboard', () => {
     expect(result.current.paneData.status).toEqual(statusData);
     expect(result.current.paneStates.status.loading).toBe(false);
     expect(result.current.paneStates.status.error).toBe(null);
+    expect(result.current.paneStates.status.fetched_at).toEqual(expect.any(Number));
   });
 
   it('refreshPane still issues requests under StrictMode remount probing', async () => {
@@ -303,5 +308,39 @@ describe('useRepeaterDashboard', () => {
     expect(mockApi.repeaterAdvertIntervals).toHaveBeenCalledTimes(1);
     expect(mockApi.repeaterOwnerInfo).toHaveBeenCalledTimes(1);
     expect(mockApi.repeaterLppTelemetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores dashboard state when navigating away and back to the same repeater', async () => {
+    const statusData = { battery_volts: 4.2 };
+    mockApi.repeaterLogin.mockResolvedValueOnce({ status: 'ok' });
+    mockApi.repeaterStatus.mockResolvedValueOnce(statusData);
+    mockApi.sendRepeaterCommand.mockResolvedValueOnce({
+      command: 'ver',
+      response: 'v2.1.0',
+      sender_timestamp: 1000,
+    });
+
+    const firstMount = renderHook(() => useRepeaterDashboard(repeaterConversation));
+
+    await act(async () => {
+      await firstMount.result.current.login('secret');
+      await firstMount.result.current.refreshPane('status');
+      await firstMount.result.current.sendConsoleCommand('ver');
+    });
+
+    expect(firstMount.result.current.loggedIn).toBe(true);
+    expect(firstMount.result.current.paneData.status).toEqual(statusData);
+    expect(firstMount.result.current.consoleHistory).toHaveLength(2);
+
+    firstMount.unmount();
+
+    const secondMount = renderHook(() => useRepeaterDashboard(repeaterConversation));
+
+    expect(secondMount.result.current.loggedIn).toBe(true);
+    expect(secondMount.result.current.loginError).toBe(null);
+    expect(secondMount.result.current.paneData.status).toEqual(statusData);
+    expect(secondMount.result.current.paneStates.status.loading).toBe(false);
+    expect(secondMount.result.current.consoleHistory).toHaveLength(2);
+    expect(secondMount.result.current.consoleHistory[1].response).toBe('v2.1.0');
   });
 });

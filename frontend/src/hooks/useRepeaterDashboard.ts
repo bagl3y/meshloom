@@ -17,6 +17,7 @@ import type {
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
+const MAX_CACHED_REPEATERS = 20;
 
 interface ConsoleEntry {
   command: string;
@@ -35,7 +36,15 @@ interface PaneData {
   lppTelemetry: RepeaterLppTelemetryResponse | null;
 }
 
-const INITIAL_PANE_STATE: PaneState = { loading: false, attempt: 0, error: null };
+interface RepeaterDashboardCacheEntry {
+  loggedIn: boolean;
+  loginError: string | null;
+  paneData: PaneData;
+  paneStates: Record<PaneName, PaneState>;
+  consoleHistory: ConsoleEntry[];
+}
+
+const INITIAL_PANE_STATE: PaneState = { loading: false, attempt: 0, error: null, fetched_at: null };
 
 function createInitialPaneStates(): Record<PaneName, PaneState> {
   return {
@@ -59,6 +68,67 @@ function createInitialPaneData(): PaneData {
     ownerInfo: null,
     lppTelemetry: null,
   };
+}
+
+const repeaterDashboardCache = new Map<string, RepeaterDashboardCacheEntry>();
+
+function clonePaneData(data: PaneData): PaneData {
+  return { ...data };
+}
+
+function normalizePaneStates(paneStates: Record<PaneName, PaneState>): Record<PaneName, PaneState> {
+  return {
+    status: { ...paneStates.status, loading: false },
+    neighbors: { ...paneStates.neighbors, loading: false },
+    acl: { ...paneStates.acl, loading: false },
+    radioSettings: { ...paneStates.radioSettings, loading: false },
+    advertIntervals: { ...paneStates.advertIntervals, loading: false },
+    ownerInfo: { ...paneStates.ownerInfo, loading: false },
+    lppTelemetry: { ...paneStates.lppTelemetry, loading: false },
+  };
+}
+
+function cloneConsoleHistory(consoleHistory: ConsoleEntry[]): ConsoleEntry[] {
+  return consoleHistory.map((entry) => ({ ...entry }));
+}
+
+function getCachedState(publicKey: string | null): RepeaterDashboardCacheEntry | null {
+  if (!publicKey) return null;
+  const cached = repeaterDashboardCache.get(publicKey);
+  if (!cached) return null;
+
+  repeaterDashboardCache.delete(publicKey);
+  repeaterDashboardCache.set(publicKey, cached);
+
+  return {
+    loggedIn: cached.loggedIn,
+    loginError: cached.loginError,
+    paneData: clonePaneData(cached.paneData),
+    paneStates: normalizePaneStates(cached.paneStates),
+    consoleHistory: cloneConsoleHistory(cached.consoleHistory),
+  };
+}
+
+function cacheState(publicKey: string, entry: RepeaterDashboardCacheEntry) {
+  repeaterDashboardCache.delete(publicKey);
+  repeaterDashboardCache.set(publicKey, {
+    loggedIn: entry.loggedIn,
+    loginError: entry.loginError,
+    paneData: clonePaneData(entry.paneData),
+    paneStates: normalizePaneStates(entry.paneStates),
+    consoleHistory: cloneConsoleHistory(entry.consoleHistory),
+  });
+
+  if (repeaterDashboardCache.size > MAX_CACHED_REPEATERS) {
+    const lruKey = repeaterDashboardCache.keys().next().value as string | undefined;
+    if (lruKey) {
+      repeaterDashboardCache.delete(lruKey);
+    }
+  }
+}
+
+export function resetRepeaterDashboardCacheForTests() {
+  repeaterDashboardCache.clear();
 }
 
 // Maps pane name to the API call
@@ -102,15 +172,24 @@ export interface UseRepeaterDashboardResult {
 export function useRepeaterDashboard(
   activeConversation: Conversation | null
 ): UseRepeaterDashboardResult {
-  const [loggedIn, setLoggedIn] = useState(false);
+  const conversationId =
+    activeConversation && activeConversation.type === 'contact' ? activeConversation.id : null;
+  const cachedState = getCachedState(conversationId);
+
+  const [loggedIn, setLoggedIn] = useState(cachedState?.loggedIn ?? false);
   const [loginLoading, setLoginLoading] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(cachedState?.loginError ?? null);
 
-  const [paneData, setPaneData] = useState<PaneData>(createInitialPaneData);
-  const [paneStates, setPaneStates] =
-    useState<Record<PaneName, PaneState>>(createInitialPaneStates);
+  const [paneData, setPaneData] = useState<PaneData>(
+    cachedState?.paneData ?? createInitialPaneData
+  );
+  const [paneStates, setPaneStates] = useState<Record<PaneName, PaneState>>(
+    cachedState?.paneStates ?? createInitialPaneStates
+  );
 
-  const [consoleHistory, setConsoleHistory] = useState<ConsoleEntry[]>([]);
+  const [consoleHistory, setConsoleHistory] = useState<ConsoleEntry[]>(
+    cachedState?.consoleHistory ?? []
+  );
   const [consoleLoading, setConsoleLoading] = useState(false);
 
   // Track which conversation we're operating on to avoid stale updates after
@@ -121,11 +200,26 @@ export function useRepeaterDashboard(
   // Guard against setting state after unmount (retry timers firing late)
   const mountedRef = useRef(true);
   useEffect(() => {
+    activeIdRef.current = conversationId;
+  }, [conversationId]);
+
+  useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!conversationId) return;
+    cacheState(conversationId, {
+      loggedIn,
+      loginError,
+      paneData,
+      paneStates,
+      consoleHistory,
+    });
+  }, [consoleHistory, conversationId, loggedIn, loginError, paneData, paneStates]);
 
   const getPublicKey = useCallback((): string | null => {
     if (!activeConversation || activeConversation.type !== 'contact') return null;
@@ -172,7 +266,12 @@ export function useRepeaterDashboard(
 
         setPaneStates((prev) => ({
           ...prev,
-          [pane]: { loading: true, attempt, error: null },
+          [pane]: {
+            loading: true,
+            attempt,
+            error: null,
+            fetched_at: prev[pane].fetched_at ?? null,
+          },
         }));
 
         try {
@@ -182,7 +281,7 @@ export function useRepeaterDashboard(
           setPaneData((prev) => ({ ...prev, [pane]: data }));
           setPaneStates((prev) => ({
             ...prev,
-            [pane]: { loading: false, attempt, error: null },
+            [pane]: { loading: false, attempt, error: null, fetched_at: Date.now() },
           }));
           return; // Success
         } catch (err) {
@@ -193,7 +292,12 @@ export function useRepeaterDashboard(
           if (attempt === MAX_RETRIES) {
             setPaneStates((prev) => ({
               ...prev,
-              [pane]: { loading: false, attempt, error: msg },
+              [pane]: {
+                loading: false,
+                attempt,
+                error: msg,
+                fetched_at: prev[pane].fetched_at ?? null,
+              },
             }));
             toast.error(`Failed to fetch ${pane}`, { description: msg });
           } else {

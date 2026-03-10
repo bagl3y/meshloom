@@ -364,6 +364,7 @@ export interface PaneState {
   loading: boolean;
   attempt: number;
   error: string | null;
+  fetched_at?: number | null;
 }
 
 export interface TraceResponse {

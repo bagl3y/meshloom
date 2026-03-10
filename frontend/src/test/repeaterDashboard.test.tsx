@@ -244,6 +244,20 @@ describe('RepeaterDashboard', () => {
     expect(screen.getByText('7.5 dB')).toBeInTheDocument();
   });
 
+  it('shows fetched time and relative age when pane data has been loaded', () => {
+    mockHook.loggedIn = true;
+    mockHook.paneStates.status = {
+      loading: false,
+      attempt: 1,
+      error: null,
+      fetched_at: Date.now(),
+    };
+
+    render(<RepeaterDashboard {...defaultProps} />);
+
+    expect(screen.getByText(/Fetched .*Just now/)).toBeInTheDocument();
+  });
+
   it('renders action buttons', () => {
     mockHook.loggedIn = true;
 
