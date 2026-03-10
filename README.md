@@ -224,11 +224,11 @@ npm run build                        # build the frontend
 | `MESHCORE_LOG_LEVEL` | INFO | DEBUG, INFO, WARNING, ERROR |
 | `MESHCORE_DATABASE_PATH` | data/meshcore.db | SQLite database path |
 | `MESHCORE_DISABLE_BOTS` | false | Disable bot system entirely (blocks execution and config) |
-| `MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK` | false | Enable periodic `get_msg()` fallback polling if radio events are not reliably surfacing messages |
+| `MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK` | false | Run aggressive 10-second `get_msg()` fallback polling instead of the default hourly audit task |
 
 Only one transport may be active at a time. If multiple are set, the server will refuse to start.
 
-By default the app relies on radio events plus MeshCore auto-fetch for incoming messages. If you see messages on the radio that never show up in the app, try `MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK=true` to add a more aggressive periodic `get_msg()` safety net.
+By default the app relies on radio events plus MeshCore auto-fetch for incoming messages, and also runs a low-frequency hourly audit poll. If that audit ever finds radio data that was not surfaced through event subscription, the backend logs an error and the UI shows a toast telling the operator to check the logs. If you see that warning, or if messages on the radio never show up in the app, try `MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK=true` to switch that task into a more aggressive 10-second `get_msg()` safety net.
 
 ## Additional Setup
 

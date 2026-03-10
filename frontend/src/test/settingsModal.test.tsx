@@ -183,9 +183,7 @@ describe('SettingsModal', () => {
     renderModal();
     openRadioSection();
 
-    expect(
-      screen.getByText(/Configured radio contact capacity/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Configured radio contact capacity/i)).toBeInTheDocument();
   });
 
   it('saves changed max contacts value through onSaveAppSettings', async () => {

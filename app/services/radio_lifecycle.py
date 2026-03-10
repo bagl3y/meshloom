@@ -1,8 +1,6 @@
 import asyncio
 import logging
 
-from app.config import settings
-
 logger = logging.getLogger(__name__)
 
 POST_CONNECT_SETUP_TIMEOUT_SECONDS = 300
@@ -137,10 +135,7 @@ async def run_post_connect_setup(radio_manager) -> None:
             # These tasks acquire their own locks when they need radio access.
             start_periodic_sync()
             start_periodic_advert()
-            if settings.enable_message_poll_fallback:
-                start_message_polling()
-            else:
-                logger.info("Fallback message polling disabled; relying on radio events")
+            start_message_polling()
 
             radio_manager._setup_complete = True
         finally:

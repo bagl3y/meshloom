@@ -751,8 +751,8 @@ class TestPostConnectSetupOrdering:
         mock_mc.commands.set_flood_scope.assert_awaited_once_with("")
 
     @pytest.mark.asyncio
-    async def test_message_polling_disabled_by_default(self):
-        """Post-connect setup does not start fallback polling unless explicitly enabled."""
+    async def test_message_polling_starts_hourly_audit_by_default(self):
+        """Post-connect setup always starts the message audit task by default."""
         from app.models import AppSettings
         from app.radio import RadioManager
 
@@ -780,11 +780,11 @@ class TestPostConnectSetupOrdering:
         ):
             await rm.post_connect_setup()
 
-        mock_start_message_polling.assert_not_called()
+        mock_start_message_polling.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_message_polling_starts_when_env_flag_enabled(self):
-        """Post-connect setup starts fallback polling when the env-backed setting is enabled."""
+        """Post-connect setup also starts the same task when aggressive fallback is enabled."""
         from app.models import AppSettings
         from app.radio import RadioManager
 
@@ -809,7 +809,6 @@ class TestPostConnectSetupOrdering:
             patch("app.radio_sync.start_periodic_advert"),
             patch("app.radio_sync.drain_pending_messages", new_callable=AsyncMock, return_value=0),
             patch("app.radio_sync.start_message_polling") as mock_start_message_polling,
-            patch("app.services.radio_lifecycle.settings.enable_message_poll_fallback", True),
         ):
             await rm.post_connect_setup()
 

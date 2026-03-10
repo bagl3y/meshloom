@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 
 from meshcore import EventType, MeshCore
 
+from app.config import settings
 from app.event_handlers import cleanup_expired_acks
 from app.models import Contact, ContactUpsert
 from app.radio import RadioOperationBusyError
@@ -28,6 +29,7 @@ from app.repository import (
 )
 from app.services.contact_reconciliation import reconcile_contact_messages
 from app.services.radio_runtime import radio_runtime as radio_manager
+from app.websocket import broadcast_error
 
 logger = logging.getLogger(__name__)
 
@@ -99,8 +101,11 @@ async def upsert_channel_from_radio_slot(payload: dict, *, on_radio: bool) -> st
 # Message poll task handle
 _message_poll_task: asyncio.Task | None = None
 
-# Message poll interval in seconds (10s gives DM ACKs plenty of time to arrive)
+# Message poll interval in seconds when aggressive fallback is enabled.
 MESSAGE_POLL_INTERVAL = 10
+
+# Always-on audit interval when aggressive fallback is disabled.
+MESSAGE_POLL_AUDIT_INTERVAL = 3600
 
 # Periodic advertisement task handle
 _advert_task: asyncio.Task | None = None
@@ -445,7 +450,10 @@ async def _message_poll_loop():
     """Background task that periodically polls for messages."""
     while True:
         try:
-            await asyncio.sleep(MESSAGE_POLL_INTERVAL)
+            aggressive_fallback = settings.enable_message_poll_fallback
+            await asyncio.sleep(
+                MESSAGE_POLL_INTERVAL if aggressive_fallback else MESSAGE_POLL_AUDIT_INTERVAL
+            )
 
             if radio_manager.is_connected and not is_polling_paused():
                 try:
@@ -456,10 +464,24 @@ async def _message_poll_loop():
                     ) as mc:
                         count = await poll_for_messages(mc)
                         if count > 0:
-                            logger.warning(
-                                "Poll loop caught %d message(s) missed by auto-fetch",
-                                count,
-                            )
+                            if aggressive_fallback:
+                                logger.warning(
+                                    "Poll loop caught %d message(s) missed by auto-fetch",
+                                    count,
+                                )
+                            else:
+                                logger.error(
+                                    "Periodic radio audit caught %d message(s) that were not "
+                                    "surfaced via event subscription. See README and consider "
+                                    "setting MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK=true to "
+                                    "enable more frequent polling.",
+                                    count,
+                                )
+                                broadcast_error(
+                                    "A periodic poll task has discovered radio inconsistencies.",
+                                    "Please check the logs for recommendations (search "
+                                    "'MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK').",
+                                )
                 except RadioOperationBusyError:
                     logger.debug("Skipping message poll: radio busy")
 
@@ -474,7 +496,16 @@ def start_message_polling():
     global _message_poll_task
     if _message_poll_task is None or _message_poll_task.done():
         _message_poll_task = asyncio.create_task(_message_poll_loop())
-        logger.info("Started periodic message polling (interval: %ds)", MESSAGE_POLL_INTERVAL)
+        if settings.enable_message_poll_fallback:
+            logger.info(
+                "Started periodic message polling task (aggressive fallback, interval: %ds)",
+                MESSAGE_POLL_INTERVAL,
+            )
+        else:
+            logger.info(
+                "Started periodic message audit task (interval: %ds)",
+                MESSAGE_POLL_AUDIT_INTERVAL,
+            )
 
 
 async def stop_message_polling():

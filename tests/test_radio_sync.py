@@ -1192,6 +1192,34 @@ class TestMessagePollLoopRaces:
     """Regression tests for disconnect/reconnect race paths in _message_poll_loop."""
 
     @pytest.mark.asyncio
+    async def test_uses_hourly_audit_interval_when_fallback_disabled(self):
+        rm, _mc = _make_connected_manager()
+        mock_sleep, sleep_calls = _sleep_controller(cancel_after=1)
+
+        with (
+            patch("app.radio_sync.radio_manager", rm),
+            patch("app.radio_sync.settings.enable_message_poll_fallback", False),
+            patch("asyncio.sleep", side_effect=mock_sleep),
+        ):
+            await _message_poll_loop()
+
+        assert sleep_calls == [3600]
+
+    @pytest.mark.asyncio
+    async def test_uses_fast_poll_interval_when_fallback_enabled(self):
+        rm, _mc = _make_connected_manager()
+        mock_sleep, sleep_calls = _sleep_controller(cancel_after=1)
+
+        with (
+            patch("app.radio_sync.radio_manager", rm),
+            patch("app.radio_sync.settings.enable_message_poll_fallback", True),
+            patch("asyncio.sleep", side_effect=mock_sleep),
+        ):
+            await _message_poll_loop()
+
+        assert sleep_calls == [10]
+
+    @pytest.mark.asyncio
     async def test_disconnect_race_between_precheck_and_lock(self):
         """RadioDisconnectedError between is_connected and radio_operation()
         is caught by the outer except — loop survives and continues."""
@@ -1247,6 +1275,46 @@ class TestMessagePollLoopRaces:
             await _message_poll_loop()
 
         mock_poll.assert_called_once_with(mock_mc)
+
+    @pytest.mark.asyncio
+    async def test_hourly_audit_crows_loudly_when_it_finds_hidden_messages(self):
+        rm, mock_mc = _make_connected_manager()
+        mock_sleep, _ = _sleep_controller(cancel_after=2)
+
+        with (
+            patch("app.radio_sync.radio_manager", rm),
+            patch("app.radio_sync.settings.enable_message_poll_fallback", False),
+            patch("asyncio.sleep", side_effect=mock_sleep),
+            patch("app.radio_sync.poll_for_messages", new_callable=AsyncMock, return_value=2),
+            patch("app.radio_sync.logger") as mock_logger,
+            patch("app.radio_sync.broadcast_error") as mock_broadcast_error,
+        ):
+            await _message_poll_loop()
+
+        mock_logger.error.assert_called_once()
+        mock_broadcast_error.assert_called_once_with(
+            "A periodic poll task has discovered radio inconsistencies.",
+            "Please check the logs for recommendations (search "
+            "'MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK').",
+        )
+
+    @pytest.mark.asyncio
+    async def test_fast_poll_logs_missed_messages_without_error_toast(self):
+        rm, mock_mc = _make_connected_manager()
+        mock_sleep, _ = _sleep_controller(cancel_after=2)
+
+        with (
+            patch("app.radio_sync.radio_manager", rm),
+            patch("app.radio_sync.settings.enable_message_poll_fallback", True),
+            patch("asyncio.sleep", side_effect=mock_sleep),
+            patch("app.radio_sync.poll_for_messages", new_callable=AsyncMock, return_value=2),
+            patch("app.radio_sync.logger") as mock_logger,
+            patch("app.radio_sync.broadcast_error") as mock_broadcast_error,
+        ):
+            await _message_poll_loop()
+
+        mock_logger.warning.assert_called_once()
+        mock_broadcast_error.assert_not_called()
 
 
 class TestPeriodicAdvertLoopRaces:
@@ -1356,7 +1424,9 @@ class TestPeriodicSyncLoopRaces:
             patch("app.radio_sync.radio_manager", rm),
             patch("asyncio.sleep", side_effect=mock_sleep),
             patch("app.radio_sync.cleanup_expired_acks") as mock_cleanup,
-            patch("app.radio_sync.should_run_full_periodic_sync", new_callable=AsyncMock) as mock_check,
+            patch(
+                "app.radio_sync.should_run_full_periodic_sync", new_callable=AsyncMock
+            ) as mock_check,
             patch("app.radio_sync.sync_and_offload_all", new_callable=AsyncMock) as mock_sync,
             patch("app.radio_sync.sync_radio_time", new_callable=AsyncMock) as mock_time,
         ):
@@ -1380,7 +1450,9 @@ class TestPeriodicSyncLoopRaces:
                 patch("app.radio_sync.radio_manager", rm),
                 patch("asyncio.sleep", side_effect=mock_sleep),
                 patch("app.radio_sync.cleanup_expired_acks") as mock_cleanup,
-                patch("app.radio_sync.should_run_full_periodic_sync", new_callable=AsyncMock) as mock_check,
+                patch(
+                    "app.radio_sync.should_run_full_periodic_sync", new_callable=AsyncMock
+                ) as mock_check,
                 patch("app.radio_sync.sync_and_offload_all", new_callable=AsyncMock) as mock_sync,
                 patch("app.radio_sync.sync_radio_time", new_callable=AsyncMock) as mock_time,
             ):
@@ -1405,7 +1477,11 @@ class TestPeriodicSyncLoopRaces:
             patch("app.radio_sync.radio_manager", rm),
             patch("asyncio.sleep", side_effect=mock_sleep),
             patch("app.radio_sync.cleanup_expired_acks") as mock_cleanup,
-            patch("app.radio_sync.should_run_full_periodic_sync", new_callable=AsyncMock, return_value=True),
+            patch(
+                "app.radio_sync.should_run_full_periodic_sync",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
             patch("app.radio_sync.sync_and_offload_all", new_callable=AsyncMock) as mock_sync,
             patch("app.radio_sync.sync_radio_time", new_callable=AsyncMock) as mock_time,
         ):
@@ -1425,7 +1501,11 @@ class TestPeriodicSyncLoopRaces:
             patch("app.radio_sync.radio_manager", rm),
             patch("asyncio.sleep", side_effect=mock_sleep),
             patch("app.radio_sync.cleanup_expired_acks") as mock_cleanup,
-            patch("app.radio_sync.should_run_full_periodic_sync", new_callable=AsyncMock, return_value=False),
+            patch(
+                "app.radio_sync.should_run_full_periodic_sync",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
             patch("app.radio_sync.sync_and_offload_all", new_callable=AsyncMock) as mock_sync,
             patch("app.radio_sync.sync_radio_time", new_callable=AsyncMock) as mock_time,
         ):
