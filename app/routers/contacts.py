@@ -26,6 +26,7 @@ from app.repository import (
     ContactRepository,
     MessageRepository,
 )
+from app.services.contact_reconciliation import reconcile_contact_messages
 
 logger = logging.getLogger(__name__)
 
@@ -181,18 +182,11 @@ async def create_contact(
     await ContactRepository.upsert(contact_data)
     logger.info("Created contact %s", lower_key[:12])
 
-    # Promote any prefix-stored messages to this full key
-    claimed = await MessageRepository.claim_prefix_messages(lower_key)
-    if claimed > 0:
-        logger.info("Claimed %d prefix messages for contact %s", claimed, lower_key[:12])
-
-    # Backfill sender_key on channel messages that match this contact's name
-    if request.name:
-        backfilled = await MessageRepository.backfill_channel_sender_key(lower_key, request.name)
-        if backfilled > 0:
-            logger.info(
-                "Backfilled sender_key on %d channel message(s) for %s", backfilled, request.name
-            )
+    await reconcile_contact_messages(
+        public_key=lower_key,
+        contact_name=request.name,
+        log=logger,
+    )
 
     # Trigger historical decryption if requested
     if request.try_historical:
@@ -318,18 +312,11 @@ async def sync_contacts_from_radio() -> dict:
             Contact.from_radio_dict(lower_key, contact_data, on_radio=True)
         )
         synced_keys.append(lower_key)
-        claimed = await MessageRepository.claim_prefix_messages(lower_key)
-        if claimed > 0:
-            logger.info("Claimed %d prefix DM message(s) for contact %s", claimed, public_key[:12])
-        adv_name = contact_data.get("adv_name")
-        if adv_name:
-            backfilled = await MessageRepository.backfill_channel_sender_key(lower_key, adv_name)
-            if backfilled > 0:
-                logger.info(
-                    "Backfilled sender_key on %d channel message(s) for %s",
-                    backfilled,
-                    adv_name,
-                )
+        await reconcile_contact_messages(
+            public_key=lower_key,
+            contact_name=contact_data.get("adv_name"),
+            log=logger,
+        )
         count += 1
 
     # Clear on_radio for contacts not found on the radio

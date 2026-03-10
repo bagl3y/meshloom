@@ -8,11 +8,13 @@ from app.models import CONTACT_TYPE_REPEATER, Contact
 from app.packet_processor import process_raw_packet
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
-    ContactNameHistoryRepository,
     ContactRepository,
-    MessageRepository,
 )
 from app.services import dm_ack_tracker
+from app.services.contact_reconciliation import (
+    claim_prefix_messages_for_contact,
+    record_contact_name_and_reconcile,
+)
 from app.services.messages import create_fallback_direct_message, increment_ack_and_broadcast
 from app.websocket import broadcast_event
 
@@ -76,7 +78,7 @@ async def on_contact_message(event: "Event") -> None:
         sender_pubkey = contact.public_key.lower()
 
         # Promote any prefix-stored messages to this full key
-        await MessageRepository.claim_prefix_messages(sender_pubkey)
+        await claim_prefix_messages_for_contact(public_key=sender_pubkey, log=logger)
 
         # Skip messages from repeaters - they only send CLI responses, not chat messages.
         # CLI responses are handled by the command endpoint and txt_type filter above.
@@ -232,19 +234,13 @@ async def on_new_contact(event: "Event") -> None:
     }
     await ContactRepository.upsert(contact_data)
 
-    # Record name history if contact has a name
     adv_name = payload.get("adv_name")
-    if adv_name:
-        await ContactNameHistoryRepository.record_name(
-            public_key.lower(), adv_name, int(time.time())
-        )
-        backfilled = await MessageRepository.backfill_channel_sender_key(public_key, adv_name)
-        if backfilled > 0:
-            logger.info(
-                "Backfilled sender_key on %d channel message(s) for %s",
-                backfilled,
-                adv_name,
-            )
+    await record_contact_name_and_reconcile(
+        public_key=public_key,
+        contact_name=adv_name,
+        timestamp=int(time.time()),
+        log=logger,
+    )
 
     # Read back from DB so the broadcast includes all fields (last_contacted,
     # last_read_at, etc.) matching the REST Contact shape exactly.

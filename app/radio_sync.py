@@ -24,8 +24,8 @@ from app.repository import (
     AppSettingsRepository,
     ChannelRepository,
     ContactRepository,
-    MessageRepository,
 )
+from app.services.contact_reconciliation import reconcile_contact_messages
 
 logger = logging.getLogger(__name__)
 
@@ -156,24 +156,11 @@ async def sync_and_offload_contacts(mc: MeshCore) -> dict:
             await ContactRepository.upsert(
                 Contact.from_radio_dict(public_key, contact_data, on_radio=False)
             )
-            claimed = await MessageRepository.claim_prefix_messages(public_key.lower())
-            if claimed > 0:
-                logger.info(
-                    "Claimed %d prefix DM message(s) for contact %s",
-                    claimed,
-                    public_key[:12],
-                )
-            adv_name = contact_data.get("adv_name")
-            if adv_name:
-                backfilled = await MessageRepository.backfill_channel_sender_key(
-                    public_key, adv_name
-                )
-                if backfilled > 0:
-                    logger.info(
-                        "Backfilled sender_key on %d channel message(s) for %s",
-                        backfilled,
-                        adv_name,
-                    )
+            await reconcile_contact_messages(
+                public_key=public_key,
+                contact_name=contact_data.get("adv_name"),
+                log=logger,
+            )
             synced += 1
 
             # Remove from radio

@@ -36,11 +36,10 @@ from app.models import (
 from app.repository import (
     ChannelRepository,
     ContactAdvertPathRepository,
-    ContactNameHistoryRepository,
     ContactRepository,
-    MessageRepository,
     RawPacketRepository,
 )
+from app.services.contact_reconciliation import record_contact_name_and_reconcile
 from app.services.messages import (
     create_dm_message_from_decrypted as _create_dm_message_from_decrypted,
 )
@@ -490,14 +489,6 @@ async def _process_advertisement(
         hop_count=new_path_len,
     )
 
-    # Record name history
-    if advert.name:
-        await ContactNameHistoryRepository.record_name(
-            public_key=advert.public_key.lower(),
-            name=advert.name,
-            timestamp=timestamp,
-        )
-
     contact_data = {
         "public_key": advert.public_key.lower(),
         "name": advert.name,
@@ -513,23 +504,12 @@ async def _process_advertisement(
     }
 
     await ContactRepository.upsert(contact_data)
-    claimed = await MessageRepository.claim_prefix_messages(advert.public_key.lower())
-    if claimed > 0:
-        logger.info(
-            "Claimed %d prefix DM message(s) for contact %s",
-            claimed,
-            advert.public_key[:12],
-        )
-    if advert.name:
-        backfilled = await MessageRepository.backfill_channel_sender_key(
-            advert.public_key, advert.name
-        )
-        if backfilled > 0:
-            logger.info(
-                "Backfilled sender_key on %d channel message(s) for %s",
-                backfilled,
-                advert.name,
-            )
+    await record_contact_name_and_reconcile(
+        public_key=advert.public_key,
+        contact_name=advert.name,
+        timestamp=timestamp,
+        log=logger,
+    )
 
     # Read back from DB so the broadcast includes all fields (last_contacted,
     # last_read_at, flags, on_radio, etc.) matching the REST Contact shape exactly.
