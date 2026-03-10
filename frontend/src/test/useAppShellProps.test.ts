@@ -186,4 +186,40 @@ describe('useAppShellProps', () => {
     });
     expect(args.fetchUndecryptedCount).toHaveBeenCalledTimes(1);
   });
+
+  it('does not fail cracked channel creation when undecrypted count refresh rejects', async () => {
+    mocks.api.createChannel.mockResolvedValue({
+      key: '22'.repeat(16),
+      name: 'Found',
+      is_hashtag: false,
+    });
+    mocks.api.getChannels.mockResolvedValue([
+      publicChannel,
+      { ...publicChannel, key: '22'.repeat(16), name: 'Found' },
+    ]);
+    mocks.api.decryptHistoricalPackets.mockResolvedValue({ decrypted_count: 4 });
+
+    const args = createArgs({
+      fetchUndecryptedCount: vi.fn(async () => {
+        throw new Error('refresh failed');
+      }),
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = renderHook(() => useAppShellProps(args));
+
+    await act(async () => {
+      await result.current.crackerProps.onChannelCreate('Found', '22'.repeat(16));
+    });
+
+    expect(mocks.api.decryptHistoricalPackets).toHaveBeenCalledWith({
+      key_type: 'channel',
+      channel_key: '22'.repeat(16),
+    });
+    expect(consoleError).toHaveBeenCalledWith(
+      'Failed to refresh undecrypted count after cracked channel create:',
+      expect.any(Error)
+    );
+
+    consoleError.mockRestore();
+  });
 });

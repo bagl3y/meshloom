@@ -188,7 +188,9 @@ export function useAppShellProps({
         key_type: 'channel',
         channel_key: created.key,
       });
-      await fetchUndecryptedCount();
+      void fetchUndecryptedCount().catch((error) => {
+        console.error('Failed to refresh undecrypted count after cracked channel create:', error);
+      });
     },
     [fetchUndecryptedCount, setChannels]
   );

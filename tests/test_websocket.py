@@ -5,7 +5,6 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from pydantic import ValidationError
 
 from app.websocket import SEND_TIMEOUT_SECONDS, WebSocketManager
 
@@ -262,8 +261,12 @@ class TestTypedEventSerialization:
             "data": {"message_id": 7, "ack_count": 2},
         }
 
-    def test_dump_ws_event_validates_supported_payloads(self):
+    def test_dump_ws_event_falls_back_to_raw_payload_when_validation_fails(self):
         from app.events import dump_ws_event
 
-        with pytest.raises(ValidationError):
-            dump_ws_event("message_acked", {"ack_count": 2})
+        serialized = dump_ws_event("message_acked", {"ack_count": 2})
+
+        assert json.loads(serialized) == {
+            "type": "message_acked",
+            "data": {"ack_count": 2},
+        }

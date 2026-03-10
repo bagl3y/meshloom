@@ -1,6 +1,7 @@
 """Typed WebSocket event contracts and serialization helpers."""
 
 import json
+import logging
 from typing import Any, Literal
 
 from pydantic import TypeAdapter
@@ -8,6 +9,8 @@ from typing_extensions import NotRequired, TypedDict
 
 from app.models import Channel, Contact, Message, MessagePath, RawPacketBroadcast
 from app.routers.health import HealthResponse
+
+logger = logging.getLogger(__name__)
 
 WsEventType = Literal[
     "health",
@@ -82,9 +85,16 @@ def dump_ws_event(event_type: str, data: Any) -> str:
     if adapter is None:
         return json.dumps({"type": event_type, "data": data})
 
-    validated = adapter.validate_python(data)
-    payload = adapter.dump_python(validated, mode="json")
-    return json.dumps({"type": event_type, "data": payload})
+    try:
+        validated = adapter.validate_python(data)
+        payload = adapter.dump_python(validated, mode="json")
+        return json.dumps({"type": event_type, "data": payload})
+    except Exception:
+        logger.exception(
+            "Failed to validate WebSocket payload for event %s; falling back to raw JSON envelope",
+            event_type,
+        )
+        return json.dumps({"type": event_type, "data": data})
 
 
 def dump_ws_event_payload(event_type: str, data: Any) -> Any:
