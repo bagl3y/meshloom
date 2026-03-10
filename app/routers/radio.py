@@ -207,6 +207,8 @@ async def send_advertisement() -> dict:
 
 async def _attempt_reconnect() -> dict:
     """Shared reconnection logic for reboot and reconnect endpoints."""
+    from app.services.radio_lifecycle import reconnect_and_prepare_radio
+
     if radio_manager.is_reconnecting:
         return {
             "status": "pending",
@@ -214,20 +216,22 @@ async def _attempt_reconnect() -> dict:
             "connected": False,
         }
 
-    success = await radio_manager.reconnect()
-    if not success:
-        raise HTTPException(
-            status_code=503, detail="Failed to reconnect. Check radio connection and power."
-        )
-
     try:
-        await radio_manager.post_connect_setup()
+        success = await reconnect_and_prepare_radio(
+            radio_manager,
+            broadcast_on_success=True,
+        )
     except Exception as e:
         logger.exception("Post-connect setup failed after reconnect")
         raise HTTPException(
             status_code=503,
             detail=f"Radio connected but setup failed: {e}",
         ) from e
+
+    if not success:
+        raise HTTPException(
+            status_code=503, detail="Failed to reconnect. Check radio connection and power."
+        )
 
     return {"status": "ok", "message": "Reconnected successfully", "connected": True}
 
@@ -260,13 +264,15 @@ async def reconnect_radio() -> dict:
     if no specific port is configured. Useful when the radio has been disconnected
     or power-cycled.
     """
+    from app.services.radio_lifecycle import prepare_connected_radio
+
     if radio_manager.is_connected:
         if radio_manager.is_setup_complete:
             return {"status": "ok", "message": "Already connected", "connected": True}
 
         logger.info("Radio connected but setup incomplete, retrying setup")
         try:
-            await radio_manager.post_connect_setup()
+            await prepare_connected_radio(radio_manager, broadcast_on_success=True)
             return {"status": "ok", "message": "Setup completed", "connected": True}
         except Exception as e:
             logger.exception("Post-connect setup failed")

@@ -37,13 +37,14 @@ logger = logging.getLogger(__name__)
 
 async def _startup_radio_connect_and_setup() -> None:
     """Connect/setup the radio in the background so HTTP serving can start immediately."""
-    try:
-        connected = await radio_manager.reconnect(broadcast_on_success=False)
-        if connected:
-            await radio_manager.post_connect_setup()
-            from app.websocket import broadcast_health
+    from app.services.radio_lifecycle import reconnect_and_prepare_radio
 
-            broadcast_health(True, radio_manager.connection_info)
+    try:
+        connected = await reconnect_and_prepare_radio(
+            radio_manager,
+            broadcast_on_success=True,
+        )
+        if connected:
             logger.info("Connected to radio")
         else:
             logger.warning("Failed to connect to radio on startup")
