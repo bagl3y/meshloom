@@ -184,9 +184,7 @@ describe('SettingsModal', () => {
     openRadioSection();
 
     expect(
-      screen.getByText(
-        /Favorite contacts stay loaded on the radio for DM ACK support up to this limit/i
-      )
+      screen.getByText(/Configured radio contact capacity/i)
     ).toBeInTheDocument();
   });
 

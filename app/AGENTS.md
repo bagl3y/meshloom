@@ -251,7 +251,7 @@ Main tables:
 
 Repository writes should prefer typed models such as `ContactUpsert` over ad hoc dict payloads when adding or updating schema-coupled data.
 
-`max_radio_contacts` now controls how many favorite contacts are kept loaded on the radio for ACK support. The app no longer rotates recent non-favorite contacts onto the radio during normal background maintenance.
+`max_radio_contacts` is the configured radio contact capacity baseline. Favorites reload first, the app refills non-favorite working-set contacts to about 80% of that capacity, and periodic offload triggers once occupancy reaches about 95%.
 
 `app_settings` fields in active model:
 - `max_radio_contacts`

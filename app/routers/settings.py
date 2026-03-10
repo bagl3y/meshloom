@@ -18,7 +18,10 @@ class AppSettingsUpdate(BaseModel):
         default=None,
         ge=1,
         le=1000,
-        description="Maximum favorite contacts to keep loaded on the radio for ACK support",
+        description=(
+            "Configured radio contact capacity used for maintenance thresholds and "
+            "background refill behavior"
+        ),
     )
     auto_decrypt_dm_on_advert: bool | None = Field(
         default=None,

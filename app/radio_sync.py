@@ -11,6 +11,7 @@ don't work reliably.
 
 import asyncio
 import logging
+import math
 import time
 from contextlib import asynccontextmanager
 
@@ -139,8 +140,57 @@ async def pause_polling():
 # Background task handle
 _sync_task: asyncio.Task | None = None
 
-# Sync interval in seconds (10 minutes)
-SYNC_INTERVAL = 600
+# Periodic maintenance check interval in seconds (5 minutes)
+SYNC_INTERVAL = 300
+
+# Reload non-favorite contacts up to 80% of configured radio capacity after offload.
+RADIO_CONTACT_REFILL_RATIO = 0.80
+
+# Trigger a full offload/reload once occupancy reaches 95% of configured capacity.
+RADIO_CONTACT_FULL_SYNC_RATIO = 0.95
+
+
+def _compute_radio_contact_limits(max_contacts: int) -> tuple[int, int]:
+    """Return (refill_target, full_sync_trigger) for the configured capacity."""
+    capacity = max(1, max_contacts)
+    refill_target = max(1, min(capacity, int((capacity * RADIO_CONTACT_REFILL_RATIO) + 0.5)))
+    full_sync_trigger = max(
+        refill_target,
+        min(capacity, math.ceil(capacity * RADIO_CONTACT_FULL_SYNC_RATIO)),
+    )
+    return refill_target, full_sync_trigger
+
+
+async def should_run_full_periodic_sync(mc: MeshCore) -> bool:
+    """Check current radio occupancy and decide whether to offload/reload."""
+    app_settings = await AppSettingsRepository.get()
+    capacity = app_settings.max_radio_contacts
+    refill_target, full_sync_trigger = _compute_radio_contact_limits(capacity)
+
+    result = await mc.commands.get_contacts()
+    if result is None or result.type == EventType.ERROR:
+        logger.warning("Periodic sync occupancy check failed: %s", result)
+        return False
+
+    current_contacts = len(result.payload or {})
+    if current_contacts >= full_sync_trigger:
+        logger.info(
+            "Running full radio sync: %d/%d contacts on radio (trigger=%d, refill_target=%d)",
+            current_contacts,
+            capacity,
+            full_sync_trigger,
+            refill_target,
+        )
+        return True
+
+    logger.debug(
+        "Skipping full radio sync: %d/%d contacts on radio (trigger=%d, refill_target=%d)",
+        current_contacts,
+        capacity,
+        full_sync_trigger,
+        refill_target,
+    )
+    return False
 
 
 async def sync_and_offload_contacts(mc: MeshCore) -> dict:
@@ -311,9 +361,9 @@ async def sync_and_offload_all(mc: MeshCore) -> dict:
     # Ensure default channels exist
     await ensure_default_channels()
 
-    # Reload favorites back onto the radio immediately so they do not stay
-    # in on_radio=False limbo after offload. Pass mc directly since the
-    # caller already holds the radio operation lock (asyncio.Lock is not
+    # Reload favorites plus a working-set fill back onto the radio immediately
+    # so they do not stay in on_radio=False limbo after offload. Pass mc directly
+    # since the caller already holds the radio operation lock (asyncio.Lock is not
     # reentrant).
     reload_result = await sync_recent_contacts_to_radio(force=True, mc=mc)
 
@@ -580,8 +630,8 @@ async def _periodic_sync_loop():
                     "periodic_sync",
                     blocking=False,
                 ) as mc:
-                    logger.debug("Running periodic radio sync")
-                    await sync_and_offload_all(mc)
+                    if await should_run_full_periodic_sync(mc):
+                        await sync_and_offload_all(mc)
                     await sync_radio_time(mc)
             except RadioOperationBusyError:
                 logger.debug("Skipping periodic sync: radio busy")
@@ -627,12 +677,14 @@ async def _sync_contacts_to_radio_inner(mc: MeshCore) -> dict:
     2. Most recently interacted-with non-repeaters
     3. Most recently advert-heard non-repeaters without interaction history
 
-    Contacts are loaded up to max_radio_contacts.
+    Favorite contacts are always reloaded first, up to the configured capacity.
+    Additional non-favorite fill stops at the refill target (80% of capacity).
 
     Caller must hold the radio operation lock and pass a valid MeshCore instance.
     """
     app_settings = await AppSettingsRepository.get()
     max_contacts = app_settings.max_radio_contacts
+    refill_target, _full_sync_trigger = _compute_radio_contact_limits(max_contacts)
     selected_contacts: list[Contact] = []
     selected_keys: set[str] = set()
 
@@ -659,7 +711,7 @@ async def _sync_contacts_to_radio_inner(mc: MeshCore) -> dict:
         if len(selected_contacts) >= max_contacts:
             break
 
-    if len(selected_contacts) < max_contacts:
+    if len(selected_contacts) < refill_target:
         for contact in await ContactRepository.get_recently_contacted_non_repeaters(
             limit=max_contacts
         ):
@@ -668,10 +720,10 @@ async def _sync_contacts_to_radio_inner(mc: MeshCore) -> dict:
                 continue
             selected_keys.add(key)
             selected_contacts.append(contact)
-            if len(selected_contacts) >= max_contacts:
+            if len(selected_contacts) >= refill_target:
                 break
 
-    if len(selected_contacts) < max_contacts:
+    if len(selected_contacts) < refill_target:
         for contact in await ContactRepository.get_recently_advertised_non_repeaters(
             limit=max_contacts
         ):
@@ -680,13 +732,14 @@ async def _sync_contacts_to_radio_inner(mc: MeshCore) -> dict:
                 continue
             selected_keys.add(key)
             selected_contacts.append(contact)
-            if len(selected_contacts) >= max_contacts:
+            if len(selected_contacts) >= refill_target:
                 break
 
     logger.debug(
-        "Selected %d contacts to sync (%d favorites, limit=%d)",
+        "Selected %d contacts to sync (%d favorites, refill_target=%d, capacity=%d)",
         len(selected_contacts),
         favorite_contacts_loaded,
+        refill_target,
         max_contacts,
     )
     return await _load_contacts_to_radio(mc, selected_contacts)
@@ -811,7 +864,9 @@ async def sync_recent_contacts_to_radio(force: bool = False, mc: MeshCore | None
     Load contacts to the radio for DM ACK support.
 
     Fill order is favorites, then recently contacted non-repeaters,
-    then recently advert-heard non-repeaters until max_radio_contacts.
+    then recently advert-heard non-repeaters. Favorites are always reloaded
+    up to the configured capacity; additional non-favorite fill stops at the
+    80% refill target.
     Only runs at most once every CONTACT_SYNC_THROTTLE_SECONDS unless forced.
 
     Args:

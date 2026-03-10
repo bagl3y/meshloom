@@ -444,7 +444,7 @@ mc.subscribe(EventType.ACK, handler)
 | `MESHCORE_DISABLE_BOTS` | `false` | Disable bot system entirely (blocks execution and config) |
 | `MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK` | `false` | Enable periodic `get_msg()` fallback polling if radio events are not reliably surfacing messages |
 
-**Note:** Runtime app settings are stored in the database (`app_settings` table), not environment variables. These include `max_radio_contacts`, `auto_decrypt_dm_on_advert`, `sidebar_sort_order`, `advert_interval`, `last_advert_time`, `favorites`, `last_message_times`, `flood_scope`, `blocked_keys`, and `blocked_names`. `max_radio_contacts` now means favorite contacts kept loaded on the radio for ACK support, not a recent-contact rotation pool. They are configured via `GET/PATCH /api/settings`. MQTT, bot, webhook, and Apprise configs are stored in the `fanout_configs` table, managed via `/api/fanout`.
+**Note:** Runtime app settings are stored in the database (`app_settings` table), not environment variables. These include `max_radio_contacts`, `auto_decrypt_dm_on_advert`, `sidebar_sort_order`, `advert_interval`, `last_advert_time`, `favorites`, `last_message_times`, `flood_scope`, `blocked_keys`, and `blocked_names`. `max_radio_contacts` is the configured radio contact capacity baseline used by background maintenance: favorites reload first, non-favorite fill targets about 80% of that value, and full offload/reload triggers around 95% occupancy. They are configured via `GET/PATCH /api/settings`. MQTT, bot, webhook, and Apprise configs are stored in the `fanout_configs` table, managed via `/api/fanout`.
 
 Byte-perfect channel retries are user-triggered via `POST /api/messages/channel/{message_id}/resend` and are allowed for 30 seconds after the original send.
 

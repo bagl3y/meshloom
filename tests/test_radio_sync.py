@@ -218,7 +218,7 @@ class TestSyncRecentContactsToRadio:
         await _insert_contact("ee" * 32, "Eve", last_advert=2500)
 
         await AppSettingsRepository.update(
-            max_radio_contacts=4, favorites=[Favorite(type="contact", id=KEY_A)]
+            max_radio_contacts=5, favorites=[Favorite(type="contact", id=KEY_A)]
         )
 
         mock_mc = MagicMock()
@@ -235,6 +235,33 @@ class TestSyncRecentContactsToRadio:
             call.args[0]["public_key"] for call in mock_mc.commands.add_contact.call_args_list
         ]
         assert loaded_keys == [KEY_A, KEY_B, "cc" * 32, "dd" * 32]
+
+    @pytest.mark.asyncio
+    async def test_favorites_can_exceed_non_favorite_refill_target(self, test_db):
+        """Favorites are reloaded even when they exceed the 80% background refill target."""
+        favorite_keys = ["aa" * 32, "bb" * 32, "cc" * 32, "dd" * 32]
+        for index, key in enumerate(favorite_keys):
+            await _insert_contact(key, f"Favorite{index}", last_contacted=2000 - index)
+
+        await AppSettingsRepository.update(
+            max_radio_contacts=4,
+            favorites=[Favorite(type="contact", id=key) for key in favorite_keys],
+        )
+
+        mock_mc = MagicMock()
+        mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
+        mock_result = MagicMock()
+        mock_result.type = EventType.OK
+        mock_mc.commands.add_contact = AsyncMock(return_value=mock_result)
+
+        radio_manager._meshcore = mock_mc
+        result = await sync_recent_contacts_to_radio()
+
+        assert result["loaded"] == 4
+        loaded_keys = [
+            call.args[0]["public_key"] for call in mock_mc.commands.add_contact.call_args_list
+        ]
+        assert loaded_keys == favorite_keys
 
     @pytest.mark.asyncio
     async def test_advert_fill_skips_repeaters(self, test_db):
@@ -1288,6 +1315,36 @@ class TestPeriodicSyncLoopRaces:
     """Regression tests for disconnect/reconnect race paths in _periodic_sync_loop."""
 
     @pytest.mark.asyncio
+    async def test_should_run_full_periodic_sync_at_trigger_threshold(self, test_db):
+        """Occupancy at 95% of configured capacity triggers a full offload/reload."""
+        from app.radio_sync import should_run_full_periodic_sync
+
+        await AppSettingsRepository.update(max_radio_contacts=100)
+
+        mock_mc = MagicMock()
+        mock_result = MagicMock()
+        mock_result.type = EventType.NEW_CONTACT
+        mock_result.payload = {f"{i:064x}": {"adv_name": f"Node{i}"} for i in range(95)}
+        mock_mc.commands.get_contacts = AsyncMock(return_value=mock_result)
+
+        assert await should_run_full_periodic_sync(mock_mc) is True
+
+    @pytest.mark.asyncio
+    async def test_should_skip_full_periodic_sync_below_trigger_threshold(self, test_db):
+        """Occupancy below 95% of configured capacity does not trigger offload/reload."""
+        from app.radio_sync import should_run_full_periodic_sync
+
+        await AppSettingsRepository.update(max_radio_contacts=100)
+
+        mock_mc = MagicMock()
+        mock_result = MagicMock()
+        mock_result.type = EventType.NEW_CONTACT
+        mock_result.payload = {f"{i:064x}": {"adv_name": f"Node{i}"} for i in range(94)}
+        mock_mc.commands.get_contacts = AsyncMock(return_value=mock_result)
+
+        assert await should_run_full_periodic_sync(mock_mc) is False
+
+    @pytest.mark.asyncio
     async def test_disconnect_race_between_precheck_and_lock(self):
         """RadioDisconnectedError between is_connected and radio_operation()
         is caught by the outer except — loop survives and continues."""
@@ -1299,12 +1356,14 @@ class TestPeriodicSyncLoopRaces:
             patch("app.radio_sync.radio_manager", rm),
             patch("asyncio.sleep", side_effect=mock_sleep),
             patch("app.radio_sync.cleanup_expired_acks") as mock_cleanup,
+            patch("app.radio_sync.should_run_full_periodic_sync", new_callable=AsyncMock) as mock_check,
             patch("app.radio_sync.sync_and_offload_all", new_callable=AsyncMock) as mock_sync,
             patch("app.radio_sync.sync_radio_time", new_callable=AsyncMock) as mock_time,
         ):
             await _periodic_sync_loop()
 
         mock_cleanup.assert_called_once()
+        mock_check.assert_not_called()
         mock_sync.assert_not_called()
         mock_time.assert_not_called()
         assert len(sleep_calls) == 2
@@ -1321,6 +1380,7 @@ class TestPeriodicSyncLoopRaces:
                 patch("app.radio_sync.radio_manager", rm),
                 patch("asyncio.sleep", side_effect=mock_sleep),
                 patch("app.radio_sync.cleanup_expired_acks") as mock_cleanup,
+                patch("app.radio_sync.should_run_full_periodic_sync", new_callable=AsyncMock) as mock_check,
                 patch("app.radio_sync.sync_and_offload_all", new_callable=AsyncMock) as mock_sync,
                 patch("app.radio_sync.sync_radio_time", new_callable=AsyncMock) as mock_time,
             ):
@@ -1329,6 +1389,7 @@ class TestPeriodicSyncLoopRaces:
             lock.release()
 
         mock_cleanup.assert_called_once()
+        mock_check.assert_not_called()
         mock_sync.assert_not_called()
         mock_time.assert_not_called()
 
@@ -1344,6 +1405,7 @@ class TestPeriodicSyncLoopRaces:
             patch("app.radio_sync.radio_manager", rm),
             patch("asyncio.sleep", side_effect=mock_sleep),
             patch("app.radio_sync.cleanup_expired_acks") as mock_cleanup,
+            patch("app.radio_sync.should_run_full_periodic_sync", new_callable=AsyncMock, return_value=True),
             patch("app.radio_sync.sync_and_offload_all", new_callable=AsyncMock) as mock_sync,
             patch("app.radio_sync.sync_radio_time", new_callable=AsyncMock) as mock_time,
         ):
@@ -1351,4 +1413,24 @@ class TestPeriodicSyncLoopRaces:
 
         mock_cleanup.assert_called_once()
         mock_sync.assert_called_once_with(mock_mc)
+        mock_time.assert_called_once_with(mock_mc)
+
+    @pytest.mark.asyncio
+    async def test_skips_full_sync_below_threshold_but_still_syncs_time(self):
+        """Periodic maintenance still does time sync when occupancy is below the trigger."""
+        rm, mock_mc = _make_connected_manager()
+        mock_sleep, _ = _sleep_controller(cancel_after=2)
+
+        with (
+            patch("app.radio_sync.radio_manager", rm),
+            patch("asyncio.sleep", side_effect=mock_sleep),
+            patch("app.radio_sync.cleanup_expired_acks") as mock_cleanup,
+            patch("app.radio_sync.should_run_full_periodic_sync", new_callable=AsyncMock, return_value=False),
+            patch("app.radio_sync.sync_and_offload_all", new_callable=AsyncMock) as mock_sync,
+            patch("app.radio_sync.sync_radio_time", new_callable=AsyncMock) as mock_time,
+        ):
+            await _periodic_sync_loop()
+
+        mock_cleanup.assert_called_once()
+        mock_sync.assert_not_called()
         mock_time.assert_called_once_with(mock_mc)

@@ -575,7 +575,8 @@ export function SettingsRadioSection({
           onChange={(e) => setMaxRadioContacts(e.target.value)}
         />
         <p className="text-xs text-muted-foreground">
-          Favorite contacts stay loaded on the radio for DM ACK support up to this limit (1-1000)
+          Configured radio contact capacity. Favorites reload first, then background maintenance
+          refills to about 80% of this value and offloads once occupancy reaches about 95%.
         </p>
       </div>
 
