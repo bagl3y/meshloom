@@ -51,6 +51,12 @@ frontend/src/
 ├── components/
 │   ├── AppShell.tsx            # App-shell layout: status, sidebar, search/settings panes, cracker, modals
 │   ├── ConversationPane.tsx    # Active conversation surface selection (map/raw/repeater/chat/empty)
+│   ├── visualizer/
+│   │   ├── useVisualizerData3D.ts   # Packet→graph data pipeline, repeat aggregation, simulation state
+│   │   ├── useVisualizer3DScene.ts  # Three.js scene lifecycle, buffers, hover/pin interaction
+│   │   ├── VisualizerControls.tsx   # Visualizer legends and control panel overlay
+│   │   ├── VisualizerTooltip.tsx    # Hover/pin node detail overlay
+│   │   └── shared.ts                # Graph node/link types and shared rendering helpers
 │   └── ...
 ├── utils/
 │   ├── urlHash.ts              # Hash parsing and encoding
@@ -216,6 +222,7 @@ High-level state is delegated to hooks:
 ### Visualizer behavior
 
 - `VisualizerView.tsx` hosts `PacketVisualizer3D.tsx` (desktop split-pane and mobile tabs).
+- `PacketVisualizer3D.tsx` is now a thin composition shell over visualizer-specific hooks/components in `components/visualizer/`.
 - `PacketVisualizer3D` uses persistent Three.js geometries for links/highlights/particles and updates typed-array buffers in-place per frame.
 - Packet repeat aggregation keys prefer decoder `messageHash` (path-insensitive), with hash fallback for malformed packets.
 - Raw-packet decoding in `RawPacketList.tsx` and `visualizerUtils.ts` relies on the multibyte-aware decoder fork; keep frontend packet parsing aligned with backend `path_utils.py`.
