@@ -28,28 +28,29 @@ Ancillary AGENTS.md files which should generally not be reviewed unless specific
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Frontend (React)                         │
+│                         Frontend (React)                        │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐ │
 │  │ StatusBar│  │ Sidebar  │  │MessageList│  │  MessageInput   │ │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────────────┘ │
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │      CrackerPanel (global collapsible, WebGPU cracking)    │ │
 │  └────────────────────────────────────────────────────────────┘ │
-│                           │                                      │
-│                    useWebSocket ←──── Real-time updates          │
-│                           │                                      │
-│                      api.ts ←──── REST API calls                 │
-└───────────────────────────┼──────────────────────────────────────┘
+│                           │                                     │
+│                    useWebSocket ←──── Real-time updates         │
+│                           │                                     │
+│                      api.ts ←──── REST API calls                │
+└───────────────────────────┼─────────────────────────────────────┘
                             │ HTTP + WebSocket (/api/*)
 ┌───────────────────────────┼──────────────────────────────────────┐
 │                      Backend (FastAPI)                           │
-│  ┌──────────┐  ┌──────────────┐  ┌────────────┐  ┌───────────┐  │
-│  │ Routers  │→ │ Repositories │→ │  SQLite DB │  │ WebSocket │  │
-│  └──────────┘  └──────────────┘  └────────────┘  │  Manager  │  │
-│        ↓                                          └───────────┘  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │              RadioManager + Event Handlers               │   │
-│  └──────────────────────────────────────────────────────────┘   │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────┐  ┌────────────┐    │
+│  │ Routers  │→ │ Services │→ │ Repositories │→ │  SQLite DB │    │
+│  └──────────┘  └──────────┘  └──────────────┘  └────────────┘    │
+│        ↓                         │                ┌───────────┐  │
+│  ┌──────────────────────────┐    └──────────────→ │ WebSocket │  │
+│  │ RadioManager + lifecycle │                     │  Manager  │  │
+│  │ / event adapters         │                     └───────────┘  │
+│  └──────────────────────────┘                                    │
 └───────────────────────────┼──────────────────────────────────────┘
                             │ Serial / TCP / BLE
                      ┌──────┴──────┐
@@ -142,7 +143,7 @@ MeshCore firmware can encode path hops as 1-byte, 2-byte, or 3-byte identifiers.
 
 1. User types message → clicks send
 2. `api.sendChannelMessage()` → POST to backend
-3. Backend calls `radio_manager.meshcore.commands.send_chan_msg()`
+3. Backend route delegates to service-layer send orchestration, which acquires the radio lock and calls MeshCore commands
 4. Message stored in database with `outgoing=true`
 5. For direct messages: ACK tracked; for channel: repeat detection
 
@@ -162,6 +163,7 @@ This message-layer echo/path handling is independent of raw-packet storage dedup
 │   ├── AGENTS.md           # Backend documentation
 │   ├── main.py             # App entry, lifespan
 │   ├── routers/            # API endpoints
+│   ├── services/           # Shared backend orchestration/domain services
 │   ├── packet_processor.py # Raw packet pipeline, dedup, path handling
 │   ├── repository/         # Database CRUD (contacts, channels, messages, raw_packets, settings, fanout)
 │   ├── event_handlers.py   # Radio events
@@ -250,6 +252,8 @@ Key test files:
 - `tests/test_messages_search.py` - Message search, around endpoint, forward pagination
 - `tests/test_rx_log_data.py` - on_rx_log_data event handler integration
 - `tests/test_ack_tracking_wiring.py` - DM ACK tracking extraction and wiring
+- `tests/test_radio_lifecycle_service.py` - Radio reconnect/setup orchestration helpers
+- `tests/test_radio_commands_service.py` - Radio config/private-key service workflows
 - `tests/test_health_mqtt_status.py` - Health endpoint MQTT status field
 - `tests/test_community_mqtt.py` - Community MQTT publisher (JWT, packet format, hash, broadcast)
 - `tests/test_radio_sync.py` - Radio sync, periodic tasks, and contact offload back to the radio

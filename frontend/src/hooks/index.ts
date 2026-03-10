@@ -5,3 +5,4 @@ export { useRepeaterDashboard } from './useRepeaterDashboard';
 export { useAppSettings } from './useAppSettings';
 export { useConversationRouter } from './useConversationRouter';
 export { useContactsAndChannels } from './useContactsAndChannels';
+export { useRealtimeAppState } from './useRealtimeAppState';

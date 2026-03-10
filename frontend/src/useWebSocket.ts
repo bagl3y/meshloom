@@ -12,7 +12,7 @@ interface SuccessEvent {
   details?: string;
 }
 
-interface UseWebSocketOptions {
+export interface UseWebSocketOptions {
   onHealth?: (health: HealthStatus) => void;
   onMessage?: (message: Message) => void;
   onContact?: (contact: Contact) => void;

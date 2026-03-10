@@ -25,6 +25,7 @@ frontend/src/
 ├── api.ts                  # Typed REST client
 ├── types.ts                # Shared TS contracts
 ├── useWebSocket.ts         # WS lifecycle + event dispatch
+├── wsEvents.ts             # Typed WS event parsing / discriminated union
 ├── messageCache.ts         # Conversation-scoped cache
 ├── prefetch.ts             # Consumes prefetched API promises started in index.html
 ├── index.css               # Global styles/utilities
@@ -36,6 +37,7 @@ frontend/src/
 │   ├── index.ts            # Central re-export of all hooks
 │   ├── useConversationMessages.ts  # Fetch, pagination, dedup, ACK buffering
 │   ├── useUnreadCounts.ts          # Unread counters, mentions, recent-sort timestamps
+│   ├── useRealtimeAppState.ts      # WebSocket event application and reconnect recovery
 │   ├── useRepeaterDashboard.ts      # Repeater dashboard state (login, panes, console, retries)
 │   ├── useRadioControl.ts          # Radio health/config state, reconnection
 │   ├── useAppSettings.ts           # Settings, favorites, preferences migration
@@ -138,8 +140,11 @@ frontend/src/
     ├── useConversationMessages.race.test.ts
     ├── useRepeaterDashboard.test.ts
     ├── useContactsAndChannels.test.ts
+    ├── useRealtimeAppState.test.ts
+    ├── useUnreadCounts.test.ts
     ├── useWebSocket.dispatch.test.ts
-    └── useWebSocket.lifecycle.test.ts
+    ├── useWebSocket.lifecycle.test.ts
+    └── wsEvents.test.ts
 
 ```
 
@@ -154,12 +159,14 @@ frontend/src/
 - `useConversationRouter`: URL hash → active conversation routing
 - `useConversationMessages`: fetch, pagination, dedup/update helpers
 - `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps
+- `useRealtimeAppState`: typed WS event application, reconnect recovery, cache/unread coordination
 - `useRepeaterDashboard`: repeater dashboard state (login, pane data/retries, console, actions)
 
 ### Initial load + realtime
 
 - Initial data: REST fetches (`api.ts`) for config/settings/channels/contacts/unreads.
 - WebSocket: realtime deltas/events.
+- On reconnect, `App.tsx` refetches channels and contacts, refreshes unread counts, and reconciles the active conversation to recover disconnect-window drift.
 - On WS connect, backend sends `health` only; contacts/channels still come from REST.
 
 ### New Message modal
@@ -193,6 +200,7 @@ frontend/src/
 
 - Auto reconnect (3s) with cleanup guard on unmount.
 - Heartbeat ping every 30s.
+- Incoming JSON is parsed through `wsEvents.ts`, which returns a typed discriminated union for known events and a centralized `unknown` fallback.
 - Event handlers: `health`, `message`, `contact`, `raw_packet`, `message_acked`, `contact_deleted`, `channel_deleted`, `error`, `success`, `pong` (ignored).
 - For `raw_packet` events, use `observation_id` as event identity; `id` is a storage reference and may repeat.
 

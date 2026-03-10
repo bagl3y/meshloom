@@ -14,11 +14,11 @@ import { useWebSocket } from './useWebSocket';
 import {
   useUnreadCounts,
   useConversationMessages,
-  getMessageContentKey,
   useRadioControl,
   useAppSettings,
   useConversationRouter,
   useContactsAndChannels,
+  useRealtimeAppState,
 } from './hooks';
 import * as messageCache from './messageCache';
 import { StatusBar } from './components/StatusBar';
@@ -62,24 +62,11 @@ import {
   SheetTitle,
 } from './components/ui/sheet';
 import { Toaster, toast } from './components/ui/sonner';
-import { getStateKey } from './utils/conversationState';
-import { appendRawPacketUnique } from './utils/rawPacketIdentity';
 import { messageContainsMention } from './utils/messageParser';
-import { mergeContactIntoList } from './utils/contactMerge';
 import { getLocalLabel, getContrastTextColor } from './utils/localLabel';
 import { cn } from '@/lib/utils';
 import type { SearchNavigateTarget } from './components/SearchView';
-import type {
-  Channel,
-  Contact,
-  Conversation,
-  HealthStatus,
-  Message,
-  MessagePath,
-  RawPacket,
-} from './types';
-
-const MAX_RAW_PACKETS = 500;
+import type { Channel, Conversation, Message, RawPacket } from './types';
 
 export function App() {
   const messageInputRef = useRef<MessageInputHandle>(null);
@@ -233,6 +220,29 @@ export function App() {
     return contact?.type === CONTACT_TYPE_REPEATER;
   }, [activeConversation, contacts]);
 
+  const wsHandlers = useRealtimeAppState({
+    prevHealthRef,
+    setHealth,
+    fetchConfig,
+    setRawPackets,
+    triggerReconcile,
+    refreshUnreads,
+    setChannels,
+    fetchAllContacts,
+    setContacts,
+    blockedKeysRef,
+    blockedNamesRef,
+    activeConversationRef,
+    hasNewerMessagesRef,
+    addMessageIfNew,
+    trackNewMessage,
+    incrementUnread,
+    checkMention,
+    pendingDeleteFallbackRef,
+    setActiveConversation,
+    updateMessageAck,
+  });
+
   const mergeChannelIntoList = useCallback(
     (updated: Channel) => {
       setChannels((prev) => {
@@ -246,185 +256,6 @@ export function App() {
       });
     },
     [setChannels]
-  );
-
-  // WebSocket handlers - memoized to prevent reconnection loops
-  const wsHandlers = useMemo(
-    () => ({
-      onHealth: (data: HealthStatus) => {
-        const prev = prevHealthRef.current;
-        prevHealthRef.current = data;
-        setHealth(data);
-        const initializationCompleted =
-          prev !== null &&
-          prev.radio_connected &&
-          prev.radio_initializing &&
-          data.radio_connected &&
-          !data.radio_initializing;
-
-        // Show toast on connection status change
-        if (prev !== null && prev.radio_connected !== data.radio_connected) {
-          if (data.radio_connected) {
-            toast.success('Radio connected', {
-              description: data.connection_info
-                ? `Connected via ${data.connection_info}`
-                : undefined,
-            });
-            // Refresh config after reconnection (may have changed after reboot)
-            fetchConfig();
-          } else {
-            toast.error('Radio disconnected', {
-              description: 'Check radio connection and power',
-            });
-          }
-        }
-
-        if (initializationCompleted) {
-          fetchConfig();
-        }
-      },
-      onError: (error: { message: string; details?: string }) => {
-        toast.error(error.message, {
-          description: error.details,
-        });
-      },
-      onSuccess: (success: { message: string; details?: string }) => {
-        toast.success(success.message, {
-          description: success.details,
-        });
-      },
-      onReconnect: () => {
-        // Clear raw packets: observation_id is a process-local counter that resets
-        // on backend restart, so stale packets would cause new ones to be deduped away.
-        setRawPackets([]);
-        // Silently recover any data missed during the disconnect window
-        triggerReconcile();
-        refreshUnreads();
-        api.getChannels().then(setChannels).catch(console.error);
-        fetchAllContacts()
-          .then((data) => setContacts(data))
-          .catch(console.error);
-      },
-      onMessage: (msg: Message) => {
-        // Filter blocked contacts on incoming (non-outgoing) messages
-        if (!msg.outgoing) {
-          const bKeys = blockedKeysRef.current;
-          const bNames = blockedNamesRef.current;
-          // Block DMs by sender key
-          if (
-            bKeys.length > 0 &&
-            msg.type === 'PRIV' &&
-            bKeys.includes(msg.conversation_key.toLowerCase())
-          )
-            return;
-          // Block channel messages by sender key
-          if (
-            bKeys.length > 0 &&
-            msg.type === 'CHAN' &&
-            msg.sender_key &&
-            bKeys.includes(msg.sender_key.toLowerCase())
-          )
-            return;
-          // Block by sender name (works for both DMs and channel messages)
-          if (bNames.length > 0 && msg.sender_name && bNames.includes(msg.sender_name)) return;
-        }
-
-        const activeConv = activeConversationRef.current;
-
-        // Check if message belongs to the active conversation
-        const isForActiveConversation = (() => {
-          if (!activeConv) return false;
-          if (msg.type === 'CHAN' && activeConv.type === 'channel') {
-            return msg.conversation_key === activeConv.id;
-          }
-          if (msg.type === 'PRIV' && activeConv.type === 'contact') {
-            return msg.conversation_key === activeConv.id;
-          }
-          return false;
-        })();
-
-        // Only add to message list if it's for the active conversation
-        // and we're not viewing historical messages (hasNewerMessages means we jumped mid-history)
-        if (isForActiveConversation && !hasNewerMessagesRef.current) {
-          addMessageIfNew(msg);
-        }
-
-        // Track for unread counts and sorting
-        trackNewMessage(msg);
-
-        const contentKey = getMessageContentKey(msg);
-
-        // For non-active conversations: update cache and count unreads
-        if (!isForActiveConversation) {
-          // Update message cache (instant restore on switch) — returns true if new
-          const isNew = messageCache.addMessage(msg.conversation_key, msg, contentKey);
-
-          // Count unread for incoming messages (skip duplicates from multiple mesh paths)
-          if (!msg.outgoing && isNew) {
-            let stateKey: string | null = null;
-            if (msg.type === 'CHAN' && msg.conversation_key) {
-              stateKey = getStateKey('channel', msg.conversation_key);
-            } else if (msg.type === 'PRIV' && msg.conversation_key) {
-              stateKey = getStateKey('contact', msg.conversation_key);
-            }
-            if (stateKey) {
-              const hasMention = checkMention(msg.text);
-              incrementUnread(stateKey, hasMention);
-            }
-          }
-        }
-      },
-      onContact: (contact: Contact) => {
-        setContacts((prev) => mergeContactIntoList(prev, contact));
-      },
-      onChannel: (channel: Channel) => {
-        mergeChannelIntoList(channel);
-      },
-      onContactDeleted: (publicKey: string) => {
-        setContacts((prev) => prev.filter((c) => c.public_key !== publicKey));
-        messageCache.remove(publicKey);
-        const active = activeConversationRef.current;
-        if (active?.type === 'contact' && active.id === publicKey) {
-          pendingDeleteFallbackRef.current = true;
-          setActiveConversation(null);
-        }
-      },
-      onChannelDeleted: (key: string) => {
-        setChannels((prev) => prev.filter((c) => c.key !== key));
-        messageCache.remove(key);
-        const active = activeConversationRef.current;
-        if (active?.type === 'channel' && active.id === key) {
-          pendingDeleteFallbackRef.current = true;
-          setActiveConversation(null);
-        }
-      },
-      onRawPacket: (packet: RawPacket) => {
-        setRawPackets((prev) => appendRawPacketUnique(prev, packet, MAX_RAW_PACKETS));
-      },
-      onMessageAcked: (messageId: number, ackCount: number, paths?: MessagePath[]) => {
-        updateMessageAck(messageId, ackCount, paths);
-        messageCache.updateAck(messageId, ackCount, paths);
-      },
-    }),
-    [
-      addMessageIfNew,
-      trackNewMessage,
-      incrementUnread,
-      updateMessageAck,
-      checkMention,
-      fetchConfig,
-      mergeChannelIntoList,
-      prevHealthRef,
-      setHealth,
-      activeConversationRef,
-      hasNewerMessagesRef,
-      setActiveConversation,
-      setContacts,
-      setChannels,
-      triggerReconcile,
-      refreshUnreads,
-      fetchAllContacts,
-    ]
   );
 
   // Connect to WebSocket
