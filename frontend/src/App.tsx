@@ -1,13 +1,4 @@
-import {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
-  startTransition,
-  lazy,
-  Suspense,
-} from 'react';
+import { useState, useEffect, useCallback, useRef, startTransition, lazy, Suspense } from 'react';
 import { api } from './api';
 import { takePrefetchOrFetch } from './prefetch';
 import { useWebSocket } from './useWebSocket';
@@ -23,28 +14,16 @@ import {
 } from './hooks';
 import { StatusBar } from './components/StatusBar';
 import { Sidebar } from './components/Sidebar';
-import { ChatHeader } from './components/ChatHeader';
-import { MessageList } from './components/MessageList';
-import { MessageInput, type MessageInputHandle } from './components/MessageInput';
+import { ConversationPane } from './components/ConversationPane';
+import type { MessageInputHandle } from './components/MessageInput';
 import { NewMessageModal } from './components/NewMessageModal';
 import {
   SETTINGS_SECTION_LABELS,
   SETTINGS_SECTION_ORDER,
   type SettingsSection,
 } from './components/settings/settingsConstants';
-import { RawPacketList } from './components/RawPacketList';
 import { ContactInfoPane } from './components/ContactInfoPane';
 import { ChannelInfoPane } from './components/ChannelInfoPane';
-import { CONTACT_TYPE_REPEATER } from './types';
-
-// Lazy-load heavy components to reduce initial bundle
-const RepeaterDashboard = lazy(() =>
-  import('./components/RepeaterDashboard').then((m) => ({ default: m.RepeaterDashboard }))
-);
-const MapView = lazy(() => import('./components/MapView').then((m) => ({ default: m.MapView })));
-const VisualizerView = lazy(() =>
-  import('./components/VisualizerView').then((m) => ({ default: m.VisualizerView }))
-);
 const SettingsModal = lazy(() =>
   import('./components/SettingsModal').then((m) => ({ default: m.SettingsModal }))
 );
@@ -208,13 +187,6 @@ export function App() {
     trackNewMessage,
     refreshUnreads,
   } = useUnreadCounts(channels, contacts, activeConversation);
-
-  // Determine if active contact is a repeater (used for routing to dashboard)
-  const activeContactIsRepeater = useMemo(() => {
-    if (!activeConversation || activeConversation.type !== 'contact') return false;
-    const contact = contacts.find((c) => c.public_key === activeConversation.id);
-    return contact?.type === CONTACT_TYPE_REPEATER;
-  }, [activeConversation, contacts]);
 
   const wsHandlers = useRealtimeAppState({
     prevHealthRef,
@@ -431,123 +403,37 @@ export function App() {
               (showSettings || activeConversation?.type === 'search') && 'hidden'
             )}
           >
-            {activeConversation ? (
-              activeConversation.type === 'map' ? (
-                <>
-                  <h2 className="flex justify-between items-center px-4 py-2.5 border-b border-border font-semibold text-base">
-                    Node Map
-                  </h2>
-                  <div className="flex-1 overflow-hidden">
-                    <Suspense
-                      fallback={
-                        <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                          Loading map...
-                        </div>
-                      }
-                    >
-                      <MapView contacts={contacts} focusedKey={activeConversation.mapFocusKey} />
-                    </Suspense>
-                  </div>
-                </>
-              ) : activeConversation.type === 'visualizer' ? (
-                <Suspense
-                  fallback={
-                    <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                      Loading visualizer...
-                    </div>
-                  }
-                >
-                  <VisualizerView packets={rawPackets} contacts={contacts} config={config} />
-                </Suspense>
-              ) : activeConversation.type === 'raw' ? (
-                <>
-                  <h2 className="flex justify-between items-center px-4 py-2.5 border-b border-border font-semibold text-base">
-                    Raw Packet Feed
-                  </h2>
-                  <div className="flex-1 overflow-hidden">
-                    <RawPacketList packets={rawPackets} />
-                  </div>
-                </>
-              ) : activeConversation.type === 'search' ? null : activeContactIsRepeater ? (
-                <Suspense
-                  fallback={
-                    <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                      Loading dashboard...
-                    </div>
-                  }
-                >
-                  <RepeaterDashboard
-                    key={activeConversation.id}
-                    conversation={activeConversation}
-                    contacts={contacts}
-                    favorites={favorites}
-                    radioLat={config?.lat ?? null}
-                    radioLon={config?.lon ?? null}
-                    radioName={config?.name ?? null}
-                    onTrace={handleTrace}
-                    onToggleFavorite={handleToggleFavorite}
-                    onDeleteContact={handleDeleteContact}
-                  />
-                </Suspense>
-              ) : (
-                <>
-                  <ChatHeader
-                    conversation={activeConversation}
-                    contacts={contacts}
-                    channels={channels}
-                    config={config}
-                    favorites={favorites}
-                    onTrace={handleTrace}
-                    onToggleFavorite={handleToggleFavorite}
-                    onSetChannelFloodScopeOverride={handleSetChannelFloodScopeOverride}
-                    onDeleteChannel={handleDeleteChannel}
-                    onDeleteContact={handleDeleteContact}
-                    onOpenContactInfo={handleOpenContactInfo}
-                    onOpenChannelInfo={handleOpenChannelInfo}
-                  />
-                  <MessageList
-                    key={activeConversation.id}
-                    messages={messages}
-                    contacts={contacts}
-                    loading={messagesLoading}
-                    loadingOlder={loadingOlder}
-                    hasOlderMessages={hasOlderMessages}
-                    onSenderClick={
-                      activeConversation.type === 'channel' ? handleSenderClick : undefined
-                    }
-                    onLoadOlder={fetchOlderMessages}
-                    onResendChannelMessage={
-                      activeConversation.type === 'channel' ? handleResendChannelMessage : undefined
-                    }
-                    radioName={config?.name}
-                    config={config}
-                    onOpenContactInfo={handleOpenContactInfo}
-                    targetMessageId={targetMessageId}
-                    onTargetReached={() => setTargetMessageId(null)}
-                    hasNewerMessages={hasNewerMessages}
-                    loadingNewer={loadingNewer}
-                    onLoadNewer={fetchNewerMessages}
-                    onJumpToBottom={jumpToBottom}
-                  />
-                  <MessageInput
-                    ref={messageInputRef}
-                    onSend={handleSendMessage}
-                    disabled={!health?.radio_connected}
-                    conversationType={activeConversation.type}
-                    senderName={config?.name}
-                    placeholder={
-                      !health?.radio_connected
-                        ? 'Radio not connected'
-                        : `Message ${activeConversation.name}...`
-                    }
-                  />
-                </>
-              )
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                Select a conversation or start a new one
-              </div>
-            )}
+            <ConversationPane
+              activeConversation={activeConversation}
+              contacts={contacts}
+              channels={channels}
+              rawPackets={rawPackets}
+              config={config}
+              health={health}
+              favorites={favorites}
+              messages={messages}
+              messagesLoading={messagesLoading}
+              loadingOlder={loadingOlder}
+              hasOlderMessages={hasOlderMessages}
+              targetMessageId={targetMessageId}
+              hasNewerMessages={hasNewerMessages}
+              loadingNewer={loadingNewer}
+              messageInputRef={messageInputRef}
+              onTrace={handleTrace}
+              onToggleFavorite={handleToggleFavorite}
+              onDeleteContact={handleDeleteContact}
+              onDeleteChannel={handleDeleteChannel}
+              onSetChannelFloodScopeOverride={handleSetChannelFloodScopeOverride}
+              onOpenContactInfo={handleOpenContactInfo}
+              onOpenChannelInfo={handleOpenChannelInfo}
+              onSenderClick={handleSenderClick}
+              onLoadOlder={fetchOlderMessages}
+              onResendChannelMessage={handleResendChannelMessage}
+              onTargetReached={() => setTargetMessageId(null)}
+              onLoadNewer={fetchNewerMessages}
+              onJumpToBottom={jumpToBottom}
+              onSendMessage={handleSendMessage}
+            />
           </div>
 
           {searchMounted.current && (

@@ -45,6 +45,9 @@ frontend/src/
 │   ├── useAppSettings.ts           # Settings, favorites, preferences migration
 │   ├── useConversationRouter.ts    # URL hash → active conversation routing
 │   └── useContactsAndChannels.ts   # Contact/channel loading, creation, deletion
+├── components/
+│   ├── ConversationPane.tsx    # Active conversation surface selection (map/raw/repeater/chat/empty)
+│   └── ...
 ├── utils/
 │   ├── urlHash.ts              # Hash parsing and encoding
 │   ├── conversationState.ts    # State keys, in-memory + localStorage helpers
@@ -165,6 +168,14 @@ frontend/src/
 - `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps
 - `useRealtimeAppState`: typed WS event application, reconnect recovery, cache/unread coordination
 - `useRepeaterDashboard`: repeater dashboard state (login, pane data/retries, console, actions)
+
+`ConversationPane.tsx` owns the main active-conversation surface branching:
+- empty state
+- map view
+- visualizer
+- raw packet feed
+- repeater dashboard
+- normal chat chrome (`ChatHeader` + `MessageList` + `MessageInput`)
 
 ### Initial load + realtime
 
