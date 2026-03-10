@@ -30,6 +30,8 @@ from app.decoder import (
 from app.keystore import get_private_key, get_public_key, has_private_key
 from app.models import (
     CONTACT_TYPE_REPEATER,
+    Contact,
+    ContactUpsert,
     RawPacketBroadcast,
     RawPacketDecryptedInfo,
 )
@@ -489,21 +491,21 @@ async def _process_advertisement(
         hop_count=new_path_len,
     )
 
-    contact_data = {
-        "public_key": advert.public_key.lower(),
-        "name": advert.name,
-        "type": contact_type,
-        "lat": advert.lat,
-        "lon": advert.lon,
-        "last_advert": advert.timestamp if advert.timestamp > 0 else timestamp,
-        "last_seen": timestamp,
-        "last_path": path_hex,
-        "last_path_len": path_len,
-        "out_path_hash_mode": out_path_hash_mode,
-        "first_seen": timestamp,  # COALESCE in upsert preserves existing value
-    }
+    contact_upsert = ContactUpsert(
+        public_key=advert.public_key.lower(),
+        name=advert.name,
+        type=contact_type,
+        lat=advert.lat,
+        lon=advert.lon,
+        last_advert=advert.timestamp if advert.timestamp > 0 else timestamp,
+        last_seen=timestamp,
+        last_path=path_hex,
+        last_path_len=path_len,
+        out_path_hash_mode=out_path_hash_mode,
+        first_seen=timestamp,  # COALESCE in upsert preserves existing value
+    )
 
-    await ContactRepository.upsert(contact_data)
+    await ContactRepository.upsert(contact_upsert)
     await record_contact_name_and_reconcile(
         public_key=advert.public_key,
         contact_name=advert.name,
@@ -517,7 +519,10 @@ async def _process_advertisement(
     if db_contact:
         broadcast_event("contact", db_contact.model_dump())
     else:
-        broadcast_event("contact", contact_data)
+        broadcast_event(
+            "contact",
+            Contact(**contact_upsert.model_dump(exclude_none=True)).model_dump(),
+        )
 
     # For new contacts, optionally attempt to decrypt any historical DMs we may have stored
     # This is controlled by the auto_decrypt_dm_on_advert setting

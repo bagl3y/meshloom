@@ -73,8 +73,10 @@ class RadioRuntime:
         """Return MeshCore when available, mirroring existing HTTP semantics."""
         if self.is_setup_in_progress:
             raise HTTPException(status_code=503, detail="Radio is initializing")
+        if not self.is_connected:
+            raise HTTPException(status_code=503, detail="Radio not connected")
         mc = self.meshcore
-        if not self.is_connected or mc is None:
+        if mc is None:
             raise HTTPException(status_code=503, detail="Radio not connected")
         return mc
 

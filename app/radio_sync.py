@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 from meshcore import EventType, MeshCore
 
 from app.event_handlers import cleanup_expired_acks
-from app.models import Contact
+from app.models import Contact, ContactUpsert
 from app.radio import RadioOperationBusyError
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
@@ -155,7 +155,7 @@ async def sync_and_offload_contacts(mc: MeshCore) -> dict:
         for public_key, contact_data in contacts.items():
             # Save to database
             await ContactRepository.upsert(
-                Contact.from_radio_dict(public_key, contact_data, on_radio=False)
+                ContactUpsert.from_radio_dict(public_key, contact_data, on_radio=False)
             )
             await reconcile_contact_messages(
                 public_key=public_key,

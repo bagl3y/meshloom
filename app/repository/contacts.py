@@ -1,4 +1,5 @@
 import time
+from collections.abc import Mapping
 from typing import Any
 
 from app.database import db
@@ -7,6 +8,7 @@ from app.models import (
     ContactAdvertPath,
     ContactAdvertPathSummary,
     ContactNameHistory,
+    ContactUpsert,
 )
 from app.path_utils import first_hop_hex, normalize_contact_route, normalize_route_override
 
@@ -22,17 +24,28 @@ class AmbiguousPublicKeyPrefixError(ValueError):
 
 class ContactRepository:
     @staticmethod
-    async def upsert(contact: dict[str, Any]) -> None:
+    def _coerce_contact_upsert(
+        contact: ContactUpsert | Contact | Mapping[str, Any],
+    ) -> ContactUpsert:
+        if isinstance(contact, ContactUpsert):
+            return contact
+        if isinstance(contact, Contact):
+            return contact.to_upsert()
+        return ContactUpsert.model_validate(contact)
+
+    @staticmethod
+    async def upsert(contact: ContactUpsert | Contact | Mapping[str, Any]) -> None:
+        contact_row = ContactRepository._coerce_contact_upsert(contact)
         last_path, last_path_len, out_path_hash_mode = normalize_contact_route(
-            contact.get("last_path"),
-            contact.get("last_path_len", -1),
-            contact.get("out_path_hash_mode"),
+            contact_row.last_path,
+            contact_row.last_path_len,
+            contact_row.out_path_hash_mode,
         )
         route_override_path, route_override_len, route_override_hash_mode = (
             normalize_route_override(
-                contact.get("route_override_path"),
-                contact.get("route_override_len"),
-                contact.get("route_override_hash_mode"),
+                contact_row.route_override_path,
+                contact_row.route_override_len,
+                contact_row.route_override_hash_mode,
             )
         )
 
@@ -70,23 +83,23 @@ class ContactRepository:
                 first_seen = COALESCE(contacts.first_seen, excluded.first_seen)
             """,
             (
-                contact.get("public_key", "").lower(),
-                contact.get("name"),
-                contact.get("type", 0),
-                contact.get("flags", 0),
+                contact_row.public_key.lower(),
+                contact_row.name,
+                contact_row.type,
+                contact_row.flags,
                 last_path,
                 last_path_len,
                 out_path_hash_mode,
                 route_override_path,
                 route_override_len,
                 route_override_hash_mode,
-                contact.get("last_advert"),
-                contact.get("lat"),
-                contact.get("lon"),
-                contact.get("last_seen", int(time.time())),
-                contact.get("on_radio"),
-                contact.get("last_contacted"),
-                contact.get("first_seen"),
+                contact_row.last_advert,
+                contact_row.lat,
+                contact_row.lon,
+                contact_row.last_seen if contact_row.last_seen is not None else int(time.time()),
+                contact_row.on_radio,
+                contact_row.last_contacted,
+                contact_row.first_seen,
             ),
         )
         await db.conn.commit()

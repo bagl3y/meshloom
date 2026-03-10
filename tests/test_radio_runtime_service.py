@@ -65,6 +65,29 @@ def test_require_connected_preserves_http_semantics():
     assert exc.value.status_code == 503
 
 
+def test_require_connected_returns_fresh_meshcore_after_connectivity_check():
+    old_meshcore = object()
+    new_meshcore = object()
+
+    class _SwappingManager:
+        def __init__(self):
+            self._meshcore = old_meshcore
+            self.is_setup_in_progress = False
+
+        @property
+        def is_connected(self):
+            self._meshcore = new_meshcore
+            return True
+
+        @property
+        def meshcore(self):
+            return self._meshcore
+
+    runtime = RadioRuntime(_SwappingManager())
+
+    assert runtime.require_connected() is new_meshcore
+
+
 @pytest.mark.asyncio
 async def test_radio_operation_delegates_to_current_manager():
     manager = _Manager(meshcore="meshcore", is_connected=True)

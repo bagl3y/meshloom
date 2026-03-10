@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from meshcore import EventType
 
-from app.models import CONTACT_TYPE_REPEATER, Contact
+from app.models import CONTACT_TYPE_REPEATER, Contact, ContactUpsert
 from app.packet_processor import process_raw_packet
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
@@ -228,11 +228,9 @@ async def on_new_contact(event: "Event") -> None:
 
     logger.debug("New contact: %s", public_key[:12])
 
-    contact_data = {
-        **Contact.from_radio_dict(public_key.lower(), payload, on_radio=True),
-        "last_seen": int(time.time()),
-    }
-    await ContactRepository.upsert(contact_data)
+    contact_upsert = ContactUpsert.from_radio_dict(public_key.lower(), payload, on_radio=True)
+    contact_upsert.last_seen = int(time.time())
+    await ContactRepository.upsert(contact_upsert)
 
     adv_name = payload.get("adv_name")
     await record_contact_name_and_reconcile(
@@ -245,7 +243,14 @@ async def on_new_contact(event: "Event") -> None:
     # Read back from DB so the broadcast includes all fields (last_contacted,
     # last_read_at, etc.) matching the REST Contact shape exactly.
     db_contact = await ContactRepository.get_by_key(public_key)
-    broadcast_event("contact", (db_contact.model_dump() if db_contact else contact_data))
+    broadcast_event(
+        "contact",
+        (
+            db_contact.model_dump()
+            if db_contact
+            else Contact(**contact_upsert.model_dump(exclude_none=True)).model_dump()
+        ),
+    )
 
 
 async def on_ack(event: "Event") -> None:

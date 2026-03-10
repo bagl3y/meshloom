@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.models import Contact, ContactUpsert
 from app.repository import (
     ContactAdvertPathRepository,
     ContactNameHistoryRepository,
@@ -643,3 +644,34 @@ class TestMessageRepositoryGetById:
         result = await MessageRepository.get_by_id(999999)
 
         assert result is None
+
+
+class TestContactRepositoryUpsertContracts:
+    @pytest.mark.asyncio
+    async def test_accepts_contact_upsert_model(self, test_db):
+        await ContactRepository.upsert(
+            ContactUpsert(public_key="aa" * 32, name="Alice", type=1, on_radio=False)
+        )
+
+        contact = await ContactRepository.get_by_key("aa" * 32)
+        assert contact is not None
+        assert contact.name == "Alice"
+        assert contact.type == 1
+
+    @pytest.mark.asyncio
+    async def test_accepts_contact_model(self, test_db):
+        await ContactRepository.upsert(
+            Contact(
+                public_key="bb" * 32,
+                name="Bob",
+                type=2,
+                on_radio=True,
+                out_path_hash_mode=-1,
+            )
+        )
+
+        contact = await ContactRepository.get_by_key("bb" * 32)
+        assert contact is not None
+        assert contact.name == "Bob"
+        assert contact.type == 2
+        assert contact.on_radio is True

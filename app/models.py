@@ -5,6 +5,64 @@ from pydantic import BaseModel, Field
 from app.path_utils import normalize_contact_route
 
 
+class ContactUpsert(BaseModel):
+    """Typed write contract for contacts persisted to SQLite."""
+
+    public_key: str = Field(description="Public key (64-char hex)")
+    name: str | None = None
+    type: int = 0
+    flags: int = 0
+    last_path: str | None = None
+    last_path_len: int = -1
+    out_path_hash_mode: int | None = None
+    route_override_path: str | None = None
+    route_override_len: int | None = None
+    route_override_hash_mode: int | None = None
+    last_advert: int | None = None
+    lat: float | None = None
+    lon: float | None = None
+    last_seen: int | None = None
+    on_radio: bool | None = None
+    last_contacted: int | None = None
+    first_seen: int | None = None
+
+    @classmethod
+    def from_contact(cls, contact: "Contact", **changes) -> "ContactUpsert":
+        return cls.model_validate(
+            {
+                **contact.model_dump(exclude={"last_read_at"}),
+                **changes,
+            }
+        )
+
+    @classmethod
+    def from_radio_dict(
+        cls, public_key: str, radio_data: dict, on_radio: bool = False
+    ) -> "ContactUpsert":
+        """Convert radio contact data to the contact-row write shape."""
+        last_path, last_path_len, out_path_hash_mode = normalize_contact_route(
+            radio_data.get("out_path"),
+            radio_data.get("out_path_len", -1),
+            radio_data.get(
+                "out_path_hash_mode",
+                -1 if radio_data.get("out_path_len", -1) == -1 else 0,
+            ),
+        )
+        return cls(
+            public_key=public_key,
+            name=radio_data.get("adv_name"),
+            type=radio_data.get("type", 0),
+            flags=radio_data.get("flags", 0),
+            last_path=last_path,
+            last_path_len=last_path_len,
+            out_path_hash_mode=out_path_hash_mode,
+            lat=radio_data.get("adv_lat"),
+            lon=radio_data.get("adv_lon"),
+            last_advert=radio_data.get("last_advert"),
+            on_radio=on_radio,
+        )
+
+
 class Contact(BaseModel):
     public_key: str = Field(description="Public key (64-char hex)")
     name: str | None = None
@@ -61,34 +119,18 @@ class Contact(BaseModel):
             "last_advert": self.last_advert if self.last_advert is not None else 0,
         }
 
+    def to_upsert(self, **changes) -> ContactUpsert:
+        """Convert the stored contact to the repository's write contract."""
+        return ContactUpsert.from_contact(self, **changes)
+
     @staticmethod
     def from_radio_dict(public_key: str, radio_data: dict, on_radio: bool = False) -> dict:
-        """Convert radio contact data to database format dict.
-
-        This is the inverse of to_radio_dict(), used when syncing contacts
-        from radio to database.
-        """
-        last_path, last_path_len, out_path_hash_mode = normalize_contact_route(
-            radio_data.get("out_path"),
-            radio_data.get("out_path_len", -1),
-            radio_data.get(
-                "out_path_hash_mode",
-                -1 if radio_data.get("out_path_len", -1) == -1 else 0,
-            ),
-        )
-        return {
-            "public_key": public_key,
-            "name": radio_data.get("adv_name"),
-            "type": radio_data.get("type", 0),
-            "flags": radio_data.get("flags", 0),
-            "last_path": last_path,
-            "last_path_len": last_path_len,
-            "out_path_hash_mode": out_path_hash_mode,
-            "lat": radio_data.get("adv_lat"),
-            "lon": radio_data.get("adv_lon"),
-            "last_advert": radio_data.get("last_advert"),
-            "on_radio": on_radio,
-        }
+        """Backward-compatible dict wrapper over ContactUpsert.from_radio_dict()."""
+        return ContactUpsert.from_radio_dict(
+            public_key,
+            radio_data,
+            on_radio=on_radio,
+        ).model_dump()
 
 
 class CreateContactRequest(BaseModel):

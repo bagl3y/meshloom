@@ -12,6 +12,7 @@ from app.models import (
     ContactAdvertPathSummary,
     ContactDetail,
     ContactRoutingOverrideRequest,
+    ContactUpsert,
     CreateContactRequest,
     NearestRepeater,
     TraceResponse,
@@ -133,23 +134,7 @@ async def create_contact(
     if existing:
         # Update name if provided
         if request.name:
-            await ContactRepository.upsert(
-                {
-                    "public_key": existing.public_key,
-                    "name": request.name,
-                    "type": existing.type,
-                    "flags": existing.flags,
-                    "last_path": existing.last_path,
-                    "last_path_len": existing.last_path_len,
-                    "out_path_hash_mode": existing.out_path_hash_mode,
-                    "last_advert": existing.last_advert,
-                    "lat": existing.lat,
-                    "lon": existing.lon,
-                    "last_seen": existing.last_seen,
-                    "on_radio": existing.on_radio,
-                    "last_contacted": existing.last_contacted,
-                }
-            )
+            await ContactRepository.upsert(existing.to_upsert(name=request.name))
             refreshed = await ContactRepository.get_by_key(request.public_key)
             if refreshed is not None:
                 existing = refreshed
@@ -164,22 +149,13 @@ async def create_contact(
 
     # Create new contact
     lower_key = request.public_key.lower()
-    contact_data = {
-        "public_key": lower_key,
-        "name": request.name,
-        "type": 0,  # Unknown
-        "flags": 0,
-        "last_path": None,
-        "last_path_len": -1,
-        "out_path_hash_mode": -1,
-        "last_advert": None,
-        "lat": None,
-        "lon": None,
-        "last_seen": None,
-        "on_radio": False,
-        "last_contacted": None,
-    }
-    await ContactRepository.upsert(contact_data)
+    contact_upsert = ContactUpsert(
+        public_key=lower_key,
+        name=request.name,
+        out_path_hash_mode=-1,
+        on_radio=False,
+    )
+    await ContactRepository.upsert(contact_upsert)
     logger.info("Created contact %s", lower_key[:12])
 
     await reconcile_contact_messages(
@@ -192,7 +168,7 @@ async def create_contact(
     if request.try_historical:
         await start_historical_dm_decryption(background_tasks, lower_key, request.name)
 
-    return Contact(**contact_data)
+    return Contact(**contact_upsert.model_dump())
 
 
 @router.get("/{public_key}/detail", response_model=ContactDetail)
@@ -309,7 +285,7 @@ async def sync_contacts_from_radio() -> dict:
     for public_key, contact_data in contacts.items():
         lower_key = public_key.lower()
         await ContactRepository.upsert(
-            Contact.from_radio_dict(lower_key, contact_data, on_radio=True)
+            ContactUpsert.from_radio_dict(lower_key, contact_data, on_radio=True)
         )
         synced_keys.append(lower_key)
         await reconcile_contact_messages(
