@@ -4,7 +4,6 @@ import { takePrefetchOrFetch } from './prefetch';
 import { useWebSocket } from './useWebSocket';
 import {
   useAppShell,
-  useAppShellProps,
   useUnreadCounts,
   useConversationMessages,
   useRadioControl,
@@ -222,81 +221,130 @@ export function App() {
     handleToggleBlockedName,
     messageInputRef,
   });
+  const handleCreateCrackedChannel = useCallback(
+    async (name: string, key: string) => {
+      const created = await api.createChannel(name, key);
+      const updatedChannels = await api.getChannels();
+      setChannels(updatedChannels);
+      await api.decryptHistoricalPackets({
+        key_type: 'channel',
+        channel_key: created.key,
+      });
+      void fetchUndecryptedCount().catch((error) => {
+        console.error('Failed to refresh undecrypted count after cracked channel create:', error);
+      });
+    },
+    [fetchUndecryptedCount, setChannels]
+  );
 
-  const {
-    statusProps,
-    sidebarProps,
-    conversationPaneProps,
-    searchProps,
-    settingsProps,
-    crackerProps,
-    newMessageModalProps,
-    contactInfoPaneProps,
-    channelInfoPaneProps,
-  } = useAppShellProps({
+  const statusProps = { health, config };
+  const sidebarProps = {
+    contacts,
+    channels,
+    activeConversation,
+    onSelectConversation: handleSelectConversationWithTargetReset,
+    onNewMessage: handleOpenNewMessage,
+    lastMessageTimes,
+    unreadCounts,
+    mentions,
+    showCracker,
+    crackerRunning,
+    onToggleCracker: handleToggleCracker,
+    onMarkAllRead: () => {
+      void markAllRead();
+    },
+    favorites,
+    sortOrder: appSettings?.sidebar_sort_order ?? 'recent',
+    onSortOrderChange: (sortOrder: 'recent' | 'alpha') => {
+      void handleSortOrderChange(sortOrder);
+    },
+  };
+  const conversationPaneProps = {
+    activeConversation,
     contacts,
     channels,
     rawPackets,
-    undecryptedCount,
-    activeConversation,
     config,
     health,
     favorites,
-    appSettings,
-    unreadCounts,
-    mentions,
-    lastMessageTimes,
-    showCracker,
-    crackerRunning,
-    messageInputRef,
-    targetMessageId,
-    infoPaneContactKey,
-    infoPaneFromChannel,
-    infoPaneChannelKey,
     messages,
     messagesLoading,
     loadingOlder,
     hasOlderMessages,
+    targetMessageId,
     hasNewerMessages,
     loadingNewer,
-    handleOpenNewMessage,
-    handleToggleCracker,
-    markAllRead,
-    handleSortOrderChange,
-    handleSelectConversationWithTargetReset,
-    handleNavigateToMessage,
-    handleSaveConfig,
-    handleSaveAppSettings,
-    handleSetPrivateKey,
-    handleReboot,
-    handleAdvertise,
-    handleHealthRefresh,
-    fetchAppSettings,
-    setChannels,
-    fetchUndecryptedCount,
-    handleCreateContact,
-    handleCreateChannel,
-    handleCreateHashtagChannel,
-    handleDeleteContact,
-    handleDeleteChannel,
-    handleToggleFavorite,
-    handleSetChannelFloodScopeOverride,
-    handleOpenContactInfo,
-    handleOpenChannelInfo,
-    handleCloseContactInfo,
-    handleCloseChannelInfo,
-    handleSenderClick,
-    handleResendChannelMessage,
-    handleTrace,
-    handleSendMessage,
-    fetchOlderMessages,
-    fetchNewerMessages,
-    jumpToBottom,
-    setTargetMessageId,
-    handleNavigateToChannel,
-    handleBlockKey,
-    handleBlockName,
-  });
+    messageInputRef,
+    onTrace: handleTrace,
+    onToggleFavorite: handleToggleFavorite,
+    onDeleteContact: handleDeleteContact,
+    onDeleteChannel: handleDeleteChannel,
+    onSetChannelFloodScopeOverride: handleSetChannelFloodScopeOverride,
+    onOpenContactInfo: handleOpenContactInfo,
+    onOpenChannelInfo: handleOpenChannelInfo,
+    onSenderClick: handleSenderClick,
+    onLoadOlder: fetchOlderMessages,
+    onResendChannelMessage: handleResendChannelMessage,
+    onTargetReached: () => setTargetMessageId(null),
+    onLoadNewer: fetchNewerMessages,
+    onJumpToBottom: jumpToBottom,
+    onSendMessage: handleSendMessage,
+  };
+  const searchProps = {
+    contacts,
+    channels,
+    onNavigateToMessage: handleNavigateToMessage,
+  };
+  const settingsProps = {
+    config,
+    health,
+    appSettings,
+    onSave: handleSaveConfig,
+    onSaveAppSettings: handleSaveAppSettings,
+    onSetPrivateKey: handleSetPrivateKey,
+    onReboot: handleReboot,
+    onAdvertise: handleAdvertise,
+    onHealthRefresh: handleHealthRefresh,
+    onRefreshAppSettings: fetchAppSettings,
+    blockedKeys: appSettings?.blocked_keys,
+    blockedNames: appSettings?.blocked_names,
+    onToggleBlockedKey: handleBlockKey,
+    onToggleBlockedName: handleBlockName,
+  };
+  const crackerProps = {
+    packets: rawPackets,
+    channels,
+    onChannelCreate: handleCreateCrackedChannel,
+  };
+  const newMessageModalProps = {
+    contacts,
+    undecryptedCount,
+    onSelectConversation: handleSelectConversationWithTargetReset,
+    onCreateContact: handleCreateContact,
+    onCreateChannel: handleCreateChannel,
+    onCreateHashtagChannel: handleCreateHashtagChannel,
+  };
+  const contactInfoPaneProps = {
+    contactKey: infoPaneContactKey,
+    fromChannel: infoPaneFromChannel,
+    onClose: handleCloseContactInfo,
+    contacts,
+    config,
+    favorites,
+    onToggleFavorite: handleToggleFavorite,
+    onNavigateToChannel: handleNavigateToChannel,
+    onToggleBlockedKey: handleBlockKey,
+    onToggleBlockedName: handleBlockName,
+    blockedKeys: appSettings?.blocked_keys ?? [],
+    blockedNames: appSettings?.blocked_names ?? [],
+  };
+  const channelInfoPaneProps = {
+    channelKey: infoPaneChannelKey,
+    onClose: handleCloseChannelInfo,
+    channels,
+    favorites,
+    onToggleFavorite: handleToggleFavorite,
+  };
 
   // Connect to WebSocket
   useWebSocket(wsHandlers);

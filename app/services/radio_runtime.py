@@ -15,7 +15,7 @@ import app.radio as radio_module
 
 
 class RadioRuntime:
-    """Thin wrapper around the process-global RadioManager."""
+    """Thin forwarding wrapper around the process-global RadioManager."""
 
     def __init__(self, manager_or_getter=None):
         if manager_or_getter is None:
@@ -29,45 +29,25 @@ class RadioRuntime:
     def manager(self) -> Any:
         return self._manager_getter()
 
-    @property
-    def meshcore(self):
-        return self.manager.meshcore
+    def __getattr__(self, name: str) -> Any:
+        """Forward unknown attributes to the current global manager."""
+        return getattr(self.manager, name)
 
-    @property
-    def connection_info(self) -> str | None:
-        return self.manager.connection_info
+    @staticmethod
+    def _is_local_runtime_attr(name: str) -> bool:
+        return name.startswith("_") or hasattr(RadioRuntime, name)
 
-    @property
-    def is_connected(self) -> bool:
-        return self.manager.is_connected
+    def __setattr__(self, name: str, value: Any) -> None:
+        if self._is_local_runtime_attr(name):
+            object.__setattr__(self, name, value)
+            return
+        setattr(self.manager, name, value)
 
-    @property
-    def is_reconnecting(self) -> bool:
-        return self.manager.is_reconnecting
-
-    @property
-    def is_setup_in_progress(self) -> bool:
-        return self.manager.is_setup_in_progress
-
-    @property
-    def is_setup_complete(self) -> bool:
-        return self.manager.is_setup_complete
-
-    @property
-    def path_hash_mode(self) -> int:
-        return self.manager.path_hash_mode
-
-    @path_hash_mode.setter
-    def path_hash_mode(self, mode: int) -> None:
-        self.manager.path_hash_mode = mode
-
-    @property
-    def path_hash_mode_supported(self) -> bool:
-        return self.manager.path_hash_mode_supported
-
-    @path_hash_mode_supported.setter
-    def path_hash_mode_supported(self, supported: bool) -> None:
-        self.manager.path_hash_mode_supported = supported
+    def __delattr__(self, name: str) -> None:
+        if self._is_local_runtime_attr(name):
+            object.__delattr__(self, name)
+            return
+        delattr(self.manager, name)
 
     def require_connected(self):
         """Return MeshCore when available, mirroring existing HTTP semantics."""
