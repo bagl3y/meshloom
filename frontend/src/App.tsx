@@ -11,6 +11,7 @@ import {
   useConversationRouter,
   useContactsAndChannels,
   useConversationActions,
+  useConversationNavigation,
   useRealtimeAppState,
 } from './hooks';
 import { AppShell } from './components/AppShell';
@@ -29,12 +30,10 @@ export function App() {
     showCracker,
     crackerRunning,
     localLabel,
-    targetMessageId,
     setSettingsSection,
     setSidebarOpen,
     setCrackerRunning,
     setLocalLabel,
-    setTargetMessageId,
     handleCloseSettingsView,
     handleToggleSettingsView,
     handleOpenNewMessage,
@@ -137,6 +136,24 @@ export function App() {
   // Wire up the ref bridge so useContactsAndChannels handlers reach the real setter
   setActiveConversationRef.current = setActiveConversation;
 
+  const {
+    targetMessageId,
+    setTargetMessageId,
+    infoPaneContactKey,
+    infoPaneFromChannel,
+    infoPaneChannelKey,
+    handleOpenContactInfo,
+    handleCloseContactInfo,
+    handleOpenChannelInfo,
+    handleCloseChannelInfo,
+    handleSelectConversationWithTargetReset,
+    handleNavigateToChannel,
+    handleNavigateToMessage,
+  } = useConversationNavigation({
+    channels,
+    handleSelectConversation,
+  });
+
   // Custom hooks for conversation-specific functionality
   const {
     messages,
@@ -187,9 +204,6 @@ export function App() {
     updateMessageAck,
   });
   const {
-    infoPaneContactKey,
-    infoPaneFromChannel,
-    infoPaneChannelKey,
     handleSendMessage,
     handleResendChannelMessage,
     handleSetChannelFloodScopeOverride,
@@ -197,24 +211,14 @@ export function App() {
     handleTrace,
     handleBlockKey,
     handleBlockName,
-    handleOpenContactInfo,
-    handleCloseContactInfo,
-    handleOpenChannelInfo,
-    handleCloseChannelInfo,
-    handleSelectConversationWithTargetReset,
-    handleNavigateToChannel,
-    handleNavigateToMessage,
   } = useConversationActions({
     activeConversation,
     activeConversationRef,
-    setTargetMessageId,
-    channels,
     setChannels,
     addMessageIfNew,
     jumpToBottom,
     handleToggleBlockedKey,
     handleToggleBlockedName,
-    handleSelectConversation,
     messageInputRef,
   });
 

@@ -65,14 +65,11 @@ function createArgs(overrides: Partial<Parameters<typeof useConversationActions>
   return {
     activeConversation,
     activeConversationRef: { current: activeConversation },
-    setTargetMessageId: vi.fn(),
-    channels: [publicChannel],
     setChannels: vi.fn(),
     addMessageIfNew: vi.fn(() => true),
     jumpToBottom: vi.fn(),
     handleToggleBlockedKey: vi.fn(async () => {}),
     handleToggleBlockedName: vi.fn(async () => {}),
-    handleSelectConversation: vi.fn(),
     messageInputRef: { current: { appendText: vi.fn() } },
     ...overrides,
   };
@@ -123,47 +120,6 @@ describe('useConversationActions', () => {
     expect(args.addMessageIfNew).not.toHaveBeenCalled();
   });
 
-  it('resets the jump target when switching to a normal conversation', () => {
-    const args = createArgs();
-    const { result } = renderHook(() => useConversationActions(args));
-
-    act(() => {
-      result.current.handleSelectConversationWithTargetReset({
-        type: 'contact',
-        id: 'bb'.repeat(32),
-        name: 'Bob',
-      });
-    });
-
-    expect(args.setTargetMessageId).toHaveBeenCalledWith(null);
-    expect(args.handleSelectConversation).toHaveBeenCalledWith({
-      type: 'contact',
-      id: 'bb'.repeat(32),
-      name: 'Bob',
-    });
-  });
-
-  it('navigates search results into the target conversation and preserves the jump target', () => {
-    const args = createArgs();
-    const { result } = renderHook(() => useConversationActions(args));
-
-    act(() => {
-      result.current.handleNavigateToMessage({
-        id: 321,
-        type: 'CHAN',
-        conversation_key: publicChannel.key,
-        conversation_name: publicChannel.name,
-      });
-    });
-
-    expect(args.setTargetMessageId).toHaveBeenCalledWith(321);
-    expect(args.handleSelectConversation).toHaveBeenCalledWith({
-      type: 'channel',
-      id: publicChannel.key,
-      name: publicChannel.name,
-    });
-  });
-
   it('clears cached messages and jumps to the latest page after blocking a key', async () => {
     const args = createArgs();
     const { result } = renderHook(() => useConversationActions(args));
@@ -175,5 +131,16 @@ describe('useConversationActions', () => {
     expect(args.handleToggleBlockedKey).toHaveBeenCalledWith('cc'.repeat(32));
     expect(mocks.messageCache.clear).toHaveBeenCalledTimes(1);
     expect(args.jumpToBottom).toHaveBeenCalledTimes(1);
+  });
+
+  it('appends sender mentions into the message input', () => {
+    const args = createArgs();
+    const { result } = renderHook(() => useConversationActions(args));
+
+    act(() => {
+      result.current.handleSenderClick('Alice');
+    });
+
+    expect(args.messageInputRef.current?.appendText).toHaveBeenCalledWith('@[Alice] ');
   });
 });

@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useState, type Dispatch, type SetStateAction } from 'react';
+import { startTransition, useCallback, useState } from 'react';
 
 import { getLocalLabel, type LocalLabel } from '../utils/localLabel';
 import type { SettingsSection } from '../components/settings/settingsConstants';
@@ -11,12 +11,10 @@ interface UseAppShellResult {
   showCracker: boolean;
   crackerRunning: boolean;
   localLabel: LocalLabel;
-  targetMessageId: number | null;
   setSettingsSection: (section: SettingsSection) => void;
   setSidebarOpen: (open: boolean) => void;
   setCrackerRunning: (running: boolean) => void;
   setLocalLabel: (label: LocalLabel) => void;
-  setTargetMessageId: Dispatch<SetStateAction<number | null>>;
   handleCloseSettingsView: () => void;
   handleToggleSettingsView: () => void;
   handleOpenNewMessage: () => void;
@@ -32,7 +30,6 @@ export function useAppShell(): UseAppShellResult {
   const [showCracker, setShowCracker] = useState(false);
   const [crackerRunning, setCrackerRunning] = useState(false);
   const [localLabel, setLocalLabel] = useState(getLocalLabel);
-  const [targetMessageId, setTargetMessageId] = useState<number | null>(null);
 
   const handleCloseSettingsView = useCallback(() => {
     startTransition(() => setShowSettings(false));
@@ -67,12 +64,10 @@ export function useAppShell(): UseAppShellResult {
     showCracker,
     crackerRunning,
     localLabel,
-    targetMessageId,
     setSettingsSection,
     setSidebarOpen,
     setCrackerRunning,
     setLocalLabel,
-    setTargetMessageId,
     handleCloseSettingsView,
     handleToggleSettingsView,
     handleOpenNewMessage,

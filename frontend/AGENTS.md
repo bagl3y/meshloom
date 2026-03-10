@@ -35,7 +35,8 @@ frontend/src/
 │   └── utils.ts            # cn() — clsx + tailwind-merge helper
 ├── hooks/
 │   ├── index.ts            # Central re-export of all hooks
-│   ├── useConversationActions.ts   # Send/navigation/info-pane conversation actions
+│   ├── useConversationActions.ts   # Send/resend/trace/block conversation actions
+│   ├── useConversationNavigation.ts # Search target, selection reset, and info-pane navigation state
 │   ├── useConversationMessages.ts  # Dedup/update helpers over the conversation timeline
 │   ├── useConversationTimeline.ts  # Fetch, cache restore, jump-target loading, pagination, reconcile
 │   ├── useUnreadCounts.ts          # Unread counters, mentions, recent-sort timestamps
@@ -145,6 +146,7 @@ frontend/src/
     ├── searchView.test.tsx
     ├── useConversationMessages.test.ts
     ├── useConversationMessages.race.test.ts
+    ├── useConversationNavigation.test.ts
     ├── useAppShell.test.ts
     ├── useRepeaterDashboard.test.ts
     ├── useContactsAndChannels.test.ts
@@ -169,12 +171,13 @@ frontend/src/
 - new-message modal and info panes
 
 High-level state is delegated to hooks:
-- `useAppShell`: app-shell view state (settings section, sidebar, cracker, new-message modal, target message)
+- `useAppShell`: app-shell view state (settings section, sidebar, cracker, new-message modal)
 - `useRadioControl`: radio health/config state, reconnect/reboot polling
 - `useAppSettings`: settings CRUD, favorites, preferences migration
 - `useContactsAndChannels`: contact/channel lists, creation, deletion
 - `useConversationRouter`: URL hash → active conversation routing
-- `useConversationActions`: send/resend/trace/navigation handlers and info-pane state
+- `useConversationNavigation`: search target, conversation selection reset, and info-pane state
+- `useConversationActions`: send/resend/trace/block handlers and channel override updates
 - `useConversationMessages`: dedup/update helpers and pending ACK buffering
 - `useConversationTimeline`: conversation switch loading, cache restore, jump-target loading, pagination, reconcile
 - `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps
@@ -311,7 +314,7 @@ Clicking a contact's avatar in `ChatHeader` or `MessageList` opens a `ContactInf
 - Nearest repeaters (resolved from first-hop path prefixes)
 - Recent advert paths
 
-State: `useConversationActions` controls open/close via `infoPaneContactKey`. Live contact data from WebSocket updates is preferred over the initial detail snapshot.
+State: `useConversationNavigation` controls open/close via `infoPaneContactKey`. Live contact data from WebSocket updates is preferred over the initial detail snapshot.
 
 ## Channel Info Pane
 
@@ -323,7 +326,7 @@ Clicking a channel name in `ChatHeader` opens a `ChannelInfoPane` sheet (right d
 - First message date
 - Top senders in last 24h (name + count)
 
-State: `useConversationActions` controls open/close via `infoPaneChannelKey`. Live channel data from the `channels` array is preferred over the initial detail snapshot.
+State: `useConversationNavigation` controls open/close via `infoPaneChannelKey`. Live channel data from the `channels` array is preferred over the initial detail snapshot.
 
 ## Repeater Dashboard
 
@@ -343,7 +346,7 @@ All state is managed by `useRepeaterDashboard` hook. State resets on conversatio
 
 The `SearchView` component (`components/SearchView.tsx`) provides full-text search across all DMs and channel messages. Key behaviors:
 
-- **State**: `targetMessageId` is shared between `useAppShell`, `useConversationActions`, and `useConversationMessages`. When a search result is clicked, `handleNavigateToMessage` sets the target ID and switches to the target conversation.
+- **State**: `targetMessageId` is shared between `useConversationNavigation` and `useConversationMessages`. When a search result is clicked, `handleNavigateToMessage` sets the target ID and switches to the target conversation.
 - **Same-conversation clear**: when `targetMessageId` is cleared after the target is reached, the hook preserves the around-loaded mid-history view instead of replacing it with the latest page.
 - **Persistence**: `SearchView` stays mounted after first open using the same `hidden` class pattern as `CrackerPanel`, preserving search state when navigating to results.
 - **Jump-to-message**: `useConversationTimeline` handles optional `targetMessageId` by calling `api.getMessagesAround()` instead of the normal latest-page fetch, loading context around the target message. `MessageList` scrolls to the target via `data-message-id` attribute and applies a `message-highlight` CSS animation.

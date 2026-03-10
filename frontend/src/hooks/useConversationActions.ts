@@ -1,36 +1,22 @@
-import {
-  useCallback,
-  useState,
-  type Dispatch,
-  type MutableRefObject,
-  type RefObject,
-  type SetStateAction,
-} from 'react';
+import { useCallback, type MutableRefObject, type RefObject } from 'react';
 import { api } from '../api';
 import * as messageCache from '../messageCache';
 import { toast } from '../components/ui/sonner';
 import type { MessageInputHandle } from '../components/MessageInput';
-import type { SearchNavigateTarget } from '../components/SearchView';
 import type { Channel, Conversation, Message } from '../types';
 
 interface UseConversationActionsArgs {
   activeConversation: Conversation | null;
   activeConversationRef: MutableRefObject<Conversation | null>;
-  setTargetMessageId: Dispatch<SetStateAction<number | null>>;
-  channels: Channel[];
   setChannels: React.Dispatch<React.SetStateAction<Channel[]>>;
   addMessageIfNew: (msg: Message) => boolean;
   jumpToBottom: () => void;
   handleToggleBlockedKey: (key: string) => Promise<void>;
   handleToggleBlockedName: (name: string) => Promise<void>;
-  handleSelectConversation: (conv: Conversation) => void;
   messageInputRef: RefObject<MessageInputHandle | null>;
 }
 
 interface UseConversationActionsResult {
-  infoPaneContactKey: string | null;
-  infoPaneFromChannel: boolean;
-  infoPaneChannelKey: string | null;
   handleSendMessage: (text: string) => Promise<void>;
   handleResendChannelMessage: (messageId: number, newTimestamp?: boolean) => Promise<void>;
   handleSetChannelFloodScopeOverride: (
@@ -41,35 +27,18 @@ interface UseConversationActionsResult {
   handleTrace: () => Promise<void>;
   handleBlockKey: (key: string) => Promise<void>;
   handleBlockName: (name: string) => Promise<void>;
-  handleOpenContactInfo: (publicKey: string, fromChannel?: boolean) => void;
-  handleCloseContactInfo: () => void;
-  handleOpenChannelInfo: (channelKey: string) => void;
-  handleCloseChannelInfo: () => void;
-  handleSelectConversationWithTargetReset: (
-    conv: Conversation,
-    options?: { preserveTarget?: boolean }
-  ) => void;
-  handleNavigateToChannel: (channelKey: string) => void;
-  handleNavigateToMessage: (target: SearchNavigateTarget) => void;
 }
 
 export function useConversationActions({
   activeConversation,
   activeConversationRef,
-  setTargetMessageId,
-  channels,
   setChannels,
   addMessageIfNew,
   jumpToBottom,
   handleToggleBlockedKey,
   handleToggleBlockedName,
-  handleSelectConversation,
   messageInputRef,
 }: UseConversationActionsArgs): UseConversationActionsResult {
-  const [infoPaneContactKey, setInfoPaneContactKey] = useState<string | null>(null);
-  const [infoPaneFromChannel, setInfoPaneFromChannel] = useState(false);
-  const [infoPaneChannelKey, setInfoPaneChannelKey] = useState<string | null>(null);
-
   const mergeChannelIntoList = useCallback(
     (updated: Channel) => {
       setChannels((prev) => {
@@ -175,68 +144,7 @@ export function useConversationActions({
     [handleToggleBlockedName, jumpToBottom]
   );
 
-  const handleOpenContactInfo = useCallback((publicKey: string, fromChannel?: boolean) => {
-    setInfoPaneContactKey(publicKey);
-    setInfoPaneFromChannel(fromChannel ?? false);
-  }, []);
-
-  const handleCloseContactInfo = useCallback(() => {
-    setInfoPaneContactKey(null);
-  }, []);
-
-  const handleOpenChannelInfo = useCallback((channelKey: string) => {
-    setInfoPaneChannelKey(channelKey);
-  }, []);
-
-  const handleCloseChannelInfo = useCallback(() => {
-    setInfoPaneChannelKey(null);
-  }, []);
-
-  const handleSelectConversationWithTargetReset = useCallback(
-    (conv: Conversation, options?: { preserveTarget?: boolean }) => {
-      if (conv.type !== 'search' && !options?.preserveTarget) {
-        setTargetMessageId(null);
-      }
-      handleSelectConversation(conv);
-    },
-    [handleSelectConversation, setTargetMessageId]
-  );
-
-  const handleNavigateToChannel = useCallback(
-    (channelKey: string) => {
-      const channel = channels.find((c) => c.key === channelKey);
-      if (channel) {
-        handleSelectConversationWithTargetReset({
-          type: 'channel',
-          id: channel.key,
-          name: channel.name,
-        });
-        setInfoPaneContactKey(null);
-      }
-    },
-    [channels, handleSelectConversationWithTargetReset]
-  );
-
-  const handleNavigateToMessage = useCallback(
-    (target: SearchNavigateTarget) => {
-      const convType = target.type === 'CHAN' ? 'channel' : 'contact';
-      setTargetMessageId(target.id);
-      handleSelectConversationWithTargetReset(
-        {
-          type: convType,
-          id: target.conversation_key,
-          name: target.conversation_name,
-        },
-        { preserveTarget: true }
-      );
-    },
-    [handleSelectConversationWithTargetReset, setTargetMessageId]
-  );
-
   return {
-    infoPaneContactKey,
-    infoPaneFromChannel,
-    infoPaneChannelKey,
     handleSendMessage,
     handleResendChannelMessage,
     handleSetChannelFloodScopeOverride,
@@ -244,12 +152,5 @@ export function useConversationActions({
     handleTrace,
     handleBlockKey,
     handleBlockName,
-    handleOpenContactInfo,
-    handleCloseContactInfo,
-    handleOpenChannelInfo,
-    handleCloseChannelInfo,
-    handleSelectConversationWithTargetReset,
-    handleNavigateToChannel,
-    handleNavigateToMessage,
   };
 }

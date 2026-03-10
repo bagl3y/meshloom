@@ -34,14 +34,15 @@ describe('useAppShell', () => {
     expect(result.current.showSettings).toBe(false);
   });
 
-  it('supports React-style target message updates', () => {
+  it('toggles the cracker shell without affecting sidebar state', () => {
     const { result } = renderHook(() => useAppShell());
 
     act(() => {
-      result.current.setTargetMessageId(10);
-      result.current.setTargetMessageId((prev) => (prev ?? 0) + 5);
+      result.current.setSidebarOpen(true);
+      result.current.handleToggleCracker();
     });
 
-    expect(result.current.targetMessageId).toBe(15);
+    expect(result.current.showCracker).toBe(true);
+    expect(result.current.sidebarOpen).toBe(true);
   });
 });
