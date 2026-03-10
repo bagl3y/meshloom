@@ -216,7 +216,23 @@ describe('useRepeaterDashboard', () => {
     expect(result.current.consoleLoading).toBe(false);
   });
 
-  it('sendAdvert sends "advert" command', async () => {
+  it('sendZeroHopAdvert sends "advert.zerohop" command', async () => {
+    mockApi.sendRepeaterCommand.mockResolvedValueOnce({
+      command: 'advert.zerohop',
+      response: 'ok',
+      sender_timestamp: 1000,
+    });
+
+    const { result } = renderHook(() => useRepeaterDashboard(repeaterConversation));
+
+    await act(async () => {
+      await result.current.sendZeroHopAdvert();
+    });
+
+    expect(mockApi.sendRepeaterCommand).toHaveBeenCalledWith(REPEATER_KEY, 'advert.zerohop');
+  });
+
+  it('sendFloodAdvert sends "advert" command', async () => {
     mockApi.sendRepeaterCommand.mockResolvedValueOnce({
       command: 'advert',
       response: 'ok',
@@ -226,7 +242,7 @@ describe('useRepeaterDashboard', () => {
     const { result } = renderHook(() => useRepeaterDashboard(repeaterConversation));
 
     await act(async () => {
-      await result.current.sendAdvert();
+      await result.current.sendFloodAdvert();
     });
 
     expect(mockApi.sendRepeaterCommand).toHaveBeenCalledWith(REPEATER_KEY, 'advert');

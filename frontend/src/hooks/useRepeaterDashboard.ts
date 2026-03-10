@@ -164,7 +164,8 @@ export interface UseRepeaterDashboardResult {
   refreshPane: (pane: PaneName) => Promise<void>;
   loadAll: () => Promise<void>;
   sendConsoleCommand: (command: string) => Promise<void>;
-  sendAdvert: () => Promise<void>;
+  sendZeroHopAdvert: () => Promise<void>;
+  sendFloodAdvert: () => Promise<void>;
   rebootRepeater: () => Promise<void>;
   syncClock: () => Promise<void>;
 }
@@ -370,7 +371,11 @@ export function useRepeaterDashboard(
     [getPublicKey]
   );
 
-  const sendAdvert = useCallback(async () => {
+  const sendZeroHopAdvert = useCallback(async () => {
+    await sendConsoleCommand('advert.zerohop');
+  }, [sendConsoleCommand]);
+
+  const sendFloodAdvert = useCallback(async () => {
     await sendConsoleCommand('advert');
   }, [sendConsoleCommand]);
 
@@ -396,7 +401,8 @@ export function useRepeaterDashboard(
     refreshPane,
     loadAll,
     sendConsoleCommand,
-    sendAdvert,
+    sendZeroHopAdvert,
+    sendFloodAdvert,
     rebootRepeater,
     syncClock,
   };

@@ -56,7 +56,8 @@ export function RepeaterDashboard({
     refreshPane,
     loadAll,
     sendConsoleCommand,
-    sendAdvert,
+    sendZeroHopAdvert,
+    sendFloodAdvert,
     rebootRepeater,
     syncClock,
   } = useRepeaterDashboard(conversation);
@@ -200,7 +201,8 @@ export function RepeaterDashboard({
                   disabled={anyLoading}
                 />
                 <ActionsPane
-                  onSendAdvert={sendAdvert}
+                  onSendZeroHopAdvert={sendZeroHopAdvert}
+                  onSendFloodAdvert={sendFloodAdvert}
                   onSyncClock={syncClock}
                   onReboot={rebootRepeater}
                   consoleLoading={consoleLoading}

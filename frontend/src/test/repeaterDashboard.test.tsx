@@ -38,7 +38,8 @@ const mockHook: {
   refreshPane: vi.fn(),
   loadAll: vi.fn(),
   sendConsoleCommand: vi.fn(),
-  sendAdvert: vi.fn(),
+  sendZeroHopAdvert: vi.fn(),
+  sendFloodAdvert: vi.fn(),
   rebootRepeater: vi.fn(),
   syncClock: vi.fn(),
 };
@@ -263,7 +264,8 @@ describe('RepeaterDashboard', () => {
 
     render(<RepeaterDashboard {...defaultProps} />);
 
-    expect(screen.getByText('Send Advert')).toBeInTheDocument();
+    expect(screen.getByText('Zero Hop Advert')).toBeInTheDocument();
+    expect(screen.getByText('Flood Advert')).toBeInTheDocument();
     expect(screen.getByText('Sync Clock')).toBeInTheDocument();
     expect(screen.getByText('Reboot')).toBeInTheDocument();
   });
