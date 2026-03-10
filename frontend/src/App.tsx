@@ -18,9 +18,9 @@ import {
   useAppSettings,
   useConversationRouter,
   useContactsAndChannels,
+  useConversationActions,
   useRealtimeAppState,
 } from './hooks';
-import * as messageCache from './messageCache';
 import { StatusBar } from './components/StatusBar';
 import { Sidebar } from './components/Sidebar';
 import { ChatHeader } from './components/ChatHeader';
@@ -61,12 +61,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from './components/ui/sheet';
-import { Toaster, toast } from './components/ui/sonner';
+import { Toaster } from './components/ui/sonner';
 import { messageContainsMention } from './utils/messageParser';
 import { getLocalLabel, getContrastTextColor } from './utils/localLabel';
 import { cn } from '@/lib/utils';
-import type { SearchNavigateTarget } from './components/SearchView';
-import type { Channel, Conversation, Message, RawPacket } from './types';
+import type { Conversation, RawPacket } from './types';
 
 export function App() {
   const messageInputRef = useRef<MessageInputHandle>(null);
@@ -78,9 +77,6 @@ export function App() {
   const [showCracker, setShowCracker] = useState(false);
   const [crackerRunning, setCrackerRunning] = useState(false);
   const [localLabel, setLocalLabel] = useState(getLocalLabel);
-  const [infoPaneContactKey, setInfoPaneContactKey] = useState<string | null>(null);
-  const [infoPaneFromChannel, setInfoPaneFromChannel] = useState(false);
-  const [infoPaneChannelKey, setInfoPaneChannelKey] = useState<string | null>(null);
   const [targetMessageId, setTargetMessageId] = useState<number | null>(null);
 
   // Defer CrackerPanel mount until first opened (lazy-loaded, but keep mounted after for state)
@@ -242,21 +238,37 @@ export function App() {
     setActiveConversation,
     updateMessageAck,
   });
-
-  const mergeChannelIntoList = useCallback(
-    (updated: Channel) => {
-      setChannels((prev) => {
-        const existingIndex = prev.findIndex((channel) => channel.key === updated.key);
-        if (existingIndex === -1) {
-          return [...prev, updated].sort((a, b) => a.name.localeCompare(b.name));
-        }
-        const next = [...prev];
-        next[existingIndex] = updated;
-        return next;
-      });
-    },
-    [setChannels]
-  );
+  const {
+    infoPaneContactKey,
+    infoPaneFromChannel,
+    infoPaneChannelKey,
+    handleSendMessage,
+    handleResendChannelMessage,
+    handleSetChannelFloodScopeOverride,
+    handleSenderClick,
+    handleTrace,
+    handleBlockKey,
+    handleBlockName,
+    handleOpenContactInfo,
+    handleCloseContactInfo,
+    handleOpenChannelInfo,
+    handleCloseChannelInfo,
+    handleSelectConversationWithTargetReset,
+    handleNavigateToChannel,
+    handleNavigateToMessage,
+  } = useConversationActions({
+    activeConversation,
+    activeConversationRef,
+    setTargetMessageId,
+    channels,
+    setChannels,
+    addMessageIfNew,
+    jumpToBottom,
+    handleToggleBlockedKey,
+    handleToggleBlockedName,
+    handleSelectConversation,
+    messageInputRef,
+  });
 
   // Connect to WebSocket
   useWebSocket(wsHandlers);
@@ -288,106 +300,6 @@ export function App() {
     setContactsLoaded,
   ]);
 
-  // Send message handler
-  const handleSendMessage = useCallback(
-    async (text: string) => {
-      if (!activeConversation) return;
-
-      const conversationId = activeConversation.id;
-
-      let sent: Message;
-      if (activeConversation.type === 'channel') {
-        sent = await api.sendChannelMessage(activeConversation.id, text);
-      } else {
-        sent = await api.sendDirectMessage(activeConversation.id, text);
-      }
-
-      if (activeConversationRef.current?.id === conversationId) {
-        addMessageIfNew(sent);
-      }
-    },
-    [activeConversation, addMessageIfNew, activeConversationRef]
-  );
-
-  // Handle resend channel message
-  const handleResendChannelMessage = useCallback(
-    async (messageId: number, newTimestamp?: boolean) => {
-      try {
-        // New-timestamp resend creates a new message; the backend broadcast_event
-        // will add it to the conversation via WebSocket.
-        await api.resendChannelMessage(messageId, newTimestamp);
-        toast.success(newTimestamp ? 'Message resent with new timestamp' : 'Message resent');
-      } catch (err) {
-        toast.error('Failed to resend', {
-          description: err instanceof Error ? err.message : 'Unknown error',
-        });
-      }
-    },
-    []
-  );
-
-  const handleSetChannelFloodScopeOverride = useCallback(
-    async (channelKey: string, floodScopeOverride: string) => {
-      try {
-        const updated = await api.setChannelFloodScopeOverride(channelKey, floodScopeOverride);
-        mergeChannelIntoList(updated);
-        toast.success(
-          updated.flood_scope_override ? 'Regional override saved' : 'Regional override cleared'
-        );
-      } catch (err) {
-        toast.error('Failed to update regional override', {
-          description: err instanceof Error ? err.message : 'Unknown error',
-        });
-      }
-    },
-    [mergeChannelIntoList]
-  );
-
-  // Handle sender click to add mention
-  const handleSenderClick = useCallback((sender: string) => {
-    messageInputRef.current?.appendText(`@[${sender}] `);
-  }, []);
-
-  // Handle direct trace request
-  const handleTrace = useCallback(async () => {
-    if (!activeConversation || activeConversation.type !== 'contact') return;
-    toast('Trace started...');
-    try {
-      const result = await api.requestTrace(activeConversation.id);
-      const parts: string[] = [];
-      if (result.remote_snr !== null) parts.push(`Remote SNR: ${result.remote_snr.toFixed(1)} dB`);
-      if (result.local_snr !== null) parts.push(`Local SNR: ${result.local_snr.toFixed(1)} dB`);
-      const detail = parts.join(', ');
-      toast.success(detail ? `Trace complete! ${detail}` : 'Trace complete!');
-    } catch (err) {
-      toast.error('Trace failed', {
-        description: err instanceof Error ? err.message : 'Unknown error',
-      });
-    }
-  }, [activeConversation]);
-
-  // Wrappers that clear cache and hard-refetch messages after block changes.
-  // jumpToBottom does cache.remove + fetchMessages(true) which fully replaces
-  // the message state; triggerReconcile only merges diffs and would keep
-  // blocked messages already in state.
-  const handleBlockKey = useCallback(
-    async (key: string) => {
-      await handleToggleBlockedKey(key);
-      messageCache.clear();
-      jumpToBottom();
-    },
-    [handleToggleBlockedKey, jumpToBottom]
-  );
-
-  const handleBlockName = useCallback(
-    async (name: string) => {
-      await handleToggleBlockedName(name);
-      messageCache.clear();
-      jumpToBottom();
-    },
-    [handleToggleBlockedName, jumpToBottom]
-  );
-
   const handleCloseSettingsView = useCallback(() => {
     startTransition(() => setShowSettings(false));
     setSidebarOpen(false);
@@ -408,64 +320,6 @@ export function App() {
   const handleToggleCracker = useCallback(() => {
     setShowCracker((prev) => !prev);
   }, []);
-
-  const handleOpenContactInfo = useCallback((publicKey: string, fromChannel?: boolean) => {
-    setInfoPaneContactKey(publicKey);
-    setInfoPaneFromChannel(fromChannel ?? false);
-  }, []);
-
-  const handleCloseContactInfo = useCallback(() => {
-    setInfoPaneContactKey(null);
-  }, []);
-
-  const handleOpenChannelInfo = useCallback((channelKey: string) => {
-    setInfoPaneChannelKey(channelKey);
-  }, []);
-
-  const handleCloseChannelInfo = useCallback(() => {
-    setInfoPaneChannelKey(null);
-  }, []);
-
-  const handleSelectConversationWithTargetReset = useCallback(
-    (conv: Conversation, options?: { preserveTarget?: boolean }) => {
-      if (conv.type !== 'search' && !options?.preserveTarget) {
-        setTargetMessageId(null);
-      }
-      handleSelectConversation(conv);
-    },
-    [handleSelectConversation]
-  );
-
-  const handleNavigateToChannel = useCallback(
-    (channelKey: string) => {
-      const channel = channels.find((c) => c.key === channelKey);
-      if (channel) {
-        handleSelectConversationWithTargetReset({
-          type: 'channel',
-          id: channel.key,
-          name: channel.name,
-        });
-        setInfoPaneContactKey(null);
-      }
-    },
-    [channels, handleSelectConversationWithTargetReset]
-  );
-
-  const handleNavigateToMessage = useCallback(
-    (target: SearchNavigateTarget) => {
-      const convType = target.type === 'CHAN' ? 'channel' : 'contact';
-      setTargetMessageId(target.id);
-      handleSelectConversationWithTargetReset(
-        {
-          type: convType,
-          id: target.conversation_key,
-          name: target.conversation_name,
-        },
-        { preserveTarget: true }
-      );
-    },
-    [handleSelectConversationWithTargetReset]
-  );
 
   // Sidebar content (shared between desktop and mobile)
   const sidebarContent = (

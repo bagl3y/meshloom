@@ -35,6 +35,7 @@ frontend/src/
 │   └── utils.ts            # cn() — clsx + tailwind-merge helper
 ├── hooks/
 │   ├── index.ts            # Central re-export of all hooks
+│   ├── useConversationActions.ts   # Send/navigation/info-pane conversation actions
 │   ├── useConversationMessages.ts  # Fetch, pagination, dedup, ACK buffering
 │   ├── useUnreadCounts.ts          # Unread counters, mentions, recent-sort timestamps
 │   ├── useRealtimeAppState.ts      # WebSocket event application and reconnect recovery
@@ -157,6 +158,7 @@ frontend/src/
 - `useAppSettings`: settings CRUD, favorites, preferences migration
 - `useContactsAndChannels`: contact/channel lists, creation, deletion
 - `useConversationRouter`: URL hash → active conversation routing
+- `useConversationActions`: send/resend/trace/navigation handlers and info-pane state
 - `useConversationMessages`: fetch, pagination, dedup/update helpers
 - `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps
 - `useRealtimeAppState`: typed WS event application, reconnect recovery, cache/unread coordination
@@ -284,7 +286,7 @@ Clicking a contact's avatar in `ChatHeader` or `MessageList` opens a `ContactInf
 - Nearest repeaters (resolved from first-hop path prefixes)
 - Recent advert paths
 
-State: `infoPaneContactKey` in App.tsx controls open/close. Live contact data from WebSocket updates is preferred over the initial detail snapshot.
+State: `useConversationActions` controls open/close via `infoPaneContactKey`. Live contact data from WebSocket updates is preferred over the initial detail snapshot.
 
 ## Channel Info Pane
 
@@ -296,7 +298,7 @@ Clicking a channel name in `ChatHeader` opens a `ChannelInfoPane` sheet (right d
 - First message date
 - Top senders in last 24h (name + count)
 
-State: `infoPaneChannelKey` in App.tsx controls open/close. Live channel data from the `channels` array is preferred over the initial detail snapshot.
+State: `useConversationActions` controls open/close via `infoPaneChannelKey`. Live channel data from the `channels` array is preferred over the initial detail snapshot.
 
 ## Repeater Dashboard
 
@@ -316,7 +318,7 @@ All state is managed by `useRepeaterDashboard` hook. State resets on conversatio
 
 The `SearchView` component (`components/SearchView.tsx`) provides full-text search across all DMs and channel messages. Key behaviors:
 
-- **State**: `targetMessageId` in `App.tsx` drives the jump-to-message flow. When a search result is clicked, `handleNavigateToMessage` sets `targetMessageId` and switches to the target conversation.
+- **State**: `targetMessageId` is shared between `App.tsx`, `useConversationActions`, and `useConversationMessages`. When a search result is clicked, `handleNavigateToMessage` sets the target ID and switches to the target conversation.
 - **Persistence**: `SearchView` stays mounted after first open using the same `hidden` class pattern as `CrackerPanel`, preserving search state when navigating to results.
 - **Jump-to-message**: `useConversationMessages` accepts optional `targetMessageId`. When set, it calls `api.getMessagesAround()` instead of normal fetch, loading context around the target message. `MessageList` scrolls to the target via `data-message-id` attribute and applies a `message-highlight` CSS animation.
 - **Bidirectional pagination**: After jumping mid-history, `hasNewerMessages` enables forward pagination via `fetchNewerMessages`. The scroll-to-bottom button calls `jumpToBottom` (re-fetches latest page) instead of just scrolling.

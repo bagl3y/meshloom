@@ -6,3 +6,4 @@ export { useAppSettings } from './useAppSettings';
 export { useConversationRouter } from './useConversationRouter';
 export { useContactsAndChannels } from './useContactsAndChannels';
 export { useRealtimeAppState } from './useRealtimeAppState';
+export { useConversationActions } from './useConversationActions';
