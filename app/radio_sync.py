@@ -17,15 +17,16 @@ from contextlib import asynccontextmanager
 from meshcore import EventType, MeshCore
 
 from app.event_handlers import cleanup_expired_acks
-from app.models import Contact
-from app.radio import RadioOperationBusyError, radio_manager
+from app.models import Contact, ContactUpsert
+from app.radio import RadioOperationBusyError
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
     AppSettingsRepository,
     ChannelRepository,
     ContactRepository,
-    MessageRepository,
 )
+from app.services.contact_reconciliation import reconcile_contact_messages
+from app.services.radio_runtime import radio_runtime as radio_manager
 
 logger = logging.getLogger(__name__)
 
@@ -154,26 +155,13 @@ async def sync_and_offload_contacts(mc: MeshCore) -> dict:
         for public_key, contact_data in contacts.items():
             # Save to database
             await ContactRepository.upsert(
-                Contact.from_radio_dict(public_key, contact_data, on_radio=False)
+                ContactUpsert.from_radio_dict(public_key, contact_data, on_radio=False)
             )
-            claimed = await MessageRepository.claim_prefix_messages(public_key.lower())
-            if claimed > 0:
-                logger.info(
-                    "Claimed %d prefix DM message(s) for contact %s",
-                    claimed,
-                    public_key[:12],
-                )
-            adv_name = contact_data.get("adv_name")
-            if adv_name:
-                backfilled = await MessageRepository.backfill_channel_sender_key(
-                    public_key, adv_name
-                )
-                if backfilled > 0:
-                    logger.info(
-                        "Backfilled sender_key on %d channel message(s) for %s",
-                        backfilled,
-                        adv_name,
-                    )
+            await reconcile_contact_messages(
+                public_key=public_key,
+                contact_name=contact_data.get("adv_name"),
+                log=logger,
+            )
             synced += 1
 
             # Remove from radio
@@ -757,6 +745,7 @@ async def sync_recent_contacts_to_radio(force: bool = False, mc: MeshCore | None
     # If caller provided a MeshCore instance, use it directly (caller holds the lock)
     if mc is not None:
         _last_contact_sync = now
+        assert mc is not None
         return await _sync_contacts_to_radio_inner(mc)
 
     if not radio_manager.is_connected or radio_manager.meshcore is None:
@@ -769,6 +758,7 @@ async def sync_recent_contacts_to_radio(force: bool = False, mc: MeshCore | None
             blocking=False,
         ) as mc:
             _last_contact_sync = now
+            assert mc is not None
             return await _sync_contacts_to_radio_inner(mc)
     except RadioOperationBusyError:
         logger.debug("Skipping contact sync to radio: radio busy")

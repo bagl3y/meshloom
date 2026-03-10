@@ -11,6 +11,14 @@ Keep it aligned with `app/` source files and router behavior.
 - MeshCore Python library (`meshcore` from PyPI)
 - PyCryptodome
 
+## Code Ethos
+
+- Prefer strong domain modules over layers of pass-through helpers.
+- Split code when the new module owns real policy, not just a nicer name.
+- Avoid wrapper services around globals unless they materially improve testability or reduce coupling.
+- Keep workflows locally understandable; do not scatter one reasoning unit across several files without a clear contract.
+- Typed write/read contracts are preferred over loose dict-shaped repository inputs.
+
 ## Backend Map
 
 ```text
@@ -19,13 +27,22 @@ app/
 ├── config.py            # Env-driven runtime settings
 ├── database.py          # SQLite connection + base schema + migration runner
 ├── migrations.py        # Schema migrations (SQLite user_version)
-├── models.py            # Pydantic request/response models
+├── models.py            # Pydantic request/response models and typed write contracts (for example ContactUpsert)
 ├── repository/          # Data access layer (contacts, channels, messages, raw_packets, settings, fanout)
-├── radio.py             # RadioManager + auto-reconnect monitor
+├── services/            # Shared orchestration/domain services
+│   ├── messages.py              # Shared message creation, dedup, ACK application
+│   ├── message_send.py          # Direct send, channel send, resend workflows
+│   ├── dm_ack_tracker.py        # Pending DM ACK state
+│   ├── contact_reconciliation.py # Prefix-claim, sender-key backfill, name-history wiring
+│   ├── radio_lifecycle.py       # Post-connect setup and reconnect/setup helpers
+│   ├── radio_commands.py        # Radio config/private-key command workflows
+│   └── radio_runtime.py         # Router/dependency seam over the global RadioManager
+├── radio.py             # RadioManager transport/session state + lock management
 ├── radio_sync.py        # Polling, sync, periodic advertisement loop
 ├── decoder.py           # Packet parsing/decryption
 ├── packet_processor.py  # Raw packet pipeline, dedup, path handling
 ├── event_handlers.py    # MeshCore event subscriptions and ACK tracking
+├── events.py            # Typed WS event payload serialization
 ├── websocket.py         # WS manager + broadcast helpers
 ├── fanout/              # Fanout bus: MQTT, bots, webhooks, Apprise (see fanout/AGENTS_fanout.md)
 ├── dependencies.py      # Shared FastAPI dependency providers
@@ -53,13 +70,13 @@ app/
 
 1. Radio emits events.
 2. `on_rx_log_data` stores raw packet and tries decrypt/pipeline handling.
-3. Decrypted messages are inserted into `messages` and broadcast over WS.
+3. Shared message-domain services create/update `messages` and shape WS payloads.
 4. `CONTACT_MSG_RECV` is a fallback DM path when packet pipeline cannot decrypt.
 
 ### Outgoing messages
 
-1. Send endpoints in `routers/messages.py` call MeshCore commands.
-2. Message is persisted as outgoing.
+1. Send endpoints in `routers/messages.py` validate requests and delegate to `services/message_send.py`.
+2. Service-layer send workflows call MeshCore commands, persist outgoing messages, and wire ACK tracking.
 3. Endpoint broadcasts WS `message` event so all live clients update.
 4. ACK/repeat updates arrive later as `message_acked` events.
 5. Channel resend (`POST /messages/channel/{id}/resend`) strips the sender name prefix by exact match against the current radio name. This assumes the radio name hasn't changed between the original send and the resend. Name changes require an explicit radio config update and are rare, but the `new_timestamp=true` resend path has no time window, so a mismatch is possible if the name was changed between the original send and a later resend.
@@ -67,9 +84,10 @@ app/
 ### Connection lifecycle
 
 - `RadioManager.start_connection_monitor()` checks health every 5s.
-- Monitor reconnect path runs `post_connect_setup()` before broadcasting healthy state.
-- Manual reconnect/reboot endpoints call `reconnect()` then `post_connect_setup()`.
-- Setup includes handler registration, key export, time sync, contact/channel sync, polling/advert tasks.
+- `RadioManager.post_connect_setup()` delegates to `services/radio_lifecycle.py`.
+- Routers, startup/lifespan code, fanout helpers, and `radio_sync.py` should reach radio state through `services/radio_runtime.py`, not by importing `app.radio.radio_manager` directly.
+- Shared reconnect/setup helpers in `services/radio_lifecycle.py` are used by startup, the monitor, and manual reconnect/reboot flows before broadcasting healthy state.
+- Setup still includes handler registration, key export, time sync, contact/channel sync, polling/advert tasks.
 
 ## Important Behaviors
 
@@ -215,7 +233,7 @@ app/
 - `error` — toast notification (reconnect failure, missing private key, etc.)
 - `success` — toast notification (historical decrypt complete, etc.)
 
-Initial WS connect sends `health` only. Contacts/channels are loaded by REST.
+Backend WS sends go through typed serialization in `events.py`. Initial WS connect sends `health` only. Contacts/channels are loaded by REST.
 Client sends `"ping"` text; server replies `{"type":"pong"}`.
 
 ## Data Model Notes
@@ -229,6 +247,8 @@ Main tables:
 - `contact_advert_paths` (recent unique advertisement paths per contact, keyed by contact + path bytes + hop count)
 - `contact_name_history` (tracks name changes over time)
 - `app_settings`
+
+Repository writes should prefer typed models such as `ContactUpsert` over ad hoc dict payloads when adding or updating schema-coupled data.
 
 `app_settings` fields in active model:
 - `max_radio_contacts`
@@ -289,6 +309,8 @@ tests/
 ├── test_packet_pipeline.py     # End-to-end packet processing
 ├── test_packets_router.py      # Packets router endpoints (decrypt, maintenance)
 ├── test_radio.py               # RadioManager, serial detection
+├── test_radio_commands_service.py # Radio config/private-key service workflows
+├── test_radio_lifecycle_service.py # Reconnect/setup orchestration helpers
 ├── test_real_crypto.py         # Real cryptographic operations
 ├── test_radio_operation.py     # radio_operation() context manager
 ├── test_radio_router.py        # Radio router endpoints

@@ -5,8 +5,8 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.config import settings
-from app.radio import radio_manager
 from app.repository import RawPacketRepository
+from app.services.radio_runtime import radio_runtime as radio_manager
 
 router = APIRouter(tags=["health"])
 
@@ -53,6 +53,8 @@ async def build_health_data(radio_connected: bool, connection_info: str | None) 
     setup_complete = getattr(radio_manager, "is_setup_complete", radio_connected)
     if not isinstance(setup_complete, bool):
         setup_complete = radio_connected
+    if not radio_connected:
+        setup_complete = False
 
     radio_initializing = bool(radio_connected and (setup_in_progress or not setup_complete))
 

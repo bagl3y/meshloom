@@ -12,13 +12,13 @@ from app.models import (
     ContactAdvertPathSummary,
     ContactDetail,
     ContactRoutingOverrideRequest,
+    ContactUpsert,
     CreateContactRequest,
     NearestRepeater,
     TraceResponse,
 )
 from app.packet_processor import start_historical_dm_decryption
 from app.path_utils import parse_explicit_hop_route
-from app.radio import radio_manager
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
     ContactAdvertPathRepository,
@@ -26,6 +26,8 @@ from app.repository import (
     ContactRepository,
     MessageRepository,
 )
+from app.services.contact_reconciliation import reconcile_contact_messages
+from app.services.radio_runtime import radio_runtime as radio_manager
 
 logger = logging.getLogger(__name__)
 
@@ -132,23 +134,7 @@ async def create_contact(
     if existing:
         # Update name if provided
         if request.name:
-            await ContactRepository.upsert(
-                {
-                    "public_key": existing.public_key,
-                    "name": request.name,
-                    "type": existing.type,
-                    "flags": existing.flags,
-                    "last_path": existing.last_path,
-                    "last_path_len": existing.last_path_len,
-                    "out_path_hash_mode": existing.out_path_hash_mode,
-                    "last_advert": existing.last_advert,
-                    "lat": existing.lat,
-                    "lon": existing.lon,
-                    "last_seen": existing.last_seen,
-                    "on_radio": existing.on_radio,
-                    "last_contacted": existing.last_contacted,
-                }
-            )
+            await ContactRepository.upsert(existing.to_upsert(name=request.name))
             refreshed = await ContactRepository.get_by_key(request.public_key)
             if refreshed is not None:
                 existing = refreshed
@@ -163,42 +149,26 @@ async def create_contact(
 
     # Create new contact
     lower_key = request.public_key.lower()
-    contact_data = {
-        "public_key": lower_key,
-        "name": request.name,
-        "type": 0,  # Unknown
-        "flags": 0,
-        "last_path": None,
-        "last_path_len": -1,
-        "out_path_hash_mode": -1,
-        "last_advert": None,
-        "lat": None,
-        "lon": None,
-        "last_seen": None,
-        "on_radio": False,
-        "last_contacted": None,
-    }
-    await ContactRepository.upsert(contact_data)
+    contact_upsert = ContactUpsert(
+        public_key=lower_key,
+        name=request.name,
+        out_path_hash_mode=-1,
+        on_radio=False,
+    )
+    await ContactRepository.upsert(contact_upsert)
     logger.info("Created contact %s", lower_key[:12])
 
-    # Promote any prefix-stored messages to this full key
-    claimed = await MessageRepository.claim_prefix_messages(lower_key)
-    if claimed > 0:
-        logger.info("Claimed %d prefix messages for contact %s", claimed, lower_key[:12])
-
-    # Backfill sender_key on channel messages that match this contact's name
-    if request.name:
-        backfilled = await MessageRepository.backfill_channel_sender_key(lower_key, request.name)
-        if backfilled > 0:
-            logger.info(
-                "Backfilled sender_key on %d channel message(s) for %s", backfilled, request.name
-            )
+    await reconcile_contact_messages(
+        public_key=lower_key,
+        contact_name=request.name,
+        log=logger,
+    )
 
     # Trigger historical decryption if requested
     if request.try_historical:
         await start_historical_dm_decryption(background_tasks, lower_key, request.name)
 
-    return Contact(**contact_data)
+    return Contact(**contact_upsert.model_dump())
 
 
 @router.get("/{public_key}/detail", response_model=ContactDetail)
@@ -315,21 +285,14 @@ async def sync_contacts_from_radio() -> dict:
     for public_key, contact_data in contacts.items():
         lower_key = public_key.lower()
         await ContactRepository.upsert(
-            Contact.from_radio_dict(lower_key, contact_data, on_radio=True)
+            ContactUpsert.from_radio_dict(lower_key, contact_data, on_radio=True)
         )
         synced_keys.append(lower_key)
-        claimed = await MessageRepository.claim_prefix_messages(lower_key)
-        if claimed > 0:
-            logger.info("Claimed %d prefix DM message(s) for contact %s", claimed, public_key[:12])
-        adv_name = contact_data.get("adv_name")
-        if adv_name:
-            backfilled = await MessageRepository.backfill_channel_sender_key(lower_key, adv_name)
-            if backfilled > 0:
-                logger.info(
-                    "Backfilled sender_key on %d channel message(s) for %s",
-                    backfilled,
-                    adv_name,
-                )
+        await reconcile_contact_messages(
+            public_key=lower_key,
+            contact_name=contact_data.get("adv_name"),
+            log=logger,
+        )
         count += 1
 
     # Clear on_radio for contacts not found on the radio

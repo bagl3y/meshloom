@@ -16,15 +16,25 @@ Keep it aligned with `frontend/src` source code.
 - `meshcore-hashtag-cracker` + `nosleep.js` (channel cracker)
 - Multibyte-aware decoder build published as `meshcore-decoder-multibyte-patch`
 
+## Code Ethos
+
+- Prefer fewer, stronger modules over many thin wrappers.
+- Split code only when the new hook/component owns a real invariant or workflow.
+- Keep one reasoning unit readable in one place, even if that file is moderately large.
+- Avoid dedicated files whose main job is pass-through, prop bundling, or renaming.
+- For this repo, "locally dense but semantically obvious" is better than indirection-heavy "clean architecture".
+- When refactoring, preserve behavior first and add tests around the seam being moved.
+
 ## Frontend Map
 
 ```text
 frontend/src/
 ├── main.tsx                # React entry point (StrictMode, root render)
-├── App.tsx                 # App shell and orchestration
+├── App.tsx                 # Data/orchestration entry that wires hooks into AppShell
 ├── api.ts                  # Typed REST client
 ├── types.ts                # Shared TS contracts
 ├── useWebSocket.ts         # WS lifecycle + event dispatch
+├── wsEvents.ts             # Typed WS event parsing / discriminated union
 ├── messageCache.ts         # Conversation-scoped cache
 ├── prefetch.ts             # Consumes prefetched API promises started in index.html
 ├── index.css               # Global styles/utilities
@@ -34,13 +44,27 @@ frontend/src/
 │   └── utils.ts            # cn() — clsx + tailwind-merge helper
 ├── hooks/
 │   ├── index.ts            # Central re-export of all hooks
-│   ├── useConversationMessages.ts  # Fetch, pagination, dedup, ACK buffering
+│   ├── useConversationActions.ts   # Send/resend/trace/block conversation actions
+│   ├── useConversationNavigation.ts # Search target, selection reset, and info-pane navigation state
+│   ├── useConversationMessages.ts  # Conversation timeline loading, cache restore, jump-target loading, pagination, dedup, pending ACK buffering
 │   ├── useUnreadCounts.ts          # Unread counters, mentions, recent-sort timestamps
+│   ├── useRealtimeAppState.ts      # WebSocket event application and reconnect recovery
+│   ├── useAppShell.ts              # App-shell view state (settings/sidebar/modals/cracker)
 │   ├── useRepeaterDashboard.ts      # Repeater dashboard state (login, panes, console, retries)
 │   ├── useRadioControl.ts          # Radio health/config state, reconnection
 │   ├── useAppSettings.ts           # Settings, favorites, preferences migration
 │   ├── useConversationRouter.ts    # URL hash → active conversation routing
 │   └── useContactsAndChannels.ts   # Contact/channel loading, creation, deletion
+├── components/
+│   ├── AppShell.tsx            # App-shell layout: status, sidebar, search/settings panes, cracker, modals
+│   ├── ConversationPane.tsx    # Active conversation surface selection (map/raw/repeater/chat/empty)
+│   ├── visualizer/
+│   │   ├── useVisualizerData3D.ts   # Packet→graph data pipeline, repeat aggregation, simulation state
+│   │   ├── useVisualizer3DScene.ts  # Three.js scene lifecycle, buffers, hover/pin interaction
+│   │   ├── VisualizerControls.tsx   # Visualizer legends and control panel overlay
+│   │   ├── VisualizerTooltip.tsx    # Hover/pin node detail overlay
+│   │   └── shared.ts                # Graph node/link types and shared rendering helpers
+│   └── ...
 ├── utils/
 │   ├── urlHash.ts              # Hash parsing and encoding
 │   ├── conversationState.ts    # State keys, in-memory + localStorage helpers
@@ -136,10 +160,15 @@ frontend/src/
     ├── searchView.test.tsx
     ├── useConversationMessages.test.ts
     ├── useConversationMessages.race.test.ts
+    ├── useConversationNavigation.test.ts
+    ├── useAppShell.test.ts
     ├── useRepeaterDashboard.test.ts
     ├── useContactsAndChannels.test.ts
+    ├── useRealtimeAppState.test.ts
+    ├── useUnreadCounts.test.ts
     ├── useWebSocket.dispatch.test.ts
-    └── useWebSocket.lifecycle.test.ts
+    ├── useWebSocket.lifecycle.test.ts
+    └── wsEvents.test.ts
 
 ```
 
@@ -147,19 +176,42 @@ frontend/src/
 
 ### State ownership
 
-`App.tsx` orchestrates high-level state and delegates to hooks:
+`App.tsx` is now a thin composition entrypoint over the hook layer. `AppShell.tsx` owns shell layout/composition:
+- local label banner
+- status bar
+- desktop/mobile sidebar container
+- search/settings surface switching
+- global cracker mount/focus behavior
+- new-message modal and info panes
+
+High-level state is delegated to hooks:
+- `useAppShell`: app-shell view state (settings section, sidebar, cracker, new-message modal)
 - `useRadioControl`: radio health/config state, reconnect/reboot polling
 - `useAppSettings`: settings CRUD, favorites, preferences migration
 - `useContactsAndChannels`: contact/channel lists, creation, deletion
 - `useConversationRouter`: URL hash → active conversation routing
-- `useConversationMessages`: fetch, pagination, dedup/update helpers
+- `useConversationNavigation`: search target, conversation selection reset, and info-pane state
+- `useConversationActions`: send/resend/trace/block handlers and channel override updates
+- `useConversationMessages`: conversation switch loading, cache restore, jump-target loading, pagination, dedup/update helpers, and pending ACK buffering
 - `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps
+- `useRealtimeAppState`: typed WS event application, reconnect recovery, cache/unread coordination
 - `useRepeaterDashboard`: repeater dashboard state (login, pane data/retries, console, actions)
+
+`App.tsx` intentionally still does the final `AppShell` prop assembly. That composition layer is considered acceptable here because it keeps the shell contract visible in one place and avoids a prop-bundling hook with little original logic.
+
+`ConversationPane.tsx` owns the main active-conversation surface branching:
+- empty state
+- map view
+- visualizer
+- raw packet feed
+- repeater dashboard
+- normal chat chrome (`ChatHeader` + `MessageList` + `MessageInput`)
 
 ### Initial load + realtime
 
 - Initial data: REST fetches (`api.ts`) for config/settings/channels/contacts/unreads.
 - WebSocket: realtime deltas/events.
+- On reconnect, the app refetches channels and contacts, refreshes unread counts, and reconciles the active conversation to recover disconnect-window drift.
 - On WS connect, backend sends `health` only; contacts/channels still come from REST.
 
 ### New Message modal
@@ -176,6 +228,7 @@ frontend/src/
 ### Visualizer behavior
 
 - `VisualizerView.tsx` hosts `PacketVisualizer3D.tsx` (desktop split-pane and mobile tabs).
+- `PacketVisualizer3D.tsx` is now a thin composition shell over visualizer-specific hooks/components in `components/visualizer/`.
 - `PacketVisualizer3D` uses persistent Three.js geometries for links/highlights/particles and updates typed-array buffers in-place per frame.
 - Packet repeat aggregation keys prefer decoder `messageHash` (path-insensitive), with hash fallback for malformed packets.
 - Raw-packet decoding in `RawPacketList.tsx` and `visualizerUtils.ts` relies on the multibyte-aware decoder fork; keep frontend packet parsing aligned with backend `path_utils.py`.
@@ -193,6 +246,7 @@ frontend/src/
 
 - Auto reconnect (3s) with cleanup guard on unmount.
 - Heartbeat ping every 30s.
+- Incoming JSON is parsed through `wsEvents.ts`, which returns a typed discriminated union for known events and a centralized `unknown` fallback.
 - Event handlers: `health`, `message`, `contact`, `raw_packet`, `message_acked`, `contact_deleted`, `channel_deleted`, `error`, `success`, `pong` (ignored).
 - For `raw_packet` events, use `observation_id` as event identity; `id` is a storage reference and may repeat.
 
@@ -276,7 +330,7 @@ Clicking a contact's avatar in `ChatHeader` or `MessageList` opens a `ContactInf
 - Nearest repeaters (resolved from first-hop path prefixes)
 - Recent advert paths
 
-State: `infoPaneContactKey` in App.tsx controls open/close. Live contact data from WebSocket updates is preferred over the initial detail snapshot.
+State: `useConversationNavigation` controls open/close via `infoPaneContactKey`. Live contact data from WebSocket updates is preferred over the initial detail snapshot.
 
 ## Channel Info Pane
 
@@ -288,11 +342,11 @@ Clicking a channel name in `ChatHeader` opens a `ChannelInfoPane` sheet (right d
 - First message date
 - Top senders in last 24h (name + count)
 
-State: `infoPaneChannelKey` in App.tsx controls open/close. Live channel data from the `channels` array is preferred over the initial detail snapshot.
+State: `useConversationNavigation` controls open/close via `infoPaneChannelKey`. Live channel data from the `channels` array is preferred over the initial detail snapshot.
 
 ## Repeater Dashboard
 
-For repeater contacts (`type=2`), App.tsx renders `RepeaterDashboard` instead of the normal chat UI (ChatHeader + MessageList + MessageInput).
+For repeater contacts (`type=2`), `ConversationPane.tsx` renders `RepeaterDashboard` instead of the normal chat UI (ChatHeader + MessageList + MessageInput).
 
 **Login**: `RepeaterLogin` component — password or guest login via `POST /api/contacts/{key}/repeater/login`.
 
@@ -308,9 +362,10 @@ All state is managed by `useRepeaterDashboard` hook. State resets on conversatio
 
 The `SearchView` component (`components/SearchView.tsx`) provides full-text search across all DMs and channel messages. Key behaviors:
 
-- **State**: `targetMessageId` in `App.tsx` drives the jump-to-message flow. When a search result is clicked, `handleNavigateToMessage` sets `targetMessageId` and switches to the target conversation.
+- **State**: `targetMessageId` is shared between `useConversationNavigation` and `useConversationMessages`. When a search result is clicked, `handleNavigateToMessage` sets the target ID and switches to the target conversation.
+- **Same-conversation clear**: when `targetMessageId` is cleared after the target is reached, the hook preserves the around-loaded mid-history view instead of replacing it with the latest page.
 - **Persistence**: `SearchView` stays mounted after first open using the same `hidden` class pattern as `CrackerPanel`, preserving search state when navigating to results.
-- **Jump-to-message**: `useConversationMessages` accepts optional `targetMessageId`. When set, it calls `api.getMessagesAround()` instead of normal fetch, loading context around the target message. `MessageList` scrolls to the target via `data-message-id` attribute and applies a `message-highlight` CSS animation.
+- **Jump-to-message**: `useConversationMessages` handles optional `targetMessageId` by calling `api.getMessagesAround()` instead of the normal latest-page fetch, loading context around the target message. `MessageList` scrolls to the target via `data-message-id` attribute and applies a `message-highlight` CSS animation.
 - **Bidirectional pagination**: After jumping mid-history, `hasNewerMessages` enables forward pagination via `fetchNewerMessages`. The scroll-to-bottom button calls `jumpToBottom` (re-fetches latest page) instead of just scrolling.
 - **WS message suppression**: When `hasNewerMessages` is true, incoming WS messages for the active conversation are not added to the message list (the user is viewing historical context, not the latest page).
 

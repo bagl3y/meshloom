@@ -25,9 +25,9 @@ from app.models import (
     RepeaterRadioSettingsResponse,
     RepeaterStatusResponse,
 )
-from app.radio import radio_manager
 from app.repository import ContactRepository
 from app.routers.contacts import _ensure_on_radio, _resolve_contact_or_404
+from app.services.radio_runtime import radio_runtime as radio_manager
 
 if TYPE_CHECKING:
     from meshcore.events import Event

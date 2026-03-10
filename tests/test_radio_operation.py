@@ -7,6 +7,11 @@ import pytest
 
 from app.radio import RadioDisconnectedError, RadioOperationBusyError, radio_manager
 from app.radio_sync import is_polling_paused
+from app.services.radio_runtime import RadioRuntime
+
+
+def _runtime(manager):
+    return RadioRuntime(lambda: manager)
 
 
 @pytest.fixture(autouse=True)
@@ -180,11 +185,11 @@ class TestRequireConnected:
 
         from app.dependencies import require_connected
 
-        with patch("app.dependencies.radio_manager") as mock_rm:
-            mock_rm.is_connected = True
-            mock_rm.meshcore = MagicMock()
-            mock_rm.is_setup_in_progress = True
-
+        manager = MagicMock()
+        manager.is_connected = True
+        manager.meshcore = MagicMock()
+        manager.is_setup_in_progress = True
+        with patch("app.dependencies.radio_manager", _runtime(manager)):
             with pytest.raises(HTTPException) as exc_info:
                 require_connected()
 
@@ -197,11 +202,11 @@ class TestRequireConnected:
 
         from app.dependencies import require_connected
 
-        with patch("app.dependencies.radio_manager") as mock_rm:
-            mock_rm.is_setup_in_progress = False
-            mock_rm.is_connected = False
-            mock_rm.meshcore = None
-
+        manager = MagicMock()
+        manager.is_setup_in_progress = False
+        manager.is_connected = False
+        manager.meshcore = None
+        with patch("app.dependencies.radio_manager", _runtime(manager)):
             with pytest.raises(HTTPException) as exc_info:
                 require_connected()
 
@@ -212,11 +217,11 @@ class TestRequireConnected:
         from app.dependencies import require_connected
 
         mock_mc = MagicMock()
-        with patch("app.dependencies.radio_manager") as mock_rm:
-            mock_rm.is_setup_in_progress = False
-            mock_rm.is_connected = True
-            mock_rm.meshcore = mock_mc
-
+        manager = MagicMock()
+        manager.is_setup_in_progress = False
+        manager.is_connected = True
+        manager.meshcore = mock_mc
+        with patch("app.dependencies.radio_manager", _runtime(manager)):
             result = require_connected()
 
         assert result is mock_mc

@@ -22,6 +22,7 @@ from app.routers.radio import (
     set_private_key,
     update_radio_config,
 )
+from app.services.radio_runtime import RadioRuntime
 
 
 def _radio_result(event_type=EventType.OK, payload=None):
@@ -39,6 +40,10 @@ def _noop_radio_operation(mc=None):
         yield mc
 
     return _ctx
+
+
+def _runtime(manager):
+    return RadioRuntime(lambda: manager)
 
 
 @pytest.fixture(autouse=True)
@@ -301,7 +306,7 @@ class TestAdvertise:
         isolated_manager._meshcore = MagicMock()
         with (
             patch("app.routers.radio.require_connected"),
-            patch("app.routers.radio.radio_manager", isolated_manager),
+            patch("app.routers.radio.radio_manager", _runtime(isolated_manager)),
             patch(
                 "app.routers.radio.do_send_advertisement",
                 new_callable=AsyncMock,
@@ -324,7 +329,7 @@ class TestRebootAndReconnect:
         mock_rm.meshcore = mock_mc
         mock_rm.radio_operation = _noop_radio_operation(mock_mc)
 
-        with patch("app.routers.radio.radio_manager", mock_rm):
+        with patch("app.routers.radio.radio_manager", _runtime(mock_rm)):
             result = await reboot_radio()
 
         assert result["status"] == "ok"
@@ -338,7 +343,7 @@ class TestRebootAndReconnect:
         mock_rm.is_reconnecting = True
         mock_rm.radio_operation = _noop_radio_operation()
 
-        with patch("app.routers.radio.radio_manager", mock_rm):
+        with patch("app.routers.radio.radio_manager", _runtime(mock_rm)):
             result = await reboot_radio()
 
         assert result["status"] == "pending"
@@ -353,8 +358,9 @@ class TestRebootAndReconnect:
         mock_rm.reconnect = AsyncMock(return_value=True)
         mock_rm.post_connect_setup = AsyncMock()
         mock_rm.radio_operation = _noop_radio_operation()
+        mock_rm.connection_info = "TCP: test:4000"
 
-        with patch("app.routers.radio.radio_manager", mock_rm):
+        with patch("app.routers.radio.radio_manager", _runtime(mock_rm)):
             result = await reboot_radio()
 
         assert result["status"] == "ok"
@@ -367,8 +373,9 @@ class TestRebootAndReconnect:
         mock_rm = MagicMock()
         mock_rm.is_connected = True
         mock_rm.radio_operation = _noop_radio_operation()
+        mock_rm.is_setup_complete = True
 
-        with patch("app.routers.radio.radio_manager", mock_rm):
+        with patch("app.routers.radio.radio_manager", _runtime(mock_rm)):
             result = await reconnect_radio()
 
         assert result["status"] == "ok"
@@ -382,7 +389,7 @@ class TestRebootAndReconnect:
         mock_rm.reconnect = AsyncMock(return_value=False)
         mock_rm.radio_operation = _noop_radio_operation()
 
-        with patch("app.routers.radio.radio_manager", mock_rm):
+        with patch("app.routers.radio.radio_manager", _runtime(mock_rm)):
             with pytest.raises(HTTPException) as exc:
                 await reconnect_radio()
 

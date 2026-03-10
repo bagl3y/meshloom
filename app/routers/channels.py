@@ -7,10 +7,10 @@ from pydantic import BaseModel, Field
 
 from app.dependencies import require_connected
 from app.models import Channel, ChannelDetail, ChannelMessageCounts, ChannelTopSender
-from app.radio import radio_manager
 from app.radio_sync import upsert_channel_from_radio_slot
 from app.region_scope import normalize_region_scope
 from app.repository import ChannelRepository, MessageRepository
+from app.services.radio_runtime import radio_runtime as radio_manager
 from app.websocket import broadcast_event
 
 logger = logging.getLogger(__name__)

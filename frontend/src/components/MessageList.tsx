@@ -148,6 +148,23 @@ function HopCountBadge({ paths, onClick, variant }: HopCountBadgeProps) {
 }
 
 const RESEND_WINDOW_SECONDS = 30;
+const CORRUPT_SENDER_LABEL = '<No name -- corrupt packet?>';
+
+function hasUnexpectedControlChars(text: string): boolean {
+  for (const char of text) {
+    const code = char.charCodeAt(0);
+    if (
+      (code >= 0 && code <= 8) ||
+      code === 11 ||
+      code === 12 ||
+      (code >= 14 && code <= 31) ||
+      code === 127
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export function MessageList({
   messages,
@@ -400,6 +417,17 @@ export function MessageList({
     return contacts.find((c) => c.name === name) || null;
   };
 
+  const isCorruptUnnamedChannelMessage = (msg: Message, parsedSender: string | null): boolean => {
+    return (
+      msg.type === 'CHAN' &&
+      !msg.outgoing &&
+      !msg.sender_name &&
+      !msg.sender_key &&
+      !parsedSender &&
+      hasUnexpectedControlChars(msg.text)
+    );
+  };
+
   // Build sender info for path modal
   const getSenderInfo = (
     msg: Message,
@@ -415,6 +443,32 @@ export function MessageList({
         pathHashMode: contact.out_path_hash_mode,
       };
     }
+    if (msg.type === 'CHAN') {
+      const senderName = msg.sender_name || parsedSender;
+      const senderContact =
+        (msg.sender_key
+          ? contacts.find((candidate) => candidate.public_key === msg.sender_key)
+          : null) || (senderName ? getContactByName(senderName) : null);
+      if (senderContact) {
+        return {
+          name: senderContact.name || senderName || senderContact.public_key.slice(0, 12),
+          publicKeyOrPrefix: senderContact.public_key,
+          lat: senderContact.lat,
+          lon: senderContact.lon,
+          pathHashMode: senderContact.out_path_hash_mode,
+        };
+      }
+      if (senderName || msg.sender_key) {
+        return {
+          name: senderName || msg.sender_key || 'Unknown',
+          publicKeyOrPrefix: msg.sender_key || msg.conversation_key || '',
+          lat: null,
+          lon: null,
+          pathHashMode: null,
+        };
+      }
+    }
+
     // For channel messages, try to find contact by parsed sender name
     if (parsedSender) {
       const senderContact = getContactByName(parsedSender);
@@ -455,10 +509,17 @@ export function MessageList({
   }
 
   // Helper to get a unique sender key for grouping messages
-  const getSenderKey = (msg: Message, sender: string | null): string => {
+  const getSenderKey = (
+    msg: Message,
+    senderName: string | null,
+    isCorruptChannelMessage: boolean
+  ): string => {
     if (msg.outgoing) return '__outgoing__';
     if (msg.type === 'PRIV' && msg.conversation_key) return msg.conversation_key;
-    return sender || '__unknown__';
+    if (msg.sender_key) return `key:${msg.sender_key}`;
+    if (senderName) return `name:${senderName}`;
+    if (isCorruptChannelMessage) return `corrupt:${msg.id}`;
+    return '__unknown__';
   };
 
   return (
@@ -487,17 +548,36 @@ export function MessageList({
           const { sender, content } = isRepeater
             ? { sender: null, content: msg.text }
             : parseSenderFromText(msg.text);
+          const channelSenderName = msg.type === 'CHAN' ? msg.sender_name || sender : null;
+          const channelSenderContact =
+            msg.type === 'CHAN' && channelSenderName ? getContactByName(channelSenderName) : null;
+          const isCorruptChannelMessage = isCorruptUnnamedChannelMessage(msg, sender);
           const displaySender = msg.outgoing
             ? 'You'
-            : contact?.name || sender || msg.conversation_key?.slice(0, 8) || 'Unknown';
+            : contact?.name ||
+              channelSenderName ||
+              (isCorruptChannelMessage
+                ? CORRUPT_SENDER_LABEL
+                : msg.conversation_key?.slice(0, 8) || 'Unknown');
 
-          const canClickSender = !msg.outgoing && onSenderClick && displaySender !== 'Unknown';
+          const canClickSender =
+            !msg.outgoing &&
+            onSenderClick &&
+            displaySender !== 'Unknown' &&
+            displaySender !== CORRUPT_SENDER_LABEL;
 
           // Determine if we should show avatar (first message in a chunk from same sender)
-          const currentSenderKey = getSenderKey(msg, sender);
+          const currentSenderKey = getSenderKey(msg, channelSenderName, isCorruptChannelMessage);
           const prevMsg = sortedMessages[index - 1];
+          const prevParsedSender = prevMsg ? parseSenderFromText(prevMsg.text).sender : null;
           const prevSenderKey = prevMsg
-            ? getSenderKey(prevMsg, parseSenderFromText(prevMsg.text).sender)
+            ? getSenderKey(
+                prevMsg,
+                prevMsg.type === 'CHAN'
+                  ? prevMsg.sender_name || prevParsedSender
+                  : prevParsedSender,
+                isCorruptUnnamedChannelMessage(prevMsg, prevParsedSender)
+              )
             : null;
           const isFirstInGroup = currentSenderKey !== prevSenderKey;
           const showAvatar = !msg.outgoing && isFirstInGroup;
@@ -506,16 +586,24 @@ export function MessageList({
           // Get avatar info for incoming messages
           let avatarName: string | null = null;
           let avatarKey: string = '';
+          let avatarVariant: 'default' | 'corrupt' = 'default';
           if (!msg.outgoing) {
             if (msg.type === 'PRIV' && msg.conversation_key) {
               // DM: use conversation_key (sender's public key)
               avatarName = contact?.name || null;
               avatarKey = msg.conversation_key;
-            } else if (sender) {
-              // Channel message: try to find contact by name, or use sender name as pseudo-key
-              const senderContact = getContactByName(sender);
-              avatarName = sender;
-              avatarKey = senderContact?.public_key || `name:${sender}`;
+            } else if (isCorruptChannelMessage) {
+              avatarName = CORRUPT_SENDER_LABEL;
+              avatarKey = `corrupt:${msg.id}`;
+              avatarVariant = 'corrupt';
+            } else {
+              // Channel message: use stored sender identity first, then parsed/fallback display name
+              avatarName =
+                channelSenderName || (displaySender !== 'Unknown' ? displaySender : null);
+              avatarKey =
+                msg.sender_key ||
+                channelSenderContact?.public_key ||
+                (avatarName ? `name:${avatarName}` : `message:${msg.id}`);
             }
           }
 
@@ -547,6 +635,7 @@ export function MessageList({
                         publicKey={avatarKey}
                         size={32}
                         clickable={!!onOpenContactInfo}
+                        variant={avatarVariant}
                       />
                     </span>
                   )}

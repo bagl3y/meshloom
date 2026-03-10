@@ -37,7 +37,7 @@ interface SettingsModalBaseProps {
   onToggleBlockedName?: (name: string) => void;
 }
 
-type SettingsModalProps = SettingsModalBaseProps &
+export type SettingsModalProps = SettingsModalBaseProps &
   (
     | { externalSidebarNav: true; desktopSection: SettingsSection }
     | { externalSidebarNav?: false; desktopSection?: never }

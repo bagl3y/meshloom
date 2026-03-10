@@ -12,7 +12,7 @@ The visualizer displays:
 
 ## Architecture
 
-### Data Layer (`useVisualizerData3D` hook)
+### Data Layer (`components/visualizer/useVisualizerData3D.ts`)
 
 The custom hook manages all graph state and simulation logic:
 
@@ -39,6 +39,8 @@ Packets → Parse → Aggregate by key → Observation window → Publish → An
 
 ### Rendering Layer (Three.js)
 
+Scene creation, render-loop updates, raycasting hover, and click-to-pin interaction live in `components/visualizer/useVisualizer3DScene.ts`.
+
 - `THREE.WebGLRenderer` + `CSS2DRenderer` (text labels overlaid on 3D scene)
 - `OrbitControls` for camera interaction (orbit, pan, zoom)
 - `THREE.Mesh` with `SphereGeometry` per node + `CSS2DObject` labels
@@ -46,15 +48,20 @@ Packets → Parse → Aggregate by key → Observation window → Publish → An
 - `THREE.Points` with vertex colors for particles (persistent geometry + circular sprite texture)
 - `THREE.Raycaster` for hover/click detection on node spheres
 
-### Shared Utilities (`utils/visualizerUtils.ts`)
+### Shared Utilities
 
-Types, constants, and pure functions shared across the codebase:
+- `components/visualizer/shared.ts`
+  - Graph-specific types: `GraphNode`, `GraphLink`, `NodeMeshData`
+  - Shared rendering helpers: node colors, relative-time formatting, typed-array growth helpers
+- `utils/visualizerUtils.ts`
+  - Packet parsing, identity helpers, ambiguous repeater heuristics, constants shared across visualizer code
 
-- Types: `NodeType`, `PacketLabel`, `Particle`, `ObservedPath`, `PendingPacket`, `ParsedPacket`, `TrafficObservation`, `RepeaterTrafficData`, `RepeaterSplitAnalysis`
-- Constants: `COLORS`, `PARTICLE_COLOR_MAP`, `PARTICLE_SPEED`, `DEFAULT_OBSERVATION_WINDOW_SEC`, traffic thresholds, `PACKET_LEGEND_ITEMS`
-- Functions: `hashString` (from `utils/contactAvatar.ts`), `parsePacket`, `getPacketLabel`, `generatePacketKey`, `getLinkId`, `getNodeType`, `dedupeConsecutive`, `analyzeRepeaterTraffic`, `recordTrafficObservation`
+### UI Overlays
 
-`GraphNode` and `GraphLink` are defined locally in the component — they extend `SimulationNodeDatum3D` and `SimulationLinkDatum` from `d3-force-3d`.
+- `components/visualizer/VisualizerControls.tsx`
+  - Legends, settings toggles, repulsion/speed controls, reset/stretch actions
+- `components/visualizer/VisualizerTooltip.tsx`
+  - Hovered/pinned node metadata and neighbor list
 
 ### Type Declarations (`types/d3-force-3d.d.ts`)
 

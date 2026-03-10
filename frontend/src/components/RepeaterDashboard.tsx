@@ -70,7 +70,7 @@ export function RepeaterDashboard({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Header */}
-      <header className="flex justify-between items-center px-4 py-2.5 border-b border-border gap-2">
+      <header className="flex justify-between items-start sm:items-center px-4 py-2.5 border-b border-border gap-2">
         <span className="flex flex-wrap items-baseline gap-x-2 min-w-0 flex-1">
           <span className="flex-shrink-0 font-semibold text-base">{conversation.name}</span>
           <span
@@ -95,7 +95,7 @@ export function RepeaterDashboard({
               size="sm"
               onClick={loadAll}
               disabled={anyLoading}
-              className="text-xs border-success text-success hover:bg-success/10 hover:text-success"
+              className="h-7 px-2 text-[11px] leading-none border-success text-success hover:bg-success/10 hover:text-success sm:h-8 sm:px-3 sm:text-xs"
             >
               {anyLoading ? 'Loading...' : 'Load All'}
             </Button>

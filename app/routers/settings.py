@@ -132,7 +132,7 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
 
         # Apply flood scope to radio immediately if changed
         if flood_scope_changed:
-            from app.radio import radio_manager
+            from app.services.radio_runtime import radio_runtime as radio_manager
 
             if radio_manager.is_connected:
                 try:
