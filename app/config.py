@@ -95,15 +95,9 @@ def setup_logging() -> None:
                     "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
                     "datefmt": "%Y-%m-%d %H:%M:%S",
                 },
-                "uvicorn_default": {
-                    "()": "uvicorn.logging.DefaultFormatter",
-                    "fmt": "%(asctime)s - %(levelprefix)s %(message)s",
-                    "datefmt": "%Y-%m-%d %H:%M:%S",
-                    "use_colors": None,
-                },
                 "uvicorn_access": {
                     "()": "uvicorn.logging.AccessFormatter",
-                    "fmt": '%(asctime)s - %(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s',
+                    "fmt": '%(asctime)s - %(name)s - %(levelname)s - %(client_addr)s - "%(request_line)s" %(status_code)s',
                     "datefmt": "%Y-%m-%d %H:%M:%S",
                     "use_colors": None,
                 },
@@ -112,10 +106,6 @@ def setup_logging() -> None:
                 "default": {
                     "class": "logging.StreamHandler",
                     "formatter": "default",
-                },
-                "uvicorn_default": {
-                    "class": "logging.StreamHandler",
-                    "formatter": "uvicorn_default",
                 },
                 "uvicorn_access": {
                     "class": "logging.StreamHandler",
@@ -129,12 +119,12 @@ def setup_logging() -> None:
             "loggers": {
                 "uvicorn": {
                     "level": settings.log_level,
-                    "handlers": ["uvicorn_default"],
+                    "handlers": ["default"],
                     "propagate": False,
                 },
                 "uvicorn.error": {
                     "level": settings.log_level,
-                    "handlers": ["uvicorn_default"],
+                    "handlers": ["default"],
                     "propagate": False,
                 },
                 "uvicorn.access": {
