@@ -48,8 +48,9 @@ Ancillary AGENTS.md files which should generally not be reviewed unless specific
 │  └──────────┘  └──────────┘  └──────────────┘  └────────────┘    │
 │        ↓                         │                ┌───────────┐  │
 │  ┌──────────────────────────┐    └──────────────→ │ WebSocket │  │
-│  │ RadioManager + lifecycle │                     │  Manager  │  │
-│  │ / event adapters         │                     └───────────┘  │
+│  │ Radio runtime seam +     │                     │  Manager  │  │
+│  │ RadioManager lifecycle   │                     └───────────┘  │
+│  │ / event adapters         │                                    │
 │  └──────────────────────────┘                                    │
 └───────────────────────────┼──────────────────────────────────────┘
                             │ Serial / TCP / BLE
@@ -163,7 +164,7 @@ This message-layer echo/path handling is independent of raw-packet storage dedup
 │   ├── AGENTS.md           # Backend documentation
 │   ├── main.py             # App entry, lifespan
 │   ├── routers/            # API endpoints
-│   ├── services/           # Shared backend orchestration/domain services
+│   ├── services/           # Shared backend orchestration/domain services, including radio_runtime access seam
 │   ├── packet_processor.py # Raw packet pipeline, dedup, path handling
 │   ├── repository/         # Database CRUD (contacts, channels, messages, raw_packets, settings, fanout)
 │   ├── event_handlers.py   # Radio events

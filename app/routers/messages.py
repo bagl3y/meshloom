@@ -11,13 +11,13 @@ from app.models import (
     SendChannelMessageRequest,
     SendDirectMessageRequest,
 )
-from app.radio import radio_manager
 from app.repository import AmbiguousPublicKeyPrefixError, AppSettingsRepository, MessageRepository
 from app.services.message_send import (
     resend_channel_message_record,
     send_channel_message_to_channel,
     send_direct_message_to_contact,
 )
+from app.services.radio_runtime import radio_runtime as radio_manager
 from app.websocket import broadcast_error, broadcast_event
 
 logger = logging.getLogger(__name__)

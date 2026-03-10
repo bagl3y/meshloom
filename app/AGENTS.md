@@ -27,7 +27,8 @@ app/
 │   ├── dm_ack_tracker.py        # Pending DM ACK state
 │   ├── contact_reconciliation.py # Prefix-claim, sender-key backfill, name-history wiring
 │   ├── radio_lifecycle.py       # Post-connect setup and reconnect/setup helpers
-│   └── radio_commands.py        # Radio config/private-key command workflows
+│   ├── radio_commands.py        # Radio config/private-key command workflows
+│   └── radio_runtime.py         # Router/dependency seam over the global RadioManager
 ├── radio.py             # RadioManager transport/session state + lock management
 ├── radio_sync.py        # Polling, sync, periodic advertisement loop
 ├── decoder.py           # Packet parsing/decryption
@@ -76,6 +77,7 @@ app/
 
 - `RadioManager.start_connection_monitor()` checks health every 5s.
 - `RadioManager.post_connect_setup()` delegates to `services/radio_lifecycle.py`.
+- Routers and shared dependencies should reach radio state through `services/radio_runtime.py`, not by importing `app.radio.radio_manager` directly.
 - Shared reconnect/setup helpers in `services/radio_lifecycle.py` are used by startup, the monitor, and manual reconnect/reboot flows before broadcasting healthy state.
 - Setup still includes handler registration, key export, time sync, contact/channel sync, polling/advert tasks.
 

@@ -18,7 +18,6 @@ from app.models import (
 )
 from app.packet_processor import start_historical_dm_decryption
 from app.path_utils import parse_explicit_hop_route
-from app.radio import radio_manager
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
     ContactAdvertPathRepository,
@@ -27,6 +26,7 @@ from app.repository import (
     MessageRepository,
 )
 from app.services.contact_reconciliation import reconcile_contact_messages
+from app.services.radio_runtime import radio_runtime as radio_manager
 
 logger = logging.getLogger(__name__)
 

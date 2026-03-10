@@ -4,7 +4,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.dependencies import require_connected
-from app.radio import radio_manager
 from app.radio_sync import send_advertisement as do_send_advertisement
 from app.radio_sync import sync_radio_time
 from app.services.radio_commands import (
@@ -14,9 +13,18 @@ from app.services.radio_commands import (
     apply_radio_config_update,
     import_private_key_and_refresh_keystore,
 )
+from app.services.radio_lifecycle import prepare_connected_radio, reconnect_and_prepare_radio
+from app.services.radio_runtime import RadioRuntime
+from app.services.radio_runtime import radio_runtime as radio_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/radio", tags=["radio"])
+
+
+def _unwrap_radio_manager():
+    if isinstance(radio_manager, RadioRuntime):
+        return radio_manager.manager
+    return radio_manager
 
 
 class RadioSettings(BaseModel):
@@ -160,8 +168,6 @@ async def send_advertisement() -> dict:
 
 async def _attempt_reconnect() -> dict:
     """Shared reconnection logic for reboot and reconnect endpoints."""
-    from app.services.radio_lifecycle import reconnect_and_prepare_radio
-
     if radio_manager.is_reconnecting:
         return {
             "status": "pending",
@@ -171,7 +177,7 @@ async def _attempt_reconnect() -> dict:
 
     try:
         success = await reconnect_and_prepare_radio(
-            radio_manager,
+            _unwrap_radio_manager(),
             broadcast_on_success=True,
         )
     except Exception as e:
@@ -217,15 +223,16 @@ async def reconnect_radio() -> dict:
     if no specific port is configured. Useful when the radio has been disconnected
     or power-cycled.
     """
-    from app.services.radio_lifecycle import prepare_connected_radio
-
     if radio_manager.is_connected:
         if radio_manager.is_setup_complete:
             return {"status": "ok", "message": "Already connected", "connected": True}
 
         logger.info("Radio connected but setup incomplete, retrying setup")
         try:
-            await prepare_connected_radio(radio_manager, broadcast_on_success=True)
+            await prepare_connected_radio(
+                _unwrap_radio_manager(),
+                broadcast_on_success=True,
+            )
             return {"status": "ok", "message": "Setup completed", "connected": True}
         except Exception as e:
             logger.exception("Post-connect setup failed")
