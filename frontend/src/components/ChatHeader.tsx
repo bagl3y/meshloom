@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
+import { Bell, Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
 import { toast } from './ui/sonner';
 import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
@@ -14,7 +14,11 @@ interface ChatHeaderProps {
   channels: Channel[];
   config: RadioConfig | null;
   favorites: Favorite[];
+  notificationsSupported: boolean;
+  notificationsEnabled: boolean;
+  notificationsPermission: NotificationPermission | 'unsupported';
   onTrace: () => void;
+  onToggleNotifications: () => void;
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
   onSetChannelFloodScopeOverride?: (key: string, floodScopeOverride: string) => void;
   onDeleteChannel: (key: string) => void;
@@ -29,7 +33,11 @@ export function ChatHeader({
   channels,
   config,
   favorites,
+  notificationsSupported,
+  notificationsEnabled,
+  notificationsPermission,
   onTrace,
+  onToggleNotifications,
   onToggleFavorite,
   onSetChannelFloodScopeOverride,
   onDeleteChannel,
@@ -196,6 +204,35 @@ export function ChatHeader({
             aria-label="Direct Trace"
           >
             <Route className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
+        {notificationsSupported && (
+          <button
+            className="flex items-center gap-1 rounded px-1 py-1 hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={onToggleNotifications}
+            title={
+              notificationsEnabled
+                ? 'Disable desktop notifications for this conversation'
+                : notificationsPermission === 'denied'
+                  ? 'Notifications blocked by the browser'
+                  : 'Enable desktop notifications for this conversation'
+            }
+            aria-label={
+              notificationsEnabled
+                ? 'Disable notifications for this conversation'
+                : 'Enable notifications for this conversation'
+            }
+          >
+            <Bell
+              className={`h-4 w-4 ${notificationsEnabled ? 'text-status-connected' : 'text-muted-foreground'}`}
+              fill={notificationsEnabled ? 'currentColor' : 'none'}
+              aria-hidden="true"
+            />
+            {notificationsEnabled && (
+              <span className="hidden md:inline text-[11px] font-medium text-status-connected">
+                Notifications On
+              </span>
+            )}
           </button>
         )}
         {conversation.type === 'channel' && onSetChannelFloodScopeOverride && (

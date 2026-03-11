@@ -44,6 +44,7 @@ interface UseRealtimeAppStateArgs {
   pendingDeleteFallbackRef: MutableRefObject<boolean>;
   setActiveConversation: (conv: Conversation | null) => void;
   updateMessageAck: (messageId: number, ackCount: number, paths?: MessagePath[]) => void;
+  notifyIncomingMessage?: (msg: Message) => void;
   maxRawPackets?: number;
 }
 
@@ -103,6 +104,7 @@ export function useRealtimeAppState({
   pendingDeleteFallbackRef,
   setActiveConversation,
   updateMessageAck,
+  notifyIncomingMessage,
   maxRawPackets = 500,
 }: UseRealtimeAppStateArgs): UseWebSocketOptions {
   const mergeChannelIntoList = useCallback(
@@ -180,18 +182,19 @@ export function useRealtimeAppState({
           activeConversationRef.current,
           msg
         );
+        let isNewMessage = false;
 
         if (isForActiveConversation && !hasNewerMessagesRef.current) {
-          addMessageIfNew(msg);
+          isNewMessage = addMessageIfNew(msg);
         }
 
         trackNewMessage(msg);
 
         const contentKey = getMessageContentKey(msg);
         if (!isForActiveConversation) {
-          const isNew = messageCache.addMessage(msg.conversation_key, msg, contentKey);
+          isNewMessage = messageCache.addMessage(msg.conversation_key, msg, contentKey);
 
-          if (!msg.outgoing && isNew) {
+          if (!msg.outgoing && isNewMessage) {
             let stateKey: string | null = null;
             if (msg.type === 'CHAN' && msg.conversation_key) {
               stateKey = getStateKey('channel', msg.conversation_key);
@@ -202,6 +205,10 @@ export function useRealtimeAppState({
               incrementUnread(stateKey, checkMention(msg.text));
             }
           }
+        }
+
+        if (!msg.outgoing && isNewMessage) {
+          notifyIncomingMessage?.(msg);
         }
       },
       onContact: (contact: Contact) => {
@@ -259,6 +266,7 @@ export function useRealtimeAppState({
       trackNewMessage,
       triggerReconcile,
       updateMessageAck,
+      notifyIncomingMessage,
     ]
   );
 }

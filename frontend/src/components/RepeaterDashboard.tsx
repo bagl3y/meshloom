@@ -1,6 +1,6 @@
 import { toast } from './ui/sonner';
 import { Button } from './ui/button';
-import { Route, Star, Trash2 } from 'lucide-react';
+import { Bell, Route, Star, Trash2 } from 'lucide-react';
 import { RepeaterLogin } from './RepeaterLogin';
 import { useRepeaterDashboard } from '../hooks/useRepeaterDashboard';
 import { isFavorite } from '../utils/favorites';
@@ -25,10 +25,14 @@ interface RepeaterDashboardProps {
   conversation: Conversation;
   contacts: Contact[];
   favorites: Favorite[];
+  notificationsSupported: boolean;
+  notificationsEnabled: boolean;
+  notificationsPermission: NotificationPermission | 'unsupported';
   radioLat: number | null;
   radioLon: number | null;
   radioName: string | null;
   onTrace: () => void;
+  onToggleNotifications: () => void;
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
   onDeleteContact: (publicKey: string) => void;
 }
@@ -37,10 +41,14 @@ export function RepeaterDashboard({
   conversation,
   contacts,
   favorites,
+  notificationsSupported,
+  notificationsEnabled,
+  notificationsPermission,
   radioLat,
   radioLon,
   radioName,
   onTrace,
+  onToggleNotifications,
   onToggleFavorite,
   onDeleteContact,
 }: RepeaterDashboardProps) {
@@ -120,6 +128,35 @@ export function RepeaterDashboard({
           >
             <Route className="h-4 w-4" aria-hidden="true" />
           </button>
+          {notificationsSupported && (
+            <button
+              className="flex items-center gap-1 rounded px-1 py-1 hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={onToggleNotifications}
+              title={
+                notificationsEnabled
+                  ? 'Disable desktop notifications for this conversation'
+                  : notificationsPermission === 'denied'
+                    ? 'Notifications blocked by the browser'
+                    : 'Enable desktop notifications for this conversation'
+              }
+              aria-label={
+                notificationsEnabled
+                  ? 'Disable notifications for this conversation'
+                  : 'Enable notifications for this conversation'
+              }
+            >
+              <Bell
+                className={`h-4 w-4 ${notificationsEnabled ? 'text-status-connected' : 'text-muted-foreground'}`}
+                fill={notificationsEnabled ? 'currentColor' : 'none'}
+                aria-hidden="true"
+              />
+              {notificationsEnabled && (
+                <span className="hidden md:inline text-[11px] font-medium text-status-connected">
+                  Notifications On
+                </span>
+              )}
+            </button>
+          )}
           <button
             className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => onToggleFavorite('contact', conversation.id)}

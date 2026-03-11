@@ -13,6 +13,7 @@ import {
   useConversationActions,
   useConversationNavigation,
   useRealtimeAppState,
+  useBrowserNotifications,
 } from './hooks';
 import { AppShell } from './components/AppShell';
 import type { MessageInputHandle } from './components/MessageInput';
@@ -22,6 +23,13 @@ import type { Conversation, RawPacket } from './types';
 export function App() {
   const messageInputRef = useRef<MessageInputHandle>(null);
   const [rawPackets, setRawPackets] = useState<RawPacket[]>([]);
+  const {
+    notificationsSupported,
+    notificationsPermission,
+    isConversationNotificationsEnabled,
+    toggleConversationNotifications,
+    notifyIncomingMessage,
+  } = useBrowserNotifications();
   const {
     showNewMessage,
     showSettings,
@@ -202,6 +210,7 @@ export function App() {
     pendingDeleteFallbackRef,
     setActiveConversation,
     updateMessageAck,
+    notifyIncomingMessage,
   });
   const {
     handleSendMessage,
@@ -237,7 +246,10 @@ export function App() {
     [fetchUndecryptedCount, setChannels]
   );
 
-  const statusProps = { health, config };
+  const statusProps = {
+    health,
+    config,
+  };
   const sidebarProps = {
     contacts,
     channels,
@@ -289,6 +301,21 @@ export function App() {
     onLoadNewer: fetchNewerMessages,
     onJumpToBottom: jumpToBottom,
     onSendMessage: handleSendMessage,
+    notificationsSupported,
+    notificationsPermission,
+    notificationsEnabled:
+      activeConversation?.type === 'contact' || activeConversation?.type === 'channel'
+        ? isConversationNotificationsEnabled(activeConversation.type, activeConversation.id)
+        : false,
+    onToggleNotifications: () => {
+      if (activeConversation?.type === 'contact' || activeConversation?.type === 'channel') {
+        void toggleConversationNotifications(
+          activeConversation.type,
+          activeConversation.id,
+          activeConversation.name
+        );
+      }
+    },
   };
   const searchProps = {
     contacts,

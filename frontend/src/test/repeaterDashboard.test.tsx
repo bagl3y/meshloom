@@ -99,10 +99,14 @@ const defaultProps = {
   conversation,
   contacts,
   favorites,
+  notificationsSupported: true,
+  notificationsEnabled: false,
+  notificationsPermission: 'granted' as const,
   radioLat: null,
   radioLon: null,
   radioName: null,
   onTrace: vi.fn(),
+  onToggleNotifications: vi.fn(),
   onToggleFavorite: vi.fn(),
   onDeleteContact: vi.fn(),
 };
@@ -188,6 +192,21 @@ describe('RepeaterDashboard', () => {
 
     fireEvent.click(screen.getByText('Load All'));
     expect(mockHook.loadAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows enabled notification state and toggles when clicked', () => {
+    render(
+      <RepeaterDashboard
+        {...defaultProps}
+        notificationsEnabled
+        onToggleNotifications={defaultProps.onToggleNotifications}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Notifications On'));
+
+    expect(screen.getByText('Notifications On')).toBeInTheDocument();
+    expect(defaultProps.onToggleNotifications).toHaveBeenCalledTimes(1);
   });
 
   it('shows login error when present', () => {

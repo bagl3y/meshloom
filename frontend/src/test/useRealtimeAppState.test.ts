@@ -81,6 +81,7 @@ function createRealtimeArgs(overrides: Partial<Parameters<typeof useRealtimeAppS
       pendingDeleteFallbackRef: { current: false },
       setActiveConversation: vi.fn(),
       updateMessageAck: vi.fn(),
+      notifyIncomingMessage: vi.fn(),
       ...overrides,
     },
     fns: {
@@ -163,6 +164,7 @@ describe('useRealtimeAppState', () => {
       `contact-${incomingDm.conversation_key}`,
       true
     );
+    expect(args.notifyIncomingMessage).toHaveBeenCalledWith(incomingDm);
   });
 
   it('deleting the active contact clears it and marks fallback recovery pending', () => {

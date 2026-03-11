@@ -99,6 +99,9 @@ function createProps(overrides: Partial<React.ComponentProps<typeof Conversation
     rawPackets: [],
     config,
     health,
+    notificationsSupported: true,
+    notificationsEnabled: false,
+    notificationsPermission: 'granted' as const,
     favorites: [] as Favorite[],
     messages: [message],
     messagesLoading: false,
@@ -122,6 +125,7 @@ function createProps(overrides: Partial<React.ComponentProps<typeof Conversation
     onLoadNewer: vi.fn(async () => {}),
     onJumpToBottom: vi.fn(),
     onSendMessage: vi.fn(async () => {}),
+    onToggleNotifications: vi.fn(),
     ...overrides,
   };
 }

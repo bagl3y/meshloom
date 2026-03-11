@@ -31,6 +31,9 @@ interface ConversationPaneProps {
   rawPackets: RawPacket[];
   config: RadioConfig | null;
   health: HealthStatus | null;
+  notificationsSupported: boolean;
+  notificationsEnabled: boolean;
+  notificationsPermission: NotificationPermission | 'unsupported';
   favorites: Favorite[];
   messages: Message[];
   messagesLoading: boolean;
@@ -54,6 +57,7 @@ interface ConversationPaneProps {
   onLoadNewer: () => Promise<void>;
   onJumpToBottom: () => void;
   onSendMessage: (text: string) => Promise<void>;
+  onToggleNotifications: () => void;
 }
 
 function LoadingPane({ label }: { label: string }) {
@@ -69,6 +73,9 @@ export function ConversationPane({
   rawPackets,
   config,
   health,
+  notificationsSupported,
+  notificationsEnabled,
+  notificationsPermission,
   favorites,
   messages,
   messagesLoading,
@@ -92,6 +99,7 @@ export function ConversationPane({
   onLoadNewer,
   onJumpToBottom,
   onSendMessage,
+  onToggleNotifications,
 }: ConversationPaneProps) {
   const activeContactIsRepeater = useMemo(() => {
     if (!activeConversation || activeConversation.type !== 'contact') return false;
@@ -155,10 +163,14 @@ export function ConversationPane({
           conversation={activeConversation}
           contacts={contacts}
           favorites={favorites}
+          notificationsSupported={notificationsSupported}
+          notificationsEnabled={notificationsEnabled}
+          notificationsPermission={notificationsPermission}
           radioLat={config?.lat ?? null}
           radioLon={config?.lon ?? null}
           radioName={config?.name ?? null}
           onTrace={onTrace}
+          onToggleNotifications={onToggleNotifications}
           onToggleFavorite={onToggleFavorite}
           onDeleteContact={onDeleteContact}
         />
@@ -174,7 +186,11 @@ export function ConversationPane({
         channels={channels}
         config={config}
         favorites={favorites}
+        notificationsSupported={notificationsSupported}
+        notificationsEnabled={notificationsEnabled}
+        notificationsPermission={notificationsPermission}
         onTrace={onTrace}
+        onToggleNotifications={onToggleNotifications}
         onToggleFavorite={onToggleFavorite}
         onSetChannelFloodScopeOverride={onSetChannelFloodScopeOverride}
         onDeleteChannel={onDeleteChannel}
