@@ -111,7 +111,7 @@ describe('ChatHeader key visibility', () => {
     expect(writeText).toHaveBeenCalledWith(key);
   });
 
-  it('shows active regional override banner for channels', () => {
+  it('shows active regional override badge for channels', () => {
     const key = 'AB'.repeat(16);
     const channel = {
       ...makeChannel(key, '#flightless', true),
@@ -121,7 +121,7 @@ describe('ChatHeader key visibility', () => {
 
     render(<ChatHeader {...baseProps} conversation={conversation} channels={[channel]} />);
 
-    expect(screen.getByText('Regional override active: Esperance')).toBeInTheDocument();
+    expect(screen.getAllByText('#Esperance')).toHaveLength(2);
   });
 
   it('shows enabled notification state and toggles when clicked', () => {
