@@ -13,7 +13,7 @@ from app.repository.fanout import FanoutConfigRepository
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/fanout", tags=["fanout"])
 
-_VALID_TYPES = {"mqtt_private", "mqtt_community", "bot", "webhook", "apprise"}
+_VALID_TYPES = {"mqtt_private", "mqtt_community", "bot", "webhook", "apprise", "sqs"}
 
 _IATA_RE = re.compile(r"^[A-Z]{3}$")
 _DEFAULT_COMMUNITY_MQTT_TOPIC_TEMPLATE = "meshcore/{IATA}/{PUBLIC_KEY}/packets"
@@ -179,6 +179,39 @@ def _validate_webhook_config(config: dict) -> None:
         raise HTTPException(status_code=400, detail="headers must be a JSON object")
 
 
+def _validate_sqs_config(config: dict) -> None:
+    """Validate sqs config blob."""
+    queue_url = str(config.get("queue_url", "")).strip()
+    if not queue_url:
+        raise HTTPException(status_code=400, detail="queue_url is required for sqs")
+    if not queue_url.startswith(("https://", "http://")):
+        raise HTTPException(status_code=400, detail="queue_url must start with http:// or https://")
+
+    endpoint_url = str(config.get("endpoint_url", "")).strip()
+    if endpoint_url and not endpoint_url.startswith(("https://", "http://")):
+        raise HTTPException(
+            status_code=400,
+            detail="endpoint_url must start with http:// or https://",
+        )
+
+    access_key_id = str(config.get("access_key_id", "")).strip()
+    secret_access_key = str(config.get("secret_access_key", "")).strip()
+    session_token = str(config.get("session_token", "")).strip()
+    has_static_keypair = bool(access_key_id) and bool(secret_access_key)
+    has_partial_keypair = bool(access_key_id) != bool(secret_access_key)
+
+    if has_partial_keypair:
+        raise HTTPException(
+            status_code=400,
+            detail="access_key_id and secret_access_key must be set together for sqs",
+        )
+    if session_token and not has_static_keypair:
+        raise HTTPException(
+            status_code=400,
+            detail="session_token requires access_key_id and secret_access_key for sqs",
+        )
+
+
 def _enforce_scope(config_type: str, scope: dict) -> dict:
     """Enforce type-specific scope constraints. Returns normalized scope."""
     if config_type == "mqtt_community":
@@ -193,7 +226,7 @@ def _enforce_scope(config_type: str, scope: dict) -> dict:
                 detail="scope.messages must be 'all', 'none', or a filter object",
             )
         return {"messages": messages, "raw_packets": "none"}
-    # For mqtt_private, validate scope values
+    # For mqtt_private and sqs, validate scope values
     messages = scope.get("messages", "all")
     if messages not in ("all", "none") and not isinstance(messages, dict):
         raise HTTPException(
@@ -240,6 +273,8 @@ async def create_fanout_config(body: FanoutConfigCreate) -> dict:
             _validate_webhook_config(body.config)
         elif body.type == "apprise":
             _validate_apprise_config(body.config)
+        elif body.type == "sqs":
+            _validate_sqs_config(body.config)
 
     scope = _enforce_scope(body.type, body.scope)
 
@@ -295,6 +330,8 @@ async def update_fanout_config(config_id: str, body: FanoutConfigUpdate) -> dict
             _validate_webhook_config(config_to_validate)
         elif existing["type"] == "apprise":
             _validate_apprise_config(config_to_validate)
+        elif existing["type"] == "sqs":
+            _validate_sqs_config(config_to_validate)
 
     updated = await FanoutConfigRepository.update(config_id, **kwargs)
     if updated is None:

@@ -45,7 +45,7 @@ app/
 ├── events.py            # Typed WS event payload serialization
 ├── websocket.py         # WS manager + broadcast helpers
 ├── security.py          # Optional app-wide HTTP Basic auth middleware for HTTP + WS
-├── fanout/              # Fanout bus: MQTT, bots, webhooks, Apprise (see fanout/AGENTS_fanout.md)
+├── fanout/              # Fanout bus: MQTT, bots, webhooks, Apprise, SQS (see fanout/AGENTS_fanout.md)
 ├── dependencies.py      # Shared FastAPI dependency providers
 ├── path_utils.py        # Path hex rendering and hop-width helpers
 ├── keystore.py          # Ephemeral private/public key storage for DM decryption
@@ -132,7 +132,7 @@ app/
 
 ### Fanout bus
 
-- All external integrations (MQTT, bots, webhooks, Apprise) are managed through the fanout bus (`app/fanout/`).
+- All external integrations (MQTT, bots, webhooks, Apprise, SQS) are managed through the fanout bus (`app/fanout/`).
 - Configs stored in `fanout_configs` table, managed via `GET/POST/PATCH/DELETE /api/fanout`.
 - `broadcast_event()` in `websocket.py` dispatches to the fanout manager for `message` and `raw_packet` events.
 - Each integration is a `FanoutModule` with scope-based filtering.

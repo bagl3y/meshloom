@@ -18,6 +18,7 @@ const TYPE_LABELS: Record<string, string> = {
   bot: 'Bot',
   webhook: 'Webhook',
   apprise: 'Apprise',
+  sqs: 'Amazon SQS',
 };
 
 const TYPE_OPTIONS = [
@@ -26,6 +27,7 @@ const TYPE_OPTIONS = [
   { value: 'bot', label: 'Bot' },
   { value: 'webhook', label: 'Webhook' },
   { value: 'apprise', label: 'Apprise' },
+  { value: 'sqs', label: 'Amazon SQS' },
 ];
 
 const DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE = 'meshcore/{IATA}/{PUBLIC_KEY}/packets';
@@ -58,6 +60,12 @@ function formatAppriseTargets(urls: string | undefined, maxLength = 80) {
   const joined = targets.join(', ');
   if (joined.length <= maxLength) return joined;
   return `${joined.slice(0, maxLength - 3)}...`;
+}
+
+function formatSqsQueueSummary(config: Record<string, unknown>) {
+  const queueUrl = ((config.queue_url as string) || '').trim();
+  if (!queueUrl) return 'No queue configured';
+  return queueUrl;
 }
 
 function getDefaultIntegrationName(type: string, configs: FanoutConfig[]) {
@@ -998,6 +1006,111 @@ function WebhookConfigEditor({
   );
 }
 
+function SqsConfigEditor({
+  config,
+  scope,
+  onChange,
+  onScopeChange,
+}: {
+  config: Record<string, unknown>;
+  scope: Record<string, unknown>;
+  onChange: (config: Record<string, unknown>) => void;
+  onScopeChange: (scope: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Send matched mesh events to an Amazon SQS queue for durable processing by workers, Lambdas,
+        or downstream automation.
+      </p>
+
+      <div className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning">
+        Outgoing messages and any selected raw packets will be delivered exactly as forwarded by the
+        fanout scope, including decrypted/plaintext message content.
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="fanout-sqs-queue-url">Queue URL</Label>
+        <Input
+          id="fanout-sqs-queue-url"
+          type="url"
+          placeholder="https://sqs.us-east-1.amazonaws.com/123456789012/mesh-events"
+          value={(config.queue_url as string) || ''}
+          onChange={(e) => onChange({ ...config, queue_url: e.target.value })}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="fanout-sqs-region">Region (optional)</Label>
+          <Input
+            id="fanout-sqs-region"
+            type="text"
+            placeholder="us-east-1"
+            value={(config.region_name as string) || ''}
+            onChange={(e) => onChange({ ...config, region_name: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="fanout-sqs-endpoint">Endpoint URL (optional)</Label>
+          <Input
+            id="fanout-sqs-endpoint"
+            type="url"
+            placeholder="http://localhost:4566"
+            value={(config.endpoint_url as string) || ''}
+            onChange={(e) => onChange({ ...config, endpoint_url: e.target.value })}
+          />
+          <p className="text-xs text-muted-foreground">Useful for LocalStack or custom endpoints</p>
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-2">
+        <Label>Static Credentials (optional)</Label>
+        <p className="text-xs text-muted-foreground">
+          Leave blank to use the server&apos;s normal AWS credential chain.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="fanout-sqs-access-key">Access Key ID</Label>
+          <Input
+            id="fanout-sqs-access-key"
+            type="text"
+            value={(config.access_key_id as string) || ''}
+            onChange={(e) => onChange({ ...config, access_key_id: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="fanout-sqs-secret-key">Secret Access Key</Label>
+          <Input
+            id="fanout-sqs-secret-key"
+            type="password"
+            value={(config.secret_access_key as string) || ''}
+            onChange={(e) => onChange({ ...config, secret_access_key: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="fanout-sqs-session-token">Session Token (optional)</Label>
+        <Input
+          id="fanout-sqs-session-token"
+          type="password"
+          value={(config.session_token as string) || ''}
+          onChange={(e) => onChange({ ...config, session_token: e.target.value })}
+        />
+      </div>
+
+      <Separator />
+
+      <ScopeSelector scope={scope} onChange={onScopeChange} showRawPackets />
+    </div>
+  );
+}
+
 export function SettingsFanoutSection({
   health,
   onHealthRefresh,
@@ -1208,6 +1321,14 @@ export function SettingsFanoutSection({
         preserve_identity: true,
         include_path: true,
       },
+      sqs: {
+        queue_url: '',
+        region_name: '',
+        endpoint_url: '',
+        access_key_id: '',
+        secret_access_key: '',
+        session_token: '',
+      },
     };
     const defaultScopes: Record<string, Record<string, unknown>> = {
       mqtt_private: { messages: 'all', raw_packets: 'all' },
@@ -1215,6 +1336,7 @@ export function SettingsFanoutSection({
       bot: { messages: 'all', raw_packets: 'none' },
       webhook: { messages: 'all', raw_packets: 'none' },
       apprise: { messages: 'all', raw_packets: 'none' },
+      sqs: { messages: 'all', raw_packets: 'none' },
     };
     setAddMenuOpen(false);
     setEditingId(null);
@@ -1289,6 +1411,15 @@ export function SettingsFanoutSection({
 
         {detailType === 'webhook' && (
           <WebhookConfigEditor
+            config={editConfig}
+            scope={editScope}
+            onChange={setEditConfig}
+            onScopeChange={setEditScope}
+          />
+        )}
+
+        {detailType === 'sqs' && (
+          <SqsConfigEditor
             config={editConfig}
             scope={editScope}
             onChange={setEditConfig}
@@ -1516,6 +1647,17 @@ export function SettingsFanoutSection({
                               {formatAppriseTargets(
                                 (cfg.config as Record<string, unknown>).urls as string | undefined
                               )}
+                            </code>
+                          </div>
+                        </div>
+                      )}
+
+                      {cfg.type === 'sqs' && (
+                        <div className="space-y-1 border-t border-input px-3 py-2 text-xs text-muted-foreground">
+                          <div className="break-all">
+                            Queue:{' '}
+                            <code>
+                              {formatSqsQueueSummary(cfg.config as Record<string, unknown>)}
                             </code>
                           </div>
                         </div>

@@ -15,6 +15,7 @@ dependencies = [
     "meshcore==2.2.29",
     "aiomqtt>=2.0",
     "apprise>=1.9.7",
+    "boto3>=1.38.0",
 ]
 
 [project.optional-dependencies]

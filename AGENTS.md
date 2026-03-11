@@ -21,7 +21,7 @@ A web interface for MeshCore mesh radio networks. The backend connects to a Mesh
 - `frontend/AGENTS.md` - Frontend (React, state management, WebSocket, components)
 
 Ancillary AGENTS.md files which should generally not be reviewed unless specific work is being performed on those features include:
-- `app/fanout/AGENTS_fanout.md` - Fanout bus architecture (MQTT, bots, webhooks, Apprise)
+- `app/fanout/AGENTS_fanout.md` - Fanout bus architecture (MQTT, bots, webhooks, Apprise, SQS)
 - `frontend/src/components/AGENTS_packet_visualizer.md` - Packet visualizer (force-directed graph, advert-path identity, layout engine)
 
 ## Architecture Overview
@@ -77,7 +77,7 @@ Ancillary AGENTS.md files which should generally not be reviewed unless specific
 - Raw packet feed — a debug/observation tool ("radio aquarium"); interesting to watch or copy packets from, but not critical infrastructure
 - Map view — visual display of node locations from advertisements
 - Network visualizer — force-directed graph of mesh topology
-- Fanout integrations (MQTT, bots, webhooks, Apprise) — see `app/fanout/AGENTS_fanout.md`
+- Fanout integrations (MQTT, bots, webhooks, Apprise, SQS) — see `app/fanout/AGENTS_fanout.md`
 - Read state tracking / mark-all-read — convenience feature for unread badges; no need for transactional atomicity or race-condition hardening
 
 ## Error Handling Philosophy
@@ -181,7 +181,7 @@ This message-layer echo/path handling is independent of raw-packet storage dedup
 │   ├── event_handlers.py   # Radio events
 │   ├── decoder.py          # Packet decryption
 │   ├── websocket.py        # Real-time broadcasts
-│   └── fanout/             # Fanout bus: MQTT, bots, webhooks, Apprise (see fanout/AGENTS_fanout.md)
+│   └── fanout/             # Fanout bus: MQTT, bots, webhooks, Apprise, SQS (see fanout/AGENTS_fanout.md)
 ├── frontend/               # React frontend
 │   ├── AGENTS.md           # Frontend documentation
 │   ├── src/
@@ -393,7 +393,7 @@ Read state (`last_read_at`) is tracked **server-side** for consistency across de
 
 **Note:** These are NOT the same as `Message.conversation_key` (the database field).
 
-### Fanout Bus (MQTT, Bots, Webhooks, Apprise)
+### Fanout Bus (MQTT, Bots, Webhooks, Apprise, SQS)
 
 All external integrations are managed through the fanout bus (`app/fanout/`). Each integration is a `FanoutModule` with scope-based event filtering, stored in the `fanout_configs` table and managed via `GET/POST/PATCH/DELETE /api/fanout`.
 
@@ -446,7 +446,7 @@ mc.subscribe(EventType.ACK, handler)
 | `MESHCORE_BASIC_AUTH_USERNAME` | *(none)* | Optional app-wide HTTP Basic auth username; must be set together with `MESHCORE_BASIC_AUTH_PASSWORD` |
 | `MESHCORE_BASIC_AUTH_PASSWORD` | *(none)* | Optional app-wide HTTP Basic auth password; must be set together with `MESHCORE_BASIC_AUTH_USERNAME` |
 
-**Note:** Runtime app settings are stored in the database (`app_settings` table), not environment variables. These include `max_radio_contacts`, `auto_decrypt_dm_on_advert`, `sidebar_sort_order`, `advert_interval`, `last_advert_time`, `favorites`, `last_message_times`, `flood_scope`, `blocked_keys`, and `blocked_names`. `max_radio_contacts` is the configured radio contact capacity baseline used by background maintenance: favorites reload first, non-favorite fill targets about 80% of that value, and full offload/reload triggers around 95% occupancy. They are configured via `GET/PATCH /api/settings`. MQTT, bot, webhook, and Apprise configs are stored in the `fanout_configs` table, managed via `/api/fanout`.
+**Note:** Runtime app settings are stored in the database (`app_settings` table), not environment variables. These include `max_radio_contacts`, `auto_decrypt_dm_on_advert`, `sidebar_sort_order`, `advert_interval`, `last_advert_time`, `favorites`, `last_message_times`, `flood_scope`, `blocked_keys`, and `blocked_names`. `max_radio_contacts` is the configured radio contact capacity baseline used by background maintenance: favorites reload first, non-favorite fill targets about 80% of that value, and full offload/reload triggers around 95% occupancy. They are configured via `GET/PATCH /api/settings`. MQTT, bot, webhook, Apprise, and SQS configs are stored in the `fanout_configs` table, managed via `/api/fanout`.
 
 Byte-perfect channel retries are user-triggered via `POST /api/messages/channel/{message_id}/resend` and are allowed for 30 seconds after the original send.
 

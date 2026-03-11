@@ -565,7 +565,7 @@ class FanoutConfig(BaseModel):
     """Configuration for a single fanout integration."""
 
     id: str
-    type: str  # 'mqtt_private' | 'mqtt_community' | 'bot' | 'webhook' | 'apprise'
+    type: str  # 'mqtt_private' | 'mqtt_community' | 'bot' | 'webhook' | 'apprise' | 'sqs'
     name: str
     enabled: bool
     config: dict
