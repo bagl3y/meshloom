@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Menu } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Menu, Moon, Sun } from 'lucide-react';
 import type { HealthStatus, RadioConfig } from '../types';
 import { api } from '../api';
 import { toast } from './ui/sonner';
 import { handleKeyboardActivate } from '../utils/a11y';
+import { applyTheme, getSavedTheme, THEME_CHANGE_EVENT } from '../utils/theme';
 import { cn } from '@/lib/utils';
 
 interface StatusBarProps {
@@ -29,6 +30,19 @@ export function StatusBar({
       ? 'Radio OK'
       : 'Radio Disconnected';
   const [reconnecting, setReconnecting] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState(getSavedTheme);
+
+  useEffect(() => {
+    const handleThemeChange = (event: Event) => {
+      const themeId = (event as CustomEvent<string>).detail;
+      setCurrentTheme(typeof themeId === 'string' && themeId ? themeId : getSavedTheme());
+    };
+
+    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange as EventListener);
+    return () => {
+      window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange as EventListener);
+    };
+  }, []);
 
   const handleReconnect = async () => {
     setReconnecting(true);
@@ -44,6 +58,12 @@ export function StatusBar({
     } finally {
       setReconnecting(false);
     }
+  };
+
+  const handleThemeToggle = () => {
+    const nextTheme = currentTheme === 'light' ? 'original' : 'light';
+    applyTheme(nextTheme);
+    setCurrentTheme(nextTheme);
   };
 
   return (
@@ -127,6 +147,18 @@ export function StatusBar({
         )}
       >
         {settingsMode ? 'Back to Chat' : 'Settings'}
+      </button>
+      <button
+        onClick={handleThemeToggle}
+        className="p-0.5 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+        title={currentTheme === 'light' ? 'Switch to classic theme' : 'Switch to light theme'}
+        aria-label={currentTheme === 'light' ? 'Switch to classic theme' : 'Switch to light theme'}
+      >
+        {currentTheme === 'light' ? (
+          <Moon className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <Sun className="h-4 w-4" aria-hidden="true" />
+        )}
       </button>
     </header>
   );

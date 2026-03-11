@@ -14,7 +14,11 @@ const baseProps = {
   contacts: [],
   config: null,
   favorites: [] as Favorite[],
+  notificationsSupported: true,
+  notificationsEnabled: false,
+  notificationsPermission: 'granted' as const,
   onTrace: noop,
+  onToggleNotifications: noop,
   onToggleFavorite: noop,
   onSetChannelFloodScopeOverride: noop,
   onDeleteChannel: noop,
@@ -107,7 +111,7 @@ describe('ChatHeader key visibility', () => {
     expect(writeText).toHaveBeenCalledWith(key);
   });
 
-  it('shows active regional override banner for channels', () => {
+  it('shows active regional override badge for channels', () => {
     const key = 'AB'.repeat(16);
     const channel = {
       ...makeChannel(key, '#flightless', true),
@@ -117,7 +121,27 @@ describe('ChatHeader key visibility', () => {
 
     render(<ChatHeader {...baseProps} conversation={conversation} channels={[channel]} />);
 
-    expect(screen.getByText('Regional override active: Esperance')).toBeInTheDocument();
+    expect(screen.getAllByText('#Esperance')).toHaveLength(2);
+  });
+
+  it('shows enabled notification state and toggles when clicked', () => {
+    const conversation: Conversation = { type: 'contact', id: '11'.repeat(32), name: 'Alice' };
+    const onToggleNotifications = vi.fn();
+
+    render(
+      <ChatHeader
+        {...baseProps}
+        conversation={conversation}
+        channels={[]}
+        notificationsEnabled
+        onToggleNotifications={onToggleNotifications}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Notifications On'));
+
+    expect(screen.getByText('Notifications On')).toBeInTheDocument();
+    expect(onToggleNotifications).toHaveBeenCalledTimes(1);
   });
 
   it('prompts for regional override when globe button is clicked', () => {

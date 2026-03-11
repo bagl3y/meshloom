@@ -7,6 +7,8 @@ export interface Theme {
   metaThemeColor: string;
 }
 
+export const THEME_CHANGE_EVENT = 'remoteterm-theme-change';
+
 export const THEMES: Theme[] = [
   {
     id: 'original',
@@ -44,6 +46,24 @@ export const THEMES: Theme[] = [
     swatches: ['#0D0607', '#151012', '#FF0066', '#2D1D22', '#FF8C1A', '#30ACD4'],
     metaThemeColor: '#0D0607',
   },
+  {
+    id: 'lagoon-pop',
+    name: 'Lagoon Pop',
+    swatches: ['#081A22', '#0F2630', '#23D7C6', '#173844', '#FF7A66', '#7C83FF'],
+    metaThemeColor: '#081A22',
+  },
+  {
+    id: 'candy-dusk',
+    name: 'Candy Dusk',
+    swatches: ['#140F24', '#201736', '#FF79C9', '#2A2144', '#FFC857', '#8BE9FD'],
+    metaThemeColor: '#140F24',
+  },
+  {
+    id: 'paper-grove',
+    name: 'Paper Grove',
+    swatches: ['#F7F1E4', '#FFF9EE', '#2F9E74', '#E7DEC8', '#E76F51', '#5C7CFA'],
+    metaThemeColor: '#F7F1E4',
+  },
 ];
 
 const THEME_KEY = 'remoteterm-theme';
@@ -76,5 +96,9 @@ export function applyTheme(themeId: string): void {
     if (meta) {
       meta.setAttribute('content', theme.metaThemeColor);
     }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: themeId }));
   }
 }
