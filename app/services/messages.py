@@ -12,6 +12,25 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 BroadcastFn = Callable[..., Any]
+LOG_MESSAGE_PREVIEW_LEN = 32
+
+
+def _truncate_for_log(text: str, max_chars: int = LOG_MESSAGE_PREVIEW_LEN) -> str:
+    """Return a compact single-line message preview for log output."""
+    normalized = " ".join(text.split())
+    if len(normalized) <= max_chars:
+        return normalized
+    return f"{normalized[:max_chars].rstrip()}..."
+
+
+def _format_channel_log_target(channel_name: str | None, channel_key: str) -> str:
+    """Return a human-friendly channel label for logs."""
+    return channel_name or channel_key
+
+
+def _format_contact_log_target(contact_name: str | None, public_key: str) -> str:
+    """Return a human-friendly DM target label for logs."""
+    return contact_name or public_key[:12]
 
 
 def build_message_paths(
@@ -214,7 +233,13 @@ async def create_message_from_decrypted(
         )
         return None
 
-    logger.info("Stored channel message %d for channel %s", msg_id, channel_key_normalized[:8])
+    logger.info(
+        'Stored channel message "%s" for %r (msg ID %d in chan ID %s)',
+        _truncate_for_log(text),
+        _format_channel_log_target(channel_name, channel_key_normalized),
+        msg_id,
+        channel_key_normalized,
+    )
     await RawPacketRepository.mark_decrypted(packet_id, msg_id)
 
     broadcast_message(
@@ -292,9 +317,11 @@ async def create_dm_message_from_decrypted(
         return None
 
     logger.info(
-        "Stored direct message %d for contact %s (outgoing=%s)",
+        'Stored direct message "%s" for %r (msg ID %d in contact ID %s, outgoing=%s)',
+        _truncate_for_log(decrypted.message),
+        _format_contact_log_target(contact.name if contact else None, conversation_key),
         msg_id,
-        conversation_key[:12],
+        conversation_key,
         outgoing,
     )
     await RawPacketRepository.mark_decrypted(packet_id, msg_id)
