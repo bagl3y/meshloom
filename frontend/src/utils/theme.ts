@@ -46,6 +46,12 @@ export const THEMES: Theme[] = [
     swatches: ['#0D0607', '#151012', '#FF0066', '#2D1D22', '#FF8C1A', '#30ACD4'],
     metaThemeColor: '#0D0607',
   },
+  {
+    id: 'lagoon-pop',
+    name: 'Lagoon Pop',
+    swatches: ['#081A22', '#0F2630', '#23D7C6', '#173844', '#FF7A66', '#7C83FF'],
+    metaThemeColor: '#081A22',
+  },
 ];
 
 const THEME_KEY = 'remoteterm-theme';

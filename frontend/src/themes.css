@@ -382,3 +382,104 @@
 [data-theme='solar-flare'] ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, hsl(338 90% 48%), hsl(24 90% 48%));
 }
+
+/* ── Lagoon Pop ("Tidal Candy") ───────────────────────────── */
+:root[data-theme='lagoon-pop'] {
+  --background: 197 62% 9%;
+  --foreground: 42 33% 92%;
+  --card: 197 46% 13%;
+  --card-foreground: 42 33% 92%;
+  --popover: 197 46% 14%;
+  --popover-foreground: 42 33% 92%;
+  --primary: 175 72% 49%;
+  --primary-foreground: 196 60% 9%;
+  --secondary: 197 34% 18%;
+  --secondary-foreground: 42 22% 84%;
+  --muted: 197 30% 16%;
+  --muted-foreground: 195 16% 64%;
+  --accent: 205 46% 22%;
+  --accent-foreground: 42 33% 92%;
+  --destructive: 8 88% 61%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 191 34% 24%;
+  --input: 191 34% 24%;
+  --ring: 175 72% 49%;
+  --radius: 1rem;
+  --msg-outgoing: 184 46% 16%;
+  --msg-incoming: 204 34% 14%;
+  --status-connected: 167 76% 46%;
+  --status-disconnected: 204 12% 46%;
+  --warning: 41 100% 58%;
+  --warning-foreground: 38 100% 10%;
+  --success: 167 76% 42%;
+  --success-foreground: 196 60% 9%;
+  --info: 229 90% 72%;
+  --info-foreground: 232 56% 14%;
+  --region-override: 277 88% 76%;
+  --favorite: 49 100% 63%;
+  --console: 175 72% 54%;
+  --console-command: 175 78% 68%;
+  --console-bg: 198 68% 7%;
+  --toast-error: 8 38% 14%;
+  --toast-error-foreground: 10 86% 77%;
+  --toast-error-border: 8 30% 24%;
+  --code-editor-bg: 198 44% 11%;
+  --font-sans: 'Trebuchet MS', 'Avenir Next', 'Segoe UI', sans-serif;
+  --scrollbar: 191 34% 22%;
+  --scrollbar-hover: 191 40% 30%;
+  --overlay: 198 80% 4%;
+}
+
+[data-theme='lagoon-pop'] body {
+  background:
+    radial-gradient(circle at top left, hsl(175 72% 49% / 0.1), transparent 28%),
+    radial-gradient(circle at top right, hsl(229 90% 72% / 0.1), transparent 24%),
+    radial-gradient(circle at bottom center, hsl(8 88% 61% / 0.08), transparent 26%),
+    hsl(197 62% 9%);
+}
+
+[data-theme='lagoon-pop'] .bg-card {
+  background: linear-gradient(145deg, hsl(197 46% 14%), hsl(205 40% 16%));
+}
+
+[data-theme='lagoon-pop'] .bg-popover {
+  background: linear-gradient(145deg, hsl(197 46% 15%), hsl(205 40% 17%));
+}
+
+[data-theme='lagoon-pop'] .bg-msg-outgoing {
+  background: linear-gradient(135deg, hsl(184 48% 16%), hsl(175 38% 19%));
+  border-left: 2px solid hsl(175 72% 49% / 0.45);
+}
+
+[data-theme='lagoon-pop'] .bg-msg-incoming {
+  background: linear-gradient(135deg, hsl(204 34% 14%), hsl(214 30% 16%));
+  border-left: 2px solid hsl(229 90% 72% / 0.35);
+}
+
+[data-theme='lagoon-pop'] .bg-primary {
+  background: linear-gradient(135deg, hsl(175 72% 49%), hsl(191 78% 56%));
+}
+
+[data-theme='lagoon-pop'] button {
+  transition:
+    transform 0.12s ease,
+    filter 0.2s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+[data-theme='lagoon-pop'] button:hover {
+  filter: drop-shadow(0 0 10px hsl(175 72% 49% / 0.18));
+}
+
+[data-theme='lagoon-pop'] button:active {
+  transform: translateY(1px);
+}
+
+[data-theme='lagoon-pop'] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, hsl(175 40% 32%), hsl(229 38% 40%));
+}
+
+[data-theme='lagoon-pop'] ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, hsl(175 52% 42%), hsl(229 52% 54%));
+}
