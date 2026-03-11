@@ -34,7 +34,7 @@ test.describe('Sidebar search/filter', () => {
     await expect(page.getByText(nameB, { exact: true })).toBeVisible();
 
     // Type partial name to filter
-    const searchInput = page.getByPlaceholder('Search...');
+    const searchInput = page.getByLabel('Search conversations');
     await searchInput.fill(`alpha${suffix}`);
 
     // Only nameA should be visible
