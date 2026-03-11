@@ -71,7 +71,8 @@ echo -n "  package.json:   "
 grep '"version"' frontend/package.json | head -1 | sed 's/.*"version": "\(.*\)".*/\1/'
 echo
 
-read -p "Enter new version (e.g., 1.2.3): " VERSION
+read -r -p "Enter new version (e.g., 1.2.3): " VERSION
+VERSION="$(printf '%s' "$VERSION" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
 
 if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo -e "${RED}Error: Version must be in format X.Y.Z${NC}"
