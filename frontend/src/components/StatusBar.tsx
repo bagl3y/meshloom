@@ -52,16 +52,16 @@ export function StatusBar({
       {onMenuClick && (
         <button
           onClick={onMenuClick}
-          className="md:hidden p-1 bg-transparent border-none text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+          className="md:hidden p-0.5 bg-transparent border-none text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
           aria-label="Open menu"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-4 w-4" />
         </button>
       )}
 
       <h1 className="text-base font-semibold tracking-tight mr-auto text-foreground flex items-center gap-1.5">
         <svg
-          className="h-5 w-5 shrink-0 text-white"
+          className="h-4 w-4 shrink-0 text-white"
           viewBox="0 0 512 512"
           fill="currentColor"
           aria-hidden="true"

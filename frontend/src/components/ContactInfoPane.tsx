@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react';
+import { Ban, Star } from 'lucide-react';
 import { api } from '../api';
 import { formatTime } from '../utils/messageParser';
 import {
@@ -152,12 +153,12 @@ export function ContactInfoPane({
                 >
                   {blockedNames.includes(nameOnlyValue) ? (
                     <>
-                      <span className="text-destructive text-lg">&#x2718;</span>
+                      <Ban className="h-4.5 w-4.5 text-destructive" aria-hidden="true" />
                       <span>Unblock this name</span>
                     </>
                   ) : (
                     <>
-                      <span className="text-muted-foreground text-lg">&#x2718;</span>
+                      <Ban className="h-4.5 w-4.5 text-muted-foreground" aria-hidden="true" />
                       <span>Block this name</span>
                     </>
                   )}
@@ -283,12 +284,12 @@ export function ContactInfoPane({
               >
                 {isFavorite(favorites, 'contact', contact.public_key) ? (
                   <>
-                    <span className="text-favorite text-lg">&#9733;</span>
+                    <Star className="h-4.5 w-4.5 fill-current text-favorite" aria-hidden="true" />
                     <span>Remove from favorites</span>
                   </>
                 ) : (
                   <>
-                    <span className="text-muted-foreground text-lg">&#9734;</span>
+                    <Star className="h-4.5 w-4.5 text-muted-foreground" aria-hidden="true" />
                     <span>Add to favorites</span>
                   </>
                 )}
@@ -306,12 +307,12 @@ export function ContactInfoPane({
                   >
                     {blockedKeys.includes(contact.public_key.toLowerCase()) ? (
                       <>
-                        <span className="text-destructive text-lg">&#x2718;</span>
+                        <Ban className="h-4.5 w-4.5 text-destructive" aria-hidden="true" />
                         <span>Unblock this key</span>
                       </>
                     ) : (
                       <>
-                        <span className="text-muted-foreground text-lg">&#x2718;</span>
+                        <Ban className="h-4.5 w-4.5 text-muted-foreground" aria-hidden="true" />
                         <span>Block this key</span>
                       </>
                     )}
@@ -325,12 +326,12 @@ export function ContactInfoPane({
                   >
                     {blockedNames.includes(contact.name) ? (
                       <>
-                        <span className="text-destructive text-lg">&#x2718;</span>
+                        <Ban className="h-4.5 w-4.5 text-destructive" aria-hidden="true" />
                         <span>Unblock name &ldquo;{contact.name}&rdquo;</span>
                       </>
                     ) : (
                       <>
-                        <span className="text-muted-foreground text-lg">&#x2718;</span>
+                        <Ban className="h-4.5 w-4.5 text-muted-foreground" aria-hidden="true" />
                         <span>Block name &ldquo;{contact.name}&rdquo;</span>
                       </>
                     )}

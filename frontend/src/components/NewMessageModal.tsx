@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { Dice5 } from 'lucide-react';
 import type { Contact, Conversation } from '../types';
 import { getContactDisplayName } from '../utils/pubkey';
 import {
@@ -256,7 +257,7 @@ export function NewMessageModal({
                   title="Generate random key"
                   aria-label="Generate random key"
                 >
-                  <span aria-hidden="true">🎲</span>
+                  <Dice5 className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { MapPinned } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
@@ -406,7 +407,14 @@ export function SettingsRadioSection({
             onClick={handleGetLocation}
             disabled={gettingLocation}
           >
-            {gettingLocation ? 'Getting...' : '📍 Use My Location'}
+            {gettingLocation ? (
+              'Getting...'
+            ) : (
+              <>
+                <MapPinned className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                Use My Location
+              </>
+            )}
           </Button>
         </div>
         <div className="grid grid-cols-2 gap-4">

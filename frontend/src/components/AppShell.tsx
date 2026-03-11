@@ -9,6 +9,7 @@ import { ChannelInfoPane } from './ChannelInfoPane';
 import { Toaster } from './ui/sonner';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
 import {
+  SETTINGS_SECTION_ICONS,
   SETTINGS_SECTION_LABELS,
   SETTINGS_SECTION_ORDER,
   type SettingsSection,
@@ -115,20 +116,26 @@ export function AppShell({
         </button>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto py-1 [contain:layout_paint]">
-        {SETTINGS_SECTION_ORDER.map((section) => (
-          <button
-            key={section}
-            type="button"
-            className={cn(
-              'w-full px-3 py-2 text-left text-[13px] border-l-2 border-transparent hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-              settingsSection === section && 'bg-accent border-l-primary'
-            )}
-            aria-current={settingsSection === section ? 'true' : undefined}
-            onClick={() => onSettingsSectionChange(section)}
-          >
-            {SETTINGS_SECTION_LABELS[section]}
-          </button>
-        ))}
+        {SETTINGS_SECTION_ORDER.map((section) => {
+          const Icon = SETTINGS_SECTION_ICONS[section];
+          return (
+            <button
+              key={section}
+              type="button"
+              className={cn(
+                'w-full px-3 py-2 text-left text-[13px] border-l-2 border-transparent hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                settingsSection === section && 'bg-accent border-l-primary'
+              )}
+              aria-current={settingsSection === section ? 'true' : undefined}
+              onClick={() => onSettingsSectionChange(section)}
+            >
+              <span className="flex items-center gap-2">
+                <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <span>{SETTINGS_SECTION_LABELS[section]}</span>
+              </span>
+            </button>
+          );
+        })}
       </div>
     </nav>
   );
@@ -216,7 +223,13 @@ export function AppShell({
               <h2 className="flex justify-between items-center px-4 py-2.5 border-b border-border font-semibold text-base">
                 <span>Radio & Settings</span>
                 <span className="text-sm text-muted-foreground hidden md:inline">
-                  {SETTINGS_SECTION_LABELS[settingsSection]}
+                  <span className="inline-flex items-center gap-1.5">
+                    {(() => {
+                      const Icon = SETTINGS_SECTION_ICONS[settingsSection];
+                      return <Icon className="h-4 w-4" aria-hidden="true" />;
+                    })()}
+                    <span>{SETTINGS_SECTION_LABELS[settingsSection]}</span>
+                  </span>
                 </span>
               </h2>
               <div className="flex-1 min-h-0 overflow-hidden">

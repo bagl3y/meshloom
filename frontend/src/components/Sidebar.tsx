@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  CheckCheck,
+  ChevronDown,
+  ChevronRight,
+  LockOpen,
+  Map,
+  Search as SearchIcon,
+  Sparkles,
+  SquarePen,
+  Waypoints,
+  X,
+} from 'lucide-react';
+import {
   CONTACT_TYPE_REPEATER,
   type Contact,
   type Channel,
@@ -459,7 +471,7 @@ export function Sidebar({
   }: {
     key: string;
     active?: boolean;
-    icon: string;
+    icon: React.ReactNode;
     label: React.ReactNode;
     onClick: () => void;
   }) => (
@@ -475,7 +487,7 @@ export function Sidebar({
       onKeyDown={handleKeyboardActivate}
       onClick={onClick}
     >
-      <span className="text-muted-foreground text-xs" aria-hidden="true">
+      <span className="text-muted-foreground" aria-hidden="true">
         {icon}
       </span>
       <span className="flex-1 truncate text-muted-foreground">{label}</span>
@@ -507,7 +519,7 @@ export function Sidebar({
         renderSidebarActionRow({
           key: 'tool-raw',
           active: isActive('raw', 'raw'),
-          icon: '📡',
+          icon: <Waypoints className="h-4 w-4" />,
           label: 'Packet Feed',
           onClick: () =>
             handleSelectConversation({
@@ -519,7 +531,7 @@ export function Sidebar({
         renderSidebarActionRow({
           key: 'tool-map',
           active: isActive('map', 'map'),
-          icon: '🗺️',
+          icon: <Map className="h-4 w-4" />,
           label: 'Node Map',
           onClick: () =>
             handleSelectConversation({
@@ -531,7 +543,7 @@ export function Sidebar({
         renderSidebarActionRow({
           key: 'tool-visualizer',
           active: isActive('visualizer', 'visualizer'),
-          icon: '✨',
+          icon: <Sparkles className="h-4 w-4" />,
           label: 'Mesh Visualizer',
           onClick: () =>
             handleSelectConversation({
@@ -543,7 +555,7 @@ export function Sidebar({
         renderSidebarActionRow({
           key: 'tool-search',
           active: isActive('search', 'search'),
-          icon: '🔍',
+          icon: <SearchIcon className="h-4 w-4" />,
           label: 'Message Search',
           onClick: () =>
             handleSelectConversation({
@@ -555,7 +567,7 @@ export function Sidebar({
         renderSidebarActionRow({
           key: 'tool-cracker',
           active: showCracker,
-          icon: '🔓',
+          icon: <LockOpen className="h-4 w-4" />,
           label: (
             <>
               {showCracker ? 'Hide' : 'Show'} Room Finder
@@ -597,9 +609,11 @@ export function Sidebar({
           }}
           title={effectiveCollapsed ? `Expand ${title}` : `Collapse ${title}`}
         >
-          <span className="text-[9px]" aria-hidden="true">
-            {effectiveCollapsed ? '▸' : '▾'}
-          </span>
+          {effectiveCollapsed ? (
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
           <span>{title}</span>
         </button>
         {(showSortToggle || unreadCount > 0) && (
@@ -651,7 +665,7 @@ export function Sidebar({
           aria-label="New message"
           className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground transition-colors"
         >
-          +
+          <SquarePen className="h-4 w-4" />
         </Button>
       </div>
 
@@ -672,7 +686,7 @@ export function Sidebar({
             title="Clear search"
             aria-label="Clear search"
           >
-            ×
+            <X className="h-4 w-4" />
           </button>
         )}
       </div>
@@ -696,9 +710,7 @@ export function Sidebar({
             onKeyDown={handleKeyboardActivate}
             onClick={onMarkAllRead}
           >
-            <span className="text-muted-foreground text-xs" aria-hidden="true">
-              ✓
-            </span>
+            <CheckCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <span className="flex-1 truncate text-muted-foreground">Mark all as read</span>
           </div>
         )}
