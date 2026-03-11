@@ -7,6 +7,8 @@ export interface Theme {
   metaThemeColor: string;
 }
 
+export const THEME_CHANGE_EVENT = 'remoteterm-theme-change';
+
 export const THEMES: Theme[] = [
   {
     id: 'original',
@@ -76,5 +78,9 @@ export function applyTheme(themeId: string): void {
     if (meta) {
       meta.setAttribute('content', theme.metaThemeColor);
     }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: themeId }));
   }
 }
