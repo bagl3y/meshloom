@@ -5,8 +5,10 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
+from app.config import settings as server_settings
 from app.config import setup_logging
 from app.database import db
 from app.frontend_static import register_frontend_missing_fallback, register_frontend_static_routes
@@ -30,6 +32,7 @@ from app.routers import (
     statistics,
     ws,
 )
+from app.security import add_optional_basic_auth_middleware
 from app.services.radio_runtime import radio_runtime as radio_manager
 
 setup_logging()
@@ -114,6 +117,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+add_optional_basic_auth_middleware(app, server_settings)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

@@ -44,6 +44,7 @@ app/
 ├── event_handlers.py    # MeshCore event subscriptions and ACK tracking
 ├── events.py            # Typed WS event payload serialization
 ├── websocket.py         # WS manager + broadcast helpers
+├── security.py          # Optional app-wide HTTP Basic auth middleware for HTTP + WS
 ├── fanout/              # Fanout bus: MQTT, bots, webhooks, Apprise (see fanout/AGENTS_fanout.md)
 ├── dependencies.py      # Shared FastAPI dependency providers
 ├── path_utils.py        # Path hex rendering and hop-width helpers

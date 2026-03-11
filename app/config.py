@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     database_path: str = "data/meshcore.db"
     disable_bots: bool = False
     enable_message_poll_fallback: bool = False
+    basic_auth_username: str = ""
+    basic_auth_password: str = ""
 
     @model_validator(mode="after")
     def validate_transport_exclusivity(self) -> "Settings":
@@ -36,6 +38,11 @@ class Settings(BaseSettings):
             )
         if self.ble_address and not self.ble_pin:
             raise ValueError("MESHCORE_BLE_PIN is required when MESHCORE_BLE_ADDRESS is set.")
+        if self.basic_auth_partially_configured:
+            raise ValueError(
+                "MESHCORE_BASIC_AUTH_USERNAME and MESHCORE_BASIC_AUTH_PASSWORD "
+                "must be set together."
+            )
         return self
 
     @property
@@ -45,6 +52,15 @@ class Settings(BaseSettings):
         if self.ble_address:
             return "ble"
         return "serial"
+
+    @property
+    def basic_auth_enabled(self) -> bool:
+        return bool(self.basic_auth_username and self.basic_auth_password)
+
+    @property
+    def basic_auth_partially_configured(self) -> bool:
+        any_credentials_set = bool(self.basic_auth_username or self.basic_auth_password)
+        return any_credentials_set and not self.basic_auth_enabled
 
 
 settings = Settings()
