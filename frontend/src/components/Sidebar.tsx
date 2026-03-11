@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Bell,
   CheckCheck,
   ChevronDown,
   ChevronRight,
@@ -36,6 +37,7 @@ type ConversationRow = {
   name: string;
   unreadCount: number;
   isMention: boolean;
+  notificationsEnabled: boolean;
   contact?: Contact;
 };
 
@@ -93,6 +95,7 @@ interface SidebarProps {
   sortOrder?: SortOrder;
   /** Callback when sort order changes */
   onSortOrderChange?: (order: SortOrder) => void;
+  isConversationNotificationsEnabled?: (type: 'channel' | 'contact', id: string) => boolean;
 }
 
 export function Sidebar({
@@ -111,6 +114,7 @@ export function Sidebar({
   favorites,
   sortOrder: sortOrderProp = 'recent',
   onSortOrderChange,
+  isConversationNotificationsEnabled,
 }: SidebarProps) {
   const sortOrder = sortOrderProp;
   const [searchQuery, setSearchQuery] = useState('');
@@ -405,6 +409,7 @@ export function Sidebar({
     name: channel.name,
     unreadCount: getUnreadCount('channel', channel.key),
     isMention: hasMention('channel', channel.key),
+    notificationsEnabled: isConversationNotificationsEnabled?.('channel', channel.key) ?? false,
   });
 
   const buildContactRow = (contact: Contact, keyPrefix: string): ConversationRow => ({
@@ -414,6 +419,8 @@ export function Sidebar({
     name: getContactDisplayName(contact.name, contact.public_key),
     unreadCount: getUnreadCount('contact', contact.public_key),
     isMention: hasMention('contact', contact.public_key),
+    notificationsEnabled:
+      isConversationNotificationsEnabled?.('contact', contact.public_key) ?? false,
     contact,
   });
 
@@ -446,19 +453,26 @@ export function Sidebar({
         />
       )}
       <span className="name flex-1 truncate text-[13px]">{row.name}</span>
-      {row.unreadCount > 0 && (
-        <span
-          className={cn(
-            'text-[10px] font-semibold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
-            row.isMention
-              ? 'bg-badge-mention text-badge-mention-foreground'
-              : 'bg-badge-unread/90 text-badge-unread-foreground'
-          )}
-          aria-label={`${row.unreadCount} unread message${row.unreadCount !== 1 ? 's' : ''}`}
-        >
-          {row.unreadCount}
-        </span>
-      )}
+      <span className="ml-auto flex items-center gap-1">
+        {row.notificationsEnabled && (
+          <span aria-label="Notifications enabled" title="Notifications enabled">
+            <Bell className="h-3.5 w-3.5 text-muted-foreground" />
+          </span>
+        )}
+        {row.unreadCount > 0 && (
+          <span
+            className={cn(
+              'text-[10px] font-semibold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
+              row.isMention
+                ? 'bg-badge-mention text-badge-mention-foreground'
+                : 'bg-badge-unread/90 text-badge-unread-foreground'
+            )}
+            aria-label={`${row.unreadCount} unread message${row.unreadCount !== 1 ? 's' : ''}`}
+          >
+            {row.unreadCount}
+          </span>
+        )}
+      </span>
     </div>
   );
 

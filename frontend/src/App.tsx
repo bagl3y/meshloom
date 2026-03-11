@@ -270,6 +270,7 @@ export function App() {
     onSortOrderChange: (sortOrder: 'recent' | 'alpha') => {
       void handleSortOrderChange(sortOrder);
     },
+    isConversationNotificationsEnabled,
   };
   const conversationPaneProps = {
     activeConversation,

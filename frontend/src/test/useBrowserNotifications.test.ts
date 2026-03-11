@@ -81,7 +81,7 @@ describe('useBrowserNotifications', () => {
     );
     expect(window.Notification).toHaveBeenCalledWith('New message in #flightless', {
       body: 'Notifications will look like this. These require the tab to stay open, and will not be reliable on mobile.',
-      icon: '/apple-touch-icon.png',
+      icon: '/favicon-256x256.png',
       tag: `meshcore-notification-preview-channel-${incomingChannelMessage.conversation_key}`,
     });
   });
@@ -110,7 +110,7 @@ describe('useBrowserNotifications', () => {
     expect(window.Notification).toHaveBeenCalledTimes(2);
     expect(window.Notification).toHaveBeenNthCalledWith(2, 'New message in #flightless', {
       body: 'hello room',
-      icon: '/apple-touch-icon.png',
+      icon: '/favicon-256x256.png',
       tag: 'meshcore-message-42',
     });
   });
