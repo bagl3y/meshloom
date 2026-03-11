@@ -1,6 +1,6 @@
 import type { FullConfig } from '@playwright/test';
 
-const BASE_URL = 'http://localhost:8000';
+const BASE_URL = 'http://localhost:8001';
 const MAX_RETRIES = 10;
 const RETRY_DELAY_MS = 2000;
 

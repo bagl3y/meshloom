@@ -21,6 +21,10 @@ import { messageContainsMention } from './utils/messageParser';
 import type { Conversation, RawPacket } from './types';
 
 export function App() {
+  const quoteSearchOperatorValue = useCallback((value: string) => {
+    return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  }, []);
+
   const messageInputRef = useRef<MessageInputHandle>(null);
   const [rawPackets, setRawPackets] = useState<RawPacket[]>([]);
   const {
@@ -150,6 +154,7 @@ export function App() {
     infoPaneContactKey,
     infoPaneFromChannel,
     infoPaneChannelKey,
+    searchPrefillRequest,
     handleOpenContactInfo,
     handleCloseContactInfo,
     handleOpenChannelInfo,
@@ -157,6 +162,7 @@ export function App() {
     handleSelectConversationWithTargetReset,
     handleNavigateToChannel,
     handleNavigateToMessage,
+    handleOpenSearchWithQuery,
   } = useConversationNavigation({
     channels,
     handleSelectConversation,
@@ -322,6 +328,7 @@ export function App() {
     contacts,
     channels,
     onNavigateToMessage: handleNavigateToMessage,
+    prefillRequest: searchPrefillRequest,
   };
   const settingsProps = {
     config,
@@ -361,6 +368,12 @@ export function App() {
     favorites,
     onToggleFavorite: handleToggleFavorite,
     onNavigateToChannel: handleNavigateToChannel,
+    onSearchMessagesByKey: (publicKey: string) => {
+      handleOpenSearchWithQuery(`user:${publicKey}`);
+    },
+    onSearchMessagesByName: (name: string) => {
+      handleOpenSearchWithQuery(`user:${quoteSearchOperatorValue(name)}`);
+    },
     onToggleBlockedKey: handleBlockKey,
     onToggleBlockedName: handleBlockName,
     blockedKeys: appSettings?.blocked_keys ?? [],

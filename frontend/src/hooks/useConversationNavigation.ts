@@ -14,6 +14,7 @@ interface UseConversationNavigationResult {
   infoPaneContactKey: string | null;
   infoPaneFromChannel: boolean;
   infoPaneChannelKey: string | null;
+  searchPrefillRequest: { query: string; nonce: number } | null;
   handleOpenContactInfo: (publicKey: string, fromChannel?: boolean) => void;
   handleCloseContactInfo: () => void;
   handleOpenChannelInfo: (channelKey: string) => void;
@@ -24,6 +25,7 @@ interface UseConversationNavigationResult {
   ) => void;
   handleNavigateToChannel: (channelKey: string) => void;
   handleNavigateToMessage: (target: SearchNavigateTarget) => void;
+  handleOpenSearchWithQuery: (query: string) => void;
 }
 
 export function useConversationNavigation({
@@ -34,6 +36,10 @@ export function useConversationNavigation({
   const [infoPaneContactKey, setInfoPaneContactKey] = useState<string | null>(null);
   const [infoPaneFromChannel, setInfoPaneFromChannel] = useState(false);
   const [infoPaneChannelKey, setInfoPaneChannelKey] = useState<string | null>(null);
+  const [searchPrefillRequest, setSearchPrefillRequest] = useState<{
+    query: string;
+    nonce: number;
+  } | null>(null);
 
   const handleOpenContactInfo = useCallback((publicKey: string, fromChannel?: boolean) => {
     setInfoPaneContactKey(publicKey);
@@ -95,12 +101,30 @@ export function useConversationNavigation({
     [handleSelectConversationWithTargetReset]
   );
 
+  const handleOpenSearchWithQuery = useCallback(
+    (query: string) => {
+      setTargetMessageId(null);
+      setInfoPaneContactKey(null);
+      handleSelectConversationWithTargetReset({
+        type: 'search',
+        id: 'search',
+        name: 'Message Search',
+      });
+      setSearchPrefillRequest((prev) => ({
+        query,
+        nonce: (prev?.nonce ?? 0) + 1,
+      }));
+    },
+    [handleSelectConversationWithTargetReset]
+  );
+
   return {
     targetMessageId,
     setTargetMessageId,
     infoPaneContactKey,
     infoPaneFromChannel,
     infoPaneChannelKey,
+    searchPrefillRequest,
     handleOpenContactInfo,
     handleCloseContactInfo,
     handleOpenChannelInfo,
@@ -108,5 +132,6 @@ export function useConversationNavigation({
     handleSelectConversationWithTargetReset,
     handleNavigateToChannel,
     handleNavigateToMessage,
+    handleOpenSearchWithQuery,
   };
 }

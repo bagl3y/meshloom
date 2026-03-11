@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { Ban, Star } from 'lucide-react';
+import { Ban, Search, Star } from 'lucide-react';
 import { api } from '../api';
 import { formatTime } from '../utils/messageParser';
 import {
@@ -51,6 +51,8 @@ interface ContactInfoPaneProps {
   favorites: Favorite[];
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
   onNavigateToChannel?: (channelKey: string) => void;
+  onSearchMessagesByKey?: (publicKey: string) => void;
+  onSearchMessagesByName?: (name: string) => void;
   blockedKeys?: string[];
   blockedNames?: string[];
   onToggleBlockedKey?: (key: string) => void;
@@ -66,6 +68,8 @@ export function ContactInfoPane({
   favorites,
   onToggleFavorite,
   onNavigateToChannel,
+  onSearchMessagesByKey,
+  onSearchMessagesByName,
   blockedKeys = [],
   blockedNames = [],
   onToggleBlockedKey,
@@ -179,6 +183,19 @@ export function ContactInfoPane({
                       <span>Block this name</span>
                     </>
                   )}
+                </button>
+              </div>
+            )}
+
+            {onSearchMessagesByName && (
+              <div className="px-5 py-3 border-b border-border">
+                <button
+                  type="button"
+                  className="text-sm flex items-center gap-2 hover:text-primary transition-colors"
+                  onClick={() => onSearchMessagesByName(nameOnlyValue)}
+                >
+                  <Search className="h-4.5 w-4.5 text-muted-foreground" aria-hidden="true" />
+                  <span>Search user&apos;s messages by name</span>
                 </button>
               </div>
             )}
@@ -384,6 +401,19 @@ export function ContactInfoPane({
                     )}
                   </button>
                 )}
+              </div>
+            )}
+
+            {onSearchMessagesByKey && (
+              <div className="px-5 py-3 border-b border-border">
+                <button
+                  type="button"
+                  className="text-sm flex items-center gap-2 hover:text-primary transition-colors"
+                  onClick={() => onSearchMessagesByKey(contact.public_key)}
+                >
+                  <Search className="h-4.5 w-4.5 text-muted-foreground" aria-hidden="true" />
+                  <span>Search user&apos;s messages by key</span>
+                </button>
               </div>
             )}
 

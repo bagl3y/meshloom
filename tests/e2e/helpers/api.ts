@@ -3,7 +3,7 @@
  * These bypass the UI to set up preconditions and verify backend state.
  */
 
-const BASE_URL = 'http://localhost:8000/api';
+const BASE_URL = 'http://localhost:8001/api';
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {

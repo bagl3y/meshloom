@@ -70,6 +70,7 @@ describe('SearchView', () => {
     mockGetMessages.mockResolvedValue([]);
     render(<SearchView {...defaultProps} />);
     expect(screen.getByText('Type to search across all messages')).toBeInTheDocument();
+    expect(screen.getByText(/Tip: use/i)).toBeInTheDocument();
   });
 
   it('focuses input on mount', () => {
@@ -245,5 +246,38 @@ describe('SearchView', () => {
     await typeAndWaitForResults('dm');
 
     expect(screen.getByText('Bob')).toBeInTheDocument();
+  });
+
+  it('passes raw operator queries to the API and highlights only free text', async () => {
+    mockGetMessages.mockResolvedValue([createSearchResult({ text: 'hello world' })]);
+
+    render(<SearchView {...defaultProps} />);
+
+    await typeAndWaitForResults('user:Alice hello');
+
+    expect(mockGetMessages).toHaveBeenCalledWith(
+      expect.objectContaining({ q: 'user:Alice hello' }),
+      expect.any(AbortSignal)
+    );
+    expect(screen.getByText('hello', { selector: 'mark' })).toBeInTheDocument();
+    expect(screen.queryByText('user:Alice', { selector: 'mark' })).not.toBeInTheDocument();
+  });
+
+  it('runs a prefilled search immediately', async () => {
+    mockGetMessages.mockResolvedValue([createSearchResult({ text: 'prefilled result' })]);
+
+    render(
+      <SearchView {...defaultProps} prefillRequest={{ query: 'user:"Alice Smith"', nonce: 1 }} />
+    );
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(screen.getByLabelText('Search messages')).toHaveValue('user:"Alice Smith"');
+    expect(mockGetMessages).toHaveBeenCalledWith(
+      expect.objectContaining({ q: 'user:"Alice Smith"' }),
+      expect.any(AbortSignal)
+    );
   });
 });

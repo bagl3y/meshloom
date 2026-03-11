@@ -92,11 +92,15 @@ const baseProps = {
   config: null,
   favorites: [],
   onToggleFavorite: () => {},
+  onSearchMessagesByKey: vi.fn(),
+  onSearchMessagesByName: vi.fn(),
 };
 
 describe('ContactInfoPane', () => {
   beforeEach(() => {
     getContactAnalytics.mockReset();
+    baseProps.onSearchMessagesByKey = vi.fn();
+    baseProps.onSearchMessagesByName = vi.fn();
   });
 
   it('shows hop width when contact has a stored path hash mode', async () => {
@@ -190,7 +194,21 @@ describe('ContactInfoPane', () => {
         screen.getByText(/Name-only analytics include channel messages only/i)
       ).toBeInTheDocument();
       expect(screen.getByText(/same sender name/i)).toBeInTheDocument();
+      expect(screen.getByText("Search user's messages by name")).toBeInTheDocument();
     });
+  });
+
+  it('fires the name search callback from the name-only pane', async () => {
+    getContactAnalytics.mockResolvedValue(
+      createAnalytics(null, { lookup_type: 'name', name: 'Mystery' })
+    );
+
+    render(<ContactInfoPane {...baseProps} contactKey="name:Mystery" fromChannel />);
+
+    const button = await screen.findByRole('button', { name: "Search user's messages by name" });
+    button.click();
+
+    expect(baseProps.onSearchMessagesByName).toHaveBeenCalledWith('Mystery');
   });
 
   it('shows alias note in the channel attribution warning for keyed contacts', async () => {
@@ -214,6 +232,19 @@ describe('ContactInfoPane', () => {
           /may include messages previously attributed under names shown in Also Known As/i
         )
       ).toBeInTheDocument();
+      expect(screen.getByText("Search user's messages by key")).toBeInTheDocument();
     });
+  });
+
+  it('fires the key search callback from the keyed pane', async () => {
+    const contact = createContact();
+    getContactAnalytics.mockResolvedValue(createAnalytics(contact));
+
+    render(<ContactInfoPane {...baseProps} contactKey={contact.public_key} />);
+
+    const button = await screen.findByRole('button', { name: "Search user's messages by key" });
+    button.click();
+
+    expect(baseProps.onSearchMessagesByKey).toHaveBeenCalledWith(contact.public_key);
   });
 });

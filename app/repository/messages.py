@@ -1,5 +1,7 @@
 import json
+import re
 import time
+from dataclasses import dataclass
 from typing import Any
 
 from app.database import db
@@ -12,6 +14,17 @@ from app.models import (
 
 
 class MessageRepository:
+    @dataclass
+    class _SearchQuery:
+        free_text: str
+        user_terms: list[str]
+        channel_terms: list[str]
+
+    _SEARCH_OPERATOR_RE = re.compile(
+        r'(?<!\S)(user|channel):(?:"((?:[^"\\]|\\.)*)"|(\S+))',
+        re.IGNORECASE,
+    )
+
     @staticmethod
     def _contact_activity_filter(public_key: str) -> tuple[str, list[Any]]:
         lower_key = public_key.lower()
@@ -186,6 +199,92 @@ class MessageRepository:
             return "AND conversation_key LIKE ?", f"{conversation_key}%"
 
     @staticmethod
+    def _unescape_search_quoted_value(value: str) -> str:
+        return value.replace('\\"', '"').replace("\\\\", "\\")
+
+    @staticmethod
+    def _parse_search_query(q: str) -> _SearchQuery:
+        user_terms: list[str] = []
+        channel_terms: list[str] = []
+        fragments: list[str] = []
+        last_end = 0
+
+        for match in MessageRepository._SEARCH_OPERATOR_RE.finditer(q):
+            fragments.append(q[last_end : match.start()])
+            raw_value = match.group(2) if match.group(2) is not None else match.group(3) or ""
+            value = MessageRepository._unescape_search_quoted_value(raw_value)
+            if match.group(1).lower() == "user":
+                user_terms.append(value)
+            else:
+                channel_terms.append(value)
+            last_end = match.end()
+
+        if not user_terms and not channel_terms:
+            return MessageRepository._SearchQuery(free_text=q, user_terms=[], channel_terms=[])
+
+        fragments.append(q[last_end:])
+        free_text = " ".join(fragment.strip() for fragment in fragments if fragment.strip())
+        return MessageRepository._SearchQuery(
+            free_text=free_text,
+            user_terms=user_terms,
+            channel_terms=channel_terms,
+        )
+
+    @staticmethod
+    def _escape_like(value: str) -> str:
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    @staticmethod
+    def _looks_like_hex_prefix(value: str) -> bool:
+        return bool(value) and all(ch in "0123456789abcdefABCDEF" for ch in value)
+
+    @staticmethod
+    def _build_channel_scope_clause(value: str) -> tuple[str, list[Any]]:
+        params: list[Any] = [value]
+        clause = "(messages.type = 'CHAN' AND (channels.name = ? COLLATE NOCASE"
+
+        if MessageRepository._looks_like_hex_prefix(value):
+            if len(value) == 32:
+                clause += " OR UPPER(messages.conversation_key) = ?"
+                params.append(value.upper())
+            else:
+                clause += " OR UPPER(messages.conversation_key) LIKE ? ESCAPE '\\'"
+                params.append(f"{MessageRepository._escape_like(value.upper())}%")
+
+        clause += "))"
+        return clause, params
+
+    @staticmethod
+    def _build_user_scope_clause(value: str) -> tuple[str, list[Any]]:
+        params: list[Any] = [value, value]
+        clause = (
+            "((messages.type = 'PRIV' AND contacts.name = ? COLLATE NOCASE)"
+            " OR (messages.type = 'CHAN' AND sender_name = ? COLLATE NOCASE)"
+        )
+
+        if MessageRepository._looks_like_hex_prefix(value):
+            lower_value = value.lower()
+            priv_key_clause: str
+            chan_key_clause: str
+            if len(value) == 64:
+                priv_key_clause = "LOWER(messages.conversation_key) = ?"
+                chan_key_clause = "LOWER(sender_key) = ?"
+                params.extend([lower_value, lower_value])
+            else:
+                escaped_prefix = f"{MessageRepository._escape_like(lower_value)}%"
+                priv_key_clause = "LOWER(messages.conversation_key) LIKE ? ESCAPE '\\'"
+                chan_key_clause = "LOWER(sender_key) LIKE ? ESCAPE '\\'"
+                params.extend([escaped_prefix, escaped_prefix])
+
+            clause += (
+                f" OR (messages.type = 'PRIV' AND {priv_key_clause})"
+                f" OR (messages.type = 'CHAN' AND sender_key IS NOT NULL AND {chan_key_clause})"
+            )
+
+        clause += ")"
+        return clause, params
+
+    @staticmethod
     def _row_to_message(row: Any) -> Message:
         """Convert a database row to a Message model."""
         return Message(
@@ -218,15 +317,24 @@ class MessageRepository:
         blocked_keys: list[str] | None = None,
         blocked_names: list[str] | None = None,
     ) -> list[Message]:
-        query = "SELECT * FROM messages WHERE 1=1"
+        search_query = MessageRepository._parse_search_query(q) if q else None
+        query = (
+            "SELECT messages.* FROM messages "
+            "LEFT JOIN contacts ON messages.type = 'PRIV' "
+            "AND LOWER(messages.conversation_key) = LOWER(contacts.public_key) "
+            "LEFT JOIN channels ON messages.type = 'CHAN' "
+            "AND UPPER(messages.conversation_key) = UPPER(channels.key) "
+            "WHERE 1=1"
+        )
         params: list[Any] = []
 
         if blocked_keys:
             placeholders = ",".join("?" for _ in blocked_keys)
             query += (
-                f" AND NOT (outgoing=0 AND ("
-                f"(type='PRIV' AND LOWER(conversation_key) IN ({placeholders}))"
-                f" OR (type='CHAN' AND sender_key IS NOT NULL AND LOWER(sender_key) IN ({placeholders}))"
+                f" AND NOT (messages.outgoing=0 AND ("
+                f"(messages.type='PRIV' AND LOWER(messages.conversation_key) IN ({placeholders}))"
+                f" OR (messages.type='CHAN' AND messages.sender_key IS NOT NULL"
+                f" AND LOWER(messages.sender_key) IN ({placeholders}))"
                 f"))"
             )
             params.extend(blocked_keys)
@@ -235,36 +343,57 @@ class MessageRepository:
         if blocked_names:
             placeholders = ",".join("?" for _ in blocked_names)
             query += (
-                f" AND NOT (outgoing=0 AND sender_name IS NOT NULL"
-                f" AND sender_name IN ({placeholders}))"
+                f" AND NOT (messages.outgoing=0 AND messages.sender_name IS NOT NULL"
+                f" AND messages.sender_name IN ({placeholders}))"
             )
             params.extend(blocked_names)
 
         if msg_type:
-            query += " AND type = ?"
+            query += " AND messages.type = ?"
             params.append(msg_type)
         if conversation_key:
             clause, norm_key = MessageRepository._normalize_conversation_key(conversation_key)
-            query += f" {clause}"
+            query += f" {clause.replace('conversation_key', 'messages.conversation_key')}"
             params.append(norm_key)
 
-        if q:
-            escaped_q = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            query += " AND text LIKE ? ESCAPE '\\' COLLATE NOCASE"
+        if search_query and search_query.user_terms:
+            scope_clauses: list[str] = []
+            for term in search_query.user_terms:
+                clause, clause_params = MessageRepository._build_user_scope_clause(term)
+                scope_clauses.append(clause)
+                params.extend(clause_params)
+            query += f" AND ({' OR '.join(scope_clauses)})"
+
+        if search_query and search_query.channel_terms:
+            scope_clauses = []
+            for term in search_query.channel_terms:
+                clause, clause_params = MessageRepository._build_channel_scope_clause(term)
+                scope_clauses.append(clause)
+                params.extend(clause_params)
+            query += f" AND ({' OR '.join(scope_clauses)})"
+
+        if search_query and search_query.free_text:
+            escaped_q = MessageRepository._escape_like(search_query.free_text)
+            query += " AND messages.text LIKE ? ESCAPE '\\' COLLATE NOCASE"
             params.append(f"%{escaped_q}%")
 
         # Forward cursor (after/after_id) — mutually exclusive with before/before_id
         if after is not None and after_id is not None:
-            query += " AND (received_at > ? OR (received_at = ? AND id > ?))"
+            query += (
+                " AND (messages.received_at > ? OR (messages.received_at = ? AND messages.id > ?))"
+            )
             params.extend([after, after, after_id])
-            query += " ORDER BY received_at ASC, id ASC LIMIT ?"
+            query += " ORDER BY messages.received_at ASC, messages.id ASC LIMIT ?"
             params.append(limit)
         else:
             if before is not None and before_id is not None:
-                query += " AND (received_at < ? OR (received_at = ? AND id < ?))"
+                query += (
+                    " AND (messages.received_at < ?"
+                    " OR (messages.received_at = ? AND messages.id < ?))"
+                )
                 params.extend([before, before, before_id])
 
-            query += " ORDER BY received_at DESC, id DESC LIMIT ?"
+            query += " ORDER BY messages.received_at DESC, messages.id DESC LIMIT ?"
             params.append(limit)
             if before is None or before_id is None:
                 query += " OFFSET ?"
