@@ -671,11 +671,11 @@ export function Sidebar({
         <div className="relative min-w-0 flex-1">
           <Input
             type="text"
-            placeholder="Search conversations..."
+            placeholder="Search rooms/contacts..."
             aria-label="Search conversations"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-7 text-[13px] pr-8 bg-background/50"
+            className={cn('h-7 text-[13px] bg-background/50', searchQuery ? 'pr-8' : 'pr-3')}
           />
           {searchQuery && (
             <button
