@@ -52,6 +52,18 @@ export const THEMES: Theme[] = [
     swatches: ['#081A22', '#0F2630', '#23D7C6', '#173844', '#FF7A66', '#7C83FF'],
     metaThemeColor: '#081A22',
   },
+  {
+    id: 'candy-dusk',
+    name: 'Candy Dusk',
+    swatches: ['#140F24', '#201736', '#FF79C9', '#2A2144', '#FFC857', '#8BE9FD'],
+    metaThemeColor: '#140F24',
+  },
+  {
+    id: 'paper-grove',
+    name: 'Paper Grove',
+    swatches: ['#F7F1E4', '#FFF9EE', '#2F9E74', '#E7DEC8', '#E76F51', '#5C7CFA'],
+    metaThemeColor: '#F7F1E4',
+  },
 ];
 
 const THEME_KEY = 'remoteterm-theme';
