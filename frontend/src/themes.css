@@ -49,6 +49,10 @@
   --overlay: 220 20% 10%;
 }
 
+:root[data-theme='light'] .sidebar-tool-label {
+  color: hsl(var(--foreground));
+}
+
 /* ── Cyberpunk ("Neon Bleed") ──────────────────────────────── */
 :root[data-theme='cyberpunk'] {
   --background: 210 18% 3%;

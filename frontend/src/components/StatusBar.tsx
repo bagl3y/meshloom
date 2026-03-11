@@ -155,9 +155,9 @@ export function StatusBar({
         aria-label={currentTheme === 'light' ? 'Switch to classic theme' : 'Switch to light theme'}
       >
         {currentTheme === 'light' ? (
-          <Sun className="h-4 w-4" aria-hidden="true" />
-        ) : (
           <Moon className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <Sun className="h-4 w-4" aria-hidden="true" />
         )}
       </button>
     </header>

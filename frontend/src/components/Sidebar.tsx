@@ -501,10 +501,10 @@ export function Sidebar({
       onKeyDown={handleKeyboardActivate}
       onClick={onClick}
     >
-      <span className="text-muted-foreground" aria-hidden="true">
+      <span className="sidebar-tool-icon text-muted-foreground" aria-hidden="true">
         {icon}
       </span>
-      <span className="flex-1 truncate text-muted-foreground">{label}</span>
+      <span className="sidebar-tool-label flex-1 truncate text-muted-foreground">{label}</span>
     </div>
   );
 
