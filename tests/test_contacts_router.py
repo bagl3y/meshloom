@@ -453,6 +453,97 @@ class TestNameOnlyContactDetail:
         assert data["advert_frequency"] > 0
 
 
+class TestContactAnalytics:
+    """Test GET /api/contacts/analytics."""
+
+    @pytest.mark.asyncio
+    async def test_analytics_returns_keyed_contact_profile_and_series(self, test_db, client):
+        now = 2_000_000_000
+        chan_key = "11" * 16
+        await _insert_contact(KEY_A, "Alice", type=1)
+
+        await MessageRepository.create(
+            msg_type="PRIV",
+            text="hi",
+            conversation_key=KEY_A,
+            sender_timestamp=now - 100,
+            received_at=now - 100,
+            sender_key=KEY_A,
+        )
+        await MessageRepository.create(
+            msg_type="CHAN",
+            text="Alice: ping",
+            conversation_key=chan_key,
+            sender_timestamp=now - 7200,
+            received_at=now - 7200,
+            sender_name="Alice",
+            sender_key=KEY_A,
+        )
+
+        with patch("app.repository.messages.time.time", return_value=now):
+            response = await client.get("/api/contacts/analytics", params={"public_key": KEY_A})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["lookup_type"] == "contact"
+        assert data["contact"]["public_key"] == KEY_A
+        assert data["includes_direct_messages"] is True
+        assert data["dm_message_count"] == 1
+        assert data["channel_message_count"] == 1
+        assert len(data["hourly_activity"]) == 24
+        assert len(data["weekly_activity"]) == 26
+        assert sum(bucket["last_24h_count"] for bucket in data["hourly_activity"]) == 2
+        assert sum(bucket["message_count"] for bucket in data["weekly_activity"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_analytics_returns_name_only_profile_and_series(self, test_db, client):
+        now = 2_000_000_000
+        chan_key = "22" * 16
+
+        await MessageRepository.create(
+            msg_type="CHAN",
+            text="Mystery: hi",
+            conversation_key=chan_key,
+            sender_timestamp=now - 100,
+            received_at=now - 100,
+            sender_name="Mystery",
+        )
+        await MessageRepository.create(
+            msg_type="CHAN",
+            text="Mystery: hello",
+            conversation_key=chan_key,
+            sender_timestamp=now - 86400,
+            received_at=now - 86400,
+            sender_name="Mystery",
+        )
+
+        with patch("app.repository.messages.time.time", return_value=now):
+            response = await client.get("/api/contacts/analytics", params={"name": "Mystery"})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["lookup_type"] == "name"
+        assert data["contact"] is None
+        assert data["name"] == "Mystery"
+        assert data["name_first_seen_at"] == now - 86400
+        assert data["includes_direct_messages"] is False
+        assert data["dm_message_count"] == 0
+        assert data["channel_message_count"] == 2
+        assert len(data["hourly_activity"]) == 24
+        assert len(data["weekly_activity"]) == 26
+        assert sum(bucket["last_24h_count"] for bucket in data["hourly_activity"]) == 1
+        assert sum(bucket["message_count"] for bucket in data["weekly_activity"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_analytics_requires_exactly_one_lookup_mode(self, test_db, client):
+        response = await client.get(
+            "/api/contacts/analytics",
+            params={"public_key": KEY_A, "name": "Alice"},
+        )
+        assert response.status_code == 400
+        assert "exactly one" in response.json()["detail"].lower()
+
+
 class TestDeleteContactCascade:
     """Test that contact delete cleans up related tables."""
 

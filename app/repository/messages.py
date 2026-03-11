@@ -3,10 +3,28 @@ import time
 from typing import Any
 
 from app.database import db
-from app.models import Message, MessagePath
+from app.models import (
+    ContactAnalyticsHourlyBucket,
+    ContactAnalyticsWeeklyBucket,
+    Message,
+    MessagePath,
+)
 
 
 class MessageRepository:
+    @staticmethod
+    def _contact_activity_filter(public_key: str) -> tuple[str, list[Any]]:
+        lower_key = public_key.lower()
+        return (
+            "((type = 'PRIV' AND LOWER(conversation_key) = ?)"
+            " OR (type = 'CHAN' AND LOWER(sender_key) = ?))",
+            [lower_key, lower_key],
+        )
+
+    @staticmethod
+    def _name_activity_filter(sender_name: str) -> tuple[str, list[Any]]:
+        return "type = 'CHAN' AND sender_name = ?", [sender_name]
+
     @staticmethod
     def _parse_paths(paths_json: str | None) -> list[MessagePath] | None:
         """Parse paths JSON string to list of MessagePath objects."""
@@ -556,6 +574,16 @@ class MessageRepository:
         return row["cnt"] if row else 0
 
     @staticmethod
+    async def get_first_channel_message_by_sender_name(sender_name: str) -> int | None:
+        """Get the earliest stored channel message timestamp for a display name."""
+        cursor = await db.conn.execute(
+            "SELECT MIN(received_at) AS first_seen FROM messages WHERE type = 'CHAN' AND sender_name = ?",
+            (sender_name,),
+        )
+        row = await cursor.fetchone()
+        return row["first_seen"] if row and row["first_seen"] is not None else None
+
+    @staticmethod
     async def get_channel_stats(conversation_key: str) -> dict:
         """Get channel message statistics: time-windowed counts, first message, unique senders, top senders.
 
@@ -663,3 +691,114 @@ class MessageRepository:
         )
         rows = await cursor.fetchall()
         return [(row["conversation_key"], row["channel_name"], row["cnt"]) for row in rows]
+
+    @staticmethod
+    async def _get_activity_hour_buckets(where_sql: str, params: list[Any]) -> dict[int, int]:
+        cursor = await db.conn.execute(
+            f"""
+            SELECT received_at / 3600 AS hour_bucket, COUNT(*) AS cnt
+            FROM messages
+            WHERE {where_sql}
+            GROUP BY hour_bucket
+            """,
+            params,
+        )
+        rows = await cursor.fetchall()
+        return {int(row["hour_bucket"]): row["cnt"] for row in rows}
+
+    @staticmethod
+    def _build_hourly_activity(
+        hour_counts: dict[int, int], now: int
+    ) -> list[ContactAnalyticsHourlyBucket]:
+        current_hour = now // 3600
+        if hour_counts:
+            min_hour = min(hour_counts)
+        else:
+            min_hour = current_hour
+
+        buckets: list[ContactAnalyticsHourlyBucket] = []
+        for hour_bucket in range(current_hour - 23, current_hour + 1):
+            last_24h_count = hour_counts.get(hour_bucket, 0)
+
+            week_total = 0
+            week_samples = 0
+            all_time_total = 0
+            all_time_samples = 0
+            compare_hour = hour_bucket
+            while compare_hour >= min_hour:
+                count = hour_counts.get(compare_hour, 0)
+                all_time_total += count
+                all_time_samples += 1
+                if week_samples < 7:
+                    week_total += count
+                    week_samples += 1
+                compare_hour -= 24
+
+            buckets.append(
+                ContactAnalyticsHourlyBucket(
+                    bucket_start=hour_bucket * 3600,
+                    last_24h_count=last_24h_count,
+                    last_week_average=round(week_total / week_samples, 2) if week_samples else 0,
+                    all_time_average=round(all_time_total / all_time_samples, 2)
+                    if all_time_samples
+                    else 0,
+                )
+            )
+        return buckets
+
+    @staticmethod
+    async def _get_weekly_activity(
+        where_sql: str,
+        params: list[Any],
+        now: int,
+        weeks: int = 26,
+    ) -> list[ContactAnalyticsWeeklyBucket]:
+        bucket_seconds = 7 * 24 * 3600
+        current_day_start = (now // 86400) * 86400
+        start = current_day_start - (weeks - 1) * bucket_seconds
+
+        cursor = await db.conn.execute(
+            f"""
+            SELECT (received_at - ?) / ? AS bucket_idx, COUNT(*) AS cnt
+            FROM messages
+            WHERE {where_sql} AND received_at >= ?
+            GROUP BY bucket_idx
+            """,
+            [start, bucket_seconds, *params, start],
+        )
+        rows = await cursor.fetchall()
+        counts = {int(row["bucket_idx"]): row["cnt"] for row in rows}
+
+        return [
+            ContactAnalyticsWeeklyBucket(
+                bucket_start=start + bucket_idx * bucket_seconds,
+                message_count=counts.get(bucket_idx, 0),
+            )
+            for bucket_idx in range(weeks)
+        ]
+
+    @staticmethod
+    async def get_contact_activity_series(
+        public_key: str,
+        now: int | None = None,
+    ) -> tuple[list[ContactAnalyticsHourlyBucket], list[ContactAnalyticsWeeklyBucket]]:
+        """Get combined DM + channel activity series for a keyed contact."""
+        ts = now if now is not None else int(time.time())
+        where_sql, params = MessageRepository._contact_activity_filter(public_key)
+        hour_counts = await MessageRepository._get_activity_hour_buckets(where_sql, params)
+        hourly = MessageRepository._build_hourly_activity(hour_counts, ts)
+        weekly = await MessageRepository._get_weekly_activity(where_sql, params, ts)
+        return hourly, weekly
+
+    @staticmethod
+    async def get_sender_name_activity_series(
+        sender_name: str,
+        now: int | None = None,
+    ) -> tuple[list[ContactAnalyticsHourlyBucket], list[ContactAnalyticsWeeklyBucket]]:
+        """Get channel-only activity series for a sender name."""
+        ts = now if now is not None else int(time.time())
+        where_sql, params = MessageRepository._name_activity_filter(sender_name)
+        hour_counts = await MessageRepository._get_activity_hour_buckets(where_sql, params)
+        hourly = MessageRepository._build_hourly_activity(hour_counts, ts)
+        weekly = await MessageRepository._get_weekly_activity(where_sql, params, ts)
+        return hourly, weekly

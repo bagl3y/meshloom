@@ -5,6 +5,7 @@ import type {
   ChannelDetail,
   CommandResponse,
   Contact,
+  ContactAnalytics,
   ContactAdvertPath,
   ContactAdvertPathSummary,
   ContactDetail,
@@ -114,6 +115,12 @@ export const api = {
     ),
   getContactAdvertPaths: (publicKey: string, limit = 10) =>
     fetchJson<ContactAdvertPath[]>(`/contacts/${publicKey}/advert-paths?limit=${limit}`),
+  getContactAnalytics: (params: { publicKey?: string; name?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params.publicKey) searchParams.set('public_key', params.publicKey);
+    if (params.name) searchParams.set('name', params.name);
+    return fetchJson<ContactAnalytics>(`/contacts/analytics?${searchParams.toString()}`);
+  },
   getContactDetail: (publicKey: string) =>
     fetchJson<ContactDetail>(`/contacts/${publicKey}/detail`),
   getNameOnlyContactDetail: (name: string) =>

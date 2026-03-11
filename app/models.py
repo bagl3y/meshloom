@@ -233,6 +233,44 @@ class NameOnlyContactDetail(BaseModel):
     most_active_rooms: list[ContactActiveRoom] = Field(default_factory=list)
 
 
+class ContactAnalyticsHourlyBucket(BaseModel):
+    """A single hourly activity bucket for contact analytics."""
+
+    bucket_start: int = Field(description="Unix timestamp for the start of the hour bucket")
+    last_24h_count: int = 0
+    last_week_average: float = 0
+    all_time_average: float = 0
+
+
+class ContactAnalyticsWeeklyBucket(BaseModel):
+    """A single weekly activity bucket for contact analytics."""
+
+    bucket_start: int = Field(description="Unix timestamp for the start of the 7-day bucket")
+    message_count: int = 0
+
+
+class ContactAnalytics(BaseModel):
+    """Unified contact analytics payload for keyed and name-only lookups."""
+
+    lookup_type: Literal["contact", "name"]
+    name: str
+    contact: Contact | None = None
+    name_first_seen_at: int | None = None
+    name_history: list[ContactNameHistory] = Field(default_factory=list)
+    dm_message_count: int = 0
+    channel_message_count: int = 0
+    includes_direct_messages: bool = False
+    most_active_rooms: list[ContactActiveRoom] = Field(default_factory=list)
+    advert_paths: list[ContactAdvertPath] = Field(default_factory=list)
+    advert_frequency: float | None = Field(
+        default=None,
+        description="Advert observations per hour (includes multi-path arrivals of same advert)",
+    )
+    nearest_repeaters: list[NearestRepeater] = Field(default_factory=list)
+    hourly_activity: list[ContactAnalyticsHourlyBucket] = Field(default_factory=list)
+    weekly_activity: list[ContactAnalyticsWeeklyBucket] = Field(default_factory=list)
+
+
 class Channel(BaseModel):
     key: str = Field(description="Channel key (32-char hex)")
     name: str

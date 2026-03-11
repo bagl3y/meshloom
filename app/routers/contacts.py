@@ -10,6 +10,7 @@ from app.models import (
     ContactActiveRoom,
     ContactAdvertPath,
     ContactAdvertPathSummary,
+    ContactAnalytics,
     ContactDetail,
     ContactRoutingOverrideRequest,
     ContactUpsert,
@@ -92,6 +93,102 @@ async def _broadcast_contact_update(contact: Contact) -> None:
     broadcast_event("contact", contact.model_dump())
 
 
+async def _build_keyed_contact_analytics(contact: Contact) -> ContactAnalytics:
+    name_history = await ContactNameHistoryRepository.get_history(contact.public_key)
+    dm_count = await MessageRepository.count_dm_messages(contact.public_key)
+    chan_count = await MessageRepository.count_channel_messages_by_sender(contact.public_key)
+    active_rooms_raw = await MessageRepository.get_most_active_rooms(contact.public_key)
+    advert_paths = await ContactAdvertPathRepository.get_recent_for_contact(contact.public_key)
+    hourly_activity, weekly_activity = await MessageRepository.get_contact_activity_series(
+        contact.public_key
+    )
+
+    most_active_rooms = [
+        ContactActiveRoom(channel_key=key, channel_name=name, message_count=count)
+        for key, name, count in active_rooms_raw
+    ]
+
+    advert_frequency: float | None = None
+    if advert_paths:
+        total_observations = sum(p.heard_count for p in advert_paths)
+        earliest = min(p.first_seen for p in advert_paths)
+        latest = max(p.last_seen for p in advert_paths)
+        span_hours = (latest - earliest) / 3600.0
+        if span_hours > 0:
+            advert_frequency = round(total_observations / span_hours, 2)
+
+    first_hop_stats: dict[str, dict] = {}
+    for p in advert_paths:
+        prefix = p.next_hop
+        if prefix:
+            if prefix not in first_hop_stats:
+                first_hop_stats[prefix] = {
+                    "heard_count": 0,
+                    "path_len": p.path_len,
+                    "last_seen": p.last_seen,
+                }
+            first_hop_stats[prefix]["heard_count"] += p.heard_count
+            first_hop_stats[prefix]["last_seen"] = max(
+                first_hop_stats[prefix]["last_seen"], p.last_seen
+            )
+
+    resolved_contacts = await ContactRepository.resolve_prefixes(list(first_hop_stats.keys()))
+
+    nearest_repeaters: list[NearestRepeater] = []
+    for prefix, stats in first_hop_stats.items():
+        resolved = resolved_contacts.get(prefix)
+        nearest_repeaters.append(
+            NearestRepeater(
+                public_key=resolved.public_key if resolved else prefix,
+                name=resolved.name if resolved else None,
+                path_len=stats["path_len"],
+                last_seen=stats["last_seen"],
+                heard_count=stats["heard_count"],
+            )
+        )
+
+    nearest_repeaters.sort(key=lambda r: r.heard_count, reverse=True)
+
+    return ContactAnalytics(
+        lookup_type="contact",
+        name=contact.name or contact.public_key[:12],
+        contact=contact,
+        name_history=name_history,
+        dm_message_count=dm_count,
+        channel_message_count=chan_count,
+        includes_direct_messages=True,
+        most_active_rooms=most_active_rooms,
+        advert_paths=advert_paths,
+        advert_frequency=advert_frequency,
+        nearest_repeaters=nearest_repeaters,
+        hourly_activity=hourly_activity,
+        weekly_activity=weekly_activity,
+    )
+
+
+async def _build_name_only_contact_analytics(name: str) -> ContactAnalytics:
+    chan_count = await MessageRepository.count_channel_messages_by_sender_name(name)
+    name_first_seen_at = await MessageRepository.get_first_channel_message_by_sender_name(name)
+    active_rooms_raw = await MessageRepository.get_most_active_rooms_by_sender_name(name)
+    hourly_activity, weekly_activity = await MessageRepository.get_sender_name_activity_series(name)
+
+    most_active_rooms = [
+        ContactActiveRoom(channel_key=key, channel_name=room_name, message_count=count)
+        for key, room_name, count in active_rooms_raw
+    ]
+
+    return ContactAnalytics(
+        lookup_type="name",
+        name=name,
+        name_first_seen_at=name_first_seen_at,
+        channel_message_count=chan_count,
+        includes_direct_messages=False,
+        most_active_rooms=most_active_rooms,
+        hourly_activity=hourly_activity,
+        weekly_activity=weekly_activity,
+    )
+
+
 @router.get("", response_model=list[Contact])
 async def list_contacts(
     limit: int = Query(default=100, ge=1, le=1000),
@@ -113,6 +210,26 @@ async def list_repeater_advert_paths(
     return await ContactAdvertPathRepository.get_recent_for_all_contacts(
         limit_per_contact=limit_per_repeater
     )
+
+
+@router.get("/analytics", response_model=ContactAnalytics)
+async def get_contact_analytics(
+    public_key: str | None = Query(default=None),
+    name: str | None = Query(default=None, min_length=1, max_length=200),
+) -> ContactAnalytics:
+    """Get unified contact analytics for either a keyed contact or a sender name."""
+    if bool(public_key) == bool(name):
+        raise HTTPException(status_code=400, detail="Specify exactly one of public_key or name")
+
+    if public_key:
+        contact = await _resolve_contact_or_404(public_key)
+        return await _build_keyed_contact_analytics(contact)
+
+    assert name is not None
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise HTTPException(status_code=400, detail="name is required")
+    return await _build_name_only_contact_analytics(normalized_name)
 
 
 @router.post("", response_model=Contact)
@@ -180,73 +297,17 @@ async def get_contact_detail(public_key: str) -> ContactDetail:
     advertisement paths, advert frequency, and nearest repeaters.
     """
     contact = await _resolve_contact_or_404(public_key)
-
-    name_history = await ContactNameHistoryRepository.get_history(contact.public_key)
-    dm_count = await MessageRepository.count_dm_messages(contact.public_key)
-    chan_count = await MessageRepository.count_channel_messages_by_sender(contact.public_key)
-    active_rooms_raw = await MessageRepository.get_most_active_rooms(contact.public_key)
-    advert_paths = await ContactAdvertPathRepository.get_recent_for_contact(contact.public_key)
-
-    most_active_rooms = [
-        ContactActiveRoom(channel_key=key, channel_name=name, message_count=count)
-        for key, name, count in active_rooms_raw
-    ]
-
-    # Compute advert observation rate (observations/hour) from path data.
-    # Note: a single advertisement can arrive via multiple paths, so this counts
-    # RF observations, not unique advertisement broadcasts.
-    advert_frequency: float | None = None
-    if advert_paths:
-        total_observations = sum(p.heard_count for p in advert_paths)
-        earliest = min(p.first_seen for p in advert_paths)
-        latest = max(p.last_seen for p in advert_paths)
-        span_hours = (latest - earliest) / 3600.0
-        if span_hours > 0:
-            advert_frequency = round(total_observations / span_hours, 2)
-
-    # Compute nearest repeaters from first-hop prefixes in advert paths
-    first_hop_stats: dict[str, dict] = {}  # prefix -> {heard_count, path_len, last_seen}
-    for p in advert_paths:
-        prefix = p.next_hop
-        if prefix:
-            if prefix not in first_hop_stats:
-                first_hop_stats[prefix] = {
-                    "heard_count": 0,
-                    "path_len": p.path_len,
-                    "last_seen": p.last_seen,
-                }
-            first_hop_stats[prefix]["heard_count"] += p.heard_count
-            first_hop_stats[prefix]["last_seen"] = max(
-                first_hop_stats[prefix]["last_seen"], p.last_seen
-            )
-
-    # Resolve all first-hop prefixes to contacts in a single query
-    resolved_contacts = await ContactRepository.resolve_prefixes(list(first_hop_stats.keys()))
-
-    nearest_repeaters: list[NearestRepeater] = []
-    for prefix, stats in first_hop_stats.items():
-        resolved = resolved_contacts.get(prefix)
-        nearest_repeaters.append(
-            NearestRepeater(
-                public_key=resolved.public_key if resolved else prefix,
-                name=resolved.name if resolved else None,
-                path_len=stats["path_len"],
-                last_seen=stats["last_seen"],
-                heard_count=stats["heard_count"],
-            )
-        )
-
-    nearest_repeaters.sort(key=lambda r: r.heard_count, reverse=True)
-
+    analytics = await _build_keyed_contact_analytics(contact)
+    assert analytics.contact is not None
     return ContactDetail(
-        contact=contact,
-        name_history=name_history,
-        dm_message_count=dm_count,
-        channel_message_count=chan_count,
-        most_active_rooms=most_active_rooms,
-        advert_paths=advert_paths,
-        advert_frequency=advert_frequency,
-        nearest_repeaters=nearest_repeaters,
+        contact=analytics.contact,
+        name_history=analytics.name_history,
+        dm_message_count=analytics.dm_message_count,
+        channel_message_count=analytics.channel_message_count,
+        most_active_rooms=analytics.most_active_rooms,
+        advert_paths=analytics.advert_paths,
+        advert_frequency=analytics.advert_frequency,
+        nearest_repeaters=analytics.nearest_repeaters,
     )
 
 
@@ -258,18 +319,11 @@ async def get_name_only_contact_detail(
     normalized_name = name.strip()
     if not normalized_name:
         raise HTTPException(status_code=400, detail="name is required")
-
-    chan_count = await MessageRepository.count_channel_messages_by_sender_name(normalized_name)
-    active_rooms_raw = await MessageRepository.get_most_active_rooms_by_sender_name(normalized_name)
-    most_active_rooms = [
-        ContactActiveRoom(channel_key=key, channel_name=room_name, message_count=count)
-        for key, room_name, count in active_rooms_raw
-    ]
-
+    analytics = await _build_name_only_contact_analytics(normalized_name)
     return NameOnlyContactDetail(
-        name=normalized_name,
-        channel_message_count=chan_count,
-        most_active_rooms=most_active_rooms,
+        name=analytics.name,
+        channel_message_count=analytics.channel_message_count,
+        most_active_rooms=analytics.most_active_rooms,
     )
 
 

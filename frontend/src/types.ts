@@ -131,6 +131,35 @@ export interface NameOnlyContactDetail {
   most_active_rooms: ContactActiveRoom[];
 }
 
+export interface ContactAnalyticsHourlyBucket {
+  bucket_start: number;
+  last_24h_count: number;
+  last_week_average: number;
+  all_time_average: number;
+}
+
+export interface ContactAnalyticsWeeklyBucket {
+  bucket_start: number;
+  message_count: number;
+}
+
+export interface ContactAnalytics {
+  lookup_type: 'contact' | 'name';
+  name: string;
+  contact: Contact | null;
+  name_first_seen_at: number | null;
+  name_history: ContactNameHistory[];
+  dm_message_count: number;
+  channel_message_count: number;
+  includes_direct_messages: boolean;
+  most_active_rooms: ContactActiveRoom[];
+  advert_paths: ContactAdvertPath[];
+  advert_frequency: number | null;
+  nearest_repeaters: NearestRepeater[];
+  hourly_activity: ContactAnalyticsHourlyBucket[];
+  weekly_activity: ContactAnalyticsWeeklyBucket[];
+}
+
 export interface Channel {
   key: string;
   name: string;
