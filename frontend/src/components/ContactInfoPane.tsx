@@ -17,7 +17,14 @@ import { handleKeyboardActivate } from '../utils/a11y';
 import { ContactAvatar } from './ContactAvatar';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
 import { toast } from './ui/sonner';
-import type { Contact, ContactDetail, Favorite, RadioConfig } from '../types';
+import type {
+  Contact,
+  ContactActiveRoom,
+  ContactDetail,
+  Favorite,
+  NameOnlyContactDetail,
+  RadioConfig,
+} from '../types';
 
 const CONTACT_TYPE_LABELS: Record<number, string> = {
   0: 'Unknown',
@@ -67,6 +74,7 @@ export function ContactInfoPane({
   const nameOnlyValue = isNameOnly && contactKey ? contactKey.slice(5) : null;
 
   const [detail, setDetail] = useState<ContactDetail | null>(null);
+  const [nameOnlyDetail, setNameOnlyDetail] = useState<NameOnlyContactDetail | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Get live contact data from contacts array (real-time via WS)
@@ -99,6 +107,33 @@ export function ContactInfoPane({
       cancelled = true;
     };
   }, [contactKey, isNameOnly]);
+
+  useEffect(() => {
+    if (!nameOnlyValue) {
+      setNameOnlyDetail(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    api
+      .getNameOnlyContactDetail(nameOnlyValue)
+      .then((data) => {
+        if (!cancelled) setNameOnlyDetail(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('Failed to fetch name-only contact detail:', err);
+          toast.error('Failed to load contact info');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [nameOnlyValue]);
 
   // Use live contact data where available, fall back to detail snapshot
   const contact = liveContact ?? detail?.contact ?? null;
@@ -141,8 +176,6 @@ export function ContactInfoPane({
               </div>
             </div>
 
-            {fromChannel && <ChannelAttributionWarning />}
-
             {/* Block by name toggle */}
             {onToggleBlockedName && (
               <div className="px-5 py-3 border-b border-border">
@@ -165,6 +198,25 @@ export function ContactInfoPane({
                 </button>
               </div>
             )}
+
+            {fromChannel && (
+              <ChannelAttributionWarning
+                nameOnly
+                includeAliasNote={false}
+                className="border-b border-border mx-0 my-0 rounded-none px-5 py-3"
+              />
+            )}
+
+            <MessageStatsSection
+              dmMessageCount={0}
+              channelMessageCount={nameOnlyDetail?.channel_message_count ?? 0}
+              showDirectMessages={false}
+            />
+
+            <MostActiveRoomsSection
+              rooms={nameOnlyDetail?.most_active_rooms ?? []}
+              onNavigateToChannel={onNavigateToChannel}
+            />
           </div>
         ) : loading && !detail ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -211,8 +263,6 @@ export function ContactInfoPane({
                 </div>
               </div>
             </div>
-
-            {fromChannel && <ChannelAttributionWarning />}
 
             {/* Info grid */}
             <div className="px-5 py-3 border-b border-border">
@@ -340,79 +390,6 @@ export function ContactInfoPane({
               </div>
             )}
 
-            {/* AKA (Name History) - only show if more than one name */}
-            {detail && detail.name_history.length > 1 && (
-              <div className="px-5 py-3 border-b border-border">
-                <SectionLabel>Also Known As</SectionLabel>
-                <div className="space-y-1">
-                  {detail.name_history.map((h) => (
-                    <div key={h.name} className="flex justify-between items-center text-sm">
-                      <span className="font-medium truncate">{h.name}</span>
-                      <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
-                        {formatTime(h.first_seen)} &ndash; {formatTime(h.last_seen)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Message Stats */}
-            {detail && (detail.dm_message_count > 0 || detail.channel_message_count > 0) && (
-              <div className="px-5 py-3 border-b border-border">
-                <SectionLabel>Messages</SectionLabel>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                  {detail.dm_message_count > 0 && (
-                    <InfoItem
-                      label="Direct Messages"
-                      value={detail.dm_message_count.toLocaleString()}
-                    />
-                  )}
-                  {detail.channel_message_count > 0 && (
-                    <InfoItem
-                      label="Channel Messages"
-                      value={detail.channel_message_count.toLocaleString()}
-                    />
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Most Active Rooms */}
-            {detail && detail.most_active_rooms.length > 0 && (
-              <div className="px-5 py-3 border-b border-border">
-                <SectionLabel>Most Active Rooms</SectionLabel>
-                <div className="space-y-1">
-                  {detail.most_active_rooms.map((room) => (
-                    <div
-                      key={room.channel_key}
-                      className="flex justify-between items-center text-sm"
-                    >
-                      <span
-                        className={
-                          onNavigateToChannel
-                            ? 'cursor-pointer hover:text-primary transition-colors truncate'
-                            : 'truncate'
-                        }
-                        role={onNavigateToChannel ? 'button' : undefined}
-                        tabIndex={onNavigateToChannel ? 0 : undefined}
-                        onKeyDown={onNavigateToChannel ? handleKeyboardActivate : undefined}
-                        onClick={() => onNavigateToChannel?.(room.channel_key)}
-                      >
-                        {room.channel_name.startsWith('#') || room.channel_name === 'Public'
-                          ? room.channel_name
-                          : `#${room.channel_name}`}
-                      </span>
-                      <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
-                        {room.message_count.toLocaleString()} msg
-                        {room.message_count !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Nearest Repeaters */}
             {detail && detail.nearest_repeaters.length > 0 && (
               <div className="px-5 py-3 border-b border-border">
@@ -435,7 +412,7 @@ export function ContactInfoPane({
 
             {/* Advert Paths */}
             {detail && detail.advert_paths.length > 0 && (
-              <div className="px-5 py-3">
+              <div className="px-5 py-3 border-b border-border">
                 <SectionLabel>Recent Advert Paths</SectionLabel>
                 <div className="space-y-1">
                   {detail.advert_paths.map((p) => (
@@ -454,6 +431,39 @@ export function ContactInfoPane({
                 </div>
               </div>
             )}
+
+            {fromChannel && (
+              <ChannelAttributionWarning
+                includeAliasNote={Boolean(detail && detail.name_history.length > 1)}
+              />
+            )}
+
+            {/* AKA (Name History) - only show if more than one name */}
+            {detail && detail.name_history.length > 1 && (
+              <div className="px-5 py-3 border-b border-border">
+                <SectionLabel>Also Known As</SectionLabel>
+                <div className="space-y-1">
+                  {detail.name_history.map((h) => (
+                    <div key={h.name} className="flex justify-between items-center text-sm">
+                      <span className="font-medium truncate">{h.name}</span>
+                      <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+                        {formatTime(h.first_seen)} &ndash; {formatTime(h.last_seen)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <MessageStatsSection
+              dmMessageCount={detail?.dm_message_count ?? 0}
+              channelMessageCount={detail?.channel_message_count ?? 0}
+            />
+
+            <MostActiveRoomsSection
+              rooms={detail?.most_active_rooms ?? []}
+              onNavigateToChannel={onNavigateToChannel}
+            />
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -473,14 +483,95 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ChannelAttributionWarning() {
+function ChannelAttributionWarning({
+  includeAliasNote = false,
+  nameOnly = false,
+  className = 'mx-5 my-3 px-3 py-2 rounded-md bg-yellow-500/10 border border-yellow-500/20',
+}: {
+  includeAliasNote?: boolean;
+  nameOnly?: boolean;
+  className?: string;
+}) {
   return (
-    <div className="mx-5 my-3 px-3 py-2 rounded-md bg-yellow-500/10 border border-yellow-500/20">
+    <div className={className}>
       <p className="text-xs text-yellow-600 dark:text-yellow-400">
         Channel sender identity is based on best-effort name matching. Different nodes using the
-        same name will be attributed to the same contact. Message counts and key-based statistics
+        same name will be attributed to the same {nameOnly ? 'sender name' : 'contact'}. Stats below
         may be inaccurate.
+        {includeAliasNote &&
+          ' Message counts below include messages attributed under the names listed in Also Known As.'}
       </p>
+    </div>
+  );
+}
+
+function MessageStatsSection({
+  dmMessageCount,
+  channelMessageCount,
+  showDirectMessages = true,
+}: {
+  dmMessageCount: number;
+  channelMessageCount: number;
+  showDirectMessages?: boolean;
+}) {
+  if ((showDirectMessages ? dmMessageCount : 0) <= 0 && channelMessageCount <= 0) {
+    return null;
+  }
+
+  return (
+    <div className="px-5 py-3 border-b border-border">
+      <SectionLabel>Messages</SectionLabel>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+        {showDirectMessages && dmMessageCount > 0 && (
+          <InfoItem label="Direct Messages" value={dmMessageCount.toLocaleString()} />
+        )}
+        {channelMessageCount > 0 && (
+          <InfoItem label="Channel Messages" value={channelMessageCount.toLocaleString()} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MostActiveRoomsSection({
+  rooms,
+  onNavigateToChannel,
+}: {
+  rooms: ContactActiveRoom[];
+  onNavigateToChannel?: (channelKey: string) => void;
+}) {
+  if (rooms.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="px-5 py-3 border-b border-border">
+      <SectionLabel>Most Active Rooms</SectionLabel>
+      <div className="space-y-1">
+        {rooms.map((room) => (
+          <div key={room.channel_key} className="flex justify-between items-center text-sm">
+            <span
+              className={
+                onNavigateToChannel
+                  ? 'cursor-pointer hover:text-primary transition-colors truncate'
+                  : 'truncate'
+              }
+              role={onNavigateToChannel ? 'button' : undefined}
+              tabIndex={onNavigateToChannel ? 0 : undefined}
+              onKeyDown={onNavigateToChannel ? handleKeyboardActivate : undefined}
+              onClick={() => onNavigateToChannel?.(room.channel_key)}
+            >
+              {room.channel_name.startsWith('#') || room.channel_name === 'Public'
+                ? room.channel_name
+                : `#${room.channel_name}`}
+            </span>
+            <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+              {room.message_count.toLocaleString()} msg
+              {room.message_count !== 1 ? 's' : ''}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

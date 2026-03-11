@@ -358,6 +358,60 @@ class TestContactDetail:
         assert repeater["name"] == "Relay1"
         assert repeater["heard_count"] == 2
 
+
+class TestNameOnlyContactDetail:
+    """Test GET /api/contacts/name-detail."""
+
+    @pytest.mark.asyncio
+    async def test_name_detail_returns_channel_stats(self, test_db, client):
+        chan_a = "11" * 16
+        chan_b = "22" * 16
+
+        await MessageRepository.create(
+            msg_type="CHAN",
+            text="Mystery: hi",
+            conversation_key=chan_a,
+            sender_timestamp=1000,
+            received_at=1000,
+            sender_name="Mystery",
+        )
+        await MessageRepository.create(
+            msg_type="CHAN",
+            text="Mystery: hello",
+            conversation_key=chan_a,
+            sender_timestamp=1001,
+            received_at=1001,
+            sender_name="Mystery",
+        )
+        await MessageRepository.create(
+            msg_type="CHAN",
+            text="Mystery: ping",
+            conversation_key=chan_b,
+            sender_timestamp=1002,
+            received_at=1002,
+            sender_name="Mystery",
+        )
+
+        response = await client.get("/api/contacts/name-detail", params={"name": "Mystery"})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Mystery"
+        assert data["channel_message_count"] == 3
+        assert len(data["most_active_rooms"]) == 2
+        assert data["most_active_rooms"][0]["channel_key"] == chan_a
+        assert data["most_active_rooms"][0]["message_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_name_detail_with_no_activity_returns_empty(self, test_db, client):
+        response = await client.get("/api/contacts/name-detail", params={"name": "Mystery"})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Mystery"
+        assert data["channel_message_count"] == 0
+        assert data["most_active_rooms"] == []
+
     @pytest.mark.asyncio
     async def test_detail_nearest_repeaters_use_full_multibyte_next_hop(self, test_db, client):
         """Nearest repeater resolution should distinguish multi-byte hops with the same first byte."""

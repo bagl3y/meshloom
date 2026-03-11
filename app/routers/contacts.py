@@ -14,6 +14,7 @@ from app.models import (
     ContactRoutingOverrideRequest,
     ContactUpsert,
     CreateContactRequest,
+    NameOnlyContactDetail,
     NearestRepeater,
     TraceResponse,
 )
@@ -246,6 +247,29 @@ async def get_contact_detail(public_key: str) -> ContactDetail:
         advert_paths=advert_paths,
         advert_frequency=advert_frequency,
         nearest_repeaters=nearest_repeaters,
+    )
+
+
+@router.get("/name-detail", response_model=NameOnlyContactDetail)
+async def get_name_only_contact_detail(
+    name: str = Query(min_length=1, max_length=200),
+) -> NameOnlyContactDetail:
+    """Get channel activity summary for a sender name without a resolved key."""
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise HTTPException(status_code=400, detail="name is required")
+
+    chan_count = await MessageRepository.count_channel_messages_by_sender_name(normalized_name)
+    active_rooms_raw = await MessageRepository.get_most_active_rooms_by_sender_name(normalized_name)
+    most_active_rooms = [
+        ContactActiveRoom(channel_key=key, channel_name=room_name, message_count=count)
+        for key, room_name, count in active_rooms_raw
+    ]
+
+    return NameOnlyContactDetail(
+        name=normalized_name,
+        channel_message_count=chan_count,
+        most_active_rooms=most_active_rooms,
     )
 
 

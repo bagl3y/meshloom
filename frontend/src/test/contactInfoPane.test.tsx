@@ -2,15 +2,17 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { ContactInfoPane } from '../components/ContactInfoPane';
-import type { Contact, ContactDetail } from '../types';
+import type { Contact, ContactDetail, NameOnlyContactDetail } from '../types';
 
-const { getContactDetail } = vi.hoisted(() => ({
+const { getContactDetail, getNameOnlyContactDetail } = vi.hoisted(() => ({
   getContactDetail: vi.fn(),
+  getNameOnlyContactDetail: vi.fn(),
 }));
 
 vi.mock('../api', () => ({
   api: {
     getContactDetail,
+    getNameOnlyContactDetail,
   },
 }));
 
@@ -54,7 +56,7 @@ function createContact(overrides: Partial<Contact> = {}): Contact {
   };
 }
 
-function createDetail(contact: Contact): ContactDetail {
+function createDetail(contact: Contact, overrides: Partial<ContactDetail> = {}): ContactDetail {
   return {
     contact,
     name_history: [],
@@ -64,6 +66,18 @@ function createDetail(contact: Contact): ContactDetail {
     advert_paths: [],
     advert_frequency: null,
     nearest_repeaters: [],
+    ...overrides,
+  };
+}
+
+function createNameOnlyDetail(
+  overrides: Partial<NameOnlyContactDetail> = {}
+): NameOnlyContactDetail {
+  return {
+    name: 'Mystery',
+    channel_message_count: 0,
+    most_active_rooms: [],
+    ...overrides,
   };
 }
 
@@ -79,6 +93,7 @@ const baseProps = {
 describe('ContactInfoPane', () => {
   beforeEach(() => {
     getContactDetail.mockReset();
+    getNameOnlyContactDetail.mockReset();
   });
 
   it('shows hop width when contact has a stored path hash mode', async () => {
@@ -87,7 +102,7 @@ describe('ContactInfoPane', () => {
 
     render(<ContactInfoPane {...baseProps} contactKey={contact.public_key} />);
 
-    await screen.findByText('Alice');
+    await screen.findByText(contact.public_key);
     await waitFor(() => {
       expect(screen.getByText('Hop Width')).toBeInTheDocument();
       expect(screen.getByText('2-byte IDs')).toBeInTheDocument();
@@ -125,6 +140,57 @@ describe('ContactInfoPane', () => {
       expect(screen.getByText('(forced)')).toBeInTheDocument();
       expect(screen.getByText('Learned Route')).toBeInTheDocument();
       expect(screen.getByText('1 hop')).toBeInTheDocument();
+    });
+  });
+
+  it('loads name-only channel stats and most active rooms', async () => {
+    getNameOnlyContactDetail.mockResolvedValue(
+      createNameOnlyDetail({
+        name: 'Mystery',
+        channel_message_count: 4,
+        most_active_rooms: [
+          {
+            channel_key: 'ab'.repeat(16),
+            channel_name: '#ops',
+            message_count: 3,
+          },
+        ],
+      })
+    );
+
+    render(<ContactInfoPane {...baseProps} contactKey="name:Mystery" fromChannel />);
+
+    await screen.findByText('Mystery');
+    await waitFor(() => {
+      expect(getNameOnlyContactDetail).toHaveBeenCalledWith('Mystery');
+      expect(screen.getByText('Messages')).toBeInTheDocument();
+      expect(screen.getByText('Channel Messages')).toBeInTheDocument();
+      expect(screen.getByText('4')).toBeInTheDocument();
+      expect(screen.getByText('Most Active Rooms')).toBeInTheDocument();
+      expect(screen.getByText('#ops')).toBeInTheDocument();
+      expect(screen.getByText(/same sender name/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows alias note in the channel attribution warning for keyed contacts', async () => {
+    const contact = createContact();
+    getContactDetail.mockResolvedValue(
+      createDetail(contact, {
+        name_history: [
+          { name: 'Alice', first_seen: 1000, last_seen: 2000 },
+          { name: 'AliceOld', first_seen: 900, last_seen: 999 },
+        ],
+      })
+    );
+
+    render(<ContactInfoPane {...baseProps} contactKey={contact.public_key} fromChannel />);
+
+    await screen.findByText(contact.public_key);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Also Known As' })).toBeInTheDocument();
+      expect(
+        screen.getByText(/include messages attributed under the names listed in Also Known As/i)
+      ).toBeInTheDocument();
     });
   });
 });

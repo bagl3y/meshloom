@@ -16,6 +16,7 @@ import type {
   MessagesAroundResponse,
   MigratePreferencesRequest,
   MigratePreferencesResponse,
+  NameOnlyContactDetail,
   RadioConfig,
   RadioConfigUpdate,
   RepeaterAclResponse,
@@ -115,6 +116,8 @@ export const api = {
     fetchJson<ContactAdvertPath[]>(`/contacts/${publicKey}/advert-paths?limit=${limit}`),
   getContactDetail: (publicKey: string) =>
     fetchJson<ContactDetail>(`/contacts/${publicKey}/detail`),
+  getNameOnlyContactDetail: (name: string) =>
+    fetchJson<NameOnlyContactDetail>(`/contacts/name-detail?name=${encodeURIComponent(name)}`),
   deleteContact: (publicKey: string) =>
     fetchJson<{ status: string }>(`/contacts/${publicKey}`, {
       method: 'DELETE',

@@ -125,6 +125,12 @@ export interface ContactDetail {
   nearest_repeaters: NearestRepeater[];
 }
 
+export interface NameOnlyContactDetail {
+  name: string;
+  channel_message_count: number;
+  most_active_rooms: ContactActiveRoom[];
+}
+
 export interface Channel {
   key: string;
   name: string;

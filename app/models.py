@@ -225,6 +225,14 @@ class ContactDetail(BaseModel):
     nearest_repeaters: list[NearestRepeater] = Field(default_factory=list)
 
 
+class NameOnlyContactDetail(BaseModel):
+    """Channel activity summary for a sender name that is not tied to a known key."""
+
+    name: str
+    channel_message_count: int = 0
+    most_active_rooms: list[ContactActiveRoom] = Field(default_factory=list)
+
+
 class Channel(BaseModel):
     key: str = Field(description="Channel key (32-char hex)")
     name: str

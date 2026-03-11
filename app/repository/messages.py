@@ -546,6 +546,16 @@ class MessageRepository:
         return row["cnt"] if row else 0
 
     @staticmethod
+    async def count_channel_messages_by_sender_name(sender_name: str) -> int:
+        """Count channel messages attributed to a display name."""
+        cursor = await db.conn.execute(
+            "SELECT COUNT(*) as cnt FROM messages WHERE type = 'CHAN' AND sender_name = ?",
+            (sender_name,),
+        )
+        row = await cursor.fetchone()
+        return row["cnt"] if row else 0
+
+    @staticmethod
     async def get_channel_stats(conversation_key: str) -> dict:
         """Get channel message statistics: time-windowed counts, first message, unique senders, top senders.
 
@@ -629,6 +639,27 @@ class MessageRepository:
             LIMIT ?
             """,
             (sender_key.lower(), limit),
+        )
+        rows = await cursor.fetchall()
+        return [(row["conversation_key"], row["channel_name"], row["cnt"]) for row in rows]
+
+    @staticmethod
+    async def get_most_active_rooms_by_sender_name(
+        sender_name: str, limit: int = 5
+    ) -> list[tuple[str, str, int]]:
+        """Get channels where a display name has sent the most messages."""
+        cursor = await db.conn.execute(
+            """
+            SELECT m.conversation_key, COALESCE(c.name, m.conversation_key) AS channel_name,
+                   COUNT(*) AS cnt
+            FROM messages m
+            LEFT JOIN channels c ON m.conversation_key = c.key
+            WHERE m.type = 'CHAN' AND m.sender_name = ?
+            GROUP BY m.conversation_key
+            ORDER BY cnt DESC
+            LIMIT ?
+            """,
+            (sender_name, limit),
         )
         rows = await cursor.fetchall()
         return [(row["conversation_key"], row["channel_name"], row["cnt"]) for row in rows]
