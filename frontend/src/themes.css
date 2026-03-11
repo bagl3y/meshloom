@@ -696,3 +696,102 @@
 [data-theme='paper-grove'] ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, hsl(157 34% 46%), hsl(227 34% 52%));
 }
+
+/* ── Monochrome ("Workbench") ─────────────────────────────── */
+:root[data-theme='monochrome'] {
+  --background: 0 0% 98%;
+  --foreground: 0 0% 8%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 8%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 8%;
+  --primary: 0 0% 10%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 10%;
+  --muted: 0 0% 97%;
+  --muted-foreground: 0 0% 18%;
+  --accent: 0 0% 94%;
+  --accent-foreground: 0 0% 8%;
+  --destructive: 0 0% 18%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 0 0% 72%;
+  --input: 0 0% 72%;
+  --ring: 0 0% 10%;
+  --radius: 0.2rem;
+  --msg-outgoing: 0 0% 92%;
+  --msg-incoming: 0 0% 98%;
+  --status-connected: 0 0% 12%;
+  --status-disconnected: 0 0% 24%;
+  --warning: 0 0% 22%;
+  --warning-foreground: 0 0% 98%;
+  --success: 0 0% 12%;
+  --success-foreground: 0 0% 98%;
+  --info: 0 0% 18%;
+  --info-foreground: 0 0% 98%;
+  --region-override: 0 0% 14%;
+  --favorite: 0 0% 10%;
+  --console: 0 0% 18%;
+  --console-command: 0 0% 8%;
+  --console-bg: 0 0% 96%;
+  --toast-error: 0 0% 96%;
+  --toast-error-foreground: 0 0% 12%;
+  --toast-error-border: 0 0% 70%;
+  --code-editor-bg: 0 0% 96%;
+  --font-sans: 'Inter', 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Cascadia Mono', 'SFMono-Regular', monospace;
+  --scrollbar: 0 0% 18%;
+  --scrollbar-hover: 0 0% 8%;
+  --overlay: 0 0% 6%;
+}
+
+[data-theme='monochrome'] body {
+  background: hsl(0 0% 98%);
+}
+
+[data-theme='monochrome'] .bg-card,
+[data-theme='monochrome'] .bg-popover {
+  background: hsl(0 0% 100%);
+}
+
+[data-theme='monochrome'] .bg-msg-outgoing {
+  background: hsl(0 0% 92%);
+  border-left: 2px solid hsl(0 0% 12% / 0.9);
+}
+
+[data-theme='monochrome'] .bg-msg-incoming {
+  background: hsl(0 0% 98%);
+  border-left: 2px solid hsl(0 0% 12% / 0.35);
+}
+
+[data-theme='monochrome'] .bg-primary {
+  background: hsl(0 0% 10%);
+}
+
+[data-theme='monochrome'] button {
+  border-radius: 0.2rem;
+  box-shadow: none;
+  filter: none;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+[data-theme='monochrome'] button:hover {
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
+
+[data-theme='monochrome'] button:active {
+  transform: none;
+}
+
+[data-theme='monochrome'] ::-webkit-scrollbar-thumb {
+  background: hsl(0 0% 18%);
+}
+
+[data-theme='monochrome'] ::-webkit-scrollbar-thumb:hover {
+  background: hsl(0 0% 8%);
+}

@@ -150,7 +150,7 @@ describe('Sidebar section summaries', () => {
     expect(screen.queryByText(opsChannel.name)).not.toBeInTheDocument();
     expect(screen.queryByText(aliceName)).not.toBeInTheDocument();
 
-    const search = screen.getByPlaceholderText('Search...');
+    const search = screen.getByLabelText('Search conversations');
     fireEvent.change(search, { target: { value: 'alice' } });
 
     await waitFor(() => {

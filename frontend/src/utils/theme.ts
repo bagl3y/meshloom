@@ -23,16 +23,16 @@ export const THEMES: Theme[] = [
     metaThemeColor: '#F8F7F4',
   },
   {
+    id: 'paper-grove',
+    name: 'Paper Grove',
+    swatches: ['#F7F1E4', '#FFF9EE', '#2F9E74', '#E7DEC8', '#E76F51', '#5C7CFA'],
+    metaThemeColor: '#F7F1E4',
+  },
+  {
     id: 'cyberpunk',
     name: 'Cyberpunk',
     swatches: ['#07080A', '#0D1112', '#00FF41', '#141E17', '#FAFF00', '#FF2E6C'],
     metaThemeColor: '#07080A',
-  },
-  {
-    id: 'high-contrast',
-    name: 'High Contrast',
-    swatches: ['#000000', '#141414', '#3B9EFF', '#1E1E1E', '#FFB800', '#FF4757'],
-    metaThemeColor: '#000000',
   },
   {
     id: 'obsidian-glass',
@@ -59,10 +59,16 @@ export const THEMES: Theme[] = [
     metaThemeColor: '#140F24',
   },
   {
-    id: 'paper-grove',
-    name: 'Paper Grove',
-    swatches: ['#F7F1E4', '#FFF9EE', '#2F9E74', '#E7DEC8', '#E76F51', '#5C7CFA'],
-    metaThemeColor: '#F7F1E4',
+    id: 'high-contrast',
+    name: 'High Contrast',
+    swatches: ['#000000', '#141414', '#3B9EFF', '#1E1E1E', '#FFB800', '#FF4757'],
+    metaThemeColor: '#000000',
+  },
+  {
+    id: 'monochrome',
+    name: 'Monochrome',
+    swatches: ['#FAFAFA', '#FFFFFF', '#111111', '#EAEAEA', '#8A8A8A', '#4A4A4A'],
+    metaThemeColor: '#FAFAFA',
   },
 ];
 
