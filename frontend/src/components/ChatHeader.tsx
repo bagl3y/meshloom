@@ -259,7 +259,7 @@ export function ChatHeader({
             aria-label="Set regional override"
           >
             <Globe2
-              className={`h-4 w-4 ${activeFloodScopeLabel ? 'text-[hsl(var(--region-override))]' : ''}`}
+              className={`h-4 w-4 ${activeFloodScopeLabel ? 'text-[hsl(var(--region-override))]' : 'text-muted-foreground'}`}
               aria-hidden="true"
             />
             {activeFloodScopeDisplay && (
