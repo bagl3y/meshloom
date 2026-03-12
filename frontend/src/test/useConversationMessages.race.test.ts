@@ -101,6 +101,40 @@ describe('useConversationMessages ACK ordering', () => {
     expect(result.current.messages[0].paths).toEqual(paths);
   });
 
+  it('preserves a WebSocket-arrived message when latest fetch resolves afterward', async () => {
+    const deferred = createDeferred<Message[]>();
+    mockGetMessages.mockReturnValueOnce(deferred.promise);
+
+    const { result } = renderHook(() => useConversationMessages(createConversation()));
+    await waitFor(() => expect(mockGetMessages).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      const added = result.current.addMessageIfNew(
+        createMessage({
+          id: 99,
+          text: 'ws-arrived',
+          sender_timestamp: 1700000099,
+          received_at: 1700000099,
+        })
+      );
+      expect(added).toBe(true);
+    });
+
+    deferred.resolve([
+      createMessage({
+        id: 42,
+        text: 'rest-fetched',
+        sender_timestamp: 1700000000,
+        received_at: 1700000001,
+      }),
+    ]);
+
+    await waitFor(() => expect(result.current.messagesLoading).toBe(false));
+    expect(result.current.messages).toHaveLength(2);
+    expect(result.current.messages.some((msg) => msg.text === 'rest-fetched')).toBe(true);
+    expect(result.current.messages.some((msg) => msg.text === 'ws-arrived')).toBe(true);
+  });
+
   it('keeps highest ACK state when out-of-order ACK updates arrive', async () => {
     mockGetMessages.mockResolvedValueOnce([]);
 

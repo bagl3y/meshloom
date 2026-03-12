@@ -195,8 +195,12 @@ export function useConversationMessages(
         }
 
         const messagesWithPendingAck = data.map((msg) => applyPendingAck(msg));
-        setMessages(messagesWithPendingAck);
-        syncSeenContent(messagesWithPendingAck);
+        const merged = messageCache.reconcile(messagesRef.current, messagesWithPendingAck);
+        const nextMessages = merged ?? messagesRef.current;
+        if (merged) {
+          setMessages(merged);
+        }
+        syncSeenContent(nextMessages);
         setHasOlderMessages(messagesWithPendingAck.length >= MESSAGE_PAGE_SIZE);
       } catch (err) {
         if (isAbortError(err)) {
