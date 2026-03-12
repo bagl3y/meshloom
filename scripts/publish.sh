@@ -185,11 +185,12 @@ RELEASE_NOTES_FILE=$(mktemp)
 } > "$RELEASE_NOTES_FILE"
 
 # Create and push the release tag first so GitHub release creation does not
-# depend on resolving a symbolic ref like HEAD on the remote side.
+# depend on resolving a symbolic ref like HEAD on the remote side. Use the same
+# changelog-derived notes for the annotated tag message.
 if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
     echo -e "${YELLOW}Tag $VERSION already exists locally; reusing it.${NC}"
 else
-    git tag "$VERSION" "$FULL_GIT_HASH"
+    git tag -a "$VERSION" "$FULL_GIT_HASH" -F "$RELEASE_NOTES_FILE"
 fi
 
 if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
