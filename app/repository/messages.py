@@ -652,13 +652,61 @@ class MessageRepository:
             if mention_token and row["has_mention"]:
                 mention_flags[state_key] = True
 
-        # Last message times for all conversations (including read ones)
+        # Last message times for all conversations (including read ones),
+        # excluding blocked incoming traffic so refresh matches live WS behavior.
+        last_time_filters: list[str] = []
+        last_time_params: list[Any] = []
+
+        if blocked_keys:
+            placeholders = ",".join("?" for _ in blocked_keys)
+            last_time_filters.append(
+                f"""
+                NOT (
+                    type = 'PRIV'
+                    AND outgoing = 0
+                    AND LOWER(conversation_key) IN ({placeholders})
+                )
+                """
+            )
+            last_time_params.extend(blocked_keys)
+            last_time_filters.append(
+                f"""
+                NOT (
+                    type = 'CHAN'
+                    AND outgoing = 0
+                    AND sender_key IS NOT NULL
+                    AND LOWER(sender_key) IN ({placeholders})
+                )
+                """
+            )
+            last_time_params.extend(blocked_keys)
+
+        if blocked_names:
+            placeholders = ",".join("?" for _ in blocked_names)
+            last_time_filters.append(
+                f"""
+                NOT (
+                    type = 'CHAN'
+                    AND outgoing = 0
+                    AND sender_name IS NOT NULL
+                    AND sender_name IN ({placeholders})
+                )
+                """
+            )
+            last_time_params.extend(blocked_names)
+
+        last_time_where_sql = (
+            f"WHERE {' AND '.join(last_time_filters)}" if last_time_filters else ""
+        )
+
         cursor = await db.conn.execute(
-            """
+            f"""
             SELECT type, conversation_key, MAX(received_at) as last_message_time
             FROM messages
+            {last_time_where_sql}
             GROUP BY type, conversation_key
-            """
+            """,
+            last_time_params,
         )
         rows = await cursor.fetchall()
         for row in rows:
