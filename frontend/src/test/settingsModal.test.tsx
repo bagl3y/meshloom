@@ -297,6 +297,14 @@ describe('SettingsModal', () => {
     expect(screen.getByText("Hi there! I'm using RemoteTerm.")).toBeInTheDocument();
   });
 
+  it('lists the new Windows 95 and iPhone themes', () => {
+    renderModal();
+    openLocalSection();
+
+    expect(screen.getByText('Windows 95')).toBeInTheDocument();
+    expect(screen.getByText('iPhone')).toBeInTheDocument();
+  });
+
   it('clears stale errors when switching external desktop sections', async () => {
     const onSaveAppSettings = vi.fn(async () => {
       throw new Error('Save failed');

@@ -53,6 +53,191 @@
   color: hsl(var(--foreground));
 }
 
+/* ── Windows 95 ───────────────────────────────────────────── */
+:root[data-theme='windows-95'] {
+  --background: 180 100% 25%;
+  --foreground: 0 0% 0%;
+  --card: 0 0% 75%;
+  --card-foreground: 0 0% 0%;
+  --popover: 0 0% 75%;
+  --popover-foreground: 0 0% 0%;
+  --primary: 240 100% 25%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 84%;
+  --secondary-foreground: 0 0% 0%;
+  --muted: 0 0% 80%;
+  --muted-foreground: 0 0% 18%;
+  --accent: 0 0% 88%;
+  --accent-foreground: 0 0% 0%;
+  --destructive: 0 82% 44%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 47%;
+  --input: 0 0% 47%;
+  --ring: 240 100% 25%;
+  --radius: 0px;
+  --msg-outgoing: 210 100% 92%;
+  --msg-incoming: 0 0% 92%;
+  --status-connected: 142 75% 32%;
+  --status-disconnected: 0 0% 35%;
+  --warning: 45 100% 45%;
+  --warning-foreground: 0 0% 0%;
+  --success: 142 75% 28%;
+  --success-foreground: 0 0% 100%;
+  --info: 210 100% 42%;
+  --info-foreground: 0 0% 100%;
+  --region-override: 300 100% 28%;
+  --favorite: 44 100% 50%;
+  --console: 120 100% 22%;
+  --console-command: 120 100% 28%;
+  --console-bg: 0 0% 0%;
+  --toast-error: 0 0% 86%;
+  --toast-error-foreground: 0 72% 30%;
+  --toast-error-border: 0 0% 38%;
+  --code-editor-bg: 0 0% 94%;
+  --font-sans: Tahoma, 'MS Sans Serif', 'Segoe UI', sans-serif;
+  --font-mono: 'Courier New', monospace;
+  --scrollbar: 0 0% 62%;
+  --scrollbar-hover: 0 0% 48%;
+  --overlay: 0 0% 0%;
+}
+
+[data-theme='windows-95'] body {
+  background: hsl(180 100% 25%);
+}
+
+[data-theme='windows-95'] .bg-card,
+[data-theme='windows-95'] .bg-popover,
+[data-theme='windows-95'] .bg-secondary,
+[data-theme='windows-95'] .bg-muted {
+  box-shadow:
+    inset 1px 1px 0 hsl(0 0% 100%),
+    inset -1px -1px 0 hsl(0 0% 34%);
+}
+
+[data-theme='windows-95'] button,
+[data-theme='windows-95'] input,
+[data-theme='windows-95'] select,
+[data-theme='windows-95'] textarea {
+  border-radius: 0 !important;
+}
+
+[data-theme='windows-95'] button {
+  background: hsl(0 0% 75%);
+  color: hsl(0 0% 0%);
+  padding: 0.35rem 0.75rem;
+  box-shadow:
+    inset 1px 1px 0 hsl(0 0% 100%),
+    inset -1px -1px 0 hsl(0 0% 34%);
+}
+
+[data-theme='windows-95'] button:active,
+[data-theme='windows-95'] button:active {
+  box-shadow:
+    inset -1px -1px 0 hsl(0 0% 100%),
+    inset 1px 1px 0 hsl(0 0% 34%);
+}
+
+[data-theme='windows-95'] input,
+[data-theme='windows-95'] select,
+[data-theme='windows-95'] textarea {
+  background: hsl(0 0% 100%);
+  box-shadow:
+    inset 1px 1px 0 hsl(0 0% 34%),
+    inset -1px -1px 0 hsl(0 0% 100%);
+}
+
+[data-theme='windows-95'] .bg-msg-incoming,
+[data-theme='windows-95'] .bg-msg-outgoing {
+  box-shadow:
+    inset 1px 1px 0 hsl(0 0% 100%),
+    inset -1px -1px 0 hsl(0 0% 34%);
+}
+
+/* ── iPhone / iOS ─────────────────────────────────────────── */
+:root[data-theme='ios'] {
+  --background: 240 18% 96%;
+  --foreground: 220 18% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 18% 14%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 18% 14%;
+  --primary: 211 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 240 10% 92%;
+  --secondary-foreground: 220 10% 26%;
+  --muted: 240 10% 94%;
+  --muted-foreground: 220 8% 45%;
+  --accent: 240 12% 90%;
+  --accent-foreground: 220 18% 14%;
+  --destructive: 3 100% 59%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 7% 84%;
+  --input: 240 7% 84%;
+  --ring: 211 100% 50%;
+  --radius: 1.35rem;
+  --msg-outgoing: 211 100% 50%;
+  --msg-incoming: 240 12% 90%;
+  --status-connected: 134 61% 49%;
+  --status-disconnected: 240 5% 60%;
+  --warning: 35 100% 50%;
+  --warning-foreground: 0 0% 100%;
+  --success: 134 61% 42%;
+  --success-foreground: 0 0% 100%;
+  --info: 188 100% 43%;
+  --info-foreground: 0 0% 100%;
+  --region-override: 279 100% 67%;
+  --favorite: 47 100% 50%;
+  --console: 134 61% 40%;
+  --console-command: 134 61% 34%;
+  --console-bg: 0 0% 100%;
+  --toast-error: 0 0% 100%;
+  --toast-error-foreground: 3 70% 46%;
+  --toast-error-border: 240 7% 84%;
+  --code-editor-bg: 240 16% 97%;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', sans-serif;
+  --font-mono: 'SF Mono', SFMono-Regular, ui-monospace, monospace;
+  --scrollbar: 240 8% 76%;
+  --scrollbar-hover: 240 8% 64%;
+  --overlay: 220 30% 8%;
+}
+
+[data-theme='ios'] body {
+  background:
+    radial-gradient(circle at top, hsl(211 100% 97%), transparent 40%),
+    linear-gradient(180deg, hsl(240 25% 98%), hsl(240 16% 95%));
+}
+
+[data-theme='ios'] .bg-card,
+[data-theme='ios'] .bg-popover {
+  background: hsl(0 0% 100% / 0.82);
+  backdrop-filter: saturate(180%) blur(24px);
+  box-shadow:
+    0 14px 32px hsl(220 30% 10% / 0.08),
+    0 1px 0 hsl(0 0% 100% / 0.7) inset;
+}
+
+[data-theme='ios'] button,
+[data-theme='ios'] [role='button'] {
+  font-weight: 600;
+}
+
+[data-theme='ios'] input,
+[data-theme='ios'] select,
+[data-theme='ios'] textarea {
+  background: hsl(0 0% 100% / 0.9);
+  box-shadow: 0 1px 2px hsl(220 30% 10% / 0.06) inset;
+}
+
+[data-theme='ios'] .bg-msg-outgoing {
+  color: hsl(0 0% 100%);
+  box-shadow: 0 10px 24px hsl(211 100% 50% / 0.18);
+}
+
+[data-theme='ios'] .bg-msg-incoming {
+  box-shadow: 0 8px 18px hsl(220 30% 10% / 0.08);
+}
+
 /* ── Cyberpunk ("Neon Bleed") ──────────────────────────────── */
 :root[data-theme='cyberpunk'] {
   --background: 210 18% 3%;

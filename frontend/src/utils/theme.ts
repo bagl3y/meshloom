@@ -23,6 +23,12 @@ export const THEMES: Theme[] = [
     metaThemeColor: '#F8F7F4',
   },
   {
+    id: 'ios',
+    name: 'iPhone',
+    swatches: ['#F2F2F7', '#FFFFFF', '#007AFF', '#E5E5EA', '#FF9F0A', '#34C759'],
+    metaThemeColor: '#F2F2F7',
+  },
+  {
     id: 'paper-grove',
     name: 'Paper Grove',
     swatches: ['#F7F1E4', '#FFF9EE', '#2F9E74', '#E7DEC8', '#E76F51', '#5C7CFA'],
@@ -69,6 +75,12 @@ export const THEMES: Theme[] = [
     name: 'Monochrome',
     swatches: ['#FAFAFA', '#FFFFFF', '#111111', '#EAEAEA', '#8A8A8A', '#4A4A4A'],
     metaThemeColor: '#FAFAFA',
+  },
+  {
+    id: 'windows-95',
+    name: 'Windows 95',
+    swatches: ['#008080', '#C0C0C0', '#000080', '#DFDFDF', '#FFDE59', '#000000'],
+    metaThemeColor: '#008080',
   },
 ];
 
