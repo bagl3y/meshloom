@@ -604,7 +604,6 @@ async def _periodic_advert_loop():
             break
         except Exception as e:
             logger.error("Error in periodic advertisement loop: %s", e, exc_info=True)
-            await asyncio.sleep(ADVERT_CHECK_INTERVAL)
 
 
 def start_periodic_advert():

@@ -1326,10 +1326,10 @@ class TestPeriodicAdvertLoopRaces:
         is caught by the outer except — loop survives and continues."""
         rm, _mc = _make_connected_manager()
         _disconnect_on_acquire(rm)
-        # Advert loop: sleep first, then work.  Sleep 1 (loop top) passes,
-        # work hits RadioDisconnectedError, error handler does sleep 2 (passes),
-        # next iteration sleep 3 cancels cleanly via except CancelledError.
-        mock_sleep, sleep_calls = _sleep_controller(cancel_after=3)
+        # Advert loop: sleep first, then work. Sleep 1 (loop top) passes,
+        # work hits RadioDisconnectedError, next iteration sleep 2 cancels
+        # cleanly via except CancelledError without an extra backoff sleep.
+        mock_sleep, sleep_calls = _sleep_controller(cancel_after=2)
 
         with (
             patch("app.radio_sync.radio_manager", rm),
@@ -1339,7 +1339,7 @@ class TestPeriodicAdvertLoopRaces:
             await _periodic_advert_loop()
 
         mock_advert.assert_not_called()
-        assert len(sleep_calls) == 3
+        assert len(sleep_calls) == 2
 
     @pytest.mark.asyncio
     async def test_busy_lock_skips_iteration(self):
