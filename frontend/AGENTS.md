@@ -248,6 +248,7 @@ High-level state is delegated to hooks:
 ### Radio settings behavior
 
 - `SettingsRadioSection.tsx` surfaces `path_hash_mode` only when `config.path_hash_mode_supported` is true.
+- Advert-location control is intentionally only `off` vs `include node location`. Companion-radio firmware does not reliably distinguish saved coordinates from live GPS in this path.
 - Frontend `path_len` fields are hop counts, not raw byte lengths; multibyte path rendering must use the accompanying metadata before splitting hop identifiers.
 
 ## WebSocket (`useWebSocket.ts`)

@@ -96,17 +96,17 @@ class TestGetRadioConfig:
         assert response.lon == 20.0
         assert response.radio.freq == 910.525
         assert response.radio.cr == 5
-        assert response.advert_location_source == "saved_coords"
+        assert response.advert_location_source == "current"
 
     @pytest.mark.asyncio
-    async def test_maps_node_gps_advert_location_source(self):
+    async def test_maps_any_nonzero_advert_location_policy_to_current(self):
         mc = _mock_meshcore_with_info()
         mc.self_info["adv_loc_policy"] = 1
 
         with patch("app.routers.radio.require_connected", return_value=mc):
             response = await get_radio_config()
 
-        assert response.advert_location_source == "node_gps"
+        assert response.advert_location_source == "current"
 
     @pytest.mark.asyncio
     async def test_returns_503_when_self_info_missing(self):
@@ -164,7 +164,7 @@ class TestUpdateRadioConfig:
             radio=RadioSettings(freq=910.525, bw=62.5, sf=7, cr=5),
             path_hash_mode=0,
             path_hash_mode_supported=False,
-            advert_location_source="node_gps",
+            advert_location_source="current",
         )
 
         with (
@@ -175,7 +175,7 @@ class TestUpdateRadioConfig:
                 "app.routers.radio.get_radio_config", new_callable=AsyncMock, return_value=expected
             ),
         ):
-            result = await update_radio_config(RadioConfigUpdate(advert_location_source="node_gps"))
+            result = await update_radio_config(RadioConfigUpdate(advert_location_source="current"))
 
         mc.commands.set_advert_loc_policy.assert_awaited_once_with(1)
         assert result == expected

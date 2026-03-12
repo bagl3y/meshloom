@@ -146,7 +146,7 @@ app/
 - `GET /health`
 
 ### Radio
-- `GET /radio/config` — includes `path_hash_mode` and `path_hash_mode_supported`
+- `GET /radio/config` — includes `path_hash_mode`, `path_hash_mode_supported`, and advert-location on/off
 - `PATCH /radio/config` — may update `path_hash_mode` (`0..2`) when firmware supports it
 - `PUT /radio/private-key`
 - `POST /radio/advertise`

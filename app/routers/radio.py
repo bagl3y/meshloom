@@ -20,6 +20,8 @@ from app.websocket import broadcast_health
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/radio", tags=["radio"])
 
+AdvertLocationSource = Literal["off", "current"]
+
 
 async def _prepare_connected(*, broadcast_on_success: bool) -> bool:
     return await radio_manager.prepare_connected(broadcast_on_success=broadcast_on_success)
@@ -52,9 +54,9 @@ class RadioConfigResponse(BaseModel):
     path_hash_mode_supported: bool = Field(
         default=False, description="Whether firmware supports path hash mode setting"
     )
-    advert_location_source: Literal["off", "node_gps", "saved_coords"] = Field(
-        default="saved_coords",
-        description="Source used for location included in adverts",
+    advert_location_source: AdvertLocationSource = Field(
+        default="current",
+        description="Whether adverts include the node's current location state",
     )
 
 
@@ -70,9 +72,9 @@ class RadioConfigUpdate(BaseModel):
         le=2,
         description="Path hash mode (0=1-byte, 1=2-byte, 2=3-byte)",
     )
-    advert_location_source: Literal["off", "node_gps", "saved_coords"] | None = Field(
+    advert_location_source: AdvertLocationSource | None = Field(
         default=None,
-        description="Source used for location included in adverts",
+        description="Whether adverts include the node's current location state",
     )
 
 
@@ -89,14 +91,8 @@ async def get_radio_config() -> RadioConfigResponse:
     if not info:
         raise HTTPException(status_code=503, detail="Radio info not available")
 
-    adv_loc_policy = info.get("adv_loc_policy", 2)
-    advert_location_source: Literal["off", "node_gps", "saved_coords"]
-    if adv_loc_policy == 0:
-        advert_location_source = "off"
-    elif adv_loc_policy == 1:
-        advert_location_source = "node_gps"
-    else:
-        advert_location_source = "saved_coords"
+    adv_loc_policy = info.get("adv_loc_policy", 1)
+    advert_location_source: AdvertLocationSource = "off" if adv_loc_policy == 0 else "current"
 
     return RadioConfigResponse(
         public_key=info.get("public_key", ""),

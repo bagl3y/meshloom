@@ -75,7 +75,7 @@ class TestApplyRadioConfigUpdate:
 
         await apply_radio_config_update(
             mc,
-            RadioConfigUpdate(advert_location_source="node_gps"),
+            RadioConfigUpdate(advert_location_source="current"),
             path_hash_mode_supported=True,
             set_path_hash_mode=MagicMock(),
             sync_radio_time_fn=AsyncMock(),

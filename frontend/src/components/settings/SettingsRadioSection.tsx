@@ -54,9 +54,7 @@ export function SettingsRadioSection({
   const [sf, setSf] = useState('');
   const [cr, setCr] = useState('');
   const [pathHashMode, setPathHashMode] = useState('0');
-  const [advertLocationSource, setAdvertLocationSource] = useState<
-    'off' | 'node_gps' | 'saved_coords'
-  >('saved_coords');
+  const [advertLocationSource, setAdvertLocationSource] = useState<'off' | 'current'>('current');
   const [gettingLocation, setGettingLocation] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rebooting, setRebooting] = useState(false);
@@ -89,7 +87,7 @@ export function SettingsRadioSection({
     setSf(String(config.radio.sf));
     setCr(String(config.radio.cr));
     setPathHashMode(String(config.path_hash_mode));
-    setAdvertLocationSource(config.advert_location_source ?? 'saved_coords');
+    setAdvertLocationSource(config.advert_location_source ?? 'current');
   }, [config]);
 
   useEffect(() => {
@@ -179,7 +177,7 @@ export function SettingsRadioSection({
       lat: parsedLat,
       lon: parsedLon,
       tx_power: parsedTxPower,
-      ...(advertLocationSource !== (config.advert_location_source ?? 'saved_coords')
+      ...(advertLocationSource !== (config.advert_location_source ?? 'current')
         ? { advert_location_source: advertLocationSource }
         : {}),
       radio: {
@@ -518,21 +516,18 @@ export function SettingsRadioSection({
           <select
             id="advert-location-source"
             value={advertLocationSource}
-            onChange={(e) =>
-              setAdvertLocationSource(e.target.value as 'off' | 'node_gps' | 'saved_coords')
-            }
+            onChange={(e) => setAdvertLocationSource(e.target.value as 'off' | 'current')}
             className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
             <option value="off">Off</option>
-            <option value="node_gps">Use Node GPS</option>
-            <option value="saved_coords">Use Saved Coordinates</option>
+            <option value="current">Include Node Location</option>
           </select>
           <p className="text-xs text-muted-foreground">
-            This only controls which location source the radio puts into adverts. If you choose Use
-            Node GPS, GPS still has to be enabled manually on the node itself for live coordinates
-            to take effect; RemoteTerm cannot turn it on through the interface library. RemoteTerm
-            still uses the saved coordinates above for local distance math and similar UI
-            calculations.
+            Companion-radio firmware does not distinguish between saved coordinates and live GPS
+            here. When enabled, adverts include the node&apos;s current location state. That may be
+            the last coordinates you set from RemoteTerm or live GPS coordinates if the node itself
+            is already updating them. RemoteTerm cannot enable GPS on the node through the interface
+            library.
           </p>
         </div>
       </div>

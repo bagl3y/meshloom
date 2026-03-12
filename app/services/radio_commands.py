@@ -33,11 +33,7 @@ async def apply_radio_config_update(
 ) -> None:
     """Apply a validated radio-config update to the connected radio."""
     if update.advert_location_source is not None:
-        advert_loc_policy = {
-            "off": 0,
-            "node_gps": 1,
-            "saved_coords": 2,
-        }[update.advert_location_source]
+        advert_loc_policy = 0 if update.advert_location_source == "off" else 1
         logger.info(
             "Setting advert location policy to %s",
             update.advert_location_source,
