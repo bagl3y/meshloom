@@ -286,7 +286,10 @@ async def create_contact(
     if request.try_historical:
         await start_historical_dm_decryption(background_tasks, lower_key, request.name)
 
-    return Contact(**contact_upsert.model_dump())
+    stored = await ContactRepository.get_by_key(lower_key)
+    if stored is None:
+        raise HTTPException(status_code=500, detail="Contact was created but could not be reloaded")
+    return stored
 
 
 @router.get("/{public_key}/detail", response_model=ContactDetail)

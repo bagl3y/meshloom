@@ -117,11 +117,13 @@ class TestCreateContact:
         data = response.json()
         assert data["public_key"] == KEY_A
         assert data["name"] == "NewContact"
+        assert data["last_seen"] is not None
 
         # Verify in DB
         contact = await ContactRepository.get_by_key(KEY_A)
         assert contact is not None
         assert contact.name == "NewContact"
+        assert data["last_seen"] == contact.last_seen
 
     @pytest.mark.asyncio
     async def test_create_invalid_hex(self, test_db, client):
