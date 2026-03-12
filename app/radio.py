@@ -261,6 +261,27 @@ class RadioManager:
         self._last_connected = False
         await self.disconnect()
 
+    async def _disable_meshcore_auto_reconnect(self, mc: MeshCore) -> None:
+        """Disable library-managed reconnects so manual teardown fully releases transport."""
+        connection_manager = getattr(mc, "connection_manager", None)
+        if connection_manager is None:
+            return
+
+        if hasattr(connection_manager, "auto_reconnect"):
+            connection_manager.auto_reconnect = False
+
+        reconnect_task = getattr(connection_manager, "_reconnect_task", None)
+        if reconnect_task is None or not isinstance(reconnect_task, asyncio.Task | asyncio.Future):
+            return
+
+        reconnect_task.cancel()
+        try:
+            await reconnect_task
+        except asyncio.CancelledError:
+            pass
+        finally:
+            connection_manager._reconnect_task = None
+
     async def connect(self) -> None:
         """Connect to the radio using the configured transport."""
         if self._meshcore is not None:
@@ -339,7 +360,10 @@ class RadioManager:
         """Disconnect from the radio."""
         if self._meshcore is not None:
             logger.debug("Disconnecting from radio")
-            await self._meshcore.disconnect()
+            mc = self._meshcore
+            await self._disable_meshcore_auto_reconnect(mc)
+            await mc.disconnect()
+            await self._disable_meshcore_auto_reconnect(mc)
             self._meshcore = None
             self._setup_complete = False
             self.path_hash_mode = 0

@@ -450,6 +450,64 @@ class TestReconnectLock:
         rm.connect.assert_not_called()
 
 
+class TestManualDisconnectCleanup:
+    """Tests for manual disconnect teardown behavior."""
+
+    @pytest.mark.asyncio
+    async def test_disconnect_disables_library_auto_reconnect(self):
+        """Manual disconnect should suppress meshcore_py reconnect behavior."""
+        from app.radio import RadioManager
+
+        rm = RadioManager()
+        reconnect_task: asyncio.Task | None = None
+
+        connection_manager = MagicMock()
+        connection_manager.auto_reconnect = True
+        connection_manager._reconnect_task = None
+
+        async def _disconnect():
+            nonlocal reconnect_task
+            reconnect_task = asyncio.create_task(asyncio.sleep(60))
+            connection_manager._reconnect_task = reconnect_task
+
+        mock_mc = MagicMock()
+        mock_mc.disconnect = AsyncMock(side_effect=_disconnect)
+        mock_mc.connection_manager = connection_manager
+        rm._meshcore = mock_mc
+        rm._setup_complete = True
+        rm.path_hash_mode = 2
+        rm.path_hash_mode_supported = True
+
+        await rm.disconnect()
+
+        mock_mc.disconnect.assert_awaited_once()
+        assert connection_manager.auto_reconnect is False
+        assert connection_manager._reconnect_task is None
+        assert reconnect_task is not None and reconnect_task.cancelled()
+        assert rm.meshcore is None
+        assert rm.is_setup_complete is False
+        assert rm.path_hash_mode == 0
+        assert rm.path_hash_mode_supported is False
+
+    @pytest.mark.asyncio
+    async def test_pause_connection_marks_connection_undesired(self):
+        """Pausing should flip connection_desired off and tear down transport."""
+        from app.radio import RadioManager
+
+        rm = RadioManager()
+        mock_mc = MagicMock()
+        mock_mc.disconnect = AsyncMock()
+        rm._meshcore = mock_mc
+        rm._connection_desired = True
+        rm._last_connected = True
+
+        await rm.pause_connection()
+
+        assert rm.connection_desired is False
+        assert rm._last_connected is False
+        mock_mc.disconnect.assert_awaited_once()
+
+
 class TestSerialDeviceProbe:
     """Tests for test_serial_device() — verifies cleanup on all exit paths."""
 
