@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -22,6 +23,8 @@ interface MessageListProps {
   loading: boolean;
   loadingOlder?: boolean;
   hasOlderMessages?: boolean;
+  unreadMarkerLastReadAt?: number | null;
+  onDismissUnreadMarker?: () => void;
   onSenderClick?: (sender: string) => void;
   onLoadOlder?: () => void;
   onResendChannelMessage?: (messageId: number, newTimestamp?: boolean) => void;
@@ -172,6 +175,8 @@ export function MessageList({
   loading,
   loadingOlder = false,
   hasOlderMessages = false,
+  unreadMarkerLastReadAt,
+  onDismissUnreadMarker,
   onSenderClick,
   onLoadOlder,
   onResendChannelMessage,
@@ -198,7 +203,12 @@ export function MessageList({
   const [resendableIds, setResendableIds] = useState<Set<number>>(new Set());
   const resendTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
+  const [showJumpToUnread, setShowJumpToUnread] = useState(false);
   const targetScrolledRef = useRef(false);
+  const unreadMarkerRef = useRef<HTMLButtonElement | HTMLDivElement | null>(null);
+  const setUnreadMarkerElement = useCallback((node: HTMLButtonElement | HTMLDivElement | null) => {
+    unreadMarkerRef.current = node;
+  }, []);
 
   // Capture scroll state in the scroll handler BEFORE any state updates
   const scrollStateRef = useRef({
@@ -389,6 +399,18 @@ export function MessageList({
     () => [...messages].sort((a, b) => a.received_at - b.received_at || a.id - b.id),
     [messages]
   );
+  const unreadMarkerIndex = useMemo(() => {
+    if (unreadMarkerLastReadAt === undefined) {
+      return -1;
+    }
+
+    const boundary = unreadMarkerLastReadAt ?? 0;
+    return sortedMessages.findIndex((msg) => !msg.outgoing && msg.received_at > boundary);
+  }, [sortedMessages, unreadMarkerLastReadAt]);
+
+  useEffect(() => {
+    setShowJumpToUnread(unreadMarkerIndex !== -1);
+  }, [unreadMarkerIndex]);
 
   // Sender info for outgoing messages (used by path modal on own messages)
   const selfSenderInfo = useMemo<SenderInfo>(
@@ -612,102 +634,102 @@ export function MessageList({
               : `View info for ${avatarKey.slice(0, 12)}`;
 
           return (
-            <div
-              key={msg.id}
-              data-message-id={msg.id}
-              className={cn(
-                'flex items-start max-w-[85%]',
-                msg.outgoing && 'flex-row-reverse self-end',
-                isFirstInGroup && !isFirstMessage && 'mt-3'
-              )}
-            >
-              {!msg.outgoing && (
-                <div className="w-10 flex-shrink-0 flex items-start pt-0.5">
-                  {showAvatar &&
-                    avatarKey &&
-                    (onOpenContactInfo ? (
-                      <button
-                        type="button"
-                        className="avatar-action-button rounded-full border-none bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        aria-label={avatarActionLabel}
-                        onClick={() => onOpenContactInfo(avatarKey, msg.type === 'CHAN')}
-                      >
-                        <ContactAvatar
-                          name={avatarName}
-                          publicKey={avatarKey}
-                          size={32}
-                          clickable
-                          variant={avatarVariant}
-                        />
-                      </button>
-                    ) : (
-                      <span>
-                        <ContactAvatar
-                          name={avatarName}
-                          publicKey={avatarKey}
-                          size={32}
-                          variant={avatarVariant}
-                        />
-                      </span>
-                    ))}
-                </div>
-              )}
+            <Fragment key={msg.id}>
+              {unreadMarkerIndex === index &&
+                (onDismissUnreadMarker ? (
+                  <button
+                    ref={setUnreadMarkerElement}
+                    type="button"
+                    className="my-2 flex w-full items-center gap-3 text-left text-xs font-medium text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={onDismissUnreadMarker}
+                  >
+                    <span className="h-px flex-1 bg-border" />
+                    <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1">
+                      Unread messages
+                    </span>
+                    <span className="h-px flex-1 bg-border" />
+                  </button>
+                ) : (
+                  <div
+                    ref={setUnreadMarkerElement}
+                    className="my-2 flex w-full items-center gap-3 text-xs font-medium text-primary"
+                  >
+                    <span className="h-px flex-1 bg-border" />
+                    <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1">
+                      Unread messages
+                    </span>
+                    <span className="h-px flex-1 bg-border" />
+                  </div>
+                ))}
               <div
+                data-message-id={msg.id}
                 className={cn(
-                  'py-1.5 px-3 rounded-lg min-w-0',
-                  msg.outgoing ? 'bg-msg-outgoing' : 'bg-msg-incoming',
-                  highlightedMessageId === msg.id && 'message-highlight'
+                  'flex items-start max-w-[85%]',
+                  msg.outgoing && 'flex-row-reverse self-end',
+                  isFirstInGroup && !isFirstMessage && 'mt-3'
                 )}
               >
-                {showAvatar && (
-                  <div className="text-[13px] font-semibold text-foreground mb-0.5">
-                    {canClickSender ? (
-                      <span
-                        className="cursor-pointer hover:text-primary transition-colors"
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={handleKeyboardActivate}
-                        onClick={() => onSenderClick(displaySender)}
-                        title={`Mention ${displaySender}`}
-                      >
-                        {displaySender}
-                      </span>
-                    ) : (
-                      displaySender
-                    )}
-                    <span className="font-normal text-muted-foreground ml-2 text-[11px]">
-                      {formatTime(msg.sender_timestamp || msg.received_at)}
-                    </span>
-                    {!msg.outgoing && msg.paths && msg.paths.length > 0 && (
-                      <HopCountBadge
-                        paths={msg.paths}
-                        variant="header"
-                        onClick={() =>
-                          setSelectedPath({
-                            paths: msg.paths!,
-                            senderInfo: getSenderInfo(msg, contact, sender),
-                          })
-                        }
-                      />
-                    )}
+                {!msg.outgoing && (
+                  <div className="w-10 flex-shrink-0 flex items-start pt-0.5">
+                    {showAvatar &&
+                      avatarKey &&
+                      (onOpenContactInfo ? (
+                        <button
+                          type="button"
+                          className="avatar-action-button rounded-full border-none bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          aria-label={avatarActionLabel}
+                          onClick={() => onOpenContactInfo(avatarKey, msg.type === 'CHAN')}
+                        >
+                          <ContactAvatar
+                            name={avatarName}
+                            publicKey={avatarKey}
+                            size={32}
+                            clickable
+                            variant={avatarVariant}
+                          />
+                        </button>
+                      ) : (
+                        <span>
+                          <ContactAvatar
+                            name={avatarName}
+                            publicKey={avatarKey}
+                            size={32}
+                            variant={avatarVariant}
+                          />
+                        </span>
+                      ))}
                   </div>
                 )}
-                <div className="break-words whitespace-pre-wrap">
-                  {content.split('\n').map((line, i, arr) => (
-                    <span key={i}>
-                      {renderTextWithMentions(line, radioName)}
-                      {i < arr.length - 1 && <br />}
-                    </span>
-                  ))}
-                  {!showAvatar && (
-                    <>
-                      <span className="text-[10px] text-muted-foreground ml-2">
+                <div
+                  className={cn(
+                    'py-1.5 px-3 rounded-lg min-w-0',
+                    msg.outgoing ? 'bg-msg-outgoing' : 'bg-msg-incoming',
+                    highlightedMessageId === msg.id && 'message-highlight'
+                  )}
+                >
+                  {showAvatar && (
+                    <div className="text-[13px] font-semibold text-foreground mb-0.5">
+                      {canClickSender ? (
+                        <span
+                          className="cursor-pointer hover:text-primary transition-colors"
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={handleKeyboardActivate}
+                          onClick={() => onSenderClick(displaySender)}
+                          title={`Mention ${displaySender}`}
+                        >
+                          {displaySender}
+                        </span>
+                      ) : (
+                        displaySender
+                      )}
+                      <span className="font-normal text-muted-foreground ml-2 text-[11px]">
                         {formatTime(msg.sender_timestamp || msg.received_at)}
                       </span>
                       {!msg.outgoing && msg.paths && msg.paths.length > 0 && (
                         <HopCountBadge
                           paths={msg.paths}
-                          variant="inline"
+                          variant="header"
                           onClick={() =>
                             setSelectedPath({
                               paths: msg.paths!,
@@ -716,11 +738,58 @@ export function MessageList({
                           }
                         />
                       )}
-                    </>
+                    </div>
                   )}
-                  {msg.outgoing &&
-                    (msg.acked > 0 ? (
-                      msg.paths && msg.paths.length > 0 ? (
+                  <div className="break-words whitespace-pre-wrap">
+                    {content.split('\n').map((line, i, arr) => (
+                      <span key={i}>
+                        {renderTextWithMentions(line, radioName)}
+                        {i < arr.length - 1 && <br />}
+                      </span>
+                    ))}
+                    {!showAvatar && (
+                      <>
+                        <span className="text-[10px] text-muted-foreground ml-2">
+                          {formatTime(msg.sender_timestamp || msg.received_at)}
+                        </span>
+                        {!msg.outgoing && msg.paths && msg.paths.length > 0 && (
+                          <HopCountBadge
+                            paths={msg.paths}
+                            variant="inline"
+                            onClick={() =>
+                              setSelectedPath({
+                                paths: msg.paths!,
+                                senderInfo: getSenderInfo(msg, contact, sender),
+                              })
+                            }
+                          />
+                        )}
+                      </>
+                    )}
+                    {msg.outgoing &&
+                      (msg.acked > 0 ? (
+                        msg.paths && msg.paths.length > 0 ? (
+                          <span
+                            className="text-muted-foreground cursor-pointer hover:text-primary"
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={handleKeyboardActivate}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPath({
+                                paths: msg.paths!,
+                                senderInfo: selfSenderInfo,
+                                messageId: msg.id,
+                                isOutgoingChan: msg.type === 'CHAN' && !!onResendChannelMessage,
+                              });
+                            }}
+                            title="View echo paths"
+                            aria-label={`Acknowledged, ${msg.acked} echo${msg.acked !== 1 ? 's' : ''} — view paths`}
+                          >{` ✓${msg.acked > 1 ? msg.acked : ''}`}</span>
+                        ) : (
+                          <span className="text-muted-foreground">{` ✓${msg.acked > 1 ? msg.acked : ''}`}</span>
+                        )
+                      ) : onResendChannelMessage && msg.type === 'CHAN' ? (
                         <span
                           className="text-muted-foreground cursor-pointer hover:text-primary"
                           role="button"
@@ -729,48 +798,28 @@ export function MessageList({
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedPath({
-                              paths: msg.paths!,
+                              paths: [],
                               senderInfo: selfSenderInfo,
                               messageId: msg.id,
-                              isOutgoingChan: msg.type === 'CHAN' && !!onResendChannelMessage,
+                              isOutgoingChan: true,
                             });
                           }}
-                          title="View echo paths"
-                          aria-label={`Acknowledged, ${msg.acked} echo${msg.acked !== 1 ? 's' : ''} — view paths`}
-                        >{` ✓${msg.acked > 1 ? msg.acked : ''}`}</span>
+                          title="Message status"
+                          aria-label="No echoes yet — view message status"
+                        >
+                          {' '}
+                          ?
+                        </span>
                       ) : (
-                        <span className="text-muted-foreground">{` ✓${msg.acked > 1 ? msg.acked : ''}`}</span>
-                      )
-                    ) : onResendChannelMessage && msg.type === 'CHAN' ? (
-                      <span
-                        className="text-muted-foreground cursor-pointer hover:text-primary"
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={handleKeyboardActivate}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedPath({
-                            paths: [],
-                            senderInfo: selfSenderInfo,
-                            messageId: msg.id,
-                            isOutgoingChan: true,
-                          });
-                        }}
-                        title="Message status"
-                        aria-label="No echoes yet — view message status"
-                      >
-                        {' '}
-                        ?
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground" title="No repeats heard yet">
-                        {' '}
-                        ?
-                      </span>
-                    ))}
+                        <span className="text-muted-foreground" title="No repeats heard yet">
+                          {' '}
+                          ?
+                        </span>
+                      ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            </Fragment>
           );
         })}
         {loadingNewer && (
@@ -786,28 +835,44 @@ export function MessageList({
       </div>
 
       {/* Scroll to bottom button */}
-      {showScrollToBottom && (
-        <button
-          onClick={scrollToBottom}
-          className="absolute bottom-4 right-4 w-9 h-9 rounded-full bg-card hover:bg-accent border border-border flex items-center justify-center shadow-lg transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title="Scroll to bottom"
-          aria-label="Scroll to bottom"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="text-muted-foreground"
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
+      {(showJumpToUnread || showScrollToBottom) && (
+        <div className="absolute bottom-4 right-4 flex items-center gap-2">
+          {showJumpToUnread && (
+            <button
+              type="button"
+              onClick={() => {
+                unreadMarkerRef.current?.scrollIntoView?.({ block: 'center' });
+                setShowJumpToUnread(false);
+              }}
+              className="h-9 rounded-full bg-card hover:bg-accent border border-border px-3 text-sm font-medium shadow-lg transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Jump to unread
+            </button>
+          )}
+          {showScrollToBottom && (
+            <button
+              onClick={scrollToBottom}
+              className="w-9 h-9 rounded-full bg-card hover:bg-accent border border-border flex items-center justify-center shadow-lg transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              title="Scroll to bottom"
+              aria-label="Scroll to bottom"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-muted-foreground"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+          )}
+        </div>
       )}
 
       {/* Path modal */}

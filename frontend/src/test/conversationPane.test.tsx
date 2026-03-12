@@ -13,12 +13,16 @@ import type {
   RadioConfig,
 } from '../types';
 
+const mocks = vi.hoisted(() => ({
+  messageList: vi.fn(() => <div data-testid="message-list" />),
+}));
+
 vi.mock('../components/ChatHeader', () => ({
   ChatHeader: () => <div data-testid="chat-header" />,
 }));
 
 vi.mock('../components/MessageList', () => ({
-  MessageList: () => <div data-testid="message-list" />,
+  MessageList: mocks.messageList,
 }));
 
 vi.mock('../components/MessageInput', () => ({
@@ -107,6 +111,7 @@ function createProps(overrides: Partial<React.ComponentProps<typeof Conversation
     messagesLoading: false,
     loadingOlder: false,
     hasOlderMessages: false,
+    unreadMarkerLastReadAt: undefined,
     targetMessageId: null,
     hasNewerMessages: false,
     loadingNewer: false,
@@ -124,6 +129,7 @@ function createProps(overrides: Partial<React.ComponentProps<typeof Conversation
     onTargetReached: vi.fn(),
     onLoadNewer: vi.fn(async () => {}),
     onJumpToBottom: vi.fn(),
+    onDismissUnreadMarker: vi.fn(),
     onSendMessage: vi.fn(async () => {}),
     onToggleNotifications: vi.fn(),
     ...overrides,
@@ -133,6 +139,7 @@ function createProps(overrides: Partial<React.ComponentProps<typeof Conversation
 describe('ConversationPane', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.messageList.mockImplementation(() => <div data-testid="message-list" />);
   });
 
   it('renders the empty state when no conversation is active', () => {
@@ -195,6 +202,52 @@ describe('ConversationPane', () => {
       expect(screen.getByTestId('message-list')).toBeInTheDocument();
       expect(screen.getByTestId('message-input')).toBeInTheDocument();
     });
+  });
+
+  it('passes unread marker props to MessageList only for channel conversations', async () => {
+    render(
+      <ConversationPane
+        {...createProps({
+          activeConversation: {
+            type: 'channel',
+            id: channel.key,
+            name: channel.name,
+          },
+          unreadMarkerLastReadAt: 1700000000,
+        })}
+      />
+    );
+
+    await waitFor(() => {
+      expect(mocks.messageList).toHaveBeenCalled();
+    });
+
+    const channelCallArgs = mocks.messageList.mock.calls[
+      mocks.messageList.mock.calls.length - 1
+    ] as unknown[] | undefined;
+    const channelCall = channelCallArgs?.[0] as Record<string, unknown> | undefined;
+    expect(channelCall?.unreadMarkerLastReadAt).toBe(1700000000);
+    expect(channelCall?.onDismissUnreadMarker).toBeTypeOf('function');
+
+    render(
+      <ConversationPane
+        {...createProps({
+          activeConversation: {
+            type: 'contact',
+            id: 'cc'.repeat(32),
+            name: 'Alice',
+          },
+          unreadMarkerLastReadAt: 1700000000,
+        })}
+      />
+    );
+
+    const contactCallArgs = mocks.messageList.mock.calls[
+      mocks.messageList.mock.calls.length - 1
+    ] as unknown[] | undefined;
+    const contactCall = contactCallArgs?.[0] as Record<string, unknown> | undefined;
+    expect(contactCall?.unreadMarkerLastReadAt).toBeUndefined();
+    expect(contactCall?.onDismissUnreadMarker).toBeUndefined();
   });
 
   it('shows a warning but keeps input for full-key contacts without an advert', async () => {

@@ -1,8 +1,12 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageList } from '../components/MessageList';
 import type { Message } from '../types';
+
+const scrollIntoViewMock = vi.fn();
 
 function createMessage(overrides: Partial<Message> = {}): Message {
   return {
@@ -24,6 +28,15 @@ function createMessage(overrides: Partial<Message> = {}): Message {
 }
 
 describe('MessageList channel sender rendering', () => {
+  beforeEach(() => {
+    scrollIntoViewMock.mockReset();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoViewMock,
+      writable: true,
+    });
+  });
+
   it('renders explicit corrupt placeholder and warning avatar for unnamed corrupt channel packets', () => {
     render(
       <MessageList
@@ -79,5 +92,67 @@ describe('MessageList channel sender rendering', () => {
     );
 
     expect(screen.getByRole('button', { name: 'View info for Alice' })).toBeInTheDocument();
+  });
+
+  it('renders and dismisses an unread marker at the first unread message boundary', async () => {
+    const user = userEvent.setup();
+    const messages = [
+      createMessage({ id: 1, received_at: 1700000001, text: 'Alice: older' }),
+      createMessage({ id: 2, received_at: 1700000010, text: 'Alice: newer' }),
+    ];
+
+    function DismissibleUnreadMarkerList() {
+      const [unreadMarkerLastReadAt, setUnreadMarkerLastReadAt] = useState<number | undefined>(
+        1700000005
+      );
+
+      return (
+        <MessageList
+          messages={messages}
+          contacts={[]}
+          loading={false}
+          unreadMarkerLastReadAt={unreadMarkerLastReadAt}
+          onDismissUnreadMarker={() => setUnreadMarkerLastReadAt(undefined)}
+        />
+      );
+    }
+
+    render(<DismissibleUnreadMarkerList />);
+
+    const marker = screen.getByRole('button', { name: /Unread messages/i });
+    expect(marker).toBeInTheDocument();
+    expect(screen.getByText('older')).toBeInTheDocument();
+    expect(screen.getByText('newer')).toBeInTheDocument();
+
+    await user.click(marker);
+
+    expect(screen.queryByRole('button', { name: /Unread messages/i })).not.toBeInTheDocument();
+  });
+
+  it('shows a jump-to-unread button and dismisses it after use without hiding the marker', async () => {
+    const user = userEvent.setup();
+    const messages = [
+      createMessage({ id: 1, received_at: 1700000001, text: 'Alice: older' }),
+      createMessage({ id: 2, received_at: 1700000010, text: 'Alice: newer' }),
+    ];
+
+    render(
+      <MessageList
+        messages={messages}
+        contacts={[]}
+        loading={false}
+        unreadMarkerLastReadAt={1700000005}
+      />
+    );
+
+    const jumpButton = screen.getByRole('button', { name: 'Jump to unread' });
+    expect(jumpButton).toBeInTheDocument();
+    expect(screen.getByText('Unread messages')).toBeInTheDocument();
+
+    await user.click(jumpButton);
+
+    expect(screen.queryByRole('button', { name: 'Jump to unread' })).not.toBeInTheDocument();
+    expect(screen.getByText('Unread messages')).toBeInTheDocument();
+    expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 });

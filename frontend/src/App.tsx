@@ -18,7 +18,51 @@ import {
 import { AppShell } from './components/AppShell';
 import type { MessageInputHandle } from './components/MessageInput';
 import { messageContainsMention } from './utils/messageParser';
-import type { Conversation, RawPacket } from './types';
+import { getStateKey } from './utils/conversationState';
+import type { Conversation, Message, RawPacket } from './types';
+
+interface ChannelUnreadMarker {
+  channelId: string;
+  lastReadAt: number | null;
+}
+
+interface UnreadBoundaryBackfillParams {
+  activeConversation: Conversation | null;
+  unreadMarker: ChannelUnreadMarker | null;
+  messages: Message[];
+  messagesLoading: boolean;
+  loadingOlder: boolean;
+  hasOlderMessages: boolean;
+}
+
+export function getUnreadBoundaryBackfillKey({
+  activeConversation,
+  unreadMarker,
+  messages,
+  messagesLoading,
+  loadingOlder,
+  hasOlderMessages,
+}: UnreadBoundaryBackfillParams): string | null {
+  if (activeConversation?.type !== 'channel') return null;
+  if (!unreadMarker || unreadMarker.channelId !== activeConversation.id) return null;
+  if (unreadMarker.lastReadAt === null) return null;
+  if (messagesLoading || loadingOlder || !hasOlderMessages || messages.length === 0) return null;
+
+  const oldestLoadedMessage = messages.reduce(
+    (oldest, msg) => {
+      if (!oldest) return msg;
+      if (msg.received_at < oldest.received_at) return msg;
+      if (msg.received_at === oldest.received_at && msg.id < oldest.id) return msg;
+      return oldest;
+    },
+    null as Message | null
+  );
+
+  if (!oldestLoadedMessage) return null;
+  if (oldestLoadedMessage.received_at <= unreadMarker.lastReadAt) return null;
+
+  return `${activeConversation.id}:${unreadMarker.lastReadAt}:${oldestLoadedMessage.id}`;
+}
 
 export function App() {
   const quoteSearchOperatorValue = useCallback((value: string) => {
@@ -27,6 +71,8 @@ export function App() {
 
   const messageInputRef = useRef<MessageInputHandle>(null);
   const [rawPackets, setRawPackets] = useState<RawPacket[]>([]);
+  const [channelUnreadMarker, setChannelUnreadMarker] = useState<ChannelUnreadMarker | null>(null);
+  const lastUnreadBackfillAttemptRef = useRef<string | null>(null);
   const {
     notificationsSupported,
     notificationsPermission,
@@ -198,6 +244,61 @@ export function App() {
     refreshUnreads,
   } = useUnreadCounts(channels, contacts, activeConversation);
 
+  useEffect(() => {
+    if (activeConversation?.type !== 'channel') {
+      setChannelUnreadMarker(null);
+      return;
+    }
+
+    const activeChannelId = activeConversation.id;
+    const activeChannelUnreadCount = unreadCounts[getStateKey('channel', activeChannelId)] ?? 0;
+
+    setChannelUnreadMarker((prev) => {
+      if (prev?.channelId === activeChannelId) {
+        return prev;
+      }
+      if (activeChannelUnreadCount <= 0) {
+        return null;
+      }
+
+      const activeChannel = channels.find((channel) => channel.key === activeChannelId);
+      return {
+        channelId: activeChannelId,
+        lastReadAt: activeChannel?.last_read_at ?? null,
+      };
+    });
+  }, [activeConversation, channels, unreadCounts]);
+
+  useEffect(() => {
+    lastUnreadBackfillAttemptRef.current = null;
+  }, [activeConversation?.id, channelUnreadMarker?.channelId, channelUnreadMarker?.lastReadAt]);
+
+  useEffect(() => {
+    const backfillKey = getUnreadBoundaryBackfillKey({
+      activeConversation,
+      unreadMarker: channelUnreadMarker,
+      messages,
+      messagesLoading,
+      loadingOlder,
+      hasOlderMessages,
+    });
+
+    if (!backfillKey || lastUnreadBackfillAttemptRef.current === backfillKey) {
+      return;
+    }
+
+    lastUnreadBackfillAttemptRef.current = backfillKey;
+    void fetchOlderMessages();
+  }, [
+    activeConversation,
+    channelUnreadMarker,
+    messages,
+    messagesLoading,
+    loadingOlder,
+    hasOlderMessages,
+    fetchOlderMessages,
+  ]);
+
   const wsHandlers = useRealtimeAppState({
     prevHealthRef,
     setHealth,
@@ -294,6 +395,11 @@ export function App() {
     messagesLoading,
     loadingOlder,
     hasOlderMessages,
+    unreadMarkerLastReadAt:
+      activeConversation?.type === 'channel' &&
+      channelUnreadMarker?.channelId === activeConversation.id
+        ? channelUnreadMarker.lastReadAt
+        : undefined,
     targetMessageId,
     hasNewerMessages,
     loadingNewer,
@@ -312,6 +418,7 @@ export function App() {
     onLoadNewer: fetchNewerMessages,
     onJumpToBottom: jumpToBottom,
     onSendMessage: handleSendMessage,
+    onDismissUnreadMarker: () => setChannelUnreadMarker(null),
     notificationsSupported,
     notificationsPermission,
     notificationsEnabled:

@@ -40,6 +40,7 @@ interface ConversationPaneProps {
   messagesLoading: boolean;
   loadingOlder: boolean;
   hasOlderMessages: boolean;
+  unreadMarkerLastReadAt?: number | null;
   targetMessageId: number | null;
   hasNewerMessages: boolean;
   loadingNewer: boolean;
@@ -57,6 +58,7 @@ interface ConversationPaneProps {
   onTargetReached: () => void;
   onLoadNewer: () => Promise<void>;
   onJumpToBottom: () => void;
+  onDismissUnreadMarker: () => void;
   onSendMessage: (text: string) => Promise<void>;
   onToggleNotifications: () => void;
 }
@@ -101,6 +103,7 @@ export function ConversationPane({
   messagesLoading,
   loadingOlder,
   hasOlderMessages,
+  unreadMarkerLastReadAt,
   targetMessageId,
   hasNewerMessages,
   loadingNewer,
@@ -118,6 +121,7 @@ export function ConversationPane({
   onTargetReached,
   onLoadNewer,
   onJumpToBottom,
+  onDismissUnreadMarker,
   onSendMessage,
   onToggleNotifications,
 }: ConversationPaneProps) {
@@ -242,6 +246,12 @@ export function ConversationPane({
         loading={messagesLoading}
         loadingOlder={loadingOlder}
         hasOlderMessages={hasOlderMessages}
+        unreadMarkerLastReadAt={
+          activeConversation.type === 'channel' ? unreadMarkerLastReadAt : undefined
+        }
+        onDismissUnreadMarker={
+          activeConversation.type === 'channel' ? onDismissUnreadMarker : undefined
+        }
         onSenderClick={activeConversation.type === 'channel' ? onSenderClick : undefined}
         onLoadOlder={onLoadOlder}
         onResendChannelMessage={
