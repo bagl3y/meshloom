@@ -180,8 +180,16 @@ class MessageRepository:
         """
         cursor = await db.conn.execute(
             """UPDATE messages SET sender_key = ?
-               WHERE type = 'CHAN' AND sender_name = ? AND sender_key IS NULL""",
-            (public_key.lower(), name),
+               WHERE type = 'CHAN' AND sender_name = ? AND sender_key IS NULL
+               AND (
+                   SELECT COUNT(*) FROM contacts
+                   WHERE name = ?
+               ) = 1
+               AND EXISTS (
+                   SELECT 1 FROM contacts
+                   WHERE public_key = ? AND name = ?
+               )""",
+            (public_key.lower(), name, name, public_key.lower(), name),
         )
         await db.conn.commit()
         return cursor.rowcount
