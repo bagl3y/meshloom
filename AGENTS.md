@@ -318,7 +318,8 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | POST | `/api/contacts/{public_key}/repeater/lpp-telemetry` | Fetch CayenneLPP sensor data |
 | POST | `/api/contacts/{public_key}/repeater/neighbors` | Fetch repeater neighbors |
 | POST | `/api/contacts/{public_key}/repeater/acl` | Fetch repeater ACL |
-| POST | `/api/contacts/{public_key}/repeater/radio-settings` | Fetch radio settings via CLI |
+| POST | `/api/contacts/{public_key}/repeater/node-info` | Fetch repeater name, location, and clock via CLI |
+| POST | `/api/contacts/{public_key}/repeater/radio-settings` | Fetch repeater radio config via CLI |
 | POST | `/api/contacts/{public_key}/repeater/advert-intervals` | Fetch advert intervals |
 | POST | `/api/contacts/{public_key}/repeater/owner-info` | Fetch owner info |
 

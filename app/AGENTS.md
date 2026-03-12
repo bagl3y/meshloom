@@ -176,6 +176,7 @@ app/
 - `POST /contacts/{public_key}/repeater/lpp-telemetry`
 - `POST /contacts/{public_key}/repeater/neighbors`
 - `POST /contacts/{public_key}/repeater/acl`
+- `POST /contacts/{public_key}/repeater/node-info`
 - `POST /contacts/{public_key}/repeater/radio-settings`
 - `POST /contacts/{public_key}/repeater/advert-intervals`
 - `POST /contacts/{public_key}/repeater/owner-info`

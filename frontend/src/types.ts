@@ -356,6 +356,13 @@ export interface RepeaterAclResponse {
   acl: AclEntry[];
 }
 
+export interface RepeaterNodeInfoResponse {
+  name: string | null;
+  lat: string | null;
+  lon: string | null;
+  clock_utc: string | null;
+}
+
 export interface RepeaterRadioSettingsResponse {
   firmware_version: string | null;
   radio: string | null;
@@ -363,10 +370,6 @@ export interface RepeaterRadioSettingsResponse {
   airtime_factor: string | null;
   repeat_enabled: string | null;
   flood_max: string | null;
-  name: string | null;
-  lat: string | null;
-  lon: string | null;
-  clock_utc: string | null;
 }
 
 export interface RepeaterAdvertIntervalsResponse {
@@ -391,6 +394,7 @@ export interface RepeaterLppTelemetryResponse {
 
 export type PaneName =
   | 'status'
+  | 'nodeInfo'
   | 'neighbors'
   | 'acl'
   | 'radioSettings'

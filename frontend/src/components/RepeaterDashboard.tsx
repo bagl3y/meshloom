@@ -11,6 +11,7 @@ import type { Contact, Conversation, Favorite } from '../types';
 import { TelemetryPane } from './repeater/RepeaterTelemetryPane';
 import { NeighborsPane } from './repeater/RepeaterNeighborsPane';
 import { AclPane } from './repeater/RepeaterAclPane';
+import { NodeInfoPane } from './repeater/RepeaterNodeInfoPane';
 import { RadioSettingsPane } from './repeater/RepeaterRadioSettingsPane';
 import { LppTelemetryPane } from './repeater/RepeaterLppTelemetryPane';
 import { OwnerInfoPane } from './repeater/RepeaterOwnerInfoPane';
@@ -47,7 +48,7 @@ export function RepeaterDashboard({
   notificationsPermission,
   radioLat,
   radioLon,
-  radioName,
+  radioName: _radioName,
   onTrace,
   onToggleNotifications,
   onToggleFavorite,
@@ -197,9 +198,15 @@ export function RepeaterDashboard({
           />
         ) : (
           <div className="space-y-4">
-            {/* Top row: Telemetry + Radio Settings | Neighbors (with expanding map) */}
+            {/* Top row: Telemetry + Radio Settings | Node Info + Neighbors */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex flex-col gap-4">
+                <NodeInfoPane
+                  data={paneData.nodeInfo}
+                  state={paneStates.nodeInfo}
+                  onRefresh={() => refreshPane('nodeInfo')}
+                  disabled={anyLoading}
+                />
                 <TelemetryPane
                   data={paneData.status}
                   state={paneStates.status}
@@ -222,16 +229,18 @@ export function RepeaterDashboard({
                   disabled={anyLoading}
                 />
               </div>
-              <NeighborsPane
-                data={paneData.neighbors}
-                state={paneStates.neighbors}
-                onRefresh={() => refreshPane('neighbors')}
-                disabled={anyLoading}
-                contacts={contacts}
-                radioLat={radioLat}
-                radioLon={radioLon}
-                radioName={radioName}
-              />
+              <div className="flex flex-col gap-4">
+                <NeighborsPane
+                  data={paneData.neighbors}
+                  state={paneStates.neighbors}
+                  onRefresh={() => refreshPane('neighbors')}
+                  disabled={anyLoading}
+                  contacts={contacts}
+                  nodeInfo={paneData.nodeInfo}
+                  nodeInfoState={paneStates.nodeInfo}
+                  repeaterName={conversation.name}
+                />
+              </div>
             </div>
 
             {/* Remaining panes: ACL | Owner Info + Actions */}

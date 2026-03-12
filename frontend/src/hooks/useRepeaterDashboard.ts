@@ -8,6 +8,7 @@ import type {
   RepeaterStatusResponse,
   RepeaterNeighborsResponse,
   RepeaterAclResponse,
+  RepeaterNodeInfoResponse,
   RepeaterRadioSettingsResponse,
   RepeaterAdvertIntervalsResponse,
   RepeaterOwnerInfoResponse,
@@ -28,6 +29,7 @@ interface ConsoleEntry {
 
 interface PaneData {
   status: RepeaterStatusResponse | null;
+  nodeInfo: RepeaterNodeInfoResponse | null;
   neighbors: RepeaterNeighborsResponse | null;
   acl: RepeaterAclResponse | null;
   radioSettings: RepeaterRadioSettingsResponse | null;
@@ -49,6 +51,7 @@ const INITIAL_PANE_STATE: PaneState = { loading: false, attempt: 0, error: null,
 function createInitialPaneStates(): Record<PaneName, PaneState> {
   return {
     status: { ...INITIAL_PANE_STATE },
+    nodeInfo: { ...INITIAL_PANE_STATE },
     neighbors: { ...INITIAL_PANE_STATE },
     acl: { ...INITIAL_PANE_STATE },
     radioSettings: { ...INITIAL_PANE_STATE },
@@ -61,6 +64,7 @@ function createInitialPaneStates(): Record<PaneName, PaneState> {
 function createInitialPaneData(): PaneData {
   return {
     status: null,
+    nodeInfo: null,
     neighbors: null,
     acl: null,
     radioSettings: null,
@@ -79,6 +83,7 @@ function clonePaneData(data: PaneData): PaneData {
 function normalizePaneStates(paneStates: Record<PaneName, PaneState>): Record<PaneName, PaneState> {
   return {
     status: { ...paneStates.status, loading: false },
+    nodeInfo: { ...paneStates.nodeInfo, loading: false },
     neighbors: { ...paneStates.neighbors, loading: false },
     acl: { ...paneStates.acl, loading: false },
     radioSettings: { ...paneStates.radioSettings, loading: false },
@@ -136,6 +141,8 @@ function fetchPaneData(publicKey: string, pane: PaneName) {
   switch (pane) {
     case 'status':
       return api.repeaterStatus(publicKey);
+    case 'nodeInfo':
+      return api.repeaterNodeInfo(publicKey);
     case 'neighbors':
       return api.repeaterNeighbors(publicKey);
     case 'acl':
@@ -187,6 +194,10 @@ export function useRepeaterDashboard(
   const [paneStates, setPaneStates] = useState<Record<PaneName, PaneState>>(
     cachedState?.paneStates ?? createInitialPaneStates
   );
+  const paneDataRef = useRef<PaneData>(cachedState?.paneData ?? createInitialPaneData());
+  const paneStatesRef = useRef<Record<PaneName, PaneState>>(
+    cachedState?.paneStates ?? createInitialPaneStates()
+  );
 
   const [consoleHistory, setConsoleHistory] = useState<ConsoleEntry[]>(
     cachedState?.consoleHistory ?? []
@@ -221,6 +232,14 @@ export function useRepeaterDashboard(
       consoleHistory,
     });
   }, [consoleHistory, conversationId, loggedIn, loginError, paneData, paneStates]);
+
+  useEffect(() => {
+    paneDataRef.current = paneData;
+  }, [paneData]);
+
+  useEffect(() => {
+    paneStatesRef.current = paneStates;
+  }, [paneStates]);
 
   const getPublicKey = useCallback((): string | null => {
     if (!activeConversation || activeConversation.type !== 'contact') return null;
@@ -262,27 +281,60 @@ export function useRepeaterDashboard(
       if (!publicKey) return;
       const conversationId = publicKey;
 
+      if (pane === 'neighbors') {
+        const nodeInfoState = paneStatesRef.current.nodeInfo;
+        const nodeInfoData = paneDataRef.current.nodeInfo;
+        const needsNodeInfoPrefetch =
+          nodeInfoState.error !== null ||
+          (nodeInfoState.fetched_at == null && nodeInfoData == null);
+
+        if (needsNodeInfoPrefetch) {
+          await refreshPane('nodeInfo');
+          if (!mountedRef.current || activeIdRef.current !== conversationId) return;
+        }
+      }
+
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         if (!mountedRef.current || activeIdRef.current !== conversationId) return;
 
+        const loadingState = {
+          loading: true,
+          attempt,
+          error: null,
+          fetched_at: paneStatesRef.current[pane].fetched_at ?? null,
+        };
+        paneStatesRef.current = {
+          ...paneStatesRef.current,
+          [pane]: loadingState,
+        };
         setPaneStates((prev) => ({
           ...prev,
-          [pane]: {
-            loading: true,
-            attempt,
-            error: null,
-            fetched_at: prev[pane].fetched_at ?? null,
-          },
+          [pane]: loadingState,
         }));
 
         try {
           const data = await fetchPaneData(publicKey, pane);
           if (!mountedRef.current || activeIdRef.current !== conversationId) return;
 
+          paneDataRef.current = {
+            ...paneDataRef.current,
+            [pane]: data,
+          };
+          const successState = {
+            loading: false,
+            attempt,
+            error: null,
+            fetched_at: Date.now(),
+          };
+          paneStatesRef.current = {
+            ...paneStatesRef.current,
+            [pane]: successState,
+          };
+
           setPaneData((prev) => ({ ...prev, [pane]: data }));
           setPaneStates((prev) => ({
             ...prev,
-            [pane]: { loading: false, attempt, error: null, fetched_at: Date.now() },
+            [pane]: successState,
           }));
           return; // Success
         } catch (err) {
@@ -291,14 +343,19 @@ export function useRepeaterDashboard(
           const msg = err instanceof Error ? err.message : 'Request failed';
 
           if (attempt === MAX_RETRIES) {
+            const errorState = {
+              loading: false,
+              attempt,
+              error: msg,
+              fetched_at: paneStatesRef.current[pane].fetched_at ?? null,
+            };
+            paneStatesRef.current = {
+              ...paneStatesRef.current,
+              [pane]: errorState,
+            };
             setPaneStates((prev) => ({
               ...prev,
-              [pane]: {
-                loading: false,
-                attempt,
-                error: msg,
-                fetched_at: prev[pane].fetched_at ?? null,
-              },
+              [pane]: errorState,
             }));
             toast.error(`Failed to fetch ${pane}`, { description: msg });
           } else {
@@ -314,9 +371,10 @@ export function useRepeaterDashboard(
   const loadAll = useCallback(async () => {
     const panes: PaneName[] = [
       'status',
+      'nodeInfo',
       'neighbors',
-      'acl',
       'radioSettings',
+      'acl',
       'advertIntervals',
       'ownerInfo',
       'lppTelemetry',

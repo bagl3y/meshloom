@@ -25,6 +25,7 @@ import type {
   RepeaterLoginResponse,
   RepeaterLppTelemetryResponse,
   RepeaterNeighborsResponse,
+  RepeaterNodeInfoResponse,
   RepeaterOwnerInfoResponse,
   RepeaterRadioSettingsResponse,
   RepeaterStatusResponse,
@@ -350,6 +351,10 @@ export const api = {
     }),
   repeaterNeighbors: (publicKey: string) =>
     fetchJson<RepeaterNeighborsResponse>(`/contacts/${publicKey}/repeater/neighbors`, {
+      method: 'POST',
+    }),
+  repeaterNodeInfo: (publicKey: string) =>
+    fetchJson<RepeaterNodeInfoResponse>(`/contacts/${publicKey}/repeater/node-info`, {
       method: 'POST',
     }),
   repeaterAcl: (publicKey: string) =>

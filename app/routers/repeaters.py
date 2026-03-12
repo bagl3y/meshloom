@@ -21,6 +21,7 @@ from app.models import (
     RepeaterLoginResponse,
     RepeaterLppTelemetryResponse,
     RepeaterNeighborsResponse,
+    RepeaterNodeInfoResponse,
     RepeaterOwnerInfoResponse,
     RepeaterRadioSettingsResponse,
     RepeaterStatusResponse,
@@ -373,9 +374,29 @@ async def _batch_cli_fetch(
     return results
 
 
+@router.post("/{public_key}/repeater/node-info", response_model=RepeaterNodeInfoResponse)
+async def repeater_node_info(public_key: str) -> RepeaterNodeInfoResponse:
+    """Fetch repeater identity/location info via a small CLI batch."""
+    require_connected()
+    contact = await _resolve_contact_or_404(public_key)
+    _require_repeater(contact)
+
+    results = await _batch_cli_fetch(
+        contact,
+        "repeater_node_info",
+        [
+            ("get name", "name"),
+            ("get lat", "lat"),
+            ("get lon", "lon"),
+            ("clock", "clock_utc"),
+        ],
+    )
+    return RepeaterNodeInfoResponse(**results)
+
+
 @router.post("/{public_key}/repeater/radio-settings", response_model=RepeaterRadioSettingsResponse)
 async def repeater_radio_settings(public_key: str) -> RepeaterRadioSettingsResponse:
-    """Fetch radio settings from a repeater via batch CLI commands."""
+    """Fetch radio settings from a repeater via radio/config CLI commands."""
     require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_repeater(contact)
@@ -390,10 +411,6 @@ async def repeater_radio_settings(public_key: str) -> RepeaterRadioSettingsRespo
             ("get af", "airtime_factor"),
             ("get repeat", "repeat_enabled"),
             ("get flood.max", "flood_max"),
-            ("get name", "name"),
-            ("get lat", "lat"),
-            ("get lon", "lon"),
-            ("clock", "clock_utc"),
         ],
     )
     return RepeaterRadioSettingsResponse(**results)

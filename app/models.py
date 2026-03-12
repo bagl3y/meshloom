@@ -428,8 +428,17 @@ class RepeaterStatusResponse(BaseModel):
     full_events: int = Field(description="Full event queue count")
 
 
+class RepeaterNodeInfoResponse(BaseModel):
+    """Identity/location info from a repeater (small CLI batch)."""
+
+    name: str | None = Field(default=None, description="Repeater name")
+    lat: str | None = Field(default=None, description="Latitude")
+    lon: str | None = Field(default=None, description="Longitude")
+    clock_utc: str | None = Field(default=None, description="Repeater clock in UTC")
+
+
 class RepeaterRadioSettingsResponse(BaseModel):
-    """Radio settings from a repeater (batch CLI get commands)."""
+    """Radio settings from a repeater (radio/config CLI batch)."""
 
     firmware_version: str | None = Field(default=None, description="Firmware version string")
     radio: str | None = Field(default=None, description="Radio settings (freq,bw,sf,cr)")
@@ -437,10 +446,6 @@ class RepeaterRadioSettingsResponse(BaseModel):
     airtime_factor: str | None = Field(default=None, description="Airtime factor")
     repeat_enabled: str | None = Field(default=None, description="Repeat mode enabled")
     flood_max: str | None = Field(default=None, description="Max flood hops")
-    name: str | None = Field(default=None, description="Repeater name")
-    lat: str | None = Field(default=None, description="Latitude")
-    lon: str | None = Field(default=None, description="Longitude")
-    clock_utc: str | None = Field(default=None, description="Repeater clock in UTC")
 
 
 class RepeaterAdvertIntervalsResponse(BaseModel):

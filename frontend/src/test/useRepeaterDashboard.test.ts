@@ -12,6 +12,7 @@ vi.mock('../api', () => ({
   api: {
     repeaterLogin: vi.fn(),
     repeaterStatus: vi.fn(),
+    repeaterNodeInfo: vi.fn(),
     repeaterNeighbors: vi.fn(),
     repeaterAcl: vi.fn(),
     repeaterRadioSettings: vi.fn(),
@@ -284,8 +285,12 @@ describe('useRepeaterDashboard', () => {
 
   it('loadAll calls refreshPane for all panes serially', async () => {
     mockApi.repeaterStatus.mockResolvedValueOnce({ battery_volts: 4.0 });
-    mockApi.repeaterNeighbors.mockResolvedValueOnce({ neighbors: [] });
-    mockApi.repeaterAcl.mockResolvedValueOnce({ acl: [] });
+    mockApi.repeaterNodeInfo.mockResolvedValueOnce({
+      name: null,
+      lat: null,
+      lon: null,
+      clock_utc: null,
+    });
     mockApi.repeaterRadioSettings.mockResolvedValueOnce({
       firmware_version: 'v1.0',
       radio: null,
@@ -293,11 +298,9 @@ describe('useRepeaterDashboard', () => {
       airtime_factor: null,
       repeat_enabled: null,
       flood_max: null,
-      name: null,
-      lat: null,
-      lon: null,
-      clock_utc: null,
     });
+    mockApi.repeaterNeighbors.mockResolvedValueOnce({ neighbors: [] });
+    mockApi.repeaterAcl.mockResolvedValueOnce({ acl: [] });
     mockApi.repeaterAdvertIntervals.mockResolvedValueOnce({
       advert_interval: null,
       flood_advert_interval: null,
@@ -315,12 +318,60 @@ describe('useRepeaterDashboard', () => {
     });
 
     expect(mockApi.repeaterStatus).toHaveBeenCalledTimes(1);
+    expect(mockApi.repeaterNodeInfo).toHaveBeenCalledTimes(1);
     expect(mockApi.repeaterNeighbors).toHaveBeenCalledTimes(1);
     expect(mockApi.repeaterAcl).toHaveBeenCalledTimes(1);
     expect(mockApi.repeaterRadioSettings).toHaveBeenCalledTimes(1);
     expect(mockApi.repeaterAdvertIntervals).toHaveBeenCalledTimes(1);
     expect(mockApi.repeaterOwnerInfo).toHaveBeenCalledTimes(1);
     expect(mockApi.repeaterLppTelemetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshing neighbors fetches node info first', async () => {
+    mockApi.repeaterNodeInfo.mockResolvedValueOnce({
+      name: 'Repeater',
+      lat: '-31.9523',
+      lon: '115.8613',
+      clock_utc: null,
+    });
+    mockApi.repeaterNeighbors.mockResolvedValueOnce({ neighbors: [] });
+
+    const { result } = renderHook(() => useRepeaterDashboard(repeaterConversation));
+
+    await act(async () => {
+      await result.current.refreshPane('neighbors');
+    });
+
+    expect(mockApi.repeaterNodeInfo).toHaveBeenCalledTimes(1);
+    expect(mockApi.repeaterNeighbors).toHaveBeenCalledTimes(1);
+    expect(mockApi.repeaterNodeInfo.mock.invocationCallOrder[0]).toBeLessThan(
+      mockApi.repeaterNeighbors.mock.invocationCallOrder[0]
+    );
+    expect(result.current.paneData.nodeInfo?.lat).toBe('-31.9523');
+    expect(result.current.paneData.neighbors).toEqual({ neighbors: [] });
+  });
+
+  it('refreshing neighbors reuses already-fetched node info', async () => {
+    mockApi.repeaterNodeInfo.mockResolvedValueOnce({
+      name: 'Repeater',
+      lat: '-31.9523',
+      lon: '115.8613',
+      clock_utc: null,
+    });
+    mockApi.repeaterNeighbors.mockResolvedValueOnce({ neighbors: [] });
+    mockApi.repeaterNeighbors.mockResolvedValueOnce({ neighbors: [] });
+
+    const { result } = renderHook(() => useRepeaterDashboard(repeaterConversation));
+
+    await act(async () => {
+      await result.current.refreshPane('neighbors');
+    });
+    await act(async () => {
+      await result.current.refreshPane('neighbors');
+    });
+
+    expect(mockApi.repeaterNodeInfo).toHaveBeenCalledTimes(1);
+    expect(mockApi.repeaterNeighbors).toHaveBeenCalledTimes(2);
   });
 
   it('restores dashboard state when navigating away and back to the same repeater', async () => {

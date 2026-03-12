@@ -122,7 +122,8 @@ frontend/src/
 │   │   ├── RepeaterTelemetryPane.tsx    # Battery, airtime, packet counts
 │   │   ├── RepeaterNeighborsPane.tsx    # Neighbor table + lazy mini-map
 │   │   ├── RepeaterAclPane.tsx          # Permission table
-│   │   ├── RepeaterRadioSettingsPane.tsx # Radio settings + advert intervals
+│   │   ├── RepeaterNodeInfoPane.tsx      # Repeater name, coords, clock drift
+│   │   ├── RepeaterRadioSettingsPane.tsx # Radio config + advert intervals
 │   │   ├── RepeaterLppTelemetryPane.tsx # CayenneLPP sensor data
 │   │   ├── RepeaterOwnerInfoPane.tsx    # Owner info + guest password
 │   │   ├── RepeaterActionsPane.tsx      # Send Advert, Sync Clock, Reboot
@@ -359,7 +360,7 @@ For repeater contacts (`type=2`), `ConversationPane.tsx` renders `RepeaterDashbo
 
 **Login**: `RepeaterLogin` component — password or guest login via `POST /api/contacts/{key}/repeater/login`.
 
-**Dashboard panes** (after login): Telemetry, Neighbors, ACL, Radio Settings, Advert Intervals, Owner Info — each fetched via granular `POST /api/contacts/{key}/repeater/{pane}` endpoints. Panes retry up to 3 times client-side. "Load All" fetches all panes serially (parallel would queue behind the radio lock).
+**Dashboard panes** (after login): Telemetry, Node Info, Neighbors, ACL, Radio Settings, Advert Intervals, Owner Info — each fetched via granular `POST /api/contacts/{key}/repeater/{pane}` endpoints. Panes retry up to 3 times client-side. `Neighbors` depends on the smaller `node-info` fetch for repeater GPS, not the heavier radio-settings batch. "Load All" fetches all panes serially (parallel would queue behind the radio lock).
 
 **Actions pane**: Send Advert, Sync Clock, Reboot — all send CLI commands via `POST /api/contacts/{key}/command`.
 
