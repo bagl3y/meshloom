@@ -2,7 +2,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PayloadType } from '@michaelhart/meshcore-decoder';
 
-import type { Contact, RadioConfig, RawPacket } from '../types';
+import type { Contact, ContactAdvertPathSummary, RadioConfig, RawPacket } from '../types';
 import { CONTACT_TYPE_REPEATER } from '../types';
 import { buildLinkKey } from '../utils/visualizerUtils';
 
@@ -61,10 +61,13 @@ function createContact(publicKey: string, name: string, type = 1): Contact {
   };
 }
 
-function createPacket(data: string): RawPacket {
+function createPacket(
+  data: string,
+  { id = 1, observationId = id }: { id?: number; observationId?: number } = {}
+): RawPacket {
   return {
-    id: 1,
-    observation_id: 1,
+    id,
+    observation_id: observationId,
     timestamp: 1_700_000_000,
     data,
     payload_type: 'TEXT',
@@ -81,22 +84,29 @@ function renderVisualizerData({
   config,
   showAmbiguousPaths = false,
   showAmbiguousNodes = false,
+  collapseLikelyKnownSiblingRepeaters = true,
+  repeaterAdvertPaths = [],
+  useAdvertPathHints = false,
 }: {
   packets: RawPacket[];
   contacts: Contact[];
   config: RadioConfig;
   showAmbiguousPaths?: boolean;
   showAmbiguousNodes?: boolean;
+  collapseLikelyKnownSiblingRepeaters?: boolean;
+  repeaterAdvertPaths?: ContactAdvertPathSummary[];
+  useAdvertPathHints?: boolean;
 }) {
   return renderHook(() =>
     useVisualizerData3D({
       packets,
       contacts,
       config,
-      repeaterAdvertPaths: [],
+      repeaterAdvertPaths,
       showAmbiguousPaths,
       showAmbiguousNodes,
-      useAdvertPathHints: false,
+      useAdvertPathHints,
+      collapseLikelyKnownSiblingRepeaters,
       splitAmbiguousByTraffic: false,
       chargeStrength: -200,
       letEmDrift: false,
@@ -221,6 +231,92 @@ describe('useVisualizerData3D', () => {
     expect(result.current.links.has(buildLinkKey('self', '323232323232'))).toBe(true);
     expect(result.current.links.has(buildLinkKey('323232323232', 'bbbbbbbbbbbb'))).toBe(true);
     expect(result.current.links.has(buildLinkKey('self', 'bbbbbbbbbbbb'))).toBe(false);
+  });
+
+  it('collapses a high-confidence ambiguous repeater into its known sibling when both share the same next hop', async () => {
+    const selfKey = 'ffffffffffff0000000000000000000000000000000000000000000000000000';
+    const aliceKey = 'aaaaaaaaaaaa0000000000000000000000000000000000000000000000000000';
+    const carolKey = 'cccccccccccc0000000000000000000000000000000000000000000000000000';
+    const knownRelayKey = '3232323232320000000000000000000000000000000000000000000000000000';
+    const otherRelayKey = '32ababababab0000000000000000000000000000000000000000000000000000';
+    const nextRelayKey = '5656565656560000000000000000000000000000000000000000000000000000';
+
+    packetFixtures.set('dm-ambiguous-sibling', {
+      payloadType: PayloadType.TextMessage,
+      messageHash: 'dm-ambiguous-sibling',
+      pathBytes: ['32', '565656565656'],
+      srcHash: 'aaaaaaaaaaaa',
+      dstHash: 'ffffffffffff',
+      advertPubkey: null,
+      groupTextSender: null,
+      anonRequestPubkey: null,
+    });
+    packetFixtures.set('dm-known-sibling', {
+      payloadType: PayloadType.TextMessage,
+      messageHash: 'dm-known-sibling',
+      pathBytes: ['323232323232', '565656565656'],
+      srcHash: 'cccccccccccc',
+      dstHash: 'ffffffffffff',
+      advertPubkey: null,
+      groupTextSender: null,
+      anonRequestPubkey: null,
+    });
+
+    const sharedArgs = {
+      packets: [
+        createPacket('dm-ambiguous-sibling', { id: 1, observationId: 1 }),
+        createPacket('dm-known-sibling', { id: 2, observationId: 2 }),
+      ],
+      contacts: [
+        createContact(aliceKey, 'Alice'),
+        createContact(carolKey, 'Carol'),
+        createContact(knownRelayKey, 'Relay A', CONTACT_TYPE_REPEATER),
+        createContact(otherRelayKey, 'Relay B', CONTACT_TYPE_REPEATER),
+        createContact(nextRelayKey, 'Relay Next', CONTACT_TYPE_REPEATER),
+      ],
+      config: createConfig(selfKey),
+      showAmbiguousPaths: true,
+      useAdvertPathHints: true,
+      repeaterAdvertPaths: [
+        {
+          public_key: knownRelayKey,
+          paths: [
+            {
+              path: '',
+              path_len: 1,
+              next_hop: '565656565656',
+              first_seen: 1,
+              last_seen: 2,
+              heard_count: 4,
+            },
+          ],
+        },
+      ],
+    };
+
+    const collapsed = renderVisualizerData({
+      ...sharedArgs,
+      collapseLikelyKnownSiblingRepeaters: true,
+    });
+    const separated = renderVisualizerData({
+      ...sharedArgs,
+      collapseLikelyKnownSiblingRepeaters: false,
+    });
+
+    await waitFor(() =>
+      expect(collapsed.result.current.renderedNodeIds.has('323232323232')).toBe(true)
+    );
+    await waitFor(() => expect(separated.result.current.renderedNodeIds.has('?32')).toBe(true));
+
+    expect(collapsed.result.current.renderedNodeIds.has('?32')).toBe(false);
+    expect(collapsed.result.current.links.has(buildLinkKey('aaaaaaaaaaaa', '323232323232'))).toBe(
+      true
+    );
+    expect(collapsed.result.current.links.has(buildLinkKey('323232323232', '565656565656'))).toBe(
+      true
+    );
+    expect(separated.result.current.renderedNodeIds.has('?32')).toBe(true);
+    expect(separated.result.current.links.has(buildLinkKey('aaaaaaaaaaaa', '?32'))).toBe(true);
   });
 
   it('picks back up with known repeaters after hiding ambiguous repeater segments', async () => {

@@ -94,8 +94,9 @@ When a new packet arrives from the WebSocket:
 
 ```typescript
 packets.forEach((packet) => {
-  if (processedRef.current.has(packet.id)) return; // Skip duplicates
-  processedRef.current.add(packet.id);
+  const observationKey = getRawPacketObservationKey(packet);
+  if (processedRef.current.has(observationKey)) return; // Skip duplicates
+  processedRef.current.add(observationKey);
 
   const parsed = parsePacket(packet.data);
   const key = generatePacketKey(parsed, packet);
@@ -215,6 +216,8 @@ When a winner is found, the ambiguous node gets a `probableIdentity` label (the 
 
 **Interaction with traffic splitting:** Advert-path hints run first. If a probable identity is found, the display name is set. Traffic splitting can still produce separate node IDs (`?XX:>YY`), but won't overwrite the advert-path display name.
 
+**Sibling collapse projection:** When an ambiguous repeater has a high-confidence likely identity and that likely repeater also appears as a definitely-known sibling connecting to the same next hop, the projection layer can collapse the ambiguous node into the known repeater. This is projection-only: canonical observations and canonical neighbor truth remain unchanged.
+
 **Toggle:** "Use repeater advert-path identity hints" checkbox (enabled by default, disabled when ambiguous repeaters are hidden).
 
 ### Traffic Pattern Splitting (Experimental)
@@ -331,21 +334,22 @@ function buildPath(parsed, packet, myPrefix): string[] {
 
 ## Configuration Options
 
-| Option                     | Default | Description                                               |
-| -------------------------- | ------- | --------------------------------------------------------- |
-| Ambiguous repeaters        | On      | Show nodes when only partial prefix known                 |
-| Ambiguous sender/recipient | Off     | Show placeholder nodes for unknown senders                |
-| Advert-path identity hints | On      | Use stored advert paths to label ambiguous repeaters      |
-| Split by traffic pattern   | Off     | Split ambiguous repeaters by next-hop routing (see above) |
-| Observation window         | 15 sec  | Wait time for duplicate packets before animating (1-60s)  |
-| Let 'em drift              | On      | Continuous layout optimization                            |
-| Repulsion                  | 200     | Force strength (50-2500)                                  |
-| Packet speed               | 2x      | Particle animation speed multiplier (1x-5x)               |
-| Shuffle layout             | -       | Button to randomize node positions and reheat sim         |
-| Oooh Big Stretch!          | -       | Button to temporarily increase repulsion then relax       |
-| Clear & Reset              | -       | Button to clear all nodes, links, and packets             |
-| Hide UI                    | Off     | Hide legends and most controls for cleaner view           |
-| Full screen                | Off     | Hide the packet feed panel (desktop only)                 |
+| Option                     | Default | Description                                                 |
+| -------------------------- | ------- | ----------------------------------------------------------- |
+| Ambiguous repeaters        | On      | Show nodes when only partial prefix known                   |
+| Ambiguous sender/recipient | Off     | Show placeholder nodes for unknown senders                  |
+| Advert-path identity hints | On      | Use stored advert paths to label ambiguous repeaters        |
+| Collapse sibling repeaters | On      | Merge likely ambiguous repeater with known sibling repeater |
+| Split by traffic pattern   | Off     | Split ambiguous repeaters by next-hop routing (see above)   |
+| Observation window         | 15 sec  | Wait time for duplicate packets before animating (1-60s)    |
+| Let 'em drift              | On      | Continuous layout optimization                              |
+| Repulsion                  | 200     | Force strength (50-2500)                                    |
+| Packet speed               | 2x      | Particle animation speed multiplier (1x-5x)                 |
+| Shuffle layout             | -       | Button to randomize node positions and reheat sim           |
+| Oooh Big Stretch!          | -       | Button to temporarily increase repulsion then relax         |
+| Clear & Reset              | -       | Button to clear all nodes, links, and packets               |
+| Hide UI                    | Off     | Hide legends and most controls for cleaner view             |
+| Full screen                | Off     | Hide the packet feed panel (desktop only)                   |
 
 ## File Structure
 

@@ -29,6 +29,9 @@ export function PacketVisualizer3D({
   const [showAmbiguousPaths, setShowAmbiguousPaths] = useState(savedSettings.showAmbiguousPaths);
   const [showAmbiguousNodes, setShowAmbiguousNodes] = useState(savedSettings.showAmbiguousNodes);
   const [useAdvertPathHints, setUseAdvertPathHints] = useState(savedSettings.useAdvertPathHints);
+  const [collapseLikelyKnownSiblingRepeaters, setCollapseLikelyKnownSiblingRepeaters] = useState(
+    savedSettings.collapseLikelyKnownSiblingRepeaters
+  );
   const [splitAmbiguousByTraffic, setSplitAmbiguousByTraffic] = useState(
     savedSettings.splitAmbiguousByTraffic
   );
@@ -52,6 +55,7 @@ export function PacketVisualizer3D({
       showAmbiguousPaths,
       showAmbiguousNodes,
       useAdvertPathHints,
+      collapseLikelyKnownSiblingRepeaters,
       splitAmbiguousByTraffic,
       chargeStrength,
       observationWindowSec,
@@ -66,6 +70,7 @@ export function PacketVisualizer3D({
     showAmbiguousPaths,
     showAmbiguousNodes,
     useAdvertPathHints,
+    collapseLikelyKnownSiblingRepeaters,
     splitAmbiguousByTraffic,
     chargeStrength,
     observationWindowSec,
@@ -108,6 +113,7 @@ export function PacketVisualizer3D({
     showAmbiguousPaths,
     showAmbiguousNodes,
     useAdvertPathHints,
+    collapseLikelyKnownSiblingRepeaters,
     splitAmbiguousByTraffic,
     chargeStrength,
     letEmDrift,
@@ -143,6 +149,8 @@ export function PacketVisualizer3D({
         setShowAmbiguousNodes={setShowAmbiguousNodes}
         useAdvertPathHints={useAdvertPathHints}
         setUseAdvertPathHints={setUseAdvertPathHints}
+        collapseLikelyKnownSiblingRepeaters={collapseLikelyKnownSiblingRepeaters}
+        setCollapseLikelyKnownSiblingRepeaters={setCollapseLikelyKnownSiblingRepeaters}
         splitAmbiguousByTraffic={splitAmbiguousByTraffic}
         setSplitAmbiguousByTraffic={setSplitAmbiguousByTraffic}
         observationWindowSec={observationWindowSec}

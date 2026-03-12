@@ -45,6 +45,7 @@ export interface PacketNetworkContext {
 export interface PacketNetworkVisibilityOptions {
   showAmbiguousNodes: boolean;
   showAmbiguousPaths: boolean;
+  collapseLikelyKnownSiblingRepeaters: boolean;
 }
 
 export interface PacketNetworkNode {
@@ -56,6 +57,7 @@ export interface PacketNetworkNode {
   lastActivityReason?: string;
   lastSeen?: number | null;
   probableIdentity?: string | null;
+  probableIdentityNodeId?: string | null;
   ambiguousNames?: string[];
 }
 
@@ -210,6 +212,7 @@ export function clearPacketNetworkState(
     lastActivityReason: undefined,
     lastSeen: null,
     probableIdentity: undefined,
+    probableIdentityNodeId: undefined,
     ambiguousNames: undefined,
   });
 
@@ -228,6 +231,7 @@ function addOrUpdateNode(
     lastSeen,
     name,
     probableIdentity,
+    probableIdentityNodeId,
     type,
   }: {
     activityAtMs: number;
@@ -237,6 +241,7 @@ function addOrUpdateNode(
     lastSeen?: number | null;
     name: string | null;
     probableIdentity?: string | null;
+    probableIdentityNodeId?: string | null;
     type: NodeType;
   }
 ): void {
@@ -245,6 +250,9 @@ function addOrUpdateNode(
     existing.lastActivity = Math.max(existing.lastActivity, activityAtMs);
     if (name) existing.name = name;
     if (probableIdentity !== undefined) existing.probableIdentity = probableIdentity;
+    if (probableIdentityNodeId !== undefined) {
+      existing.probableIdentityNodeId = probableIdentityNodeId;
+    }
     if (ambiguousNames) existing.ambiguousNames = ambiguousNames;
     if (lastSeen !== undefined) existing.lastSeen = lastSeen;
     return;
@@ -257,6 +265,7 @@ function addOrUpdateNode(
     isAmbiguous,
     lastActivity: activityAtMs,
     probableIdentity,
+    probableIdentityNodeId,
     ambiguousNames,
     lastSeen,
   });
@@ -437,6 +446,7 @@ function resolveNode(
   let nodeId = buildAmbiguousRepeaterNodeId(lookupValue);
   let displayName = buildAmbiguousRepeaterLabel(lookupValue);
   let probableIdentity: string | null = null;
+  let probableIdentityNodeId: string | null = null;
   let ambiguousNames = names.length > 0 ? names : undefined;
 
   if (context.useAdvertPathHints && isRepeater && trafficContext) {
@@ -444,6 +454,7 @@ function resolveNode(
     if (likely) {
       const likelyName = likely.name || likely.public_key.slice(0, 12).toUpperCase();
       probableIdentity = likelyName;
+      probableIdentityNodeId = likely.public_key.slice(0, 12).toLowerCase();
       displayName = likelyName;
       ambiguousNames = filtered
         .filter((candidate) => candidate.public_key !== likely.public_key)
@@ -481,6 +492,7 @@ function resolveNode(
     type: isRepeater ? 'repeater' : 'client',
     isAmbiguous: true,
     probableIdentity,
+    probableIdentityNodeId,
     ambiguousNames,
     lastSeen,
     activityAtMs,
@@ -647,14 +659,73 @@ export function isPacketNetworkNodeVisible(
   return node.type === 'repeater' ? visibility.showAmbiguousPaths : visibility.showAmbiguousNodes;
 }
 
-export function projectCanonicalPath(
+function buildKnownSiblingRepeaterAliasMap(
+  state: PacketNetworkState,
+  visibility: PacketNetworkVisibilityOptions
+): Map<string, string> {
+  if (!visibility.collapseLikelyKnownSiblingRepeaters || !visibility.showAmbiguousPaths) {
+    return new Map();
+  }
+
+  const knownRepeaterNextHops = new Map<string, Set<string>>();
+  for (const observation of state.observations) {
+    for (let i = 0; i < observation.nodes.length - 1; i++) {
+      const currentNode = state.nodes.get(observation.nodes[i]);
+      if (!currentNode || currentNode.type !== 'repeater' || currentNode.isAmbiguous) {
+        continue;
+      }
+
+      const nextNodeId = observation.nodes[i + 1];
+      const existing = knownRepeaterNextHops.get(currentNode.id);
+      if (existing) {
+        existing.add(nextNodeId);
+      } else {
+        knownRepeaterNextHops.set(currentNode.id, new Set([nextNodeId]));
+      }
+    }
+  }
+
+  const aliases = new Map<string, string>();
+  for (const observation of state.observations) {
+    for (let i = 0; i < observation.nodes.length - 1; i++) {
+      const currentNodeId = observation.nodes[i];
+      const currentNode = state.nodes.get(currentNodeId);
+      if (
+        !currentNode ||
+        currentNode.type !== 'repeater' ||
+        !currentNode.isAmbiguous ||
+        !currentNode.probableIdentityNodeId
+      ) {
+        continue;
+      }
+
+      const probableNode = state.nodes.get(currentNode.probableIdentityNodeId);
+      if (!probableNode || probableNode.type !== 'repeater' || probableNode.isAmbiguous) {
+        continue;
+      }
+
+      const nextNodeId = observation.nodes[i + 1];
+      const probableNextHops = knownRepeaterNextHops.get(probableNode.id);
+      if (probableNextHops?.has(nextNodeId)) {
+        aliases.set(currentNodeId, probableNode.id);
+      }
+    }
+  }
+
+  return aliases;
+}
+
+function projectCanonicalPathWithAliases(
   state: PacketNetworkState,
   canonicalPath: string[],
-  visibility: PacketNetworkVisibilityOptions
+  visibility: PacketNetworkVisibilityOptions,
+  repeaterAliases: Map<string, string>
 ): ProjectedPacketNetworkPath {
   const projected = compactPathSteps(
     canonicalPath.map((nodeId) => ({
-      nodeId: isPacketNetworkNodeVisible(state.nodes.get(nodeId), visibility) ? nodeId : null,
+      nodeId: isPacketNetworkNodeVisible(state.nodes.get(nodeId), visibility)
+        ? (repeaterAliases.get(nodeId) ?? nodeId)
+        : null,
       markHiddenLinkWhenOmitted: true,
       hiddenLabel: null,
     }))
@@ -666,10 +737,24 @@ export function projectCanonicalPath(
   };
 }
 
+export function projectCanonicalPath(
+  state: PacketNetworkState,
+  canonicalPath: string[],
+  visibility: PacketNetworkVisibilityOptions
+): ProjectedPacketNetworkPath {
+  return projectCanonicalPathWithAliases(
+    state,
+    canonicalPath,
+    visibility,
+    buildKnownSiblingRepeaterAliasMap(state, visibility)
+  );
+}
+
 export function projectPacketNetwork(
   state: PacketNetworkState,
   visibility: PacketNetworkVisibilityOptions
 ): PacketNetworkProjection {
+  const repeaterAliases = buildKnownSiblingRepeaterAliasMap(state, visibility);
   const nodes = new Map<string, PacketNetworkNode>();
   const selfNode = state.nodes.get('self');
   if (selfNode) {
@@ -679,7 +764,12 @@ export function projectPacketNetwork(
   const links = new Map<string, ProjectedPacketNetworkLink>();
 
   for (const observation of state.observations) {
-    const projected = projectCanonicalPath(state, observation.nodes, visibility);
+    const projected = projectCanonicalPathWithAliases(
+      state,
+      observation.nodes,
+      visibility,
+      repeaterAliases
+    );
     if (projected.nodes.length < 2) continue;
 
     for (const nodeId of projected.nodes) {

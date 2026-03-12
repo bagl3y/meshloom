@@ -49,6 +49,7 @@ export interface UseVisualizerData3DOptions {
   showAmbiguousPaths: boolean;
   showAmbiguousNodes: boolean;
   useAdvertPathHints: boolean;
+  collapseLikelyKnownSiblingRepeaters: boolean;
   splitAmbiguousByTraffic: boolean;
   chargeStrength: number;
   letEmDrift: boolean;
@@ -102,6 +103,7 @@ export function useVisualizerData3D({
   showAmbiguousPaths,
   showAmbiguousNodes,
   useAdvertPathHints,
+  collapseLikelyKnownSiblingRepeaters,
   splitAmbiguousByTraffic,
   chargeStrength,
   letEmDrift,
@@ -256,6 +258,7 @@ export function useVisualizerData3D({
     const projection = projectPacketNetwork(networkStateRef.current, {
       showAmbiguousNodes,
       showAmbiguousPaths,
+      collapseLikelyKnownSiblingRepeaters,
     });
     const previousNodes = nodesRef.current;
     const nextNodes = new Map<string, GraphNode>();
@@ -279,7 +282,13 @@ export function useVisualizerData3D({
     nodesRef.current = nextNodes;
     linksRef.current = nextLinks;
     syncSimulation();
-  }, [showAmbiguousNodes, showAmbiguousPaths, syncSimulation, upsertRenderNode]);
+  }, [
+    collapseLikelyKnownSiblingRepeaters,
+    showAmbiguousNodes,
+    showAmbiguousPaths,
+    syncSimulation,
+    upsertRenderNode,
+  ]);
 
   useEffect(() => {
     ensureSelfNode(networkStateRef.current, config?.name || 'Me');
@@ -366,6 +375,7 @@ export function useVisualizerData3D({
       const projectedPath = projectCanonicalPath(networkStateRef.current, ingested.canonicalPath, {
         showAmbiguousNodes,
         showAmbiguousPaths,
+        collapseLikelyKnownSiblingRepeaters,
       });
       if (projectedPath.nodes.length < 2) continue;
 
@@ -429,6 +439,7 @@ export function useVisualizerData3D({
     packets,
     packetNetworkContext,
     publishPacket,
+    collapseLikelyKnownSiblingRepeaters,
     rebuildRenderProjection,
     showAmbiguousNodes,
     showAmbiguousPaths,

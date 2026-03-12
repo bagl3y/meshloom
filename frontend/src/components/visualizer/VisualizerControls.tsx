@@ -13,6 +13,8 @@ interface VisualizerControlsProps {
   setShowAmbiguousNodes: (value: boolean) => void;
   useAdvertPathHints: boolean;
   setUseAdvertPathHints: (value: boolean) => void;
+  collapseLikelyKnownSiblingRepeaters: boolean;
+  setCollapseLikelyKnownSiblingRepeaters: (value: boolean) => void;
   splitAmbiguousByTraffic: boolean;
   setSplitAmbiguousByTraffic: (value: boolean) => void;
   observationWindowSec: number;
@@ -46,6 +48,8 @@ export function VisualizerControls({
   setShowAmbiguousNodes,
   useAdvertPathHints,
   setUseAdvertPathHints,
+  collapseLikelyKnownSiblingRepeaters,
+  setCollapseLikelyKnownSiblingRepeaters,
   splitAmbiguousByTraffic,
   setSplitAmbiguousByTraffic,
   observationWindowSec,
@@ -149,55 +153,77 @@ export function VisualizerControls({
                     Show ambiguous sender/recipient
                   </span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox
-                    checked={useAdvertPathHints}
-                    onCheckedChange={(c) => setUseAdvertPathHints(c === true)}
-                    disabled={!showAmbiguousPaths}
-                  />
-                  <span
-                    title="Use stored repeater advert paths to assign likely identity labels for ambiguous repeater nodes"
-                    className={!showAmbiguousPaths ? 'text-muted-foreground' : ''}
-                  >
-                    Use repeater advert-path identity hints
-                  </span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox
-                    checked={splitAmbiguousByTraffic}
-                    onCheckedChange={(c) => setSplitAmbiguousByTraffic(c === true)}
-                    disabled={!showAmbiguousPaths}
-                  />
-                  <span
-                    title="Split ambiguous repeaters into separate nodes based on traffic patterns (prev→next). Helps identify colliding prefixes representing different physical nodes, but requires enough traffic to disambiguate."
-                    className={!showAmbiguousPaths ? 'text-muted-foreground' : ''}
-                  >
-                    Heuristically group repeaters by traffic pattern
-                  </span>
-                </label>
-                <div className="flex items-center gap-2">
-                  <label
-                    htmlFor="observation-window-3d"
-                    className="text-muted-foreground"
-                    title="How long to wait for duplicate packets via different paths before animating"
-                  >
-                    Ack/echo listen window:
-                  </label>
-                  <input
-                    id="observation-window-3d"
-                    type="number"
-                    min="1"
-                    max="60"
-                    value={observationWindowSec}
-                    onChange={(e) =>
-                      setObservationWindowSec(
-                        Math.max(1, Math.min(60, parseInt(e.target.value, 10) || 1))
-                      )
-                    }
-                    className="w-12 px-1 py-0.5 bg-background border border-border rounded text-xs text-center"
-                  />
-                  <span className="text-muted-foreground">sec</span>
-                </div>
+                <details className="rounded border border-border/60 px-2 py-1">
+                  <summary className="cursor-pointer select-none text-muted-foreground">
+                    Advanced
+                  </summary>
+                  <div className="mt-2 flex flex-col gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={useAdvertPathHints}
+                        onCheckedChange={(c) => setUseAdvertPathHints(c === true)}
+                        disabled={!showAmbiguousPaths}
+                      />
+                      <span
+                        title="Use stored repeater advert paths to assign likely identity labels for ambiguous repeater nodes."
+                        className={!showAmbiguousPaths ? 'text-muted-foreground' : ''}
+                      >
+                        Use repeater advert-path identity hints
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={collapseLikelyKnownSiblingRepeaters}
+                        onCheckedChange={(c) => setCollapseLikelyKnownSiblingRepeaters(c === true)}
+                        disabled={!showAmbiguousPaths || !useAdvertPathHints}
+                      />
+                      <span
+                        title="When an ambiguous repeater has a high-confidence likely-identity that matches a sibling definitely-known repeater, and they both connect to the same next hop, collapse them into the known repeater. This should resolve more ambiguity as the mesh navigates the 1.14 upgrade."
+                        className={
+                          !showAmbiguousPaths || !useAdvertPathHints ? 'text-muted-foreground' : ''
+                        }
+                      >
+                        Collapse likely sibling repeaters
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={splitAmbiguousByTraffic}
+                        onCheckedChange={(c) => setSplitAmbiguousByTraffic(c === true)}
+                        disabled={!showAmbiguousPaths}
+                      />
+                      <span
+                        title="Split ambiguous repeaters into separate nodes based on traffic patterns (prev→next). Helps identify colliding prefixes representing different physical nodes, but requires enough traffic to disambiguate."
+                        className={!showAmbiguousPaths ? 'text-muted-foreground' : ''}
+                      >
+                        Heuristically group repeaters by traffic pattern
+                      </span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <label
+                        htmlFor="observation-window-3d"
+                        className="text-muted-foreground"
+                        title="How long to wait for duplicate packets via different paths before animating"
+                      >
+                        Ack/echo listen window:
+                      </label>
+                      <input
+                        id="observation-window-3d"
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={observationWindowSec}
+                        onChange={(e) =>
+                          setObservationWindowSec(
+                            Math.max(1, Math.min(60, parseInt(e.target.value, 10) || 1))
+                          )
+                        }
+                        className="w-12 px-1 py-0.5 bg-background border border-border rounded text-xs text-center"
+                      />
+                      <span className="text-muted-foreground">sec</span>
+                    </div>
+                  </div>
+                </details>
                 <div className="border-t border-border pt-2 mt-1 flex flex-col gap-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <Checkbox

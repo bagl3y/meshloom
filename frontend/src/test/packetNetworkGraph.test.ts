@@ -110,10 +110,12 @@ describe('packetNetworkGraph', () => {
     const hiddenProjection = projectPacketNetwork(state, {
       showAmbiguousNodes: false,
       showAmbiguousPaths: false,
+      collapseLikelyKnownSiblingRepeaters: true,
     });
     const shownProjection = projectPacketNetwork(state, {
       showAmbiguousNodes: false,
       showAmbiguousPaths: true,
+      collapseLikelyKnownSiblingRepeaters: true,
     });
 
     expect(snapshotNeighborIds(state)).toEqual(
@@ -163,10 +165,12 @@ describe('packetNetworkGraph', () => {
     const projectedPath = projectCanonicalPath(state, ingested!.canonicalPath, {
       showAmbiguousNodes: false,
       showAmbiguousPaths: false,
+      collapseLikelyKnownSiblingRepeaters: true,
     });
     const projection = projectPacketNetwork(state, {
       showAmbiguousNodes: false,
       showAmbiguousPaths: false,
+      collapseLikelyKnownSiblingRepeaters: true,
     });
 
     expect(projectedPath.nodes).toEqual(['aaaaaaaaaaaa', '565656565656', 'self']);
@@ -205,5 +209,90 @@ describe('packetNetworkGraph', () => {
       'self',
     ]);
     expect(snapshotNeighborIds(state).get('?73')).toEqual(['?86', '?d2']);
+  });
+
+  it('collapses a likely ambiguous repeater into its known sibling when both share the same next hop', () => {
+    const selfKey = 'ffffffffffff0000000000000000000000000000000000000000000000000000';
+    const state = createPacketNetworkState('Me');
+    const context = buildPacketNetworkContext({
+      contacts: [
+        createContact('aaaaaaaaaaaa0000000000000000000000000000000000000000000000000000', 'Alice'),
+        createContact('cccccccccccc0000000000000000000000000000000000000000000000000000', 'Carol'),
+        createContact(
+          '3232323232320000000000000000000000000000000000000000000000000000',
+          'Relay A',
+          CONTACT_TYPE_REPEATER
+        ),
+        createContact(
+          '32ababababab0000000000000000000000000000000000000000000000000000',
+          'Relay B',
+          CONTACT_TYPE_REPEATER
+        ),
+        createContact(
+          '5656565656560000000000000000000000000000000000000000000000000000',
+          'Relay Next',
+          CONTACT_TYPE_REPEATER
+        ),
+      ],
+      config: createConfig(selfKey),
+      repeaterAdvertPaths: [
+        {
+          public_key: '3232323232320000000000000000000000000000000000000000000000000000',
+          paths: [
+            {
+              path: '',
+              path_len: 1,
+              next_hop: '565656565656',
+              first_seen: 1,
+              last_seen: 2,
+              heard_count: 4,
+            },
+          ],
+        },
+      ],
+      splitAmbiguousByTraffic: false,
+      useAdvertPathHints: true,
+    });
+
+    packetFixtures.set('graph-ambiguous-sibling', {
+      payloadType: PayloadType.TextMessage,
+      messageHash: 'graph-ambiguous-sibling',
+      pathBytes: ['32', '565656565656'],
+      srcHash: 'aaaaaaaaaaaa',
+      dstHash: 'ffffffffffff',
+      advertPubkey: null,
+      groupTextSender: null,
+      anonRequestPubkey: null,
+    });
+    packetFixtures.set('graph-known-sibling', {
+      payloadType: PayloadType.TextMessage,
+      messageHash: 'graph-known-sibling',
+      pathBytes: ['323232323232', '565656565656'],
+      srcHash: 'cccccccccccc',
+      dstHash: 'ffffffffffff',
+      advertPubkey: null,
+      groupTextSender: null,
+      anonRequestPubkey: null,
+    });
+
+    ingestPacketIntoPacketNetwork(state, context, createPacket('graph-ambiguous-sibling'));
+    ingestPacketIntoPacketNetwork(state, context, createPacket('graph-known-sibling'));
+
+    const collapsed = projectPacketNetwork(state, {
+      showAmbiguousNodes: false,
+      showAmbiguousPaths: true,
+      collapseLikelyKnownSiblingRepeaters: true,
+    });
+    const separated = projectPacketNetwork(state, {
+      showAmbiguousNodes: false,
+      showAmbiguousPaths: true,
+      collapseLikelyKnownSiblingRepeaters: false,
+    });
+
+    expect(collapsed.renderedNodeIds.has('?32')).toBe(false);
+    expect(collapsed.renderedNodeIds.has('323232323232')).toBe(true);
+    expect(collapsed.links.has('323232323232->aaaaaaaaaaaa')).toBe(true);
+    expect(separated.renderedNodeIds.has('?32')).toBe(true);
+    expect(separated.links.has('?32->aaaaaaaaaaaa')).toBe(true);
   });
 });
