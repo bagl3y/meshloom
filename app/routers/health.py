@@ -15,6 +15,7 @@ class HealthResponse(BaseModel):
     status: str
     radio_connected: bool
     radio_initializing: bool = False
+    radio_state: str = "disconnected"
     connection_info: str | None
     database_size_mb: float
     oldest_undecrypted_timestamp: int | None
@@ -56,12 +57,31 @@ async def build_health_data(radio_connected: bool, connection_info: str | None) 
     if not radio_connected:
         setup_complete = False
 
+    connection_desired = getattr(radio_manager, "connection_desired", True)
+    if not isinstance(connection_desired, bool):
+        connection_desired = True
+
+    is_reconnecting = getattr(radio_manager, "is_reconnecting", False)
+    if not isinstance(is_reconnecting, bool):
+        is_reconnecting = False
+
     radio_initializing = bool(radio_connected and (setup_in_progress or not setup_complete))
+    if not connection_desired:
+        radio_state = "paused"
+    elif radio_initializing:
+        radio_state = "initializing"
+    elif radio_connected:
+        radio_state = "connected"
+    elif is_reconnecting:
+        radio_state = "connecting"
+    else:
+        radio_state = "disconnected"
 
     return {
         "status": "ok" if radio_connected and not radio_initializing else "degraded",
         "radio_connected": radio_connected,
         "radio_initializing": radio_initializing,
+        "radio_state": radio_state,
         "connection_info": connection_info,
         "database_size_mb": db_size_mb,
         "oldest_undecrypted_timestamp": oldest_ts,

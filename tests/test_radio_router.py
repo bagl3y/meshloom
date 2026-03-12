@@ -15,6 +15,7 @@ from app.routers.radio import (
     RadioConfigResponse,
     RadioConfigUpdate,
     RadioSettings,
+    disconnect_radio,
     get_radio_config,
     reboot_radio,
     reconnect_radio,
@@ -394,3 +395,21 @@ class TestRebootAndReconnect:
                 await reconnect_radio()
 
         assert exc.value.status_code == 503
+
+    @pytest.mark.asyncio
+    async def test_disconnect_pauses_connection_attempts_and_broadcasts_health(self):
+        mock_rm = MagicMock()
+        mock_rm.pause_connection = AsyncMock()
+        mock_rm.connection_info = "BLE: AA:BB:CC:DD:EE:FF"
+
+        with (
+            patch("app.routers.radio.radio_manager", _runtime(mock_rm)),
+            patch("app.routers.radio.broadcast_health") as mock_broadcast,
+        ):
+            result = await disconnect_radio()
+
+        assert result["status"] == "ok"
+        assert result["connected"] is False
+        assert result["paused"] is True
+        mock_rm.pause_connection.assert_awaited_once()
+        mock_broadcast.assert_called_once_with(False, "BLE: AA:BB:CC:DD:EE:FF")

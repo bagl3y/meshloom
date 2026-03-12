@@ -101,6 +101,13 @@ export const api = {
     fetchJson<{ status: string; message: string }>('/radio/reboot', {
       method: 'POST',
     }),
+  disconnectRadio: () =>
+    fetchJson<{ status: string; message: string; connected: boolean; paused: boolean }>(
+      '/radio/disconnect',
+      {
+        method: 'POST',
+      }
+    ),
   reconnectRadio: () =>
     fetchJson<{ status: string; message: string; connected: boolean }>('/radio/reconnect', {
       method: 'POST',

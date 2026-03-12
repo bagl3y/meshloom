@@ -36,6 +36,7 @@ export interface HealthStatus {
   status: string;
   radio_connected: boolean;
   radio_initializing: boolean;
+  radio_state?: 'connected' | 'initializing' | 'connecting' | 'disconnected' | 'paused';
   connection_info: string | null;
   database_size_mb: number;
   oldest_undecrypted_timestamp: number | null;

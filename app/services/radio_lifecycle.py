@@ -147,9 +147,14 @@ async def run_post_connect_setup(radio_manager) -> None:
     logger.info("Post-connect setup complete")
 
 
-async def prepare_connected_radio(radio_manager, *, broadcast_on_success: bool = True) -> None:
+async def prepare_connected_radio(radio_manager, *, broadcast_on_success: bool = True) -> bool:
     """Finish setup for an already-connected radio and optionally broadcast health."""
     from app.websocket import broadcast_error, broadcast_health
+
+    if not radio_manager.connection_desired:
+        if radio_manager.is_connected:
+            await radio_manager.disconnect()
+        return False
 
     for attempt in range(1, POST_CONNECT_SETUP_MAX_ATTEMPTS + 1):
         try:
@@ -177,9 +182,15 @@ async def prepare_connected_radio(radio_manager, *, broadcast_on_success: bool =
             )
             raise RuntimeError("Post-connect setup timed out") from exc
 
+    if not radio_manager.connection_desired:
+        if radio_manager.is_connected:
+            await radio_manager.disconnect()
+        return False
+
     radio_manager._last_connected = True
     if broadcast_on_success:
         broadcast_health(True, radio_manager.connection_info)
+    return True
 
 
 async def reconnect_and_prepare_radio(
@@ -192,8 +203,7 @@ async def reconnect_and_prepare_radio(
     if not connected:
         return False
 
-    await prepare_connected_radio(radio_manager, broadcast_on_success=broadcast_on_success)
-    return True
+    return await prepare_connected_radio(radio_manager, broadcast_on_success=broadcast_on_success)
 
 
 async def connection_monitor_loop(radio_manager) -> None:
@@ -209,12 +219,20 @@ async def connection_monitor_loop(radio_manager) -> None:
             await asyncio.sleep(check_interval_seconds)
 
             current_connected = radio_manager.is_connected
+            connection_desired = radio_manager.connection_desired
 
             if radio_manager._last_connected and not current_connected:
                 logger.warning("Radio connection lost, broadcasting status change")
                 broadcast_health(False, radio_manager.connection_info)
                 radio_manager._last_connected = False
                 consecutive_setup_failures = 0
+
+            if not connection_desired:
+                if current_connected:
+                    logger.info("Radio connection paused by operator; disconnecting transport")
+                    await radio_manager.disconnect()
+                consecutive_setup_failures = 0
+                continue
 
             if not current_connected:
                 if not radio_manager.is_reconnecting and await reconnect_and_prepare_radio(

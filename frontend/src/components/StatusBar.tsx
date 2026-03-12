@@ -22,13 +22,24 @@ export function StatusBar({
   onSettingsClick,
   onMenuClick,
 }: StatusBarProps) {
+  const radioState =
+    health?.radio_state ??
+    (health?.radio_initializing
+      ? 'initializing'
+      : health?.radio_connected
+        ? 'connected'
+        : 'disconnected');
   const connected = health?.radio_connected ?? false;
-  const initializing = health?.radio_initializing ?? false;
-  const statusLabel = initializing
-    ? 'Radio Initializing'
-    : connected
-      ? 'Radio OK'
-      : 'Radio Disconnected';
+  const statusLabel =
+    radioState === 'paused'
+      ? 'Radio Paused'
+      : radioState === 'connecting'
+        ? 'Radio Connecting'
+        : radioState === 'initializing'
+          ? 'Radio Initializing'
+          : connected
+            ? 'Radio OK'
+            : 'Radio Disconnected';
   const [reconnecting, setReconnecting] = useState(false);
   const [currentTheme, setCurrentTheme] = useState(getSavedTheme);
 
@@ -97,7 +108,7 @@ export function StatusBar({
         <div
           className={cn(
             'w-2 h-2 rounded-full transition-colors',
-            initializing
+            radioState === 'initializing' || radioState === 'connecting'
               ? 'bg-warning'
               : connected
                 ? 'bg-status-connected shadow-[0_0_6px_hsl(var(--status-connected)/0.5)]'
@@ -128,13 +139,13 @@ export function StatusBar({
         </div>
       )}
 
-      {!connected && !initializing && (
+      {(radioState === 'disconnected' || radioState === 'paused') && (
         <button
           onClick={handleReconnect}
           disabled={reconnecting}
           className="px-3 py-1 bg-warning/10 border border-warning/20 text-warning rounded-md text-xs cursor-pointer hover:bg-warning/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {reconnecting ? 'Reconnecting...' : 'Reconnect'}
+          {reconnecting ? 'Reconnecting...' : radioState === 'paused' ? 'Connect' : 'Reconnect'}
         </button>
       )}
       <button

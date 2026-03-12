@@ -48,6 +48,19 @@ describe('StatusBar', () => {
     expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
   });
 
+  it('shows Radio Paused and a Connect action when reconnect attempts are paused', () => {
+    render(
+      <StatusBar
+        health={{ ...baseHealth, radio_state: 'paused' }}
+        config={null}
+        onSettingsClick={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('status', { name: 'Radio Paused' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+  });
+
   it('toggles between classic and light themes from the shortcut button', () => {
     localStorage.setItem('remoteterm-theme', 'cyberpunk');
 

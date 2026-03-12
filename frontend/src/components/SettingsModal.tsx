@@ -31,6 +31,8 @@ interface SettingsModalBaseProps {
   onSaveAppSettings: (update: AppSettingsUpdate) => Promise<void>;
   onSetPrivateKey: (key: string) => Promise<void>;
   onReboot: () => Promise<void>;
+  onDisconnect: () => Promise<void>;
+  onReconnect: () => Promise<void>;
   onAdvertise: () => Promise<void>;
   onHealthRefresh: () => Promise<void>;
   onRefreshAppSettings: () => Promise<void>;
@@ -59,6 +61,8 @@ export function SettingsModal(props: SettingsModalProps) {
     onSaveAppSettings,
     onSetPrivateKey,
     onReboot,
+    onDisconnect,
+    onReconnect,
     onAdvertise,
     onHealthRefresh,
     onRefreshAppSettings,
@@ -182,6 +186,8 @@ export function SettingsModal(props: SettingsModalProps) {
               onSaveAppSettings={onSaveAppSettings}
               onSetPrivateKey={onSetPrivateKey}
               onReboot={onReboot}
+              onDisconnect={onDisconnect}
+              onReconnect={onReconnect}
               onAdvertise={onAdvertise}
               onClose={onClose}
               className={sectionContentClass}

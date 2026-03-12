@@ -128,6 +128,13 @@ export function useRealtimeAppState({
         const prev = prevHealthRef.current;
         prevHealthRef.current = data;
         setHealth(data);
+        const nextRadioState =
+          data.radio_state ??
+          (data.radio_initializing
+            ? 'initializing'
+            : data.radio_connected
+              ? 'connected'
+              : 'disconnected');
         const initializationCompleted =
           prev !== null &&
           prev.radio_connected &&
@@ -144,9 +151,13 @@ export function useRealtimeAppState({
             });
             fetchConfig();
           } else {
-            toast.error('Radio disconnected', {
-              description: 'Check radio connection and power',
-            });
+            if (nextRadioState === 'paused') {
+              toast.success('Radio connection paused');
+            } else {
+              toast.error('Radio disconnected', {
+                description: 'Check radio connection and power',
+              });
+            }
           }
         }
 

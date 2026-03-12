@@ -121,6 +121,7 @@ class RadioManager:
     def __init__(self):
         self._meshcore: MeshCore | None = None
         self._connection_info: str | None = None
+        self._connection_desired: bool = True
         self._reconnect_task: asyncio.Task | None = None
         self._last_connected: bool = False
         self._reconnect_lock: asyncio.Lock | None = None
@@ -246,6 +247,20 @@ class RadioManager:
     def is_setup_complete(self) -> bool:
         return self._setup_complete
 
+    @property
+    def connection_desired(self) -> bool:
+        return self._connection_desired
+
+    def resume_connection(self) -> None:
+        """Allow connection monitor and manual reconnects to establish transport again."""
+        self._connection_desired = True
+
+    async def pause_connection(self) -> None:
+        """Stop automatic reconnect attempts and tear down any current transport."""
+        self._connection_desired = False
+        self._last_connected = False
+        await self.disconnect()
+
     async def connect(self) -> None:
         """Connect to the radio using the configured transport."""
         if self._meshcore is not None:
@@ -344,6 +359,10 @@ class RadioManager:
             self._reconnect_lock = asyncio.Lock()
 
         async with self._reconnect_lock:
+            if not self._connection_desired:
+                logger.info("Reconnect skipped because connection is paused by operator")
+                return False
+
             # If we became connected while waiting for the lock (another
             # reconnect succeeded ahead of us), skip the redundant attempt.
             if self.is_connected:
@@ -363,6 +382,11 @@ class RadioManager:
 
                 # Try to connect (will auto-detect if no port specified)
                 await self.connect()
+
+                if not self._connection_desired:
+                    logger.info("Reconnect completed after pause request; disconnecting transport")
+                    await self.disconnect()
+                    return False
 
                 if self.is_connected:
                     logger.info("Radio reconnected successfully at %s", self._connection_info)

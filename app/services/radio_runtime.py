@@ -74,10 +74,12 @@ class RadioRuntime:
     async def disconnect(self) -> None:
         await self.manager.disconnect()
 
-    async def prepare_connected(self, *, broadcast_on_success: bool = True) -> None:
+    async def prepare_connected(self, *, broadcast_on_success: bool = True) -> bool:
         from app.services.radio_lifecycle import prepare_connected_radio
 
-        await prepare_connected_radio(self.manager, broadcast_on_success=broadcast_on_success)
+        return await prepare_connected_radio(
+            self.manager, broadcast_on_success=broadcast_on_success
+        )
 
     async def reconnect_and_prepare(self, *, broadcast_on_success: bool = True) -> bool:
         from app.services.radio_lifecycle import reconnect_and_prepare_radio

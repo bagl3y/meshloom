@@ -68,6 +68,8 @@ function renderModal(overrides?: {
   onClose?: () => void;
   onSetPrivateKey?: (key: string) => Promise<void>;
   onReboot?: () => Promise<void>;
+  onDisconnect?: () => Promise<void>;
+  onReconnect?: () => Promise<void>;
   open?: boolean;
   pageMode?: boolean;
   externalSidebarNav?: boolean;
@@ -82,6 +84,8 @@ function renderModal(overrides?: {
   const onClose = overrides?.onClose ?? vi.fn();
   const onSetPrivateKey = overrides?.onSetPrivateKey ?? vi.fn(async () => {});
   const onReboot = overrides?.onReboot ?? vi.fn(async () => {});
+  const onDisconnect = overrides?.onDisconnect ?? vi.fn(async () => {});
+  const onReconnect = overrides?.onReconnect ?? vi.fn(async () => {});
 
   const commonProps = {
     open: overrides?.open ?? true,
@@ -94,6 +98,8 @@ function renderModal(overrides?: {
     onSaveAppSettings,
     onSetPrivateKey,
     onReboot,
+    onDisconnect,
+    onReconnect,
     onAdvertise: vi.fn(async () => {}),
     onHealthRefresh: vi.fn(async () => {}),
     onRefreshAppSettings,
@@ -116,6 +122,8 @@ function renderModal(overrides?: {
     onClose,
     onSetPrivateKey,
     onReboot,
+    onDisconnect,
+    onReconnect,
     view,
   };
 }
@@ -184,6 +192,15 @@ describe('SettingsModal', () => {
     openRadioSection();
 
     expect(screen.getByText(/Configured radio contact capacity/i)).toBeInTheDocument();
+  });
+
+  it('shows reconnect action when radio connection is paused', () => {
+    renderModal({
+      health: { ...baseHealth, radio_state: 'paused' },
+    });
+    openRadioSection();
+
+    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
   });
 
   it('saves changed max contacts value through onSaveAppSettings', async () => {
@@ -309,6 +326,8 @@ describe('SettingsModal', () => {
         onSaveAppSettings={onSaveAppSettings}
         onSetPrivateKey={vi.fn(async () => {})}
         onReboot={vi.fn(async () => {})}
+        onDisconnect={vi.fn(async () => {})}
+        onReconnect={vi.fn(async () => {})}
         onAdvertise={vi.fn(async () => {})}
         onHealthRefresh={vi.fn(async () => {})}
         onRefreshAppSettings={vi.fn(async () => {})}
@@ -330,6 +349,8 @@ describe('SettingsModal', () => {
       onSave,
       onSetPrivateKey,
       onReboot,
+      onDisconnect: vi.fn(async () => {}),
+      onReconnect: vi.fn(async () => {}),
     });
     openRadioSection();
 

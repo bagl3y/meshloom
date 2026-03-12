@@ -300,6 +300,29 @@ class TestConnectionMonitor:
 
         rm.post_connect_setup.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_monitor_does_not_reconnect_when_connection_is_paused(self):
+        """Operator-paused state suppresses reconnect attempts."""
+        from app.radio import RadioManager
+
+        rm = RadioManager()
+        rm._connection_desired = False
+        rm.reconnect = AsyncMock()
+        rm.post_connect_setup = AsyncMock()
+
+        async def _sleep(_seconds: float):
+            raise asyncio.CancelledError()
+
+        with patch("app.radio.asyncio.sleep", side_effect=_sleep):
+            await rm.start_connection_monitor()
+            try:
+                await rm._reconnect_task
+            finally:
+                await rm.stop_connection_monitor()
+
+        rm.reconnect.assert_not_called()
+        rm.post_connect_setup.assert_not_called()
+
 
 class TestReconnectLock:
     """Tests for reconnect() lock serialization — no duplicate reconnections."""
@@ -407,6 +430,24 @@ class TestReconnectLock:
             result2 = await rm.reconnect(broadcast_on_success=False)
             assert result2 is True
             assert attempt == 2
+
+    @pytest.mark.asyncio
+    async def test_reconnect_returns_false_when_connection_is_paused(self):
+        """Reconnect should no-op when the operator has paused connection attempts."""
+        from app.radio import RadioManager
+
+        rm = RadioManager()
+        rm._connection_desired = False
+        rm.connect = AsyncMock()
+
+        with (
+            patch("app.websocket.broadcast_health"),
+            patch("app.websocket.broadcast_error"),
+        ):
+            result = await rm.reconnect(broadcast_on_success=False)
+
+        assert result is False
+        rm.connect.assert_not_called()
 
 
 class TestSerialDeviceProbe:

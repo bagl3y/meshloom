@@ -73,6 +73,8 @@ export function App() {
     handleSaveConfig,
     handleSetPrivateKey,
     handleReboot,
+    handleDisconnect,
+    handleReconnect,
     handleAdvertise,
     handleHealthRefresh,
   } = useRadioControl();
@@ -338,6 +340,8 @@ export function App() {
     onSaveAppSettings: handleSaveAppSettings,
     onSetPrivateKey: handleSetPrivateKey,
     onReboot: handleReboot,
+    onDisconnect: handleDisconnect,
+    onReconnect: handleReconnect,
     onAdvertise: handleAdvertise,
     onHealthRefresh: handleHealthRefresh,
     onRefreshAppSettings: fetchAppSettings,

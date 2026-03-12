@@ -14,13 +14,14 @@ from app.services.radio_commands import (
     import_private_key_and_refresh_keystore,
 )
 from app.services.radio_runtime import radio_runtime as radio_manager
+from app.websocket import broadcast_health
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/radio", tags=["radio"])
 
 
-async def _prepare_connected(*, broadcast_on_success: bool) -> None:
-    await radio_manager.prepare_connected(broadcast_on_success=broadcast_on_success)
+async def _prepare_connected(*, broadcast_on_success: bool) -> bool:
+    return await radio_manager.prepare_connected(broadcast_on_success=broadcast_on_success)
 
 
 async def _reconnect_and_prepare(*, broadcast_on_success: bool) -> bool:
@@ -170,6 +171,8 @@ async def send_advertisement() -> dict:
 
 async def _attempt_reconnect() -> dict:
     """Shared reconnection logic for reboot and reconnect endpoints."""
+    radio_manager.resume_connection()
+
     if radio_manager.is_reconnecting:
         return {
             "status": "pending",
@@ -192,6 +195,20 @@ async def _attempt_reconnect() -> dict:
         )
 
     return {"status": "ok", "message": "Reconnected successfully", "connected": True}
+
+
+@router.post("/disconnect")
+async def disconnect_radio() -> dict:
+    """Disconnect from the radio and pause automatic reconnect attempts."""
+    logger.info("Manual radio disconnect requested")
+    await radio_manager.pause_connection()
+    broadcast_health(False, radio_manager.connection_info)
+    return {
+        "status": "ok",
+        "message": "Disconnected. Automatic reconnect is paused.",
+        "connected": False,
+        "paused": True,
+    }
 
 
 @router.post("/reboot")
@@ -228,8 +245,11 @@ async def reconnect_radio() -> dict:
 
         logger.info("Radio connected but setup incomplete, retrying setup")
         try:
-            await _prepare_connected(broadcast_on_success=True)
+            if not await _prepare_connected(broadcast_on_success=True):
+                raise HTTPException(status_code=503, detail="Radio connection is paused")
             return {"status": "ok", "message": "Setup completed", "connected": True}
+        except HTTPException:
+            raise
         except Exception as e:
             logger.exception("Post-connect setup failed")
             raise HTTPException(
