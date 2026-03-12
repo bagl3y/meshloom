@@ -462,3 +462,9 @@ Byte-perfect channel retries are user-triggered via `POST /api/messages/channel/
 The vendored MeshCore Python reader's `LOG_DATA` advert path assumes the decoded advert payload always contains at least 101 bytes of advert body and reads the flags byte with `pk_buf.read(1)[0]` without a length guard. If a malformed or truncated RF log frame slips through, `MessageReader.handle_rx()` can fail with `IndexError: index out of range` from `meshcore/reader.py` while parsing payload type `0x04` (advert).
 
 This does not indicate database corruption or a message-store bug. It is a parser-hardening gap in `meshcore_py`: the reader does not fully mirror firmware-side packet/path validation before attempting advert decode. The practical effect is usually a one-off asyncio task failure for that packet while later packets continue processing normally.
+
+### Channel-message dedup intentionally treats same-name/same-text/same-second channel sends as indistinguishable because they are
+
+Channel message storage deduplicates on `(type, conversation_key, text, sender_timestamp)`. Reviewers often flag this as "missing sender identity," but for channel messages the stored `text` already includes the displayed sender label (for example `Alice: hello`). That means two different users only collide when they produce the same rendered sender name, the same body text, and the same sender timestamp.
+
+In that case, RemoteTerm usually does not have enough information to distinguish "two independent same-name sends" from "one message observed again as an echo/repeat." Without a reliable sender identity at ingest, treating those packets as the same message is an accepted limitation of the observable data model, not an obvious correctness bug.
