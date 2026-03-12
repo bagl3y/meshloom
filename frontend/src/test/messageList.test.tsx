@@ -7,6 +7,7 @@ import { MessageList } from '../components/MessageList';
 import type { Message } from '../types';
 
 const scrollIntoViewMock = vi.fn();
+const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
 
 function createMessage(overrides: Partial<Message> = {}): Message {
   return {
@@ -33,6 +34,11 @@ describe('MessageList channel sender rendering', () => {
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
       configurable: true,
       value: scrollIntoViewMock,
+      writable: true,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value: originalGetBoundingClientRect,
       writable: true,
     });
   });
@@ -154,5 +160,69 @@ describe('MessageList channel sender rendering', () => {
     expect(screen.queryByRole('button', { name: 'Jump to unread' })).not.toBeInTheDocument();
     expect(screen.getByText('Unread messages')).toBeInTheDocument();
     expect(scrollIntoViewMock).toHaveBeenCalled();
+  });
+
+  it('hides the jump-to-unread button when the unread marker is already visible', () => {
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      writable: true,
+      value: function () {
+        const element = this as HTMLElement;
+        if (element.textContent?.includes('Unread messages')) {
+          return {
+            top: 200,
+            bottom: 240,
+            left: 0,
+            right: 300,
+            width: 300,
+            height: 40,
+            x: 0,
+            y: 200,
+            toJSON: () => '',
+          };
+        }
+        if (element.className.includes('overflow-y-auto')) {
+          return {
+            top: 100,
+            bottom: 500,
+            left: 0,
+            right: 400,
+            width: 400,
+            height: 400,
+            x: 0,
+            y: 100,
+            toJSON: () => '',
+          };
+        }
+        return {
+          top: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          width: 0,
+          height: 0,
+          x: 0,
+          y: 0,
+          toJSON: () => '',
+        };
+      },
+    });
+
+    const messages = [
+      createMessage({ id: 1, received_at: 1700000001, text: 'Alice: older' }),
+      createMessage({ id: 2, received_at: 1700000010, text: 'Alice: newer' }),
+    ];
+
+    render(
+      <MessageList
+        messages={messages}
+        contacts={[]}
+        loading={false}
+        unreadMarkerLastReadAt={1700000005}
+      />
+    );
+
+    expect(screen.getByText('Unread messages')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Jump to unread' })).not.toBeInTheDocument();
   });
 });

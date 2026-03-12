@@ -86,6 +86,30 @@ function isMessageConversation(conversation: Conversation | null): conversation 
   return !!conversation && !['raw', 'map', 'visualizer', 'search'].includes(conversation.type);
 }
 
+function appendUniqueMessages(current: Message[], incoming: Message[]): Message[] {
+  if (incoming.length === 0) return current;
+
+  const seenIds = new Set(current.map((msg) => msg.id));
+  const seenContent = new Set(current.map((msg) => getMessageContentKey(msg)));
+  const additions: Message[] = [];
+
+  for (const msg of incoming) {
+    const contentKey = getMessageContentKey(msg);
+    if (seenIds.has(msg.id) || seenContent.has(contentKey)) {
+      continue;
+    }
+    seenIds.add(msg.id);
+    seenContent.add(contentKey);
+    additions.push(msg);
+  }
+
+  if (additions.length === 0) {
+    return current;
+  }
+
+  return [...current, ...additions];
+}
+
 export function useConversationMessages(
   activeConversation: Conversation | null,
   targetMessageId?: number | null
@@ -139,6 +163,7 @@ export function useConversationMessages(
   const fetchingConversationIdRef = useRef<string | null>(null);
   const latestReconcileRequestIdRef = useRef(0);
   const messagesRef = useRef<Message[]>([]);
+  const loadingOlderRef = useRef(false);
   const hasOlderMessagesRef = useRef(false);
   const hasNewerMessagesRef = useRef(false);
   const prevConversationIdRef = useRef<string | null>(null);
@@ -146,6 +171,10 @@ export function useConversationMessages(
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    loadingOlderRef.current = loadingOlder;
+  }, [loadingOlder]);
 
   useEffect(() => {
     hasOlderMessagesRef.current = hasOlderMessages;
@@ -252,7 +281,13 @@ export function useConversationMessages(
   );
 
   const fetchOlderMessages = useCallback(async () => {
-    if (!isMessageConversation(activeConversation) || loadingOlder || !hasOlderMessages) return;
+    if (
+      !isMessageConversation(activeConversation) ||
+      loadingOlderRef.current ||
+      !hasOlderMessagesRef.current
+    ) {
+      return;
+    }
 
     const conversationId = activeConversation.id;
     const oldestMessage = messages.reduce(
@@ -266,6 +301,7 @@ export function useConversationMessages(
     );
     if (!oldestMessage) return;
 
+    loadingOlderRef.current = true;
     setLoadingOlder(true);
     try {
       const data = await api.getMessages({
@@ -281,9 +317,17 @@ export function useConversationMessages(
       const dataWithPendingAck = data.map((msg) => applyPendingAck(msg));
 
       if (dataWithPendingAck.length > 0) {
-        setMessages((prev) => [...prev, ...dataWithPendingAck]);
-        for (const msg of dataWithPendingAck) {
-          seenMessageContent.current.add(getMessageContentKey(msg));
+        let nextMessages: Message[] | null = null;
+        setMessages((prev) => {
+          const merged = appendUniqueMessages(prev, dataWithPendingAck);
+          if (merged !== prev) {
+            nextMessages = merged;
+          }
+          return merged;
+        });
+        if (nextMessages) {
+          messagesRef.current = nextMessages;
+          syncSeenContent(nextMessages);
         }
       }
       setHasOlderMessages(dataWithPendingAck.length >= MESSAGE_PAGE_SIZE);
@@ -293,9 +337,10 @@ export function useConversationMessages(
         description: err instanceof Error ? err.message : 'Check your connection',
       });
     } finally {
+      loadingOlderRef.current = false;
       setLoadingOlder(false);
     }
-  }, [activeConversation, applyPendingAck, hasOlderMessages, loadingOlder, messages]);
+  }, [activeConversation, applyPendingAck, messages, syncSeenContent]);
 
   const fetchNewerMessages = useCallback(async () => {
     if (!isMessageConversation(activeConversation) || loadingNewer || !hasNewerMessages) return;
@@ -379,6 +424,7 @@ export function useConversationMessages(
     }
 
     setLoadingOlder(false);
+    loadingOlderRef.current = false;
     setLoadingNewer(false);
     if (conversationChanged) {
       setHasNewerMessages(false);

@@ -204,11 +204,9 @@ export function MessageList({
   const resendTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
   const [showJumpToUnread, setShowJumpToUnread] = useState(false);
+  const [jumpToUnreadDismissed, setJumpToUnreadDismissed] = useState(false);
   const targetScrolledRef = useRef(false);
   const unreadMarkerRef = useRef<HTMLButtonElement | HTMLDivElement | null>(null);
-  const setUnreadMarkerElement = useCallback((node: HTMLButtonElement | HTMLDivElement | null) => {
-    unreadMarkerRef.current = node;
-  }, []);
 
   // Capture scroll state in the scroll handler BEFORE any state updates
   const scrollStateRef = useRef({
@@ -330,68 +328,6 @@ export function MessageList({
     };
   }, [messages, onResendChannelMessage]);
 
-  // Refs for scroll handler to read without causing callback recreation
-  const onLoadOlderRef = useRef(onLoadOlder);
-  const loadingOlderRef = useRef(loadingOlder);
-  const hasOlderMessagesRef = useRef(hasOlderMessages);
-  const onLoadNewerRef = useRef(onLoadNewer);
-  const loadingNewerRef = useRef(loadingNewer);
-  const hasNewerMessagesRef = useRef(hasNewerMessages);
-  onLoadOlderRef.current = onLoadOlder;
-  loadingOlderRef.current = loadingOlder;
-  hasOlderMessagesRef.current = hasOlderMessages;
-  onLoadNewerRef.current = onLoadNewer;
-  loadingNewerRef.current = loadingNewer;
-  hasNewerMessagesRef.current = hasNewerMessages;
-
-  // Handle scroll - capture state and detect when user is near top/bottom
-  // Stable callback: reads changing values from refs, never recreated.
-  const handleScroll = useCallback(() => {
-    if (!listRef.current) return;
-
-    const { scrollTop, scrollHeight, clientHeight } = listRef.current;
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-
-    // Always capture current scroll state (needed for scroll preservation)
-    scrollStateRef.current = {
-      scrollTop,
-      scrollHeight,
-      clientHeight,
-      wasNearTop: scrollTop < 150,
-      wasNearBottom: distanceFromBottom < 100,
-    };
-
-    // Show scroll-to-bottom button when not near the bottom (more than 100px away)
-    setShowScrollToBottom(distanceFromBottom > 100);
-
-    if (!onLoadOlderRef.current || loadingOlderRef.current || !hasOlderMessagesRef.current) {
-      // skip older load
-    } else if (scrollTop < 100) {
-      onLoadOlderRef.current();
-    }
-
-    // Trigger load newer when within 100px of bottom
-    if (
-      onLoadNewerRef.current &&
-      !loadingNewerRef.current &&
-      hasNewerMessagesRef.current &&
-      distanceFromBottom < 100
-    ) {
-      onLoadNewerRef.current();
-    }
-  }, []);
-
-  // Scroll to bottom handler (or jump to bottom if viewing historical messages)
-  const scrollToBottom = useCallback(() => {
-    if (hasNewerMessages && onJumpToBottom) {
-      onJumpToBottom();
-      return;
-    }
-    if (listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
-    }
-  }, [hasNewerMessages, onJumpToBottom]);
-
   // Sort messages by received_at ascending (oldest first)
   // Note: Deduplication is handled by useConversationMessages.addMessageIfNew()
   // and the database UNIQUE constraint on (type, conversation_key, text, sender_timestamp)
@@ -408,9 +344,116 @@ export function MessageList({
     return sortedMessages.findIndex((msg) => !msg.outgoing && msg.received_at > boundary);
   }, [sortedMessages, unreadMarkerLastReadAt]);
 
+  const syncJumpToUnreadVisibility = useCallback(() => {
+    if (unreadMarkerIndex === -1 || jumpToUnreadDismissed) {
+      setShowJumpToUnread(false);
+      return;
+    }
+
+    const marker = unreadMarkerRef.current;
+    const list = listRef.current;
+    if (!marker || !list) {
+      setShowJumpToUnread(true);
+      return;
+    }
+
+    const markerRect = marker.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+
+    if (
+      markerRect.width === 0 ||
+      markerRect.height === 0 ||
+      listRect.width === 0 ||
+      listRect.height === 0
+    ) {
+      setShowJumpToUnread(true);
+      return;
+    }
+
+    const markerVisible =
+      markerRect.top >= listRect.top &&
+      markerRect.bottom <= listRect.bottom &&
+      markerRect.left >= listRect.left &&
+      markerRect.right <= listRect.right;
+
+    setShowJumpToUnread(!markerVisible);
+  }, [jumpToUnreadDismissed, unreadMarkerIndex]);
+
+  // Refs for scroll handler to read without causing callback recreation
+  const onLoadOlderRef = useRef(onLoadOlder);
+  const loadingOlderRef = useRef(loadingOlder);
+  const hasOlderMessagesRef = useRef(hasOlderMessages);
+  const onLoadNewerRef = useRef(onLoadNewer);
+  const loadingNewerRef = useRef(loadingNewer);
+  const hasNewerMessagesRef = useRef(hasNewerMessages);
+  onLoadOlderRef.current = onLoadOlder;
+  loadingOlderRef.current = loadingOlder;
+  hasOlderMessagesRef.current = hasOlderMessages;
+  onLoadNewerRef.current = onLoadNewer;
+  loadingNewerRef.current = loadingNewer;
+  hasNewerMessagesRef.current = hasNewerMessages;
+
+  const setUnreadMarkerElement = useCallback(
+    (node: HTMLButtonElement | HTMLDivElement | null) => {
+      unreadMarkerRef.current = node;
+      syncJumpToUnreadVisibility();
+    },
+    [syncJumpToUnreadVisibility]
+  );
+
   useEffect(() => {
-    setShowJumpToUnread(unreadMarkerIndex !== -1);
+    setJumpToUnreadDismissed(false);
   }, [unreadMarkerIndex]);
+
+  useLayoutEffect(() => {
+    syncJumpToUnreadVisibility();
+  }, [messages, syncJumpToUnreadVisibility]);
+
+  // Handle scroll - capture state and detect when user is near top/bottom
+  // Stable callback: reads changing values from refs, never recreated.
+  const handleScroll = useCallback(() => {
+    if (!listRef.current) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = listRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+    scrollStateRef.current = {
+      scrollTop,
+      scrollHeight,
+      clientHeight,
+      wasNearTop: scrollTop < 150,
+      wasNearBottom: distanceFromBottom < 100,
+    };
+
+    setShowScrollToBottom(distanceFromBottom > 100);
+
+    if (!onLoadOlderRef.current || loadingOlderRef.current || !hasOlderMessagesRef.current) {
+      // skip older load
+    } else if (scrollTop < 100) {
+      onLoadOlderRef.current();
+    }
+
+    if (
+      onLoadNewerRef.current &&
+      !loadingNewerRef.current &&
+      hasNewerMessagesRef.current &&
+      distanceFromBottom < 100
+    ) {
+      onLoadNewerRef.current();
+    }
+    syncJumpToUnreadVisibility();
+  }, [syncJumpToUnreadVisibility]);
+
+  // Scroll to bottom handler (or jump to bottom if viewing historical messages)
+  const scrollToBottom = useCallback(() => {
+    if (hasNewerMessages && onJumpToBottom) {
+      onJumpToBottom();
+      return;
+    }
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
+  }, [hasNewerMessages, onJumpToBottom]);
 
   // Sender info for outgoing messages (used by path modal on own messages)
   const selfSenderInfo = useMemo<SenderInfo>(
@@ -841,6 +884,7 @@ export function MessageList({
             type="button"
             onClick={() => {
               unreadMarkerRef.current?.scrollIntoView?.({ block: 'center' });
+              setJumpToUnreadDismissed(true);
               setShowJumpToUnread(false);
             }}
             className="pointer-events-auto h-9 rounded-full bg-card hover:bg-accent border border-border px-3 text-sm font-medium shadow-lg transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
