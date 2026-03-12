@@ -22,7 +22,7 @@ A web interface for MeshCore mesh radio networks. The backend connects to a Mesh
 
 Ancillary AGENTS.md files which should generally not be reviewed unless specific work is being performed on those features include:
 - `app/fanout/AGENTS_fanout.md` - Fanout bus architecture (MQTT, bots, webhooks, Apprise, SQS)
-- `frontend/src/components/AGENTS_packet_visualizer.md` - Packet visualizer (force-directed graph, advert-path identity, layout engine)
+- `frontend/src/components/visualizer/AGENTS_packet_visualizer.md` - Packet visualizer (force-directed graph, advert-path identity, layout engine)
 
 ## Architecture Overview
 
@@ -295,9 +295,12 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | PUT | `/api/radio/private-key` | Import private key to radio |
 | POST | `/api/radio/advertise` | Send advertisement |
 | POST | `/api/radio/reboot` | Reboot radio or reconnect if disconnected |
+| POST | `/api/radio/disconnect` | Disconnect from radio and pause automatic reconnect attempts |
 | POST | `/api/radio/reconnect` | Manual radio reconnection |
 | GET | `/api/contacts` | List contacts |
+| GET | `/api/contacts/analytics` | Unified keyed-or-name contact analytics payload |
 | GET | `/api/contacts/repeaters/advert-paths` | List recent unique advert paths for all contacts |
+| GET | `/api/contacts/name-detail` | Channel activity summary for a sender name without a resolved key |
 | GET | `/api/contacts/{public_key}` | Get contact by public key or prefix |
 | GET | `/api/contacts/{public_key}/detail` | Comprehensive contact profile (stats, name history, paths) |
 | GET | `/api/contacts/{public_key}/advert-paths` | List recent unique advert paths for a contact |
