@@ -15,6 +15,7 @@ export interface RadioConfig {
   radio: RadioSettings;
   path_hash_mode: number;
   path_hash_mode_supported: boolean;
+  advert_location_source?: 'off' | 'node_gps' | 'saved_coords';
 }
 
 export interface RadioConfigUpdate {
@@ -24,6 +25,7 @@ export interface RadioConfigUpdate {
   tx_power?: number;
   radio?: RadioSettings;
   path_hash_mode?: number;
+  advert_location_source?: 'off' | 'node_gps' | 'saved_coords';
 }
 
 export interface FanoutStatusEntry {

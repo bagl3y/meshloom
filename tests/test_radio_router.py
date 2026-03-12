@@ -70,12 +70,14 @@ def _mock_meshcore_with_info():
         "radio_bw": 62.5,
         "radio_sf": 7,
         "radio_cr": 5,
+        "adv_loc_policy": 2,
     }
     mc.commands = MagicMock()
     mc.commands.set_name = AsyncMock()
     mc.commands.set_coords = AsyncMock()
     mc.commands.set_tx_power = AsyncMock()
     mc.commands.set_radio = AsyncMock()
+    mc.commands.set_advert_loc_policy = AsyncMock(return_value=_radio_result())
     mc.commands.send_appstart = AsyncMock()
     mc.commands.import_private_key = AsyncMock(return_value=_radio_result())
     return mc
@@ -94,6 +96,17 @@ class TestGetRadioConfig:
         assert response.lon == 20.0
         assert response.radio.freq == 910.525
         assert response.radio.cr == 5
+        assert response.advert_location_source == "saved_coords"
+
+    @pytest.mark.asyncio
+    async def test_maps_node_gps_advert_location_source(self):
+        mc = _mock_meshcore_with_info()
+        mc.self_info["adv_loc_policy"] = 1
+
+        with patch("app.routers.radio.require_connected", return_value=mc):
+            response = await get_radio_config()
+
+        assert response.advert_location_source == "node_gps"
 
     @pytest.mark.asyncio
     async def test_returns_503_when_self_info_missing(self):
@@ -136,6 +149,35 @@ class TestUpdateRadioConfig:
         mc.commands.set_radio.assert_not_awaited()
         mc.commands.send_appstart.assert_awaited_once()
         mock_sync_time.assert_awaited_once()
+        assert result == expected
+
+    @pytest.mark.asyncio
+    async def test_updates_advert_location_source(self):
+        mc = _mock_meshcore_with_info()
+        expected = RadioConfigResponse(
+            public_key="aa" * 32,
+            name="NodeA",
+            lat=10.0,
+            lon=20.0,
+            tx_power=17,
+            max_tx_power=22,
+            radio=RadioSettings(freq=910.525, bw=62.5, sf=7, cr=5),
+            path_hash_mode=0,
+            path_hash_mode_supported=False,
+            advert_location_source="node_gps",
+        )
+
+        with (
+            patch("app.routers.radio.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.radio.sync_radio_time", new_callable=AsyncMock),
+            patch(
+                "app.routers.radio.get_radio_config", new_callable=AsyncMock, return_value=expected
+            ),
+        ):
+            result = await update_radio_config(RadioConfigUpdate(advert_location_source="node_gps"))
+
+        mc.commands.set_advert_loc_policy.assert_awaited_once_with(1)
         assert result == expected
 
     def test_model_rejects_negative_path_hash_mode(self):

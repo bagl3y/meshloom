@@ -32,6 +32,22 @@ async def apply_radio_config_update(
     sync_radio_time_fn: Callable[[Any], Awaitable[Any]],
 ) -> None:
     """Apply a validated radio-config update to the connected radio."""
+    if update.advert_location_source is not None:
+        advert_loc_policy = {
+            "off": 0,
+            "node_gps": 1,
+            "saved_coords": 2,
+        }[update.advert_location_source]
+        logger.info(
+            "Setting advert location policy to %s",
+            update.advert_location_source,
+        )
+        result = await mc.commands.set_advert_loc_policy(advert_loc_policy)
+        if result is not None and result.type == EventType.ERROR:
+            raise RadioCommandRejectedError(
+                f"Failed to set advert location policy: {result.payload}"
+            )
+
     if update.name is not None:
         logger.info("Setting radio name to %s", update.name)
         await mc.commands.set_name(update.name)

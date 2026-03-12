@@ -1,4 +1,5 @@
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -51,6 +52,10 @@ class RadioConfigResponse(BaseModel):
     path_hash_mode_supported: bool = Field(
         default=False, description="Whether firmware supports path hash mode setting"
     )
+    advert_location_source: Literal["off", "node_gps", "saved_coords"] = Field(
+        default="saved_coords",
+        description="Source used for location included in adverts",
+    )
 
 
 class RadioConfigUpdate(BaseModel):
@@ -64,6 +69,10 @@ class RadioConfigUpdate(BaseModel):
         ge=0,
         le=2,
         description="Path hash mode (0=1-byte, 1=2-byte, 2=3-byte)",
+    )
+    advert_location_source: Literal["off", "node_gps", "saved_coords"] | None = Field(
+        default=None,
+        description="Source used for location included in adverts",
     )
 
 
@@ -80,6 +89,15 @@ async def get_radio_config() -> RadioConfigResponse:
     if not info:
         raise HTTPException(status_code=503, detail="Radio info not available")
 
+    adv_loc_policy = info.get("adv_loc_policy", 2)
+    advert_location_source: Literal["off", "node_gps", "saved_coords"]
+    if adv_loc_policy == 0:
+        advert_location_source = "off"
+    elif adv_loc_policy == 1:
+        advert_location_source = "node_gps"
+    else:
+        advert_location_source = "saved_coords"
+
     return RadioConfigResponse(
         public_key=info.get("public_key", ""),
         name=info.get("name", ""),
@@ -95,6 +113,7 @@ async def get_radio_config() -> RadioConfigResponse:
         ),
         path_hash_mode=radio_manager.path_hash_mode,
         path_hash_mode_supported=radio_manager.path_hash_mode_supported,
+        advert_location_source=advert_location_source,
     )
 
 

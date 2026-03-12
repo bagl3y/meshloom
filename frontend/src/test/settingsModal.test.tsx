@@ -32,6 +32,7 @@ const baseConfig: RadioConfig = {
   },
   path_hash_mode: 0,
   path_hash_mode_supported: false,
+  advert_location_source: 'saved_coords',
 };
 
 const baseHealth: HealthStatus = {
@@ -201,6 +202,22 @@ describe('SettingsModal', () => {
     openRadioSection();
 
     expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+  });
+
+  it('saves advert location source through radio config save', async () => {
+    const { onSave } = renderModal();
+    openRadioSection();
+
+    fireEvent.change(screen.getByLabelText('Advert Location Source'), {
+      target: { value: 'node_gps' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ advert_location_source: 'node_gps' })
+      );
+    });
   });
 
   it('saves changed max contacts value through onSaveAppSettings', async () => {
