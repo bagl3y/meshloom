@@ -223,7 +223,7 @@ MESHCORE_SERIAL_PORT=/dev/cu.usbserial-0001 uv run uvicorn app.main:app --reload
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev    # http://localhost:5173, proxies /api to :8000
 ```
 
@@ -237,7 +237,7 @@ Terminal 2: `cd frontend && npm run dev`
 In production, the FastAPI backend serves the compiled frontend. Build the frontend first:
 
 ```bash
-cd frontend && npm install && npm run build && cd ..
+cd frontend && npm ci && npm run build && cd ..
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 

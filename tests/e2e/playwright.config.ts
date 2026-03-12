@@ -38,8 +38,8 @@ export default defineConfig({
     command: `bash -c '
       echo "[e2e] $(date +%T.%3N) Starting webServer command..."
       if [ ! -d frontend/dist ]; then
-        echo "[e2e] $(date +%T.%3N) frontend/dist missing — running npm install + build"
-        cd frontend && npm install && npm run build
+        echo "[e2e] $(date +%T.%3N) frontend/dist missing — running npm ci + build"
+        cd frontend && npm ci && npm run build
         echo "[e2e] $(date +%T.%3N) Frontend build complete"
       else
         echo "[e2e] $(date +%T.%3N) frontend/dist exists — skipping build"

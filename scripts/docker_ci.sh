@@ -35,7 +35,7 @@ run_combo() {
             npm i -g npm@${npm_version}
             echo 'Using Node:' \$(node -v)
             echo 'Using npm:' \$(npm -v)
-            npm install
+            npm ci
             npm run build
         "
 
