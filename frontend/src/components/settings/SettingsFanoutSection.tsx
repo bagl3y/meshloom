@@ -1459,7 +1459,8 @@ export function SettingsFanoutSection({
   return (
     <div className={cn('mx-auto w-full max-w-[800px] space-y-4', className)}>
       <div className="rounded-md border border-warning/50 bg-warning/10 px-4 py-3 text-sm text-warning">
-        Integrations are an experimental feature in open beta.
+        Integrations are an experimental feature in open beta, and allow you to fanout raw and
+        decrypted messages across multiple services for automation, analysis, or archiving.
       </div>
 
       {health?.bots_disabled && (
