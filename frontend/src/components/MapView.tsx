@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { Fragment, useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
 import type { LatLngBoundsExpression, CircleMarker as LeafletCircleMarker } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -13,18 +13,27 @@ interface MapViewProps {
   focusedKey?: string | null;
 }
 
+const MAP_RECENCY_COLORS = {
+  recent: '#06b6d4',
+  today: '#2563eb',
+  stale: '#f59e0b',
+  old: '#64748b',
+} as const;
+const MAP_MARKER_STROKE = '#0f172a';
+const MAP_REPEATER_RING = '#f8fafc';
+
 // Calculate marker color based on how recently the contact was heard
 function getMarkerColor(lastSeen: number | null | undefined): string {
-  if (lastSeen == null) return '#9ca3af';
+  if (lastSeen == null) return MAP_RECENCY_COLORS.old;
   const now = Date.now() / 1000;
   const age = now - lastSeen;
   const hour = 3600;
   const day = 86400;
 
-  if (age < hour) return '#22c55e'; // Bright green - less than 1 hour
-  if (age < day) return '#4ade80'; // Light green - less than 1 day
-  if (age < 3 * day) return '#a3e635'; // Yellow-green - less than 3 days
-  return '#9ca3af'; // Gray - older (up to 7 days)
+  if (age < hour) return MAP_RECENCY_COLORS.recent;
+  if (age < day) return MAP_RECENCY_COLORS.today;
+  if (age < 3 * day) return MAP_RECENCY_COLORS.stale;
+  return MAP_RECENCY_COLORS.old;
 }
 
 // Component to handle map bounds fitting
@@ -147,16 +156,44 @@ export function MapView({ contacts, focusedKey }: MapViewProps) {
         </span>
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-[#22c55e]" aria-hidden="true" /> &lt;1h
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: MAP_RECENCY_COLORS.recent }}
+              aria-hidden="true"
+            />{' '}
+            &lt;1h
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-[#4ade80]" aria-hidden="true" /> &lt;1d
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: MAP_RECENCY_COLORS.today }}
+              aria-hidden="true"
+            />{' '}
+            &lt;1d
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-[#a3e635]" aria-hidden="true" /> &lt;3d
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: MAP_RECENCY_COLORS.stale }}
+              aria-hidden="true"
+            />{' '}
+            &lt;3d
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-[#9ca3af]" aria-hidden="true" /> older
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: MAP_RECENCY_COLORS.old }}
+              aria-hidden="true"
+            />{' '}
+            older
+          </span>
+          <span className="flex items-center gap-1">
+            <span
+              className="w-3 h-3 rounded-full border-2"
+              style={{ borderColor: MAP_REPEATER_RING, backgroundColor: MAP_RECENCY_COLORS.today }}
+              aria-hidden="true"
+            />{' '}
+            repeater
           </span>
         </div>
       </div>
@@ -188,37 +225,40 @@ export function MapView({ contacts, focusedKey }: MapViewProps) {
               contact.last_seen != null
                 ? formatTime(contact.last_seen)
                 : 'Never heard by this server';
+            const radius = isRepeater ? 10 : 7;
 
             return (
-              <CircleMarker
-                key={contact.public_key}
-                ref={(ref) => setMarkerRef(contact.public_key, ref)}
-                center={[contact.lat!, contact.lon!]}
-                radius={isRepeater ? 10 : 7}
-                pathOptions={{
-                  color: isRepeater ? color : '#000',
-                  fillColor: color,
-                  fillOpacity: 0.8,
-                  weight: isRepeater ? 0 : 1,
-                }}
-              >
-                <Popup>
-                  <div className="text-sm">
-                    <div className="font-medium flex items-center gap-1">
-                      {isRepeater && (
-                        <span title="Repeater" aria-hidden="true">
-                          🛜
-                        </span>
-                      )}
-                      {displayName}
+              <Fragment key={contact.public_key}>
+                <CircleMarker
+                  key={contact.public_key}
+                  ref={(ref) => setMarkerRef(contact.public_key, ref)}
+                  center={[contact.lat!, contact.lon!]}
+                  radius={radius}
+                  pathOptions={{
+                    color: isRepeater ? MAP_REPEATER_RING : MAP_MARKER_STROKE,
+                    fillColor: color,
+                    fillOpacity: 0.9,
+                    weight: isRepeater ? 3 : 2,
+                  }}
+                >
+                  <Popup>
+                    <div className="text-sm">
+                      <div className="font-medium flex items-center gap-1">
+                        {isRepeater && (
+                          <span title="Repeater" aria-hidden="true">
+                            🛜
+                          </span>
+                        )}
+                        {displayName}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">Last heard: {lastHeardLabel}</div>
+                      <div className="text-xs text-gray-400 mt-1 font-mono">
+                        {contact.lat!.toFixed(5)}, {contact.lon!.toFixed(5)}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">Last heard: {lastHeardLabel}</div>
-                    <div className="text-xs text-gray-400 mt-1 font-mono">
-                      {contact.lat!.toFixed(5)}, {contact.lon!.toFixed(5)}
-                    </div>
-                  </div>
-                </Popup>
-              </CircleMarker>
+                  </Popup>
+                </CircleMarker>
+              </Fragment>
             );
           })}
         </MapContainer>
