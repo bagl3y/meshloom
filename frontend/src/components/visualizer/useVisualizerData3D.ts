@@ -10,10 +10,20 @@ import {
   type ForceLink3D,
   type Simulation3D,
 } from 'd3-force-3d';
-import { PayloadType } from '@michaelhart/meshcore-decoder';
 
+import type { PacketNetworkNode } from '../../networkGraph/packetNetworkGraph';
 import {
-  CONTACT_TYPE_REPEATER,
+  buildPacketNetworkContext,
+  clearPacketNetworkState,
+  createPacketNetworkState,
+  ensureSelfNode,
+  ingestPacketIntoPacketNetwork,
+  projectCanonicalPath,
+  projectPacketNetwork,
+  prunePacketNetworkState,
+  snapshotNeighborIds,
+} from '../../networkGraph/packetNetworkGraph';
+import {
   type Contact,
   type ContactAdvertPathSummary,
   type RadioConfig,
@@ -22,24 +32,14 @@ import {
 import { getRawPacketObservationKey } from '../../utils/rawPacketIdentity';
 import {
   buildLinkKey,
-  type Particle,
-  type PathStep,
-  type PendingPacket,
-  type RepeaterTrafficData,
-  PARTICLE_COLOR_MAP,
-  PARTICLE_SPEED,
-  analyzeRepeaterTraffic,
-  buildAmbiguousRepeaterLabel,
-  buildAmbiguousRepeaterNodeId,
-  compactPathSteps,
   dedupeConsecutive,
   generatePacketKey,
-  getNodeType,
-  getPacketLabel,
-  parsePacket,
-  recordTrafficObservation,
+  type Particle,
+  PARTICLE_COLOR_MAP,
+  PARTICLE_SPEED,
+  type PendingPacket,
 } from '../../utils/visualizerUtils';
-import { type GraphLink, type GraphNode, normalizePacketTimestampMs } from './shared';
+import { type GraphLink, type GraphNode } from './shared';
 
 export interface UseVisualizerData3DOptions {
   packets: RawPacket[];
@@ -61,10 +61,37 @@ export interface UseVisualizerData3DOptions {
 export interface VisualizerData3D {
   nodes: Map<string, GraphNode>;
   links: Map<string, GraphLink>;
+  canonicalNodes: Map<string, PacketNetworkNode>;
+  canonicalNeighborIds: Map<string, string[]>;
+  renderedNodeIds: Set<string>;
   particles: Particle[];
   stats: { processed: number; animated: number; nodes: number; links: number };
   expandContract: () => void;
   clearAndReset: () => void;
+}
+
+function buildInitialRenderNode(node: PacketNetworkNode): GraphNode {
+  if (node.id === 'self') {
+    return {
+      ...node,
+      x: 0,
+      y: 0,
+      z: 0,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+    };
+  }
+
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const r = 80 + Math.random() * 100;
+  return {
+    ...node,
+    x: r * Math.sin(phi) * Math.cos(theta),
+    y: r * Math.sin(phi) * Math.sin(theta),
+    z: r * Math.cos(phi),
+  };
 }
 
 export function useVisualizerData3D({
@@ -83,6 +110,7 @@ export function useVisualizerData3D({
   pruneStaleNodes,
   pruneStaleMinutes,
 }: UseVisualizerData3DOptions): VisualizerData3D {
+  const networkStateRef = useRef(createPacketNetworkState(config?.name || 'Me'));
   const nodesRef = useRef<Map<string, GraphNode>>(new Map());
   const linksRef = useRef<Map<string, GraphLink>>(new Map());
   const particlesRef = useRef<Particle[]>([]);
@@ -90,47 +118,23 @@ export function useVisualizerData3D({
   const processedRef = useRef<Set<string>>(new Set());
   const pendingRef = useRef<Map<string, PendingPacket>>(new Map());
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const trafficPatternsRef = useRef<Map<string, RepeaterTrafficData>>(new Map());
   const speedMultiplierRef = useRef(particleSpeedMultiplier);
   const observationWindowRef = useRef(observationWindowSec * 1000);
   const stretchRafRef = useRef<number | null>(null);
   const [stats, setStats] = useState({ processed: 0, animated: 0, nodes: 0, links: 0 });
+  const [, setProjectionVersion] = useState(0);
 
-  const contactIndex = useMemo(() => {
-    const byPrefix12 = new Map<string, Contact>();
-    const byName = new Map<string, Contact>();
-    const byPrefix = new Map<string, Contact[]>();
-
-    for (const contact of contacts) {
-      const prefix12 = contact.public_key.slice(0, 12).toLowerCase();
-      byPrefix12.set(prefix12, contact);
-
-      if (contact.name && !byName.has(contact.name)) {
-        byName.set(contact.name, contact);
-      }
-
-      for (let len = 1; len <= 12; len++) {
-        const prefix = prefix12.slice(0, len);
-        const matches = byPrefix.get(prefix);
-        if (matches) {
-          matches.push(contact);
-        } else {
-          byPrefix.set(prefix, [contact]);
-        }
-      }
-    }
-
-    return { byPrefix12, byName, byPrefix };
-  }, [contacts]);
-
-  const advertPathIndex = useMemo(() => {
-    const byRepeater = new Map<string, ContactAdvertPathSummary['paths']>();
-    for (const summary of repeaterAdvertPaths) {
-      const key = summary.public_key.slice(0, 12).toLowerCase();
-      byRepeater.set(key, summary.paths);
-    }
-    return { byRepeater };
-  }, [repeaterAdvertPaths]);
+  const packetNetworkContext = useMemo(
+    () =>
+      buildPacketNetworkContext({
+        contacts,
+        config,
+        repeaterAdvertPaths,
+        splitAmbiguousByTraffic,
+        useAdvertPathHints,
+      }),
+    [contacts, config, repeaterAdvertPaths, splitAmbiguousByTraffic, useAdvertPathHints]
+  );
 
   useEffect(() => {
     speedMultiplierRef.current = particleSpeedMultiplier;
@@ -216,115 +220,98 @@ export function useVisualizerData3D({
         ? prev
         : { ...prev, nodes: nodes.length, links: links.length }
     );
+    setProjectionVersion((prev) => prev + 1);
   }, []);
 
-  useEffect(() => {
-    if (!nodesRef.current.has('self')) {
-      nodesRef.current.set('self', {
-        id: 'self',
-        name: config?.name || 'Me',
-        type: 'self',
-        isAmbiguous: false,
-        lastActivity: Date.now(),
-        x: 0,
-        y: 0,
-        z: 0,
-      });
-      syncSimulation();
+  const upsertRenderNode = useCallback(
+    (node: PacketNetworkNode, existing?: GraphNode): GraphNode => {
+      if (!existing) {
+        return buildInitialRenderNode(node);
+      }
+
+      existing.name = node.name;
+      existing.type = node.type;
+      existing.isAmbiguous = node.isAmbiguous;
+      existing.lastActivity = node.lastActivity;
+      existing.lastActivityReason = node.lastActivityReason;
+      existing.lastSeen = node.lastSeen;
+      existing.probableIdentity = node.probableIdentity;
+      existing.ambiguousNames = node.ambiguousNames;
+
+      if (node.id === 'self') {
+        existing.x = 0;
+        existing.y = 0;
+        existing.z = 0;
+        existing.vx = 0;
+        existing.vy = 0;
+        existing.vz = 0;
+      }
+
+      return existing;
+    },
+    []
+  );
+
+  const rebuildRenderProjection = useCallback(() => {
+    const projection = projectPacketNetwork(networkStateRef.current, {
+      showAmbiguousNodes,
+      showAmbiguousPaths,
+    });
+    const previousNodes = nodesRef.current;
+    const nextNodes = new Map<string, GraphNode>();
+
+    for (const [nodeId, node] of projection.nodes) {
+      nextNodes.set(nodeId, upsertRenderNode(node, previousNodes.get(nodeId)));
     }
-  }, [config, syncSimulation]);
+
+    const nextLinks = new Map<string, GraphLink>();
+    for (const [key, link] of projection.links) {
+      nextLinks.set(key, {
+        source: link.sourceId,
+        target: link.targetId,
+        lastActivity: link.lastActivity,
+        hasDirectObservation: link.hasDirectObservation,
+        hasHiddenIntermediate: link.hasHiddenIntermediate,
+        hiddenHopLabels: [...link.hiddenHopLabels],
+      });
+    }
+
+    nodesRef.current = nextNodes;
+    linksRef.current = nextLinks;
+    syncSimulation();
+  }, [showAmbiguousNodes, showAmbiguousPaths, syncSimulation, upsertRenderNode]);
+
+  useEffect(() => {
+    ensureSelfNode(networkStateRef.current, config?.name || 'Me');
+    const selfNode = networkStateRef.current.nodes.get('self');
+    if (selfNode) {
+      nodesRef.current.set('self', upsertRenderNode(selfNode, nodesRef.current.get('self')));
+    }
+    syncSimulation();
+  }, [config?.name, syncSimulation, upsertRenderNode]);
 
   useEffect(() => {
     processedRef.current.clear();
-    const selfNode = nodesRef.current.get('self');
+    clearPacketNetworkState(networkStateRef.current, { selfName: config?.name || 'Me' });
     nodesRef.current.clear();
-    if (selfNode) nodesRef.current.set('self', selfNode);
     linksRef.current.clear();
     particlesRef.current = [];
     pendingRef.current.clear();
-    timersRef.current.forEach((t) => clearTimeout(t));
+    timersRef.current.forEach((timer) => clearTimeout(timer));
     timersRef.current.clear();
-    trafficPatternsRef.current.clear();
+
+    const selfNode = networkStateRef.current.nodes.get('self');
+    if (selfNode) {
+      nodesRef.current.set('self', upsertRenderNode(selfNode));
+    }
+
     setStats({ processed: 0, animated: 0, nodes: selfNode ? 1 : 0, links: 0 });
     syncSimulation();
-  }, [
-    showAmbiguousPaths,
-    showAmbiguousNodes,
-    useAdvertPathHints,
-    splitAmbiguousByTraffic,
-    syncSimulation,
-  ]);
+  }, [config?.name, splitAmbiguousByTraffic, syncSimulation, upsertRenderNode, useAdvertPathHints]);
 
-  const addNode = useCallback(
-    (
-      id: string,
-      name: string | null,
-      type: GraphNode['type'],
-      isAmbiguous: boolean,
-      probableIdentity?: string | null,
-      ambiguousNames?: string[],
-      lastSeen?: number | null,
-      activityAtMs?: number
-    ) => {
-      const activityAt = activityAtMs ?? Date.now();
-      const existing = nodesRef.current.get(id);
-      if (existing) {
-        existing.lastActivity = Math.max(existing.lastActivity, activityAt);
-        if (name) existing.name = name;
-        if (probableIdentity !== undefined) existing.probableIdentity = probableIdentity;
-        if (ambiguousNames) existing.ambiguousNames = ambiguousNames;
-        if (lastSeen !== undefined) existing.lastSeen = lastSeen;
-      } else {
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos(2 * Math.random() - 1);
-        const r = 80 + Math.random() * 100;
-        nodesRef.current.set(id, {
-          id,
-          name,
-          type,
-          isAmbiguous,
-          lastActivity: activityAt,
-          probableIdentity,
-          lastSeen,
-          ambiguousNames,
-          x: r * Math.sin(phi) * Math.cos(theta),
-          y: r * Math.sin(phi) * Math.sin(theta),
-          z: r * Math.cos(phi),
-        });
-      }
-    },
-    []
-  );
-
-  const addLink = useCallback(
-    (
-      sourceId: string,
-      targetId: string,
-      activityAtMs?: number,
-      hiddenIntermediate: boolean = false
-    ) => {
-      const activityAt = activityAtMs ?? Date.now();
-      const key = buildLinkKey(sourceId, targetId);
-      const existing = linksRef.current.get(key);
-      if (existing) {
-        existing.lastActivity = Math.max(existing.lastActivity, activityAt);
-        if (hiddenIntermediate) {
-          existing.hasHiddenIntermediate = true;
-        } else {
-          existing.hasDirectObservation = true;
-        }
-      } else {
-        linksRef.current.set(key, {
-          source: sourceId,
-          target: targetId,
-          lastActivity: activityAt,
-          hasDirectObservation: !hiddenIntermediate,
-          hasHiddenIntermediate: hiddenIntermediate,
-        });
-      }
-    },
-    []
-  );
+  useEffect(() => {
+    rebuildRenderProjection();
+  }, [rebuildRenderProjection]);
 
   const publishPacket = useCallback((packetKey: string) => {
     const pending = pendingRef.current.get(packetKey);
@@ -353,342 +340,10 @@ export function useVisualizerData3D({
     }
   }, []);
 
-  const pickLikelyRepeaterByAdvertPath = useCallback(
-    (candidates: Contact[], nextPrefix: string | null) => {
-      const nextHop = nextPrefix?.toLowerCase() ?? null;
-      const scored = candidates
-        .map((candidate) => {
-          const prefix12 = candidate.public_key.slice(0, 12).toLowerCase();
-          const paths = advertPathIndex.byRepeater.get(prefix12) ?? [];
-          let matchScore = 0;
-          let totalScore = 0;
-
-          for (const path of paths) {
-            totalScore += path.heard_count;
-            const pathNextHop = path.next_hop?.toLowerCase() ?? null;
-            if (pathNextHop === nextHop) {
-              matchScore += path.heard_count;
-            }
-          }
-
-          return { candidate, matchScore, totalScore };
-        })
-        .filter((entry) => entry.totalScore > 0)
-        .sort(
-          (a, b) =>
-            b.matchScore - a.matchScore ||
-            b.totalScore - a.totalScore ||
-            a.candidate.public_key.localeCompare(b.candidate.public_key)
-        );
-
-      if (scored.length === 0) return null;
-
-      const top = scored[0];
-      const second = scored[1] ?? null;
-
-      if (top.matchScore < 2) return null;
-      if (second && top.matchScore < second.matchScore * 2) return null;
-
-      return top.candidate;
-    },
-    [advertPathIndex]
-  );
-
-  const resolveNode = useCallback(
-    (
-      source: { type: 'prefix' | 'pubkey' | 'name'; value: string },
-      isRepeater: boolean,
-      showAmbiguous: boolean,
-      myPrefix: string | null,
-      activityAtMs: number,
-      trafficContext?: { packetSource: string | null; nextPrefix: string | null }
-    ): string | null => {
-      if (source.type === 'pubkey') {
-        if (source.value.length < 12) return null;
-        const nodeId = source.value.slice(0, 12).toLowerCase();
-        if (myPrefix && nodeId === myPrefix) return 'self';
-        const contact = contactIndex.byPrefix12.get(nodeId);
-        addNode(
-          nodeId,
-          contact?.name || null,
-          getNodeType(contact),
-          false,
-          undefined,
-          undefined,
-          contact?.last_seen,
-          activityAtMs
-        );
-        return nodeId;
-      }
-
-      if (source.type === 'name') {
-        const contact = contactIndex.byName.get(source.value) ?? null;
-        if (contact) {
-          const nodeId = contact.public_key.slice(0, 12).toLowerCase();
-          if (myPrefix && nodeId === myPrefix) return 'self';
-          addNode(
-            nodeId,
-            contact.name,
-            getNodeType(contact),
-            false,
-            undefined,
-            undefined,
-            contact.last_seen,
-            activityAtMs
-          );
-          return nodeId;
-        }
-        const nodeId = `name:${source.value}`;
-        addNode(
-          nodeId,
-          source.value,
-          'client',
-          false,
-          undefined,
-          undefined,
-          undefined,
-          activityAtMs
-        );
-        return nodeId;
-      }
-
-      const lookupValue = source.value.toLowerCase();
-      const matches = contactIndex.byPrefix.get(lookupValue) ?? [];
-      const contact = matches.length === 1 ? matches[0] : null;
-      if (contact) {
-        const nodeId = contact.public_key.slice(0, 12).toLowerCase();
-        if (myPrefix && nodeId === myPrefix) return 'self';
-        addNode(
-          nodeId,
-          contact.name,
-          getNodeType(contact),
-          false,
-          undefined,
-          undefined,
-          contact.last_seen,
-          activityAtMs
-        );
-        return nodeId;
-      }
-
-      if (showAmbiguous) {
-        const filtered = isRepeater
-          ? matches.filter((c) => c.type === CONTACT_TYPE_REPEATER)
-          : matches.filter((c) => c.type !== CONTACT_TYPE_REPEATER);
-
-        if (filtered.length === 1) {
-          const c = filtered[0];
-          const nodeId = c.public_key.slice(0, 12).toLowerCase();
-          addNode(
-            nodeId,
-            c.name,
-            getNodeType(c),
-            false,
-            undefined,
-            undefined,
-            c.last_seen,
-            activityAtMs
-          );
-          return nodeId;
-        }
-
-        if (filtered.length > 1 || (filtered.length === 0 && isRepeater)) {
-          const names = filtered.map((c) => c.name || c.public_key.slice(0, 8));
-          const lastSeen = filtered.reduce(
-            (max, c) => (c.last_seen && (!max || c.last_seen > max) ? c.last_seen : max),
-            null as number | null
-          );
-
-          let nodeId = buildAmbiguousRepeaterNodeId(lookupValue);
-          let displayName = buildAmbiguousRepeaterLabel(lookupValue);
-          let probableIdentity: string | null = null;
-          let ambiguousNames = names.length > 0 ? names : undefined;
-
-          if (useAdvertPathHints && isRepeater && trafficContext) {
-            const normalizedNext = trafficContext.nextPrefix?.toLowerCase() ?? null;
-            const likely = pickLikelyRepeaterByAdvertPath(filtered, normalizedNext);
-            if (likely) {
-              const likelyName = likely.name || likely.public_key.slice(0, 12).toUpperCase();
-              probableIdentity = likelyName;
-              displayName = likelyName;
-              ambiguousNames = filtered
-                .filter((c) => c.public_key !== likely.public_key)
-                .map((c) => c.name || c.public_key.slice(0, 8));
-            }
-          }
-
-          if (splitAmbiguousByTraffic && isRepeater && trafficContext) {
-            const normalizedNext = trafficContext.nextPrefix?.toLowerCase() ?? null;
-
-            if (trafficContext.packetSource) {
-              recordTrafficObservation(
-                trafficPatternsRef.current,
-                lookupValue,
-                trafficContext.packetSource,
-                normalizedNext
-              );
-            }
-
-            const trafficData = trafficPatternsRef.current.get(lookupValue);
-            if (trafficData) {
-              const analysis = analyzeRepeaterTraffic(trafficData);
-              if (analysis.shouldSplit && normalizedNext) {
-                nodeId = buildAmbiguousRepeaterNodeId(lookupValue, normalizedNext);
-                if (!probableIdentity) {
-                  displayName = buildAmbiguousRepeaterLabel(lookupValue, normalizedNext);
-                }
-              }
-            }
-          }
-
-          addNode(
-            nodeId,
-            displayName,
-            isRepeater ? 'repeater' : 'client',
-            true,
-            probableIdentity,
-            ambiguousNames,
-            lastSeen,
-            activityAtMs
-          );
-          return nodeId;
-        }
-      }
-
-      return null;
-    },
-    [
-      contactIndex,
-      addNode,
-      useAdvertPathHints,
-      pickLikelyRepeaterByAdvertPath,
-      splitAmbiguousByTraffic,
-    ]
-  );
-
-  const buildPath = useCallback(
-    (
-      parsed: ReturnType<typeof parsePacket>,
-      packet: RawPacket,
-      myPrefix: string | null,
-      activityAtMs: number
-    ): { nodes: string[]; dashedLinkKeys: Set<string> } => {
-      if (!parsed) return { nodes: [], dashedLinkKeys: new Set() };
-      const steps: PathStep[] = [];
-      let packetSource: string | null = null;
-      const isDm = parsed.payloadType === PayloadType.TextMessage;
-      const isOutgoingDm = isDm && !!myPrefix && parsed.srcHash?.toLowerCase() === myPrefix;
-
-      if (parsed.payloadType === PayloadType.Advert && parsed.advertPubkey) {
-        const nodeId = resolveNode(
-          { type: 'pubkey', value: parsed.advertPubkey },
-          false,
-          false,
-          myPrefix,
-          activityAtMs
-        );
-        if (nodeId) {
-          steps.push({ nodeId });
-          packetSource = nodeId;
-        }
-      } else if (parsed.payloadType === PayloadType.AnonRequest && parsed.anonRequestPubkey) {
-        const nodeId = resolveNode(
-          { type: 'pubkey', value: parsed.anonRequestPubkey },
-          false,
-          false,
-          myPrefix,
-          activityAtMs
-        );
-        if (nodeId) {
-          steps.push({ nodeId });
-          packetSource = nodeId;
-        }
-      } else if (parsed.payloadType === PayloadType.TextMessage && parsed.srcHash) {
-        if (myPrefix && parsed.srcHash.toLowerCase() === myPrefix) {
-          steps.push({ nodeId: 'self' });
-          packetSource = 'self';
-        } else {
-          const nodeId = resolveNode(
-            { type: 'prefix', value: parsed.srcHash },
-            false,
-            showAmbiguousNodes,
-            myPrefix,
-            activityAtMs
-          );
-          if (nodeId) {
-            steps.push({ nodeId });
-            packetSource = nodeId;
-          }
-        }
-      } else if (parsed.payloadType === PayloadType.GroupText) {
-        const senderName = parsed.groupTextSender || packet.decrypted_info?.sender;
-        if (senderName) {
-          const resolved = resolveNode(
-            { type: 'name', value: senderName },
-            false,
-            false,
-            myPrefix,
-            activityAtMs
-          );
-          if (resolved) {
-            steps.push({ nodeId: resolved });
-            packetSource = resolved;
-          }
-        }
-      }
-
-      for (let i = 0; i < parsed.pathBytes.length; i++) {
-        const hexPrefix = parsed.pathBytes[i];
-        const nextPrefix = parsed.pathBytes[i + 1] || null;
-        const nodeId = resolveNode(
-          { type: 'prefix', value: hexPrefix },
-          true,
-          showAmbiguousPaths,
-          myPrefix,
-          activityAtMs,
-          { packetSource, nextPrefix }
-        );
-        steps.push({ nodeId, markHiddenLinkWhenOmitted: true });
-      }
-
-      if (parsed.payloadType === PayloadType.TextMessage && parsed.dstHash) {
-        if (myPrefix && parsed.dstHash.toLowerCase() === myPrefix) {
-          steps.push({ nodeId: 'self' });
-        } else {
-          const nodeId = resolveNode(
-            { type: 'prefix', value: parsed.dstHash },
-            false,
-            showAmbiguousNodes,
-            myPrefix,
-            activityAtMs
-          );
-          if (nodeId) {
-            steps.push({ nodeId });
-          } else if (!isOutgoingDm) {
-            steps.push({ nodeId: 'self' });
-          }
-        }
-      } else {
-        const hasVisibleNode = steps.some((step) => step.nodeId !== null);
-        if (hasVisibleNode) {
-          steps.push({ nodeId: 'self' });
-        }
-      }
-
-      const compacted = compactPathSteps(steps);
-      return {
-        nodes: dedupeConsecutive(compacted.nodes),
-        dashedLinkKeys: compacted.dashedLinkKeys,
-      };
-    },
-    [resolveNode, showAmbiguousPaths, showAmbiguousNodes]
-  );
-
   useEffect(() => {
     let newProcessed = 0;
     let newAnimated = 0;
-    let needsUpdate = false;
-    const myPrefix = config?.public_key?.slice(0, 12).toLowerCase() || null;
+    let needsProjectionRebuild = false;
 
     for (const packet of packets) {
       const observationKey = getRawPacketObservationKey(packet);
@@ -700,40 +355,30 @@ export function useVisualizerData3D({
         processedRef.current = new Set(Array.from(processedRef.current).slice(-500));
       }
 
-      const parsed = parsePacket(packet.data);
-      if (!parsed) continue;
+      const ingested = ingestPacketIntoPacketNetwork(
+        networkStateRef.current,
+        packetNetworkContext,
+        packet
+      );
+      if (!ingested) continue;
+      needsProjectionRebuild = true;
 
-      const packetActivityAt = normalizePacketTimestampMs(packet.timestamp);
-      const builtPath = buildPath(parsed, packet, myPrefix, packetActivityAt);
-      if (builtPath.nodes.length < 2) continue;
+      const projectedPath = projectCanonicalPath(networkStateRef.current, ingested.canonicalPath, {
+        showAmbiguousNodes,
+        showAmbiguousPaths,
+      });
+      if (projectedPath.nodes.length < 2) continue;
 
-      const label = getPacketLabel(parsed.payloadType);
-      for (let i = 0; i < builtPath.nodes.length; i++) {
-        const n = nodesRef.current.get(builtPath.nodes[i]);
-        if (n && n.id !== 'self') {
-          n.lastActivityReason = i === 0 ? `${label} source` : `Relayed ${label}`;
-        }
-      }
-
-      for (let i = 0; i < builtPath.nodes.length - 1; i++) {
-        if (builtPath.nodes[i] !== builtPath.nodes[i + 1]) {
-          const linkKey = buildLinkKey(builtPath.nodes[i], builtPath.nodes[i + 1]);
-          addLink(
-            builtPath.nodes[i],
-            builtPath.nodes[i + 1],
-            packetActivityAt,
-            builtPath.dashedLinkKeys.has(linkKey)
-          );
-          needsUpdate = true;
-        }
-      }
-
-      const packetKey = generatePacketKey(parsed, packet);
+      const packetKey = generatePacketKey(ingested.parsed, packet);
       const now = Date.now();
       const existing = pendingRef.current.get(packetKey);
 
       if (existing && now < existing.expiresAt) {
-        existing.paths.push({ nodes: builtPath.nodes, snr: packet.snr ?? null, timestamp: now });
+        existing.paths.push({
+          nodes: projectedPath.nodes,
+          snr: packet.snr ?? null,
+          timestamp: now,
+        });
       } else {
         const existingTimer = timersRef.current.get(packetKey);
         if (existingTimer) {
@@ -742,8 +387,8 @@ export function useVisualizerData3D({
         const windowMs = observationWindowRef.current;
         pendingRef.current.set(packetKey, {
           key: packetKey,
-          label: getPacketLabel(parsed.payloadType),
-          paths: [{ nodes: builtPath.nodes, snr: packet.snr ?? null, timestamp: now }],
+          label: ingested.label,
+          paths: [{ nodes: projectedPath.nodes, snr: packet.snr ?? null, timestamp: now }],
           firstSeen: now,
           expiresAt: now + windowMs,
         });
@@ -770,7 +415,9 @@ export function useVisualizerData3D({
       newAnimated++;
     }
 
-    if (needsUpdate) syncSimulation();
+    if (needsProjectionRebuild) {
+      rebuildRenderProjection();
+    }
     if (newProcessed > 0) {
       setStats((prev) => ({
         ...prev,
@@ -778,7 +425,14 @@ export function useVisualizerData3D({
         animated: prev.animated + newAnimated,
       }));
     }
-  }, [packets, config, buildPath, addLink, syncSimulation, publishPacket]);
+  }, [
+    packets,
+    packetNetworkContext,
+    publishPacket,
+    rebuildRenderProjection,
+    showAmbiguousNodes,
+    showAmbiguousPaths,
+  ]);
 
   const expandContract = useCallback(() => {
     const sim = simulationRef.current;
@@ -867,21 +521,14 @@ export function useVisualizerData3D({
     timersRef.current.clear();
     pendingRef.current.clear();
     processedRef.current.clear();
-    trafficPatternsRef.current.clear();
     particlesRef.current.length = 0;
-    linksRef.current.clear();
+    clearPacketNetworkState(networkStateRef.current, { selfName: config?.name || 'Me' });
 
-    const selfNode = nodesRef.current.get('self');
+    linksRef.current.clear();
     nodesRef.current.clear();
+    const selfNode = networkStateRef.current.nodes.get('self');
     if (selfNode) {
-      selfNode.x = 0;
-      selfNode.y = 0;
-      selfNode.z = 0;
-      selfNode.vx = 0;
-      selfNode.vy = 0;
-      selfNode.vz = 0;
-      selfNode.lastActivity = Date.now();
-      nodesRef.current.set('self', selfNode);
+      nodesRef.current.set('self', upsertRenderNode(selfNode));
     }
 
     const sim = simulationRef.current;
@@ -892,8 +539,8 @@ export function useVisualizerData3D({
       sim.alpha(0.3).restart();
     }
 
-    setStats({ processed: 0, animated: 0, nodes: 1, links: 0 });
-  }, []);
+    setStats({ processed: 0, animated: 0, nodes: selfNode ? 1 : 0, links: 0 });
+  }, [config?.name, upsertRenderNode]);
 
   useEffect(() => {
     const stretchRaf = stretchRafRef;
@@ -919,40 +566,23 @@ export function useVisualizerData3D({
 
     const interval = setInterval(() => {
       const cutoff = Date.now() - staleMs;
-      let pruned = false;
-
-      for (const [id, node] of nodesRef.current) {
-        if (id === 'self') continue;
-        if (node.lastActivity < cutoff) {
-          nodesRef.current.delete(id);
-          pruned = true;
-        }
-      }
-
-      if (pruned) {
-        for (const [key, link] of linksRef.current) {
-          const sourceId = typeof link.source === 'string' ? link.source : link.source.id;
-          const targetId = typeof link.target === 'string' ? link.target : link.target.id;
-          if (!nodesRef.current.has(sourceId) || !nodesRef.current.has(targetId)) {
-            linksRef.current.delete(key);
-          }
-        }
-        syncSimulation();
+      if (prunePacketNetworkState(networkStateRef.current, cutoff)) {
+        rebuildRenderProjection();
       }
     }, pruneIntervalMs);
 
     return () => clearInterval(interval);
-  }, [pruneStaleNodes, pruneStaleMinutes, syncSimulation]);
+  }, [pruneStaleMinutes, pruneStaleNodes, rebuildRenderProjection]);
 
-  return useMemo(
-    () => ({
-      nodes: nodesRef.current,
-      links: linksRef.current,
-      particles: particlesRef.current,
-      stats,
-      expandContract,
-      clearAndReset,
-    }),
-    [stats, expandContract, clearAndReset]
-  );
+  return {
+    nodes: nodesRef.current,
+    links: linksRef.current,
+    canonicalNodes: networkStateRef.current.nodes,
+    canonicalNeighborIds: snapshotNeighborIds(networkStateRef.current),
+    renderedNodeIds: new Set(nodesRef.current.keys()),
+    particles: particlesRef.current,
+    stats,
+    expandContract,
+    clearAndReset,
+  };
 }

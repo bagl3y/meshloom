@@ -1,25 +1,37 @@
-import type { GraphNode } from './shared';
+import type { PacketNetworkNode } from '../../networkGraph/packetNetworkGraph';
 import { formatRelativeTime } from './shared';
 
 interface VisualizerTooltipProps {
   activeNodeId: string | null;
-  nodes: Map<string, GraphNode>;
-  neighborIds: string[];
+  canonicalNodes: Map<string, PacketNetworkNode>;
+  canonicalNeighborIds: Map<string, string[]>;
+  renderedNodeIds: Set<string>;
 }
 
-export function VisualizerTooltip({ activeNodeId, nodes, neighborIds }: VisualizerTooltipProps) {
+export function VisualizerTooltip({
+  activeNodeId,
+  canonicalNodes,
+  canonicalNeighborIds,
+  renderedNodeIds,
+}: VisualizerTooltipProps) {
   if (!activeNodeId) return null;
 
-  const node = nodes.get(activeNodeId);
+  const node = canonicalNodes.get(activeNodeId);
   if (!node) return null;
 
+  const neighborIds = canonicalNeighborIds.get(activeNodeId) ?? [];
   const neighbors = neighborIds
     .map((nid) => {
-      const neighbor = nodes.get(nid);
+      const neighbor = canonicalNodes.get(nid);
       if (!neighbor) return null;
       const displayName =
         neighbor.name || (neighbor.type === 'self' ? 'Me' : neighbor.id.slice(0, 8));
-      return { id: nid, name: displayName, ambiguousNames: neighbor.ambiguousNames };
+      return {
+        id: nid,
+        name: displayName,
+        ambiguousNames: neighbor.ambiguousNames,
+        hidden: !renderedNodeIds.has(nid),
+      };
     })
     .filter((neighbor): neighbor is NonNullable<typeof neighbor> => neighbor !== null);
 
@@ -56,6 +68,7 @@ export function VisualizerTooltip({ activeNodeId, nodes, neighborIds }: Visualiz
               {neighbors.map((neighbor) => (
                 <li key={neighbor.id}>
                   {neighbor.name}
+                  {neighbor.hidden && <span className="text-muted-foreground/60"> (hidden)</span>}
                   {neighbor.ambiguousNames && neighbor.ambiguousNames.length > 0 && (
                     <span className="text-muted-foreground/60">
                       {' '}

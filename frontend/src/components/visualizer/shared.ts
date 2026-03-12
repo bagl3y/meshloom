@@ -23,6 +23,7 @@ export interface GraphLink extends SimulationLinkDatum<GraphNode> {
   lastActivity: number;
   hasDirectObservation: boolean;
   hasHiddenIntermediate: boolean;
+  hiddenHopLabels: string[];
 }
 
 export interface NodeMeshData {
@@ -74,6 +75,11 @@ export function formatRelativeTime(timestamp: number): string {
   const minutes = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return secs > 0 ? `${minutes}m ${secs}s ago` : `${minutes}m ago`;
+}
+
+export function getSceneNodeLabel(node: Pick<GraphNode, 'id' | 'name' | 'type' | 'isAmbiguous'>) {
+  const baseLabel = node.name || (node.type === 'self' ? 'Me' : node.id.slice(0, 8));
+  return node.isAmbiguous ? `${baseLabel} (?)` : baseLabel;
 }
 
 export function normalizePacketTimestampMs(timestamp: number | null | undefined): number {

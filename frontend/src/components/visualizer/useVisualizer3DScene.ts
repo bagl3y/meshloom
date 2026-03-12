@@ -5,7 +5,13 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 
 import { COLORS, getLinkId } from '../../utils/visualizerUtils';
 import type { VisualizerData3D } from './useVisualizerData3D';
-import { arraysEqual, getBaseNodeColor, growFloat32Buffer, type NodeMeshData } from './shared';
+import {
+  arraysEqual,
+  getBaseNodeColor,
+  getSceneNodeLabel,
+  growFloat32Buffer,
+  type NodeMeshData,
+} from './shared';
 
 interface UseVisualizer3DSceneArgs {
   containerRef: RefObject<HTMLDivElement | null>;
@@ -362,7 +368,7 @@ export function useVisualizer3DScene({
         if (nd.labelDiv.style.color !== labelColor) {
           nd.labelDiv.style.color = labelColor;
         }
-        const labelText = node.name || (node.type === 'self' ? 'Me' : node.id.slice(0, 8));
+        const labelText = getSceneNodeLabel(node);
         if (nd.labelDiv.textContent !== labelText) {
           nd.labelDiv.textContent = labelText;
         }

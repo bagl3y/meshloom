@@ -117,7 +117,7 @@ export function PacketVisualizer3D({
     pruneStaleMinutes,
   });
 
-  const { hoveredNodeId, hoveredNeighborIds, pinnedNodeId } = useVisualizer3DScene({
+  const { hoveredNodeId, pinnedNodeId } = useVisualizer3DScene({
     containerRef,
     data,
     autoOrbit,
@@ -167,8 +167,9 @@ export function PacketVisualizer3D({
 
       <VisualizerTooltip
         activeNodeId={tooltipNodeId}
-        nodes={data.nodes}
-        neighborIds={hoveredNeighborIds}
+        canonicalNodes={data.canonicalNodes}
+        canonicalNeighborIds={data.canonicalNeighborIds}
+        renderedNodeIds={data.renderedNodeIds}
       />
     </div>
   );

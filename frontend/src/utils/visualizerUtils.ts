@@ -33,7 +33,7 @@ export interface PendingPacket {
   expiresAt: number;
 }
 
-interface ParsedPacket {
+export interface ParsedPacket {
   payloadType: number;
   messageHash: string | null;
   pathBytes: string[];
@@ -113,6 +113,7 @@ export const PACKET_LEGEND_ITEMS = [
 export interface PathStep {
   nodeId: string | null;
   markHiddenLinkWhenOmitted?: boolean;
+  hiddenLabel?: string | null;
 }
 
 export function normalizeHopToken(hop: string | null | undefined): string | null {
@@ -253,31 +254,43 @@ export function dedupeConsecutive<T>(arr: T[]): T[] {
 
 export function compactPathSteps(steps: PathStep[]): {
   nodes: string[];
-  dashedLinkKeys: Set<string>;
+  dashedLinkDetails: Map<string, string[]>;
 } {
   const nodes: string[] = [];
-  const dashedLinkKeys = new Set<string>();
+  const dashedLinkDetails = new Map<string, string[]>();
   let pendingHiddenLink = false;
+  let pendingHiddenLabels: string[] = [];
 
   for (const step of steps) {
     if (step.nodeId) {
       const previousNodeId = nodes.length > 0 ? nodes[nodes.length - 1] : null;
       if (previousNodeId && pendingHiddenLink && previousNodeId !== step.nodeId) {
-        dashedLinkKeys.add(buildLinkKey(previousNodeId, step.nodeId));
+        const key = buildLinkKey(previousNodeId, step.nodeId);
+        const existing = dashedLinkDetails.get(key) ?? [];
+        for (const label of pendingHiddenLabels) {
+          if (!existing.includes(label)) {
+            existing.push(label);
+          }
+        }
+        dashedLinkDetails.set(key, existing);
       }
       if (previousNodeId !== step.nodeId) {
         nodes.push(step.nodeId);
       }
       pendingHiddenLink = false;
+      pendingHiddenLabels = [];
       continue;
     }
 
     if (step.markHiddenLinkWhenOmitted && nodes.length > 0) {
       pendingHiddenLink = true;
+      if (step.hiddenLabel && !pendingHiddenLabels.includes(step.hiddenLabel)) {
+        pendingHiddenLabels.push(step.hiddenLabel);
+      }
     }
   }
 
-  return { nodes, dashedLinkKeys };
+  return { nodes, dashedLinkDetails };
 }
 
 /**

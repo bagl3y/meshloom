@@ -2,18 +2,17 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { VisualizerTooltip } from '../components/visualizer/VisualizerTooltip';
-import type { GraphNode } from '../components/visualizer/shared';
+import type { PacketNetworkNode } from '../networkGraph/packetNetworkGraph';
 
-function createNode(overrides: Partial<GraphNode> & Pick<GraphNode, 'id' | 'type'>): GraphNode {
+function createNode(
+  overrides: Partial<PacketNetworkNode> & Pick<PacketNetworkNode, 'id' | 'type'>
+): PacketNetworkNode {
   return {
     id: overrides.id,
     type: overrides.type,
     name: overrides.name ?? null,
     isAmbiguous: overrides.isAmbiguous ?? false,
     lastActivity: overrides.lastActivity ?? Date.now(),
-    x: overrides.x ?? 0,
-    y: overrides.y ?? 0,
-    z: overrides.z ?? 0,
     probableIdentity: overrides.probableIdentity,
     ambiguousNames: overrides.ambiguousNames,
     lastActivityReason: overrides.lastActivityReason,
@@ -23,7 +22,12 @@ function createNode(overrides: Partial<GraphNode> & Pick<GraphNode, 'id' | 'type
 describe('VisualizerTooltip', () => {
   it('renders nothing without an active node', () => {
     const { container } = render(
-      <VisualizerTooltip activeNodeId={null} nodes={new Map()} neighborIds={[]} />
+      <VisualizerTooltip
+        activeNodeId={null}
+        canonicalNodes={new Map()}
+        canonicalNeighborIds={new Map()}
+        renderedNodeIds={new Set()}
+      />
     );
 
     expect(container).toBeEmptyDOMElement();
@@ -49,17 +53,25 @@ describe('VisualizerTooltip', () => {
       name: 'Neighbor Node',
       ambiguousNames: ['Alt Neighbor'],
     });
+    const hiddenRepeater = createNode({
+      id: '?44',
+      type: 'repeater',
+      name: '44',
+      isAmbiguous: true,
+    });
 
     render(
       <VisualizerTooltip
         activeNodeId={node.id}
-        nodes={
+        canonicalNodes={
           new Map([
             [node.id, node],
             [neighbor.id, neighbor],
+            [hiddenRepeater.id, hiddenRepeater],
           ])
         }
-        neighborIds={[neighbor.id]}
+        canonicalNeighborIds={new Map([[node.id, [neighbor.id, hiddenRepeater.id]]])}
+        renderedNodeIds={new Set([node.id, neighbor.id])}
       />
     );
 
@@ -72,6 +84,8 @@ describe('VisualizerTooltip', () => {
     expect(screen.getByText('Reason: Relayed GT')).toBeInTheDocument();
     expect(screen.getByText('Neighbor Node')).toBeInTheDocument();
     expect(screen.getByText('(Alt Neighbor)')).toBeInTheDocument();
+    expect(screen.getByText('44')).toBeInTheDocument();
+    expect(screen.getByText('(hidden)')).toBeInTheDocument();
 
     vi.useRealTimers();
   });

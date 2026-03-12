@@ -113,6 +113,51 @@ afterEach(() => {
 });
 
 describe('useVisualizerData3D', () => {
+  it('keeps canonical adjacency stable when ambiguous repeaters are shown or hidden', async () => {
+    const selfKey = 'ffffffffffff0000000000000000000000000000000000000000000000000000';
+    const aliceKey = 'aaaaaaaaaaaa0000000000000000000000000000000000000000000000000000';
+    packetFixtures.set('dm-canonical-stable', {
+      payloadType: PayloadType.TextMessage,
+      messageHash: 'dm-canonical-stable',
+      pathBytes: ['32'],
+      srcHash: 'aaaaaaaaaaaa',
+      dstHash: 'ffffffffffff',
+      advertPubkey: null,
+      groupTextSender: null,
+      anonRequestPubkey: null,
+    });
+
+    const packets = [createPacket('dm-canonical-stable')];
+    const contacts = [createContact(aliceKey, 'Alice')];
+
+    const hidden = renderVisualizerData({
+      packets,
+      contacts,
+      config: createConfig(selfKey),
+      showAmbiguousPaths: false,
+    });
+    const shown = renderVisualizerData({
+      packets,
+      contacts,
+      config: createConfig(selfKey),
+      showAmbiguousPaths: true,
+    });
+
+    await waitFor(() =>
+      expect(hidden.result.current.canonicalNeighborIds.get('aaaaaaaaaaaa')).toEqual(['?32'])
+    );
+    await waitFor(() =>
+      expect(shown.result.current.canonicalNeighborIds.get('aaaaaaaaaaaa')).toEqual(['?32'])
+    );
+
+    expect(hidden.result.current.canonicalNeighborIds).toEqual(
+      shown.result.current.canonicalNeighborIds
+    );
+    expect(hidden.result.current.links.has(buildLinkKey('aaaaaaaaaaaa', 'self'))).toBe(true);
+    expect(hidden.result.current.links.has(buildLinkKey('aaaaaaaaaaaa', '?32'))).toBe(false);
+    expect(shown.result.current.links.has(buildLinkKey('aaaaaaaaaaaa', '?32'))).toBe(true);
+  });
+
   it('marks compressed hidden-repeater routes as dashed links instead of direct solid links', async () => {
     const selfKey = 'ffffffffffff0000000000000000000000000000000000000000000000000000';
     const aliceKey = 'aaaaaaaaaaaa0000000000000000000000000000000000000000000000000000';
@@ -140,6 +185,9 @@ describe('useVisualizerData3D', () => {
     expect(link).toBeDefined();
     expect(link?.hasHiddenIntermediate).toBe(true);
     expect(link?.hasDirectObservation).toBe(false);
+    expect(result.current.canonicalNeighborIds.get('aaaaaaaaaaaa')).toEqual(['?32']);
+    expect(result.current.canonicalNeighborIds.get('self')).toEqual(['?32']);
+    expect(result.current.renderedNodeIds.has('?32')).toBe(false);
   });
 
   it('does not append self after a resolved outgoing DM destination', async () => {
@@ -173,6 +221,44 @@ describe('useVisualizerData3D', () => {
     expect(result.current.links.has(buildLinkKey('self', '323232323232'))).toBe(true);
     expect(result.current.links.has(buildLinkKey('323232323232', 'bbbbbbbbbbbb'))).toBe(true);
     expect(result.current.links.has(buildLinkKey('self', 'bbbbbbbbbbbb'))).toBe(false);
+  });
+
+  it('picks back up with known repeaters after hiding ambiguous repeater segments', async () => {
+    const selfKey = 'ffffffffffff0000000000000000000000000000000000000000000000000000';
+    const aliceKey = 'aaaaaaaaaaaa0000000000000000000000000000000000000000000000000000';
+    const repeaterKey = '5656565656560000000000000000000000000000000000000000000000000000';
+
+    packetFixtures.set('dm-hidden-then-known', {
+      payloadType: PayloadType.TextMessage,
+      messageHash: 'dm-hidden-then-known',
+      pathBytes: ['32', '565656565656'],
+      srcHash: 'aaaaaaaaaaaa',
+      dstHash: 'ffffffffffff',
+      advertPubkey: null,
+      groupTextSender: null,
+      anonRequestPubkey: null,
+    });
+
+    const { result } = renderVisualizerData({
+      packets: [createPacket('dm-hidden-then-known')],
+      contacts: [
+        createContact(aliceKey, 'Alice'),
+        createContact(repeaterKey, 'Relay B', CONTACT_TYPE_REPEATER),
+      ],
+      config: createConfig(selfKey),
+      showAmbiguousPaths: false,
+    });
+
+    await waitFor(() => expect(result.current.links.size).toBe(2));
+
+    expect(result.current.links.has(buildLinkKey('aaaaaaaaaaaa', '565656565656'))).toBe(true);
+    expect(result.current.links.has(buildLinkKey('565656565656', 'self'))).toBe(true);
+    expect(result.current.links.has(buildLinkKey('aaaaaaaaaaaa', 'self'))).toBe(false);
+    expect(result.current.renderedNodeIds.has('565656565656')).toBe(true);
+    expect(result.current.renderedNodeIds.has('?32')).toBe(false);
+    expect(result.current.canonicalNeighborIds.get('?32')).toEqual(
+      expect.arrayContaining(['aaaaaaaaaaaa', '565656565656'])
+    );
   });
 
   it('does not create a fake self edge for an unresolved outgoing direct DM', async () => {
