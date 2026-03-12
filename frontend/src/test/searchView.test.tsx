@@ -71,6 +71,9 @@ describe('SearchView', () => {
     render(<SearchView {...defaultProps} />);
     expect(screen.getByText('Type to search across all messages')).toBeInTheDocument();
     expect(screen.getByText(/Tip: use/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/User-key linkage for group messages is best-effort/i)
+    ).toBeInTheDocument();
   });
 
   it('focuses input on mount', () => {

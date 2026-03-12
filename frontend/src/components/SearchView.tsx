@@ -243,6 +243,11 @@ export function SearchView({
               Tip: use <code>user:</code> or <code>channel:</code> for keys or names, and wrap names
               with spaces in them in quotes.
             </p>
+            <p className="mt-2 text-xs">
+              Warning: User-key linkage for group messages is best-effort and based on correlation
+              at advertise time. It does not account for multiple users with the same name, and
+              should be considered unreliable.
+            </p>
           </div>
         )}
 
