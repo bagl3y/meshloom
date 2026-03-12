@@ -153,6 +153,86 @@
     inset -1px -1px 0 hsl(0 0% 34%);
 }
 
+[data-theme='windows-95'] .conversation-header {
+  background: hsl(240 100% 25%);
+  color: hsl(0 0% 100%);
+  box-shadow:
+    inset 1px 1px 0 hsl(0 0% 100% / 0.35),
+    inset -1px -1px 0 hsl(240 100% 14%);
+}
+
+[data-theme='windows-95'] .conversation-header .text-muted-foreground,
+[data-theme='windows-95'] .conversation-header .text-foreground,
+[data-theme='windows-95'] .conversation-header .text-primary,
+[data-theme='windows-95'] .conversation-header button,
+[data-theme='windows-95'] .conversation-header [role='button'] {
+  color: hsl(0 0% 100%);
+}
+
+[data-theme='windows-95'] .conversation-header button {
+  background: hsl(240 100% 25%);
+  box-shadow: none;
+}
+
+[data-theme='windows-95'] .conversation-header .lucide-info {
+  color: hsl(0 0% 100%);
+}
+
+[data-theme='windows-95'] .message-input-shell {
+  background: hsl(0 0% 75%);
+  box-shadow:
+    inset 1px 1px 0 hsl(0 0% 100%),
+    inset -1px -1px 0 hsl(0 0% 34%);
+}
+
+@media (min-width: 768px) {
+  [data-theme='windows-95'] * {
+    scrollbar-width: auto;
+    scrollbar-color: hsl(0 0% 75%) hsl(0 0% 84%);
+  }
+
+  [data-theme='windows-95'] ::-webkit-scrollbar {
+    width: 16px;
+    height: 16px;
+  }
+
+  [data-theme='windows-95'] ::-webkit-scrollbar-track,
+  [data-theme='windows-95'] ::-webkit-scrollbar-corner {
+    background: hsl(0 0% 84%);
+    box-shadow:
+      inset 1px 1px 0 hsl(0 0% 100%),
+      inset -1px -1px 0 hsl(0 0% 34%);
+  }
+
+  [data-theme='windows-95'] ::-webkit-scrollbar-thumb {
+    background: hsl(0 0% 75%);
+    border-radius: 0;
+    box-shadow:
+      inset 1px 1px 0 hsl(0 0% 100%),
+      inset -1px -1px 0 hsl(0 0% 34%);
+  }
+
+  [data-theme='windows-95'] ::-webkit-scrollbar-thumb:hover {
+    background: hsl(0 0% 80%);
+  }
+
+  [data-theme='windows-95'] ::-webkit-scrollbar-thumb:active {
+    box-shadow:
+      inset -1px -1px 0 hsl(0 0% 100%),
+      inset 1px 1px 0 hsl(0 0% 34%);
+  }
+
+  [data-theme='windows-95'] ::-webkit-scrollbar-button:single-button {
+    display: block;
+    background: hsl(0 0% 75%);
+    height: 16px;
+    width: 16px;
+    box-shadow:
+      inset 1px 1px 0 hsl(0 0% 100%),
+      inset -1px -1px 0 hsl(0 0% 34%);
+  }
+}
+
 /* ── iPhone / iOS ─────────────────────────────────────────── */
 :root[data-theme='ios'] {
   --background: 240 18% 96%;

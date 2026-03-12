@@ -94,7 +94,7 @@ export function ChatHeader({
   };
 
   return (
-    <header className="flex justify-between items-start px-4 py-2.5 border-b border-border gap-2">
+    <header className="conversation-header flex justify-between items-start px-4 py-2.5 border-b border-border gap-2">
       <span className="flex min-w-0 flex-1 items-start gap-2">
         {conversation.type === 'contact' && onOpenContactInfo && (
           <span
