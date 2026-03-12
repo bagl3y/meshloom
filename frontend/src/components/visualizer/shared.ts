@@ -21,6 +21,8 @@ export interface GraphLink extends SimulationLinkDatum<GraphNode> {
   source: string | GraphNode;
   target: string | GraphNode;
   lastActivity: number;
+  hasDirectObservation: boolean;
+  hasHiddenIntermediate: boolean;
 }
 
 export interface NodeMeshData {

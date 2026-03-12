@@ -110,6 +110,11 @@ export const PACKET_LEGEND_ITEMS = [
   { label: '?', color: COLORS.particleUnknown, description: 'Other' },
 ] as const;
 
+export interface PathStep {
+  nodeId: string | null;
+  markHiddenLinkWhenOmitted?: boolean;
+}
+
 export function normalizeHopToken(hop: string | null | undefined): string | null {
   const normalized = hop?.trim().toLowerCase() ?? '';
   return normalized.length > 0 ? normalized : null;
@@ -234,12 +239,45 @@ export function getLinkId<
   };
 }
 
+export function buildLinkKey(sourceId: string, targetId: string): string {
+  return [sourceId, targetId].sort().join('->');
+}
+
 export function getNodeType(contact: Contact | null | undefined): NodeType {
   return contact?.type === CONTACT_TYPE_REPEATER ? 'repeater' : 'client';
 }
 
 export function dedupeConsecutive<T>(arr: T[]): T[] {
   return arr.filter((item, i) => i === 0 || item !== arr[i - 1]);
+}
+
+export function compactPathSteps(steps: PathStep[]): {
+  nodes: string[];
+  dashedLinkKeys: Set<string>;
+} {
+  const nodes: string[] = [];
+  const dashedLinkKeys = new Set<string>();
+  let pendingHiddenLink = false;
+
+  for (const step of steps) {
+    if (step.nodeId) {
+      const previousNodeId = nodes.length > 0 ? nodes[nodes.length - 1] : null;
+      if (previousNodeId && pendingHiddenLink && previousNodeId !== step.nodeId) {
+        dashedLinkKeys.add(buildLinkKey(previousNodeId, step.nodeId));
+      }
+      if (previousNodeId !== step.nodeId) {
+        nodes.push(step.nodeId);
+      }
+      pendingHiddenLink = false;
+      continue;
+    }
+
+    if (step.markHiddenLinkWhenOmitted && nodes.length > 0) {
+      pendingHiddenLink = true;
+    }
+  }
+
+  return { nodes, dashedLinkKeys };
 }
 
 /**

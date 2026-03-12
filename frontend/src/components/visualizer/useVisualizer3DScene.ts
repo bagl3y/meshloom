@@ -32,10 +32,12 @@ export function useVisualizer3DScene({
   const nodeMeshesRef = useRef<Map<string, NodeMeshData>>(new Map());
   const raycastTargetsRef = useRef<THREE.Mesh[]>([]);
   const linkLineRef = useRef<THREE.LineSegments | null>(null);
+  const dashedLinkLineRef = useRef<THREE.LineSegments | null>(null);
   const highlightLineRef = useRef<THREE.LineSegments | null>(null);
   const particlePointsRef = useRef<THREE.Points | null>(null);
   const particleTextureRef = useRef<THREE.Texture | null>(null);
   const linkPositionBufferRef = useRef<Float32Array>(new Float32Array(0));
+  const dashedLinkPositionBufferRef = useRef<Float32Array>(new Float32Array(0));
   const highlightPositionBufferRef = useRef<Float32Array>(new Float32Array(0));
   const particlePositionBufferRef = useRef<Float32Array>(new Float32Array(0));
   const particleColorBufferRef = useRef<Float32Array>(new Float32Array(0));
@@ -126,6 +128,19 @@ export function useVisualizer3DScene({
     scene.add(linkSegments);
     linkLineRef.current = linkSegments;
 
+    const dashedLinkGeometry = new THREE.BufferGeometry();
+    const dashedLinkMaterial = new THREE.LineDashedMaterial({
+      color: 0x94a3b8,
+      transparent: true,
+      opacity: 0.85,
+      dashSize: 16,
+      gapSize: 10,
+    });
+    const dashedLinkSegments = new THREE.LineSegments(dashedLinkGeometry, dashedLinkMaterial);
+    dashedLinkSegments.visible = false;
+    scene.add(dashedLinkSegments);
+    dashedLinkLineRef.current = dashedLinkSegments;
+
     const highlightGeometry = new THREE.BufferGeometry();
     const highlightMaterial = new THREE.LineBasicMaterial({
       color: 0xffd700,
@@ -198,6 +213,12 @@ export function useVisualizer3DScene({
         (linkLineRef.current.material as THREE.Material).dispose();
         linkLineRef.current = null;
       }
+      if (dashedLinkLineRef.current) {
+        scene.remove(dashedLinkLineRef.current);
+        dashedLinkLineRef.current.geometry.dispose();
+        (dashedLinkLineRef.current.material as THREE.Material).dispose();
+        dashedLinkLineRef.current = null;
+      }
       if (highlightLineRef.current) {
         scene.remove(highlightLineRef.current);
         highlightLineRef.current.geometry.dispose();
@@ -213,6 +234,7 @@ export function useVisualizer3DScene({
       particleTexture.dispose();
       particleTextureRef.current = null;
       linkPositionBufferRef.current = new Float32Array(0);
+      dashedLinkPositionBufferRef.current = new Float32Array(0);
       highlightPositionBufferRef.current = new Float32Array(0);
       particlePositionBufferRef.current = new Float32Array(0);
       particleColorBufferRef.current = new Float32Array(0);
@@ -369,11 +391,16 @@ export function useVisualizer3DScene({
       }
       const activeId = pinnedNodeIdRef.current ?? hoveredNodeIdRef.current;
 
-      const visibleLinks = [];
+      const solidLinks = [];
+      const dashedLinks = [];
       for (const link of links.values()) {
         const { sourceId, targetId } = getLinkId(link);
         if (currentNodeIds.has(sourceId) && currentNodeIds.has(targetId)) {
-          visibleLinks.push(link);
+          if (link.hasDirectObservation || !link.hasHiddenIntermediate) {
+            solidLinks.push(link);
+          } else {
+            dashedLinks.push(link);
+          }
         }
       }
 
@@ -382,7 +409,8 @@ export function useVisualizer3DScene({
       const linkLine = linkLineRef.current;
       if (linkLine) {
         const geometry = linkLine.geometry as THREE.BufferGeometry;
-        const requiredLength = visibleLinks.length * 6;
+        const requiredLength = solidLinks.length * 6;
+        const highlightRequiredLength = (solidLinks.length + dashedLinks.length) * 6;
         if (linkPositionBufferRef.current.length < requiredLength) {
           linkPositionBufferRef.current = growFloat32Buffer(
             linkPositionBufferRef.current,
@@ -397,10 +425,10 @@ export function useVisualizer3DScene({
         }
 
         const highlightLine = highlightLineRef.current;
-        if (highlightLine && highlightPositionBufferRef.current.length < requiredLength) {
+        if (highlightLine && highlightPositionBufferRef.current.length < highlightRequiredLength) {
           highlightPositionBufferRef.current = growFloat32Buffer(
             highlightPositionBufferRef.current,
-            requiredLength
+            highlightRequiredLength
           );
           (highlightLine.geometry as THREE.BufferGeometry).setAttribute(
             'position',
@@ -415,7 +443,7 @@ export function useVisualizer3DScene({
         let idx = 0;
         let hlIdx = 0;
 
-        for (const link of visibleLinks) {
+        for (const link of solidLinks) {
           const { sourceId, targetId } = getLinkId(link);
           const sNode = nodes.get(sourceId);
           const tNode = nodes.get(targetId);
@@ -446,6 +474,23 @@ export function useVisualizer3DScene({
           }
         }
 
+        for (const link of dashedLinks) {
+          const { sourceId, targetId } = getLinkId(link);
+          if (activeId && (sourceId === activeId || targetId === activeId)) {
+            const sNode = nodes.get(sourceId);
+            const tNode = nodes.get(targetId);
+            if (!sNode || !tNode) continue;
+
+            connectedIds?.add(sourceId === activeId ? targetId : sourceId);
+            hlPositions[hlIdx++] = sNode.x ?? 0;
+            hlPositions[hlIdx++] = sNode.y ?? 0;
+            hlPositions[hlIdx++] = sNode.z ?? 0;
+            hlPositions[hlIdx++] = tNode.x ?? 0;
+            hlPositions[hlIdx++] = tNode.y ?? 0;
+            hlPositions[hlIdx++] = tNode.z ?? 0;
+          }
+        }
+
         const positionAttr = geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
         if (positionAttr) {
           positionAttr.needsUpdate = true;
@@ -461,6 +506,51 @@ export function useVisualizer3DScene({
           }
           hlGeometry.setDrawRange(0, hlIdx / 3);
           highlightLine.visible = hlIdx > 0;
+        }
+      }
+
+      const dashedLinkLine = dashedLinkLineRef.current;
+      if (dashedLinkLine) {
+        const geometry = dashedLinkLine.geometry as THREE.BufferGeometry;
+        const requiredLength = dashedLinks.length * 6;
+        if (dashedLinkPositionBufferRef.current.length < requiredLength) {
+          dashedLinkPositionBufferRef.current = growFloat32Buffer(
+            dashedLinkPositionBufferRef.current,
+            requiredLength
+          );
+          geometry.setAttribute(
+            'position',
+            new THREE.BufferAttribute(dashedLinkPositionBufferRef.current, 3).setUsage(
+              THREE.DynamicDrawUsage
+            )
+          );
+        }
+
+        const positions = dashedLinkPositionBufferRef.current;
+        let idx = 0;
+
+        for (const link of dashedLinks) {
+          const { sourceId, targetId } = getLinkId(link);
+          const sNode = nodes.get(sourceId);
+          const tNode = nodes.get(targetId);
+          if (!sNode || !tNode) continue;
+
+          positions[idx++] = sNode.x ?? 0;
+          positions[idx++] = sNode.y ?? 0;
+          positions[idx++] = sNode.z ?? 0;
+          positions[idx++] = tNode.x ?? 0;
+          positions[idx++] = tNode.y ?? 0;
+          positions[idx++] = tNode.z ?? 0;
+        }
+
+        const positionAttr = geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+        if (positionAttr) {
+          positionAttr.needsUpdate = true;
+        }
+        geometry.setDrawRange(0, idx / 3);
+        dashedLinkLine.visible = idx > 0;
+        if (idx > 0 && positionAttr) {
+          dashedLinkLine.computeLineDistances();
         }
       }
 

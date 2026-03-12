@@ -21,7 +21,9 @@ import {
 } from '../../types';
 import { getRawPacketObservationKey } from '../../utils/rawPacketIdentity';
 import {
+  buildLinkKey,
   type Particle,
+  type PathStep,
   type PendingPacket,
   type RepeaterTrafficData,
   PARTICLE_COLOR_MAP,
@@ -29,6 +31,7 @@ import {
   analyzeRepeaterTraffic,
   buildAmbiguousRepeaterLabel,
   buildAmbiguousRepeaterNodeId,
+  compactPathSteps,
   dedupeConsecutive,
   generatePacketKey,
   getNodeType,
@@ -293,16 +296,35 @@ export function useVisualizerData3D({
     []
   );
 
-  const addLink = useCallback((sourceId: string, targetId: string, activityAtMs?: number) => {
-    const activityAt = activityAtMs ?? Date.now();
-    const key = [sourceId, targetId].sort().join('->');
-    const existing = linksRef.current.get(key);
-    if (existing) {
-      existing.lastActivity = Math.max(existing.lastActivity, activityAt);
-    } else {
-      linksRef.current.set(key, { source: sourceId, target: targetId, lastActivity: activityAt });
-    }
-  }, []);
+  const addLink = useCallback(
+    (
+      sourceId: string,
+      targetId: string,
+      activityAtMs?: number,
+      hiddenIntermediate: boolean = false
+    ) => {
+      const activityAt = activityAtMs ?? Date.now();
+      const key = buildLinkKey(sourceId, targetId);
+      const existing = linksRef.current.get(key);
+      if (existing) {
+        existing.lastActivity = Math.max(existing.lastActivity, activityAt);
+        if (hiddenIntermediate) {
+          existing.hasHiddenIntermediate = true;
+        } else {
+          existing.hasDirectObservation = true;
+        }
+      } else {
+        linksRef.current.set(key, {
+          source: sourceId,
+          target: targetId,
+          lastActivity: activityAt,
+          hasDirectObservation: !hiddenIntermediate,
+          hasHiddenIntermediate: hiddenIntermediate,
+        });
+      }
+    },
+    []
+  );
 
   const publishPacket = useCallback((packetKey: string) => {
     const pending = pendingRef.current.get(packetKey);
@@ -319,7 +341,7 @@ export function useVisualizerData3D({
 
       for (let i = 0; i < dedupedPath.length - 1; i++) {
         particlesRef.current.push({
-          linkKey: [dedupedPath[i], dedupedPath[i + 1]].sort().join('->'),
+          linkKey: buildLinkKey(dedupedPath[i], dedupedPath[i + 1]),
           progress: -i,
           speed: PARTICLE_SPEED * speedMultiplierRef.current,
           color: PARTICLE_COLOR_MAP[pending.label],
@@ -550,10 +572,12 @@ export function useVisualizerData3D({
       packet: RawPacket,
       myPrefix: string | null,
       activityAtMs: number
-    ): string[] => {
-      if (!parsed) return [];
-      const path: string[] = [];
+    ): { nodes: string[]; dashedLinkKeys: Set<string> } => {
+      if (!parsed) return { nodes: [], dashedLinkKeys: new Set() };
+      const steps: PathStep[] = [];
       let packetSource: string | null = null;
+      const isDm = parsed.payloadType === PayloadType.TextMessage;
+      const isOutgoingDm = isDm && !!myPrefix && parsed.srcHash?.toLowerCase() === myPrefix;
 
       if (parsed.payloadType === PayloadType.Advert && parsed.advertPubkey) {
         const nodeId = resolveNode(
@@ -564,7 +588,7 @@ export function useVisualizerData3D({
           activityAtMs
         );
         if (nodeId) {
-          path.push(nodeId);
+          steps.push({ nodeId });
           packetSource = nodeId;
         }
       } else if (parsed.payloadType === PayloadType.AnonRequest && parsed.anonRequestPubkey) {
@@ -576,12 +600,12 @@ export function useVisualizerData3D({
           activityAtMs
         );
         if (nodeId) {
-          path.push(nodeId);
+          steps.push({ nodeId });
           packetSource = nodeId;
         }
       } else if (parsed.payloadType === PayloadType.TextMessage && parsed.srcHash) {
         if (myPrefix && parsed.srcHash.toLowerCase() === myPrefix) {
-          path.push('self');
+          steps.push({ nodeId: 'self' });
           packetSource = 'self';
         } else {
           const nodeId = resolveNode(
@@ -592,7 +616,7 @@ export function useVisualizerData3D({
             activityAtMs
           );
           if (nodeId) {
-            path.push(nodeId);
+            steps.push({ nodeId });
             packetSource = nodeId;
           }
         }
@@ -607,7 +631,7 @@ export function useVisualizerData3D({
             activityAtMs
           );
           if (resolved) {
-            path.push(resolved);
+            steps.push({ nodeId: resolved });
             packetSource = resolved;
           }
         }
@@ -624,12 +648,12 @@ export function useVisualizerData3D({
           activityAtMs,
           { packetSource, nextPrefix }
         );
-        if (nodeId) path.push(nodeId);
+        steps.push({ nodeId, markHiddenLinkWhenOmitted: true });
       }
 
       if (parsed.payloadType === PayloadType.TextMessage && parsed.dstHash) {
         if (myPrefix && parsed.dstHash.toLowerCase() === myPrefix) {
-          path.push('self');
+          steps.push({ nodeId: 'self' });
         } else {
           const nodeId = resolveNode(
             { type: 'prefix', value: parsed.dstHash },
@@ -638,18 +662,24 @@ export function useVisualizerData3D({
             myPrefix,
             activityAtMs
           );
-          if (nodeId) path.push(nodeId);
-          else path.push('self');
+          if (nodeId) {
+            steps.push({ nodeId });
+          } else if (!isOutgoingDm) {
+            steps.push({ nodeId: 'self' });
+          }
         }
-      } else if (path.length > 0) {
-        path.push('self');
+      } else {
+        const hasVisibleNode = steps.some((step) => step.nodeId !== null);
+        if (hasVisibleNode) {
+          steps.push({ nodeId: 'self' });
+        }
       }
 
-      if (path.length > 0 && path[path.length - 1] !== 'self') {
-        path.push('self');
-      }
-
-      return dedupeConsecutive(path);
+      const compacted = compactPathSteps(steps);
+      return {
+        nodes: dedupeConsecutive(compacted.nodes),
+        dashedLinkKeys: compacted.dashedLinkKeys,
+      };
     },
     [resolveNode, showAmbiguousPaths, showAmbiguousNodes]
   );
@@ -674,20 +704,26 @@ export function useVisualizerData3D({
       if (!parsed) continue;
 
       const packetActivityAt = normalizePacketTimestampMs(packet.timestamp);
-      const path = buildPath(parsed, packet, myPrefix, packetActivityAt);
-      if (path.length < 2) continue;
+      const builtPath = buildPath(parsed, packet, myPrefix, packetActivityAt);
+      if (builtPath.nodes.length < 2) continue;
 
       const label = getPacketLabel(parsed.payloadType);
-      for (let i = 0; i < path.length; i++) {
-        const n = nodesRef.current.get(path[i]);
+      for (let i = 0; i < builtPath.nodes.length; i++) {
+        const n = nodesRef.current.get(builtPath.nodes[i]);
         if (n && n.id !== 'self') {
           n.lastActivityReason = i === 0 ? `${label} source` : `Relayed ${label}`;
         }
       }
 
-      for (let i = 0; i < path.length - 1; i++) {
-        if (path[i] !== path[i + 1]) {
-          addLink(path[i], path[i + 1], packetActivityAt);
+      for (let i = 0; i < builtPath.nodes.length - 1; i++) {
+        if (builtPath.nodes[i] !== builtPath.nodes[i + 1]) {
+          const linkKey = buildLinkKey(builtPath.nodes[i], builtPath.nodes[i + 1]);
+          addLink(
+            builtPath.nodes[i],
+            builtPath.nodes[i + 1],
+            packetActivityAt,
+            builtPath.dashedLinkKeys.has(linkKey)
+          );
           needsUpdate = true;
         }
       }
@@ -697,7 +733,7 @@ export function useVisualizerData3D({
       const existing = pendingRef.current.get(packetKey);
 
       if (existing && now < existing.expiresAt) {
-        existing.paths.push({ nodes: path, snr: packet.snr ?? null, timestamp: now });
+        existing.paths.push({ nodes: builtPath.nodes, snr: packet.snr ?? null, timestamp: now });
       } else {
         const existingTimer = timersRef.current.get(packetKey);
         if (existingTimer) {
@@ -707,7 +743,7 @@ export function useVisualizerData3D({
         pendingRef.current.set(packetKey, {
           key: packetKey,
           label: getPacketLabel(parsed.payloadType),
-          paths: [{ nodes: path, snr: packet.snr ?? null, timestamp: now }],
+          paths: [{ nodes: builtPath.nodes, snr: packet.snr ?? null, timestamp: now }],
           firstSeen: now,
           expiresAt: now + windowMs,
         });
