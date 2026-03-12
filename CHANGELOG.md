@@ -1,3 +1,14 @@
+## [3.2.0] - 2026-03-12
+
+Feature: Improve ambiguous-sender DM handling and visibility
+Feature: Allow for toggling of node GPS broadcast
+Feature: Add path width to bot and move example to full kwargs
+Feature: Improve node map color contrast
+Bugfix: More accurate tracking of contact data
+Bugfix: Misc. frontend performance and bugfixes
+Misc: Clearer warnings on user-key linkage
+Misc: Documentation improvements
+
 ## [3.1.1] - 2026-03-11
 
 Feature: Add basic auth
