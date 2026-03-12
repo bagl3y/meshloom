@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bell, Globe2, Info, Star, Trash2 } from 'lucide-react';
 import { toast } from './ui/sonner';
 import { DirectTraceIcon } from './DirectTraceIcon';
@@ -48,6 +48,8 @@ export function ChatHeader({
   onOpenChannelInfo,
 }: ChatHeaderProps) {
   const [showKey, setShowKey] = useState(false);
+  const [contactStatusInline, setContactStatusInline] = useState(true);
+  const keyTextRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     setShowKey(false);
@@ -104,6 +106,43 @@ export function ChatHeader({
     }
   };
 
+  useEffect(() => {
+    if (conversation.type !== 'contact') {
+      setContactStatusInline(true);
+      return;
+    }
+
+    const measure = () => {
+      const keyElement = keyTextRef.current;
+      if (!keyElement) return;
+      const isTruncated = keyElement.scrollWidth > keyElement.clientWidth + 1;
+      setContactStatusInline(!isTruncated);
+    };
+
+    measure();
+
+    const onResize = () => {
+      window.requestAnimationFrame(measure);
+    };
+
+    window.addEventListener('resize', onResize);
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => {
+        window.requestAnimationFrame(measure);
+      });
+      if (keyTextRef.current?.parentElement) {
+        observer.observe(keyTextRef.current.parentElement);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('resize', onResize);
+      observer?.disconnect();
+    };
+  }, [conversation.id, conversation.type, showKey]);
+
   return (
     <header className="conversation-header flex justify-between items-start px-4 py-2.5 border-b border-border gap-2">
       <span className="flex min-w-0 flex-1 items-start gap-2">
@@ -126,8 +165,8 @@ export function ChatHeader({
         )}
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="flex min-w-0 flex-1 items-baseline gap-2">
-              <h2 className="min-w-0 flex-1 font-semibold text-base">
+            <span className="flex min-w-0 flex-1 items-baseline gap-2 whitespace-nowrap">
+              <h2 className="min-w-0 shrink font-semibold text-base">
                 {titleClickable ? (
                   <button
                     type="button"
@@ -172,6 +211,7 @@ export function ChatHeader({
                 </button>
               ) : (
                 <span
+                  ref={keyTextRef}
                   className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground transition-colors hover:text-primary"
                   role="button"
                   tabIndex={0}
@@ -194,21 +234,25 @@ export function ChatHeader({
                 </span>
               )}
             </span>
-            {conversation.type === 'contact' &&
-              (() => {
-                const contact = contacts.find((c) => c.public_key === conversation.id);
-                if (!contact) return null;
-                return (
-                  <span className="min-w-0 flex-none text-[11px] text-muted-foreground max-sm:basis-full">
-                    <ContactStatusInfo
-                      contact={contact}
-                      ourLat={config?.lat ?? null}
-                      ourLon={config?.lon ?? null}
-                    />
-                  </span>
-                );
-              })()}
+            {conversation.type === 'contact' && activeContact && contactStatusInline && (
+              <span className="min-w-0 flex-none text-[11px] text-muted-foreground">
+                <ContactStatusInfo
+                  contact={activeContact}
+                  ourLat={config?.lat ?? null}
+                  ourLon={config?.lon ?? null}
+                />
+              </span>
+            )}
           </span>
+          {conversation.type === 'contact' && activeContact && !contactStatusInline && (
+            <span className="mt-0.5 min-w-0 text-[11px] text-muted-foreground">
+              <ContactStatusInfo
+                contact={activeContact}
+                ourLat={config?.lat ?? null}
+                ourLon={config?.lon ?? null}
+              />
+            </span>
+          )}
           {conversation.type === 'channel' && activeFloodScopeDisplay && (
             <button
               className="mt-0.5 flex items-center gap-1 text-left sm:hidden"

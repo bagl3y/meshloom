@@ -178,7 +178,14 @@ export function AppShell({
         <div className="hidden md:block min-h-0 overflow-hidden">{activeSidebarContent}</div>
 
         <Sheet open={sidebarOpen} onOpenChange={onSidebarOpenChange}>
-          <SheetContent side="left" className="w-[280px] p-0 flex flex-col" hideCloseButton>
+          <SheetContent
+            side="left"
+            className="w-[280px] p-0 flex flex-col"
+            hideCloseButton
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+            }}
+          >
             <SheetHeader className="sr-only">
               <SheetTitle>Navigation</SheetTitle>
               <SheetDescription>Sidebar navigation</SheetDescription>
