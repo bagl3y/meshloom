@@ -283,4 +283,35 @@ describe('SearchView', () => {
       expect.any(AbortSignal)
     );
   });
+
+  it('aborts the load-more request on unmount', async () => {
+    const pageResults = Array.from({ length: 50 }, (_, i) =>
+      createSearchResult({ id: i + 1, text: `result ${i}` })
+    );
+    let resolveLoadMore: ((value: Message[]) => void) | null = null;
+    mockGetMessages.mockResolvedValueOnce(pageResults).mockImplementationOnce(
+      () =>
+        new Promise<Message[]>((resolve) => {
+          resolveLoadMore = resolve;
+        })
+    );
+
+    const { unmount } = render(<SearchView {...defaultProps} />);
+
+    await typeAndWaitForResults('result');
+    fireEvent.click(screen.getByText('Load more results'));
+
+    const loadMoreSignal = mockGetMessages.mock.calls[1]?.[1] as AbortSignal | undefined;
+    expect(loadMoreSignal).toBeInstanceOf(AbortSignal);
+    expect(loadMoreSignal?.aborted).toBe(false);
+
+    unmount();
+
+    expect(loadMoreSignal?.aborted).toBe(true);
+
+    await act(async () => {
+      resolveLoadMore?.([createSearchResult({ id: 99, text: 'late result' })]);
+      await Promise.resolve();
+    });
+  });
 });

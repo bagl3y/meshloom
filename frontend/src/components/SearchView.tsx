@@ -123,6 +123,12 @@ export function SearchView({
     inputRef.current?.focus();
   }, [prefillRequest]);
 
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
   // Fetch search results
   useEffect(() => {
     if (!debouncedQuery) {
