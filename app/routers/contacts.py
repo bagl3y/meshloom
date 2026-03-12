@@ -289,6 +289,7 @@ async def create_contact(
                 background_tasks, request.public_key, request.name or existing.name
             )
 
+        await _broadcast_contact_update(existing)
         return existing
 
     # Create new contact
@@ -319,6 +320,7 @@ async def create_contact(
     stored = await ContactRepository.get_by_key(lower_key)
     if stored is None:
         raise HTTPException(status_code=500, detail="Contact was created but could not be reloaded")
+    await _broadcast_contact_update(stored)
     await _broadcast_contact_resolution(promoted_keys, stored)
     return stored
 
@@ -411,6 +413,7 @@ async def sync_contacts_from_radio() -> dict:
         )
         stored = await ContactRepository.get_by_key(lower_key)
         if stored is not None:
+            await _broadcast_contact_update(stored)
             await _broadcast_contact_resolution(promoted_keys, stored)
         count += 1
 

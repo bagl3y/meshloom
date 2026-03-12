@@ -113,6 +113,33 @@ class TestSyncChannelsFromRadio:
         assert secret_b.hex().upper() in keys
 
     @pytest.mark.asyncio
+    async def test_sync_broadcasts_channel_updates(self, test_db, client):
+        secret = bytes.fromhex("0123456789abcdef0123456789abcdef")
+        mock_mc = MagicMock()
+
+        async def mock_get_channel(idx):
+            if idx == 0:
+                return _make_channel_info("#general", secret)
+            return _make_empty_channel()
+
+        mock_mc.commands.get_channel = AsyncMock(side_effect=mock_get_channel)
+        radio_manager._meshcore = mock_mc
+
+        with (
+            _patch_require_connected(mock_mc),
+            patch("app.routers.channels.radio_manager") as mock_ch_rm,
+            patch("app.routers.channels.broadcast_event") as mock_broadcast,
+        ):
+            mock_ch_rm.radio_operation = lambda desc: _noop_radio_operation(mock_mc)
+
+            response = await client.post("/api/channels/sync?max_channels=3")
+
+        assert response.status_code == 200
+        mock_broadcast.assert_called_once()
+        assert mock_broadcast.call_args.args[0] == "channel"
+        assert mock_broadcast.call_args.args[1]["key"] == secret.hex().upper()
+
+    @pytest.mark.asyncio
     async def test_sync_skips_empty_channels(self, test_db, client):
         """Empty channel slots are skipped during sync."""
         secret = bytes.fromhex("aabbccddaabbccddaabbccddaabbccdd")
@@ -277,6 +304,19 @@ class TestChannelFloodScopeOverride:
         assert channel.flood_scope_override == "#Esperance"
         mock_broadcast.assert_called_once()
         assert mock_broadcast.call_args.args[0] == "channel"
+
+
+class TestCreateChannel:
+    @pytest.mark.asyncio
+    async def test_create_broadcasts_channel_update(self, test_db):
+        from app.routers.channels import CreateChannelRequest, create_channel
+
+        with patch("app.routers.channels.broadcast_event") as mock_broadcast:
+            result = await create_channel(CreateChannelRequest(name="#mychannel"))
+
+        mock_broadcast.assert_called_once()
+        assert mock_broadcast.call_args.args[0] == "channel"
+        assert mock_broadcast.call_args.args[1]["key"] == result.key
 
     @pytest.mark.asyncio
     async def test_existing_hash_is_not_doubled(self, test_db, client):

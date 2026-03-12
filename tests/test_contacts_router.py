@@ -108,10 +108,11 @@ class TestCreateContact:
 
     @pytest.mark.asyncio
     async def test_create_new_contact(self, test_db, client):
-        response = await client.post(
-            "/api/contacts",
-            json={"public_key": KEY_A, "name": "NewContact"},
-        )
+        with patch("app.websocket.broadcast_event") as mock_broadcast:
+            response = await client.post(
+                "/api/contacts",
+                json={"public_key": KEY_A, "name": "NewContact"},
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -124,6 +125,7 @@ class TestCreateContact:
         assert contact is not None
         assert contact.name == "NewContact"
         assert data["last_seen"] == contact.last_seen
+        mock_broadcast.assert_called_once_with("contact", contact.model_dump())
 
     @pytest.mark.asyncio
     async def test_create_invalid_hex(self, test_db, client):
@@ -662,7 +664,10 @@ class TestSyncContacts:
         mock_mc.commands.get_contacts = AsyncMock(return_value=mock_result)
 
         radio_manager._meshcore = mock_mc
-        with _patch_require_connected(mock_mc):
+        with (
+            _patch_require_connected(mock_mc),
+            patch("app.websocket.broadcast_event") as mock_broadcast,
+        ):
             response = await client.post("/api/contacts/sync")
 
         assert response.status_code == 200
@@ -672,6 +677,12 @@ class TestSyncContacts:
         alice = await ContactRepository.get_by_key(KEY_A)
         assert alice is not None
         assert alice.name == "Alice"
+        assert mock_broadcast.call_count == 2
+        assert [call.args[0] for call in mock_broadcast.call_args_list] == ["contact", "contact"]
+        assert {call.args[1]["public_key"] for call in mock_broadcast.call_args_list} == {
+            KEY_A,
+            KEY_B,
+        }
 
     @pytest.mark.asyncio
     async def test_sync_requires_connection(self, test_db, client):

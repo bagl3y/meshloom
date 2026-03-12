@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/channels", tags=["channels"])
 
 
+def _broadcast_channel_update(channel: Channel) -> None:
+    broadcast_event("channel", channel.model_dump())
+
+
 class CreateChannelRequest(BaseModel):
     name: str = Field(min_length=1, max_length=32)
     key: str | None = Field(
@@ -98,13 +102,12 @@ async def create_channel(request: CreateChannelRequest) -> Channel:
         on_radio=False,
     )
 
-    return Channel(
-        key=key_hex,
-        name=request.name,
-        is_hashtag=is_hashtag,
-        on_radio=False,
-        flood_scope_override=None,
-    )
+    stored = await ChannelRepository.get_by_key(key_hex)
+    if stored is None:
+        raise HTTPException(status_code=500, detail="Channel was created but could not be reloaded")
+
+    _broadcast_channel_update(stored)
+    return stored
 
 
 @router.post("/sync")
@@ -123,6 +126,9 @@ async def sync_channels_from_radio(max_channels: int = Query(default=40, ge=1, l
                 key_hex = await upsert_channel_from_radio_slot(result.payload, on_radio=True)
                 if key_hex is not None:
                     count += 1
+                    stored = await ChannelRepository.get_by_key(key_hex)
+                    if stored is not None:
+                        _broadcast_channel_update(stored)
                     logger.debug(
                         "Synced channel %s: %s", key_hex, result.payload.get("channel_name")
                     )
