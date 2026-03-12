@@ -220,18 +220,6 @@ export function AppShell({
 
           {showSettings && (
             <div className="flex-1 flex flex-col min-h-0">
-              <h2 className="flex justify-between items-center px-4 py-2.5 border-b border-border font-semibold text-base">
-                <span>Radio & Settings</span>
-                <span className="text-sm text-muted-foreground hidden md:inline">
-                  <span className="inline-flex items-center gap-1.5">
-                    {(() => {
-                      const Icon = SETTINGS_SECTION_ICONS[settingsSection];
-                      return <Icon className="h-4 w-4" aria-hidden="true" />;
-                    })()}
-                    <span>{SETTINGS_SECTION_LABELS[settingsSection]}</span>
-                  </span>
-                </span>
-              </h2>
               <div className="flex-1 min-h-0 overflow-hidden">
                 <Suspense
                   fallback={
