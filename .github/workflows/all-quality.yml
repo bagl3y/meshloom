@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  all-quality:
+  backend-checks:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -18,13 +18,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
         with:
@@ -33,15 +26,36 @@ jobs:
       - name: Install backend dependencies
         run: uv sync --dev
 
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: frontend
-
       - name: Backend lint
         run: uv run ruff check app/ tests/
 
       - name: Backend format check
         run: uv run ruff format --check app/ tests/
+
+      - name: Backend typecheck
+        run: uv run pyright app/
+
+      - name: Backend tests
+        run: PYTHONPATH=. uv run pytest tests/ -v
+
+  frontend-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
 
       - name: Frontend lint
         run: npm run lint
@@ -50,12 +64,6 @@ jobs:
       - name: Frontend format check
         run: npm run format:check
         working-directory: frontend
-
-      - name: Backend typecheck
-        run: uv run pyright app/
-
-      - name: Backend tests
-        run: PYTHONPATH=. uv run pytest tests/ -v
 
       - name: Frontend tests
         run: npm run test:run
