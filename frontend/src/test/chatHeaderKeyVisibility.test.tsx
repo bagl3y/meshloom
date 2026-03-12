@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ChatHeader } from '../components/ChatHeader';
@@ -92,6 +92,28 @@ describe('ChatHeader key visibility', () => {
 
     expect(screen.getByText(pubKey)).toBeInTheDocument();
     expect(screen.queryByText('Show Key')).not.toBeInTheDocument();
+  });
+
+  it('renders the clickable conversation title as a real button inside the heading', () => {
+    const pubKey = '12'.repeat(32);
+    const conversation: Conversation = { type: 'contact', id: pubKey, name: 'Alice' };
+    const onOpenContactInfo = vi.fn();
+
+    render(
+      <ChatHeader
+        {...baseProps}
+        conversation={conversation}
+        channels={[]}
+        onOpenContactInfo={onOpenContactInfo}
+      />
+    );
+
+    const heading = screen.getByRole('heading', { name: /alice/i });
+    const titleButton = within(heading).getByRole('button', { name: 'View info for Alice' });
+
+    expect(heading).toContainElement(titleButton);
+    fireEvent.click(titleButton);
+    expect(onOpenContactInfo).toHaveBeenCalledWith(pubKey);
   });
 
   it('copies key to clipboard when revealed key is clicked', async () => {

@@ -94,15 +94,23 @@ export function ChatHeader({
     onSetChannelFloodScopeOverride(conversation.id, nextValue);
   };
 
+  const handleOpenConversationInfo = () => {
+    if (conversation.type === 'contact' && onOpenContactInfo) {
+      onOpenContactInfo(conversation.id);
+      return;
+    }
+    if (conversation.type === 'channel' && onOpenChannelInfo) {
+      onOpenChannelInfo(conversation.id);
+    }
+  };
+
   return (
     <header className="conversation-header flex justify-between items-start px-4 py-2.5 border-b border-border gap-2">
       <span className="flex min-w-0 flex-1 items-start gap-2">
         {conversation.type === 'contact' && onOpenContactInfo && (
-          <span
-            className="flex-shrink-0 cursor-pointer"
-            role="button"
-            tabIndex={0}
-            onKeyDown={handleKeyboardActivate}
+          <button
+            type="button"
+            className="avatar-action-button flex-shrink-0 cursor-pointer rounded-full border-none bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => onOpenContactInfo(conversation.id)}
             title="View contact info"
             aria-label={`View info for ${conversation.name}`}
@@ -114,42 +122,41 @@ export function ChatHeader({
               contactType={contacts.find((c) => c.public_key === conversation.id)?.type}
               clickable
             />
-          </span>
+          </button>
         )}
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="flex min-w-0 flex-1 items-baseline gap-2">
-              <h2
-                className={`flex shrink min-w-0 items-center gap-1.5 font-semibold text-base ${titleClickable ? 'cursor-pointer hover:text-primary transition-colors' : ''}`}
-                role={titleClickable ? 'button' : undefined}
-                tabIndex={titleClickable ? 0 : undefined}
-                aria-label={titleClickable ? `View info for ${conversation.name}` : undefined}
-                onKeyDown={titleClickable ? handleKeyboardActivate : undefined}
-                onClick={
-                  titleClickable
-                    ? () => {
-                        if (conversation.type === 'contact' && onOpenContactInfo) {
-                          onOpenContactInfo(conversation.id);
-                        } else if (conversation.type === 'channel' && onOpenChannelInfo) {
-                          onOpenChannelInfo(conversation.id);
-                        }
-                      }
-                    : undefined
-                }
-              >
-                <span className="truncate">
-                  {conversation.type === 'channel' &&
-                  !conversation.name.startsWith('#') &&
-                  activeChannel?.is_hashtag
-                    ? '#'
-                    : ''}
-                  {conversation.name}
-                </span>
-                {titleClickable && (
-                  <Info
-                    className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/80"
-                    aria-hidden="true"
-                  />
+              <h2 className="min-w-0 flex-1 font-semibold text-base">
+                {titleClickable ? (
+                  <button
+                    type="button"
+                    className="flex min-w-0 shrink items-center gap-1.5 text-left hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                    aria-label={`View info for ${conversation.name}`}
+                    onClick={handleOpenConversationInfo}
+                  >
+                    <span className="truncate">
+                      {conversation.type === 'channel' &&
+                      !conversation.name.startsWith('#') &&
+                      activeChannel?.is_hashtag
+                        ? '#'
+                        : ''}
+                      {conversation.name}
+                    </span>
+                    <Info
+                      className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/80"
+                      aria-hidden="true"
+                    />
+                  </button>
+                ) : (
+                  <span className="truncate">
+                    {conversation.type === 'channel' &&
+                    !conversation.name.startsWith('#') &&
+                    activeChannel?.is_hashtag
+                      ? '#'
+                      : ''}
+                    {conversation.name}
+                  </span>
                 )}
               </h2>
               {isPrivateChannel && !showKey ? (

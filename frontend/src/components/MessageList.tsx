@@ -606,6 +606,10 @@ export function MessageList({
                 (avatarName ? `name:${avatarName}` : `message:${msg.id}`);
             }
           }
+          const avatarActionLabel =
+            avatarName && avatarName !== 'Unknown'
+              ? `View info for ${avatarName}`
+              : `View info for ${avatarKey.slice(0, 12)}`;
 
           return (
             <div
@@ -619,26 +623,33 @@ export function MessageList({
             >
               {!msg.outgoing && (
                 <div className="w-10 flex-shrink-0 flex items-start pt-0.5">
-                  {showAvatar && avatarKey && (
-                    <span
-                      role={onOpenContactInfo ? 'button' : undefined}
-                      tabIndex={onOpenContactInfo ? 0 : undefined}
-                      onKeyDown={onOpenContactInfo ? handleKeyboardActivate : undefined}
-                      onClick={
-                        onOpenContactInfo
-                          ? () => onOpenContactInfo(avatarKey, msg.type === 'CHAN')
-                          : undefined
-                      }
-                    >
-                      <ContactAvatar
-                        name={avatarName}
-                        publicKey={avatarKey}
-                        size={32}
-                        clickable={!!onOpenContactInfo}
-                        variant={avatarVariant}
-                      />
-                    </span>
-                  )}
+                  {showAvatar &&
+                    avatarKey &&
+                    (onOpenContactInfo ? (
+                      <button
+                        type="button"
+                        className="avatar-action-button rounded-full border-none bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={avatarActionLabel}
+                        onClick={() => onOpenContactInfo(avatarKey, msg.type === 'CHAN')}
+                      >
+                        <ContactAvatar
+                          name={avatarName}
+                          publicKey={avatarKey}
+                          size={32}
+                          clickable
+                          variant={avatarVariant}
+                        />
+                      </button>
+                    ) : (
+                      <span>
+                        <ContactAvatar
+                          name={avatarName}
+                          publicKey={avatarKey}
+                          size={32}
+                          variant={avatarVariant}
+                        />
+                      </span>
+                    ))}
                 </div>
               )}
               <div

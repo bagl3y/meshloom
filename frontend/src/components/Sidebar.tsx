@@ -5,9 +5,9 @@ import {
   ChevronDown,
   ChevronRight,
   LockOpen,
+  Logs,
   Map,
   Search as SearchIcon,
-  Sparkles,
   SquarePen,
   Waypoints,
   X,
@@ -533,7 +533,7 @@ export function Sidebar({
         renderSidebarActionRow({
           key: 'tool-raw',
           active: isActive('raw', 'raw'),
-          icon: <Waypoints className="h-4 w-4" />,
+          icon: <Logs className="h-4 w-4" />,
           label: 'Packet Feed',
           onClick: () =>
             handleSelectConversation({
@@ -557,7 +557,7 @@ export function Sidebar({
         renderSidebarActionRow({
           key: 'tool-visualizer',
           active: isActive('visualizer', 'visualizer'),
-          icon: <Sparkles className="h-4 w-4" />,
+          icon: <Waypoints className="h-4 w-4" />,
           label: 'Mesh Visualizer',
           onClick: () =>
             handleSelectConversation({

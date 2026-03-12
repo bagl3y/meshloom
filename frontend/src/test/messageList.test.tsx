@@ -61,4 +61,23 @@ describe('MessageList channel sender rendering', () => {
     expect(screen.getByText('Alice')).toBeInTheDocument();
     expect(screen.getByText('A')).toBeInTheDocument();
   });
+
+  it('gives clickable sender avatars an accessible label', () => {
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            text: 'garbled payload with no sender prefix',
+            sender_name: 'Alice',
+            sender_key: 'ab'.repeat(32),
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+        onOpenContactInfo={() => {}}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'View info for Alice' })).toBeInTheDocument();
+  });
 });

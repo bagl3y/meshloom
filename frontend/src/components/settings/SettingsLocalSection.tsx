@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { Logs, MessageSquare } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
+import { ContactAvatar } from '../ContactAvatar';
 import {
   captureLastViewedConversationFromHash,
   getReopenLastConversationEnabled,
@@ -97,7 +99,7 @@ function ThemePreview({ className }: { className?: string }) {
   return (
     <div className={`rounded-lg border border-border bg-card p-3 ${className ?? ''}`}>
       <p className="text-xs text-muted-foreground mb-3">
-        Preview alert and message contrast for the selected theme.
+        Preview alert, message, sidebar, and badge contrast for the selected theme.
       </p>
 
       <div className="space-y-2">
@@ -125,6 +127,42 @@ function ThemePreview({ className }: { className?: string }) {
           text="Hi there! I'm using RemoteTerm."
         />
       </div>
+
+      <div className="mt-4 rounded-md border border-border bg-background p-2">
+        <p className="mb-2 text-[11px] font-medium text-muted-foreground">Sidebar preview</p>
+        <div className="space-y-1">
+          <PreviewSidebarRow
+            active
+            leading={
+              <span
+                className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary"
+                aria-hidden="true"
+              >
+                <Logs className="h-3.5 w-3.5" />
+              </span>
+            }
+            label="Packet Feed"
+          />
+          <PreviewSidebarRow
+            leading={<ContactAvatar name="Alice" publicKey={'ab'.repeat(32)} size={24} />}
+            label="Alice"
+            badge={
+              <span className="rounded-full bg-badge-unread/90 px-1.5 py-0.5 text-[10px] font-semibold text-badge-unread-foreground">
+                3
+              </span>
+            }
+          />
+          <PreviewSidebarRow
+            leading={<ContactAvatar name="Mesh Ops" publicKey={'cd'.repeat(32)} size={24} />}
+            label="Mesh Ops"
+            badge={
+              <span className="rounded-full bg-badge-mention px-1.5 py-0.5 text-[10px] font-semibold text-badge-mention-foreground">
+                @2
+              </span>
+            }
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -150,6 +188,37 @@ function PreviewMessage({
         <span className="mb-1 text-[11px] text-muted-foreground">{sender}</span>
         <div className={`rounded-2xl px-3 py-2 text-sm break-words ${bubbleClassName}`}>{text}</div>
       </div>
+    </div>
+  );
+}
+
+function PreviewSidebarRow({
+  leading,
+  label,
+  badge,
+  active = false,
+}: {
+  leading: React.ReactNode;
+  label: string;
+  badge?: React.ReactNode;
+  active?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-md border-l-2 px-3 py-2 text-[13px] ${
+        active ? 'border-l-primary bg-accent text-foreground' : 'border-l-transparent'
+      }`}
+    >
+      {leading}
+      <span className={`min-w-0 flex-1 truncate ${active ? 'font-medium' : 'text-foreground'}`}>
+        {label}
+      </span>
+      {badge}
+      {!badge && (
+        <span className="text-muted-foreground" aria-hidden="true">
+          <MessageSquare className="h-3.5 w-3.5" />
+        </span>
+      )}
     </div>
   );
 }
