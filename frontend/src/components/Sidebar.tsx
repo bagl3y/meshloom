@@ -416,7 +416,7 @@ export function Sidebar({
     key: `${keyPrefix}-${contact.public_key}`,
     type: 'contact',
     id: contact.public_key,
-    name: getContactDisplayName(contact.name, contact.public_key),
+    name: getContactDisplayName(contact.name, contact.public_key, contact.last_advert),
     unreadCount: getUnreadCount('contact', contact.public_key),
     isMention: hasMention('contact', contact.public_key),
     notificationsEnabled:

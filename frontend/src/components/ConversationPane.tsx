@@ -15,6 +15,7 @@ import type {
   RadioConfig,
 } from '../types';
 import { CONTACT_TYPE_REPEATER } from '../types';
+import { isPrefixOnlyContact, isUnknownFullKeyContact } from '../utils/pubkey';
 
 const RepeaterDashboard = lazy(() =>
   import('./RepeaterDashboard').then((m) => ({ default: m.RepeaterDashboard }))
@@ -66,6 +67,25 @@ function LoadingPane({ label }: { label: string }) {
   );
 }
 
+function ContactResolutionBanner({ variant }: { variant: 'unknown-full-key' | 'prefix-only' }) {
+  if (variant === 'prefix-only') {
+    return (
+      <div className="mx-4 mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        We only know a key prefix for this sender, which can happen when a fallback DM arrives
+        before we learn their full identity. This conversation is read-only until we hear an
+        advertisement that resolves the full key.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-4 mt-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+      A full identity profile is not yet available because we have not heard an advertisement from
+      this sender. The contact will fill in automatically when an advertisement arrives.
+    </div>
+  );
+}
+
 export function ConversationPane({
   activeConversation,
   contacts,
@@ -106,6 +126,17 @@ export function ConversationPane({
     const contact = contacts.find((candidate) => candidate.public_key === activeConversation.id);
     return contact?.type === CONTACT_TYPE_REPEATER;
   }, [activeConversation, contacts]);
+  const activeContact = useMemo(() => {
+    if (!activeConversation || activeConversation.type !== 'contact') return null;
+    return contacts.find((candidate) => candidate.public_key === activeConversation.id) ?? null;
+  }, [activeConversation, contacts]);
+  const isPrefixOnlyActiveContact = activeContact
+    ? isPrefixOnlyContact(activeContact.public_key)
+    : false;
+  const isUnknownFullKeyActiveContact =
+    activeContact !== null &&
+    !isPrefixOnlyActiveContact &&
+    isUnknownFullKeyContact(activeContact.public_key, activeContact.last_advert);
 
   if (!activeConversation) {
     return (
@@ -198,6 +229,12 @@ export function ConversationPane({
         onOpenContactInfo={onOpenContactInfo}
         onOpenChannelInfo={onOpenChannelInfo}
       />
+      {activeConversation.type === 'contact' && isPrefixOnlyActiveContact && (
+        <ContactResolutionBanner variant="prefix-only" />
+      )}
+      {activeConversation.type === 'contact' && isUnknownFullKeyActiveContact && (
+        <ContactResolutionBanner variant="unknown-full-key" />
+      )}
       <MessageList
         key={activeConversation.id}
         messages={messages}
@@ -220,16 +257,20 @@ export function ConversationPane({
         onLoadNewer={onLoadNewer}
         onJumpToBottom={onJumpToBottom}
       />
-      <MessageInput
-        ref={messageInputRef}
-        onSend={onSendMessage}
-        disabled={!health?.radio_connected}
-        conversationType={activeConversation.type}
-        senderName={config?.name}
-        placeholder={
-          !health?.radio_connected ? 'Radio not connected' : `Message ${activeConversation.name}...`
-        }
-      />
+      {activeConversation.type === 'contact' && isPrefixOnlyActiveContact ? null : (
+        <MessageInput
+          ref={messageInputRef}
+          onSend={onSendMessage}
+          disabled={!health?.radio_connected}
+          conversationType={activeConversation.type}
+          senderName={config?.name}
+          placeholder={
+            !health?.radio_connected
+              ? 'Radio not connected'
+              : `Message ${activeConversation.name}...`
+          }
+        />
+      )}
     </>
   );
 }

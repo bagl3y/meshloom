@@ -16,6 +16,7 @@ export interface UseWebSocketOptions {
   onHealth?: (health: HealthStatus) => void;
   onMessage?: (message: Message) => void;
   onContact?: (contact: Contact) => void;
+  onContactResolved?: (previousPublicKey: string, contact: Contact) => void;
   onContactDeleted?: (publicKey: string) => void;
   onChannel?: (channel: Channel) => void;
   onChannelDeleted?: (key: string) => void;
@@ -102,6 +103,14 @@ export function useWebSocket(options: UseWebSocketOptions) {
           case 'contact':
             handlers.onContact?.(msg.data as Contact);
             break;
+          case 'contact_resolved': {
+            const resolved = msg.data as {
+              previous_public_key: string;
+              contact: Contact;
+            };
+            handlers.onContactResolved?.(resolved.previous_public_key, resolved.contact);
+            break;
+          }
           case 'channel':
             handlers.onChannel?.(msg.data as Channel);
             break;

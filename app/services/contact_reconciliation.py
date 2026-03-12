@@ -2,9 +2,27 @@
 
 import logging
 
-from app.repository import ContactNameHistoryRepository, MessageRepository
+from app.repository import ContactNameHistoryRepository, ContactRepository, MessageRepository
 
 logger = logging.getLogger(__name__)
+
+
+async def promote_prefix_contacts_for_contact(
+    *,
+    public_key: str,
+    contact_repository=ContactRepository,
+    log: logging.Logger | None = None,
+) -> list[str]:
+    """Promote prefix-only placeholder contacts once a full key is known."""
+    normalized_key = public_key.lower()
+    promoted = await contact_repository.promote_prefix_placeholders(normalized_key)
+    if promoted:
+        (log or logger).info(
+            "Promoted %d prefix contact placeholder(s) for %s",
+            len(promoted),
+            normalized_key[:12],
+        )
+    return promoted
 
 
 async def claim_prefix_messages_for_contact(

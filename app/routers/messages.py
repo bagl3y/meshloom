@@ -108,6 +108,11 @@ async def send_direct_message(request: SendDirectMessageRequest) -> Message:
         raise HTTPException(
             status_code=404, detail=f"Contact not found in database: {request.destination}"
         )
+    if len(db_contact.public_key) < 64:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot send to an unresolved prefix-only contact until a full key is known",
+        )
 
     return await send_direct_message_to_contact(
         contact=db_contact,

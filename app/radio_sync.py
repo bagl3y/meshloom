@@ -732,6 +732,12 @@ async def _sync_contacts_to_radio_inner(mc: MeshCore) -> dict:
             continue
         if not contact:
             continue
+        if len(contact.public_key) < 64:
+            logger.debug(
+                "Skipping unresolved prefix-only favorite contact '%s' for radio sync",
+                favorite.id,
+            )
+            continue
         key = contact.public_key.lower()
         if key in selected_keys:
             continue
@@ -801,6 +807,9 @@ async def ensure_contact_on_radio(
     if not contact:
         logger.debug("Cannot sync favorite contact %s: not found", public_key[:12])
         return {"loaded": 0, "error": "Contact not found"}
+    if len(contact.public_key) < 64:
+        logger.debug("Cannot sync unresolved prefix-only contact %s to radio", public_key)
+        return {"loaded": 0, "error": "Full contact key not yet known"}
 
     if mc is not None:
         _last_contact_sync = now
@@ -833,6 +842,11 @@ async def _load_contacts_to_radio(mc: MeshCore, contacts: list[Contact]) -> dict
     failed = 0
 
     for contact in contacts:
+        if len(contact.public_key) < 64:
+            logger.debug(
+                "Skipping unresolved prefix-only contact %s during radio load", contact.public_key
+            )
+            continue
         radio_contact = mc.get_contact_by_key_prefix(contact.public_key[:12])
         if radio_contact:
             already_on_radio += 1

@@ -14,6 +14,58 @@ describe('wsEvents', () => {
     });
   });
 
+  it('parses contact_resolved events', () => {
+    const event = parseWsEvent(
+      JSON.stringify({
+        type: 'contact_resolved',
+        data: {
+          previous_public_key: 'abc123def456',
+          contact: {
+            public_key: 'aa'.repeat(32),
+            name: null,
+            type: 0,
+            flags: 0,
+            last_path: null,
+            last_path_len: -1,
+            out_path_hash_mode: -1,
+            last_advert: null,
+            lat: null,
+            lon: null,
+            last_seen: null,
+            on_radio: false,
+            last_contacted: null,
+            last_read_at: null,
+            first_seen: null,
+          },
+        },
+      })
+    );
+
+    expect(event).toEqual({
+      type: 'contact_resolved',
+      data: {
+        previous_public_key: 'abc123def456',
+        contact: {
+          public_key: 'aa'.repeat(32),
+          name: null,
+          type: 0,
+          flags: 0,
+          last_path: null,
+          last_path_len: -1,
+          out_path_hash_mode: -1,
+          last_advert: null,
+          lat: null,
+          lon: null,
+          last_seen: null,
+          on_radio: false,
+          last_contacted: null,
+          last_read_at: null,
+          first_seen: null,
+        },
+      },
+    });
+  });
+
   it('parses channel_deleted events', () => {
     const event = parseWsEvent(JSON.stringify({ type: 'channel_deleted', data: { key: 'bb' } }));
 

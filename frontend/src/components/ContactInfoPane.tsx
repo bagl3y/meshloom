@@ -3,6 +3,11 @@ import { Ban, Search, Star } from 'lucide-react';
 import { api } from '../api';
 import { formatTime } from '../utils/messageParser';
 import {
+  getContactDisplayName,
+  isPrefixOnlyContact,
+  isUnknownFullKeyContact,
+} from '../utils/pubkey';
+import {
   isValidLocation,
   calculateDistance,
   formatDistance,
@@ -133,6 +138,11 @@ export function ContactInfoPane({
       ? formatPathHashMode(effectiveRoute.pathHashMode)
       : null;
   const learnedRouteLabel = contact ? formatRouteLabel(contact.last_path_len, true) : null;
+  const isPrefixOnlyResolvedContact = contact ? isPrefixOnlyContact(contact.public_key) : false;
+  const isUnknownFullKeyResolvedContact =
+    contact !== null &&
+    !isPrefixOnlyResolvedContact &&
+    isUnknownFullKeyContact(contact.public_key, contact.last_advert);
 
   return (
     <Sheet open={contactKey !== null} onOpenChange={(open) => !open && onClose()}>
@@ -249,7 +259,7 @@ export function ContactInfoPane({
                 />
                 <div className="flex-1 min-w-0">
                   <h2 className="text-lg font-semibold truncate">
-                    {contact.name || contact.public_key.slice(0, 12)}
+                    {getContactDisplayName(contact.name, contact.public_key, contact.last_advert)}
                   </h2>
                   <span
                     className="text-xs font-mono text-muted-foreground cursor-pointer hover:text-primary transition-colors block truncate"
@@ -277,6 +287,22 @@ export function ContactInfoPane({
                 </div>
               </div>
             </div>
+
+            {isPrefixOnlyResolvedContact && (
+              <div className="mx-5 mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                We only know a key prefix for this sender, which can happen when a fallback DM
+                arrives before we hear an advertisement. This contact stays read-only until the full
+                key resolves from a later advertisement.
+              </div>
+            )}
+
+            {isUnknownFullKeyResolvedContact && (
+              <div className="mx-5 mt-4 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+                We know this sender&apos;s full key, but we have not yet heard an advertisement that
+                fills in their identity details. Those details will appear automatically when an
+                advertisement arrives.
+              </div>
+            )}
 
             {/* Info grid */}
             <div className="px-5 py-3 border-b border-border">

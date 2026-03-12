@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   messageCache: {
     addMessage: vi.fn(),
     remove: vi.fn(),
+    rename: vi.fn(),
     updateAck: vi.fn(),
   },
 }));
@@ -77,6 +78,7 @@ function createRealtimeArgs(overrides: Partial<Parameters<typeof useRealtimeAppS
       addMessageIfNew: vi.fn(),
       trackNewMessage: vi.fn(),
       incrementUnread: vi.fn(),
+      renameConversationState: vi.fn(),
       checkMention: vi.fn(() => false),
       pendingDeleteFallbackRef: { current: false },
       setActiveConversation: vi.fn(),
@@ -191,6 +193,58 @@ describe('useRealtimeAppState', () => {
     expect(mocks.messageCache.remove).toHaveBeenCalledWith(incomingDm.conversation_key);
     expect(args.setActiveConversation).toHaveBeenCalledWith(null);
     expect(pendingDeleteFallbackRef.current).toBe(true);
+  });
+
+  it('resolves a prefix-only contact into a full key and updates active conversation state', () => {
+    const previousPublicKey = 'abc123def456';
+    const resolvedContact: Contact = {
+      public_key: 'aa'.repeat(32),
+      name: null,
+      type: 0,
+      flags: 0,
+      last_path: null,
+      last_path_len: -1,
+      out_path_hash_mode: -1,
+      last_advert: null,
+      lat: null,
+      lon: null,
+      last_seen: null,
+      on_radio: false,
+      last_contacted: 1700000000,
+      last_read_at: null,
+      first_seen: 1700000000,
+    };
+    const activeConversationRef = {
+      current: {
+        type: 'contact',
+        id: previousPublicKey,
+        name: 'abc123def456',
+      } satisfies Conversation,
+    };
+    const { args, fns } = createRealtimeArgs({
+      activeConversationRef,
+    });
+
+    const { result } = renderHook(() => useRealtimeAppState(args));
+
+    act(() => {
+      result.current.onContactResolved?.(previousPublicKey, resolvedContact);
+    });
+
+    expect(fns.setContacts).toHaveBeenCalledWith(expect.any(Function));
+    expect(mocks.messageCache.rename).toHaveBeenCalledWith(
+      previousPublicKey,
+      resolvedContact.public_key
+    );
+    expect(args.renameConversationState).toHaveBeenCalledWith(
+      `contact-${previousPublicKey}`,
+      `contact-${resolvedContact.public_key}`
+    );
+    expect(args.setActiveConversation).toHaveBeenCalledWith({
+      type: 'contact',
+      id: resolvedContact.public_key,
+      name: '[unknown sender]',
+    });
   });
 
   it('appends raw packets using observation identity dedup', () => {

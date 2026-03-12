@@ -16,6 +16,7 @@ WsEventType = Literal[
     "health",
     "message",
     "contact",
+    "contact_resolved",
     "channel",
     "contact_deleted",
     "channel_deleted",
@@ -28,6 +29,11 @@ WsEventType = Literal[
 
 class ContactDeletedPayload(TypedDict):
     public_key: str
+
+
+class ContactResolvedPayload(TypedDict):
+    previous_public_key: str
+    contact: Contact
 
 
 class ChannelDeletedPayload(TypedDict):
@@ -49,6 +55,7 @@ WsEventPayload = (
     HealthResponse
     | Message
     | Contact
+    | ContactResolvedPayload
     | Channel
     | ContactDeletedPayload
     | ChannelDeletedPayload
@@ -61,6 +68,7 @@ _PAYLOAD_ADAPTERS: dict[WsEventType, TypeAdapter[Any]] = {
     "health": TypeAdapter(HealthResponse),
     "message": TypeAdapter(Message),
     "contact": TypeAdapter(Contact),
+    "contact_resolved": TypeAdapter(ContactResolvedPayload),
     "channel": TypeAdapter(Channel),
     "contact_deleted": TypeAdapter(ContactDeletedPayload),
     "channel_deleted": TypeAdapter(ChannelDeletedPayload),

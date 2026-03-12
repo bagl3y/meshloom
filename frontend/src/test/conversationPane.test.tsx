@@ -196,4 +196,76 @@ describe('ConversationPane', () => {
       expect(screen.getByTestId('message-input')).toBeInTheDocument();
     });
   });
+
+  it('shows a warning but keeps input for full-key contacts without an advert', async () => {
+    render(
+      <ConversationPane
+        {...createProps({
+          activeConversation: {
+            type: 'contact',
+            id: 'cc'.repeat(32),
+            name: '[unknown sender]',
+          },
+          contacts: [
+            {
+              public_key: 'cc'.repeat(32),
+              name: null,
+              type: 0,
+              flags: 0,
+              last_path: null,
+              last_path_len: -1,
+              out_path_hash_mode: -1,
+              last_advert: null,
+              lat: null,
+              lon: null,
+              last_seen: 1700000000,
+              on_radio: false,
+              last_contacted: 1700000000,
+              last_read_at: null,
+              first_seen: 1700000000,
+            },
+          ],
+        })}
+      />
+    );
+
+    expect(screen.getByText(/A full identity profile is not yet available/i)).toBeInTheDocument();
+    expect(screen.getByTestId('message-input')).toBeInTheDocument();
+  });
+
+  it('hides input and shows a read-only warning for prefix-only contacts', async () => {
+    render(
+      <ConversationPane
+        {...createProps({
+          activeConversation: {
+            type: 'contact',
+            id: 'abc123def456',
+            name: 'abc123def456',
+          },
+          contacts: [
+            {
+              public_key: 'abc123def456',
+              name: null,
+              type: 0,
+              flags: 0,
+              last_path: null,
+              last_path_len: -1,
+              out_path_hash_mode: -1,
+              last_advert: null,
+              lat: null,
+              lon: null,
+              last_seen: 1700000000,
+              on_radio: false,
+              last_contacted: 1700000000,
+              last_read_at: null,
+              first_seen: 1700000000,
+            },
+          ],
+        })}
+      />
+    );
+
+    expect(screen.getByText(/This conversation is read-only/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('message-input')).not.toBeInTheDocument();
+  });
 });

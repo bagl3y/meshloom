@@ -10,6 +10,11 @@ export interface ContactDeletedPayload {
   public_key: string;
 }
 
+export interface ContactResolvedPayload {
+  previous_public_key: string;
+  contact: Contact;
+}
+
 export interface ChannelDeletedPayload {
   key: string;
 }
@@ -23,6 +28,7 @@ export type KnownWsEvent =
   | { type: 'health'; data: HealthStatus }
   | { type: 'message'; data: Message }
   | { type: 'contact'; data: Contact }
+  | { type: 'contact_resolved'; data: ContactResolvedPayload }
   | { type: 'channel'; data: Channel }
   | { type: 'contact_deleted'; data: ContactDeletedPayload }
   | { type: 'channel_deleted'; data: ChannelDeletedPayload }
@@ -55,6 +61,7 @@ export function parseWsEvent(raw: string): ParsedWsEvent {
     case 'health':
     case 'message':
     case 'contact':
+    case 'contact_resolved':
     case 'channel':
     case 'contact_deleted':
     case 'channel_deleted':

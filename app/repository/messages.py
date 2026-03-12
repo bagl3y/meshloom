@@ -162,7 +162,8 @@ class MessageRepository:
                AND ? LIKE conversation_key || '%'
                AND (
                    SELECT COUNT(*) FROM contacts
-                   WHERE public_key LIKE messages.conversation_key || '%'
+                   WHERE length(public_key) = 64
+                     AND public_key LIKE messages.conversation_key || '%'
                ) = 1""",
             (lower_key, lower_key),
         )

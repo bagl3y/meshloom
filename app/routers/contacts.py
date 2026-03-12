@@ -28,7 +28,10 @@ from app.repository import (
     ContactRepository,
     MessageRepository,
 )
-from app.services.contact_reconciliation import reconcile_contact_messages
+from app.services.contact_reconciliation import (
+    promote_prefix_contacts_for_contact,
+    reconcile_contact_messages,
+)
 from app.services.radio_runtime import radio_runtime as radio_manager
 
 logger = logging.getLogger(__name__)
@@ -91,6 +94,19 @@ async def _broadcast_contact_update(contact: Contact) -> None:
     from app.websocket import broadcast_event
 
     broadcast_event("contact", contact.model_dump())
+
+
+async def _broadcast_contact_resolution(previous_public_keys: list[str], contact: Contact) -> None:
+    from app.websocket import broadcast_event
+
+    for old_key in previous_public_keys:
+        broadcast_event(
+            "contact_resolved",
+            {
+                "previous_public_key": old_key,
+                "contact": contact.model_dump(),
+            },
+        )
 
 
 async def _build_keyed_contact_analytics(contact: Contact) -> ContactAnalytics:
@@ -257,6 +273,16 @@ async def create_contact(
             if refreshed is not None:
                 existing = refreshed
 
+        promoted_keys = await promote_prefix_contacts_for_contact(
+            public_key=request.public_key,
+            log=logger,
+        )
+        if promoted_keys:
+            refreshed = await ContactRepository.get_by_key(request.public_key)
+            if refreshed is not None:
+                existing = refreshed
+                await _broadcast_contact_resolution(promoted_keys, existing)
+
         # Trigger historical decryption if requested (even for existing contacts)
         if request.try_historical:
             await start_historical_dm_decryption(
@@ -275,6 +301,10 @@ async def create_contact(
     )
     await ContactRepository.upsert(contact_upsert)
     logger.info("Created contact %s", lower_key[:12])
+    promoted_keys = await promote_prefix_contacts_for_contact(
+        public_key=lower_key,
+        log=logger,
+    )
 
     await reconcile_contact_messages(
         public_key=lower_key,
@@ -289,6 +319,7 @@ async def create_contact(
     stored = await ContactRepository.get_by_key(lower_key)
     if stored is None:
         raise HTTPException(status_code=500, detail="Contact was created but could not be reloaded")
+    await _broadcast_contact_resolution(promoted_keys, stored)
     return stored
 
 
@@ -368,12 +399,19 @@ async def sync_contacts_from_radio() -> dict:
         await ContactRepository.upsert(
             ContactUpsert.from_radio_dict(lower_key, contact_data, on_radio=True)
         )
+        promoted_keys = await promote_prefix_contacts_for_contact(
+            public_key=lower_key,
+            log=logger,
+        )
         synced_keys.append(lower_key)
         await reconcile_contact_messages(
             public_key=lower_key,
             contact_name=contact_data.get("adv_name"),
             log=logger,
         )
+        stored = await ContactRepository.get_by_key(lower_key)
+        if stored is not None:
+            await _broadcast_contact_resolution(promoted_keys, stored)
         count += 1
 
     # Clear on_radio for contacts not found on the radio

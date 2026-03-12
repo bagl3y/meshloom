@@ -3,6 +3,7 @@ import { api } from '../api';
 import {
   getLastMessageTimes,
   setLastMessageTime,
+  renameConversationTimeKey,
   getStateKey,
   type ConversationTimes,
 } from '../utils/conversationState';
@@ -15,6 +16,7 @@ interface UseUnreadCountsResult {
   mentions: Record<string, boolean>;
   lastMessageTimes: ConversationTimes;
   incrementUnread: (stateKey: string, hasMention?: boolean) => void;
+  renameConversationState: (oldStateKey: string, newStateKey: string) => void;
   markAllRead: () => void;
   trackNewMessage: (msg: Message) => void;
   refreshUnreads: () => Promise<void>;
@@ -170,6 +172,28 @@ export function useUnreadCounts(
     }
   }, []);
 
+  const renameConversationState = useCallback((oldStateKey: string, newStateKey: string) => {
+    if (oldStateKey === newStateKey) return;
+
+    setUnreadCounts((prev) => {
+      if (!(oldStateKey in prev)) return prev;
+      const next = { ...prev };
+      next[newStateKey] = (next[newStateKey] || 0) + next[oldStateKey];
+      delete next[oldStateKey];
+      return next;
+    });
+
+    setMentions((prev) => {
+      if (!(oldStateKey in prev)) return prev;
+      const next = { ...prev };
+      next[newStateKey] = next[newStateKey] || next[oldStateKey];
+      delete next[oldStateKey];
+      return next;
+    });
+
+    setLastMessageTimes(renameConversationTimeKey(oldStateKey, newStateKey));
+  }, []);
+
   // Mark all conversations as read
   // Calls single bulk API endpoint to persist read state
   const markAllRead = useCallback(() => {
@@ -204,6 +228,7 @@ export function useUnreadCounts(
     mentions,
     lastMessageTimes,
     incrementUnread,
+    renameConversationState,
     markAllRead,
     trackNewMessage,
     refreshUnreads: fetchUnreads,

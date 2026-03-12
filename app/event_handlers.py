@@ -13,6 +13,7 @@ from app.repository import (
 from app.services import dm_ack_tracker
 from app.services.contact_reconciliation import (
     claim_prefix_messages_for_contact,
+    promote_prefix_contacts_for_contact,
     record_contact_name_and_reconcile,
 )
 from app.services.messages import create_fallback_direct_message, increment_ack_and_broadcast
@@ -88,6 +89,20 @@ async def on_contact_message(event: "Event") -> None:
                 sender_pubkey[:12],
             )
             return
+    elif sender_pubkey:
+        placeholder_upsert = ContactUpsert(
+            public_key=sender_pubkey.lower(),
+            type=0,
+            last_seen=received_at,
+            last_contacted=received_at,
+            first_seen=received_at,
+            on_radio=False,
+            out_path_hash_mode=-1,
+        )
+        await ContactRepository.upsert(placeholder_upsert)
+        contact = await ContactRepository.get_by_key(sender_pubkey.lower())
+        if contact:
+            broadcast_event("contact", contact.model_dump())
 
     # Try to create message - INSERT OR IGNORE handles duplicates atomically
     # If the packet processor already stored this message, this returns None
@@ -231,6 +246,10 @@ async def on_new_contact(event: "Event") -> None:
     contact_upsert = ContactUpsert.from_radio_dict(public_key.lower(), payload, on_radio=True)
     contact_upsert.last_seen = int(time.time())
     await ContactRepository.upsert(contact_upsert)
+    promoted_keys = await promote_prefix_contacts_for_contact(
+        public_key=public_key,
+        log=logger,
+    )
 
     adv_name = payload.get("adv_name")
     await record_contact_name_and_reconcile(
@@ -251,6 +270,15 @@ async def on_new_contact(event: "Event") -> None:
             else Contact(**contact_upsert.model_dump(exclude_none=True)).model_dump()
         ),
     )
+    if db_contact:
+        for old_key in promoted_keys:
+            broadcast_event(
+                "contact_resolved",
+                {
+                    "previous_public_key": old_key,
+                    "contact": db_contact.model_dump(),
+                },
+            )
 
 
 async def on_ack(event: "Event") -> None:

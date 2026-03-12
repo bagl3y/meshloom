@@ -4,6 +4,7 @@ import { toast } from './ui/sonner';
 import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { stripRegionScopePrefix } from '../utils/regionScope';
+import { isPrefixOnlyContact } from '../utils/pubkey';
 import { ContactAvatar } from './ContactAvatar';
 import { ContactStatusInfo } from './ContactStatusInfo';
 import type { Channel, Contact, Conversation, Favorite, RadioConfig } from '../types';
@@ -62,6 +63,13 @@ export function ChatHeader({
     : null;
   const activeFloodScopeDisplay = activeFloodScopeOverride ? activeFloodScopeOverride : null;
   const isPrivateChannel = conversation.type === 'channel' && !activeChannel?.is_hashtag;
+  const activeContact =
+    conversation.type === 'contact'
+      ? contacts.find((contact) => contact.public_key === conversation.id)
+      : null;
+  const activeContactIsPrefixOnly = activeContact
+    ? isPrefixOnlyContact(activeContact.public_key)
+    : false;
 
   const titleClickable =
     (conversation.type === 'contact' && onOpenContactInfo) ||
@@ -214,10 +222,15 @@ export function ChatHeader({
       <div className="flex items-center justify-end gap-0.5 flex-shrink-0">
         {conversation.type === 'contact' && (
           <button
-            className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={onTrace}
-            title="Direct Trace"
+            title={
+              activeContactIsPrefixOnly
+                ? 'Direct Trace unavailable until the full contact key is known'
+                : 'Direct Trace'
+            }
             aria-label="Direct Trace"
+            disabled={activeContactIsPrefixOnly}
           >
             <Route className="h-4 w-4" aria-hidden="true" />
           </button>

@@ -40,7 +40,10 @@ from app.repository import (
     ContactRepository,
     RawPacketRepository,
 )
-from app.services.contact_reconciliation import record_contact_name_and_reconcile
+from app.services.contact_reconciliation import (
+    promote_prefix_contacts_for_contact,
+    record_contact_name_and_reconcile,
+)
 from app.services.messages import (
     create_dm_message_from_decrypted as _create_dm_message_from_decrypted,
 )
@@ -504,6 +507,10 @@ async def _process_advertisement(
     )
 
     await ContactRepository.upsert(contact_upsert)
+    promoted_keys = await promote_prefix_contacts_for_contact(
+        public_key=advert.public_key,
+        log=logger,
+    )
     await record_contact_name_and_reconcile(
         public_key=advert.public_key,
         contact_name=advert.name,
@@ -516,6 +523,14 @@ async def _process_advertisement(
     db_contact = await ContactRepository.get_by_key(advert.public_key.lower())
     if db_contact:
         broadcast_event("contact", db_contact.model_dump())
+        for old_key in promoted_keys:
+            broadcast_event(
+                "contact_resolved",
+                {
+                    "previous_public_key": old_key,
+                    "contact": db_contact.model_dump(),
+                },
+            )
     else:
         broadcast_event(
             "contact",

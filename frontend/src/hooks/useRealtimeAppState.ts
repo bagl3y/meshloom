@@ -11,6 +11,7 @@ import type { UseWebSocketOptions } from '../useWebSocket';
 import { toast } from '../components/ui/sonner';
 import { getStateKey } from '../utils/conversationState';
 import { mergeContactIntoList } from '../utils/contactMerge';
+import { getContactDisplayName } from '../utils/pubkey';
 import { appendRawPacketUnique } from '../utils/rawPacketIdentity';
 import { getMessageContentKey } from './useConversationMessages';
 import type {
@@ -40,6 +41,7 @@ interface UseRealtimeAppStateArgs {
   addMessageIfNew: (msg: Message) => boolean;
   trackNewMessage: (msg: Message) => void;
   incrementUnread: (stateKey: string, hasMention?: boolean) => void;
+  renameConversationState: (oldStateKey: string, newStateKey: string) => void;
   checkMention: (text: string) => boolean;
   pendingDeleteFallbackRef: MutableRefObject<boolean>;
   setActiveConversation: (conv: Conversation | null) => void;
@@ -100,6 +102,7 @@ export function useRealtimeAppState({
   addMessageIfNew,
   trackNewMessage,
   incrementUnread,
+  renameConversationState,
   checkMention,
   pendingDeleteFallbackRef,
   setActiveConversation,
@@ -225,6 +228,28 @@ export function useRealtimeAppState({
       onContact: (contact: Contact) => {
         setContacts((prev) => mergeContactIntoList(prev, contact));
       },
+      onContactResolved: (previousPublicKey: string, contact: Contact) => {
+        setContacts((prev) =>
+          mergeContactIntoList(
+            prev.filter((candidate) => candidate.public_key !== previousPublicKey),
+            contact
+          )
+        );
+        messageCache.rename(previousPublicKey, contact.public_key);
+        renameConversationState(
+          getStateKey('contact', previousPublicKey),
+          getStateKey('contact', contact.public_key)
+        );
+
+        const active = activeConversationRef.current;
+        if (active?.type === 'contact' && active.id === previousPublicKey) {
+          setActiveConversation({
+            type: 'contact',
+            id: contact.public_key,
+            name: getContactDisplayName(contact.name, contact.public_key, contact.last_advert),
+          });
+        }
+      },
       onChannel: (channel: Channel) => {
         mergeChannelIntoList(channel);
       },
@@ -264,6 +289,7 @@ export function useRealtimeAppState({
       fetchConfig,
       hasNewerMessagesRef,
       incrementUnread,
+      renameConversationState,
       maxRawPackets,
       mergeChannelIntoList,
       pendingDeleteFallbackRef,
