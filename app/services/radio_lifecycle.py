@@ -32,16 +32,19 @@ async def run_post_connect_setup(radio_manager) -> None:
             return
         radio_manager._setup_in_progress = True
         radio_manager._setup_complete = False
-        mc = radio_manager.meshcore
         try:
-            # Register event handlers (no radio I/O, just callback setup)
-            register_event_handlers(mc)
-
             # Hold the operation lock for all radio I/O during setup.
             # This prevents user-initiated operations (send message, etc.)
             # from interleaving commands on the serial link.
             await radio_manager._acquire_operation_lock("post_connect_setup", blocking=True)
             try:
+                mc = radio_manager.meshcore
+                if not mc:
+                    return
+
+                # Register event handlers against the locked, current transport.
+                register_event_handlers(mc)
+
                 await export_and_store_private_key(mc)
 
                 # Sync radio clock with system time
