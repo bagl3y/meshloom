@@ -74,6 +74,7 @@ frontend/src/
 │   ├── pubkey.ts               # getContactDisplayName (12-char prefix fallback)
 │   ├── contactAvatar.ts        # Avatar color derivation from public key
 │   ├── rawPacketIdentity.ts    # observation_id vs id dedup helpers
+│   ├── regionScope.ts          # Regional flood-scope label/normalization helpers
 │   ├── visualizerUtils.ts      # 3D visualizer node types, colors, particles
 │   ├── visualizerSettings.ts   # LocalStorage persistence for visualizer options
 │   ├── a11y.ts                 # Keyboard accessibility helper
@@ -105,6 +106,7 @@ frontend/src/
 │   ├── RepeaterDashboard.tsx   # Layout shell — delegates to repeater/ panes
 │   ├── RepeaterLogin.tsx       # Repeater login form (password + guest)
 │   ├── ChannelInfoPane.tsx     # Channel detail sheet (stats, top senders)
+│   ├── DirectTraceIcon.tsx     # Shared direct-trace glyph used in header/dashboard
 │   ├── NeighborsMiniMap.tsx    # Leaflet mini-map for repeater neighbor locations
 │   ├── settings/
 │   │   ├── settingsConstants.ts          # Settings section type, ordering, labels
@@ -136,9 +138,13 @@ frontend/src/
     ├── appFavorites.test.tsx
     ├── appStartupHash.test.tsx
     ├── contactAvatar.test.ts
+    ├── contactInfoPane.test.tsx
     ├── integration.test.ts
+    ├── mapView.test.tsx
     ├── messageCache.test.ts
+    ├── messageList.test.tsx
     ├── messageParser.test.ts
+    ├── rawPacketList.test.tsx
     ├── pathUtils.test.ts
     ├── prefetch.test.ts
     ├── radioPresets.test.ts
@@ -152,12 +158,14 @@ frontend/src/
     ├── newMessageModal.test.tsx
     ├── settingsModal.test.tsx
     ├── sidebar.test.tsx
+    ├── statusBar.test.tsx
     ├── unreadCounts.test.ts
     ├── urlHash.test.ts
     ├── appSearchJump.test.tsx
     ├── channelInfoKeyVisibility.test.tsx
     ├── chatHeaderKeyVisibility.test.tsx
     ├── searchView.test.tsx
+    ├── useConversationActions.test.ts
     ├── useConversationMessages.test.ts
     ├── useConversationMessages.race.test.ts
     ├── useConversationNavigation.test.ts

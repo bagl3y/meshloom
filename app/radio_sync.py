@@ -339,7 +339,8 @@ async def ensure_default_channels() -> None:
     Ensure default channels exist in the database.
     These will be configured on the radio when needed for sending.
 
-    The Public channel is protected - it always exists with the canonical name.
+    This seeds the canonical Public channel row in the database if it is missing
+    or misnamed. It does not make the channel undeletable through the router.
     """
     # Public channel - no hashtag, specific well-known key
     PUBLIC_CHANNEL_KEY_HEX = "8B3387E9C5CDEA6AC9E5EDBAA115CD72"

@@ -48,6 +48,7 @@ app/
 ├── fanout/              # Fanout bus: MQTT, bots, webhooks, Apprise, SQS (see fanout/AGENTS_fanout.md)
 ├── dependencies.py      # Shared FastAPI dependency providers
 ├── path_utils.py        # Path hex rendering and hop-width helpers
+├── region_scope.py      # Normalize/validate regional flood-scope values
 ├── keystore.py          # Ephemeral private/public key storage for DM decryption
 ├── frontend_static.py   # Mount/serve built frontend (production)
 └── routers/
@@ -149,12 +150,15 @@ app/
 - `PATCH /radio/config` — may update `path_hash_mode` (`0..2`) when firmware supports it
 - `PUT /radio/private-key`
 - `POST /radio/advertise`
+- `POST /radio/disconnect`
 - `POST /radio/reboot`
 - `POST /radio/reconnect`
 
 ### Contacts
 - `GET /contacts`
+- `GET /contacts/analytics` — unified keyed-or-name analytics payload
 - `GET /contacts/repeaters/advert-paths` — recent advert paths for all contacts
+- `GET /contacts/name-detail` — name-only activity summary for unresolved channel senders
 - `GET /contacts/{public_key}`
 - `GET /contacts/{public_key}/detail` — comprehensive contact profile (stats, name history, paths, nearest repeaters)
 - `GET /contacts/{public_key}/advert-paths` — recent advert paths for one contact
@@ -293,16 +297,20 @@ tests/
 ├── test_api.py                 # REST endpoint integration tests
 ├── test_bot.py                 # Bot execution and sandboxing
 ├── test_channels_router.py     # Channels router endpoints
+├── test_channel_sender_backfill.py # Sender-key backfill uniqueness rules for channel messages
 ├── test_config.py              # Configuration validation
+├── test_contact_reconciliation_service.py # Prefix/contact reconciliation service helpers
 ├── test_contacts_router.py     # Contacts router endpoints
 ├── test_decoder.py             # Packet parsing/decryption
 ├── test_disable_bots.py        # MESHCORE_DISABLE_BOTS=true feature
 ├── test_echo_dedup.py          # Echo/repeat deduplication (incl. concurrent)
 ├── test_fanout.py              # Fanout bus CRUD, scope matching, manager dispatch
 ├── test_fanout_integration.py  # Fanout integration tests
+├── test_fanout_hitlist.py      # Fanout-related hitlist regression tests
 ├── test_event_handlers.py      # ACK tracking, event registration, cleanup
 ├── test_frontend_static.py     # Frontend static file serving
 ├── test_health_mqtt_status.py  # Health endpoint MQTT status field
+├── test_http_quality.py        # Cache-control / gzip / basic-auth HTTP quality checks
 ├── test_key_normalization.py   # Public key normalization
 ├── test_keystore.py            # Ephemeral keystore
 ├── test_message_pagination.py  # Cursor-based message pagination
@@ -315,6 +323,7 @@ tests/
 ├── test_radio.py               # RadioManager, serial detection
 ├── test_radio_commands_service.py # Radio config/private-key service workflows
 ├── test_radio_lifecycle_service.py # Reconnect/setup orchestration helpers
+├── test_radio_runtime_service.py # radio_runtime seam behavior and helpers
 ├── test_real_crypto.py         # Real cryptographic operations
 ├── test_radio_operation.py     # radio_operation() context manager
 ├── test_radio_router.py        # Radio router endpoints
@@ -324,11 +333,10 @@ tests/
 ├── test_rx_log_data.py         # on_rx_log_data event handler integration
 ├── test_messages_search.py      # Message search, around, forward pagination
 ├── test_block_lists.py          # Blocked keys/names filtering
+├── test_security.py            # Optional Basic Auth middleware / config behavior
 ├── test_send_messages.py       # Outgoing messages, bot triggers, concurrent sends
 ├── test_settings_router.py     # Settings endpoints, advert validation
 ├── test_statistics.py          # Statistics aggregation
-├── test_channel_sender_backfill.py # Sender key backfill for channel messages
-├── test_fanout_hitlist.py      # Fanout-related hitlist regression tests
 ├── test_main_startup.py        # App startup and lifespan
 ├── test_path_utils.py          # Path hex rendering helpers
 ├── test_websocket.py           # WS manager broadcast/cleanup
