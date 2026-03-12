@@ -419,6 +419,7 @@ async def add_contact_to_radio(public_key: str) -> dict:
         # Check if already on radio
         radio_contact = mc.get_contact_by_key_prefix(contact.public_key[:12])
         if radio_contact:
+            await ContactRepository.set_on_radio(contact.public_key, True)
             return {"status": "ok", "message": "Contact already on radio"}
 
         logger.info("Adding contact %s to radio", contact.public_key[:12])

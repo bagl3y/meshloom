@@ -206,7 +206,6 @@ async def send_channel_message_to_channel(
     message_repository=MessageRepository,
 ) -> Any:
     """Send a channel message and persist/broadcast the outgoing row."""
-    message_id: int | None = None
     now: int | None = None
     radio_name = ""
     our_public_key: str | None = None
@@ -235,27 +234,27 @@ async def send_channel_message_to_channel(
         if result.type == EventType.ERROR:
             raise HTTPException(status_code=500, detail=f"Failed to send message: {result.payload}")
 
-        outgoing_message = await create_outgoing_channel_message(
-            conversation_key=channel_key_upper,
-            text=text_with_sender,
-            sender_timestamp=now,
-            received_at=now,
-            sender_name=radio_name or None,
-            sender_key=our_public_key,
-            channel_name=channel.name,
-            broadcast_fn=broadcast_fn,
-            message_repository=message_repository,
-        )
-        if outgoing_message is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to store outgoing message - unexpected duplicate",
-            )
-        message_id = outgoing_message.id
-
-    if message_id is None or now is None:
+    if now is None:
         raise HTTPException(status_code=500, detail="Failed to store outgoing message")
 
+    outgoing_message = await create_outgoing_channel_message(
+        conversation_key=channel_key_upper,
+        text=text_with_sender,
+        sender_timestamp=now,
+        received_at=now,
+        sender_name=radio_name or None,
+        sender_key=our_public_key,
+        channel_name=channel.name,
+        broadcast_fn=broadcast_fn,
+        message_repository=message_repository,
+    )
+    if outgoing_message is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to store outgoing message - unexpected duplicate",
+        )
+
+    message_id = outgoing_message.id
     acked_count, paths = await message_repository.get_ack_and_paths(message_id)
     return build_message_model(
         message_id=message_id,

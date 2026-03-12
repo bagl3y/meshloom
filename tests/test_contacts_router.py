@@ -954,8 +954,8 @@ class TestAddRemoveRadio:
 
     @pytest.mark.asyncio
     async def test_add_already_on_radio(self, test_db, client):
-        """Adding a contact already on radio returns ok without calling add_contact."""
-        await _insert_contact(KEY_A, on_radio=True)
+        """Adding a contact already on radio repairs the DB flag and skips add_contact."""
+        await _insert_contact(KEY_A, on_radio=False)
 
         mock_mc = MagicMock()
         mock_mc.get_contact_by_key_prefix = MagicMock(return_value=MagicMock())  # On radio
@@ -966,6 +966,10 @@ class TestAddRemoveRadio:
 
         assert response.status_code == 200
         assert "already" in response.json()["message"].lower()
+        contact = await ContactRepository.get_by_key(KEY_A)
+        assert contact is not None
+        assert contact.on_radio is True
+        mock_mc.commands.add_contact.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_remove_from_radio(self, test_db, client):

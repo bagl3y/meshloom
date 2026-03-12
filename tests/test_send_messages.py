@@ -907,3 +907,35 @@ class TestConcurrentChannelSends:
             msg_type="CHAN", conversation_key=chan_key.upper(), limit=10
         )
         assert len(msgs) == 2
+
+
+class TestChannelSendLockScope:
+    """Channel send should release the radio lock before DB persistence work."""
+
+    @pytest.mark.asyncio
+    async def test_channel_message_row_created_after_radio_lock_released(self, test_db):
+        mc = _make_mc(name="TestNode")
+        chan_key = "de" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#lockscope")
+
+        observed_lock_states: list[bool] = []
+        original_create = MessageRepository.create
+
+        async def _assert_lock_then_create(*args, **kwargs):
+            observed_lock_states.append(bool(radio_manager._operation_lock.locked()))
+            return await original_create(*args, **kwargs)
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event"),
+            patch(
+                "app.services.message_send.MessageRepository.create",
+                side_effect=_assert_lock_then_create,
+            ),
+        ):
+            await send_channel_message(
+                SendChannelMessageRequest(channel_key=chan_key, text="Lock scope test")
+            )
+
+        assert observed_lock_states == [False]
