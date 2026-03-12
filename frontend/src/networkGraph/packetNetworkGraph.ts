@@ -593,20 +593,8 @@ export function buildCanonicalPathForPacket(
   if (parsed.payloadType === PayloadType.TextMessage && parsed.dstHash) {
     if (context.myPrefix && parsed.dstHash.toLowerCase() === context.myPrefix) {
       path.push('self');
-    } else {
-      const nodeId = resolveNode(
-        state,
-        context,
-        { type: 'prefix', value: parsed.dstHash },
-        false,
-        true,
-        activityAtMs
-      );
-      if (nodeId) {
-        path.push(nodeId);
-      } else if (!isOutgoingDm) {
-        path.push('self');
-      }
+    } else if (!isOutgoingDm && path.length > 0) {
+      path.push('self');
     }
   } else if (path.length > 0) {
     path.push('self');

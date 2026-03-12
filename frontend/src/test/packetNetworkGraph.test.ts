@@ -181,6 +181,53 @@ describe('packetNetworkGraph', () => {
     expect(projection.links.get('565656565656->self')?.hasDirectObservation).toBe(true);
   });
 
+  it('does not add a DM recipient node from destination metadata alone', () => {
+    const selfKey = 'ffffffffffff0000000000000000000000000000000000000000000000000000';
+    const aliceKey = 'aaaaaaaaaaaa0000000000000000000000000000000000000000000000000000';
+    const bobKey = 'bbbbbbbbbbbb0000000000000000000000000000000000000000000000000000';
+    const repeaterKey = '5656565656560000000000000000000000000000000000000000000000000000';
+
+    packetFixtures.set('dm-third-party-no-dst-node', {
+      payloadType: PayloadType.TextMessage,
+      messageHash: 'dm-third-party-no-dst-node',
+      pathBytes: ['565656565656'],
+      srcHash: 'aaaaaaaaaaaa',
+      dstHash: 'bbbbbbbbbbbb',
+      advertPubkey: null,
+      groupTextSender: null,
+      anonRequestPubkey: null,
+    });
+
+    const state = createPacketNetworkState('Me');
+    const context = buildPacketNetworkContext({
+      contacts: [
+        createContact(aliceKey, 'Alice'),
+        createContact(bobKey, 'Bob'),
+        createContact(repeaterKey, 'Relay', CONTACT_TYPE_REPEATER),
+      ],
+      config: createConfig(selfKey),
+      repeaterAdvertPaths: [],
+      splitAmbiguousByTraffic: false,
+      useAdvertPathHints: false,
+    });
+
+    const ingested = ingestPacketIntoPacketNetwork(
+      state,
+      context,
+      createPacket('dm-third-party-no-dst-node')
+    );
+
+    expect(ingested?.canonicalPath).toEqual(['aaaaaaaaaaaa', '565656565656', 'self']);
+    expect(state.nodes.has('bbbbbbbbbbbb')).toBe(false);
+    expect(snapshotNeighborIds(state)).toEqual(
+      new Map([
+        ['565656565656', ['aaaaaaaaaaaa', 'self']],
+        ['aaaaaaaaaaaa', ['565656565656']],
+        ['self', ['565656565656']],
+      ])
+    );
+  });
+
   it('replays real advert packets through the semantic layer', () => {
     const state = createPacketNetworkState('Me');
     const context = buildPacketNetworkContext({

@@ -200,7 +200,7 @@ describe('useVisualizerData3D', () => {
     expect(result.current.renderedNodeIds.has('?32')).toBe(false);
   });
 
-  it('does not append self after a resolved outgoing DM destination', async () => {
+  it('does not place a resolved outgoing DM destination into topology', async () => {
     const selfKey = 'ffffffffffff0000000000000000000000000000000000000000000000000000';
     const bobKey = 'bbbbbbbbbbbb0000000000000000000000000000000000000000000000000000';
     const repeaterKey = '3232323232320000000000000000000000000000000000000000000000000000';
@@ -226,11 +226,48 @@ describe('useVisualizerData3D', () => {
       showAmbiguousPaths: true,
     });
 
-    await waitFor(() => expect(result.current.links.size).toBe(2));
+    await waitFor(() => expect(result.current.links.size).toBe(1));
 
     expect(result.current.links.has(buildLinkKey('self', '323232323232'))).toBe(true);
-    expect(result.current.links.has(buildLinkKey('323232323232', 'bbbbbbbbbbbb'))).toBe(true);
+    expect(result.current.links.has(buildLinkKey('323232323232', 'bbbbbbbbbbbb'))).toBe(false);
     expect(result.current.links.has(buildLinkKey('self', 'bbbbbbbbbbbb'))).toBe(false);
+    expect(result.current.renderedNodeIds.has('bbbbbbbbbbbb')).toBe(false);
+  });
+
+  it('does not place a third-party DM destination into topology', async () => {
+    const selfKey = 'ffffffffffff0000000000000000000000000000000000000000000000000000';
+    const aliceKey = 'aaaaaaaaaaaa0000000000000000000000000000000000000000000000000000';
+    const bobKey = 'bbbbbbbbbbbb0000000000000000000000000000000000000000000000000000';
+    const repeaterKey = '3232323232320000000000000000000000000000000000000000000000000000';
+
+    packetFixtures.set('dm-third-party-known-dst', {
+      payloadType: PayloadType.TextMessage,
+      messageHash: 'dm-third-party-known-dst',
+      pathBytes: ['323232323232'],
+      srcHash: 'aaaaaaaaaaaa',
+      dstHash: 'bbbbbbbbbbbb',
+      advertPubkey: null,
+      groupTextSender: null,
+      anonRequestPubkey: null,
+    });
+
+    const { result } = renderVisualizerData({
+      packets: [createPacket('dm-third-party-known-dst')],
+      contacts: [
+        createContact(aliceKey, 'Alice'),
+        createContact(bobKey, 'Bob'),
+        createContact(repeaterKey, 'Relay', CONTACT_TYPE_REPEATER),
+      ],
+      config: createConfig(selfKey),
+      showAmbiguousPaths: true,
+    });
+
+    await waitFor(() => expect(result.current.links.size).toBe(2));
+
+    expect(result.current.links.has(buildLinkKey('aaaaaaaaaaaa', '323232323232'))).toBe(true);
+    expect(result.current.links.has(buildLinkKey('323232323232', 'self'))).toBe(true);
+    expect(result.current.links.has(buildLinkKey('323232323232', 'bbbbbbbbbbbb'))).toBe(false);
+    expect(result.current.renderedNodeIds.has('bbbbbbbbbbbb')).toBe(false);
   });
 
   it('collapses a high-confidence ambiguous repeater into its known sibling when both share the same next hop', async () => {
