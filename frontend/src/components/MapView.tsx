@@ -14,7 +14,8 @@ interface MapViewProps {
 }
 
 // Calculate marker color based on how recently the contact was heard
-function getMarkerColor(lastSeen: number): string {
+function getMarkerColor(lastSeen: number | null | undefined): string {
+  if (lastSeen == null) return '#9ca3af';
   const now = Date.now() / 1000;
   const age = now - lastSeen;
   const hour = 3600;
@@ -94,22 +95,27 @@ function MapBoundsHandler({
 }
 
 export function MapView({ contacts, focusedKey }: MapViewProps) {
+  const sevenDaysAgo = Date.now() / 1000 - 7 * 24 * 60 * 60;
+
   // Filter to contacts with GPS coordinates, heard within the last 7 days.
   // Always include the focused contact so "view on map" links work for older nodes.
   const mappableContacts = useMemo(() => {
-    const sevenDaysAgo = Date.now() / 1000 - 7 * 24 * 60 * 60;
     return contacts.filter(
       (c) =>
         isValidLocation(c.lat, c.lon) &&
         (c.public_key === focusedKey || (c.last_seen != null && c.last_seen > sevenDaysAgo))
     );
-  }, [contacts, focusedKey]);
+  }, [contacts, focusedKey, sevenDaysAgo]);
 
   // Find the focused contact by key
   const focusedContact = useMemo(() => {
     if (!focusedKey) return null;
     return mappableContacts.find((c) => c.public_key === focusedKey) || null;
   }, [focusedKey, mappableContacts]);
+
+  const includesFocusedOutsideWindow =
+    focusedContact != null &&
+    (focusedContact.last_seen == null || focusedContact.last_seen <= sevenDaysAgo);
 
   // Track marker refs to open popup programmatically
   const markerRefs = useRef<Record<string, LeafletCircleMarker | null>>({});
@@ -137,6 +143,7 @@ export function MapView({ contacts, focusedKey }: MapViewProps) {
         <span>
           Showing {mappableContacts.length} contact{mappableContacts.length !== 1 ? 's' : ''} heard
           in the last 7 days
+          {includesFocusedOutsideWindow ? ' plus the focused contact' : ''}
         </span>
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1">
@@ -175,8 +182,12 @@ export function MapView({ contacts, focusedKey }: MapViewProps) {
 
           {mappableContacts.map((contact) => {
             const isRepeater = contact.type === CONTACT_TYPE_REPEATER;
-            const color = getMarkerColor(contact.last_seen!);
+            const color = getMarkerColor(contact.last_seen);
             const displayName = contact.name || contact.public_key.slice(0, 12);
+            const lastHeardLabel =
+              contact.last_seen != null
+                ? formatTime(contact.last_seen)
+                : 'Never heard by this server';
 
             return (
               <CircleMarker
@@ -201,9 +212,7 @@ export function MapView({ contacts, focusedKey }: MapViewProps) {
                       )}
                       {displayName}
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Last heard: {formatTime(contact.last_seen!)}
-                    </div>
+                    <div className="text-xs text-gray-500 mt-1">Last heard: {lastHeardLabel}</div>
                     <div className="text-xs text-gray-400 mt-1 font-mono">
                       {contact.lat!.toFixed(5)}, {contact.lon!.toFixed(5)}
                     </div>

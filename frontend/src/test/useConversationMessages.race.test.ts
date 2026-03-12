@@ -264,6 +264,29 @@ describe('useConversationMessages background reconcile ordering', () => {
     expect(result.current.messages[0].text).toBe('newer snapshot');
     expect(result.current.messages[0].acked).toBe(2);
   });
+
+  it('clears stale hasOlderMessages when cached conversations reconcile to a short latest page', async () => {
+    const conv = createConversation();
+    const cachedMessage = createMessage({ id: 42, text: 'cached snapshot' });
+
+    messageCache.set(conv.id, {
+      messages: [cachedMessage],
+      seenContent: new Set([
+        `PRIV-${cachedMessage.conversation_key}-${cachedMessage.text}-${cachedMessage.sender_timestamp}`,
+      ]),
+      hasOlderMessages: true,
+    });
+
+    mockGetMessages.mockResolvedValueOnce([cachedMessage]);
+
+    const { result } = renderHook(() => useConversationMessages(conv));
+
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.hasOlderMessages).toBe(true);
+
+    await waitFor(() => expect(mockGetMessages).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.hasOlderMessages).toBe(false));
+  });
 });
 
 describe('useConversationMessages forward pagination', () => {

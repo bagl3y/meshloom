@@ -232,14 +232,12 @@ export function useConversationMessages(
           if (latestReconcileRequestIdRef.current !== requestId) return;
 
           const dataWithPendingAck = data.map((msg) => applyPendingAck(msg));
+          setHasOlderMessages(dataWithPendingAck.length >= MESSAGE_PAGE_SIZE);
           const merged = messageCache.reconcile(messagesRef.current, dataWithPendingAck);
           if (!merged) return;
 
           setMessages(merged);
           syncSeenContent(merged);
-          if (dataWithPendingAck.length >= MESSAGE_PAGE_SIZE) {
-            setHasOlderMessages(true);
-          }
         })
         .catch((err) => {
           if (isAbortError(err)) return;
