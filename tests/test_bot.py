@@ -373,6 +373,30 @@ def bot(sender_name, sender_key, message_text, is_dm, channel_key, channel_name,
         )
         assert result == "bytes=2"
 
+    def test_pure_kwargs_bot_receives_core_fields_and_optional_extras(self):
+        """Pure **kwargs bots are first-class and receive the full payload by keyword."""
+        code = """
+def bot(**kwargs):
+    return (
+        f"{kwargs.get('sender_name')}|{kwargs.get('message_text')}|"
+        f"{kwargs.get('is_outgoing')}|{kwargs.get('path_bytes_per_hop')}"
+    )
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Alice",
+            sender_key="abc123",
+            message_text="Hi",
+            is_dm=True,
+            channel_key=None,
+            channel_name=None,
+            sender_timestamp=None,
+            path="aabb",
+            is_outgoing=True,
+            path_bytes_per_hop=2,
+        )
+        assert result == "Alice|Hi|True|2"
+
     def test_channel_message_with_none_sender_key(self):
         """Channel messages correctly pass None for sender_key."""
         code = """
@@ -488,6 +512,12 @@ class TestBotCodeValidation:
                 )
             }
         )
+
+    def test_pure_kwargs_code_passes(self):
+        """Pure **kwargs bots are valid."""
+        from app.routers.fanout import _validate_bot_config
+
+        _validate_bot_config({"code": "def bot(**kwargs):\n    return kwargs.get('message_text')"})
 
     def test_syntax_error_raises(self):
         """Syntax error in code raises HTTPException."""

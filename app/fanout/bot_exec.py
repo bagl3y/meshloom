@@ -85,25 +85,38 @@ def _analyze_bot_signature(bot_func_or_sig) -> BotCallPlan:
         )
 
     positional_capacity = len(positional_params)
-    if not has_varargs and positional_capacity < 8:
-        raise ValueError(
-            "Bot function must accept at least 8 positional parameters before optional extras"
-        )
-
     base_args = [object()] * 8
+    base_keyword_args: dict[str, object] = {
+        "sender_name": object(),
+        "sender_key": object(),
+        "message_text": object(),
+        "is_dm": object(),
+        "channel_key": object(),
+        "channel_name": object(),
+        "sender_timestamp": object(),
+        "path": object(),
+    }
     candidate_specs: list[tuple[str, list[object], dict[str, object]]] = []
-    if has_kwargs or explicit_optional_names:
+    keyword_args = dict(base_keyword_args)
+    if has_kwargs or "is_outgoing" in params:
+        keyword_args["is_outgoing"] = False
+    if has_kwargs or "path_bytes_per_hop" in params:
+        keyword_args["path_bytes_per_hop"] = 1
+    candidate_specs.append(("keyword", [], keyword_args))
+
+    if not has_kwargs and explicit_optional_names:
         kwargs: dict[str, object] = {}
         if has_kwargs or "is_outgoing" in params:
             kwargs["is_outgoing"] = False
         if has_kwargs or "path_bytes_per_hop" in params:
             kwargs["path_bytes_per_hop"] = 1
-        candidate_specs.append(("keyword", base_args, kwargs))
-    else:
-        if has_varargs or positional_capacity >= 10:
-            candidate_specs.append(("positional_10", base_args + [False, 1], {}))
-        if has_varargs or positional_capacity >= 9:
-            candidate_specs.append(("positional_9", base_args + [False], {}))
+        candidate_specs.append(("mixed_keyword", base_args, kwargs))
+
+    if has_varargs or positional_capacity >= 10:
+        candidate_specs.append(("positional_10", base_args + [False, 1], {}))
+    if has_varargs or positional_capacity >= 9:
+        candidate_specs.append(("positional_9", base_args + [False], {}))
+    if has_varargs or positional_capacity >= 8:
         candidate_specs.append(("legacy", base_args, {}))
 
     for call_style, args, kwargs in candidate_specs:
@@ -111,7 +124,7 @@ def _analyze_bot_signature(bot_func_or_sig) -> BotCallPlan:
             sig.bind(*args, **kwargs)
         except TypeError:
             continue
-        if call_style == "keyword":
+        if call_style in {"keyword", "mixed_keyword"}:
             return BotCallPlan(call_style="keyword", keyword_args=tuple(kwargs.keys()))
         return BotCallPlan(call_style=call_style)
 
@@ -141,6 +154,7 @@ def execute_bot_code(
 
     The code should define a function:
     `bot(sender_name, sender_key, message_text, is_dm, channel_key, channel_name, sender_timestamp, path, is_outgoing, path_bytes_per_hop)`
+    or use named parameters / `**kwargs`.
     that returns either None (no response), a string (single response message),
     or a list of strings (multiple messages sent in order).
 
@@ -221,21 +235,27 @@ def execute_bot_code(
             )
         elif call_plan.call_style == "keyword":
             keyword_args: dict[str, Any] = {}
+            if "sender_name" in call_plan.keyword_args:
+                keyword_args["sender_name"] = sender_name
+            if "sender_key" in call_plan.keyword_args:
+                keyword_args["sender_key"] = sender_key
+            if "message_text" in call_plan.keyword_args:
+                keyword_args["message_text"] = message_text
+            if "is_dm" in call_plan.keyword_args:
+                keyword_args["is_dm"] = is_dm
+            if "channel_key" in call_plan.keyword_args:
+                keyword_args["channel_key"] = channel_key
+            if "channel_name" in call_plan.keyword_args:
+                keyword_args["channel_name"] = channel_name
+            if "sender_timestamp" in call_plan.keyword_args:
+                keyword_args["sender_timestamp"] = sender_timestamp
+            if "path" in call_plan.keyword_args:
+                keyword_args["path"] = path
             if "is_outgoing" in call_plan.keyword_args:
                 keyword_args["is_outgoing"] = is_outgoing
             if "path_bytes_per_hop" in call_plan.keyword_args:
                 keyword_args["path_bytes_per_hop"] = path_bytes_per_hop
-            result = bot_func(
-                sender_name,
-                sender_key,
-                message_text,
-                is_dm,
-                channel_key,
-                channel_name,
-                sender_timestamp,
-                path,
-                **keyword_args,
-            )
+            result = bot_func(**keyword_args)
         else:
             result = bot_func(
                 sender_name,

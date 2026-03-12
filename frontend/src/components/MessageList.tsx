@@ -835,44 +835,42 @@ export function MessageList({
       </div>
 
       {/* Scroll to bottom button */}
-      {(showJumpToUnread || showScrollToBottom) && (
-        <div className="absolute bottom-4 right-4 flex items-center gap-2">
-          {showJumpToUnread && (
-            <button
-              type="button"
-              onClick={() => {
-                unreadMarkerRef.current?.scrollIntoView?.({ block: 'center' });
-                setShowJumpToUnread(false);
-              }}
-              className="h-9 rounded-full bg-card hover:bg-accent border border-border px-3 text-sm font-medium shadow-lg transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Jump to unread
-            </button>
-          )}
-          {showScrollToBottom && (
-            <button
-              onClick={scrollToBottom}
-              className="w-9 h-9 rounded-full bg-card hover:bg-accent border border-border flex items-center justify-center shadow-lg transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              title="Scroll to bottom"
-              aria-label="Scroll to bottom"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-muted-foreground"
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
-          )}
+      {showJumpToUnread && (
+        <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2">
+          <button
+            type="button"
+            onClick={() => {
+              unreadMarkerRef.current?.scrollIntoView?.({ block: 'center' });
+              setShowJumpToUnread(false);
+            }}
+            className="pointer-events-auto h-9 rounded-full bg-card hover:bg-accent border border-border px-3 text-sm font-medium shadow-lg transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Jump to unread
+          </button>
         </div>
+      )}
+      {showScrollToBottom && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-4 right-4 w-9 h-9 rounded-full bg-card hover:bg-accent border border-border flex items-center justify-center shadow-lg transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          title="Scroll to bottom"
+          aria-label="Scroll to bottom"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-muted-foreground"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
       )}
 
       {/* Path modal */}
