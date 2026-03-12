@@ -1,3 +1,15 @@
+## [3.1.0] - 2026-03-11
+
+Feature: Add basic auth
+Feature: SQS fanout
+Feature: Enrich contact info pane
+Feature: Search operators for node and channel
+Feature: Pause radio connection attempts from Radio settings
+Feature: New themes! What a great use of time!
+Feature: Github workflows runs for validation
+Bugfix: More consistent log format with times
+Bugfix: Patch meshcore_py bluetooth eager reconnection out during pauses
+
 ## [3.0.0] - 2026-03-10
 
 Feature: Custom regions per-channel
