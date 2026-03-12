@@ -262,6 +262,24 @@ describe('SettingsModal', () => {
     expect(screen.queryByLabelText('Local label text')).not.toBeInTheDocument();
   });
 
+  it('shows the theme contrast preview in local settings', () => {
+    renderModal();
+    openLocalSection();
+
+    expect(
+      screen.getByText('Preview alert and message contrast for the selected theme.')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Connected preview: radio link healthy and syncing.')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Warning preview: packet audit suggests missing history.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Error preview: radio reconnect failed.')).toBeInTheDocument();
+    expect(screen.getByText('Hello, mesh!')).toBeInTheDocument();
+    expect(screen.getByText("Hi there! I'm using RemoteTerm.")).toBeInTheDocument();
+  });
+
   it('clears stale errors when switching external desktop sections', async () => {
     const onSaveAppSettings = vi.fn(async () => {
       throw new Error('Save failed');

@@ -460,7 +460,7 @@ export function SettingsRadioSection({
               <option value="1">2 bytes</option>
               <option value="2">3 bytes</option>
             </select>
-            <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-200">
+            <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-xs text-warning">
               <p className="font-semibold mb-1">Compatibility Warning</p>
               <p>
                 ALL nodes along a message&apos;s route &mdash; your radio, every repeater, and the

@@ -298,7 +298,7 @@ export function VisualizerControls({
                 </button>
                 <button
                   onClick={onClearAndReset}
-                  className="mt-1 px-3 py-1.5 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-500 rounded text-xs transition-colors"
+                  className="mt-1 rounded border border-warning/40 bg-warning/10 px-3 py-1.5 text-warning text-xs transition-colors hover:bg-warning/20"
                   title="Clear all nodes and links from the visualization - packets are preserved"
                 >
                   Clear &amp; Reset

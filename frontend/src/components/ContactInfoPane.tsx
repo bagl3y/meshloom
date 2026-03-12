@@ -515,7 +515,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function ChannelAttributionWarning({
   includeAliasNote = false,
   nameOnly = false,
-  className = 'mx-5 my-3 px-3 py-2 rounded-md bg-yellow-500/10 border border-yellow-500/20',
+  className = 'mx-5 my-3 px-3 py-2 rounded-md bg-warning/10 border border-warning/20',
 }: {
   includeAliasNote?: boolean;
   nameOnly?: boolean;
@@ -523,7 +523,7 @@ function ChannelAttributionWarning({
 }) {
   return (
     <div className={className}>
-      <p className="text-xs text-yellow-600 dark:text-yellow-400">
+      <p className="text-xs text-warning">
         Channel sender identity is based on best-effort name matching. Different nodes using the
         same name will be attributed to the same {nameOnly ? 'sender name' : 'contact'}. Stats below
         may be inaccurate.

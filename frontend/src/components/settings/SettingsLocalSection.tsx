@@ -40,6 +40,7 @@ export function SettingsLocalSection({
       <div className="space-y-1">
         <Label>Color Scheme</Label>
         <ThemeSelector />
+        <ThemePreview className="mt-6" />
       </div>
 
       <Separator />
@@ -88,6 +89,67 @@ export function SettingsLocalSection({
         />
         <span className="text-sm">Reopen to last viewed channel/conversation</span>
       </label>
+    </div>
+  );
+}
+
+function ThemePreview({ className }: { className?: string }) {
+  return (
+    <div className={`rounded-lg border border-border bg-card p-3 ${className ?? ''}`}>
+      <p className="text-xs text-muted-foreground mb-3">
+        Preview alert and message contrast for the selected theme.
+      </p>
+
+      <div className="space-y-2">
+        <PreviewBanner className="border border-status-connected/30 bg-status-connected/15 text-status-connected">
+          Connected preview: radio link healthy and syncing.
+        </PreviewBanner>
+        <PreviewBanner className="border border-warning/50 bg-warning/10 text-warning">
+          Warning preview: packet audit suggests missing history.
+        </PreviewBanner>
+        <PreviewBanner className="border border-destructive/30 bg-destructive/10 text-destructive">
+          Error preview: radio reconnect failed.
+        </PreviewBanner>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <PreviewMessage
+          sender="Alice"
+          bubbleClassName="bg-msg-incoming text-foreground"
+          text="Hello, mesh!"
+        />
+        <PreviewMessage
+          sender="You"
+          alignRight
+          bubbleClassName="bg-msg-outgoing text-foreground"
+          text="Hi there! I'm using RemoteTerm."
+        />
+      </div>
+    </div>
+  );
+}
+
+function PreviewBanner({ children, className }: { children: React.ReactNode; className: string }) {
+  return <div className={`rounded-md px-3 py-2 text-xs ${className}`}>{children}</div>;
+}
+
+function PreviewMessage({
+  sender,
+  text,
+  bubbleClassName,
+  alignRight = false,
+}: {
+  sender: string;
+  text: string;
+  bubbleClassName: string;
+  alignRight?: boolean;
+}) {
+  return (
+    <div className={`flex ${alignRight ? 'justify-end' : 'justify-start'}`}>
+      <div className={`max-w-[85%] ${alignRight ? 'items-end' : 'items-start'} flex flex-col`}>
+        <span className="mb-1 text-[11px] text-muted-foreground">{sender}</span>
+        <div className={`rounded-2xl px-3 py-2 text-sm break-words ${bubbleClassName}`}>{text}</div>
+      </div>
     </div>
   );
 }
