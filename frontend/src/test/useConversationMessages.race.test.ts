@@ -224,6 +224,48 @@ describe('useConversationMessages conversation switch', () => {
   });
 });
 
+describe('useConversationMessages background reconcile ordering', () => {
+  beforeEach(() => {
+    mockGetMessages.mockReset();
+    messageCache.clear();
+  });
+
+  it('ignores stale reconnect reconcile responses that finish after newer ones', async () => {
+    const conv = createConversation();
+    mockGetMessages.mockResolvedValueOnce([
+      createMessage({ id: 42, text: 'initial snapshot', acked: 0 }),
+    ]);
+
+    const { result } = renderHook(() => useConversationMessages(conv));
+
+    await waitFor(() => expect(result.current.messagesLoading).toBe(false));
+    expect(result.current.messages[0].text).toBe('initial snapshot');
+
+    const firstReconcile = createDeferred<Message[]>();
+    const secondReconcile = createDeferred<Message[]>();
+    mockGetMessages
+      .mockReturnValueOnce(firstReconcile.promise)
+      .mockReturnValueOnce(secondReconcile.promise);
+
+    act(() => {
+      result.current.triggerReconcile();
+      result.current.triggerReconcile();
+    });
+
+    secondReconcile.resolve([createMessage({ id: 42, text: 'newer snapshot', acked: 2 })]);
+    await waitFor(() => expect(result.current.messages[0].text).toBe('newer snapshot'));
+    expect(result.current.messages[0].acked).toBe(2);
+
+    firstReconcile.resolve([createMessage({ id: 42, text: 'stale snapshot', acked: 1 })]);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(result.current.messages[0].text).toBe('newer snapshot');
+    expect(result.current.messages[0].acked).toBe(2);
+  });
+});
+
 describe('useConversationMessages forward pagination', () => {
   beforeEach(() => {
     mockGetMessages.mockReset();

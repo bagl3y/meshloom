@@ -137,6 +137,7 @@ export function useConversationMessages(
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const fetchingConversationIdRef = useRef<string | null>(null);
+  const latestReconcileRequestIdRef = useRef(0);
   const messagesRef = useRef<Message[]>([]);
   const hasOlderMessagesRef = useRef(false);
   const hasNewerMessagesRef = useRef(false);
@@ -215,7 +216,7 @@ export function useConversationMessages(
   );
 
   const reconcileFromBackend = useCallback(
-    (conversation: Conversation, signal: AbortSignal) => {
+    (conversation: Conversation, signal: AbortSignal, requestId: number) => {
       const conversationId = conversation.id;
       api
         .getMessages(
@@ -228,6 +229,7 @@ export function useConversationMessages(
         )
         .then((data) => {
           if (fetchingConversationIdRef.current !== conversationId) return;
+          if (latestReconcileRequestIdRef.current !== requestId) return;
 
           const dataWithPendingAck = data.map((msg) => applyPendingAck(msg));
           const merged = messageCache.reconcile(messagesRef.current, dataWithPendingAck);
@@ -352,7 +354,9 @@ export function useConversationMessages(
   const triggerReconcile = useCallback(() => {
     if (!isMessageConversation(activeConversation)) return;
     const controller = new AbortController();
-    reconcileFromBackend(activeConversation, controller.signal);
+    const requestId = latestReconcileRequestIdRef.current + 1;
+    latestReconcileRequestIdRef.current = requestId;
+    reconcileFromBackend(activeConversation, controller.signal, requestId);
   }, [activeConversation, reconcileFromBackend]);
 
   useEffect(() => {
@@ -365,6 +369,7 @@ export function useConversationMessages(
     const conversationChanged = prevId !== newId;
     fetchingConversationIdRef.current = newId;
     prevConversationIdRef.current = newId;
+    latestReconcileRequestIdRef.current = 0;
 
     // Preserve around-loaded context on the same conversation when search clears targetMessageId.
     if (!conversationChanged && !targetMessageId) {
@@ -433,7 +438,9 @@ export function useConversationMessages(
         seenMessageContent.current = new Set(cached.seenContent);
         setHasOlderMessages(cached.hasOlderMessages);
         setMessagesLoading(false);
-        reconcileFromBackend(activeConversation, controller.signal);
+        const requestId = latestReconcileRequestIdRef.current + 1;
+        latestReconcileRequestIdRef.current = requestId;
+        reconcileFromBackend(activeConversation, controller.signal, requestId);
       } else {
         void fetchLatestMessages(true, controller.signal);
       }
