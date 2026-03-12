@@ -1,6 +1,7 @@
 import { toast } from './ui/sonner';
 import { Button } from './ui/button';
-import { Bell, Route, Star, Trash2 } from 'lucide-react';
+import { Bell, Star, Trash2 } from 'lucide-react';
+import { DirectTraceIcon } from './DirectTraceIcon';
 import { RepeaterLogin } from './RepeaterLogin';
 import { useRepeaterDashboard } from '../hooks/useRepeaterDashboard';
 import { isFavorite } from '../utils/favorites';
@@ -126,7 +127,7 @@ export function RepeaterDashboard({
             title="Direct Trace"
             aria-label="Direct Trace"
           >
-            <Route className="h-4 w-4" aria-hidden="true" />
+            <DirectTraceIcon className="h-4 w-4 text-muted-foreground" />
           </button>
           {notificationsSupported && (
             <button
