@@ -74,35 +74,33 @@ function getDefaultIntegrationName(type: string, configs: FanoutConfig[]) {
   return `${label} #${nextIndex}`;
 }
 
-const DEFAULT_BOT_CODE = `def bot(
-    sender_name: str | None,
-    sender_key: str | None,
-    message_text: str,
-    is_dm: bool,
-    channel_key: str | None,
-    channel_name: str | None,
-    sender_timestamp: int | None,
-    path: str | None,
-    is_outgoing: bool = False,
-) -> str | list[str] | None:
+const DEFAULT_BOT_CODE = `def bot(**kwargs) -> str | list[str] | None:
     """
     Process messages and optionally return a reply.
 
     Args:
-        sender_name: Display name of sender (may be None)
-        sender_key: 64-char hex public key (None for channel msgs)
-        message_text: The message content
-        is_dm: True for direct messages, False for channel
-        channel_key: 32-char hex key for channels, None for DMs
-        channel_name: Channel name with hash (e.g. "#bot"), None for DMs
-        sender_timestamp: Sender's timestamp (unix seconds, may be None)
-        path: Hex-encoded routing path (may be None)
-        is_outgoing: True if this is our own outgoing message
+        kwargs keys currently provided:
+            sender_name: Display name of sender (may be None)
+            sender_key: 64-char hex public key (None for channel msgs)
+            message_text: The message content
+            is_dm: True for direct messages, False for channel
+            channel_key: 32-char hex key for channels, None for DMs
+            channel_name: Channel name with hash (e.g. "#bot"), None for DMs
+            sender_timestamp: Sender's timestamp (unix seconds, may be None)
+            path: Hex-encoded routing path (may be None)
+            is_outgoing: True if this is our own outgoing message
+            path_bytes_per_hop: Bytes per hop in path (1, 2, or 3) when known
 
     Returns:
         None for no reply, a string for a single reply,
         or a list of strings to send multiple messages in order
     """
+    sender_name = kwargs.get("sender_name")
+    message_text = kwargs.get("message_text", "")
+    channel_name = kwargs.get("channel_name")
+    is_outgoing = kwargs.get("is_outgoing", False)
+    path_bytes_per_hop = kwargs.get("path_bytes_per_hop")
+
     # Don't reply to our own outgoing messages
     if is_outgoing:
         return None
