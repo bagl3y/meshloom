@@ -28,7 +28,7 @@ def test_missing_dist_logs_error_and_keeps_app_running(tmp_path, caplog):
     with TestClient(app) as client:
         resp = client.get("/")
         assert resp.status_code == 404
-        assert "npm ci" in resp.json()["detail"]
+        assert "npm install" in resp.json()["detail"]
         assert "npm run build" in resp.json()["detail"]
 
 

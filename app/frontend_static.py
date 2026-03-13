@@ -164,5 +164,7 @@ def register_frontend_missing_fallback(app: FastAPI) -> None:
     async def frontend_not_built():
         return JSONResponse(
             status_code=404,
-            content={"detail": "Frontend not built. Run: cd frontend && npm ci && npm run build"},
+            content={
+                "detail": "Frontend not built. Run: cd frontend && npm install && npm run build"
+            },
         )

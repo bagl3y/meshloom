@@ -77,7 +77,7 @@ cd Remote-Terminal-for-MeshCore
 uv sync
 
 # Build frontend
-cd frontend && npm ci && npm run build && cd ..
+cd frontend && npm install && npm run build && cd ..
 
 # Run server
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
@@ -175,7 +175,7 @@ uv run uvicorn app.main:app --reload
 
 ```bash
 cd frontend
-npm ci
+npm install
 npm run dev      # Dev server at http://localhost:5173 (proxies API to :8000)
 npm run build    # Production build to dist/
 ```
@@ -300,7 +300,7 @@ sudo -u remoteterm uv sync
 
 # Build frontend (required for the backend to serve the web UI)
 cd /opt/remoteterm/frontend
-sudo -u remoteterm npm ci
+sudo -u remoteterm npm install
 sudo -u remoteterm npm run build
 
 # Install and start service
