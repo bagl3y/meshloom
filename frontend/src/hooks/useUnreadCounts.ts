@@ -15,6 +15,7 @@ interface UseUnreadCountsResult {
   /** Tracks which conversations have unread messages that mention the user */
   mentions: Record<string, boolean>;
   lastMessageTimes: ConversationTimes;
+  unreadLastReadAts: Record<string, number | null>;
   incrementUnread: (stateKey: string, hasMention?: boolean) => void;
   renameConversationState: (oldStateKey: string, newStateKey: string) => void;
   markAllRead: () => void;
@@ -30,6 +31,7 @@ export function useUnreadCounts(
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [mentions, setMentions] = useState<Record<string, boolean>>({});
   const [lastMessageTimes, setLastMessageTimes] = useState<ConversationTimes>(getLastMessageTimes);
+  const [unreadLastReadAts, setUnreadLastReadAts] = useState<Record<string, number | null>>({});
 
   // Track active conversation via ref so applyUnreads can filter without
   // destabilizing the callback chain (avoids re-creating fetchUnreads on
@@ -61,6 +63,8 @@ export function useUnreadCounts(
       setUnreadCounts(data.counts);
       setMentions(data.mentions);
     }
+
+    setUnreadLastReadAts(data.last_read_ats);
 
     if (Object.keys(data.last_message_times).length > 0) {
       for (const [key, ts] of Object.entries(data.last_message_times)) {
@@ -200,6 +204,7 @@ export function useUnreadCounts(
     // Update local state immediately
     setUnreadCounts({});
     setMentions({});
+    setUnreadLastReadAts({});
 
     // Persist to server with single bulk request
     api.markAllRead().catch((err) => {
@@ -227,6 +232,7 @@ export function useUnreadCounts(
     unreadCounts,
     mentions,
     lastMessageTimes,
+    unreadLastReadAts,
     incrementUnread,
     renameConversationState,
     markAllRead,

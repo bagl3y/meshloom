@@ -579,11 +579,12 @@ class MessageRepository:
             blocked_names: Display names whose messages should be excluded from counts.
 
         Returns:
-            Dict with 'counts', 'mentions', and 'last_message_times' keys.
+            Dict with 'counts', 'mentions', 'last_message_times', and 'last_read_ats' keys.
         """
         counts: dict[str, int] = {}
         mention_flags: dict[str, bool] = {}
         last_message_times: dict[str, int] = {}
+        last_read_ats: dict[str, int | None] = {}
 
         mention_token = f"@[{name}]" if name else None
 
@@ -661,6 +662,26 @@ class MessageRepository:
             if mention_token and row["has_mention"]:
                 mention_flags[state_key] = True
 
+        cursor = await db.conn.execute(
+            """
+            SELECT key, last_read_at
+            FROM channels
+            """
+        )
+        rows = await cursor.fetchall()
+        for row in rows:
+            last_read_ats[f"channel-{row['key']}"] = row["last_read_at"]
+
+        cursor = await db.conn.execute(
+            """
+            SELECT public_key, last_read_at
+            FROM contacts
+            """
+        )
+        rows = await cursor.fetchall()
+        for row in rows:
+            last_read_ats[f"contact-{row['public_key']}"] = row["last_read_at"]
+
         # Last message times for all conversations (including read ones),
         # excluding blocked incoming traffic so refresh matches live WS behavior.
         last_time_filters: list[str] = []
@@ -727,6 +748,7 @@ class MessageRepository:
             "counts": counts,
             "mentions": mention_flags,
             "last_message_times": last_message_times,
+            "last_read_ats": last_read_ats,
         }
 
     @staticmethod

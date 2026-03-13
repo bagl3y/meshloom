@@ -419,6 +419,7 @@ export interface UnreadCounts {
   counts: Record<string, number>;
   mentions: Record<string, boolean>;
   last_message_times: Record<string, number>;
+  last_read_ats: Record<string, number | null>;
 }
 
 interface BusyChannel {

@@ -237,6 +237,7 @@ export function App() {
     unreadCounts,
     mentions,
     lastMessageTimes,
+    unreadLastReadAts,
     incrementUnread,
     renameConversationState,
     markAllRead,
@@ -260,14 +261,12 @@ export function App() {
       if (activeChannelUnreadCount <= 0) {
         return null;
       }
-
-      const activeChannel = channels.find((channel) => channel.key === activeChannelId);
       return {
         channelId: activeChannelId,
-        lastReadAt: activeChannel?.last_read_at ?? null,
+        lastReadAt: unreadLastReadAts[getStateKey('channel', activeChannelId)] ?? null,
       };
     });
-  }, [activeConversation, channels, unreadCounts]);
+  }, [activeConversation, unreadCounts, unreadLastReadAts]);
 
   useEffect(() => {
     lastUnreadBackfillAttemptRef.current = null;

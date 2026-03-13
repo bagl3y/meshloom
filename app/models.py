@@ -559,6 +559,9 @@ class UnreadCounts(BaseModel):
     last_message_times: dict[str, int] = Field(
         default_factory=dict, description="Map of stateKey -> last message timestamp"
     )
+    last_read_ats: dict[str, int | None] = Field(
+        default_factory=dict, description="Map of stateKey -> server-side last_read_at boundary"
+    )
 
 
 class AppSettings(BaseModel):

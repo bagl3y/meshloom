@@ -583,6 +583,8 @@ class TestReadStateEndpoints:
         # Last message times should include all conversations
         assert result["last_message_times"][f"channel-{chan_key}"] == 1003
         assert result["last_message_times"][f"contact-{contact_key}"] == 1005
+        assert result["last_read_ats"][f"channel-{chan_key}"] == 1000
+        assert result["last_read_ats"][f"contact-{contact_key}"] == 1000
 
     @pytest.mark.asyncio
     async def test_get_unreads_no_name_skips_mentions(self, test_db):
@@ -630,6 +632,7 @@ class TestReadStateEndpoints:
         data = response.json()
         assert data["counts"][f"channel-{chan_key}"] == 1
         assert data["mentions"][f"channel-{chan_key}"] is True
+        assert data["last_read_ats"][f"channel-{chan_key}"] == 0
 
     @pytest.mark.asyncio
     async def test_unreads_endpoint_no_radio_skips_mentions(self, test_db, client):
@@ -655,6 +658,7 @@ class TestReadStateEndpoints:
         data = response.json()
         assert data["counts"][f"channel-{chan_key}"] == 1
         assert len(data["mentions"]) == 0
+        assert data["last_read_ats"][f"channel-{chan_key}"] == 0
 
     @pytest.mark.asyncio
     async def test_unreads_reset_after_mark_read(self, test_db):
