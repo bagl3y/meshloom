@@ -137,6 +137,7 @@ async def run_post_connect_setup(radio_manager) -> None:
                 drained = await drain_pending_messages(mc)
                 if drained > 0:
                     logger.info("Drained %d pending message(s)", drained)
+                radio_manager.clear_pending_message_channel_slots()
 
                 await mc.start_auto_message_fetching()
                 logger.info("Auto message fetching started")

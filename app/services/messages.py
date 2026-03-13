@@ -127,7 +127,7 @@ async def increment_ack_and_broadcast(
 
 async def handle_duplicate_message(
     *,
-    packet_id: int,
+    packet_id: int | None,
     msg_type: str,
     conversation_key: str,
     text: str,
@@ -179,7 +179,8 @@ async def handle_duplicate_message(
             broadcast_fn=broadcast_fn,
         )
 
-    await RawPacketRepository.mark_decrypted(packet_id, existing_msg.id)
+    if packet_id is not None:
+        await RawPacketRepository.mark_decrypted(packet_id, existing_msg.id)
 
 
 async def create_message_from_decrypted(
@@ -391,6 +392,73 @@ async def create_fallback_direct_message(
         signature=signature,
         sender_key=sender_key,
         sender_name=sender_name,
+    )
+    broadcast_message(message=message, broadcast_fn=broadcast_fn)
+    return message
+
+
+async def create_fallback_channel_message(
+    *,
+    conversation_key: str,
+    message_text: str,
+    sender_timestamp: int,
+    received_at: int,
+    path: str | None,
+    path_len: int | None,
+    txt_type: int,
+    sender_name: str | None,
+    channel_name: str | None,
+    broadcast_fn: BroadcastFn,
+    message_repository=MessageRepository,
+) -> Message | None:
+    """Store and broadcast a CHANNEL_MSG_RECV fallback channel message."""
+    conversation_key_normalized = conversation_key.upper()
+    text = f"{sender_name}: {message_text}" if sender_name else message_text
+
+    resolved_sender_key: str | None = None
+    if sender_name:
+        candidates = await ContactRepository.get_by_name(sender_name)
+        if len(candidates) == 1:
+            resolved_sender_key = candidates[0].public_key
+
+    msg_id = await message_repository.create(
+        msg_type="CHAN",
+        text=text,
+        conversation_key=conversation_key_normalized,
+        sender_timestamp=sender_timestamp,
+        received_at=received_at,
+        path=path,
+        path_len=path_len,
+        txt_type=txt_type,
+        sender_name=sender_name,
+        sender_key=resolved_sender_key,
+    )
+    if msg_id is None:
+        await handle_duplicate_message(
+            packet_id=None,
+            msg_type="CHAN",
+            conversation_key=conversation_key_normalized,
+            text=text,
+            sender_timestamp=sender_timestamp,
+            path=path,
+            received_at=received_at,
+            path_len=path_len,
+            broadcast_fn=broadcast_fn,
+        )
+        return None
+
+    message = build_message_model(
+        message_id=msg_id,
+        msg_type="CHAN",
+        conversation_key=conversation_key_normalized,
+        text=text,
+        sender_timestamp=sender_timestamp,
+        received_at=received_at,
+        paths=build_message_paths(path, received_at, path_len),
+        txt_type=txt_type,
+        sender_name=sender_name,
+        sender_key=resolved_sender_key,
+        channel_name=channel_name,
     )
     broadcast_message(message=message, broadcast_fn=broadcast_fn)
     return message

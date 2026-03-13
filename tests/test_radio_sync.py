@@ -43,6 +43,7 @@ def reset_sync_state():
     prev_connection_info = radio_manager._connection_info
     prev_slot_by_key = radio_manager._channel_slot_by_key.copy()
     prev_key_by_slot = radio_manager._channel_key_by_slot.copy()
+    prev_pending_channel_key_by_slot = radio_manager._pending_message_channel_key_by_slot.copy()
 
     radio_sync._polling_pause_count = 0
     radio_sync._last_contact_sync = 0.0
@@ -55,6 +56,7 @@ def reset_sync_state():
     radio_manager._connection_info = prev_connection_info
     radio_manager._channel_slot_by_key = prev_slot_by_key
     radio_manager._channel_key_by_slot = prev_key_by_slot
+    radio_manager._pending_message_channel_key_by_slot = prev_pending_channel_key_by_slot
 
 
 KEY_A = "aa" * 32
@@ -1090,6 +1092,120 @@ class TestSyncAndOffloadChannels:
         await sync_and_offload_channels(mock_mc)
 
         assert radio_manager.get_cached_channel_slot("AA" * 16) is None
+
+    @pytest.mark.asyncio
+    async def test_remembers_channel_slot_for_pending_message_recovery(self, test_db):
+        """Offload snapshots slot-to-key mapping for the later startup drain."""
+        from app.radio_sync import sync_and_offload_channels
+
+        channel_key = "11" * 16
+        channel_result = MagicMock()
+        channel_result.type = EventType.CHANNEL_INFO
+        channel_result.payload = {
+            "channel_name": "#queued",
+            "channel_secret": bytes.fromhex(channel_key),
+        }
+
+        empty_result = MagicMock()
+        empty_result.type = EventType.ERROR
+
+        mock_mc = MagicMock()
+        mock_mc.commands.get_channel = AsyncMock(side_effect=[channel_result] + [empty_result] * 39)
+        mock_mc.commands.set_channel = AsyncMock(return_value=MagicMock(type=EventType.OK))
+
+        await sync_and_offload_channels(mock_mc)
+
+        assert radio_manager.get_pending_message_channel_key(0) == channel_key.upper()
+
+
+class TestPendingChannelMessageFallback:
+    """Queued CHANNEL_MSG_RECV events should be persisted instead of dropped."""
+
+    @pytest.mark.asyncio
+    async def test_drain_pending_messages_uses_snapshotted_slot_mapping_after_offload(
+        self, test_db
+    ):
+        """Startup drain can still store room traffic even after slots were cleared."""
+        from app.radio_sync import drain_pending_messages
+
+        channel_key = "22" * 16
+        await ChannelRepository.upsert(key=channel_key, name="#queued")
+        radio_manager.remember_pending_message_channel_slot(channel_key, 3)
+
+        channel_message = MagicMock()
+        channel_message.type = EventType.CHANNEL_MSG_RECV
+        channel_message.payload = {
+            "channel_idx": 3,
+            "text": "Alice: hello from queue",
+            "sender_timestamp": 1700000000,
+            "txt_type": 0,
+            "path": "aabb",
+            "path_len": 2,
+        }
+
+        no_more = MagicMock()
+        no_more.type = EventType.NO_MORE_MSGS
+        no_more.payload = {}
+
+        empty_slot = MagicMock()
+        empty_slot.type = EventType.ERROR
+        empty_slot.payload = {"error": "slot empty"}
+
+        mock_mc = MagicMock()
+        mock_mc.commands.get_msg = AsyncMock(side_effect=[channel_message, no_more])
+        mock_mc.commands.get_channel = AsyncMock(return_value=empty_slot)
+
+        with patch("app.radio_sync.broadcast_event") as mock_broadcast:
+            drained = await drain_pending_messages(mock_mc)
+
+        assert drained == 1
+        stored = await MessageRepository.get_all(msg_type="CHAN", conversation_key=channel_key)
+        assert len(stored) == 1
+        assert stored[0].text == "Alice: hello from queue"
+        assert stored[0].sender_name == "Alice"
+        assert stored[0].conversation_key == channel_key
+        assert stored[0].paths is not None
+        assert stored[0].paths[0].path == "aabb"
+
+        mock_broadcast.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_poll_for_messages_stores_first_pending_channel_message(self, test_db):
+        """Single-pass polling stores the first queued channel message before draining."""
+        from app.radio_sync import poll_for_messages
+
+        channel_key = "33" * 16
+        channel_result = MagicMock()
+        channel_result.type = EventType.CHANNEL_INFO
+        channel_result.payload = {
+            "channel_name": "#poll",
+            "channel_secret": bytes.fromhex(channel_key),
+        }
+
+        channel_message = MagicMock()
+        channel_message.type = EventType.CHANNEL_MSG_RECV
+        channel_message.payload = {
+            "channel_idx": 1,
+            "text": "Bob: polled message",
+            "sender_timestamp": 1700000010,
+            "txt_type": 0,
+        }
+
+        no_more = MagicMock()
+        no_more.type = EventType.NO_MORE_MSGS
+        no_more.payload = {}
+
+        mock_mc = MagicMock()
+        mock_mc.commands.get_msg = AsyncMock(side_effect=[channel_message, no_more])
+        mock_mc.commands.get_channel = AsyncMock(return_value=channel_result)
+
+        with patch("app.radio_sync.broadcast_event"):
+            count = await poll_for_messages(mock_mc)
+
+        assert count == 1
+        stored = await MessageRepository.get_all(msg_type="CHAN", conversation_key=channel_key)
+        assert len(stored) == 1
+        assert stored[0].text == "Bob: polled message"
 
 
 class TestEnsureDefaultChannels:

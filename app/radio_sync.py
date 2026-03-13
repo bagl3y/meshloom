@@ -28,8 +28,9 @@ from app.repository import (
     ContactRepository,
 )
 from app.services.contact_reconciliation import reconcile_contact_messages
+from app.services.messages import create_fallback_channel_message
 from app.services.radio_runtime import radio_runtime as radio_manager
-from app.websocket import broadcast_error
+from app.websocket import broadcast_error, broadcast_event
 
 logger = logging.getLogger(__name__)
 
@@ -326,6 +327,7 @@ async def sync_and_offload_channels(mc: MeshCore, max_channels: int | None = Non
             if key_hex is None:
                 continue
 
+            radio_manager.remember_pending_message_channel_slot(key_hex, idx)
             synced += 1
             logger.debug("Synced channel %s: %s", key_hex[:8], result.payload.get("channel_name"))
 
@@ -350,6 +352,87 @@ async def sync_and_offload_channels(mc: MeshCore, max_channels: int | None = Non
         return {"synced": synced, "cleared": cleared, "error": str(e)}
 
     return {"synced": synced, "cleared": cleared}
+
+
+def _split_channel_sender_and_text(text: str) -> tuple[str | None, str]:
+    """Parse the canonical MeshCore "<sender>: <message>" channel text format."""
+    sender = None
+    message_text = text
+    colon_idx = text.find(": ")
+    if 0 < colon_idx < 50:
+        potential_sender = text[:colon_idx]
+        if not any(char in potential_sender for char in ":[]\x00"):
+            sender = potential_sender
+            message_text = text[colon_idx + 2 :]
+    return sender, message_text
+
+
+async def _resolve_channel_for_pending_message(
+    mc: MeshCore,
+    channel_idx: int,
+) -> tuple[str | None, str | None]:
+    """Resolve a pending channel message's slot to a channel key and name."""
+    try:
+        result = await mc.commands.get_channel(channel_idx)
+    except Exception as exc:
+        logger.debug("Failed to fetch channel slot %s for pending message: %s", channel_idx, exc)
+    else:
+        if result.type == EventType.CHANNEL_INFO:
+            key_hex = await upsert_channel_from_radio_slot(result.payload, on_radio=False)
+            if key_hex is not None:
+                radio_manager.remember_pending_message_channel_slot(key_hex, channel_idx)
+                return key_hex, result.payload.get("channel_name") or None
+
+    current_slot_map = getattr(radio_manager, "_channel_key_by_slot", {})
+    cached_key = current_slot_map.get(channel_idx)
+    if cached_key is None:
+        cached_key = radio_manager.get_pending_message_channel_key(channel_idx)
+    if cached_key is None:
+        return None, None
+
+    channel = await ChannelRepository.get_by_key(cached_key)
+    return cached_key, channel.name if channel else None
+
+
+async def _store_pending_channel_message(mc: MeshCore, payload: dict) -> None:
+    """Persist a CHANNEL_MSG_RECV event pulled via get_msg()."""
+    channel_idx = payload.get("channel_idx")
+    if channel_idx is None:
+        logger.warning("Pending channel message missing channel_idx; dropping payload")
+        return
+
+    try:
+        normalized_channel_idx = int(channel_idx)
+    except (TypeError, ValueError):
+        logger.warning("Pending channel message had invalid channel_idx=%r", channel_idx)
+        return
+
+    channel_key, channel_name = await _resolve_channel_for_pending_message(
+        mc, normalized_channel_idx
+    )
+    if channel_key is None:
+        logger.warning(
+            "Could not resolve channel slot %d for pending message; message cannot be stored",
+            normalized_channel_idx,
+        )
+        return
+
+    received_at = int(time.time())
+    sender_timestamp = payload.get("sender_timestamp") or received_at
+    sender_name, message_text = _split_channel_sender_and_text(payload.get("text", ""))
+
+    await create_fallback_channel_message(
+        conversation_key=channel_key,
+        message_text=message_text,
+        sender_timestamp=sender_timestamp,
+        received_at=received_at,
+        path=payload.get("path"),
+        path_len=payload.get("path_len"),
+        txt_type=payload.get("txt_type", 0),
+        sender_name=sender_name,
+        channel_name=channel_name,
+        broadcast_fn=broadcast_event,
+    )
 
 
 async def ensure_default_channels() -> None:
@@ -421,6 +504,8 @@ async def drain_pending_messages(mc: MeshCore) -> int:
                 logger.debug("Error during message drain: %s", result.payload)
                 break
             elif result.type in (EventType.CONTACT_MSG_RECV, EventType.CHANNEL_MSG_RECV):
+                if result.type == EventType.CHANNEL_MSG_RECV:
+                    await _store_pending_channel_message(mc, result.payload)
                 count += 1
 
             # Small delay between fetches
@@ -456,6 +541,8 @@ async def poll_for_messages(mc: MeshCore) -> int:
         elif result.type == EventType.ERROR:
             return 0
         elif result.type in (EventType.CONTACT_MSG_RECV, EventType.CHANNEL_MSG_RECV):
+            if result.type == EventType.CHANNEL_MSG_RECV:
+                await _store_pending_channel_message(mc, result.payload)
             count += 1
             # If we got a message, there might be more - drain them
             count += await drain_pending_messages(mc)

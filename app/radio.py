@@ -135,6 +135,7 @@ class RadioManager:
         self.path_hash_mode_supported: bool = False
         self._channel_slot_by_key: OrderedDict[str, int] = OrderedDict()
         self._channel_key_by_slot: dict[int, str] = {}
+        self._pending_message_channel_key_by_slot: dict[int, str] = {}
 
     async def _acquire_operation_lock(
         self,
@@ -231,6 +232,18 @@ class RadioManager:
         """Forget any session-local channel-slot reuse state."""
         self._channel_slot_by_key.clear()
         self._channel_key_by_slot.clear()
+
+    def remember_pending_message_channel_slot(self, channel_key: str, slot: int) -> None:
+        """Remember a channel key for later queued-message recovery."""
+        self._pending_message_channel_key_by_slot[slot] = channel_key.upper()
+
+    def get_pending_message_channel_key(self, slot: int) -> str | None:
+        """Return the last remembered channel key for a radio slot."""
+        return self._pending_message_channel_key_by_slot.get(slot)
+
+    def clear_pending_message_channel_slots(self) -> None:
+        """Drop any queued-message recovery slot metadata."""
+        self._pending_message_channel_key_by_slot.clear()
 
     def channel_slot_reuse_enabled(self) -> bool:
         """Return whether this transport can safely reuse cached channel slots."""
@@ -477,6 +490,7 @@ class RadioManager:
             self.path_hash_mode = 0
             self.path_hash_mode_supported = False
             self.reset_channel_send_cache()
+            self.clear_pending_message_channel_slots()
             logger.debug("Radio disconnected")
 
     async def reconnect(self, *, broadcast_on_success: bool = True) -> bool:
