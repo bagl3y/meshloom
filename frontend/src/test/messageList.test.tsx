@@ -162,6 +162,29 @@ describe('MessageList channel sender rendering', () => {
     expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 
+  it('lets the user dismiss the jump-to-unread button without scrolling or hiding the marker', async () => {
+    const user = userEvent.setup();
+    const messages = [
+      createMessage({ id: 1, received_at: 1700000001, text: 'Alice: older' }),
+      createMessage({ id: 2, received_at: 1700000010, text: 'Alice: newer' }),
+    ];
+
+    render(
+      <MessageList
+        messages={messages}
+        contacts={[]}
+        loading={false}
+        unreadMarkerLastReadAt={1700000005}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Dismiss jump to unread' }));
+
+    expect(screen.queryByRole('button', { name: 'Jump to unread' })).not.toBeInTheDocument();
+    expect(screen.getByText('Unread messages')).toBeInTheDocument();
+    expect(scrollIntoViewMock).not.toHaveBeenCalled();
+  });
+
   it('hides the jump-to-unread button when the unread marker is already visible', () => {
     Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
       configurable: true,

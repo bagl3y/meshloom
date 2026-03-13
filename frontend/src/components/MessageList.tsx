@@ -880,17 +880,31 @@ export function MessageList({
       {/* Scroll to bottom button */}
       {showJumpToUnread && (
         <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2">
-          <button
-            type="button"
-            onClick={() => {
-              unreadMarkerRef.current?.scrollIntoView?.({ block: 'center' });
-              setJumpToUnreadDismissed(true);
-              setShowJumpToUnread(false);
-            }}
-            className="pointer-events-auto h-9 rounded-full bg-card hover:bg-accent border border-border px-3 text-sm font-medium shadow-lg transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Jump to unread
-          </button>
+          <div className="pointer-events-auto flex h-9 items-center overflow-hidden rounded-full border border-border bg-card shadow-lg transition-all hover:scale-105">
+            <button
+              type="button"
+              onClick={() => {
+                unreadMarkerRef.current?.scrollIntoView?.({ block: 'center' });
+                setJumpToUnreadDismissed(true);
+                setShowJumpToUnread(false);
+              }}
+              className="h-full px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Jump to unread
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setJumpToUnreadDismissed(true);
+                setShowJumpToUnread(false);
+              }}
+              className="flex h-full w-9 items-center justify-center border-l border-border text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Dismiss jump to unread"
+              title="Dismiss jump to unread"
+            >
+              ×
+            </button>
+          </div>
         </div>
       )}
       {showScrollToBottom && (
