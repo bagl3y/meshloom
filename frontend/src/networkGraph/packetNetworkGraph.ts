@@ -710,13 +710,22 @@ function projectCanonicalPathWithAliases(
   repeaterAliases: Map<string, string>
 ): ProjectedPacketNetworkPath {
   const projected = compactPathSteps(
-    canonicalPath.map((nodeId) => ({
-      nodeId: isPacketNetworkNodeVisible(state.nodes.get(nodeId), visibility)
-        ? (repeaterAliases.get(nodeId) ?? nodeId)
-        : null,
-      markHiddenLinkWhenOmitted: true,
-      hiddenLabel: null,
-    }))
+    canonicalPath.map((nodeId, index) => {
+      const node = state.nodes.get(nodeId);
+      const visible = isPacketNetworkNodeVisible(node, visibility);
+      return {
+        nodeId: visible ? (repeaterAliases.get(nodeId) ?? nodeId) : null,
+        // Only hidden repeater hops should imply a bridged dashed segment.
+        // Hidden sender/recipient endpoints should disappear with their own edge.
+        markHiddenLinkWhenOmitted:
+          !visible &&
+          !!node &&
+          node.type === 'repeater' &&
+          index > 0 &&
+          index < canonicalPath.length - 1,
+        hiddenLabel: null,
+      };
+    })
   );
 
   return {

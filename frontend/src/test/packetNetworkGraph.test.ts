@@ -9,6 +9,7 @@ import {
   projectPacketNetwork,
   snapshotNeighborIds,
 } from '../networkGraph/packetNetworkGraph';
+import { buildLinkKey } from '../utils/visualizerUtils';
 import type { Contact, RadioConfig, RawPacket } from '../types';
 import { CONTACT_TYPE_REPEATER } from '../types';
 
@@ -179,6 +180,63 @@ describe('packetNetworkGraph', () => {
     ]);
     expect(projection.links.get('565656565656->aaaaaaaaaaaa')?.hasHiddenIntermediate).toBe(true);
     expect(projection.links.get('565656565656->self')?.hasDirectObservation).toBe(true);
+  });
+
+  it('does not bridge across hidden ambiguous sender endpoints', () => {
+    const selfKey = 'ffffffffffff0000000000000000000000000000000000000000000000000000';
+    const repeaterOneKey = '1111111111110000000000000000000000000000000000000000000000000000';
+    const repeaterTwoKey = '2222222222220000000000000000000000000000000000000000000000000000';
+    const repeaterThreeKey = '3333333333330000000000000000000000000000000000000000000000000000';
+    const repeaterFourKey = '4444444444440000000000000000000000000000000000000000000000000000';
+
+    packetFixtures.set('dm-hidden-ambiguous-sender-a', {
+      payloadType: PayloadType.TextMessage,
+      messageHash: 'dm-hidden-ambiguous-sender-a',
+      pathBytes: ['111111111111', '222222222222'],
+      srcHash: '32',
+      dstHash: 'ffffffffffff',
+      advertPubkey: null,
+      groupTextSender: null,
+      anonRequestPubkey: null,
+    });
+    packetFixtures.set('dm-hidden-ambiguous-sender-b', {
+      payloadType: PayloadType.TextMessage,
+      messageHash: 'dm-hidden-ambiguous-sender-b',
+      pathBytes: ['333333333333', '444444444444'],
+      srcHash: '32',
+      dstHash: 'ffffffffffff',
+      advertPubkey: null,
+      groupTextSender: null,
+      anonRequestPubkey: null,
+    });
+
+    const state = createPacketNetworkState('Me');
+    const context = buildPacketNetworkContext({
+      contacts: [
+        createContact(repeaterOneKey, 'Relay 1', CONTACT_TYPE_REPEATER),
+        createContact(repeaterTwoKey, 'Relay 2', CONTACT_TYPE_REPEATER),
+        createContact(repeaterThreeKey, 'Relay 3', CONTACT_TYPE_REPEATER),
+        createContact(repeaterFourKey, 'Relay 4', CONTACT_TYPE_REPEATER),
+      ],
+      config: createConfig(selfKey),
+      repeaterAdvertPaths: [],
+      splitAmbiguousByTraffic: false,
+      useAdvertPathHints: false,
+    });
+
+    ingestPacketIntoPacketNetwork(state, context, createPacket('dm-hidden-ambiguous-sender-a'));
+    ingestPacketIntoPacketNetwork(state, context, createPacket('dm-hidden-ambiguous-sender-b'));
+
+    const projection = projectPacketNetwork(state, {
+      showAmbiguousNodes: false,
+      showAmbiguousPaths: true,
+      collapseLikelyKnownSiblingRepeaters: true,
+    });
+
+    expect(projection.links.has(buildLinkKey('111111111111', '222222222222'))).toBe(true);
+    expect(projection.links.has(buildLinkKey('333333333333', '444444444444'))).toBe(true);
+    expect(projection.links.has(buildLinkKey('111111111111', '333333333333'))).toBe(false);
+    expect(projection.links.has(buildLinkKey('222222222222', '444444444444'))).toBe(false);
   });
 
   it('does not add a DM recipient node from destination metadata alone', () => {
