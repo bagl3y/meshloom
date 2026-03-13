@@ -230,6 +230,7 @@ app/
 
 - `health` — radio connection status (broadcast on change, personal on connect)
 - `contact` — single contact upsert (from advertisements and radio sync)
+- `contact_resolved` — prefix contact reconciled to a full contact row (payload: `{ previous_public_key, contact }`)
 - `message` — new message (channel or DM, from packet processor or send endpoints)
 - `message_acked` — ACK/echo update for existing message (ack count + paths)
 - `raw_packet` — every incoming RF packet (for real-time packet feed UI)

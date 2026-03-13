@@ -129,7 +129,7 @@ To improve repeater disambiguation in the network visualizer, the backend stores
 - This is independent of raw-packet payload deduplication.
 - Paths are keyed per contact + path + hop count, with `heard_count`, `first_seen`, and `last_seen`.
 - Only the N most recent unique paths are retained per contact (currently 10).
-- See `frontend/src/components/AGENTS_packet_visualizer.md` § "Advert-Path Identity Hints" for how the visualizer consumes this data.
+- See `frontend/src/components/visualizer/AGENTS_packet_visualizer.md` § "Advert-Path Identity Hints" for how the visualizer consumes this data.
 
 ## Path Hash Modes
 
