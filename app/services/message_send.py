@@ -82,12 +82,19 @@ async def send_channel_message_with_effective_scope(
                     else ""
                 ),
             )
-            set_result = await mc.commands.set_channel(
-                channel_idx=channel_slot,
-                channel_name=channel.name,
-                channel_secret=key_bytes,
-            )
+            try:
+                set_result = await mc.commands.set_channel(
+                    channel_idx=channel_slot,
+                    channel_name=channel.name,
+                    channel_secret=key_bytes,
+                )
+            except Exception:
+                if evicted_channel_key is not None:
+                    radio_manager.invalidate_cached_channel_slot(evicted_channel_key)
+                raise
             if set_result.type == EventType.ERROR:
+                if evicted_channel_key is not None:
+                    radio_manager.invalidate_cached_channel_slot(evicted_channel_key)
                 logger.warning(
                     "Failed to set channel on radio slot %d before %s: %s",
                     channel_slot,

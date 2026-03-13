@@ -950,6 +950,69 @@ class TestRadioExceptionMidSend:
         )
         assert len(messages) == 0
 
+    @pytest.mark.asyncio
+    async def test_channel_send_set_channel_exception_invalidates_evicted_cached_slot(
+        self, test_db
+    ):
+        """Eviction-path configure exceptions drop the stale cached slot owner."""
+        from app.repository import ChannelRepository
+
+        mc = _make_mc(name="TestNode")
+        chan_key_a = "de" * 16
+        chan_key_b = "ef" * 16
+        await ChannelRepository.upsert(key=chan_key_a, name="#alpha")
+        await ChannelRepository.upsert(key=chan_key_b, name="#bravo")
+
+        radio_manager.max_channels = 1
+        radio_manager._connection_info = "Serial: /dev/ttyUSB0"
+        radio_manager.note_channel_slot_loaded(chan_key_a, 0)
+
+        mc.commands.set_channel = AsyncMock(side_effect=TimeoutError("Radio not responding"))
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+        ):
+            with pytest.raises(TimeoutError):
+                await send_channel_message(
+                    SendChannelMessageRequest(channel_key=chan_key_b, text="Never sent")
+                )
+
+        assert radio_manager.get_cached_channel_slot(chan_key_a) is None
+        assert radio_manager.get_cached_channel_slot(chan_key_b) is None
+        mc.commands.send_chan_msg.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_channel_send_set_channel_error_invalidates_evicted_cached_slot(self, test_db):
+        """Eviction-path configure error results also drop the stale cached slot owner."""
+        mc = _make_mc(name="TestNode")
+        chan_key_a = "fa" * 16
+        chan_key_b = "fb" * 16
+        await ChannelRepository.upsert(key=chan_key_a, name="#alpha")
+        await ChannelRepository.upsert(key=chan_key_b, name="#bravo")
+
+        radio_manager.max_channels = 1
+        radio_manager._connection_info = "Serial: /dev/ttyUSB0"
+        radio_manager.note_channel_slot_loaded(chan_key_a, 0)
+
+        mc.commands.set_channel = AsyncMock(
+            return_value=MagicMock(type=EventType.ERROR, payload="radio busy")
+        )
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await send_channel_message(
+                SendChannelMessageRequest(channel_key=chan_key_b, text="Never sent")
+            )
+
+        assert exc_info.value.status_code == 500
+        assert radio_manager.get_cached_channel_slot(chan_key_a) is None
+        assert radio_manager.get_cached_channel_slot(chan_key_b) is None
+        mc.commands.send_chan_msg.assert_not_called()
+
 
 class TestConcurrentChannelSends:
     """Test that concurrent channel sends are serialized by the radio operation lock.
