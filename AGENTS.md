@@ -300,15 +300,8 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | GET | `/api/contacts` | List contacts |
 | GET | `/api/contacts/analytics` | Unified keyed-or-name contact analytics payload |
 | GET | `/api/contacts/repeaters/advert-paths` | List recent unique advert paths for all contacts |
-| GET | `/api/contacts/name-detail` | Channel activity summary for a sender name without a resolved key |
-| GET | `/api/contacts/{public_key}` | Get contact by public key or prefix |
-| GET | `/api/contacts/{public_key}/detail` | Comprehensive contact profile (stats, name history, paths) |
-| GET | `/api/contacts/{public_key}/advert-paths` | List recent unique advert paths for a contact |
 | POST | `/api/contacts` | Create contact (optionally trigger historical DM decrypt) |
 | DELETE | `/api/contacts/{public_key}` | Delete contact |
-| POST | `/api/contacts/sync` | Pull from radio |
-| POST | `/api/contacts/{public_key}/add-to-radio` | Push contact to radio |
-| POST | `/api/contacts/{public_key}/remove-from-radio` | Remove contact from radio |
 | POST | `/api/contacts/{public_key}/mark-read` | Mark contact conversation as read |
 | POST | `/api/contacts/{public_key}/command` | Send CLI command to repeater |
 | POST | `/api/contacts/{public_key}/routing-override` | Set or clear a forced routing override |
@@ -325,10 +318,8 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 
 | GET | `/api/channels` | List channels |
 | GET | `/api/channels/{key}/detail` | Comprehensive channel profile (message stats, top senders) |
-| GET | `/api/channels/{key}` | Get channel by key |
 | POST | `/api/channels` | Create channel |
 | DELETE | `/api/channels/{key}` | Delete channel |
-| POST | `/api/channels/sync` | Pull from radio |
 | POST | `/api/channels/{key}/flood-scope-override` | Set or clear a per-channel regional flood-scope override |
 | POST | `/api/channels/{key}/mark-read` | Mark channel as read |
 | GET | `/api/messages` | List with filters (`q`, `after`/`after_id` for forward pagination) |

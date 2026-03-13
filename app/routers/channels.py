@@ -1,16 +1,12 @@
 import logging
 from hashlib import sha256
 
-from fastapi import APIRouter, HTTPException, Query
-from meshcore import EventType
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.dependencies import require_connected
 from app.models import Channel, ChannelDetail, ChannelMessageCounts, ChannelTopSender
-from app.radio_sync import upsert_channel_from_radio_slot
 from app.region_scope import normalize_region_scope
 from app.repository import ChannelRepository, MessageRepository
-from app.services.radio_runtime import radio_runtime as radio_manager
 from app.websocket import broadcast_event
 
 logger = logging.getLogger(__name__)
@@ -59,15 +55,6 @@ async def get_channel_detail(key: str) -> ChannelDetail:
     )
 
 
-@router.get("/{key}", response_model=Channel)
-async def get_channel(key: str) -> Channel:
-    """Get a specific channel by key (32-char hex string)."""
-    channel = await ChannelRepository.get_by_key(key)
-    if not channel:
-        raise HTTPException(status_code=404, detail="Channel not found")
-    return channel
-
-
 @router.post("", response_model=Channel)
 async def create_channel(request: CreateChannelRequest) -> Channel:
     """Create a channel in the database.
@@ -108,33 +95,6 @@ async def create_channel(request: CreateChannelRequest) -> Channel:
 
     _broadcast_channel_update(stored)
     return stored
-
-
-@router.post("/sync")
-async def sync_channels_from_radio(max_channels: int = Query(default=40, ge=1, le=40)) -> dict:
-    """Sync channels from the radio to the database."""
-    require_connected()
-
-    logger.info("Syncing channels from radio (checking %d slots)", max_channels)
-    count = 0
-
-    async with radio_manager.radio_operation("sync_channels_from_radio") as mc:
-        for idx in range(max_channels):
-            result = await mc.commands.get_channel(idx)
-
-            if result.type == EventType.CHANNEL_INFO:
-                key_hex = await upsert_channel_from_radio_slot(result.payload, on_radio=True)
-                if key_hex is not None:
-                    count += 1
-                    stored = await ChannelRepository.get_by_key(key_hex)
-                    if stored is not None:
-                        _broadcast_channel_update(stored)
-                    logger.debug(
-                        "Synced channel %s: %s", key_hex, result.payload.get("channel_name")
-                    )
-
-    logger.info("Synced %d channels from radio", count)
-    return {"synced": count}
 
 
 @router.post("/{key}/mark-read")

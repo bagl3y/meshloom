@@ -8,14 +8,11 @@ from app.dependencies import require_connected
 from app.models import (
     Contact,
     ContactActiveRoom,
-    ContactAdvertPath,
     ContactAdvertPathSummary,
     ContactAnalytics,
-    ContactDetail,
     ContactRoutingOverrideRequest,
     ContactUpsert,
     CreateContactRequest,
-    NameOnlyContactDetail,
     NearestRepeater,
     TraceResponse,
 )
@@ -323,158 +320,6 @@ async def create_contact(
     await _broadcast_contact_update(stored)
     await _broadcast_contact_resolution(promoted_keys, stored)
     return stored
-
-
-@router.get("/{public_key}/detail", response_model=ContactDetail)
-async def get_contact_detail(public_key: str) -> ContactDetail:
-    """Get comprehensive contact profile data.
-
-    Returns contact info, name history, message counts, most active rooms,
-    advertisement paths, advert frequency, and nearest repeaters.
-    """
-    contact = await _resolve_contact_or_404(public_key)
-    analytics = await _build_keyed_contact_analytics(contact)
-    assert analytics.contact is not None
-    return ContactDetail(
-        contact=analytics.contact,
-        name_history=analytics.name_history,
-        dm_message_count=analytics.dm_message_count,
-        channel_message_count=analytics.channel_message_count,
-        most_active_rooms=analytics.most_active_rooms,
-        advert_paths=analytics.advert_paths,
-        advert_frequency=analytics.advert_frequency,
-        nearest_repeaters=analytics.nearest_repeaters,
-    )
-
-
-@router.get("/name-detail", response_model=NameOnlyContactDetail)
-async def get_name_only_contact_detail(
-    name: str = Query(min_length=1, max_length=200),
-) -> NameOnlyContactDetail:
-    """Get channel activity summary for a sender name without a resolved key."""
-    normalized_name = name.strip()
-    if not normalized_name:
-        raise HTTPException(status_code=400, detail="name is required")
-    analytics = await _build_name_only_contact_analytics(normalized_name)
-    return NameOnlyContactDetail(
-        name=analytics.name,
-        channel_message_count=analytics.channel_message_count,
-        most_active_rooms=analytics.most_active_rooms,
-    )
-
-
-@router.get("/{public_key}", response_model=Contact)
-async def get_contact(public_key: str) -> Contact:
-    """Get a specific contact by public key or prefix."""
-    return await _resolve_contact_or_404(public_key)
-
-
-@router.get("/{public_key}/advert-paths", response_model=list[ContactAdvertPath])
-async def get_contact_advert_paths(
-    public_key: str,
-    limit: int = Query(default=10, ge=1, le=50),
-) -> list[ContactAdvertPath]:
-    """List recent unique advert paths for a contact."""
-    contact = await _resolve_contact_or_404(public_key)
-    return await ContactAdvertPathRepository.get_recent_for_contact(contact.public_key, limit)
-
-
-@router.post("/sync")
-async def sync_contacts_from_radio() -> dict:
-    """Sync contacts from the radio to the database."""
-    require_connected()
-
-    logger.info("Syncing contacts from radio")
-
-    async with radio_manager.radio_operation("sync_contacts_from_radio") as mc:
-        result = await mc.commands.get_contacts()
-
-    if result.type == EventType.ERROR:
-        raise HTTPException(status_code=500, detail=f"Failed to get contacts: {result.payload}")
-
-    contacts = result.payload
-    count = 0
-
-    synced_keys: list[str] = []
-    for public_key, contact_data in contacts.items():
-        lower_key = public_key.lower()
-        await ContactRepository.upsert(
-            ContactUpsert.from_radio_dict(lower_key, contact_data, on_radio=True)
-        )
-        promoted_keys = await promote_prefix_contacts_for_contact(
-            public_key=lower_key,
-            log=logger,
-        )
-        synced_keys.append(lower_key)
-        await reconcile_contact_messages(
-            public_key=lower_key,
-            contact_name=contact_data.get("adv_name"),
-            log=logger,
-        )
-        stored = await ContactRepository.get_by_key(lower_key)
-        if stored is not None:
-            await _broadcast_contact_update(stored)
-            await _broadcast_contact_resolution(promoted_keys, stored)
-        count += 1
-
-    # Clear on_radio for contacts not found on the radio
-    await ContactRepository.clear_on_radio_except(synced_keys)
-
-    logger.info("Synced %d contacts from radio", count)
-    return {"synced": count}
-
-
-@router.post("/{public_key}/remove-from-radio")
-async def remove_contact_from_radio(public_key: str) -> dict:
-    """Remove a contact from the radio (keeps it in database)."""
-    require_connected()
-
-    contact = await _resolve_contact_or_404(public_key)
-
-    async with radio_manager.radio_operation("remove_contact_from_radio") as mc:
-        # Get the contact from radio
-        radio_contact = mc.get_contact_by_key_prefix(contact.public_key[:12])
-        if not radio_contact:
-            # Already not on radio
-            await ContactRepository.set_on_radio(contact.public_key, False)
-            return {"status": "ok", "message": "Contact was not on radio"}
-
-        logger.info("Removing contact %s from radio", contact.public_key[:12])
-
-        result = await mc.commands.remove_contact(radio_contact)
-
-        if result.type == EventType.ERROR:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to remove contact: {result.payload}"
-            )
-
-    await ContactRepository.set_on_radio(contact.public_key, False)
-    return {"status": "ok"}
-
-
-@router.post("/{public_key}/add-to-radio")
-async def add_contact_to_radio(public_key: str) -> dict:
-    """Add a contact from the database to the radio."""
-    require_connected()
-
-    contact = await _resolve_contact_or_404(public_key, "Contact not found in database")
-
-    async with radio_manager.radio_operation("add_contact_to_radio") as mc:
-        # Check if already on radio
-        radio_contact = mc.get_contact_by_key_prefix(contact.public_key[:12])
-        if radio_contact:
-            await ContactRepository.set_on_radio(contact.public_key, True)
-            return {"status": "ok", "message": "Contact already on radio"}
-
-        logger.info("Adding contact %s to radio", contact.public_key[:12])
-
-        result = await mc.commands.add_contact(contact.to_radio_dict())
-
-        if result.type == EventType.ERROR:
-            raise HTTPException(status_code=500, detail=f"Failed to add contact: {result.payload}")
-
-    await ContactRepository.set_on_radio(contact.public_key, True)
-    return {"status": "ok"}
 
 
 @router.post("/{public_key}/mark-read")

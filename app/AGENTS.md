@@ -158,15 +158,8 @@ app/
 - `GET /contacts`
 - `GET /contacts/analytics` — unified keyed-or-name analytics payload
 - `GET /contacts/repeaters/advert-paths` — recent advert paths for all contacts
-- `GET /contacts/name-detail` — name-only activity summary for unresolved channel senders
-- `GET /contacts/{public_key}`
-- `GET /contacts/{public_key}/detail` — comprehensive contact profile (stats, name history, paths, nearest repeaters)
-- `GET /contacts/{public_key}/advert-paths` — recent advert paths for one contact
 - `POST /contacts`
 - `DELETE /contacts/{public_key}`
-- `POST /contacts/sync`
-- `POST /contacts/{public_key}/add-to-radio`
-- `POST /contacts/{public_key}/remove-from-radio`
 - `POST /contacts/{public_key}/mark-read`
 - `POST /contacts/{public_key}/command`
 - `POST /contacts/{public_key}/routing-override`
@@ -184,10 +177,8 @@ app/
 ### Channels
 - `GET /channels`
 - `GET /channels/{key}/detail`
-- `GET /channels/{key}`
 - `POST /channels`
 - `DELETE /channels/{key}`
-- `POST /channels/sync`
 - `POST /channels/{key}/flood-scope-override`
 - `POST /channels/{key}/mark-read`
 

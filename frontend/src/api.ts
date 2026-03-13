@@ -6,9 +6,7 @@ import type {
   CommandResponse,
   Contact,
   ContactAnalytics,
-  ContactAdvertPath,
   ContactAdvertPathSummary,
-  ContactDetail,
   FanoutConfig,
   Favorite,
   HealthStatus,
@@ -17,7 +15,6 @@ import type {
   MessagesAroundResponse,
   MigratePreferencesRequest,
   MigratePreferencesResponse,
-  NameOnlyContactDetail,
   RadioConfig,
   RadioConfigUpdate,
   RepeaterAclResponse,
@@ -121,18 +118,12 @@ export const api = {
     fetchJson<ContactAdvertPathSummary[]>(
       `/contacts/repeaters/advert-paths?limit_per_repeater=${limitPerRepeater}`
     ),
-  getContactAdvertPaths: (publicKey: string, limit = 10) =>
-    fetchJson<ContactAdvertPath[]>(`/contacts/${publicKey}/advert-paths?limit=${limit}`),
   getContactAnalytics: (params: { publicKey?: string; name?: string }) => {
     const searchParams = new URLSearchParams();
     if (params.publicKey) searchParams.set('public_key', params.publicKey);
     if (params.name) searchParams.set('name', params.name);
     return fetchJson<ContactAnalytics>(`/contacts/analytics?${searchParams.toString()}`);
   },
-  getContactDetail: (publicKey: string) =>
-    fetchJson<ContactDetail>(`/contacts/${publicKey}/detail`),
-  getNameOnlyContactDetail: (name: string) =>
-    fetchJson<NameOnlyContactDetail>(`/contacts/name-detail?name=${encodeURIComponent(name)}`),
   deleteContact: (publicKey: string) =>
     fetchJson<{ status: string }>(`/contacts/${publicKey}`, {
       method: 'DELETE',
