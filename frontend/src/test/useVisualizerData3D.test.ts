@@ -123,6 +123,31 @@ afterEach(() => {
 });
 
 describe('useVisualizerData3D', () => {
+  it('hard-pins the self node at the origin', async () => {
+    const selfKey = 'ffffffffffff0000000000000000000000000000000000000000000000000000';
+
+    const { result } = renderVisualizerData({
+      packets: [],
+      contacts: [],
+      config: createConfig(selfKey),
+    });
+
+    await waitFor(() => expect(result.current.nodes.get('self')).toBeDefined());
+
+    const selfNode = result.current.nodes.get('self');
+    expect(selfNode).toMatchObject({
+      x: 0,
+      y: 0,
+      z: 0,
+      fx: 0,
+      fy: 0,
+      fz: 0,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+    });
+  });
+
   it('keeps canonical adjacency stable when ambiguous repeaters are shown or hidden', async () => {
     const selfKey = 'ffffffffffff0000000000000000000000000000000000000000000000000000';
     const aliceKey = 'aaaaaaaaaaaa0000000000000000000000000000000000000000000000000000';

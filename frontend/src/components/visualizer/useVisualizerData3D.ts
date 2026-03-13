@@ -78,6 +78,9 @@ function buildInitialRenderNode(node: PacketNetworkNode): GraphNode {
       x: 0,
       y: 0,
       z: 0,
+      fx: 0,
+      fy: 0,
+      fz: 0,
       vx: 0,
       vy: 0,
       vz: 0,
@@ -244,6 +247,9 @@ export function useVisualizerData3D({
         existing.x = 0;
         existing.y = 0;
         existing.z = 0;
+        existing.fx = 0;
+        existing.fy = 0;
+        existing.fz = 0;
         existing.vx = 0;
         existing.vy = 0;
         existing.vz = 0;
