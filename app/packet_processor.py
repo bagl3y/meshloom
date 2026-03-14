@@ -442,8 +442,8 @@ async def _process_advertisement(
     PATH_FRESHNESS_SECONDS = 60
     use_existing_path = False
 
-    if existing and existing.last_seen:
-        path_age = timestamp - existing.last_seen
+    if existing and existing.last_advert:
+        path_age = timestamp - existing.last_advert
         existing_path_len = existing.last_path_len if existing.last_path_len >= 0 else float("inf")
 
         # Keep existing path if it's fresh and shorter (or equal)

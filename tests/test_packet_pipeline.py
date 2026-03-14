@@ -291,6 +291,7 @@ class TestAdvertisementPipeline:
                 "public_key": test_pubkey,
                 "name": "TestNode",
                 "type": 1,
+                "last_advert": 1000,
                 "last_seen": 1000,
                 "last_path_len": 3,
                 "last_path": "aabbcc",  # 3 bytes = 3 hops
@@ -352,6 +353,54 @@ class TestAdvertisementPipeline:
         # Verify the shorter path was kept
         contact = await ContactRepository.get_by_key(test_pubkey)
         assert contact.last_path_len == 1  # Still the shorter path
+
+    @pytest.mark.asyncio
+    async def test_advertisement_path_freshness_uses_last_advert_not_last_seen(
+        self, test_db, captured_broadcasts
+    ):
+        """Non-advert contact activity should not keep an old advert path artificially fresh."""
+        from unittest.mock import MagicMock
+
+        from app.decoder import ParsedAdvertisement
+        from app.packet_processor import _process_advertisement
+
+        test_pubkey = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+        await ContactRepository.upsert(
+            {
+                "public_key": test_pubkey,
+                "name": "TestNode",
+                "type": 1,
+                "last_advert": 1000,
+                "last_seen": 1055,  # Simulates later non-advert activity
+                "last_path_len": 1,
+                "last_path": "aa",
+            }
+        )
+
+        broadcasts, mock_broadcast = captured_broadcasts
+
+        longer_packet_info = MagicMock()
+        longer_packet_info.path_length = 3
+        longer_packet_info.path = bytes.fromhex("aabbcc")
+        longer_packet_info.path_hash_size = 1
+        longer_packet_info.payload = b""
+
+        with patch("app.packet_processor.broadcast_event", mock_broadcast):
+            with patch("app.packet_processor.parse_advertisement") as mock_parse:
+                mock_parse.return_value = ParsedAdvertisement(
+                    public_key=test_pubkey,
+                    name="TestNode",
+                    timestamp=1070,
+                    lat=None,
+                    lon=None,
+                    device_role=1,
+                )
+                await _process_advertisement(b"", timestamp=1070, packet_info=longer_packet_info)
+
+        contact = await ContactRepository.get_by_key(test_pubkey)
+        assert contact is not None
+        assert contact.last_path_len == 3
+        assert contact.last_path == "aabbcc"
 
     @pytest.mark.asyncio
     async def test_advertisement_default_path_len_treated_as_infinity(
