@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ChatHeader } from '../components/ChatHeader';
-import type { Channel, Conversation, Favorite } from '../types';
+import type { Channel, Contact, Conversation, Favorite, PathDiscoveryResponse } from '../types';
 
 function makeChannel(key: string, name: string, isHashtag: boolean): Channel {
   return { key, name, is_hashtag: isHashtag, on_radio: false, last_read_at: null };
@@ -18,6 +18,9 @@ const baseProps = {
   notificationsEnabled: false,
   notificationsPermission: 'granted' as const,
   onTrace: noop,
+  onPathDiscovery: vi.fn(async () => {
+    throw new Error('unused');
+  }) as (_: string) => Promise<PathDiscoveryResponse>,
   onToggleNotifications: noop,
   onToggleFavorite: noop,
   onSetChannelFloodScopeOverride: noop,
@@ -164,6 +167,89 @@ describe('ChatHeader key visibility', () => {
 
     expect(screen.getByText('Notifications On')).toBeInTheDocument();
     expect(onToggleNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens path discovery modal for contacts and runs the request on demand', async () => {
+    const pubKey = '21'.repeat(32);
+    const contact: Contact = {
+      public_key: pubKey,
+      name: 'Alice',
+      type: 1,
+      flags: 0,
+      last_path: 'AA',
+      last_path_len: 1,
+      out_path_hash_mode: 0,
+      last_advert: null,
+      lat: null,
+      lon: null,
+      last_seen: null,
+      on_radio: false,
+      last_contacted: null,
+      last_read_at: null,
+      first_seen: null,
+    };
+    const conversation: Conversation = { type: 'contact', id: pubKey, name: 'Alice' };
+    const onPathDiscovery = vi.fn().mockResolvedValue({
+      contact,
+      forward_path: { path: 'AA', path_len: 1, path_hash_mode: 0 },
+      return_path: { path: '', path_len: 0, path_hash_mode: 0 },
+    } satisfies PathDiscoveryResponse);
+
+    render(
+      <ChatHeader
+        {...baseProps}
+        conversation={conversation}
+        channels={[]}
+        contacts={[contact]}
+        onPathDiscovery={onPathDiscovery}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Path Discovery' }));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Run path discovery' }));
+
+    await waitFor(() => {
+      expect(onPathDiscovery).toHaveBeenCalledWith(pubKey);
+    });
+  });
+
+  it('shows an override warning in the path discovery modal when forced routing is set', async () => {
+    const pubKey = '31'.repeat(32);
+    const contact: Contact = {
+      public_key: pubKey,
+      name: 'Alice',
+      type: 1,
+      flags: 0,
+      last_path: 'AA',
+      last_path_len: 1,
+      out_path_hash_mode: 0,
+      route_override_path: 'BBDD',
+      route_override_len: 2,
+      route_override_hash_mode: 0,
+      last_advert: null,
+      lat: null,
+      lon: null,
+      last_seen: null,
+      on_radio: false,
+      last_contacted: null,
+      last_read_at: null,
+      first_seen: null,
+    };
+    const conversation: Conversation = { type: 'contact', id: pubKey, name: 'Alice' };
+
+    render(
+      <ChatHeader {...baseProps} conversation={conversation} channels={[]} contacts={[contact]} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Path Discovery' }));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText(/current learned route: 1 hop \(AA\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/current forced route: 2 hops \(BB -> DD\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/forced route override is currently set/i)).toBeInTheDocument();
+    expect(screen.getByText(/clearing the forced route afterward is enough/i)).toBeInTheDocument();
   });
 
   it('prompts for regional override when globe button is clicked', () => {

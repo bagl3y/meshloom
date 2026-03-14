@@ -1,13 +1,15 @@
+import { useState } from 'react';
+
 import { toast } from './ui/sonner';
 import { Button } from './ui/button';
-import { Bell, Star, Trash2 } from 'lucide-react';
+import { Bell, Route, Star, Trash2 } from 'lucide-react';
 import { DirectTraceIcon } from './DirectTraceIcon';
 import { RepeaterLogin } from './RepeaterLogin';
 import { useRepeaterDashboard } from '../hooks/useRepeaterDashboard';
 import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { ContactStatusInfo } from './ContactStatusInfo';
-import type { Contact, Conversation, Favorite } from '../types';
+import type { Contact, Conversation, Favorite, PathDiscoveryResponse } from '../types';
 import { TelemetryPane } from './repeater/RepeaterTelemetryPane';
 import { NeighborsPane } from './repeater/RepeaterNeighborsPane';
 import { AclPane } from './repeater/RepeaterAclPane';
@@ -17,6 +19,7 @@ import { LppTelemetryPane } from './repeater/RepeaterLppTelemetryPane';
 import { OwnerInfoPane } from './repeater/RepeaterOwnerInfoPane';
 import { ActionsPane } from './repeater/RepeaterActionsPane';
 import { ConsolePane } from './repeater/RepeaterConsolePane';
+import { ContactPathDiscoveryModal } from './ContactPathDiscoveryModal';
 
 // Re-export for backwards compatibility (used by repeaterFormatters.test.ts)
 export { formatDuration, formatClockDrift } from './repeater/repeaterPaneShared';
@@ -34,6 +37,7 @@ interface RepeaterDashboardProps {
   radioLon: number | null;
   radioName: string | null;
   onTrace: () => void;
+  onPathDiscovery: (publicKey: string) => Promise<PathDiscoveryResponse>;
   onToggleNotifications: () => void;
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
   onDeleteContact: (publicKey: string) => void;
@@ -48,12 +52,14 @@ export function RepeaterDashboard({
   notificationsPermission,
   radioLat,
   radioLon,
-  radioName: _radioName,
+  radioName,
   onTrace,
+  onPathDiscovery,
   onToggleNotifications,
   onToggleFavorite,
   onDeleteContact,
 }: RepeaterDashboardProps) {
+  const [pathDiscoveryOpen, setPathDiscoveryOpen] = useState(false);
   const {
     loggedIn,
     loginLoading,
@@ -122,6 +128,16 @@ export function RepeaterDashboard({
               {anyLoading ? 'Loading...' : 'Load All'}
             </Button>
           )}
+          {contact && (
+            <button
+              className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => setPathDiscoveryOpen(true)}
+              title="Path Discovery. Send a routed probe and inspect the forward and return paths"
+              aria-label="Path Discovery"
+            >
+              <Route className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            </button>
+          )}
           <button
             className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={onTrace}
@@ -184,6 +200,16 @@ export function RepeaterDashboard({
             <Trash2 className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
+        {contact && (
+          <ContactPathDiscoveryModal
+            open={pathDiscoveryOpen}
+            onClose={() => setPathDiscoveryOpen(false)}
+            contact={contact}
+            contacts={contacts}
+            radioName={radioName}
+            onDiscover={onPathDiscovery}
+          />
+        )}
       </header>
 
       {/* Body */}

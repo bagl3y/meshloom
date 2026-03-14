@@ -20,6 +20,13 @@ KEY_B = "bb" * 32  # bbbb...bb
 KEY_C = "cc" * 32  # cccc...cc
 
 
+def _radio_result(event_type=EventType.OK, payload=None):
+    result = MagicMock()
+    result.type = event_type
+    result.payload = payload or {}
+    return result
+
+
 def _noop_radio_operation(mc=None):
     """Factory for a no-op radio_operation context manager that yields mc."""
 
@@ -253,6 +260,77 @@ class TestContactAnalytics:
         )
         assert response.status_code == 400
         assert "exactly one" in response.json()["detail"].lower()
+
+
+class TestPathDiscovery:
+    @pytest.mark.asyncio
+    async def test_updates_contact_route_and_broadcasts_contact(self, test_db, client):
+        await _insert_contact(KEY_A, "Alice", type=1)
+        mc = MagicMock()
+        mc.commands = MagicMock()
+        mc.commands.add_contact = AsyncMock(return_value=_radio_result())
+        mc.commands.send_path_discovery = AsyncMock(return_value=_radio_result(EventType.MSG_SENT))
+        mc.wait_for_event = AsyncMock(
+            return_value=MagicMock(
+                payload={
+                    "pubkey_pre": KEY_A[:12],
+                    "out_path": "11223344",
+                    "out_path_len": 2,
+                    "out_path_hash_len": 2,
+                    "in_path": "778899",
+                    "in_path_len": 1,
+                    "in_path_hash_len": 3,
+                }
+            )
+        )
+
+        with (
+            patch("app.routers.contacts.require_connected", return_value=mc),
+            patch("app.routers.contacts.radio_manager") as mock_rm,
+            patch("app.websocket.broadcast_event") as mock_broadcast,
+        ):
+            mock_rm.radio_operation = _noop_radio_operation(mc)
+            response = await client.post(f"/api/contacts/{KEY_A}/path-discovery")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["forward_path"] == {
+            "path": "11223344",
+            "path_len": 2,
+            "path_hash_mode": 1,
+        }
+        assert data["return_path"] == {
+            "path": "778899",
+            "path_len": 1,
+            "path_hash_mode": 2,
+        }
+
+        updated = await ContactRepository.get_by_key(KEY_A)
+        assert updated is not None
+        assert updated.last_path == "11223344"
+        assert updated.last_path_len == 2
+        assert updated.out_path_hash_mode == 1
+        mc.commands.add_contact.assert_awaited()
+        mock_broadcast.assert_called_once_with("contact", updated.model_dump())
+
+    @pytest.mark.asyncio
+    async def test_returns_504_when_no_response_is_heard(self, test_db, client):
+        await _insert_contact(KEY_A, "Alice", type=1)
+        mc = MagicMock()
+        mc.commands = MagicMock()
+        mc.commands.add_contact = AsyncMock(return_value=_radio_result())
+        mc.commands.send_path_discovery = AsyncMock(return_value=_radio_result(EventType.MSG_SENT))
+        mc.wait_for_event = AsyncMock(return_value=None)
+
+        with (
+            patch("app.routers.contacts.require_connected", return_value=mc),
+            patch("app.routers.contacts.radio_manager") as mock_rm,
+        ):
+            mock_rm.radio_operation = _noop_radio_operation(mc)
+            response = await client.post(f"/api/contacts/{KEY_A}/path-discovery")
+
+        assert response.status_code == 504
+        assert "No path discovery response heard" in response.json()["detail"]
 
 
 class TestDeleteContactCascade:

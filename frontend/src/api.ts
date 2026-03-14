@@ -19,6 +19,7 @@ import type {
   RadioConfigUpdate,
   RadioDiscoveryResponse,
   RadioDiscoveryTarget,
+  PathDiscoveryResponse,
   RepeaterAclResponse,
   RepeaterAdvertIntervalsResponse,
   RepeaterLoginResponse,
@@ -151,6 +152,10 @@ export const api = {
     }),
   requestTrace: (publicKey: string) =>
     fetchJson<TraceResponse>(`/contacts/${publicKey}/trace`, {
+      method: 'POST',
+    }),
+  requestPathDiscovery: (publicKey: string) =>
+    fetchJson<PathDiscoveryResponse>(`/contacts/${publicKey}/path-discovery`, {
       method: 'POST',
     }),
   setContactRoutingOverride: (publicKey: string, route: string) =>

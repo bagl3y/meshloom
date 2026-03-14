@@ -109,6 +109,9 @@ const defaultProps = {
   radioLon: null,
   radioName: null,
   onTrace: vi.fn(),
+  onPathDiscovery: vi.fn(async () => {
+    throw new Error('unused');
+  }),
   onToggleNotifications: vi.fn(),
   onToggleFavorite: vi.fn(),
   onDeleteContact: vi.fn(),

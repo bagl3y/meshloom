@@ -432,6 +432,18 @@ export interface TraceResponse {
   path_len: number;
 }
 
+export interface PathDiscoveryRoute {
+  path: string;
+  path_len: number;
+  path_hash_mode: number;
+}
+
+export interface PathDiscoveryResponse {
+  contact: Contact;
+  forward_path: PathDiscoveryRoute;
+  return_path: PathDiscoveryRoute;
+}
+
 export interface UnreadCounts {
   counts: Record<string, number>;
   mentions: Record<string, boolean>;

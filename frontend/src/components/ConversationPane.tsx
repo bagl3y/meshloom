@@ -11,6 +11,7 @@ import type {
   Favorite,
   HealthStatus,
   Message,
+  PathDiscoveryResponse,
   RawPacket,
   RadioConfig,
 } from '../types';
@@ -46,6 +47,7 @@ interface ConversationPaneProps {
   loadingNewer: boolean;
   messageInputRef: Ref<MessageInputHandle>;
   onTrace: () => Promise<void>;
+  onPathDiscovery: (publicKey: string) => Promise<PathDiscoveryResponse>;
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => Promise<void>;
   onDeleteContact: (publicKey: string) => Promise<void>;
   onDeleteChannel: (key: string) => Promise<void>;
@@ -109,6 +111,7 @@ export function ConversationPane({
   loadingNewer,
   messageInputRef,
   onTrace,
+  onPathDiscovery,
   onToggleFavorite,
   onDeleteContact,
   onDeleteChannel,
@@ -205,6 +208,7 @@ export function ConversationPane({
           radioLon={config?.lon ?? null}
           radioName={config?.name ?? null}
           onTrace={onTrace}
+          onPathDiscovery={onPathDiscovery}
           onToggleNotifications={onToggleNotifications}
           onToggleFavorite={onToggleFavorite}
           onDeleteContact={onDeleteContact}
@@ -225,6 +229,7 @@ export function ConversationPane({
         notificationsEnabled={notificationsEnabled}
         notificationsPermission={notificationsPermission}
         onTrace={onTrace}
+        onPathDiscovery={onPathDiscovery}
         onToggleNotifications={onToggleNotifications}
         onToggleFavorite={onToggleFavorite}
         onSetChannelFloodScopeOverride={onSetChannelFloodScopeOverride}

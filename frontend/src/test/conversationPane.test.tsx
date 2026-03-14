@@ -117,6 +117,9 @@ function createProps(overrides: Partial<React.ComponentProps<typeof Conversation
     loadingNewer: false,
     messageInputRef: { current: null },
     onTrace: vi.fn(async () => {}),
+    onPathDiscovery: vi.fn(async () => {
+      throw new Error('unused');
+    }),
     onToggleFavorite: vi.fn(async () => {}),
     onDeleteContact: vi.fn(async () => {}),
     onDeleteChannel: vi.fn(async () => {}),

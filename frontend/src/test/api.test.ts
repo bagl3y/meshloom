@@ -200,6 +200,25 @@ describe('fetchJson (via api methods)', () => {
         expect.objectContaining({ 'Content-Type': 'application/json' })
       );
     });
+
+    it('omits Content-Type on POST requests without a body', async () => {
+      installMockFetch();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            contact: null,
+            forward_path: { path: '', path_len: 0, path_hash_mode: 0 },
+            return_path: { path: '', path_len: 0, path_hash_mode: 0 },
+          }),
+      });
+
+      await api.requestPathDiscovery('aa'.repeat(32));
+
+      const [, options] = mockFetch.mock.calls[0];
+      expect(options.method).toBe('POST');
+      expect(options.headers).not.toHaveProperty('Content-Type');
+    });
   });
 
   describe('HTTP methods and body', () => {

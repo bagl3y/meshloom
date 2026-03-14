@@ -524,6 +524,30 @@ class TraceResponse(BaseModel):
     path_len: int = Field(description="Number of hops in the trace path")
 
 
+class PathDiscoveryRoute(BaseModel):
+    """One resolved route returned by contact path discovery."""
+
+    path: str = Field(description="Hex-encoded path bytes")
+    path_len: int = Field(description="Hop count for this route")
+    path_hash_mode: int = Field(
+        description="Path hash mode (0=1-byte, 1=2-byte, 2=3-byte hop identifiers)"
+    )
+
+
+class PathDiscoveryResponse(BaseModel):
+    """Round-trip routing data for a contact path discovery request."""
+
+    contact: Contact = Field(
+        description="Updated contact row after saving the learned forward path"
+    )
+    forward_path: PathDiscoveryRoute = Field(
+        description="Route used from the local radio to the target contact"
+    )
+    return_path: PathDiscoveryRoute = Field(
+        description="Route used from the target contact back to the local radio"
+    )
+
+
 class CommandRequest(BaseModel):
     """Request to send a CLI command to a repeater."""
 

@@ -2,10 +2,11 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useConversationActions } from '../hooks/useConversationActions';
-import type { Channel, Conversation, Message } from '../types';
+import type { Channel, Contact, Conversation, Message, PathDiscoveryResponse } from '../types';
 
 const mocks = vi.hoisted(() => ({
   api: {
+    requestPathDiscovery: vi.fn(),
     requestTrace: vi.fn(),
     resendChannelMessage: vi.fn(),
     sendChannelMessage: vi.fn(),
@@ -65,6 +66,7 @@ function createArgs(overrides: Partial<Parameters<typeof useConversationActions>
   return {
     activeConversation,
     activeConversationRef: { current: activeConversation },
+    setContacts: vi.fn(),
     setChannels: vi.fn(),
     addMessageIfNew: vi.fn(() => true),
     jumpToBottom: vi.fn(),
@@ -142,5 +144,49 @@ describe('useConversationActions', () => {
     });
 
     expect(args.messageInputRef.current?.appendText).toHaveBeenCalledWith('@[Alice] ');
+  });
+
+  it('merges returned contact data after path discovery', async () => {
+    const contactKey = 'aa'.repeat(32);
+    const discoveredContact: Contact = {
+      public_key: contactKey,
+      name: 'Alice',
+      type: 1,
+      flags: 0,
+      last_path: 'AABB',
+      last_path_len: 2,
+      out_path_hash_mode: 0,
+      last_advert: null,
+      lat: null,
+      lon: null,
+      last_seen: null,
+      on_radio: false,
+      last_contacted: null,
+      last_read_at: null,
+      first_seen: null,
+    };
+    const response: PathDiscoveryResponse = {
+      contact: discoveredContact,
+      forward_path: { path: 'AABB', path_len: 2, path_hash_mode: 0 },
+      return_path: { path: 'CC', path_len: 1, path_hash_mode: 0 },
+    };
+    mocks.api.requestPathDiscovery.mockResolvedValue(response);
+    const setContacts = vi.fn();
+    const args = createArgs({
+      activeConversation: { type: 'contact', id: contactKey, name: 'Alice' },
+      activeConversationRef: { current: { type: 'contact', id: contactKey, name: 'Alice' } },
+      setContacts,
+    });
+
+    const { result } = renderHook(() => useConversationActions(args));
+
+    await act(async () => {
+      await result.current.handlePathDiscovery(contactKey);
+    });
+
+    expect(mocks.api.requestPathDiscovery).toHaveBeenCalledWith(contactKey);
+    expect(setContacts).toHaveBeenCalledTimes(1);
+    const updater = setContacts.mock.calls[0][0] as (contacts: Contact[]) => Contact[];
+    expect(updater([])).toEqual([discoveredContact]);
   });
 });

@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import random
+from contextlib import suppress
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from meshcore import EventType
@@ -14,6 +16,8 @@ from app.models import (
     ContactUpsert,
     CreateContactRequest,
     NearestRepeater,
+    PathDiscoveryResponse,
+    PathDiscoveryRoute,
     TraceResponse,
 )
 from app.packet_processor import start_historical_dm_decryption
@@ -104,6 +108,12 @@ async def _broadcast_contact_resolution(previous_public_keys: list[str], contact
                 "contact": contact.model_dump(),
             },
         )
+
+
+def _path_hash_mode_from_hop_width(hop_width: object) -> int:
+    if not isinstance(hop_width, int):
+        return 0
+    return max(0, min(hop_width - 1, 2))
 
 
 async def _build_keyed_contact_analytics(contact: Contact) -> ContactAnalytics:
@@ -418,6 +428,90 @@ async def request_trace(public_key: str) -> TraceResponse:
     )
 
     return TraceResponse(remote_snr=remote_snr, local_snr=local_snr, path_len=path_len)
+
+
+@router.post("/{public_key}/path-discovery", response_model=PathDiscoveryResponse)
+async def request_path_discovery(public_key: str) -> PathDiscoveryResponse:
+    """Discover the current forward and return paths to a known contact."""
+    require_connected()
+
+    contact = await _resolve_contact_or_404(public_key)
+    pubkey_prefix = contact.public_key[:12]
+
+    async with radio_manager.radio_operation("request_path_discovery", pause_polling=True) as mc:
+        await _ensure_on_radio(mc, contact)
+
+        response_task = asyncio.create_task(
+            mc.wait_for_event(
+                EventType.PATH_RESPONSE,
+                attribute_filters={"pubkey_pre": pubkey_prefix},
+                timeout=15,
+            )
+        )
+        try:
+            result = await mc.commands.send_path_discovery(contact.public_key)
+            if result.type == EventType.ERROR:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to send path discovery: {result.payload}",
+                )
+
+            event = await response_task
+        finally:
+            if not response_task.done():
+                response_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await response_task
+
+        if event is None:
+            raise HTTPException(status_code=504, detail="No path discovery response heard")
+
+        payload = event.payload
+        forward_path = str(payload.get("out_path") or "")
+        forward_len = int(payload.get("out_path_len") or 0)
+        forward_mode = _path_hash_mode_from_hop_width(payload.get("out_path_hash_len"))
+        return_path = str(payload.get("in_path") or "")
+        return_len = int(payload.get("in_path_len") or 0)
+        return_mode = _path_hash_mode_from_hop_width(payload.get("in_path_hash_len"))
+
+        await ContactRepository.update_path(
+            contact.public_key,
+            forward_path,
+            forward_len,
+            forward_mode,
+        )
+        refreshed_contact = await _resolve_contact_or_404(contact.public_key)
+
+        try:
+            sync_result = await mc.commands.add_contact(refreshed_contact.to_radio_dict())
+            if sync_result is not None and sync_result.type == EventType.ERROR:
+                logger.warning(
+                    "Failed to sync discovered path back to radio for %s: %s",
+                    refreshed_contact.public_key[:12],
+                    sync_result.payload,
+                )
+        except Exception:
+            logger.warning(
+                "Failed to sync discovered path back to radio for %s",
+                refreshed_contact.public_key[:12],
+                exc_info=True,
+            )
+
+    await _broadcast_contact_update(refreshed_contact)
+
+    return PathDiscoveryResponse(
+        contact=refreshed_contact,
+        forward_path=PathDiscoveryRoute(
+            path=forward_path,
+            path_len=forward_len,
+            path_hash_mode=forward_mode,
+        ),
+        return_path=PathDiscoveryRoute(
+            path=return_path,
+            path_len=return_len,
+            path_hash_mode=return_mode,
+        ),
+    )
 
 
 @router.post("/{public_key}/routing-override")

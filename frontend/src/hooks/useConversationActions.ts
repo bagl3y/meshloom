@@ -3,11 +3,13 @@ import { api } from '../api';
 import * as messageCache from '../messageCache';
 import { toast } from '../components/ui/sonner';
 import type { MessageInputHandle } from '../components/MessageInput';
-import type { Channel, Conversation, Message } from '../types';
+import type { Channel, Contact, Conversation, Message, PathDiscoveryResponse } from '../types';
+import { mergeContactIntoList } from '../utils/contactMerge';
 
 interface UseConversationActionsArgs {
   activeConversation: Conversation | null;
   activeConversationRef: MutableRefObject<Conversation | null>;
+  setContacts: React.Dispatch<React.SetStateAction<Contact[]>>;
   setChannels: React.Dispatch<React.SetStateAction<Channel[]>>;
   addMessageIfNew: (msg: Message) => boolean;
   jumpToBottom: () => void;
@@ -25,6 +27,7 @@ interface UseConversationActionsResult {
   ) => Promise<void>;
   handleSenderClick: (sender: string) => void;
   handleTrace: () => Promise<void>;
+  handlePathDiscovery: (publicKey: string) => Promise<PathDiscoveryResponse>;
   handleBlockKey: (key: string) => Promise<void>;
   handleBlockName: (name: string) => Promise<void>;
 }
@@ -32,6 +35,7 @@ interface UseConversationActionsResult {
 export function useConversationActions({
   activeConversation,
   activeConversationRef,
+  setContacts,
   setChannels,
   addMessageIfNew,
   jumpToBottom,
@@ -126,6 +130,15 @@ export function useConversationActions({
     }
   }, [activeConversation]);
 
+  const handlePathDiscovery = useCallback(
+    async (publicKey: string) => {
+      const result = await api.requestPathDiscovery(publicKey);
+      setContacts((prev) => mergeContactIntoList(prev, result.contact));
+      return result;
+    },
+    [setContacts]
+  );
+
   const handleBlockKey = useCallback(
     async (key: string) => {
       await handleToggleBlockedKey(key);
@@ -150,6 +163,7 @@ export function useConversationActions({
     handleSetChannelFloodScopeOverride,
     handleSenderClick,
     handleTrace,
+    handlePathDiscovery,
     handleBlockKey,
     handleBlockName,
   };

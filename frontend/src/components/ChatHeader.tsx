@@ -1,14 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, Globe2, Info, Star, Trash2 } from 'lucide-react';
+import { Bell, Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
 import { toast } from './ui/sonner';
 import { DirectTraceIcon } from './DirectTraceIcon';
+import { ContactPathDiscoveryModal } from './ContactPathDiscoveryModal';
 import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { stripRegionScopePrefix } from '../utils/regionScope';
 import { isPrefixOnlyContact } from '../utils/pubkey';
 import { ContactAvatar } from './ContactAvatar';
 import { ContactStatusInfo } from './ContactStatusInfo';
-import type { Channel, Contact, Conversation, Favorite, RadioConfig } from '../types';
+import type {
+  Channel,
+  Contact,
+  Conversation,
+  Favorite,
+  PathDiscoveryResponse,
+  RadioConfig,
+} from '../types';
 
 interface ChatHeaderProps {
   conversation: Conversation;
@@ -20,6 +28,7 @@ interface ChatHeaderProps {
   notificationsEnabled: boolean;
   notificationsPermission: NotificationPermission | 'unsupported';
   onTrace: () => void;
+  onPathDiscovery: (publicKey: string) => Promise<PathDiscoveryResponse>;
   onToggleNotifications: () => void;
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
   onSetChannelFloodScopeOverride?: (key: string, floodScopeOverride: string) => void;
@@ -39,6 +48,7 @@ export function ChatHeader({
   notificationsEnabled,
   notificationsPermission,
   onTrace,
+  onPathDiscovery,
   onToggleNotifications,
   onToggleFavorite,
   onSetChannelFloodScopeOverride,
@@ -49,10 +59,12 @@ export function ChatHeader({
 }: ChatHeaderProps) {
   const [showKey, setShowKey] = useState(false);
   const [contactStatusInline, setContactStatusInline] = useState(true);
+  const [pathDiscoveryOpen, setPathDiscoveryOpen] = useState(false);
   const keyTextRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     setShowKey(false);
+    setPathDiscoveryOpen(false);
   }, [conversation.id]);
 
   const activeChannel =
@@ -275,11 +287,26 @@ export function ChatHeader({
         {conversation.type === 'contact' && (
           <button
             className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => setPathDiscoveryOpen(true)}
+            title={
+              activeContactIsPrefixOnly
+                ? 'Path Discovery unavailable until the full contact key is known'
+                : 'Path Discovery. Send a routed probe and inspect the forward and return paths'
+            }
+            aria-label="Path Discovery"
+            disabled={activeContactIsPrefixOnly}
+          >
+            <Route className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          </button>
+        )}
+        {conversation.type === 'contact' && (
+          <button
+            className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={onTrace}
             title={
               activeContactIsPrefixOnly
                 ? 'Direct Trace unavailable until the full contact key is known'
-                : 'Direct Trace'
+                : 'Direct Trace. Send a zero-hop packet to thie contact and display out and back SNR'
             }
             aria-label="Direct Trace"
             disabled={activeContactIsPrefixOnly}
@@ -371,6 +398,16 @@ export function ChatHeader({
           </button>
         )}
       </div>
+      {conversation.type === 'contact' && activeContact && (
+        <ContactPathDiscoveryModal
+          open={pathDiscoveryOpen}
+          onClose={() => setPathDiscoveryOpen(false)}
+          contact={activeContact}
+          contacts={contacts}
+          radioName={config?.name ?? null}
+          onDiscover={onPathDiscovery}
+        />
+      )}
     </header>
   );
 }
