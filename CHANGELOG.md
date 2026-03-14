@@ -1,3 +1,22 @@
+## [3.3.0] - 2026-03-13
+
+Feature: Use dashed lines to show collapsed ambiguous router results
+Feature: Jump to unred
+Feature: Local channel management to prevent need to reload channel every time
+Feature: Debug endpoint
+Feature: Force-singleton channel management
+Feature: Local node discovery
+Feature: Node routing discovery
+Bugfix: Don't tell users to us npm ci
+Bugfix: Fallback polling dm message persistence
+Bugfix: All native-JS inputs are now modals
+Bugfix: Same-second send collision resolution
+Bugfix: Proper browser updates on resend
+Bugfix: Don't use last-heard when we actually want last-advert for path discovery for nodes
+Bugfix: Don't treat prefix-matching DM echoes as acks like we do for channel messages
+Misc: Visualizer data layer overhaul for future map work
+Misc: Parallelize docker tests
+
 ## [3.2.0] - 2026-03-12
 
 Feature: Improve ambiguous-sender DM handling and visibility
