@@ -60,6 +60,7 @@ async function typeAndWaitForResults(query: string) {
 describe('SearchView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetMessages.mockReset();
   });
 
   afterEach(() => {
@@ -282,6 +283,33 @@ describe('SearchView', () => {
       expect.objectContaining({ q: 'user:"Alice Smith"' }),
       expect.any(AbortSignal)
     );
+  });
+
+  it('refetches current results when visibility policy changes', async () => {
+    mockGetMessages
+      .mockResolvedValueOnce([createSearchResult({ id: 1, text: 'visible result' })])
+      .mockResolvedValueOnce([]);
+
+    const { rerender } = render(<SearchView {...defaultProps} visibilityVersion={0} />);
+
+    await typeAndWaitForResults('visible');
+    expect(mockGetMessages).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getAllByRole('button').some((button) => button.textContent?.includes('visible result'))
+    ).toBe(true);
+
+    rerender(<SearchView {...defaultProps} visibilityVersion={1} />);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(mockGetMessages).toHaveBeenCalledTimes(2);
+    expect(mockGetMessages).toHaveBeenLastCalledWith(
+      expect.objectContaining({ q: 'visible' }),
+      expect.any(AbortSignal)
+    );
+    expect(screen.getByText(/No messages found/)).toBeInTheDocument();
   });
 
   it('aborts the load-more request on unmount', async () => {

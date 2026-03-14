@@ -31,6 +31,7 @@ export interface SearchNavigateTarget {
 export interface SearchViewProps {
   contacts: Contact[];
   channels: Channel[];
+  visibilityVersion?: number;
   onNavigateToMessage: (target: SearchNavigateTarget) => void;
   prefillRequest?: {
     query: string;
@@ -84,6 +85,7 @@ function getHighlightQuery(query: string): string {
 export function SearchView({
   contacts,
   channels,
+  visibilityVersion = 0,
   onNavigateToMessage,
   prefillRequest = null,
 }: SearchViewProps) {
@@ -110,7 +112,7 @@ export function SearchView({
     setResults([]);
     setOffset(0);
     setHasMore(false);
-  }, [debouncedQuery]);
+  }, [debouncedQuery, visibilityVersion]);
 
   useEffect(() => {
     if (!prefillRequest) {
@@ -159,7 +161,7 @@ export function SearchView({
       });
 
     return () => controller.abort();
-  }, [debouncedQuery]);
+  }, [debouncedQuery, visibilityVersion]);
 
   const loadMore = useCallback(() => {
     if (!debouncedQuery || loading) return;

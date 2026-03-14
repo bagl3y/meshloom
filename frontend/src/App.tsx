@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { api } from './api';
+import * as messageCache from './messageCache';
 import { takePrefetchOrFetch } from './prefetch';
 import { useWebSocket } from './useWebSocket';
 import {
@@ -72,6 +73,7 @@ export function App() {
   const messageInputRef = useRef<MessageInputHandle>(null);
   const [rawPackets, setRawPackets] = useState<RawPacket[]>([]);
   const [channelUnreadMarker, setChannelUnreadMarker] = useState<ChannelUnreadMarker | null>(null);
+  const [visibilityVersion, setVisibilityVersion] = useState(0);
   const lastUnreadBackfillAttemptRef = useRef<string | null>(null);
   const {
     notificationsSupported,
@@ -231,6 +233,7 @@ export function App() {
     fetchOlderMessages,
     fetchNewerMessages,
     jumpToBottom,
+    reloadCurrentConversation,
     addMessageIfNew,
     updateMessageAck,
     triggerReconcile,
@@ -325,6 +328,28 @@ export function App() {
     updateMessageAck,
     notifyIncomingMessage,
   });
+  const handleVisibilityPolicyChanged = useCallback(() => {
+    messageCache.clear();
+    reloadCurrentConversation();
+    void refreshUnreads();
+    setVisibilityVersion((current) => current + 1);
+  }, [refreshUnreads, reloadCurrentConversation]);
+
+  const handleBlockKey = useCallback(
+    async (key: string) => {
+      await handleToggleBlockedKey(key);
+      handleVisibilityPolicyChanged();
+    },
+    [handleToggleBlockedKey, handleVisibilityPolicyChanged]
+  );
+
+  const handleBlockName = useCallback(
+    async (name: string) => {
+      await handleToggleBlockedName(name);
+      handleVisibilityPolicyChanged();
+    },
+    [handleToggleBlockedName, handleVisibilityPolicyChanged]
+  );
   const {
     handleSendMessage,
     handleResendChannelMessage,
@@ -332,17 +357,12 @@ export function App() {
     handleSenderClick,
     handleTrace,
     handlePathDiscovery,
-    handleBlockKey,
-    handleBlockName,
   } = useConversationActions({
     activeConversation,
     activeConversationRef,
     setContacts,
     setChannels,
     addMessageIfNew,
-    jumpToBottom,
-    handleToggleBlockedKey,
-    handleToggleBlockedName,
     messageInputRef,
   });
   const handleCreateCrackedChannel = useCallback(
@@ -443,6 +463,7 @@ export function App() {
   const searchProps = {
     contacts,
     channels,
+    visibilityVersion,
     onNavigateToMessage: handleNavigateToMessage,
     prefillRequest: searchPrefillRequest,
   };

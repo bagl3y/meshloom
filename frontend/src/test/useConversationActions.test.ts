@@ -13,9 +13,6 @@ const mocks = vi.hoisted(() => ({
     sendDirectMessage: vi.fn(),
     setChannelFloodScopeOverride: vi.fn(),
   },
-  messageCache: {
-    clear: vi.fn(),
-  },
   toast: {
     success: vi.fn(),
     error: vi.fn(),
@@ -25,8 +22,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../api', () => ({
   api: mocks.api,
 }));
-
-vi.mock('../messageCache', () => mocks.messageCache);
 
 vi.mock('../components/ui/sonner', () => ({
   toast: mocks.toast,
@@ -69,9 +64,6 @@ function createArgs(overrides: Partial<Parameters<typeof useConversationActions>
     setContacts: vi.fn(),
     setChannels: vi.fn(),
     addMessageIfNew: vi.fn(() => true),
-    jumpToBottom: vi.fn(),
-    handleToggleBlockedKey: vi.fn(async () => {}),
-    handleToggleBlockedName: vi.fn(async () => {}),
     messageInputRef: { current: { appendText: vi.fn() } },
     ...overrides,
   };
@@ -120,19 +112,6 @@ describe('useConversationActions', () => {
     });
 
     expect(args.addMessageIfNew).not.toHaveBeenCalled();
-  });
-
-  it('clears cached messages and jumps to the latest page after blocking a key', async () => {
-    const args = createArgs();
-    const { result } = renderHook(() => useConversationActions(args));
-
-    await act(async () => {
-      await result.current.handleBlockKey('cc'.repeat(32));
-    });
-
-    expect(args.handleToggleBlockedKey).toHaveBeenCalledWith('cc'.repeat(32));
-    expect(mocks.messageCache.clear).toHaveBeenCalledTimes(1);
-    expect(args.jumpToBottom).toHaveBeenCalledTimes(1);
   });
 
   it('appends sender mentions into the message input', () => {

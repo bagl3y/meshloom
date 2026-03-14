@@ -294,6 +294,40 @@ class MessageRepository:
         return clause, params
 
     @staticmethod
+    def _build_blocked_incoming_clause(
+        message_alias: str = "",
+        blocked_keys: list[str] | None = None,
+        blocked_names: list[str] | None = None,
+    ) -> tuple[str, list[Any]]:
+        prefix = f"{message_alias}." if message_alias else ""
+        blocked_matchers: list[str] = []
+        params: list[Any] = []
+
+        if blocked_keys:
+            placeholders = ",".join("?" for _ in blocked_keys)
+            blocked_matchers.append(
+                f"({prefix}type = 'PRIV' AND LOWER({prefix}conversation_key) IN ({placeholders}))"
+            )
+            params.extend(blocked_keys)
+            blocked_matchers.append(
+                f"({prefix}type = 'CHAN' AND {prefix}sender_key IS NOT NULL"
+                f" AND LOWER({prefix}sender_key) IN ({placeholders}))"
+            )
+            params.extend(blocked_keys)
+
+        if blocked_names:
+            placeholders = ",".join("?" for _ in blocked_names)
+            blocked_matchers.append(
+                f"({prefix}sender_name IS NOT NULL AND {prefix}sender_name IN ({placeholders}))"
+            )
+            params.extend(blocked_names)
+
+        if not blocked_matchers:
+            return "", []
+
+        return f"NOT ({prefix}outgoing = 0 AND ({' OR '.join(blocked_matchers)}))", params
+
+    @staticmethod
     def _row_to_message(row: Any) -> Message:
         """Convert a database row to a Message model."""
         return Message(
@@ -337,25 +371,12 @@ class MessageRepository:
         )
         params: list[Any] = []
 
-        if blocked_keys:
-            placeholders = ",".join("?" for _ in blocked_keys)
-            query += (
-                f" AND NOT (messages.outgoing=0 AND ("
-                f"(messages.type='PRIV' AND LOWER(messages.conversation_key) IN ({placeholders}))"
-                f" OR (messages.type='CHAN' AND messages.sender_key IS NOT NULL"
-                f" AND LOWER(messages.sender_key) IN ({placeholders}))"
-                f"))"
-            )
-            params.extend(blocked_keys)
-            params.extend(blocked_keys)
-
-        if blocked_names:
-            placeholders = ",".join("?" for _ in blocked_names)
-            query += (
-                f" AND NOT (messages.outgoing=0 AND messages.sender_name IS NOT NULL"
-                f" AND messages.sender_name IN ({placeholders}))"
-            )
-            params.extend(blocked_names)
+        blocked_clause, blocked_params = MessageRepository._build_blocked_incoming_clause(
+            "messages", blocked_keys, blocked_names
+        )
+        if blocked_clause:
+            query += f" AND {blocked_clause}"
+            params.extend(blocked_params)
 
         if msg_type:
             query += " AND messages.type = ?"
@@ -437,23 +458,12 @@ class MessageRepository:
             where_parts.append(clause.removeprefix("AND "))
             base_params.append(norm_key)
 
-        if blocked_keys:
-            placeholders = ",".join("?" for _ in blocked_keys)
-            where_parts.append(
-                f"NOT (outgoing=0 AND ("
-                f"(type='PRIV' AND LOWER(conversation_key) IN ({placeholders}))"
-                f" OR (type='CHAN' AND sender_key IS NOT NULL AND LOWER(sender_key) IN ({placeholders}))"
-                f"))"
-            )
-            base_params.extend(blocked_keys)
-            base_params.extend(blocked_keys)
-
-        if blocked_names:
-            placeholders = ",".join("?" for _ in blocked_names)
-            where_parts.append(
-                f"NOT (outgoing=0 AND sender_name IS NOT NULL AND sender_name IN ({placeholders}))"
-            )
-            base_params.extend(blocked_names)
+        blocked_clause, blocked_params = MessageRepository._build_blocked_incoming_clause(
+            blocked_keys=blocked_keys, blocked_names=blocked_names
+        )
+        if blocked_clause:
+            where_parts.append(blocked_clause)
+            base_params.extend(blocked_params)
 
         where_sql = " AND ".join(["1=1", *where_parts])
 
@@ -588,21 +598,10 @@ class MessageRepository:
 
         mention_token = f"@[{name}]" if name else None
 
-        # Build optional block-list WHERE fragments for channel messages
-        chan_block_sql = ""
-        chan_block_params: list[Any] = []
-        if blocked_keys:
-            placeholders = ",".join("?" for _ in blocked_keys)
-            chan_block_sql += (
-                f" AND NOT (m.sender_key IS NOT NULL AND LOWER(m.sender_key) IN ({placeholders}))"
-            )
-            chan_block_params.extend(blocked_keys)
-        if blocked_names:
-            placeholders = ",".join("?" for _ in blocked_names)
-            chan_block_sql += (
-                f" AND NOT (m.sender_name IS NOT NULL AND m.sender_name IN ({placeholders}))"
-            )
-            chan_block_params.extend(blocked_names)
+        blocked_clause, blocked_params = MessageRepository._build_blocked_incoming_clause(
+            "m", blocked_keys, blocked_names
+        )
+        blocked_sql = f" AND {blocked_clause}" if blocked_clause else ""
 
         # Channel unreads
         cursor = await db.conn.execute(
@@ -617,10 +616,10 @@ class MessageRepository:
             JOIN channels c ON m.conversation_key = c.key
             WHERE m.type = 'CHAN' AND m.outgoing = 0
               AND m.received_at > COALESCE(c.last_read_at, 0)
-              {chan_block_sql}
+              {blocked_sql}
             GROUP BY m.conversation_key
             """,
-            (mention_token or "", mention_token or "", *chan_block_params),
+            (mention_token or "", mention_token or "", *blocked_params),
         )
         rows = await cursor.fetchall()
         for row in rows:
@@ -628,14 +627,6 @@ class MessageRepository:
             counts[state_key] = row["unread_count"]
             if mention_token and row["has_mention"]:
                 mention_flags[state_key] = True
-
-        # Build block-list exclusion for contact (DM) unreads
-        contact_block_sql = ""
-        contact_block_params: list[Any] = []
-        if blocked_keys:
-            placeholders = ",".join("?" for _ in blocked_keys)
-            contact_block_sql += f" AND LOWER(m.conversation_key) NOT IN ({placeholders})"
-            contact_block_params.extend(blocked_keys)
 
         # Contact unreads
         cursor = await db.conn.execute(
@@ -650,10 +641,10 @@ class MessageRepository:
             JOIN contacts ct ON m.conversation_key = ct.public_key
             WHERE m.type = 'PRIV' AND m.outgoing = 0
               AND m.received_at > COALESCE(ct.last_read_at, 0)
-              {contact_block_sql}
+              {blocked_sql}
             GROUP BY m.conversation_key
             """,
-            (mention_token or "", mention_token or "", *contact_block_params),
+            (mention_token or "", mention_token or "", *blocked_params),
         )
         rows = await cursor.fetchall()
         for row in rows:
@@ -684,50 +675,10 @@ class MessageRepository:
 
         # Last message times for all conversations (including read ones),
         # excluding blocked incoming traffic so refresh matches live WS behavior.
-        last_time_filters: list[str] = []
-        last_time_params: list[Any] = []
-
-        if blocked_keys:
-            placeholders = ",".join("?" for _ in blocked_keys)
-            last_time_filters.append(
-                f"""
-                NOT (
-                    type = 'PRIV'
-                    AND outgoing = 0
-                    AND LOWER(conversation_key) IN ({placeholders})
-                )
-                """
-            )
-            last_time_params.extend(blocked_keys)
-            last_time_filters.append(
-                f"""
-                NOT (
-                    type = 'CHAN'
-                    AND outgoing = 0
-                    AND sender_key IS NOT NULL
-                    AND LOWER(sender_key) IN ({placeholders})
-                )
-                """
-            )
-            last_time_params.extend(blocked_keys)
-
-        if blocked_names:
-            placeholders = ",".join("?" for _ in blocked_names)
-            last_time_filters.append(
-                f"""
-                NOT (
-                    type = 'CHAN'
-                    AND outgoing = 0
-                    AND sender_name IS NOT NULL
-                    AND sender_name IN ({placeholders})
-                )
-                """
-            )
-            last_time_params.extend(blocked_names)
-
-        last_time_where_sql = (
-            f"WHERE {' AND '.join(last_time_filters)}" if last_time_filters else ""
+        last_time_clause, last_time_params = MessageRepository._build_blocked_incoming_clause(
+            blocked_keys=blocked_keys, blocked_names=blocked_names
         )
+        last_time_where_sql = f"WHERE {last_time_clause}" if last_time_clause else ""
 
         cursor = await db.conn.execute(
             f"""

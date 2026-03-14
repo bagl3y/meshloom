@@ -77,6 +77,7 @@ interface UseConversationMessagesResult {
   fetchOlderMessages: () => Promise<void>;
   fetchNewerMessages: () => Promise<void>;
   jumpToBottom: () => void;
+  reloadCurrentConversation: () => void;
   addMessageIfNew: (msg: Message) => boolean;
   updateMessageAck: (messageId: number, ackCount: number, paths?: MessagePath[]) => void;
   triggerReconcile: () => void;
@@ -167,6 +168,8 @@ export function useConversationMessages(
   const hasOlderMessagesRef = useRef(false);
   const hasNewerMessagesRef = useRef(false);
   const prevConversationIdRef = useRef<string | null>(null);
+  const prevReloadVersionRef = useRef(0);
+  const [reloadVersion, setReloadVersion] = useState(0);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -398,6 +401,13 @@ export function useConversationMessages(
     void fetchLatestMessages(true);
   }, [activeConversation, fetchLatestMessages]);
 
+  const reloadCurrentConversation = useCallback(() => {
+    if (!isMessageConversation(activeConversation)) return;
+    setHasNewerMessages(false);
+    messageCache.remove(activeConversation.id);
+    setReloadVersion((current) => current + 1);
+  }, [activeConversation]);
+
   const triggerReconcile = useCallback(() => {
     if (!isMessageConversation(activeConversation)) return;
     const controller = new AbortController();
@@ -414,12 +424,14 @@ export function useConversationMessages(
     const prevId = prevConversationIdRef.current;
     const newId = activeConversation?.id ?? null;
     const conversationChanged = prevId !== newId;
+    const reloadRequested = prevReloadVersionRef.current !== reloadVersion;
     fetchingConversationIdRef.current = newId;
     prevConversationIdRef.current = newId;
+    prevReloadVersionRef.current = reloadVersion;
     latestReconcileRequestIdRef.current = 0;
 
     // Preserve around-loaded context on the same conversation when search clears targetMessageId.
-    if (!conversationChanged && !targetMessageId) {
+    if (!conversationChanged && !targetMessageId && !reloadRequested) {
       return;
     }
 
@@ -498,7 +510,7 @@ export function useConversationMessages(
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeConversation?.id, activeConversation?.type, targetMessageId]);
+  }, [activeConversation?.id, activeConversation?.type, targetMessageId, reloadVersion]);
 
   // Add a message if it's new (deduplication)
   // Returns true if the message was added, false if it was a duplicate
@@ -584,6 +596,7 @@ export function useConversationMessages(
     fetchOlderMessages,
     fetchNewerMessages,
     jumpToBottom,
+    reloadCurrentConversation,
     addMessageIfNew,
     updateMessageAck,
     triggerReconcile,

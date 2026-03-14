@@ -42,6 +42,7 @@ vi.mock('../hooks', async (importOriginal) => {
         fetchOlderMessages: vi.fn(async () => {}),
         fetchNewerMessages: vi.fn(async () => {}),
         jumpToBottom: vi.fn(),
+        reloadCurrentConversation: vi.fn(),
         addMessageIfNew: vi.fn(),
         updateMessageAck: vi.fn(),
         triggerReconcile: vi.fn(),

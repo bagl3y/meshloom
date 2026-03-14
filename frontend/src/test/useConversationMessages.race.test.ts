@@ -225,6 +225,36 @@ describe('useConversationMessages conversation switch', () => {
     expect(result.current.messages[0].conversation_key).toBe('conv_b');
   });
 
+  it('reloads the active conversation from source when requested', async () => {
+    const conv = createConversation();
+    mockGetMessages
+      .mockResolvedValueOnce([
+        createMessage({ id: 1, text: 'keep me', sender_timestamp: 1700000000, received_at: 1 }),
+        createMessage({
+          id: 2,
+          text: 'blocked later',
+          sender_timestamp: 1700000001,
+          received_at: 2,
+        }),
+      ])
+      .mockResolvedValueOnce([
+        createMessage({ id: 1, text: 'keep me', sender_timestamp: 1700000000, received_at: 1 }),
+      ]);
+
+    const { result } = renderHook(() => useConversationMessages(conv));
+
+    await waitFor(() => expect(result.current.messagesLoading).toBe(false));
+    expect(result.current.messages.map((msg) => msg.text)).toEqual(['keep me', 'blocked later']);
+
+    act(() => {
+      result.current.reloadCurrentConversation();
+    });
+
+    await waitFor(() => expect(mockGetMessages).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.messagesLoading).toBe(false));
+    expect(result.current.messages.map((msg) => msg.text)).toEqual(['keep me']);
+  });
+
   it('aborts in-flight fetch when switching conversations', async () => {
     const convA: Conversation = { type: 'contact', id: 'conv_a', name: 'Contact A' };
     const convB: Conversation = { type: 'contact', id: 'conv_b', name: 'Contact B' };
