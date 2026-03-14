@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { RepeaterDashboard } from '../components/RepeaterDashboard';
 import type { UseRepeaterDashboardResult } from '../hooks/useRepeaterDashboard';
 import type { Contact, Conversation, Favorite } from '../types';
@@ -465,7 +465,7 @@ describe('RepeaterDashboard', () => {
       expect(screen.getByText('1 hop')).toBeInTheDocument();
     });
 
-    it('direct path is clickable with routing override title', () => {
+    it('direct path is clickable, underlined, and marked as editable', () => {
       const directContacts: Contact[] = [
         { ...contacts[0], last_path_len: 0, last_seen: 1700000000 },
       ];
@@ -475,6 +475,7 @@ describe('RepeaterDashboard', () => {
       const directEl = screen.getByTitle('Click to edit routing override');
       expect(directEl).toBeInTheDocument();
       expect(directEl.textContent).toBe('direct');
+      expect(directEl.className).toContain('underline');
     });
 
     it('shows forced decorator when a routing override is active', () => {
@@ -495,12 +496,10 @@ describe('RepeaterDashboard', () => {
       expect(screen.getByText('(forced)')).toBeInTheDocument();
     });
 
-    it('clicking direct path opens prompt and updates routing override', async () => {
+    it('clicking direct path opens modal and can force direct routing', async () => {
       const directContacts: Contact[] = [
         { ...contacts[0], last_path_len: 0, last_seen: 1700000000 },
       ];
-
-      const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('0');
 
       const { api } = await import('../api');
       const overrideSpy = vi.spyOn(api, 'setContactRoutingOverride').mockResolvedValue({
@@ -511,20 +510,20 @@ describe('RepeaterDashboard', () => {
       render(<RepeaterDashboard {...defaultProps} contacts={directContacts} />);
 
       fireEvent.click(screen.getByTitle('Click to edit routing override'));
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Force Direct' }));
 
-      expect(promptSpy).toHaveBeenCalled();
-      expect(overrideSpy).toHaveBeenCalledWith(REPEATER_KEY, '0');
+      await waitFor(() => {
+        expect(overrideSpy).toHaveBeenCalledWith(REPEATER_KEY, '0');
+      });
 
-      promptSpy.mockRestore();
       overrideSpy.mockRestore();
     });
 
-    it('clicking path does not call API when prompt is cancelled', async () => {
+    it('closing the routing override modal does not call the API', async () => {
       const directContacts: Contact[] = [
         { ...contacts[0], last_path_len: 0, last_seen: 1700000000 },
       ];
-
-      const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue(null);
 
       const { api } = await import('../api');
       const overrideSpy = vi.spyOn(api, 'setContactRoutingOverride').mockResolvedValue({
@@ -535,11 +534,11 @@ describe('RepeaterDashboard', () => {
       render(<RepeaterDashboard {...defaultProps} contacts={directContacts} />);
 
       fireEvent.click(screen.getByTitle('Click to edit routing override'));
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-      expect(promptSpy).toHaveBeenCalled();
       expect(overrideSpy).not.toHaveBeenCalled();
 
-      promptSpy.mockRestore();
       overrideSpy.mockRestore();
     });
   });
