@@ -9,13 +9,16 @@ from fastapi import HTTPException
 from meshcore import EventType
 from pydantic import ValidationError
 
+from app.models import Contact
 from app.radio import RadioManager, radio_manager
 from app.routers.radio import (
     PrivateKeyUpdate,
     RadioConfigResponse,
     RadioConfigUpdate,
+    RadioDiscoveryRequest,
     RadioSettings,
     disconnect_radio,
+    discover_mesh,
     get_radio_config,
     reboot_radio,
     reconnect_radio,
@@ -80,6 +83,9 @@ def _mock_meshcore_with_info():
     mc.commands.set_advert_loc_policy = AsyncMock(return_value=_radio_result())
     mc.commands.send_appstart = AsyncMock()
     mc.commands.import_private_key = AsyncMock(return_value=_radio_result())
+    mc.commands.send_node_discover_req = AsyncMock(return_value=_radio_result())
+    mc.stop_auto_message_fetching = AsyncMock()
+    mc.start_auto_message_fetching = AsyncMock()
     return mc
 
 
@@ -255,6 +261,267 @@ class TestPrivateKeyImport:
                 await set_private_key(PrivateKeyUpdate(private_key="aa" * 64))
 
         assert exc.value.status_code == 500
+
+
+class TestDiscoverMesh:
+    @pytest.mark.asyncio
+    async def test_discovers_repeaters_and_deduplicates_by_pubkey(self):
+        mc = _mock_meshcore_with_info()
+        callbacks = {}
+
+        def _subscribe(event_type, callback, attribute_filters=None):
+            callbacks["event_type"] = event_type
+            callbacks["callback"] = callback
+            callbacks["filters"] = attribute_filters
+            subscription = MagicMock()
+            subscription.unsubscribe = MagicMock()
+            callbacks["subscription"] = subscription
+            return subscription
+
+        async def _send_node_discover_req(filter_bits, prefix_only=True, tag=None, since=None):
+            assert filter_bits == (1 << 2)
+            assert prefix_only is False
+            assert since is None
+            callbacks["callback"](
+                _radio_result(
+                    payload={
+                        "pubkey": "11" * 32,
+                        "node_type": 2,
+                        "SNR": 7.5,
+                        "RSSI": -101,
+                        "SNR_in": 4.0,
+                    }
+                )
+            )
+            callbacks["callback"](
+                _radio_result(
+                    payload={
+                        "pubkey": "11" * 32,
+                        "node_type": 2,
+                        "SNR": 9.0,
+                        "RSSI": -99,
+                        "SNR_in": 3.0,
+                    }
+                )
+            )
+            callbacks["callback"](
+                _radio_result(
+                    payload={
+                        "pubkey": "22" * 32,
+                        "node_type": 2,
+                        "SNR": 2.5,
+                        "RSSI": -110,
+                        "SNR_in": 1.0,
+                    }
+                )
+            )
+            return _radio_result()
+
+        mc.subscribe = MagicMock(side_effect=_subscribe)
+        mc.commands.send_node_discover_req = AsyncMock(side_effect=_send_node_discover_req)
+
+        with (
+            patch("app.routers.radio.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.radio.DISCOVERY_WINDOW_SECONDS", 0.01),
+            patch(
+                "app.routers.radio.ContactRepository.get_by_key",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch("app.routers.radio.ContactRepository.upsert", new_callable=AsyncMock),
+            patch("app.routers.radio.broadcast_event"),
+        ):
+            response = await discover_mesh(RadioDiscoveryRequest(target="repeaters"))
+
+        assert response.target == "repeaters"
+        assert len(response.results) == 2
+        assert response.results[0].public_key == "11" * 32
+        assert response.results[0].node_type == "repeater"
+        assert response.results[0].heard_count == 2
+        assert response.results[0].local_snr == 9.0
+        assert response.results[0].local_rssi == -99
+        assert response.results[0].remote_snr == 4.0
+        assert callbacks["event_type"] == EventType.DISCOVER_RESPONSE
+        assert callbacks["subscription"].unsubscribe.called
+        mc.stop_auto_message_fetching.assert_awaited_once()
+        mc.start_auto_message_fetching.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_persists_newly_discovered_nodes_and_broadcasts_contact_updates(self):
+        mc = _mock_meshcore_with_info()
+        created_contact = Contact(
+            public_key="44" * 32,
+            name=None,
+            type=2,
+            flags=0,
+            last_path=None,
+            last_path_len=-1,
+            out_path_hash_mode=0,
+            last_advert=None,
+            lat=None,
+            lon=None,
+            last_seen=123,
+            on_radio=False,
+            last_contacted=None,
+            last_read_at=None,
+            first_seen=123,
+        )
+
+        def _subscribe(_event_type, callback, _attribute_filters=None):
+            callback(
+                _radio_result(
+                    payload={
+                        "pubkey": "44" * 32,
+                        "node_type": 2,
+                        "SNR": 6.0,
+                        "RSSI": -100,
+                        "SNR_in": 2.5,
+                    }
+                )
+            )
+            return MagicMock(unsubscribe=MagicMock())
+
+        mc.subscribe = MagicMock(side_effect=_subscribe)
+
+        with (
+            patch("app.routers.radio.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.radio.DISCOVERY_WINDOW_SECONDS", 0.01),
+            patch(
+                "app.routers.radio.ContactRepository.get_by_key",
+                new_callable=AsyncMock,
+                side_effect=[None, created_contact],
+            ) as mock_get_by_key,
+            patch(
+                "app.routers.radio.ContactRepository.upsert", new_callable=AsyncMock
+            ) as mock_upsert,
+            patch("app.routers.radio.broadcast_event") as mock_broadcast,
+        ):
+            response = await discover_mesh(RadioDiscoveryRequest(target="repeaters"))
+
+        assert len(response.results) == 1
+        mock_get_by_key.assert_awaited()
+        mock_upsert.assert_awaited_once()
+        upsert_arg = mock_upsert.await_args.args[0]
+        assert upsert_arg.public_key == "44" * 32
+        assert upsert_arg.type == 2
+        assert upsert_arg.on_radio is False
+        mock_broadcast.assert_called_once_with("contact", created_contact.model_dump())
+
+    @pytest.mark.asyncio
+    async def test_does_not_reinsert_existing_discovered_nodes(self):
+        mc = _mock_meshcore_with_info()
+        existing_contact = Contact(
+            public_key="55" * 32,
+            name="Known",
+            type=4,
+            flags=0,
+            last_path=None,
+            last_path_len=-1,
+            out_path_hash_mode=0,
+            last_advert=None,
+            lat=None,
+            lon=None,
+            last_seen=123,
+            on_radio=False,
+            last_contacted=None,
+            last_read_at=None,
+            first_seen=123,
+        )
+
+        def _subscribe(_event_type, callback, _attribute_filters=None):
+            callback(
+                _radio_result(
+                    payload={
+                        "pubkey": "55" * 32,
+                        "node_type": 4,
+                        "SNR": 5.0,
+                        "RSSI": -102,
+                        "SNR_in": 1.5,
+                    }
+                )
+            )
+            return MagicMock(unsubscribe=MagicMock())
+
+        mc.subscribe = MagicMock(side_effect=_subscribe)
+
+        with (
+            patch("app.routers.radio.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.radio.DISCOVERY_WINDOW_SECONDS", 0.01),
+            patch(
+                "app.routers.radio.ContactRepository.get_by_key",
+                new_callable=AsyncMock,
+                return_value=existing_contact,
+            ),
+            patch(
+                "app.routers.radio.ContactRepository.upsert", new_callable=AsyncMock
+            ) as mock_upsert,
+            patch("app.routers.radio.broadcast_event") as mock_broadcast,
+        ):
+            await discover_mesh(RadioDiscoveryRequest(target="sensors"))
+
+        mock_upsert.assert_not_awaited()
+        mock_broadcast.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_discovers_all_supported_types(self):
+        mc = _mock_meshcore_with_info()
+
+        def _subscribe(_event_type, callback, _attribute_filters=None):
+            callback(
+                _radio_result(
+                    payload={
+                        "pubkey": "33" * 32,
+                        "node_type": 4,
+                        "SNR": 5.0,
+                        "RSSI": -100,
+                        "SNR_in": 2.0,
+                    }
+                )
+            )
+            subscription = MagicMock()
+            subscription.unsubscribe = MagicMock()
+            return subscription
+
+        mc.subscribe = MagicMock(side_effect=_subscribe)
+
+        with (
+            patch("app.routers.radio.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.radio.DISCOVERY_WINDOW_SECONDS", 0.01),
+            patch(
+                "app.routers.radio.ContactRepository.get_by_key",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch("app.routers.radio.ContactRepository.upsert", new_callable=AsyncMock),
+            patch("app.routers.radio.broadcast_event"),
+        ):
+            response = await discover_mesh(RadioDiscoveryRequest(target="all"))
+
+        mc.commands.send_node_discover_req.assert_awaited_once()
+        assert mc.commands.send_node_discover_req.await_args.args[0] == (1 << 2) | (1 << 4)
+        assert response.results[0].node_type == "sensor"
+
+    @pytest.mark.asyncio
+    async def test_raises_when_discovery_request_fails(self):
+        mc = _mock_meshcore_with_info()
+        mc.subscribe = MagicMock(return_value=MagicMock(unsubscribe=MagicMock()))
+        mc.commands.send_node_discover_req = AsyncMock(
+            return_value=_radio_result(EventType.ERROR, {"error": "nope"})
+        )
+
+        with (
+            patch("app.routers.radio.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await discover_mesh(RadioDiscoveryRequest(target="sensors"))
+
+        assert exc.value.status_code == 500
+        assert exc.value.detail == "Failed to start mesh discovery"
 
     @pytest.mark.asyncio
     async def test_successful_import_refreshes_keystore(self):

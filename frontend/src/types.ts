@@ -28,6 +28,23 @@ export interface RadioConfigUpdate {
   advert_location_source?: 'off' | 'current';
 }
 
+export type RadioDiscoveryTarget = 'repeaters' | 'sensors' | 'all';
+
+export interface RadioDiscoveryResult {
+  public_key: string;
+  node_type: 'repeater' | 'sensor';
+  heard_count: number;
+  local_snr: number | null;
+  local_rssi: number | null;
+  remote_snr: number | null;
+}
+
+export interface RadioDiscoveryResponse {
+  target: RadioDiscoveryTarget;
+  duration_seconds: number;
+  results: RadioDiscoveryResult[];
+}
+
 export interface FanoutStatusEntry {
   name: string;
   type: string;

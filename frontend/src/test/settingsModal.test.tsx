@@ -8,6 +8,8 @@ import type {
   HealthStatus,
   RadioConfig,
   RadioConfigUpdate,
+  RadioDiscoveryResponse,
+  RadioDiscoveryTarget,
   StatisticsResponse,
 } from '../types';
 import type { SettingsSection } from '../components/settings/settingsConstants';
@@ -71,6 +73,9 @@ function renderModal(overrides?: {
   onReboot?: () => Promise<void>;
   onDisconnect?: () => Promise<void>;
   onReconnect?: () => Promise<void>;
+  meshDiscovery?: RadioDiscoveryResponse | null;
+  meshDiscoveryLoadingTarget?: RadioDiscoveryTarget | null;
+  onDiscoverMesh?: (target: RadioDiscoveryTarget) => Promise<void>;
   open?: boolean;
   pageMode?: boolean;
   externalSidebarNav?: boolean;
@@ -87,6 +92,7 @@ function renderModal(overrides?: {
   const onReboot = overrides?.onReboot ?? vi.fn(async () => {});
   const onDisconnect = overrides?.onDisconnect ?? vi.fn(async () => {});
   const onReconnect = overrides?.onReconnect ?? vi.fn(async () => {});
+  const onDiscoverMesh = overrides?.onDiscoverMesh ?? vi.fn(async () => {});
 
   const commonProps = {
     open: overrides?.open ?? true,
@@ -102,6 +108,9 @@ function renderModal(overrides?: {
     onDisconnect,
     onReconnect,
     onAdvertise: vi.fn(async () => {}),
+    meshDiscovery: overrides?.meshDiscovery ?? null,
+    meshDiscoveryLoadingTarget: overrides?.meshDiscoveryLoadingTarget ?? null,
+    onDiscoverMesh,
     onHealthRefresh: vi.fn(async () => {}),
     onRefreshAppSettings,
   };
@@ -125,6 +134,7 @@ function renderModal(overrides?: {
     onReboot,
     onDisconnect,
     onReconnect,
+    onDiscoverMesh,
     view,
   };
 }
@@ -202,6 +212,42 @@ describe('SettingsModal', () => {
     openRadioSection();
 
     expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+  });
+
+  it('runs repeater mesh discovery from the radio tab', async () => {
+    const { onDiscoverMesh } = renderModal();
+    openRadioSection();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discover Repeaters' }));
+
+    await waitFor(() => {
+      expect(onDiscoverMesh).toHaveBeenCalledWith('repeaters');
+    });
+  });
+
+  it('renders mesh discovery results in the radio tab', () => {
+    renderModal({
+      meshDiscovery: {
+        target: 'all',
+        duration_seconds: 8,
+        results: [
+          {
+            public_key: '11'.repeat(32),
+            node_type: 'repeater',
+            heard_count: 2,
+            local_snr: 7.5,
+            local_rssi: -101,
+            remote_snr: 4,
+          },
+        ],
+      },
+    });
+    openRadioSection();
+
+    expect(screen.getByText('Last sweep: 1 node')).toBeInTheDocument();
+    expect(screen.getByText('repeater')).toBeInTheDocument();
+    expect(screen.getByText('heard 2 times')).toBeInTheDocument();
+    expect(screen.getByText('8s listen window')).toBeInTheDocument();
   });
 
   it('saves advert location source through radio config save', async () => {
@@ -336,6 +382,9 @@ describe('SettingsModal', () => {
         onDisconnect={vi.fn(async () => {})}
         onReconnect={vi.fn(async () => {})}
         onAdvertise={vi.fn(async () => {})}
+        meshDiscovery={null}
+        meshDiscoveryLoadingTarget={null}
+        onDiscoverMesh={vi.fn(async () => {})}
         onHealthRefresh={vi.fn(async () => {})}
         onRefreshAppSettings={vi.fn(async () => {})}
       />

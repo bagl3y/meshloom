@@ -13,6 +13,8 @@ import type {
   HealthStatus,
   RadioConfig,
   RadioConfigUpdate,
+  RadioDiscoveryResponse,
+  RadioDiscoveryTarget,
 } from '../../types';
 
 export function SettingsRadioSection({
@@ -27,6 +29,9 @@ export function SettingsRadioSection({
   onDisconnect,
   onReconnect,
   onAdvertise,
+  meshDiscovery,
+  meshDiscoveryLoadingTarget,
+  onDiscoverMesh,
   onClose,
   className,
 }: {
@@ -41,6 +46,9 @@ export function SettingsRadioSection({
   onDisconnect: () => Promise<void>;
   onReconnect: () => Promise<void>;
   onAdvertise: () => Promise<void>;
+  meshDiscovery: RadioDiscoveryResponse | null;
+  meshDiscoveryLoadingTarget: RadioDiscoveryTarget | null;
+  onDiscoverMesh: (target: RadioDiscoveryTarget) => Promise<void>;
   onClose: () => void;
   className?: string;
 }) {
@@ -75,6 +83,7 @@ export function SettingsRadioSection({
 
   // Advertise state
   const [advertising, setAdvertising] = useState(false);
+  const [discoverError, setDiscoverError] = useState<string | null>(null);
   const [connectionBusy, setConnectionBusy] = useState(false);
 
   useEffect(() => {
@@ -292,6 +301,15 @@ export function SettingsRadioSection({
       await onAdvertise();
     } finally {
       setAdvertising(false);
+    }
+  };
+
+  const handleDiscover = async (target: RadioDiscoveryTarget) => {
+    setDiscoverError(null);
+    try {
+      await onDiscoverMesh(target);
+    } catch (err) {
+      setDiscoverError(err instanceof Error ? err.message : 'Failed to run mesh discovery');
     }
   };
 
@@ -687,7 +705,10 @@ export function SettingsRadioSection({
 
       <Separator />
 
-      {/* Send Advertisement */}
+      <div className="space-y-2">
+        <Label className="text-base">Hear &amp; Be Heard</Label>
+      </div>
+
       <div className="space-y-2">
         <Label>Send Advertisement</Label>
         <p className="text-xs text-muted-foreground">
@@ -702,6 +723,81 @@ export function SettingsRadioSection({
         </Button>
         {!health?.radio_connected && (
           <p className="text-sm text-destructive">Radio not connected</p>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <Label>Mesh Discovery</Label>
+        <p className="text-xs text-muted-foreground">
+          Discover nearby node types that currently respond to mesh discovery requests: repeaters
+          and sensors.
+        </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {[
+            { target: 'repeaters', label: 'Discover Repeaters' },
+            { target: 'sensors', label: 'Discover Sensors' },
+            { target: 'all', label: 'Discover Both' },
+          ].map(({ target, label }) => (
+            <Button
+              key={target}
+              type="button"
+              variant="outline"
+              onClick={() => handleDiscover(target as RadioDiscoveryTarget)}
+              disabled={meshDiscoveryLoadingTarget !== null || !health?.radio_connected}
+              className="w-full"
+            >
+              {meshDiscoveryLoadingTarget === target ? 'Listening...' : label}
+            </Button>
+          ))}
+        </div>
+        {!health?.radio_connected && (
+          <p className="text-sm text-destructive">Radio not connected</p>
+        )}
+        {discoverError && (
+          <p className="text-sm text-destructive" role="alert">
+            {discoverError}
+          </p>
+        )}
+        {meshDiscovery && (
+          <div className="space-y-2 rounded-md border border-input bg-muted/20 p-3">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm font-medium">
+                Last sweep: {meshDiscovery.results.length} node
+                {meshDiscovery.results.length === 1 ? '' : 's'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {meshDiscovery.duration_seconds.toFixed(0)}s listen window
+              </p>
+            </div>
+            {meshDiscovery.results.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No supported nodes responded during the last discovery sweep.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {meshDiscovery.results.map((result) => (
+                  <div
+                    key={result.public_key}
+                    className="rounded-md border border-input bg-background px-3 py-2"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium capitalize">{result.node_type}</span>
+                      <span className="text-xs text-muted-foreground">
+                        heard {result.heard_count} time{result.heard_count === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                      {result.public_key}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Heard here: {result.local_snr ?? 'n/a'} dB SNR / {result.local_rssi ?? 'n/a'}{' '}
+                      dBm RSSI. Remote heard us: {result.remote_snr ?? 'n/a'} dB SNR.
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

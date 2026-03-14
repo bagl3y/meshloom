@@ -5,6 +5,8 @@ import type {
   HealthStatus,
   RadioConfig,
   RadioConfigUpdate,
+  RadioDiscoveryResponse,
+  RadioDiscoveryTarget,
 } from '../types';
 import type { LocalLabel } from '../utils/localLabel';
 import {
@@ -34,6 +36,9 @@ interface SettingsModalBaseProps {
   onDisconnect: () => Promise<void>;
   onReconnect: () => Promise<void>;
   onAdvertise: () => Promise<void>;
+  meshDiscovery: RadioDiscoveryResponse | null;
+  meshDiscoveryLoadingTarget: RadioDiscoveryTarget | null;
+  onDiscoverMesh: (target: RadioDiscoveryTarget) => Promise<void>;
   onHealthRefresh: () => Promise<void>;
   onRefreshAppSettings: () => Promise<void>;
   onLocalLabelChange?: (label: LocalLabel) => void;
@@ -64,6 +69,9 @@ export function SettingsModal(props: SettingsModalProps) {
     onDisconnect,
     onReconnect,
     onAdvertise,
+    meshDiscovery,
+    meshDiscoveryLoadingTarget,
+    onDiscoverMesh,
     onHealthRefresh,
     onRefreshAppSettings,
     onLocalLabelChange,
@@ -189,6 +197,9 @@ export function SettingsModal(props: SettingsModalProps) {
               onDisconnect={onDisconnect}
               onReconnect={onReconnect}
               onAdvertise={onAdvertise}
+              meshDiscovery={meshDiscovery}
+              meshDiscoveryLoadingTarget={meshDiscoveryLoadingTarget}
+              onDiscoverMesh={onDiscoverMesh}
               onClose={onClose}
               className={sectionContentClass}
             />

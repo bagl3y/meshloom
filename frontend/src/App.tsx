@@ -122,6 +122,9 @@ export function App() {
     handleDisconnect,
     handleReconnect,
     handleAdvertise,
+    meshDiscovery,
+    meshDiscoveryLoadingTarget,
+    handleDiscoverMesh,
     handleHealthRefresh,
   } = useRadioControl();
 
@@ -451,6 +454,9 @@ export function App() {
     onDisconnect: handleDisconnect,
     onReconnect: handleReconnect,
     onAdvertise: handleAdvertise,
+    meshDiscovery,
+    meshDiscoveryLoadingTarget,
+    onDiscoverMesh: handleDiscoverMesh,
     onHealthRefresh: handleHealthRefresh,
     onRefreshAppSettings: fetchAppSettings,
     blockedKeys: appSettings?.blocked_keys,

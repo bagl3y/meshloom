@@ -257,6 +257,21 @@ describe('fetchJson (via api methods)', () => {
       expect(JSON.parse(options.body)).toEqual({ private_key: 'my-secret-key' });
     });
 
+    it('sends POST with JSON body for mesh discovery', async () => {
+      installMockFetch();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ target: 'repeaters', duration_seconds: 8, results: [] }),
+      });
+
+      await api.discoverMesh('repeaters');
+
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).toBe('/api/radio/discover');
+      expect(options.method).toBe('POST');
+      expect(JSON.parse(options.body)).toEqual({ target: 'repeaters' });
+    });
+
     it('sends DELETE for deleteContact', async () => {
       installMockFetch();
       mockFetch.mockResolvedValueOnce({

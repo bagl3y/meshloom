@@ -17,6 +17,8 @@ import type {
   MigratePreferencesResponse,
   RadioConfig,
   RadioConfigUpdate,
+  RadioDiscoveryResponse,
+  RadioDiscoveryTarget,
   RepeaterAclResponse,
   RepeaterAdvertIntervalsResponse,
   RepeaterLoginResponse,
@@ -94,6 +96,11 @@ export const api = {
   sendAdvertisement: () =>
     fetchJson<{ status: string }>('/radio/advertise', {
       method: 'POST',
+    }),
+  discoverMesh: (target: RadioDiscoveryTarget) =>
+    fetchJson<RadioDiscoveryResponse>('/radio/discover', {
+      method: 'POST',
+      body: JSON.stringify({ target }),
     }),
   rebootRadio: () =>
     fetchJson<{ status: string; message: string }>('/radio/reboot', {

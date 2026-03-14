@@ -540,6 +540,48 @@ class CommandResponse(BaseModel):
     )
 
 
+class RadioDiscoveryRequest(BaseModel):
+    """Request to discover nearby mesh nodes from the local radio."""
+
+    target: Literal["repeaters", "sensors", "all"] = Field(
+        default="all",
+        description="Which node classes to discover over the mesh",
+    )
+
+
+class RadioDiscoveryResult(BaseModel):
+    """One mesh node heard during a discovery sweep."""
+
+    public_key: str = Field(description="Discovered node public key as hex")
+    node_type: Literal["repeater", "sensor"] = Field(description="Discovered node class")
+    heard_count: int = Field(default=1, description="How many responses were heard from this node")
+    local_snr: float | None = Field(
+        default=None,
+        description="SNR at which the local radio heard the response (dB)",
+    )
+    local_rssi: int | None = Field(
+        default=None,
+        description="RSSI at which the local radio heard the response (dBm)",
+    )
+    remote_snr: float | None = Field(
+        default=None,
+        description="SNR reported by the remote node while hearing our discovery request (dB)",
+    )
+
+
+class RadioDiscoveryResponse(BaseModel):
+    """Response payload for a mesh discovery sweep."""
+
+    target: Literal["repeaters", "sensors", "all"] = Field(
+        description="Which node classes were requested"
+    )
+    duration_seconds: float = Field(description="How long the sweep listened for responses")
+    results: list[RadioDiscoveryResult] = Field(
+        default_factory=list,
+        description="Deduplicated discovery responses heard during the sweep",
+    )
+
+
 class Favorite(BaseModel):
     """A favorite conversation."""
 

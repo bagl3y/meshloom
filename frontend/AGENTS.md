@@ -51,7 +51,7 @@ frontend/src/
 │   ├── useRealtimeAppState.ts      # WebSocket event application and reconnect recovery
 │   ├── useAppShell.ts              # App-shell view state (settings/sidebar/modals/cracker)
 │   ├── useRepeaterDashboard.ts      # Repeater dashboard state (login, panes, console, retries)
-│   ├── useRadioControl.ts          # Radio health/config state, reconnection
+│   ├── useRadioControl.ts          # Radio health/config state, reconnection, mesh discovery sweeps
 │   ├── useAppSettings.ts           # Settings, favorites, preferences migration
 │   ├── useConversationRouter.ts    # URL hash → active conversation routing
 │   └── useContactsAndChannels.ts   # Contact/channel loading, creation, deletion
@@ -110,7 +110,7 @@ frontend/src/
 │   ├── NeighborsMiniMap.tsx    # Leaflet mini-map for repeater neighbor locations
 │   ├── settings/
 │   │   ├── settingsConstants.ts          # Settings section type, ordering, labels
-│   │   ├── SettingsRadioSection.tsx      # Name, keys, advert interval, max contacts, radio preset, freq/bw/sf/cr, txPower, lat/lon, reboot
+│   │   ├── SettingsRadioSection.tsx      # Name, keys, advert interval, max contacts, radio preset, freq/bw/sf/cr, txPower, lat/lon, reboot, mesh discovery
 │   │   ├── SettingsLocalSection.tsx      # Browser-local settings: theme, local label, reopen last conversation
 │   │   ├── SettingsFanoutSection.tsx     # Fanout integrations: MQTT, bots, config CRUD
 │   │   ├── SettingsDatabaseSection.tsx   # DB size, cleanup, auto-decrypt, local label
@@ -250,6 +250,7 @@ High-level state is delegated to hooks:
 
 - `SettingsRadioSection.tsx` surfaces `path_hash_mode` only when `config.path_hash_mode_supported` is true.
 - Advert-location control is intentionally only `off` vs `include node location`. Companion-radio firmware does not reliably distinguish saved coordinates from live GPS in this path.
+- Mesh discovery in the radio section is limited to node classes that currently answer discovery control-data requests in firmware: repeaters and sensors.
 - Frontend `path_len` fields are hop counts, not raw byte lengths; multibyte path rendering must use the accompanying metadata before splitting hop identifiers.
 
 ## WebSocket (`useWebSocket.ts`)

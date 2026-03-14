@@ -1,12 +1,23 @@
+import asyncio
 import logging
-from typing import Literal
+import random
+import time
+from typing import Literal, TypeAlias
 
 from fastapi import APIRouter, HTTPException
+from meshcore import EventType
 from pydantic import BaseModel, Field
 
 from app.dependencies import require_connected
+from app.models import (
+    ContactUpsert,
+    RadioDiscoveryRequest,
+    RadioDiscoveryResponse,
+    RadioDiscoveryResult,
+)
 from app.radio_sync import send_advertisement as do_send_advertisement
 from app.radio_sync import sync_radio_time
+from app.repository import ContactRepository
 from app.services.radio_commands import (
     KeystoreRefreshError,
     PathHashModeUnsupportedError,
@@ -15,12 +26,23 @@ from app.services.radio_commands import (
     import_private_key_and_refresh_keystore,
 )
 from app.services.radio_runtime import radio_runtime as radio_manager
-from app.websocket import broadcast_health
+from app.websocket import broadcast_event, broadcast_health
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/radio", tags=["radio"])
 
 AdvertLocationSource = Literal["off", "current"]
+DiscoveryNodeType: TypeAlias = Literal["repeater", "sensor"]
+DISCOVERY_WINDOW_SECONDS = 8.0
+_DISCOVERY_TARGET_BITS = {
+    "repeaters": 1 << 2,
+    "sensors": 1 << 4,
+    "all": (1 << 2) | (1 << 4),
+}
+_DISCOVERY_NODE_TYPES: dict[int, DiscoveryNodeType] = {
+    2: "repeater",
+    4: "sensor",
+}
 
 
 async def _prepare_connected(*, broadcast_on_success: bool) -> bool:
@@ -80,6 +102,88 @@ class RadioConfigUpdate(BaseModel):
 
 class PrivateKeyUpdate(BaseModel):
     private_key: str = Field(description="Private key as hex string")
+
+
+def _monotonic() -> float:
+    return time.monotonic()
+
+
+def _better_signal(first: float | None, second: float | None) -> float | None:
+    if first is None:
+        return second
+    if second is None:
+        return first
+    return second if second > first else first
+
+
+def _coerce_float(value: object) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _coerce_int(value: object) -> int | None:
+    if isinstance(value, int):
+        return value
+    return None
+
+
+def _merge_discovery_result(
+    existing: RadioDiscoveryResult | None, event_payload: dict[str, object]
+) -> RadioDiscoveryResult | None:
+    public_key = event_payload.get("pubkey")
+    node_type_code = event_payload.get("node_type")
+    if not isinstance(public_key, str) or not public_key:
+        return existing
+    if not isinstance(node_type_code, int):
+        return existing
+
+    node_type = _DISCOVERY_NODE_TYPES.get(node_type_code)
+    if node_type is None:
+        return existing
+
+    if existing is None:
+        return RadioDiscoveryResult(
+            public_key=public_key,
+            node_type=node_type,
+            heard_count=1,
+            local_snr=_coerce_float(event_payload.get("SNR")),
+            local_rssi=_coerce_int(event_payload.get("RSSI")),
+            remote_snr=_coerce_float(event_payload.get("SNR_in")),
+        )
+
+    existing.heard_count += 1
+    existing.local_snr = _better_signal(existing.local_snr, _coerce_float(event_payload.get("SNR")))
+    current_rssi = _coerce_int(event_payload.get("RSSI"))
+    if existing.local_rssi is None or (
+        current_rssi is not None and current_rssi > existing.local_rssi
+    ):
+        existing.local_rssi = current_rssi
+    existing.remote_snr = _better_signal(
+        existing.remote_snr,
+        _coerce_float(event_payload.get("SNR_in")),
+    )
+    return existing
+
+
+async def _persist_new_discovery_contacts(results: list[RadioDiscoveryResult]) -> None:
+    now = int(time.time())
+    for result in results:
+        existing = await ContactRepository.get_by_key(result.public_key)
+        if existing is not None:
+            continue
+
+        contact = ContactUpsert(
+            public_key=result.public_key,
+            type=2 if result.node_type == "repeater" else 4,
+            last_seen=now,
+            first_seen=now,
+            on_radio=False,
+        )
+        await ContactRepository.upsert(contact)
+        created = await ContactRepository.get_by_key(result.public_key)
+        if created is not None:
+            broadcast_event("contact", created.model_dump())
 
 
 @router.get("/config", response_model=RadioConfigResponse)
@@ -182,6 +286,72 @@ async def send_advertisement() -> dict:
         raise HTTPException(status_code=500, detail="Failed to send advertisement")
 
     return {"status": "ok"}
+
+
+@router.post("/discover", response_model=RadioDiscoveryResponse)
+async def discover_mesh(request: RadioDiscoveryRequest) -> RadioDiscoveryResponse:
+    """Run a short node-discovery sweep from the local radio."""
+    require_connected()
+
+    target_bits = _DISCOVERY_TARGET_BITS[request.target]
+    tag = random.randint(1, 0xFFFFFFFF)
+    tag_hex = tag.to_bytes(4, "little", signed=False).hex()
+    events: asyncio.Queue = asyncio.Queue()
+
+    async with radio_manager.radio_operation(
+        "discover_mesh",
+        pause_polling=True,
+        suspend_auto_fetch=True,
+    ) as mc:
+        subscription = mc.subscribe(
+            EventType.DISCOVER_RESPONSE,
+            lambda event: events.put_nowait(event),
+            {"tag": tag_hex},
+        )
+        try:
+            send_result = await mc.commands.send_node_discover_req(
+                target_bits,
+                prefix_only=False,
+                tag=tag,
+            )
+            if send_result is None or send_result.type == EventType.ERROR:
+                raise HTTPException(status_code=500, detail="Failed to start mesh discovery")
+
+            deadline = _monotonic() + DISCOVERY_WINDOW_SECONDS
+            results_by_key: dict[str, RadioDiscoveryResult] = {}
+
+            while True:
+                remaining = deadline - _monotonic()
+                if remaining <= 0:
+                    break
+                try:
+                    event = await asyncio.wait_for(events.get(), timeout=remaining)
+                except asyncio.TimeoutError:
+                    break
+
+                merged = _merge_discovery_result(
+                    results_by_key.get(event.payload.get("pubkey")),
+                    event.payload,
+                )
+                if merged is not None:
+                    results_by_key[merged.public_key] = merged
+        finally:
+            subscription.unsubscribe()
+
+    results = sorted(
+        results_by_key.values(),
+        key=lambda item: (
+            item.node_type,
+            -(item.local_snr if item.local_snr is not None else -999.0),
+            item.public_key,
+        ),
+    )
+    await _persist_new_discovery_contacts(results)
+    return RadioDiscoveryResponse(
+        target=request.target,
+        duration_seconds=DISCOVERY_WINDOW_SECONDS,
+        results=results,
+    )
 
 
 async def _attempt_reconnect() -> dict:

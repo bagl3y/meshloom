@@ -295,6 +295,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | PATCH | `/api/radio/config` | Update name, location, advert-location on/off, radio params, and `path_hash_mode` when supported |
 | PUT | `/api/radio/private-key` | Import private key to radio |
 | POST | `/api/radio/advertise` | Send advertisement |
+| POST | `/api/radio/discover` | Run a short mesh discovery sweep for nearby repeaters/sensors |
 | POST | `/api/radio/reboot` | Reboot radio or reconnect if disconnected |
 | POST | `/api/radio/disconnect` | Disconnect from radio and pause automatic reconnect attempts |
 | POST | `/api/radio/reconnect` | Manual radio reconnection |
