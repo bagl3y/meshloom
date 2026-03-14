@@ -180,7 +180,7 @@ RESEND_WINDOW_SECONDS = 30
 async def resend_channel_message(
     message_id: int,
     new_timestamp: bool = Query(default=False),
-) -> dict[str, object]:
+) -> ResendChannelMessageResponse:
     """Resend a channel message.
 
     When new_timestamp=False (default): byte-perfect resend using the original timestamp.

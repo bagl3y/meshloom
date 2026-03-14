@@ -20,6 +20,7 @@ import type {
   RadioDiscoveryResponse,
   RadioDiscoveryTarget,
   PathDiscoveryResponse,
+  ResendChannelMessageResponse,
   RepeaterAclResponse,
   RepeaterAdvertIntervalsResponse,
   RepeaterLoginResponse,
@@ -33,12 +34,6 @@ import type {
   TraceResponse,
   UnreadCounts,
 } from './types';
-
-export interface ResendChannelMessageResponse {
-  status: string;
-  message_id: number;
-  message?: Message;
-}
 
 const API_BASE = '/api';
 

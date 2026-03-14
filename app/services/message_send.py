@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import HTTPException
 from meshcore import EventType
 
+from app.models import ResendChannelMessageResponse
 from app.region_scope import normalize_region_scope
 from app.repository import AppSettingsRepository, ContactRepository, MessageRepository
 from app.services.messages import (
@@ -437,7 +438,7 @@ async def resend_channel_message_record(
     now_fn: NowFn,
     temp_radio_slot: int,
     message_repository=MessageRepository,
-) -> dict[str, Any]:
+) -> ResendChannelMessageResponse:
     """Resend a stored outgoing channel message."""
     try:
         key_bytes = bytes.fromhex(message.conversation_key)
@@ -530,7 +531,11 @@ async def resend_channel_message_record(
             new_message.id,
             channel.name,
         )
-        return {"status": "ok", "message_id": new_message.id, "message": new_message}
+        return ResendChannelMessageResponse(
+            status="ok",
+            message_id=new_message.id,
+            message=new_message,
+        )
 
     logger.info("Resent channel message %d to %s", message.id, channel.name)
-    return {"status": "ok", "message_id": message.id}
+    return ResendChannelMessageResponse(status="ok", message_id=message.id)

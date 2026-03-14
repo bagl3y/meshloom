@@ -632,8 +632,8 @@ class TestResendChannelMessage:
         ):
             result = await resend_channel_message(msg_id, new_timestamp=False)
 
-        assert result["status"] == "ok"
-        assert result["message_id"] == msg_id
+        assert result.status == "ok"
+        assert result.message_id == msg_id
 
         # Verify radio was called with correct timestamp bytes
         mc.commands.send_chan_msg.assert_awaited_once()
@@ -731,7 +731,7 @@ class TestResendChannelMessage:
         ):
             result = await resend_channel_message(msg_id, new_timestamp=False)
 
-        assert result["status"] == "ok"
+        assert result.status == "ok"
         mock_broadcast_error.assert_called_once()
         assert "restore failed" in mock_broadcast_error.call_args.args[0].lower()
 
@@ -762,15 +762,16 @@ class TestResendChannelMessage:
             mock_time.time.return_value = float(now)
             result = await resend_channel_message(msg_id, new_timestamp=True)
 
-        assert result["status"] == "ok"
-        assert result["message_id"] != msg_id
-        resent = await MessageRepository.get_by_id(result["message_id"])
+        assert result.status == "ok"
+        assert result.message_id != msg_id
+        resent = await MessageRepository.get_by_id(result.message_id)
         assert resent is not None
-        assert result["message"].id == resent.id
-        assert result["message"].conversation_key == resent.conversation_key
-        assert result["message"].text == resent.text
-        assert result["message"].sender_timestamp == resent.sender_timestamp
-        assert result["message"].outgoing is True
+        assert result.message is not None
+        assert result.message.id == resent.id
+        assert result.message.conversation_key == resent.conversation_key
+        assert result.message.text == resent.text
+        assert result.message.sender_timestamp == resent.sender_timestamp
+        assert result.message.outgoing is True
         assert resent.sender_timestamp == now + 1
         assert resent.received_at == now
         sent_timestamp = int.from_bytes(
@@ -896,9 +897,9 @@ class TestResendChannelMessage:
         ):
             result = await resend_channel_message(msg_id, new_timestamp=True)
 
-        assert result["status"] == "ok"
+        assert result.status == "ok"
         # Should return a NEW message id, not the original
-        assert result["message_id"] != msg_id
+        assert result.message_id != msg_id
 
     @pytest.mark.asyncio
     async def test_resend_new_timestamp_creates_new_message(self, test_db):
@@ -925,7 +926,7 @@ class TestResendChannelMessage:
         ):
             result = await resend_channel_message(msg_id, new_timestamp=True)
 
-        new_msg_id = result["message_id"]
+        new_msg_id = result.message_id
         new_msg = await MessageRepository.get_by_id(new_msg_id)
         original_msg = await MessageRepository.get_by_id(msg_id)
 
@@ -963,7 +964,7 @@ class TestResendChannelMessage:
         mock_broadcast.assert_called_once()
         event_type, event_data = mock_broadcast.call_args.args
         assert event_type == "message"
-        assert event_data["id"] == result["message_id"]
+        assert event_data["id"] == result.message_id
         assert event_data["outgoing"] is True
         assert event_data["channel_name"] == "#broadcast"
 

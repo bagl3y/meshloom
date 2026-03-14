@@ -247,6 +247,12 @@ export interface MessagesAroundResponse {
   has_newer: boolean;
 }
 
+export interface ResendChannelMessageResponse {
+  status: string;
+  message_id: number;
+  message?: Message;
+}
+
 type ConversationType = 'contact' | 'channel' | 'raw' | 'map' | 'visualizer' | 'search';
 
 export interface Conversation {
