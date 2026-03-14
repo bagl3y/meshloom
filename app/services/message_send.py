@@ -530,7 +530,7 @@ async def resend_channel_message_record(
             new_message.id,
             channel.name,
         )
-        return {"status": "ok", "message_id": new_message.id}
+        return {"status": "ok", "message_id": new_message.id, "message": new_message}
 
     logger.info("Resent channel message %d to %s", message.id, channel.name)
     return {"status": "ok", "message_id": message.id}

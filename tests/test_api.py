@@ -492,6 +492,50 @@ class TestMessagesEndpoint:
         assert send_kwargs["timestamp"] == sent_at.to_bytes(4, "little")
 
     @pytest.mark.asyncio
+    async def test_resend_channel_message_new_timestamp_returns_message_payload(
+        self, test_db, client
+    ):
+        """New-timestamp resend returns the created message payload for local UI append."""
+        from meshcore import EventType
+
+        chan_key = "EF" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#resend-new")
+        sent_at = int(time.time()) - 5
+        msg_id = await MessageRepository.create(
+            msg_type="CHAN",
+            text="TestNode: hello again",
+            conversation_key=chan_key,
+            sender_timestamp=sent_at,
+            received_at=sent_at,
+            outgoing=True,
+        )
+        assert msg_id is not None
+
+        mock_mc = MagicMock()
+        mock_mc.self_info = {"name": "TestNode", "public_key": "ab" * 32}
+        mock_mc.commands = MagicMock()
+        mock_mc.commands.set_channel = AsyncMock(
+            return_value=MagicMock(type=EventType.OK, payload={})
+        )
+        mock_mc.commands.send_chan_msg = AsyncMock(
+            return_value=MagicMock(type=EventType.MSG_SENT, payload={})
+        )
+
+        radio_manager._meshcore = mock_mc
+        with _patch_require_connected(mock_mc):
+            response = await client.post(
+                f"/api/messages/channel/{msg_id}/resend?new_timestamp=true"
+            )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "ok"
+        assert payload["message_id"] != msg_id
+        assert payload["message"]["id"] == payload["message_id"]
+        assert payload["message"]["conversation_key"] == chan_key
+        assert payload["message"]["outgoing"] is True
+
+    @pytest.mark.asyncio
     async def test_resend_channel_message_window_expired(self, test_db, client):
         """Resend endpoint rejects channel messages older than 30 seconds."""
         chan_key = "CD" * 16

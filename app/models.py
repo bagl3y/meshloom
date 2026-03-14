@@ -347,6 +347,12 @@ class MessagesAroundResponse(BaseModel):
     has_newer: bool
 
 
+class ResendChannelMessageResponse(BaseModel):
+    status: str
+    message_id: int
+    message: Message | None = None
+
+
 class RawPacketDecryptedInfo(BaseModel):
     """Decryption info for a raw packet (when successfully decrypted)."""
 

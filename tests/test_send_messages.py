@@ -766,6 +766,11 @@ class TestResendChannelMessage:
         assert result["message_id"] != msg_id
         resent = await MessageRepository.get_by_id(result["message_id"])
         assert resent is not None
+        assert result["message"].id == resent.id
+        assert result["message"].conversation_key == resent.conversation_key
+        assert result["message"].text == resent.text
+        assert result["message"].sender_timestamp == resent.sender_timestamp
+        assert result["message"].outgoing is True
         assert resent.sender_timestamp == now + 1
         assert resent.received_at == now
         sent_timestamp = int.from_bytes(

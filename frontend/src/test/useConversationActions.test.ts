@@ -125,6 +125,74 @@ describe('useConversationActions', () => {
     expect(args.messageInputRef.current?.appendText).toHaveBeenCalledWith('@[Alice] ');
   });
 
+  it('appends a new-timestamp resend immediately for the active channel', async () => {
+    const resentMessage: Message = {
+      ...sentMessage,
+      id: 99,
+      sender_timestamp: 1700000100,
+      received_at: 1700000100,
+    };
+    mocks.api.resendChannelMessage.mockResolvedValue({
+      status: 'ok',
+      message_id: resentMessage.id,
+      message: resentMessage,
+    });
+    const args = createArgs();
+
+    const { result } = renderHook(() => useConversationActions(args));
+
+    await act(async () => {
+      await result.current.handleResendChannelMessage(sentMessage.id, true);
+    });
+
+    expect(mocks.api.resendChannelMessage).toHaveBeenCalledWith(sentMessage.id, true);
+    expect(args.addMessageIfNew).toHaveBeenCalledWith(resentMessage);
+  });
+
+  it('does not append a byte-perfect resend locally', async () => {
+    mocks.api.resendChannelMessage.mockResolvedValue({
+      status: 'ok',
+      message_id: sentMessage.id,
+    });
+    const args = createArgs();
+
+    const { result } = renderHook(() => useConversationActions(args));
+
+    await act(async () => {
+      await result.current.handleResendChannelMessage(sentMessage.id, false);
+    });
+
+    expect(args.addMessageIfNew).not.toHaveBeenCalled();
+  });
+
+  it('does not append a resend if the user has switched conversations', async () => {
+    const resentMessage: Message = {
+      ...sentMessage,
+      id: 100,
+      sender_timestamp: 1700000200,
+      received_at: 1700000200,
+    };
+    mocks.api.resendChannelMessage.mockResolvedValue({
+      status: 'ok',
+      message_id: resentMessage.id,
+      message: resentMessage,
+    });
+    const args = createArgs();
+    const { result } = renderHook(() => useConversationActions(args));
+
+    await act(async () => {
+      const resendPromise = result.current.handleResendChannelMessage(sentMessage.id, true);
+      args.activeConversationRef.current = {
+        type: 'channel',
+        id: 'AA'.repeat(16),
+        name: 'Other',
+      };
+      await resendPromise;
+    });
+
+    expect(args.addMessageIfNew).not.toHaveBeenCalled();
+  });
+
   it('merges returned contact data after path discovery', async () => {
     const contactKey = 'aa'.repeat(32);
     const discoveredContact: Contact = {

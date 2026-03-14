@@ -8,6 +8,7 @@ from app.event_handlers import track_pending_ack
 from app.models import (
     Message,
     MessagesAroundResponse,
+    ResendChannelMessageResponse,
     SendChannelMessageRequest,
     SendDirectMessageRequest,
 )
@@ -171,11 +172,15 @@ async def send_channel_message(request: SendChannelMessageRequest) -> Message:
 RESEND_WINDOW_SECONDS = 30
 
 
-@router.post("/channel/{message_id}/resend")
+@router.post(
+    "/channel/{message_id}/resend",
+    response_model=ResendChannelMessageResponse,
+    response_model_exclude_none=True,
+)
 async def resend_channel_message(
     message_id: int,
     new_timestamp: bool = Query(default=False),
-) -> dict:
+) -> dict[str, object]:
     """Resend a channel message.
 
     When new_timestamp=False (default): byte-perfect resend using the original timestamp.

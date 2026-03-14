@@ -34,6 +34,12 @@ import type {
   UnreadCounts,
 } from './types';
 
+export interface ResendChannelMessageResponse {
+  status: string;
+  message_id: number;
+  message?: Message;
+}
+
 const API_BASE = '/api';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
@@ -238,7 +244,7 @@ export const api = {
       body: JSON.stringify({ channel_key: channelKey, text }),
     }),
   resendChannelMessage: (messageId: number, newTimestamp?: boolean) =>
-    fetchJson<{ status: string; message_id: number }>(
+    fetchJson<ResendChannelMessageResponse>(
       `/messages/channel/${messageId}/resend${newTimestamp ? '?new_timestamp=true' : ''}`,
       { method: 'POST' }
     ),

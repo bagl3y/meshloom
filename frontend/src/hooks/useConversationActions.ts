@@ -69,7 +69,16 @@ export function useConversationActions({
   const handleResendChannelMessage = useCallback(
     async (messageId: number, newTimestamp?: boolean) => {
       try {
-        await api.resendChannelMessage(messageId, newTimestamp);
+        const resent = await api.resendChannelMessage(messageId, newTimestamp);
+        const resentMessage = resent.message;
+        if (
+          newTimestamp &&
+          resentMessage &&
+          activeConversationRef.current?.type === 'channel' &&
+          activeConversationRef.current.id === resentMessage.conversation_key
+        ) {
+          addMessageIfNew(resentMessage);
+        }
         toast.success(newTimestamp ? 'Message resent with new timestamp' : 'Message resent');
       } catch (err) {
         toast.error('Failed to resend', {
@@ -77,7 +86,7 @@ export function useConversationActions({
         });
       }
     },
-    []
+    [activeConversationRef, addMessageIfNew]
   );
 
   const handleSetChannelFloodScopeOverride = useCallback(
