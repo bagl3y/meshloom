@@ -3,6 +3,7 @@ import { Bell, Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
 import { toast } from './ui/sonner';
 import { DirectTraceIcon } from './DirectTraceIcon';
 import { ContactPathDiscoveryModal } from './ContactPathDiscoveryModal';
+import { ChannelFloodScopeOverrideModal } from './ChannelFloodScopeOverrideModal';
 import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { stripRegionScopePrefix } from '../utils/regionScope';
@@ -60,11 +61,13 @@ export function ChatHeader({
   const [showKey, setShowKey] = useState(false);
   const [contactStatusInline, setContactStatusInline] = useState(true);
   const [pathDiscoveryOpen, setPathDiscoveryOpen] = useState(false);
+  const [channelOverrideOpen, setChannelOverrideOpen] = useState(false);
   const keyTextRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     setShowKey(false);
     setPathDiscoveryOpen(false);
+    setChannelOverrideOpen(false);
   }, [conversation.id]);
 
   const activeChannel =
@@ -100,12 +103,7 @@ export function ChatHeader({
 
   const handleEditFloodScopeOverride = () => {
     if (conversation.type !== 'channel' || !onSetChannelFloodScopeOverride) return;
-    const nextValue = window.prompt(
-      'Enter regional override flood scope for this room. This temporarily changes the radio flood scope before send and restores it after, which significantly slows room sends. Leave blank to clear.',
-      activeFloodScopeLabel ?? ''
-    );
-    if (nextValue === null) return;
-    onSetChannelFloodScopeOverride(conversation.id, nextValue);
+    setChannelOverrideOpen(true);
   };
 
   const handleOpenConversationInfo = () => {
@@ -406,6 +404,15 @@ export function ChatHeader({
           contacts={contacts}
           radioName={config?.name ?? null}
           onDiscover={onPathDiscovery}
+        />
+      )}
+      {conversation.type === 'channel' && onSetChannelFloodScopeOverride && (
+        <ChannelFloodScopeOverrideModal
+          open={channelOverrideOpen}
+          onClose={() => setChannelOverrideOpen(false)}
+          roomName={conversation.name}
+          currentOverride={activeFloodScopeDisplay}
+          onSetOverride={(value) => onSetChannelFloodScopeOverride(conversation.id, value)}
         />
       )}
     </header>

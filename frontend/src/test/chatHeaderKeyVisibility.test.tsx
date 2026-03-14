@@ -252,12 +252,11 @@ describe('ChatHeader key visibility', () => {
     expect(screen.getByText(/clearing the forced route afterward is enough/i)).toBeInTheDocument();
   });
 
-  it('prompts for regional override when globe button is clicked', () => {
+  it('opens the regional override modal and applies the entered region', async () => {
     const key = 'CD'.repeat(16);
     const channel = makeChannel(key, '#flightless', true);
     const conversation: Conversation = { type: 'channel', id: key, name: '#flightless' };
     const onSetChannelFloodScopeOverride = vi.fn();
-    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('Esperance');
 
     render(
       <ChatHeader
@@ -270,8 +269,10 @@ describe('ChatHeader key visibility', () => {
 
     fireEvent.click(screen.getByTitle('Set regional override'));
 
-    expect(promptSpy).toHaveBeenCalled();
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Region'), { target: { value: 'Esperance' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Use Esperance region for #flightless' }));
+
     expect(onSetChannelFloodScopeOverride).toHaveBeenCalledWith(key, 'Esperance');
-    promptSpy.mockRestore();
   });
 });
