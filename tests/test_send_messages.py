@@ -24,6 +24,7 @@ from app.routers.messages import (
     send_channel_message,
     send_direct_message,
 )
+from app.services import dm_ack_tracker
 
 
 @pytest.fixture(autouse=True)
@@ -35,6 +36,8 @@ def _reset_radio_state():
     prev_connection_info = radio_manager._connection_info
     prev_slot_by_key = radio_manager._channel_slot_by_key.copy()
     prev_key_by_slot = radio_manager._channel_key_by_slot.copy()
+    prev_pending_acks = dm_ack_tracker._pending_acks.copy()
+    prev_buffered_acks = dm_ack_tracker._buffered_acks.copy()
     yield
     radio_manager._meshcore = prev
     radio_manager._operation_lock = prev_lock
@@ -42,6 +45,10 @@ def _reset_radio_state():
     radio_manager._connection_info = prev_connection_info
     radio_manager._channel_slot_by_key = prev_slot_by_key
     radio_manager._channel_key_by_slot = prev_key_by_slot
+    dm_ack_tracker._pending_acks.clear()
+    dm_ack_tracker._pending_acks.update(prev_pending_acks)
+    dm_ack_tracker._buffered_acks.clear()
+    dm_ack_tracker._buffered_acks.update(prev_buffered_acks)
 
 
 def _make_radio_result(payload=None):
@@ -190,6 +197,80 @@ class TestOutgoingDMBroadcast:
         assert contact_payload["out_path_len"] == 2
         assert contact_payload["out_path_hash_mode"] == 1
 
+    @pytest.mark.asyncio
+    async def test_send_dm_same_second_duplicate_bumps_timestamp(self, test_db):
+        mc = _make_mc()
+        pub_key = "fa" * 32
+        await _insert_contact(pub_key, "Alice")
+
+        now = int(time.time())
+        original_id = await MessageRepository.create(
+            msg_type="PRIV",
+            text="hello",
+            conversation_key=pub_key,
+            sender_timestamp=now,
+            received_at=now,
+            outgoing=True,
+        )
+        assert original_id is not None
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event"),
+            patch("app.routers.messages.time") as mock_time,
+        ):
+            mock_time.time.return_value = float(now)
+            result = await send_direct_message(
+                SendDirectMessageRequest(destination=pub_key, text="hello")
+            )
+
+        assert result.id != original_id
+        assert result.sender_timestamp == now + 1
+        assert result.received_at == now
+        assert mc.commands.send_msg.await_args.kwargs["timestamp"] == now + 1
+
+    @pytest.mark.asyncio
+    async def test_send_dm_applies_buffered_ack_from_early_arrival(self, test_db):
+        from app.event_handlers import on_ack
+
+        mc = _make_mc()
+        ack_bytes = b"\xde\xad\xbe\xef"
+        result = MagicMock()
+        result.type = EventType.MSG_SENT
+        result.payload = {
+            "expected_ack": ack_bytes,
+            "suggested_timeout": 8000,
+        }
+        mc.commands.send_msg = AsyncMock(return_value=result)
+
+        pub_key = "fb" * 32
+        await _insert_contact(pub_key, "Alice")
+
+        class MockAckEvent:
+            payload = {"code": "deadbeef"}
+
+        broadcasts = []
+
+        def capture_broadcast(event_type, data):
+            broadcasts.append((event_type, data))
+
+        with (
+            patch("app.event_handlers.broadcast_event", side_effect=capture_broadcast),
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event", side_effect=capture_broadcast),
+        ):
+            await on_ack(MockAckEvent())
+            message = await send_direct_message(
+                SendDirectMessageRequest(destination=pub_key, text="Hello")
+            )
+
+        ack_count, _ = await MessageRepository.get_ack_and_paths(message.id)
+        assert ack_count == 1
+        assert message.acked == 1
+        assert any(event_type == "message_acked" for event_type, _data in broadcasts)
+
 
 class TestOutgoingChannelBroadcast:
     """Test that outgoing channel messages are broadcast via broadcast_event for fanout dispatch."""
@@ -222,6 +303,42 @@ class TestOutgoingChannelBroadcast:
         assert data["conversation_key"] == chan_key.upper()
         assert data["sender_name"] == "MyNode"
         assert data["channel_name"] == "#general"
+
+    @pytest.mark.asyncio
+    async def test_send_channel_same_second_duplicate_bumps_timestamp(self, test_db):
+        mc = _make_mc(name="MyNode")
+        chan_key = "ac" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#general")
+
+        now = int(time.time())
+        original_id = await MessageRepository.create(
+            msg_type="CHAN",
+            text="MyNode: hello",
+            conversation_key=chan_key.upper(),
+            sender_timestamp=now,
+            received_at=now,
+            outgoing=True,
+        )
+        assert original_id is not None
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event"),
+            patch("app.routers.messages.time") as mock_time,
+        ):
+            mock_time.time.return_value = float(now)
+            result = await send_channel_message(
+                SendChannelMessageRequest(channel_key=chan_key, text="hello")
+            )
+
+        assert result.id != original_id
+        assert result.sender_timestamp == now + 1
+        assert result.received_at == now
+        sent_timestamp = int.from_bytes(
+            mc.commands.send_chan_msg.await_args.kwargs["timestamp"], "little"
+        )
+        assert sent_timestamp == now + 1
 
     @pytest.mark.asyncio
     async def test_send_channel_msg_response_includes_current_ack_count(self, test_db):
@@ -619,8 +736,8 @@ class TestResendChannelMessage:
         assert "restore failed" in mock_broadcast_error.call_args.args[0].lower()
 
     @pytest.mark.asyncio
-    async def test_resend_new_timestamp_collision_returns_original_id(self, test_db):
-        """When new-timestamp resend collides (same second), return original ID gracefully."""
+    async def test_resend_new_timestamp_collision_bumps_timestamp(self, test_db):
+        """New-timestamp resend should bump the transmit timestamp instead of reusing the row."""
         mc = _make_mc(name="MyNode")
         chan_key = "dd" * 16
         await ChannelRepository.upsert(key=chan_key, name="#collision")
@@ -642,13 +759,19 @@ class TestResendChannelMessage:
             patch("app.routers.messages.broadcast_event"),
             patch("app.routers.messages.time") as mock_time,
         ):
-            # Force the same second so MessageRepository.create returns None (duplicate)
             mock_time.time.return_value = float(now)
             result = await resend_channel_message(msg_id, new_timestamp=True)
 
-        # Should succeed gracefully, returning the original message ID
         assert result["status"] == "ok"
-        assert result["message_id"] == msg_id
+        assert result["message_id"] != msg_id
+        resent = await MessageRepository.get_by_id(result["message_id"])
+        assert resent is not None
+        assert resent.sender_timestamp == now + 1
+        assert resent.received_at == now
+        sent_timestamp = int.from_bytes(
+            mc.commands.send_chan_msg.await_args.kwargs["timestamp"], "little"
+        )
+        assert sent_timestamp == now + 1
 
     @pytest.mark.asyncio
     async def test_resend_non_outgoing_returns_400(self, test_db):

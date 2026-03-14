@@ -387,6 +387,7 @@ class TestMessagesEndpoint:
             _patch_require_connected(mock_mc),
             patch("app.routers.messages.MessageRepository") as mock_msg_repo,
         ):
+            mock_msg_repo.get_by_content = AsyncMock(return_value=None)
             # Simulate duplicate - create returns None
             mock_msg_repo.create = AsyncMock(return_value=None)
 
@@ -422,6 +423,7 @@ class TestMessagesEndpoint:
             _patch_require_connected(mock_mc),
             patch("app.routers.messages.MessageRepository") as mock_msg_repo,
         ):
+            mock_msg_repo.get_by_content = AsyncMock(return_value=None)
             # Simulate duplicate - create returns None
             mock_msg_repo.create = AsyncMock(return_value=None)
 

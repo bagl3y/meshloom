@@ -28,11 +28,12 @@ logger = logging.getLogger(__name__)
 # This prevents handler duplication after reconnects
 _active_subscriptions: list["Subscription"] = []
 _pending_acks = dm_ack_tracker._pending_acks
+_buffered_acks = dm_ack_tracker._buffered_acks
 
 
-def track_pending_ack(expected_ack: str, message_id: int, timeout_ms: int) -> None:
+def track_pending_ack(expected_ack: str, message_id: int, timeout_ms: int) -> bool:
     """Compatibility wrapper for pending DM ACK tracking."""
-    dm_ack_tracker.track_pending_ack(expected_ack, message_id, timeout_ms)
+    return dm_ack_tracker.track_pending_ack(expected_ack, message_id, timeout_ms)
 
 
 def cleanup_expired_acks() -> None:
@@ -302,6 +303,7 @@ async def on_ack(event: "Event") -> None:
         # preserving any previously known paths.
         await increment_ack_and_broadcast(message_id=message_id, broadcast_fn=broadcast_event)
     else:
+        dm_ack_tracker.buffer_unmatched_ack(ack_code)
         logger.debug("ACK code %s does not match any pending messages", ack_code)
 
 

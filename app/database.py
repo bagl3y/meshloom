@@ -51,9 +51,8 @@ CREATE TABLE IF NOT EXISTS messages (
     sender_name TEXT,
     sender_key TEXT
     -- Deduplication: identical text + timestamp in the same conversation is treated as a
-    -- mesh echo/repeat. Second-precision timestamps mean two intentional identical messages
-    -- within the same second would collide, but this is not feasible in practice — LoRa
-    -- transmission takes several seconds per message, and the UI clears the input on send.
+    -- mesh echo/repeat. Outgoing sends allocate a collision-free sender_timestamp before
+    -- transmit so legitimate repeat sends do not collide with this index.
     -- Enforced via idx_messages_dedup_null_safe (unique index) rather than a table constraint
     -- to avoid the storage overhead of SQLite's autoindex duplicating every message text.
 );

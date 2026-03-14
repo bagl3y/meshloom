@@ -11,6 +11,7 @@ import pytest
 
 from app.event_handlers import (
     _active_subscriptions,
+    _buffered_acks,
     _pending_acks,
     cleanup_expired_acks,
     register_event_handlers,
@@ -26,9 +27,11 @@ from app.repository import (
 def clear_test_state():
     """Clear pending ACKs and subscriptions before each test."""
     _pending_acks.clear()
+    _buffered_acks.clear()
     _active_subscriptions.clear()
     yield
     _pending_acks.clear()
+    _buffered_acks.clear()
     _active_subscriptions.clear()
 
 
@@ -107,6 +110,28 @@ class TestAckTracking:
         assert len(_pending_acks) == 50
         assert all(k.startswith("valid_") for k in _pending_acks)
 
+    def test_track_pending_ack_consumes_buffered_ack(self):
+        """A buffered ACK should be matched immediately when the send registers later."""
+        _buffered_acks["early"] = time.time()
+
+        matched = track_pending_ack("early", message_id=42, timeout_ms=5000)
+
+        assert matched is True
+        assert "early" not in _buffered_acks
+        assert "early" not in _pending_acks
+
+    def test_cleanup_removes_expired_buffered_acks(self):
+        """Buffered ACKs should expire so unmatched early ACKs do not leak forever."""
+        from app.services.dm_ack_tracker import BUFFERED_ACK_TTL_SECONDS
+
+        _buffered_acks["stale"] = time.time() - (BUFFERED_ACK_TTL_SECONDS + 1)
+        _buffered_acks["fresh"] = time.time()
+
+        cleanup_expired_acks()
+
+        assert "stale" not in _buffered_acks
+        assert "fresh" in _buffered_acks
+
 
 class TestAckEventHandler:
     """Test the on_ack event handler."""
@@ -174,6 +199,7 @@ class TestAckEventHandler:
 
             mock_broadcast.assert_not_called()
             assert "expected" in _pending_acks
+            assert "different" in _buffered_acks
 
     @pytest.mark.asyncio
     async def test_ack_empty_code_ignored(self, test_db):
@@ -187,6 +213,35 @@ class TestAckEventHandler:
 
             await on_ack(MockEvent())
 
+            mock_broadcast.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_buffered_ack_can_be_claimed_after_early_arrival(self, test_db):
+        """An ACK that arrives before registration should be recoverable."""
+        from app.event_handlers import on_ack
+
+        msg_id = await MessageRepository.create(
+            msg_type="PRIV",
+            text="Hello",
+            received_at=1700000000,
+            conversation_key="aa" * 32,
+            sender_timestamp=1700000000,
+            outgoing=True,
+        )
+
+        with patch("app.event_handlers.broadcast_event") as mock_broadcast:
+
+            class MockEvent:
+                payload = {"code": "earlyack"}
+
+            await on_ack(MockEvent())
+
+            assert "earlyack" in _buffered_acks
+            assert track_pending_ack("earlyack", message_id=msg_id, timeout_ms=10000) is True
+            assert "earlyack" not in _buffered_acks
+            assert "earlyack" not in _pending_acks
+            ack_count, _ = await MessageRepository.get_ack_and_paths(msg_id)
+            assert ack_count == 0
             mock_broadcast.assert_not_called()
 
 
