@@ -241,8 +241,10 @@ class TestDMEchoDetection:
     """Test echo detection for direct messages."""
 
     @pytest.mark.asyncio
-    async def test_outgoing_dm_echo_increments_ack(self, test_db, captured_broadcasts):
-        """Outgoing DM echo increments ack count."""
+    async def test_outgoing_dm_echo_adds_path_without_incrementing_ack(
+        self, test_db, captured_broadcasts
+    ):
+        """Outgoing DM duplicate keeps path updates but does not count as delivery evidence."""
         from app.packet_processor import create_dm_message_from_decrypted
 
         # Store outgoing DM
@@ -283,8 +285,20 @@ class TestDMEchoDetection:
 
         ack_broadcasts = [b for b in broadcasts if b["type"] == "message_acked"]
         assert len(ack_broadcasts) == 1
-        assert ack_broadcasts[0]["data"]["ack_count"] == 1
+        assert ack_broadcasts[0]["data"]["message_id"] == msg_id
+        assert ack_broadcasts[0]["data"]["ack_count"] == 0
         assert any(p["path"] == "aabb" for p in ack_broadcasts[0]["data"]["paths"])
+
+        msg = await MessageRepository.get_by_content(
+            msg_type="PRIV",
+            conversation_key=CONTACT_PUB.lower(),
+            text="Hello friend",
+            sender_timestamp=SENDER_TIMESTAMP,
+        )
+        assert msg is not None
+        assert msg.acked == 0
+        assert msg.paths is not None
+        assert any(p.path == "aabb" for p in msg.paths)
 
     @pytest.mark.asyncio
     async def test_incoming_dm_duplicate_does_not_increment_ack(self, test_db, captured_broadcasts):
@@ -1085,4 +1099,4 @@ class TestMessageAckedBroadcastShape:
         assert payload_keys <= (self.REQUIRED_KEYS | self.OPTIONAL_KEYS)
         assert isinstance(payload["message_id"], int)
         assert isinstance(payload["ack_count"], int)
-        assert payload["ack_count"] == 1  # Outgoing DM echo increments ack
+        assert payload["ack_count"] == 0  # Outgoing DM duplicates no longer count as delivery

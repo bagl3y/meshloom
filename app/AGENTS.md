@@ -115,7 +115,7 @@ app/
 ### Echo/repeat dedup
 
 - Message uniqueness: `(type, conversation_key, text, sender_timestamp)`.
-- Duplicate insert is treated as an echo/repeat: the new path (if any) is appended, and the ACK count is incremented **only for outgoing messages**. Incoming repeats add path data but do not change the ACK count.
+- Duplicate insert is treated as an echo/repeat: the new path (if any) is appended, and the ACK count is incremented only for outgoing channel messages. Incoming repeats and direct-message duplicates may still add path data, but DM delivery state advances only from real ACK events.
 
 ### Raw packet dedup policy
 

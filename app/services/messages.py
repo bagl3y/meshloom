@@ -166,7 +166,7 @@ async def handle_duplicate_message(
     else:
         paths = existing_msg.paths or []
 
-    if existing_msg.outgoing:
+    if existing_msg.outgoing and existing_msg.type == "CHAN":
         ack_count = await MessageRepository.increment_ack_count(existing_msg.id)
     else:
         ack_count = existing_msg.acked
