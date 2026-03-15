@@ -5,8 +5,10 @@ from fastapi.testclient import TestClient
 
 from app.frontend_static import (
     ASSET_CACHE_CONTROL,
+    FRONTEND_BUILD_INSTRUCTIONS,
     INDEX_CACHE_CONTROL,
     STATIC_FILE_CACHE_CONTROL,
+    register_first_available_frontend_static_routes,
     register_frontend_missing_fallback,
     register_frontend_static_routes,
 )
@@ -28,8 +30,7 @@ def test_missing_dist_logs_error_and_keeps_app_running(tmp_path, caplog):
     with TestClient(app) as client:
         resp = client.get("/")
         assert resp.status_code == 404
-        assert "npm install" in resp.json()["detail"]
-        assert "npm run build" in resp.json()["detail"]
+        assert FRONTEND_BUILD_INSTRUCTIONS in resp.json()["detail"]
 
 
 def test_missing_index_logs_error_and_skips_frontend_routes(tmp_path, caplog):
@@ -120,3 +121,41 @@ def test_webmanifest_uses_forwarded_origin_headers(tmp_path):
         assert data["start_url"] == "https://mesh.example.com:8443/"
         assert data["scope"] == "https://mesh.example.com:8443/"
         assert data["id"] == "https://mesh.example.com:8443/"
+
+
+def test_first_available_prefers_dist_over_prebuilt(tmp_path):
+    app = FastAPI()
+    frontend_dir = tmp_path / "frontend"
+    dist_dir = frontend_dir / "dist"
+    prebuilt_dir = frontend_dir / "prebuilt"
+    dist_dir.mkdir(parents=True)
+    prebuilt_dir.mkdir(parents=True)
+    (dist_dir / "index.html").write_text("<html><body>dist</body></html>")
+    (prebuilt_dir / "index.html").write_text("<html><body>prebuilt</body></html>")
+
+    selected = register_first_available_frontend_static_routes(app, [dist_dir, prebuilt_dir])
+
+    assert selected == dist_dir.resolve()
+
+    with TestClient(app) as client:
+        response = client.get("/")
+        assert response.status_code == 200
+        assert "dist" in response.text
+
+
+def test_first_available_uses_prebuilt_when_dist_missing(tmp_path):
+    app = FastAPI()
+    frontend_dir = tmp_path / "frontend"
+    dist_dir = frontend_dir / "dist"
+    prebuilt_dir = frontend_dir / "prebuilt"
+    prebuilt_dir.mkdir(parents=True)
+    (prebuilt_dir / "index.html").write_text("<html><body>prebuilt</body></html>")
+
+    selected = register_first_available_frontend_static_routes(app, [dist_dir, prebuilt_dir])
+
+    assert selected == prebuilt_dir.resolve()
+
+    with TestClient(app) as client:
+        response = client.get("/")
+        assert response.status_code == 200
+        assert "prebuilt" in response.text

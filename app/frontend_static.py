@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 INDEX_CACHE_CONTROL = "no-store"
 ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
 STATIC_FILE_CACHE_CONTROL = "public, max-age=3600"
+FRONTEND_BUILD_INSTRUCTIONS = "Run 'cd frontend && npm install && npm run build'."
 
 
 class CacheControlStaticFiles(StaticFiles):
@@ -48,39 +49,37 @@ def _resolve_request_origin(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
-def register_frontend_static_routes(app: FastAPI, frontend_dir: Path) -> bool:
-    """Register frontend static file routes if a built frontend is available.
-
-    Returns True when routes are registered, False when frontend files are
-    missing/incomplete. Missing frontend files are logged but are not fatal.
-    """
+def _validate_frontend_dir(frontend_dir: Path, *, log_failures: bool = True) -> tuple[bool, Path]:
+    """Resolve and validate a built frontend directory."""
     frontend_dir = frontend_dir.resolve()
     index_file = frontend_dir / "index.html"
-    assets_dir = frontend_dir / "assets"
 
     if not frontend_dir.exists():
-        logger.error(
-            "Frontend build directory not found at %s. "
-            "Run 'cd frontend && npm run build'. API will continue without frontend routes.",
-            frontend_dir,
-        )
-        return False
+        if log_failures:
+            logger.error("Frontend build directory not found at %s.", frontend_dir)
+        return False, frontend_dir
 
     if not frontend_dir.is_dir():
-        logger.error(
-            "Frontend build path is not a directory: %s. "
-            "API will continue without frontend routes.",
-            frontend_dir,
-        )
-        return False
+        if log_failures:
+            logger.error("Frontend build path is not a directory: %s.", frontend_dir)
+        return False, frontend_dir
 
     if not index_file.exists():
-        logger.error(
-            "Frontend index file not found at %s. "
-            "Run 'cd frontend && npm run build'. API will continue without frontend routes.",
-            index_file,
-        )
+        if log_failures:
+            logger.error("Frontend index file not found at %s.", index_file)
+        return False, frontend_dir
+
+    return True, frontend_dir
+
+
+def register_frontend_static_routes(app: FastAPI, frontend_dir: Path) -> bool:
+    """Register frontend static file routes if a built frontend is available."""
+    valid, frontend_dir = _validate_frontend_dir(frontend_dir)
+    if not valid:
         return False
+
+    index_file = frontend_dir / "index.html"
+    assets_dir = frontend_dir / "assets"
 
     if assets_dir.exists() and assets_dir.is_dir():
         app.mount(
@@ -157,6 +156,30 @@ def register_frontend_static_routes(app: FastAPI, frontend_dir: Path) -> bool:
     return True
 
 
+def register_first_available_frontend_static_routes(
+    app: FastAPI, frontend_dirs: list[Path]
+) -> Path | None:
+    """Register frontend routes from the first valid build directory."""
+    for i, candidate in enumerate(frontend_dirs):
+        valid, resolved_candidate = _validate_frontend_dir(candidate, log_failures=False)
+        if not valid:
+            continue
+
+        if register_frontend_static_routes(app, resolved_candidate):
+            logger.info("Selected frontend build directory %s", resolved_candidate)
+            return resolved_candidate
+
+        if i < len(frontend_dirs) - 1:
+            logger.warning("Frontend build at %s was unusable; trying fallback", resolved_candidate)
+
+    logger.error(
+        "No usable frontend build found. Searched: %s. %s API will continue without frontend routes.",
+        ", ".join(str(path.resolve()) for path in frontend_dirs),
+        FRONTEND_BUILD_INSTRUCTIONS,
+    )
+    return None
+
+
 def register_frontend_missing_fallback(app: FastAPI) -> None:
     """Register a fallback route that tells the user to build the frontend."""
 
@@ -164,7 +187,5 @@ def register_frontend_missing_fallback(app: FastAPI) -> None:
     async def frontend_not_built():
         return JSONResponse(
             status_code=404,
-            content={
-                "detail": "Frontend not built. Run: cd frontend && npm install && npm run build"
-            },
+            content={"detail": f"Frontend not built. {FRONTEND_BUILD_INSTRUCTIONS}"},
         )
