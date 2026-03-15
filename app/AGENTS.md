@@ -272,6 +272,8 @@ Repository writes should prefer typed models such as `ContactUpsert` over ad hoc
 - `flood_scope`
 - `blocked_keys`, `blocked_names`
 
+Note: `sidebar_sort_order` remains in the backend model for compatibility and migration, but the current frontend sidebar uses per-section localStorage sort preferences instead of a single shared server-backed sort mode.
+
 Note: MQTT, community MQTT, and bot configs were migrated to the `fanout_configs` table (migrations 36-38).
 
 ## Security Posture (intentional)

@@ -43,25 +43,6 @@ export function useAppSettings() {
     [fetchAppSettings]
   );
 
-  const handleSortOrderChange = useCallback(
-    async (order: 'recent' | 'alpha') => {
-      const previousOrder = appSettings?.sidebar_sort_order ?? 'recent';
-
-      // Optimistic update for responsive UI
-      setAppSettings((prev) => (prev ? { ...prev, sidebar_sort_order: order } : prev));
-
-      try {
-        const updatedSettings = await api.updateSettings({ sidebar_sort_order: order });
-        setAppSettings(updatedSettings);
-      } catch (err) {
-        console.error('Failed to update sort order:', err);
-        setAppSettings((prev) => (prev ? { ...prev, sidebar_sort_order: previousOrder } : prev));
-        toast.error('Failed to save sort preference');
-      }
-    },
-    [appSettings?.sidebar_sort_order]
-  );
-
   const handleToggleBlockedKey = useCallback(async (key: string) => {
     const normalizedKey = key.toLowerCase();
     setAppSettings((prev) => {
@@ -198,7 +179,6 @@ export function useAppSettings() {
     favorites,
     fetchAppSettings,
     handleSaveAppSettings,
-    handleSortOrderChange,
     handleToggleFavorite,
     handleToggleBlockedKey,
     handleToggleBlockedName,

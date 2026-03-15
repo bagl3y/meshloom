@@ -75,8 +75,7 @@ function renderSidebar(overrides?: {
       onToggleCracker={vi.fn()}
       onMarkAllRead={vi.fn()}
       favorites={favorites}
-      sortOrder="recent"
-      onSortOrderChange={vi.fn()}
+      legacySortOrder="recent"
       isConversationNotificationsEnabled={overrides?.isConversationNotificationsEnabled}
     />
   );
@@ -85,7 +84,7 @@ function renderSidebar(overrides?: {
 }
 
 function getSectionHeaderContainer(title: string): HTMLElement {
-  const btn = screen.getByRole('button', { name: new RegExp(title, 'i') });
+  const btn = screen.getByRole('button', { name: title });
   const container = btn.closest('div');
   if (!container) throw new Error(`Missing header container for section ${title}`);
   return container;
@@ -142,9 +141,9 @@ describe('Sidebar section summaries', () => {
   it('expands collapsed sections during search and restores collapse state after clearing search', async () => {
     const { opsChannel, aliceName } = renderSidebar();
 
-    fireEvent.click(screen.getByRole('button', { name: /Tools/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Channels/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Contacts/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tools' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Channels' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Contacts' }));
 
     expect(screen.queryByText('Packet Feed')).not.toBeInTheDocument();
     expect(screen.queryByText(opsChannel.name)).not.toBeInTheDocument();
@@ -169,9 +168,9 @@ describe('Sidebar section summaries', () => {
   it('persists collapsed section state across unmount and remount', () => {
     const { opsChannel, aliceName, unmount } = renderSidebar();
 
-    fireEvent.click(screen.getByRole('button', { name: /Tools/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Channels/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Contacts/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tools' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Channels' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Contacts' }));
 
     expect(screen.queryByText('Packet Feed')).not.toBeInTheDocument();
     expect(screen.queryByText(opsChannel.name)).not.toBeInTheDocument();
@@ -206,8 +205,7 @@ describe('Sidebar section summaries', () => {
         onToggleCracker={vi.fn()}
         onMarkAllRead={vi.fn()}
         favorites={[]}
-        sortOrder="recent"
-        onSortOrderChange={vi.fn()}
+        legacySortOrder="recent"
       />
     );
 
@@ -252,5 +250,70 @@ describe('Sidebar section summaries', () => {
     const bell = within(aliceRow).getByLabelText('Notifications enabled');
     const unread = within(aliceRow).getByText('3');
     expect(bell.compareDocumentPosition(unread) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('sorts each section independently and persists per-section sort preferences', () => {
+    const publicChannel = makeChannel('AA'.repeat(16), 'Public');
+    const zebraChannel = makeChannel('BB'.repeat(16), '#zebra');
+    const alphaChannel = makeChannel('CC'.repeat(16), '#alpha');
+    const zed = makeContact('11'.repeat(32), 'Zed');
+    const amy = makeContact('22'.repeat(32), 'Amy');
+    const relayZulu = makeContact('33'.repeat(32), 'Zulu Relay', CONTACT_TYPE_REPEATER);
+    const relayAlpha = makeContact('44'.repeat(32), 'Alpha Relay', CONTACT_TYPE_REPEATER);
+
+    const props = {
+      contacts: [zed, amy, relayZulu, relayAlpha],
+      channels: [publicChannel, zebraChannel, alphaChannel],
+      activeConversation: null,
+      onSelectConversation: vi.fn(),
+      onNewMessage: vi.fn(),
+      lastMessageTimes: {
+        [getStateKey('channel', zebraChannel.key)]: 300,
+        [getStateKey('channel', alphaChannel.key)]: 100,
+        [getStateKey('contact', zed.public_key)]: 200,
+        [getStateKey('contact', amy.public_key)]: 100,
+        [getStateKey('contact', relayZulu.public_key)]: 300,
+        [getStateKey('contact', relayAlpha.public_key)]: 100,
+      },
+      unreadCounts: {},
+      mentions: {},
+      showCracker: false,
+      crackerRunning: false,
+      onToggleCracker: vi.fn(),
+      onMarkAllRead: vi.fn(),
+      favorites: [],
+      legacySortOrder: 'recent' as const,
+    };
+
+    const getChannelsOrder = () => screen.getAllByText(/^#/).map((node) => node.textContent);
+    const getContactsOrder = () =>
+      screen
+        .getAllByText(/^(Amy|Zed)$/)
+        .map((node) => node.textContent)
+        .filter((text): text is string => Boolean(text));
+    const getRepeatersOrder = () =>
+      screen
+        .getAllByText(/Relay$/)
+        .map((node) => node.textContent)
+        .filter((text): text is string => Boolean(text));
+
+    const { unmount } = render(<Sidebar {...props} />);
+
+    expect(getChannelsOrder()).toEqual(['#zebra', '#alpha']);
+    expect(getContactsOrder()).toEqual(['Zed', 'Amy']);
+    expect(getRepeatersOrder()).toEqual(['Zulu Relay', 'Alpha Relay']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sort Channels alphabetically' }));
+
+    expect(getChannelsOrder()).toEqual(['#alpha', '#zebra']);
+    expect(getContactsOrder()).toEqual(['Zed', 'Amy']);
+    expect(getRepeatersOrder()).toEqual(['Zulu Relay', 'Alpha Relay']);
+
+    unmount();
+    render(<Sidebar {...props} />);
+
+    expect(getChannelsOrder()).toEqual(['#alpha', '#zebra']);
+    expect(getContactsOrder()).toEqual(['Zed', 'Amy']);
+    expect(getRepeatersOrder()).toEqual(['Zulu Relay', 'Alpha Relay']);
   });
 });

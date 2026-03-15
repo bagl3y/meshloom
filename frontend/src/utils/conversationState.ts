@@ -11,9 +11,12 @@
 
 const LAST_MESSAGE_KEY = 'remoteterm-lastMessageTime';
 const SORT_ORDER_KEY = 'remoteterm-sortOrder';
+const SIDEBAR_SECTION_SORT_ORDERS_KEY = 'remoteterm-sidebar-section-sort-orders';
 
 export type ConversationTimes = Record<string, number>;
 export type SortOrder = 'recent' | 'alpha';
+export type SidebarSortableSection = 'channels' | 'contacts' | 'repeaters';
+export type SidebarSectionSortOrders = Record<SidebarSortableSection, SortOrder>;
 
 // In-memory cache of last message times (loaded from server on init)
 let lastMessageTimesCache: ConversationTimes = {};
@@ -90,6 +93,56 @@ export function loadLocalStorageSortOrder(): SortOrder {
     return stored === 'alpha' ? 'alpha' : 'recent';
   } catch {
     return 'recent';
+  }
+}
+
+/**
+ * Load the legacy single sidebar sort order from localStorage, if present.
+ */
+export function loadLegacyLocalStorageSortOrder(): SortOrder | null {
+  try {
+    const stored = localStorage.getItem(SORT_ORDER_KEY);
+    if (!stored) return null;
+    return stored === 'alpha' ? 'alpha' : 'recent';
+  } catch {
+    return null;
+  }
+}
+
+export function buildSidebarSectionSortOrders(
+  defaultOrder: SortOrder = 'recent'
+): SidebarSectionSortOrders {
+  return {
+    channels: defaultOrder,
+    contacts: defaultOrder,
+    repeaters: defaultOrder,
+  };
+}
+
+/**
+ * Load per-section sidebar sort orders from localStorage.
+ */
+export function loadLocalStorageSidebarSectionSortOrders(): SidebarSectionSortOrders | null {
+  try {
+    const stored = localStorage.getItem(SIDEBAR_SECTION_SORT_ORDERS_KEY);
+    if (!stored) return null;
+
+    const parsed = JSON.parse(stored) as Partial<SidebarSectionSortOrders>;
+    return {
+      channels: parsed.channels === 'alpha' ? 'alpha' : 'recent',
+      contacts: parsed.contacts === 'alpha' ? 'alpha' : 'recent',
+      repeaters: parsed.repeaters === 'alpha' ? 'alpha' : 'recent',
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveLocalStorageSidebarSectionSortOrders(orders: SidebarSectionSortOrders): void {
+  try {
+    localStorage.setItem(SIDEBAR_SECTION_SORT_ORDERS_KEY, JSON.stringify(orders));
+  } catch {
+    // localStorage might be disabled
   }
 }
 

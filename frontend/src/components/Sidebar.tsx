@@ -19,7 +19,17 @@ import {
   type Conversation,
   type Favorite,
 } from '../types';
-import { getStateKey, type ConversationTimes, type SortOrder } from '../utils/conversationState';
+import {
+  buildSidebarSectionSortOrders,
+  getStateKey,
+  loadLegacyLocalStorageSortOrder,
+  loadLocalStorageSidebarSectionSortOrders,
+  saveLocalStorageSidebarSectionSortOrders,
+  type ConversationTimes,
+  type SidebarSectionSortOrders,
+  type SidebarSortableSection,
+  type SortOrder,
+} from '../utils/conversationState';
 import { getContactDisplayName } from '../utils/pubkey';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { ContactAvatar } from './ContactAvatar';
@@ -91,11 +101,34 @@ interface SidebarProps {
   onToggleCracker: () => void;
   onMarkAllRead: () => void;
   favorites: Favorite[];
-  /** Sort order from server settings */
-  sortOrder?: SortOrder;
-  /** Callback when sort order changes */
-  onSortOrderChange?: (order: SortOrder) => void;
+  /** Legacy global sort order, used only to seed per-section local preferences. */
+  legacySortOrder?: SortOrder;
   isConversationNotificationsEnabled?: (type: 'channel' | 'contact', id: string) => boolean;
+}
+
+type InitialSectionSortState = {
+  orders: SidebarSectionSortOrders;
+  source: 'section' | 'legacy' | 'none';
+};
+
+function loadInitialSectionSortOrders(): InitialSectionSortState {
+  const storedOrders = loadLocalStorageSidebarSectionSortOrders();
+  if (storedOrders) {
+    return { orders: storedOrders, source: 'section' };
+  }
+
+  const legacyOrder = loadLegacyLocalStorageSortOrder();
+  if (legacyOrder) {
+    return {
+      orders: buildSidebarSectionSortOrders(legacyOrder),
+      source: 'legacy',
+    };
+  }
+
+  return {
+    orders: buildSidebarSectionSortOrders(),
+    source: 'none',
+  };
 }
 
 export function Sidebar({
@@ -112,12 +145,12 @@ export function Sidebar({
   onToggleCracker,
   onMarkAllRead,
   favorites,
-  sortOrder: sortOrderProp = 'recent',
-  onSortOrderChange,
+  legacySortOrder,
   isConversationNotificationsEnabled,
 }: SidebarProps) {
-  const sortOrder = sortOrderProp;
   const [searchQuery, setSearchQuery] = useState('');
+  const initialSectionSortState = useMemo(loadInitialSectionSortOrders, []);
+  const [sectionSortOrders, setSectionSortOrders] = useState(initialSectionSortState.orders);
   const initialCollapsedState = useMemo(loadCollapsedState, []);
   const [toolsCollapsed, setToolsCollapsed] = useState(initialCollapsedState.tools);
   const [favoritesCollapsed, setFavoritesCollapsed] = useState(initialCollapsedState.favorites);
@@ -125,10 +158,31 @@ export function Sidebar({
   const [contactsCollapsed, setContactsCollapsed] = useState(initialCollapsedState.contacts);
   const [repeatersCollapsed, setRepeatersCollapsed] = useState(initialCollapsedState.repeaters);
   const collapseSnapshotRef = useRef<CollapseState | null>(null);
+  const sectionSortSourceRef = useRef(initialSectionSortState.source);
 
-  const handleSortToggle = () => {
-    const newOrder = sortOrder === 'alpha' ? 'recent' : 'alpha';
-    onSortOrderChange?.(newOrder);
+  useEffect(() => {
+    if (sectionSortSourceRef.current === 'legacy') {
+      saveLocalStorageSidebarSectionSortOrders(sectionSortOrders);
+      sectionSortSourceRef.current = 'section';
+      return;
+    }
+
+    if (sectionSortSourceRef.current !== 'none' || legacySortOrder === undefined) return;
+
+    const seededOrders = buildSidebarSectionSortOrders(legacySortOrder);
+    setSectionSortOrders(seededOrders);
+    saveLocalStorageSidebarSectionSortOrders(seededOrders);
+    sectionSortSourceRef.current = 'section';
+  }, [legacySortOrder, sectionSortOrders]);
+
+  const handleSortToggle = (section: SidebarSortableSection) => {
+    setSectionSortOrders((prev) => {
+      const nextOrder = prev[section] === 'alpha' ? 'recent' : 'alpha';
+      const updated = { ...prev, [section]: nextOrder };
+      saveLocalStorageSidebarSectionSortOrders(updated);
+      sectionSortSourceRef.current = 'section';
+      return updated;
+    });
   };
 
   const handleSelectConversation = (conversation: Conversation) => {
@@ -203,7 +257,7 @@ export function Sidebar({
         if (a.name === 'Public') return -1;
         if (b.name === 'Public') return 1;
 
-        if (sortOrder === 'recent') {
+        if (sectionSortOrders.channels === 'recent') {
           const timeA = getLastMessageTime('channel', a.key);
           const timeB = getLastMessageTime('channel', b.key);
           if (timeA && timeB) return timeB - timeA;
@@ -212,13 +266,13 @@ export function Sidebar({
         }
         return a.name.localeCompare(b.name);
       }),
-    [uniqueChannels, sortOrder, getLastMessageTime]
+    [uniqueChannels, sectionSortOrders.channels, getLastMessageTime]
   );
 
   const sortContactsByOrder = useCallback(
-    (items: Contact[]) =>
+    (items: Contact[], order: SortOrder) =>
       [...items].sort((a, b) => {
-        if (sortOrder === 'recent') {
+        if (order === 'recent') {
           const timeA = getLastMessageTime('contact', a.public_key);
           const timeB = getLastMessageTime('contact', b.public_key);
           if (timeA && timeB) return timeB - timeA;
@@ -227,18 +281,26 @@ export function Sidebar({
         }
         return (a.name || a.public_key).localeCompare(b.name || b.public_key);
       }),
-    [sortOrder, getLastMessageTime]
+    [getLastMessageTime]
   );
 
   // Split non-repeater contacts and repeater contacts into separate sorted lists
   const sortedNonRepeaterContacts = useMemo(
-    () => sortContactsByOrder(uniqueContacts.filter((c) => c.type !== CONTACT_TYPE_REPEATER)),
-    [uniqueContacts, sortContactsByOrder]
+    () =>
+      sortContactsByOrder(
+        uniqueContacts.filter((c) => c.type !== CONTACT_TYPE_REPEATER),
+        sectionSortOrders.contacts
+      ),
+    [uniqueContacts, sectionSortOrders.contacts, sortContactsByOrder]
   );
 
   const sortedRepeaters = useMemo(
-    () => sortContactsByOrder(uniqueContacts.filter((c) => c.type === CONTACT_TYPE_REPEATER)),
-    [uniqueContacts, sortContactsByOrder]
+    () =>
+      sortContactsByOrder(
+        uniqueContacts.filter((c) => c.type === CONTACT_TYPE_REPEATER),
+        sectionSortOrders.repeaters
+      ),
+    [uniqueContacts, sectionSortOrders.repeaters, sortContactsByOrder]
   );
 
   // Filter by search query
@@ -604,11 +666,12 @@ export function Sidebar({
     title: string,
     collapsed: boolean,
     onToggle: () => void,
-    showSortToggle = false,
+    sortSection: SidebarSortableSection | null = null,
     unreadCount = 0,
     highlightUnread = false
   ) => {
     const effectiveCollapsed = isSearching ? false : collapsed;
+    const sectionSortOrder = sortSection ? sectionSortOrders[sortSection] : null;
 
     return (
       <div className="flex justify-between items-center px-3 py-2 pt-3.5">
@@ -630,16 +693,24 @@ export function Sidebar({
           )}
           <span>{title}</span>
         </button>
-        {(showSortToggle || unreadCount > 0) && (
+        {(sortSection || unreadCount > 0) && (
           <div className="ml-auto flex items-center gap-1.5">
-            {showSortToggle && (
+            {sortSection && sectionSortOrder && (
               <button
                 className="bg-transparent text-muted-foreground/60 px-1 py-0.5 text-[10px] rounded hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={handleSortToggle}
-                aria-label={sortOrder === 'alpha' ? 'Sort by recent' : 'Sort alphabetically'}
-                title={sortOrder === 'alpha' ? 'Sort by recent' : 'Sort alphabetically'}
+                onClick={() => handleSortToggle(sortSection)}
+                aria-label={
+                  sectionSortOrder === 'alpha'
+                    ? `Sort ${title} by recent`
+                    : `Sort ${title} alphabetically`
+                }
+                title={
+                  sectionSortOrder === 'alpha'
+                    ? `Sort ${title} by recent`
+                    : `Sort ${title} alphabetically`
+                }
               >
-                {sortOrder === 'alpha' ? 'A-Z' : '⏱'}
+                {sectionSortOrder === 'alpha' ? 'A-Z' : '⏱'}
               </button>
             )}
             {unreadCount > 0 && (
@@ -731,7 +802,7 @@ export function Sidebar({
               'Favorites',
               favoritesCollapsed,
               () => setFavoritesCollapsed((prev) => !prev),
-              false,
+              null,
               favoritesUnreadCount,
               favoritesHasMention
             )}
@@ -747,7 +818,7 @@ export function Sidebar({
               'Channels',
               channelsCollapsed,
               () => setChannelsCollapsed((prev) => !prev),
-              true,
+              'channels',
               channelsUnreadCount,
               channelsHasMention
             )}
@@ -763,7 +834,7 @@ export function Sidebar({
               'Contacts',
               contactsCollapsed,
               () => setContactsCollapsed((prev) => !prev),
-              true,
+              'contacts',
               contactsUnreadCount,
               contactsUnreadCount > 0
             )}
@@ -779,7 +850,7 @@ export function Sidebar({
               'Repeaters',
               repeatersCollapsed,
               () => setRepeatersCollapsed((prev) => !prev),
-              true,
+              'repeaters',
               repeatersUnreadCount
             )}
             {(isSearching || !repeatersCollapsed) &&

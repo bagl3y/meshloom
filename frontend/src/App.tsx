@@ -135,7 +135,6 @@ export function App() {
     favorites,
     fetchAppSettings,
     handleSaveAppSettings,
-    handleSortOrderChange,
     handleToggleFavorite,
     handleToggleBlockedKey,
     handleToggleBlockedName,
@@ -401,10 +400,7 @@ export function App() {
       void markAllRead();
     },
     favorites,
-    sortOrder: appSettings?.sidebar_sort_order ?? 'recent',
-    onSortOrderChange: (sortOrder: 'recent' | 'alpha') => {
-      void handleSortOrderChange(sortOrder);
-    },
+    legacySortOrder: appSettings?.sidebar_sort_order,
     isConversationNotificationsEnabled,
   };
   const conversationPaneProps = {

@@ -318,6 +318,8 @@ LocalStorage migration helpers for favorites; canonical favorites are server-sid
 - `flood_scope`
 - `blocked_keys`, `blocked_names`
 
+The backend still carries `sidebar_sort_order` for compatibility and old preference migration, but the current sidebar UI stores sort order per section (`Channels`, `Contacts`, `Repeaters`) in frontend localStorage rather than treating it as one global server-backed setting.
+
 Note: MQTT, bot, and community MQTT settings were migrated to the `fanout_configs` table (managed via `/api/fanout`). They are no longer part of `AppSettings`.
 
 `HealthStatus` includes `fanout_statuses: Record<string, FanoutStatusEntry>` mapping config IDs to `{name, type, status}`. Also includes `bots_disabled: boolean`.
