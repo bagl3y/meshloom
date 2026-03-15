@@ -76,6 +76,17 @@ function createInitialPaneData(): PaneData {
 
 const repeaterDashboardCache = new Map<string, RepeaterDashboardCacheEntry>();
 
+function getLoginToastTitle(status: string): string {
+  switch (status) {
+    case 'timeout':
+      return 'Login confirmation not heard';
+    case 'error':
+      return 'Login not confirmed';
+    default:
+      return 'Repeater login not confirmed';
+  }
+}
+
 function clonePaneData(data: PaneData): PaneData {
   return { ...data };
 }
@@ -255,13 +266,22 @@ export function useRepeaterDashboard(
       setLoginLoading(true);
       setLoginError(null);
       try {
-        await api.repeaterLogin(publicKey, password);
+        const result = await api.repeaterLogin(publicKey, password);
         if (activeIdRef.current !== conversationId) return;
         setLoggedIn(true);
+        if (!result.authenticated) {
+          const msg = result.message ?? 'Repeater login was not confirmed';
+          setLoginError(msg);
+          toast.error(getLoginToastTitle(result.status), { description: msg });
+        }
       } catch (err) {
         if (activeIdRef.current !== conversationId) return;
         const msg = err instanceof Error ? err.message : 'Login failed';
+        setLoggedIn(true);
         setLoginError(msg);
+        toast.error('Login request failed', {
+          description: `${msg}. The dashboard is still available, but repeater operations may fail until a login succeeds.`,
+        });
       } finally {
         if (activeIdRef.current === conversationId) {
           setLoginLoading(false);

@@ -44,8 +44,21 @@ ACL_PERMISSION_NAMES = {
 }
 router = APIRouter(prefix="/contacts", tags=["repeaters"])
 
-# Delay between repeater radio operations to allow key exchange and path establishment
-REPEATER_OP_DELAY_SECONDS = 2.0
+REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS = 5.0
+REPEATER_LOGIN_REJECTED_MESSAGE = (
+    "The repeater replied but did not confirm this login. "
+    "Existing access may still allow some repeater operations, but admin actions may fail."
+)
+REPEATER_LOGIN_SEND_FAILED_MESSAGE = (
+    "The login request could not be sent to the repeater. "
+    "The dashboard is still available, but repeater operations may fail until a login succeeds."
+)
+REPEATER_LOGIN_TIMEOUT_MESSAGE = (
+    "No login confirmation was heard from the repeater. "
+    "On current repeater firmware, that can mean the password was wrong, "
+    "blank-password login was not allowed by the ACL, or the reply was missed in transit. "
+    "The dashboard is still available; try logging in again if admin actions fail."
+)
 
 
 def _monotonic() -> float:
@@ -136,31 +149,88 @@ async def _fetch_repeater_response(
     return None
 
 
-async def prepare_repeater_connection(mc, contact: Contact, password: str) -> None:
-    """Prepare connection to a repeater by adding to radio and logging in.
+async def prepare_repeater_connection(mc, contact: Contact, password: str) -> RepeaterLoginResponse:
+    """Prepare connection to a repeater by adding to radio and attempting login.
 
     Args:
         mc: MeshCore instance
         contact: The repeater contact
         password: Password for login (empty string for no password)
-
-    Raises:
-        HTTPException: If login fails
     """
+    pubkey_prefix = contact.public_key[:12].lower()
+    loop = asyncio.get_running_loop()
+    login_future = loop.create_future()
+
+    def _resolve_login(event_type: EventType, message: str | None = None) -> None:
+        if login_future.done():
+            return
+        login_future.set_result(
+            RepeaterLoginResponse(
+                status="ok" if event_type == EventType.LOGIN_SUCCESS else "error",
+                authenticated=event_type == EventType.LOGIN_SUCCESS,
+                message=message,
+            )
+        )
+
+    success_subscription = mc.subscribe(
+        EventType.LOGIN_SUCCESS,
+        lambda _event: _resolve_login(EventType.LOGIN_SUCCESS),
+        attribute_filters={"pubkey_prefix": pubkey_prefix},
+    )
+    failed_subscription = mc.subscribe(
+        EventType.LOGIN_FAILED,
+        lambda _event: _resolve_login(
+            EventType.LOGIN_FAILED,
+            REPEATER_LOGIN_REJECTED_MESSAGE,
+        ),
+        attribute_filters={"pubkey_prefix": pubkey_prefix},
+    )
+
     # Add contact to radio with path from DB (non-fatal — contact may already be loaded)
-    logger.info("Adding repeater %s to radio", contact.public_key[:12])
-    await _ensure_on_radio(mc, contact)
+    try:
+        logger.info("Adding repeater %s to radio", contact.public_key[:12])
+        await _ensure_on_radio(mc, contact)
 
-    # Send login with password
-    logger.info("Sending login to repeater %s", contact.public_key[:12])
-    login_result = await mc.commands.send_login(contact.public_key, password)
+        logger.info("Sending login to repeater %s", contact.public_key[:12])
+        login_result = await mc.commands.send_login(contact.public_key, password)
 
-    if login_result.type == EventType.ERROR:
-        raise HTTPException(status_code=401, detail=f"Login failed: {login_result.payload}")
+        if login_result.type == EventType.ERROR:
+            return RepeaterLoginResponse(
+                status="error",
+                authenticated=False,
+                message=f"{REPEATER_LOGIN_SEND_FAILED_MESSAGE} ({login_result.payload})",
+            )
 
-    # Wait for key exchange to complete before sending requests
-    logger.debug("Waiting %.1fs for key exchange to complete", REPEATER_OP_DELAY_SECONDS)
-    await asyncio.sleep(REPEATER_OP_DELAY_SECONDS)
+        try:
+            return await asyncio.wait_for(
+                login_future,
+                timeout=REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "No login response from repeater %s within %.1fs",
+                contact.public_key[:12],
+                REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS,
+            )
+            return RepeaterLoginResponse(
+                status="timeout",
+                authenticated=False,
+                message=REPEATER_LOGIN_TIMEOUT_MESSAGE,
+            )
+    except HTTPException as exc:
+        logger.warning(
+            "Repeater login setup failed for %s: %s",
+            contact.public_key[:12],
+            exc.detail,
+        )
+        return RepeaterLoginResponse(
+            status="error",
+            authenticated=False,
+            message=f"{REPEATER_LOGIN_SEND_FAILED_MESSAGE} ({exc.detail})",
+        )
+    finally:
+        success_subscription.unsubscribe()
+        failed_subscription.unsubscribe()
 
 
 def _require_repeater(contact: Contact) -> None:
@@ -180,7 +250,7 @@ def _require_repeater(contact: Contact) -> None:
 
 @router.post("/{public_key}/repeater/login", response_model=RepeaterLoginResponse)
 async def repeater_login(public_key: str, request: RepeaterLoginRequest) -> RepeaterLoginResponse:
-    """Log in to a repeater. Adds contact to radio, sends login, waits for key exchange."""
+    """Attempt repeater login and report whether auth was confirmed."""
     require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_repeater(contact)
@@ -190,9 +260,7 @@ async def repeater_login(public_key: str, request: RepeaterLoginRequest) -> Repe
         pause_polling=True,
         suspend_auto_fetch=True,
     ) as mc:
-        await prepare_repeater_connection(mc, contact, request.password)
-
-    return RepeaterLoginResponse(status="ok")
+        return await prepare_repeater_connection(mc, contact, request.password)
 
 
 @router.post("/{public_key}/repeater/status", response_model=RepeaterStatusResponse)

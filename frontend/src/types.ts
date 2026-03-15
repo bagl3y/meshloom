@@ -349,6 +349,8 @@ export interface CommandResponse {
 
 export interface RepeaterLoginResponse {
   status: string;
+  authenticated: boolean;
+  message: string | null;
 }
 
 export interface RepeaterStatusResponse {

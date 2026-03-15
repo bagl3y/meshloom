@@ -6,13 +6,14 @@ import pytest
 from fastapi import HTTPException
 from meshcore import EventType
 
-from app.models import CommandRequest, Contact, RepeaterLoginRequest
+from app.models import CommandRequest, Contact, RepeaterLoginRequest, RepeaterLoginResponse
 from app.radio import radio_manager
 from app.repository import ContactRepository
 from app.routers.contacts import request_trace
 from app.routers.repeaters import (
     _batch_cli_fetch,
     _fetch_repeater_response,
+    prepare_repeater_connection,
     repeater_acl,
     repeater_advert_intervals,
     repeater_login,
@@ -73,6 +74,7 @@ async def _insert_contact(public_key: str, name: str = "Node", contact_type: int
 def _mock_mc():
     mc = MagicMock()
     mc.commands = MagicMock()
+    mc.commands.send_login = AsyncMock(return_value=_radio_result(EventType.MSG_SENT))
     mc.commands.req_status_sync = AsyncMock()
     mc.commands.fetch_all_neighbours = AsyncMock()
     mc.commands.req_acl_sync = AsyncMock()
@@ -82,6 +84,7 @@ def _mock_mc():
     mc.commands.add_contact = AsyncMock(return_value=_radio_result(EventType.OK))
     mc.commands.send_trace = AsyncMock(return_value=_radio_result(EventType.OK))
     mc.wait_for_event = AsyncMock()
+    mc.subscribe = MagicMock(return_value=MagicMock(unsubscribe=MagicMock()))
     mc.stop_auto_message_fetching = AsyncMock()
     mc.start_auto_message_fetching = AsyncMock()
     return mc
@@ -537,9 +540,16 @@ class TestRepeaterLogin:
                 new_callable=AsyncMock,
             ) as mock_prepare,
         ):
+            mock_prepare.return_value = RepeaterLoginResponse(
+                status="ok",
+                authenticated=True,
+                message=None,
+            )
             response = await repeater_login(KEY_A, RepeaterLoginRequest(password="secret"))
 
         assert response.status == "ok"
+        assert response.authenticated is True
+        assert response.message is None
         mock_prepare.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -567,21 +577,89 @@ class TestRepeaterLogin:
         assert "not a repeater" in exc.value.detail.lower()
 
     @pytest.mark.asyncio
-    async def test_login_error_raises(self, test_db):
+    async def test_login_error_returns_warning_response(self, test_db):
         mc = _mock_mc()
         await _insert_contact(KEY_A, name="Repeater", contact_type=2)
 
         async def _prepare_fail(*args, **kwargs):
-            raise HTTPException(status_code=401, detail="Login failed")
+            return RepeaterLoginResponse(
+                status="error",
+                authenticated=False,
+                message="Login failed",
+            )
 
         with (
             patch("app.routers.repeaters.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.repeaters.prepare_repeater_connection", side_effect=_prepare_fail),
         ):
-            with pytest.raises(HTTPException) as exc:
-                await repeater_login(KEY_A, RepeaterLoginRequest(password="bad"))
-        assert exc.value.status_code == 401
+            response = await repeater_login(KEY_A, RepeaterLoginRequest(password="bad"))
+        assert response.status == "error"
+        assert response.authenticated is False
+        assert response.message == "Login failed"
+
+
+class TestPrepareRepeaterConnection:
+    @pytest.mark.asyncio
+    async def test_returns_success_when_login_confirmed(self):
+        mc = _mock_mc()
+        contact = _make_contact()
+        subscriptions: dict[EventType, tuple[object, object]] = {}
+
+        def _subscribe(event_type, callback, attribute_filters=None):
+            subscriptions[event_type] = (callback, attribute_filters)
+            return MagicMock(unsubscribe=MagicMock())
+
+        async def _send_login(*args, **kwargs):
+            callback, filters = subscriptions[EventType.LOGIN_SUCCESS]
+            assert filters == {"pubkey_prefix": KEY_A[:12]}
+            callback(_radio_result(EventType.LOGIN_SUCCESS, {"pubkey_prefix": KEY_A[:12]}))
+            return _radio_result(EventType.MSG_SENT)
+
+        mc.subscribe = MagicMock(side_effect=_subscribe)
+        mc.commands.send_login = AsyncMock(side_effect=_send_login)
+
+        response = await prepare_repeater_connection(mc, contact, "secret")
+
+        assert response.status == "ok"
+        assert response.authenticated is True
+        assert response.message is None
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_login_rejected(self):
+        mc = _mock_mc()
+        contact = _make_contact()
+        subscriptions: dict[EventType, tuple[object, object]] = {}
+
+        def _subscribe(event_type, callback, attribute_filters=None):
+            subscriptions[event_type] = (callback, attribute_filters)
+            return MagicMock(unsubscribe=MagicMock())
+
+        async def _send_login(*args, **kwargs):
+            callback, _filters = subscriptions[EventType.LOGIN_FAILED]
+            callback(_radio_result(EventType.LOGIN_FAILED, {"pubkey_prefix": KEY_A[:12]}))
+            return _radio_result(EventType.MSG_SENT)
+
+        mc.subscribe = MagicMock(side_effect=_subscribe)
+        mc.commands.send_login = AsyncMock(side_effect=_send_login)
+
+        response = await prepare_repeater_connection(mc, contact, "bad")
+
+        assert response.status == "error"
+        assert response.authenticated is False
+        assert "did not confirm this login" in (response.message or "")
+
+    @pytest.mark.asyncio
+    async def test_returns_timeout_when_no_login_response(self):
+        mc = _mock_mc()
+        contact = _make_contact()
+
+        with patch("app.routers.repeaters.REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS", 0):
+            response = await prepare_repeater_connection(mc, contact, "secret")
+
+        assert response.status == "timeout"
+        assert response.authenticated is False
+        assert "No login confirmation was heard from the repeater" in (response.message or "")
 
 
 class TestRepeaterStatus:

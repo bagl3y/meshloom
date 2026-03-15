@@ -410,6 +410,11 @@ class RepeaterLoginResponse(BaseModel):
     """Response from repeater login."""
 
     status: str = Field(description="Login result status")
+    authenticated: bool = Field(description="Whether repeater authentication was confirmed")
+    message: str | None = Field(
+        default=None,
+        description="Optional warning or error message when authentication was not confirmed",
+    )
 
 
 class RepeaterStatusResponse(BaseModel):
