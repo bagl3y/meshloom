@@ -25,6 +25,7 @@ from app.routers.messages import (
     send_direct_message,
 )
 from app.services import dm_ack_tracker
+from app.services.message_send import NO_RADIO_RESPONSE_AFTER_SEND_DETAIL
 
 
 @pytest.fixture(autouse=True)
@@ -1019,6 +1020,32 @@ class TestRadioExceptionMidSend:
                 )
 
         # No message should be stored — the exception prevented reaching MessageRepository.create
+        messages = await MessageRepository.get_all(
+            msg_type="PRIV", conversation_key=pub_key, limit=10
+        )
+        assert len(messages) == 0
+
+    @pytest.mark.asyncio
+    async def test_dm_send_no_radio_response_returns_504_without_storing_message(self, test_db):
+        """When mc.commands.send_msg() returns None, report unknown outcome and store nothing."""
+        mc = _make_mc()
+        pub_key = "ac" * 32
+        await _insert_contact(pub_key, "Alice")
+
+        mc.commands.send_msg = AsyncMock(return_value=None)
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await send_direct_message(
+                SendDirectMessageRequest(destination=pub_key, text="Did this send?")
+            )
+
+        assert exc_info.value.status_code == 504
+        assert exc_info.value.detail == NO_RADIO_RESPONSE_AFTER_SEND_DETAIL
+
         messages = await MessageRepository.get_all(
             msg_type="PRIV", conversation_key=pub_key, limit=10
         )

@@ -24,6 +24,7 @@ const CHANNEL_WARNING_THRESHOLD = 120; // Conservative for multi-hop
 const CHANNEL_DANGER_BUFFER = 8; // Red zone starts this many bytes before hard limit
 
 const textEncoder = new TextEncoder();
+const RADIO_NO_RESPONSE_SNIPPET = 'no response was heard back';
 /** Get UTF-8 byte length of a string (LoRa packets are byte-constrained, not character-constrained). */
 function byteLen(s: string): number {
   return textEncoder.encode(s).length;
@@ -118,8 +119,11 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
         setText('');
       } catch (err) {
         console.error('Failed to send message:', err);
-        toast.error('Failed to send message', {
-          description: err instanceof Error ? err.message : 'Check radio connection',
+        const description = err instanceof Error ? err.message : 'Check radio connection';
+        const isRadioNoResponse =
+          err instanceof Error && err.message.toLowerCase().includes(RADIO_NO_RESPONSE_SNIPPET);
+        toast.error(isRadioNoResponse ? 'Radio did not confirm send' : 'Failed to send message', {
+          description,
         });
         return;
       } finally {

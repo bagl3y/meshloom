@@ -20,6 +20,11 @@ from app.services.messages import (
 
 logger = logging.getLogger(__name__)
 
+NO_RADIO_RESPONSE_AFTER_SEND_DETAIL = (
+    "Send command was issued to the radio, but no response was heard back. "
+    "The message may or may not have sent successfully."
+)
+
 BroadcastFn = Callable[..., Any]
 TrackAckFn = Callable[[str, int, int], bool]
 NowFn = Callable[[], float]
@@ -279,7 +284,14 @@ async def send_direct_message_to_contact(
                 timestamp=sender_timestamp,
             )
 
-        if result is None or result.type == EventType.ERROR:
+        if result is None:
+            logger.warning(
+                "No response from radio after direct send to %s; send outcome is unknown",
+                contact.public_key[:12],
+            )
+            raise HTTPException(status_code=504, detail=NO_RADIO_RESPONSE_AFTER_SEND_DETAIL)
+
+        if result.type == EventType.ERROR:
             raise HTTPException(status_code=500, detail=f"Failed to send message: {result.payload}")
 
         message = await create_outgoing_direct_message(
