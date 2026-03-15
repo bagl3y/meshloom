@@ -728,3 +728,54 @@ class TestCommunityMqttIataValidation:
             _validate_mqtt_community_config({"iata": "PDX", "auth_mode": "password"})
         assert exc_info.value.status_code == 400
         assert "username and password" in exc_info.value.detail
+
+
+class TestFanoutConfigMutationInvariant:
+    """Persisted fanout rows should always be valid and canonical."""
+
+    @pytest.mark.asyncio
+    async def test_disabled_create_still_validates_config(self, test_db):
+        from app.routers.fanout import FanoutConfigCreate, create_fanout_config
+
+        with pytest.raises(HTTPException) as exc_info:
+            await create_fanout_config(
+                FanoutConfigCreate(
+                    type="mqtt_community",
+                    name="Invalid draft",
+                    config={},
+                    scope={},
+                    enabled=False,
+                )
+            )
+
+        assert exc_info.value.status_code == 400
+        assert "IATA" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_enable_only_patch_persists_normalized_config(self, test_db):
+        from app.repository.fanout import FanoutConfigRepository
+        from app.routers.fanout import FanoutConfigUpdate, update_fanout_config
+
+        cfg = await FanoutConfigRepository.create(
+            config_type="mqtt_community",
+            name="Community MQTT",
+            config={
+                "iata": "PDX",
+                "broker_host": " mqtt.example.com ",
+                "topic_template": "mesh2mqtt/{iata}/node/{Public_Key}",
+            },
+            scope={"messages": "none", "raw_packets": "all"},
+            enabled=False,
+        )
+
+        with patch("app.fanout.manager.fanout_manager.reload_config", new_callable=AsyncMock):
+            updated = await update_fanout_config(
+                cfg["id"],
+                FanoutConfigUpdate(enabled=True),
+            )
+
+        assert updated["enabled"] is True
+        assert updated["config"]["broker_host"] == "mqtt.example.com"
+        assert updated["config"]["topic_template"] == "mesh2mqtt/{IATA}/node/{PUBLIC_KEY}"
+        assert updated["config"]["transport"] == "websockets"
+        assert updated["config"]["auth_mode"] == "token"

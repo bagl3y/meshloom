@@ -78,6 +78,26 @@ class FanoutConfigUpdate(BaseModel):
     enabled: bool | None = Field(default=None, description="Enable/disable toggle")
 
 
+def _validate_and_normalize_config(config_type: str, config: dict) -> dict:
+    """Validate a config blob and return the canonical persisted form."""
+    normalized = dict(config)
+
+    if config_type == "mqtt_private":
+        _validate_mqtt_private_config(normalized)
+    elif config_type == "mqtt_community":
+        _validate_mqtt_community_config(normalized)
+    elif config_type == "bot":
+        _validate_bot_config(normalized)
+    elif config_type == "webhook":
+        _validate_webhook_config(normalized)
+    elif config_type == "apprise":
+        _validate_apprise_config(normalized)
+    elif config_type == "sqs":
+        _validate_sqs_config(normalized)
+
+    return normalized
+
+
 def _validate_mqtt_private_config(config: dict) -> None:
     """Validate mqtt_private config blob."""
     if not config.get("broker_host"):
@@ -323,28 +343,13 @@ async def create_fanout_config(body: FanoutConfigCreate) -> dict:
     if body.type == "bot" and server_settings.disable_bots:
         raise HTTPException(status_code=403, detail="Bot system disabled by server configuration")
 
-    # Only validate config when creating as enabled — disabled configs
-    # are drafts the user hasn't finished configuring yet.
-    if body.enabled:
-        if body.type == "mqtt_private":
-            _validate_mqtt_private_config(body.config)
-        elif body.type == "mqtt_community":
-            _validate_mqtt_community_config(body.config)
-        elif body.type == "bot":
-            _validate_bot_config(body.config)
-        elif body.type == "webhook":
-            _validate_webhook_config(body.config)
-        elif body.type == "apprise":
-            _validate_apprise_config(body.config)
-        elif body.type == "sqs":
-            _validate_sqs_config(body.config)
-
+    normalized_config = _validate_and_normalize_config(body.type, body.config)
     scope = _enforce_scope(body.type, body.scope)
 
     cfg = await FanoutConfigRepository.create(
         config_type=body.type,
         name=body.name,
-        config=body.config,
+        config=normalized_config,
         scope=scope,
         enabled=body.enabled,
     )
@@ -374,27 +379,11 @@ async def update_fanout_config(config_id: str, body: FanoutConfigUpdate) -> dict
         kwargs["name"] = body.name
     if body.enabled is not None:
         kwargs["enabled"] = body.enabled
-    if body.config is not None:
-        kwargs["config"] = body.config
     if body.scope is not None:
         kwargs["scope"] = _enforce_scope(existing["type"], body.scope)
 
-    # Validate config when the result will be enabled
-    will_be_enabled = body.enabled if body.enabled is not None else existing["enabled"]
-    if will_be_enabled:
-        config_to_validate = body.config if body.config is not None else existing["config"]
-        if existing["type"] == "mqtt_private":
-            _validate_mqtt_private_config(config_to_validate)
-        elif existing["type"] == "mqtt_community":
-            _validate_mqtt_community_config(config_to_validate)
-        elif existing["type"] == "bot":
-            _validate_bot_config(config_to_validate)
-        elif existing["type"] == "webhook":
-            _validate_webhook_config(config_to_validate)
-        elif existing["type"] == "apprise":
-            _validate_apprise_config(config_to_validate)
-        elif existing["type"] == "sqs":
-            _validate_sqs_config(config_to_validate)
+    config_to_validate = body.config if body.config is not None else existing["config"]
+    kwargs["config"] = _validate_and_normalize_config(existing["type"], config_to_validate)
 
     updated = await FanoutConfigRepository.update(config_id, **kwargs)
     if updated is None:
