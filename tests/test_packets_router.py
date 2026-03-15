@@ -72,7 +72,7 @@ class TestDecryptHistoricalPackets:
             },
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 202
         data = response.json()
         assert data["started"] is True
         assert data["total_packets"] == 5
@@ -91,7 +91,7 @@ class TestDecryptHistoricalPackets:
             },
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 202
         data = response.json()
         assert data["started"] is True
         assert data["total_packets"] == 3
@@ -107,10 +107,9 @@ class TestDecryptHistoricalPackets:
             },
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         data = response.json()
-        assert data["started"] is False
-        assert "invalid" in data["message"].lower()
+        assert "invalid" in data["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_channel_decrypt_wrong_key_length(self, test_db, client):
@@ -123,10 +122,9 @@ class TestDecryptHistoricalPackets:
             },
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         data = response.json()
-        assert data["started"] is False
-        assert "16 bytes" in data["message"]
+        assert "16 bytes" in data["detail"]
 
     @pytest.mark.asyncio
     async def test_channel_decrypt_no_key_or_name(self, test_db, client):
@@ -136,10 +134,9 @@ class TestDecryptHistoricalPackets:
             json={"key_type": "channel"},
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         data = response.json()
-        assert data["started"] is False
-        assert "must provide" in data["message"].lower()
+        assert "must provide" in data["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_channel_decrypt_no_undecrypted_packets(self, test_db, client):
@@ -172,7 +169,7 @@ class TestDecryptHistoricalPackets:
             },
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 202
         assert response.json()["started"] is True
 
     @pytest.mark.asyncio
@@ -186,10 +183,9 @@ class TestDecryptHistoricalPackets:
             },
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         data = response.json()
-        assert data["started"] is False
-        assert "private_key" in data["message"].lower()
+        assert "private_key" in data["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_contact_decrypt_missing_contact_key(self, test_db, client):
@@ -202,10 +198,9 @@ class TestDecryptHistoricalPackets:
             },
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         data = response.json()
-        assert data["started"] is False
-        assert "contact_public_key" in data["message"].lower()
+        assert "contact_public_key" in data["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_contact_decrypt_wrong_private_key_length(self, test_db, client):
@@ -219,10 +214,9 @@ class TestDecryptHistoricalPackets:
             },
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         data = response.json()
-        assert data["started"] is False
-        assert "64 bytes" in data["message"]
+        assert "64 bytes" in data["detail"]
 
     @pytest.mark.asyncio
     async def test_contact_decrypt_wrong_public_key_length(self, test_db, client):
@@ -236,10 +230,9 @@ class TestDecryptHistoricalPackets:
             },
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         data = response.json()
-        assert data["started"] is False
-        assert "32 bytes" in data["message"]
+        assert "32 bytes" in data["detail"]
 
     @pytest.mark.asyncio
     async def test_contact_decrypt_invalid_hex(self, test_db, client):
@@ -253,10 +246,9 @@ class TestDecryptHistoricalPackets:
             },
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         data = response.json()
-        assert data["started"] is False
-        assert "invalid" in data["message"].lower()
+        assert "invalid" in data["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_invalid_key_type(self, test_db, client):
@@ -266,10 +258,9 @@ class TestDecryptHistoricalPackets:
             json={"key_type": "invalid"},
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         data = response.json()
-        assert data["started"] is False
-        assert "key_type" in data["message"].lower()
+        assert "key_type" in data["detail"].lower()
 
 
 class TestRunHistoricalChannelDecryption:

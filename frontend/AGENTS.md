@@ -415,6 +415,10 @@ PYTHONPATH=. uv run pytest tests/ -v
 
 ## Errata & Known Non-Issues
 
+### Contacts rollup uses mention styling for unread DMs
+
+This is intentional. In the sidebar section headers, unread direct messages are treated as mention-equivalent, so the Contacts rollup uses the highlighted mention-style badge for any unread DM. Row-level mention detection remains separate; this note is only about the section summary styling.
+
 ### RawPacketList always scrolls to bottom
 
 `RawPacketList` unconditionally scrolls to the latest packet on every update. This is intentional — the packet feed is a live status display, not an interactive log meant for lingering or long-term analysis. Users watching it want to see the newest packet, not hold a scroll position.

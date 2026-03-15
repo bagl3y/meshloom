@@ -15,6 +15,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Checkbox } from './ui/checkbox';
 import { Button } from './ui/button';
+import { toast } from './ui/sonner';
 
 type Tab = 'existing' | 'new-contact' | 'new-room' | 'hashtag';
 
@@ -90,6 +91,9 @@ export function NewMessageModal({
       resetForm();
       onClose();
     } catch (err) {
+      toast.error('Failed to create conversation', {
+        description: err instanceof Error ? err.message : undefined,
+      });
       setError(err instanceof Error ? err.message : 'Failed to create');
     } finally {
       setLoading(false);
@@ -123,6 +127,9 @@ export function NewMessageModal({
       setName('');
       hashtagInputRef.current?.focus();
     } catch (err) {
+      toast.error('Failed to create conversation', {
+        description: err instanceof Error ? err.message : undefined,
+      });
       setError(err instanceof Error ? err.message : 'Failed to create');
     } finally {
       setLoading(false);

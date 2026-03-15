@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { NewMessageModal } from '../components/NewMessageModal';
 import type { Contact } from '../types';
+import { toast } from '../components/ui/sonner';
 
 // Mock sonner (toast)
 vi.mock('../components/ui/sonner', () => ({
@@ -33,6 +34,11 @@ const mockContact: Contact = {
   last_contacted: null,
   last_read_at: null,
   first_seen: null,
+};
+
+const mockToast = toast as unknown as {
+  success: ReturnType<typeof vi.fn>;
+  error: ReturnType<typeof vi.fn>;
 };
 
 describe('NewMessageModal form reset', () => {
@@ -136,6 +142,24 @@ describe('NewMessageModal form reset', () => {
         expect(onCreateChannel).toHaveBeenCalledWith('MyRoom', 'cc'.repeat(16), false);
       });
       expect(onClose).toHaveBeenCalled();
+    });
+
+    it('toasts when creation fails', async () => {
+      const user = userEvent.setup();
+      onCreateChannel.mockRejectedValueOnce(new Error('Bad key'));
+      renderModal();
+      await switchToTab(user, 'Room');
+
+      await user.type(screen.getByPlaceholderText('Room name'), 'MyRoom');
+      await user.type(screen.getByPlaceholderText('Pre-shared key (hex)'), 'cc'.repeat(16));
+      await user.click(screen.getByRole('button', { name: 'Create' }));
+
+      await waitFor(() => {
+        expect(mockToast.error).toHaveBeenCalledWith('Failed to create conversation', {
+          description: 'Bad key',
+        });
+      });
+      expect(screen.getByText('Bad key')).toBeTruthy();
     });
   });
 
