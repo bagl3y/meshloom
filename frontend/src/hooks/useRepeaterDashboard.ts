@@ -188,8 +188,13 @@ export interface UseRepeaterDashboardResult {
   syncClock: () => Promise<void>;
 }
 
+interface UseRepeaterDashboardOptions {
+  hasAdvertLocation?: boolean;
+}
+
 export function useRepeaterDashboard(
-  activeConversation: Conversation | null
+  activeConversation: Conversation | null,
+  options: UseRepeaterDashboardOptions = {}
 ): UseRepeaterDashboardResult {
   const conversationId =
     activeConversation && activeConversation.type === 'contact' ? activeConversation.id : null;
@@ -301,7 +306,7 @@ export function useRepeaterDashboard(
       if (!publicKey) return;
       const conversationId = publicKey;
 
-      if (pane === 'neighbors') {
+      if (pane === 'neighbors' && !options.hasAdvertLocation) {
         const nodeInfoState = paneStatesRef.current.nodeInfo;
         const nodeInfoData = paneDataRef.current.nodeInfo;
         const needsNodeInfoPrefetch =
@@ -385,7 +390,7 @@ export function useRepeaterDashboard(
         }
       }
     },
-    [getPublicKey]
+    [getPublicKey, options.hasAdvertLocation]
   );
 
   const loadAll = useCallback(async () => {

@@ -408,6 +408,22 @@ describe('useRepeaterDashboard', () => {
     expect(mockApi.repeaterNeighbors).toHaveBeenCalledTimes(2);
   });
 
+  it('refreshing neighbors skips node info prefetch when advert location already exists', async () => {
+    mockApi.repeaterNeighbors.mockResolvedValueOnce({ neighbors: [] });
+
+    const { result } = renderHook(() =>
+      useRepeaterDashboard(repeaterConversation, { hasAdvertLocation: true })
+    );
+
+    await act(async () => {
+      await result.current.refreshPane('neighbors');
+    });
+
+    expect(mockApi.repeaterNodeInfo).not.toHaveBeenCalled();
+    expect(mockApi.repeaterNeighbors).toHaveBeenCalledTimes(1);
+    expect(result.current.paneData.neighbors).toEqual({ neighbors: [] });
+  });
+
   it('restores dashboard state when navigating away and back to the same repeater', async () => {
     const statusData = { battery_volts: 4.2 };
     mockApi.repeaterLogin.mockResolvedValueOnce({

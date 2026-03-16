@@ -8,6 +8,7 @@ import { RepeaterLogin } from './RepeaterLogin';
 import { useRepeaterDashboard } from '../hooks/useRepeaterDashboard';
 import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
+import { isValidLocation } from '../utils/pathUtils';
 import { ContactStatusInfo } from './ContactStatusInfo';
 import type { Contact, Conversation, Favorite, PathDiscoveryResponse } from '../types';
 import { TelemetryPane } from './repeater/RepeaterTelemetryPane';
@@ -60,6 +61,8 @@ export function RepeaterDashboard({
   onDeleteContact,
 }: RepeaterDashboardProps) {
   const [pathDiscoveryOpen, setPathDiscoveryOpen] = useState(false);
+  const contact = contacts.find((c) => c.public_key === conversation.id) ?? null;
+  const hasAdvertLocation = isValidLocation(contact?.lat ?? null, contact?.lon ?? null);
   const {
     loggedIn,
     loginLoading,
@@ -77,9 +80,8 @@ export function RepeaterDashboard({
     sendFloodAdvert,
     rebootRepeater,
     syncClock,
-  } = useRepeaterDashboard(conversation);
+  } = useRepeaterDashboard(conversation, { hasAdvertLocation });
 
-  const contact = contacts.find((c) => c.public_key === conversation.id);
   const isFav = isFavorite(favorites, 'contact', conversation.id);
 
   // Loading all panes indicator
@@ -261,6 +263,7 @@ export function RepeaterDashboard({
                   state={paneStates.neighbors}
                   onRefresh={() => refreshPane('neighbors')}
                   disabled={anyLoading}
+                  repeaterContact={contact}
                   contacts={contacts}
                   nodeInfo={paneData.nodeInfo}
                   nodeInfoState={paneStates.nodeInfo}

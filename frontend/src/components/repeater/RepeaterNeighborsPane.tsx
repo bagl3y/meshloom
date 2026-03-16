@@ -19,6 +19,7 @@ export function NeighborsPane({
   state,
   onRefresh,
   disabled,
+  repeaterContact,
   contacts,
   nodeInfo,
   nodeInfoState,
@@ -28,11 +29,15 @@ export function NeighborsPane({
   state: PaneState;
   onRefresh: () => void;
   disabled?: boolean;
+  repeaterContact: Contact | null;
   contacts: Contact[];
   nodeInfo: RepeaterNodeInfoResponse | null;
   nodeInfoState: PaneState;
   repeaterName: string | null;
 }) {
+  const advertLat = repeaterContact?.lat ?? null;
+  const advertLon = repeaterContact?.lon ?? null;
+
   const radioLat = useMemo(() => {
     const parsed = nodeInfo?.lat != null ? parseFloat(nodeInfo.lat) : null;
     return Number.isFinite(parsed) ? parsed : null;
@@ -43,11 +48,26 @@ export function NeighborsPane({
     return Number.isFinite(parsed) ? parsed : null;
   }, [nodeInfo?.lon]);
 
-  const radioName = nodeInfo?.name || repeaterName;
-  const hasValidRepeaterGps = isValidLocation(radioLat, radioLon);
-  const showGpsUnavailableMessage =
-    !hasValidRepeaterGps &&
-    (nodeInfoState.error !== null || nodeInfoState.fetched_at != null || nodeInfo !== null);
+  const positionSource = useMemo(() => {
+    if (isValidLocation(radioLat, radioLon)) {
+      return { lat: radioLat, lon: radioLon, source: 'reported' as const };
+    }
+    if (isValidLocation(advertLat, advertLon)) {
+      return { lat: advertLat, lon: advertLon, source: 'advert' as const };
+    }
+    return { lat: null, lon: null, source: null };
+  }, [advertLat, advertLon, radioLat, radioLon]);
+
+  const radioName = nodeInfo?.name || repeaterContact?.name || repeaterName;
+  const hasValidRepeaterGps = positionSource.source !== null;
+  const headerNote =
+    positionSource.source === 'reported'
+      ? 'Using repeater-reported position'
+      : positionSource.source === 'advert'
+        ? 'Using advert position'
+        : nodeInfoState.loading
+          ? 'Waiting for repeater position'
+          : 'No repeater position available';
 
   // Resolve contact data for each neighbor in a single pass — used for
   // coords (mini-map), distances (table column), and sorted display order.
@@ -71,7 +91,7 @@ export function NeighborsPane({
 
       let dist: string | null = null;
       if (hasValidRepeaterGps && isValidLocation(nLat, nLon)) {
-        const distKm = calculateDistance(radioLat, radioLon, nLat, nLon);
+        const distKm = calculateDistance(positionSource.lat, positionSource.lon, nLat, nLon);
         if (distKm != null) {
           dist = formatDistance(distKm);
           anyDist = true;
@@ -91,11 +111,12 @@ export function NeighborsPane({
       sorted: enriched,
       hasDistances: anyDist,
     };
-  }, [contacts, data, hasValidRepeaterGps, radioLat, radioLon]);
+  }, [contacts, data, hasValidRepeaterGps, positionSource.lat, positionSource.lon]);
 
   return (
     <RepeaterPane
       title="Neighbors"
+      headerNote={headerNote}
       state={state}
       onRefresh={onRefresh}
       disabled={disabled}
@@ -153,18 +174,17 @@ export function NeighborsPane({
               <NeighborsMiniMap
                 key={neighborsWithCoords.map((n) => n.pubkey_prefix).join(',')}
                 neighbors={neighborsWithCoords}
-                radioLat={radioLat}
-                radioLon={radioLon}
+                radioLat={positionSource.lat}
+                radioLon={positionSource.lon}
                 radioName={radioName}
               />
             </Suspense>
-          ) : showGpsUnavailableMessage ? (
+          ) : (
             <div className="rounded border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-              GPS info failed to fetch; map and distance data not available. This may be due to
-              missing or zero-zero GPS data on the repeater, or due to transient fetch failure. Try
-              refreshing.
+              Map and distance data are unavailable until this repeater has a valid position from
+              either its advert or a Node Info fetch.
             </div>
-          ) : null}
+          )}
         </div>
       )}
     </RepeaterPane>

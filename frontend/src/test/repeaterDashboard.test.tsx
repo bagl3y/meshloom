@@ -265,13 +265,14 @@ describe('RepeaterDashboard', () => {
 
     expect(
       screen.getByText(
-        'GPS info failed to fetch; map and distance data not available. This may be due to missing or zero-zero GPS data on the repeater, or due to transient fetch failure. Try refreshing.'
+        'Map and distance data are unavailable until this repeater has a valid position from either its advert or a Node Info fetch.'
       )
     ).toBeInTheDocument();
+    expect(screen.getByText('No repeater position available')).toBeInTheDocument();
     expect(screen.queryByText('Dist')).not.toBeInTheDocument();
   });
 
-  it('shows neighbor distance when repeater radio settings include valid coords', () => {
+  it('shows neighbor distance when repeater node info includes valid coords', () => {
     mockHook.loggedIn = true;
     mockHook.paneData.neighbors = {
       neighbors: [
@@ -324,11 +325,67 @@ describe('RepeaterDashboard', () => {
     render(<RepeaterDashboard {...defaultProps} contacts={contactsWithNeighbor} />);
 
     expect(screen.getByText('Dist')).toBeInTheDocument();
+    expect(screen.getByText('Using repeater-reported position')).toBeInTheDocument();
     expect(
       screen.queryByText(
-        'GPS info failed to fetch; map and distance data not available. This may be due to missing or zero-zero GPS data on the repeater, or due to transient fetch failure. Try refreshing.'
+        'Map and distance data are unavailable until this repeater has a valid position from either its advert or a Node Info fetch.'
       )
     ).not.toBeInTheDocument();
+  });
+
+  it('uses advert coords for neighbor distance when node info is unavailable', () => {
+    mockHook.loggedIn = true;
+    mockHook.paneData.neighbors = {
+      neighbors: [
+        { pubkey_prefix: 'bbbbbbbbbbbb', name: 'Neighbor', snr: 7.2, last_heard_seconds: 9 },
+      ],
+    };
+    mockHook.paneData.nodeInfo = null;
+    mockHook.paneStates.neighbors = {
+      loading: false,
+      attempt: 1,
+      error: null,
+      fetched_at: Date.now(),
+    };
+    mockHook.paneStates.nodeInfo = {
+      loading: false,
+      attempt: 0,
+      error: null,
+      fetched_at: null,
+    };
+
+    const contactsWithAdvertAndNeighbor = [
+      {
+        ...contacts[0],
+        lat: -31.95,
+        lon: 115.86,
+      },
+      {
+        public_key: 'bbbbbbbbbbbb0000000000000000000000000000000000000000000000000000',
+        name: 'Neighbor',
+        type: 1,
+        flags: 0,
+        last_path: null,
+        last_path_len: 0,
+        out_path_hash_mode: 0,
+        route_override_path: null,
+        route_override_len: null,
+        route_override_hash_mode: null,
+        last_advert: null,
+        lat: -31.94,
+        lon: 115.87,
+        last_seen: null,
+        on_radio: false,
+        last_contacted: null,
+        last_read_at: null,
+        first_seen: null,
+      },
+    ];
+
+    render(<RepeaterDashboard {...defaultProps} contacts={contactsWithAdvertAndNeighbor} />);
+
+    expect(screen.getByText('Dist')).toBeInTheDocument();
+    expect(screen.getByText('Using advert position')).toBeInTheDocument();
   });
 
   it('shows fetching state with attempt counter', () => {

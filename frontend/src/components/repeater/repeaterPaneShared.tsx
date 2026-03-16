@@ -109,6 +109,7 @@ function formatFetchedTime(fetchedAt: number): string {
 
 export function RepeaterPane({
   title,
+  headerNote,
   state,
   onRefresh,
   disabled,
@@ -117,6 +118,7 @@ export function RepeaterPane({
   contentClassName,
 }: {
   title: string;
+  headerNote?: ReactNode;
   state: PaneState;
   onRefresh?: () => void;
   disabled?: boolean;
@@ -131,6 +133,7 @@ export function RepeaterPane({
       <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b border-border">
         <div className="min-w-0">
           <h3 className="text-sm font-medium">{title}</h3>
+          {headerNote && <p className="text-[11px] text-muted-foreground">{headerNote}</p>}
           {fetchedAt && (
             <p
               className="text-[11px] text-muted-foreground"
