@@ -198,6 +198,13 @@ async def send_channel_message_with_effective_scope(
             msg=text,
             timestamp=timestamp_bytes,
         )
+        if send_result is None:
+            logger.warning(
+                "No response from radio after %s for channel %s; send outcome is unknown",
+                action_label,
+                channel.name,
+            )
+            raise HTTPException(status_code=504, detail=NO_RADIO_RESPONSE_AFTER_SEND_DETAIL)
         if send_result.type == EventType.ERROR:
             radio_manager.invalidate_cached_channel_slot(channel_key)
         else:
@@ -388,6 +395,13 @@ async def send_channel_message_to_channel(
                 error_broadcast_fn=error_broadcast_fn,
             )
 
+            if result is None:
+                logger.warning(
+                    "No response from radio after channel send to %s; send outcome is unknown",
+                    channel.name,
+                )
+                raise HTTPException(status_code=504, detail=NO_RADIO_RESPONSE_AFTER_SEND_DETAIL)
+
             if result.type == EventType.ERROR:
                 raise HTTPException(
                     status_code=500, detail=f"Failed to send message: {result.payload}"
@@ -499,6 +513,12 @@ async def resend_channel_message_record(
                 temp_radio_slot=temp_radio_slot,
                 error_broadcast_fn=error_broadcast_fn,
             )
+            if result is None:
+                logger.warning(
+                    "No response from radio after channel resend to %s; send outcome is unknown",
+                    channel.name,
+                )
+                raise HTTPException(status_code=504, detail=NO_RADIO_RESPONSE_AFTER_SEND_DETAIL)
             if result.type == EventType.ERROR:
                 raise HTTPException(
                     status_code=500,

@@ -30,6 +30,16 @@ _private_key: bytes | None = None
 _public_key: bytes | None = None
 
 
+def clear_keys() -> None:
+    """Clear any stored private/public key material from memory."""
+    global _private_key, _public_key
+    had_key = _private_key is not None or _public_key is not None
+    _private_key = None
+    _public_key = None
+    if had_key:
+        logger.info("Cleared in-memory keystore")
+
+
 def set_private_key(key: bytes) -> None:
     """Store the private key in memory and derive the public key.
 

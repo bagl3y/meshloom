@@ -781,6 +781,41 @@ class TestResendChannelMessage:
         assert sent_timestamp == now + 1
 
     @pytest.mark.asyncio
+    async def test_resend_no_radio_response_returns_504_and_creates_no_new_row(self, test_db):
+        """When resend returns None, report unknown outcome and create no new message row."""
+        mc = _make_mc(name="MyNode")
+        chan_key = "c1" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#resend-none")
+
+        now = int(time.time()) - 5
+        msg_id = await MessageRepository.create(
+            msg_type="CHAN",
+            text="MyNode: hello",
+            conversation_key=chan_key.upper(),
+            sender_timestamp=now,
+            received_at=now,
+            outgoing=True,
+        )
+        assert msg_id is not None
+
+        mc.commands.send_chan_msg = AsyncMock(return_value=None)
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await resend_channel_message(msg_id, new_timestamp=True)
+
+        assert exc_info.value.status_code == 504
+        assert exc_info.value.detail == NO_RADIO_RESPONSE_AFTER_SEND_DETAIL
+
+        messages = await MessageRepository.get_all(
+            msg_type="CHAN", conversation_key=chan_key.upper(), limit=10
+        )
+        assert len(messages) == 1
+
+    @pytest.mark.asyncio
     async def test_resend_non_outgoing_returns_400(self, test_db):
         """Resend of incoming message fails."""
         mc = _make_mc(name="MyNode")
@@ -1048,6 +1083,34 @@ class TestRadioExceptionMidSend:
 
         messages = await MessageRepository.get_all(
             msg_type="PRIV", conversation_key=pub_key, limit=10
+        )
+        assert len(messages) == 0
+
+    @pytest.mark.asyncio
+    async def test_channel_send_no_radio_response_returns_504_without_storing_message(
+        self, test_db
+    ):
+        """When mc.commands.send_chan_msg() returns None, report unknown outcome and store nothing."""
+        mc = _make_mc(name="TestNode")
+        chan_key = "ad" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#unknown-outcome")
+
+        mc.commands.send_chan_msg = AsyncMock(return_value=None)
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await send_channel_message(
+                SendChannelMessageRequest(channel_key=chan_key, text="Did this send?")
+            )
+
+        assert exc_info.value.status_code == 504
+        assert exc_info.value.detail == NO_RADIO_RESPONSE_AFTER_SEND_DETAIL
+
+        messages = await MessageRepository.get_all(
+            msg_type="CHAN", conversation_key=chan_key.upper(), limit=10
         )
         assert len(messages) == 0
 

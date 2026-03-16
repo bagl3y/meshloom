@@ -456,6 +456,7 @@ class TestManualDisconnectCleanup:
     @pytest.mark.asyncio
     async def test_disconnect_disables_library_auto_reconnect(self):
         """Manual disconnect should suppress meshcore_py reconnect behavior."""
+        from app.keystore import get_private_key, set_private_key
         from app.radio import RadioManager
 
         rm = RadioManager()
@@ -479,10 +480,12 @@ class TestManualDisconnectCleanup:
         rm.path_hash_mode = 2
         rm.path_hash_mode_supported = True
         rm.note_channel_slot_loaded("AA" * 16, 0)
+        set_private_key(b"\x01" * 64)
 
         await rm.disconnect()
 
         mock_mc.disconnect.assert_awaited_once()
+        assert get_private_key() is None
         assert connection_manager.auto_reconnect is False
         assert connection_manager._reconnect_task is None
         assert reconnect_task is not None and reconnect_task.cancelled()
@@ -496,6 +499,7 @@ class TestManualDisconnectCleanup:
     @pytest.mark.asyncio
     async def test_pause_connection_marks_connection_undesired(self):
         """Pausing should flip connection_desired off and tear down transport."""
+        from app.keystore import get_private_key, set_private_key
         from app.radio import RadioManager
 
         rm = RadioManager()
@@ -504,11 +508,13 @@ class TestManualDisconnectCleanup:
         rm._meshcore = mock_mc
         rm._connection_desired = True
         rm._last_connected = True
+        set_private_key(b"\x02" * 64)
 
         await rm.pause_connection()
 
         assert rm.connection_desired is False
         assert rm._last_connected is False
+        assert get_private_key() is None
         mock_mc.disconnect.assert_awaited_once()
 
 

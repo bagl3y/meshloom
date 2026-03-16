@@ -9,6 +9,7 @@ from pathlib import Path
 from meshcore import MeshCore
 
 from app.config import settings
+from app.keystore import clear_keys
 
 logger = logging.getLogger(__name__)
 
@@ -478,6 +479,7 @@ class RadioManager:
 
     async def disconnect(self) -> None:
         """Disconnect from the radio."""
+        clear_keys()
         if self._meshcore is not None:
             logger.debug("Disconnecting from radio")
             mc = self._meshcore
