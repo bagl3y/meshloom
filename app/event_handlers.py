@@ -4,19 +4,21 @@ from typing import TYPE_CHECKING
 
 from meshcore import EventType
 
-from app.models import CONTACT_TYPE_REPEATER, Contact, ContactUpsert
+from app.models import Contact, ContactUpsert
 from app.packet_processor import process_raw_packet
 from app.repository import (
-    AmbiguousPublicKeyPrefixError,
     ContactRepository,
 )
 from app.services import dm_ack_tracker
 from app.services.contact_reconciliation import (
-    claim_prefix_messages_for_contact,
     promote_prefix_contacts_for_contact,
     record_contact_name_and_reconcile,
 )
-from app.services.messages import create_fallback_direct_message, increment_ack_and_broadcast
+from app.services.dm_ingest import (
+    ingest_fallback_direct_message,
+    resolve_fallback_direct_message_context,
+)
+from app.services.messages import increment_ack_and_broadcast
 from app.websocket import broadcast_event
 
 if TYPE_CHECKING:
@@ -51,8 +53,8 @@ async def on_contact_message(event: "Event") -> None:
     2. The packet processor couldn't match the sender to a known contact
 
     The packet processor handles: decryption, storage, broadcast, bot trigger.
-    This handler only stores if the packet processor didn't already handle it
-    (detected via INSERT OR IGNORE returning None for duplicates).
+    This handler adapts CONTACT_MSG_RECV payloads into the shared DM ingest
+    workflow, which reconciles duplicates against the packet pipeline when possible.
     """
     payload = event.payload
 
@@ -66,54 +68,27 @@ async def on_contact_message(event: "Event") -> None:
     sender_pubkey = payload.get("public_key") or payload.get("pubkey_prefix", "")
     received_at = int(time.time())
 
-    # Look up contact from database - use prefix lookup only if needed
-    # (get_by_key_or_prefix does exact match first, then prefix fallback)
-    try:
-        contact = await ContactRepository.get_by_key_or_prefix(sender_pubkey)
-    except AmbiguousPublicKeyPrefixError:
-        logger.warning(
-            "DM sender prefix '%s' is ambiguous; storing under prefix until full key is known",
-            sender_pubkey,
+    context = await resolve_fallback_direct_message_context(
+        sender_public_key=sender_pubkey,
+        received_at=received_at,
+        broadcast_fn=broadcast_event,
+        contact_repository=ContactRepository,
+        log=logger,
+    )
+    if context.skip_storage:
+        logger.debug(
+            "Skipping message from repeater %s (not stored in chat history)",
+            context.conversation_key[:12],
         )
-        contact = None
-    if contact:
-        sender_pubkey = contact.public_key.lower()
+        return
 
-        # Promote any prefix-stored messages to this full key
-        await claim_prefix_messages_for_contact(public_key=sender_pubkey, log=logger)
-
-        # Skip messages from repeaters - they only send CLI responses, not chat messages.
-        # CLI responses are handled by the command endpoint and txt_type filter above.
-        if contact.type == CONTACT_TYPE_REPEATER:
-            logger.debug(
-                "Skipping message from repeater %s (not stored in chat history)",
-                sender_pubkey[:12],
-            )
-            return
-    elif sender_pubkey:
-        placeholder_upsert = ContactUpsert(
-            public_key=sender_pubkey.lower(),
-            type=0,
-            last_seen=received_at,
-            last_contacted=received_at,
-            first_seen=received_at,
-            on_radio=False,
-            out_path_hash_mode=-1,
-        )
-        await ContactRepository.upsert(placeholder_upsert)
-        contact = await ContactRepository.get_by_key(sender_pubkey.lower())
-        if contact:
-            broadcast_event("contact", contact.model_dump())
-
-    # Try to create message - INSERT OR IGNORE handles duplicates atomically
-    # If the packet processor already stored this message, this returns None
+    # Try to create or reconcile the message via the shared DM ingest service.
     ts = payload.get("sender_timestamp")
     sender_timestamp = ts if ts is not None else received_at
-    sender_name = contact.name if contact else None
     path = payload.get("path")
     path_len = payload.get("path_len")
-    message = await create_fallback_direct_message(
-        conversation_key=sender_pubkey,
+    message = await ingest_fallback_direct_message(
+        conversation_key=context.conversation_key,
         text=payload.get("text", ""),
         sender_timestamp=sender_timestamp,
         received_at=received_at,
@@ -121,23 +96,24 @@ async def on_contact_message(event: "Event") -> None:
         path_len=path_len,
         txt_type=txt_type,
         signature=payload.get("signature"),
-        sender_name=sender_name,
-        sender_key=sender_pubkey,
+        sender_name=context.sender_name,
+        sender_key=context.sender_key,
         broadcast_fn=broadcast_event,
+        update_last_contacted_key=context.contact.public_key.lower() if context.contact else None,
     )
 
     if message is None:
         # Already handled by packet processor (or exact duplicate) - nothing more to do
-        logger.debug("DM from %s already processed by packet processor", sender_pubkey[:12])
+        logger.debug(
+            "DM from %s already processed by packet processor", context.conversation_key[:12]
+        )
         return
 
     # If we get here, the packet processor didn't handle this message
     # (likely because private key export is not available)
-    logger.debug("DM from %s handled by event handler (fallback path)", sender_pubkey[:12])
-
-    # Update contact last_contacted (contact was already fetched above)
-    if contact:
-        await ContactRepository.update_last_contacted(sender_pubkey, received_at)
+    logger.debug(
+        "DM from %s handled by event handler (fallback path)", context.conversation_key[:12]
+    )
 
 
 async def on_rx_log_data(event: "Event") -> None:

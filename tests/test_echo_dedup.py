@@ -7,7 +7,7 @@ paths (packet_processor + event_handler fallback) don't double-store messages.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -410,7 +410,8 @@ class TestDualPathDedup:
     1. Primary: RX_LOG_DATA → packet_processor (decrypts with private key)
     2. Fallback: CONTACT_MSG_RECV → on_contact_message (MeshCore library decoded)
 
-    The fallback uses INSERT OR IGNORE to avoid double-storage when both fire.
+    The fallback path should reconcile against the packet path instead of creating
+    a second row, and should still add new path observations when available.
     """
 
     @pytest.mark.asyncio
@@ -457,19 +458,7 @@ class TestDualPathDedup:
             "sender_timestamp": SENDER_TIMESTAMP,
         }
 
-        # Mock contact lookup to return a contact with the right key
-        mock_contact = MagicMock()
-        mock_contact.public_key = CONTACT_PUB
-        mock_contact.type = 1  # Client, not repeater
-        mock_contact.name = "TestContact"
-
-        with (
-            patch("app.event_handlers.ContactRepository") as mock_contact_repo,
-            patch("app.event_handlers.broadcast_event", mock_broadcast),
-        ):
-            mock_contact_repo.get_by_key_or_prefix = AsyncMock(return_value=mock_contact)
-            mock_contact_repo.update_last_contacted = AsyncMock()
-
+        with patch("app.event_handlers.broadcast_event", mock_broadcast):
             await on_contact_message(mock_event)
 
         # No additional message broadcast should have been sent
@@ -538,18 +527,7 @@ class TestDualPathDedup:
             "sender_timestamp": SENDER_TIMESTAMP,
         }
 
-        mock_contact = MagicMock()
-        mock_contact.public_key = upper_key  # Uppercase from DB
-        mock_contact.type = 1
-        mock_contact.name = "TestContact"
-
-        with (
-            patch("app.event_handlers.ContactRepository") as mock_contact_repo,
-            patch("app.event_handlers.broadcast_event", mock_broadcast),
-        ):
-            mock_contact_repo.get_by_key_or_prefix = AsyncMock(return_value=mock_contact)
-            mock_contact_repo.update_last_contacted = AsyncMock()
-
+        with patch("app.event_handlers.broadcast_event", mock_broadcast):
             await on_contact_message(mock_event)
 
         # Should NOT create a second message (dedup catches it thanks to .lower())
@@ -563,6 +541,146 @@ class TestDualPathDedup:
             msg_type="PRIV", conversation_key=upper_key.lower(), limit=10
         )
         assert len(messages) == 1
+
+    @pytest.mark.asyncio
+    async def test_event_handler_duplicate_adds_path_to_existing_dm(
+        self, test_db, captured_broadcasts
+    ):
+        """Fallback DM duplicates should reconcile path updates onto the stored message."""
+        from app.event_handlers import on_contact_message
+        from app.packet_processor import create_dm_message_from_decrypted
+
+        await ContactRepository.upsert(
+            {
+                "public_key": CONTACT_PUB.lower(),
+                "name": "TestContact",
+                "type": 1,
+                "last_seen": SENDER_TIMESTAMP,
+                "last_contacted": SENDER_TIMESTAMP,
+                "first_seen": SENDER_TIMESTAMP,
+                "on_radio": False,
+                "out_path_hash_mode": 0,
+            }
+        )
+
+        pkt_id, _ = await RawPacketRepository.create(b"primary_with_no_path", SENDER_TIMESTAMP)
+        decrypted = DecryptedDirectMessage(
+            timestamp=SENDER_TIMESTAMP,
+            flags=0,
+            message="Dual path with route update",
+            dest_hash="fa",
+            src_hash="a1",
+        )
+
+        broadcasts, mock_broadcast = captured_broadcasts
+
+        with patch("app.packet_processor.broadcast_event", mock_broadcast):
+            msg_id = await create_dm_message_from_decrypted(
+                packet_id=pkt_id,
+                decrypted=decrypted,
+                their_public_key=CONTACT_PUB,
+                our_public_key=OUR_PUB,
+                received_at=SENDER_TIMESTAMP,
+                outgoing=False,
+            )
+
+        assert msg_id is not None
+        broadcasts.clear()
+
+        mock_event = MagicMock()
+        mock_event.payload = {
+            "public_key": CONTACT_PUB,
+            "text": "Dual path with route update",
+            "txt_type": 0,
+            "sender_timestamp": SENDER_TIMESTAMP,
+            "path": "bbcc",
+            "path_len": 2,
+        }
+
+        with patch("app.event_handlers.broadcast_event", mock_broadcast):
+            await on_contact_message(mock_event)
+
+        message_broadcasts = [b for b in broadcasts if b["type"] == "message"]
+        assert message_broadcasts == []
+
+        ack_broadcasts = [b for b in broadcasts if b["type"] == "message_acked"]
+        assert len(ack_broadcasts) == 1
+        assert ack_broadcasts[0]["data"]["message_id"] == msg_id
+        assert ack_broadcasts[0]["data"]["ack_count"] == 0
+        assert any(p["path"] == "bbcc" for p in ack_broadcasts[0]["data"]["paths"])
+
+        msg = await MessageRepository.get_by_id(msg_id)
+        assert msg is not None
+        assert msg.paths is not None
+        assert any(p.path == "bbcc" for p in msg.paths)
+
+    @pytest.mark.asyncio
+    async def test_fallback_path_duplicate_reconciles_path_without_new_row(
+        self, test_db, captured_broadcasts
+    ):
+        """Repeated fallback DMs should keep one row and merge path observations."""
+        from app.event_handlers import on_contact_message
+
+        await ContactRepository.upsert(
+            {
+                "public_key": CONTACT_PUB.lower(),
+                "name": "FallbackOnly",
+                "type": 1,
+                "last_seen": SENDER_TIMESTAMP,
+                "last_contacted": SENDER_TIMESTAMP,
+                "first_seen": SENDER_TIMESTAMP,
+                "on_radio": False,
+                "out_path_hash_mode": 0,
+            }
+        )
+
+        broadcasts, mock_broadcast = captured_broadcasts
+
+        first_event = MagicMock()
+        first_event.payload = {
+            "public_key": CONTACT_PUB,
+            "text": "Fallback duplicate route test",
+            "txt_type": 0,
+            "sender_timestamp": SENDER_TIMESTAMP,
+        }
+
+        with patch("app.event_handlers.broadcast_event", mock_broadcast):
+            await on_contact_message(first_event)
+
+        messages = await MessageRepository.get_all(
+            msg_type="PRIV", conversation_key=CONTACT_PUB.lower(), limit=10
+        )
+        assert len(messages) == 1
+        msg_id = messages[0].id
+
+        broadcasts.clear()
+
+        second_event = MagicMock()
+        second_event.payload = {
+            "public_key": CONTACT_PUB,
+            "text": "Fallback duplicate route test",
+            "txt_type": 0,
+            "sender_timestamp": SENDER_TIMESTAMP,
+            "path": "ddee",
+            "path_len": 2,
+        }
+
+        with patch("app.event_handlers.broadcast_event", mock_broadcast):
+            await on_contact_message(second_event)
+
+        messages = await MessageRepository.get_all(
+            msg_type="PRIV", conversation_key=CONTACT_PUB.lower(), limit=10
+        )
+        assert len(messages) == 1
+
+        message_broadcasts = [b for b in broadcasts if b["type"] == "message"]
+        assert message_broadcasts == []
+
+        ack_broadcasts = [b for b in broadcasts if b["type"] == "message_acked"]
+        assert len(ack_broadcasts) == 1
+        assert ack_broadcasts[0]["data"]["message_id"] == msg_id
+        assert ack_broadcasts[0]["data"]["ack_count"] == 0
+        assert any(p["path"] == "ddee" for p in ack_broadcasts[0]["data"]["paths"])
 
 
 class TestDirectMessageDirectionDetection:
