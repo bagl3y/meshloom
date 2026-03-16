@@ -60,6 +60,35 @@ class TestHealthFanoutStatus:
         assert data["connection_info"] == "Serial: /dev/ttyUSB0"
 
     @pytest.mark.asyncio
+    async def test_health_includes_cached_radio_device_info(self, test_db):
+        """Health includes device metadata captured during post-connect setup."""
+        with (
+            patch(
+                "app.routers.health.RawPacketRepository.get_oldest_undecrypted", return_value=None
+            ),
+            patch("app.routers.health.radio_manager") as mock_rm,
+        ):
+            mock_rm.is_setup_in_progress = False
+            mock_rm.is_setup_complete = True
+            mock_rm.connection_desired = True
+            mock_rm.is_reconnecting = False
+            mock_rm.device_info_loaded = True
+            mock_rm.device_model = "T-Echo"
+            mock_rm.firmware_build = "2025-02-01"
+            mock_rm.firmware_version = "1.2.3"
+            mock_rm.max_contacts = 350
+            mock_rm.max_channels = 64
+            data = await build_health_data(True, "Serial: /dev/ttyUSB0")
+
+        assert data["radio_device_info"] == {
+            "model": "T-Echo",
+            "firmware_build": "2025-02-01",
+            "firmware_version": "1.2.3",
+            "max_contacts": 350,
+            "max_channels": 64,
+        }
+
+    @pytest.mark.asyncio
     async def test_health_status_degraded_when_disconnected(self, test_db):
         """Health status is 'degraded' when radio is disconnected."""
         with patch(

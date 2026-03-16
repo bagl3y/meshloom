@@ -205,6 +205,26 @@ describe('SettingsModal', () => {
     expect(screen.getByText(/Configured radio contact capacity/i)).toBeInTheDocument();
   });
 
+  it('shows cached radio firmware and capacity info under the connection status', () => {
+    renderModal({
+      health: {
+        ...baseHealth,
+        radio_device_info: {
+          model: 'T-Echo',
+          firmware_build: '2025-02-01',
+          firmware_version: '1.2.3',
+          max_contacts: 350,
+          max_channels: 64,
+        },
+      },
+    });
+    openRadioSection();
+
+    expect(
+      screen.getByText('T-Echo running 2025-02-01/1.2.3 (max: 350 contacts, 64 channels)')
+    ).toBeInTheDocument();
+  });
+
   it('shows reconnect action when radio connection is paused', () => {
     renderModal({
       health: { ...baseHealth, radio_state: 'paused' },

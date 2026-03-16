@@ -333,6 +333,35 @@ export function SettingsRadioSection({
             ? `Connection paused${health?.connection_info ? ` (${health.connection_info})` : ''}`
             : 'Not connected';
 
+  const deviceInfoLabel = useMemo(() => {
+    const info = health?.radio_device_info;
+    if (!info) {
+      return null;
+    }
+
+    const model = info.model?.trim() || null;
+    const firmwareParts = [info.firmware_build?.trim(), info.firmware_version?.trim()].filter(
+      (value): value is string => Boolean(value)
+    );
+    const capacityParts = [
+      typeof info.max_contacts === 'number' ? `${info.max_contacts} contacts` : null,
+      typeof info.max_channels === 'number' ? `${info.max_channels} channels` : null,
+    ].filter((value): value is string => value !== null);
+
+    if (!model && firmwareParts.length === 0 && capacityParts.length === 0) {
+      return null;
+    }
+
+    let label = model ?? 'Radio';
+    if (firmwareParts.length > 0) {
+      label += ` running ${firmwareParts.join('/')}`;
+    }
+    if (capacityParts.length > 0) {
+      label += ` (max: ${capacityParts.join(', ')})`;
+    }
+    return label;
+  }, [health?.radio_device_info]);
+
   const handleConnectionAction = async () => {
     setConnectionBusy(true);
     try {
@@ -377,6 +406,7 @@ export function SettingsRadioSection({
             {connectionStatusLabel}
           </span>
         </div>
+        {deviceInfoLabel && <p className="text-sm text-muted-foreground">{deviceInfoLabel}</p>}
         <Button
           type="button"
           variant="outline"

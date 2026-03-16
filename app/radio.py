@@ -131,6 +131,11 @@ class RadioManager:
         self._setup_lock: asyncio.Lock | None = None
         self._setup_in_progress: bool = False
         self._setup_complete: bool = False
+        self.device_info_loaded: bool = False
+        self.max_contacts: int | None = None
+        self.device_model: str | None = None
+        self.firmware_build: str | None = None
+        self.firmware_version: str | None = None
         self.max_channels: int = 40
         self.path_hash_mode: int = 0
         self.path_hash_mode_supported: bool = False
@@ -488,6 +493,11 @@ class RadioManager:
             await self._disable_meshcore_auto_reconnect(mc)
             self._meshcore = None
             self._setup_complete = False
+            self.device_info_loaded = False
+            self.max_contacts = None
+            self.device_model = None
+            self.firmware_build = None
+            self.firmware_version = None
             self.max_channels = 40
             self.path_hash_mode = 0
             self.path_hash_mode_supported = False

@@ -11,16 +11,32 @@ from app.services.radio_runtime import radio_runtime as radio_manager
 router = APIRouter(tags=["health"])
 
 
+class RadioDeviceInfoResponse(BaseModel):
+    model: str | None = None
+    firmware_build: str | None = None
+    firmware_version: str | None = None
+    max_contacts: int | None = None
+    max_channels: int | None = None
+
+
 class HealthResponse(BaseModel):
     status: str
     radio_connected: bool
     radio_initializing: bool = False
     radio_state: str = "disconnected"
     connection_info: str | None
+    radio_device_info: RadioDeviceInfoResponse | None = None
     database_size_mb: float
     oldest_undecrypted_timestamp: int | None
     fanout_statuses: dict[str, dict[str, str]] = {}
     bots_disabled: bool = False
+
+
+def _clean_optional_str(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    return cleaned or None
 
 
 async def build_health_data(radio_connected: bool, connection_info: str | None) -> dict:
@@ -48,22 +64,12 @@ async def build_health_data(radio_connected: bool, connection_info: str | None) 
         pass
 
     setup_in_progress = getattr(radio_manager, "is_setup_in_progress", False)
-    if not isinstance(setup_in_progress, bool):
-        setup_in_progress = False
-
     setup_complete = getattr(radio_manager, "is_setup_complete", radio_connected)
-    if not isinstance(setup_complete, bool):
-        setup_complete = radio_connected
     if not radio_connected:
         setup_complete = False
 
     connection_desired = getattr(radio_manager, "connection_desired", True)
-    if not isinstance(connection_desired, bool):
-        connection_desired = True
-
     is_reconnecting = getattr(radio_manager, "is_reconnecting", False)
-    if not isinstance(is_reconnecting, bool):
-        is_reconnecting = False
 
     radio_initializing = bool(radio_connected and (setup_in_progress or not setup_complete))
     if not connection_desired:
@@ -77,12 +83,26 @@ async def build_health_data(radio_connected: bool, connection_info: str | None) 
     else:
         radio_state = "disconnected"
 
+    radio_device_info = None
+    device_info_loaded = getattr(radio_manager, "device_info_loaded", False)
+    if radio_connected and device_info_loaded:
+        radio_device_info = {
+            "model": _clean_optional_str(getattr(radio_manager, "device_model", None)),
+            "firmware_build": _clean_optional_str(getattr(radio_manager, "firmware_build", None)),
+            "firmware_version": _clean_optional_str(
+                getattr(radio_manager, "firmware_version", None)
+            ),
+            "max_contacts": getattr(radio_manager, "max_contacts", None),
+            "max_channels": getattr(radio_manager, "max_channels", None),
+        }
+
     return {
         "status": "ok" if radio_connected and not radio_initializing else "degraded",
         "radio_connected": radio_connected,
         "radio_initializing": radio_initializing,
         "radio_state": radio_state,
         "connection_info": connection_info,
+        "radio_device_info": radio_device_info,
         "database_size_mb": db_size_mb,
         "oldest_undecrypted_timestamp": oldest_ts,
         "fanout_statuses": fanout_statuses,

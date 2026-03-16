@@ -476,6 +476,11 @@ class TestManualDisconnectCleanup:
         mock_mc.connection_manager = connection_manager
         rm._meshcore = mock_mc
         rm._setup_complete = True
+        rm.device_info_loaded = True
+        rm.max_contacts = 350
+        rm.device_model = "T-Echo"
+        rm.firmware_build = "2025-02-01"
+        rm.firmware_version = "1.2.3"
         rm.max_channels = 8
         rm.path_hash_mode = 2
         rm.path_hash_mode_supported = True
@@ -491,6 +496,11 @@ class TestManualDisconnectCleanup:
         assert reconnect_task is not None and reconnect_task.cancelled()
         assert rm.meshcore is None
         assert rm.is_setup_complete is False
+        assert rm.device_info_loaded is False
+        assert rm.max_contacts is None
+        assert rm.device_model is None
+        assert rm.firmware_build is None
+        assert rm.firmware_version is None
         assert rm.max_channels == 40
         assert rm.path_hash_mode == 0
         assert rm.path_hash_mode_supported is False

@@ -78,6 +78,11 @@ class TestHealthEndpoint:
         with patch("app.routers.health.radio_manager") as mock_rm:
             mock_rm.is_connected = True
             mock_rm.connection_info = "Serial: /dev/ttyUSB0"
+            mock_rm.is_setup_in_progress = False
+            mock_rm.is_setup_complete = True
+            mock_rm.connection_desired = True
+            mock_rm.is_reconnecting = False
+            mock_rm.device_info_loaded = False
 
             from app.main import app
 
@@ -97,6 +102,11 @@ class TestHealthEndpoint:
         with patch("app.routers.health.radio_manager") as mock_rm:
             mock_rm.is_connected = False
             mock_rm.connection_info = None
+            mock_rm.is_setup_in_progress = False
+            mock_rm.is_setup_complete = False
+            mock_rm.connection_desired = True
+            mock_rm.is_reconnecting = False
+            mock_rm.device_info_loaded = False
 
             from app.main import app
 
@@ -1118,6 +1128,11 @@ class TestHealthEndpointDatabaseSize:
         ):
             mock_rm.is_connected = True
             mock_rm.connection_info = "Serial: /dev/ttyUSB0"
+            mock_rm.is_setup_in_progress = False
+            mock_rm.is_setup_complete = True
+            mock_rm.connection_desired = True
+            mock_rm.is_reconnecting = False
+            mock_rm.device_info_loaded = False
             mock_getsize.return_value = 10 * 1024 * 1024  # 10 MB
 
             from app.main import app
@@ -1148,6 +1163,11 @@ class TestHealthEndpointOldestUndecrypted:
         ):
             mock_rm.is_connected = True
             mock_rm.connection_info = "Serial: /dev/ttyUSB0"
+            mock_rm.is_setup_in_progress = False
+            mock_rm.is_setup_complete = True
+            mock_rm.connection_desired = True
+            mock_rm.is_reconnecting = False
+            mock_rm.device_info_loaded = False
             mock_getsize.return_value = 5 * 1024 * 1024  # 5 MB
             mock_repo.get_oldest_undecrypted = AsyncMock(return_value=1700000000)
 
@@ -1175,6 +1195,11 @@ class TestHealthEndpointOldestUndecrypted:
         ):
             mock_rm.is_connected = True
             mock_rm.connection_info = "Serial: /dev/ttyUSB0"
+            mock_rm.is_setup_in_progress = False
+            mock_rm.is_setup_complete = True
+            mock_rm.connection_desired = True
+            mock_rm.is_reconnecting = False
+            mock_rm.device_info_loaded = False
             mock_getsize.return_value = 1 * 1024 * 1024  # 1 MB
             mock_repo.get_oldest_undecrypted = AsyncMock(return_value=None)
 
@@ -1202,6 +1227,11 @@ class TestHealthEndpointOldestUndecrypted:
         ):
             mock_rm.is_connected = False
             mock_rm.connection_info = None
+            mock_rm.is_setup_in_progress = False
+            mock_rm.is_setup_complete = False
+            mock_rm.connection_desired = True
+            mock_rm.is_reconnecting = False
+            mock_rm.device_info_loaded = False
             mock_getsize.side_effect = OSError("File not found")
             mock_repo.get_oldest_undecrypted = AsyncMock(side_effect=RuntimeError("No DB"))
 

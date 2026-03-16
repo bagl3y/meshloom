@@ -7,6 +7,21 @@ POST_CONNECT_SETUP_TIMEOUT_SECONDS = 300
 POST_CONNECT_SETUP_MAX_ATTEMPTS = 2
 
 
+def _clean_device_string(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
+def _decode_fixed_string(raw: bytes, start: int, length: int) -> str | None:
+    if len(raw) < start:
+        return None
+    return _clean_device_string(
+        raw[start : start + length].decode("utf-8", "ignore").replace("\0", "")
+    )
+
+
 async def run_post_connect_setup(radio_manager) -> None:
     """Run shared radio initialization after a transport connection succeeds."""
     from app.event_handlers import register_event_handlers
@@ -78,26 +93,66 @@ async def run_post_connect_setup(radio_manager) -> None:
                     return await _original_handle_rx(data)
 
                 reader.handle_rx = _capture_handle_rx
+                radio_manager.device_info_loaded = False
+                radio_manager.max_contacts = None
+                radio_manager.device_model = None
+                radio_manager.firmware_build = None
+                radio_manager.firmware_version = None
                 radio_manager.max_channels = 40
                 radio_manager.path_hash_mode = 0
                 radio_manager.path_hash_mode_supported = False
                 try:
                     device_query = await mc.commands.send_device_query()
-                    if device_query and "max_channels" in device_query.payload:
-                        radio_manager.max_channels = max(
-                            1, int(device_query.payload["max_channels"])
-                        )
-                    if device_query and "path_hash_mode" in device_query.payload:
-                        radio_manager.path_hash_mode = device_query.payload["path_hash_mode"]
+                    payload = (
+                        device_query.payload
+                        if device_query is not None and isinstance(device_query.payload, dict)
+                        else {}
+                    )
+
+                    payload_max_contacts = payload.get("max_contacts")
+                    if isinstance(payload_max_contacts, int):
+                        radio_manager.max_contacts = max(1, payload_max_contacts)
+
+                    payload_max_channels = payload.get("max_channels")
+                    if isinstance(payload_max_channels, int):
+                        radio_manager.max_channels = max(1, payload_max_channels)
+
+                    radio_manager.device_model = _clean_device_string(payload.get("model"))
+                    radio_manager.firmware_build = _clean_device_string(payload.get("fw_build"))
+                    radio_manager.firmware_version = _clean_device_string(payload.get("ver"))
+
+                    fw_ver = payload.get("fw ver")
+                    payload_reports_device_info = isinstance(fw_ver, int) and fw_ver >= 3
+                    if payload_reports_device_info:
+                        radio_manager.device_info_loaded = True
+
+                    if "path_hash_mode" in payload and isinstance(payload["path_hash_mode"], int):
+                        radio_manager.path_hash_mode = payload["path_hash_mode"]
                         radio_manager.path_hash_mode_supported = True
-                    elif _captured_frame:
-                        # Raw-frame fallback:
-                        # byte 1 = fw_ver, byte 3 = max_channels, byte 81 = path_hash_mode
+
+                    if _captured_frame:
+                        # Raw-frame fallback / completion:
+                        # byte 1 = fw_ver, byte 2 = max_contacts/2, byte 3 = max_channels,
+                        # bytes 8:20 = fw_build, 20:60 = model, 60:80 = ver, byte 81 = path_hash_mode
                         raw = _captured_frame[-1]
                         fw_ver = raw[1] if len(raw) > 1 else 0
-                        if fw_ver >= 3 and len(raw) >= 4:
-                            radio_manager.max_channels = max(1, raw[3])
-                        if fw_ver >= 10 and len(raw) >= 82:
+                        if fw_ver >= 3:
+                            radio_manager.device_info_loaded = True
+                            if radio_manager.max_contacts is None and len(raw) >= 3:
+                                radio_manager.max_contacts = max(1, raw[2] * 2)
+                            if len(raw) >= 4 and not isinstance(payload_max_channels, int):
+                                radio_manager.max_channels = max(1, raw[3])
+                            if radio_manager.firmware_build is None:
+                                radio_manager.firmware_build = _decode_fixed_string(raw, 8, 12)
+                            if radio_manager.device_model is None:
+                                radio_manager.device_model = _decode_fixed_string(raw, 20, 40)
+                            if radio_manager.firmware_version is None:
+                                radio_manager.firmware_version = _decode_fixed_string(raw, 60, 20)
+                        if (
+                            not radio_manager.path_hash_mode_supported
+                            and fw_ver >= 10
+                            and len(raw) >= 82
+                        ):
                             radio_manager.path_hash_mode = raw[81]
                             radio_manager.path_hash_mode_supported = True
                             logger.warning(
@@ -114,6 +169,17 @@ async def run_post_connect_setup(radio_manager) -> None:
                         logger.info("Path hash mode: %d (supported)", radio_manager.path_hash_mode)
                     else:
                         logger.debug("Firmware does not report path_hash_mode")
+                    if radio_manager.device_info_loaded:
+                        logger.info(
+                            "Radio device info: model=%s build=%s version=%s max_contacts=%s max_channels=%d",
+                            radio_manager.device_model or "unknown",
+                            radio_manager.firmware_build or "unknown",
+                            radio_manager.firmware_version or "unknown",
+                            radio_manager.max_contacts
+                            if radio_manager.max_contacts is not None
+                            else "unknown",
+                            radio_manager.max_channels,
+                        )
                     logger.info("Max channel slots: %d", radio_manager.max_channels)
                 except Exception as exc:
                     logger.debug("Failed to query device info capabilities: %s", exc)

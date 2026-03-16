@@ -57,6 +57,13 @@ export interface HealthStatus {
   radio_initializing: boolean;
   radio_state?: 'connected' | 'initializing' | 'connecting' | 'disconnected' | 'paused';
   connection_info: string | null;
+  radio_device_info?: {
+    model: string | null;
+    firmware_build: string | null;
+    firmware_version: string | null;
+    max_contacts: number | null;
+    max_channels: number | null;
+  } | null;
   database_size_mb: number;
   oldest_undecrypted_timestamp: number | null;
   fanout_statuses: Record<string, FanoutStatusEntry>;
