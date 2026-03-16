@@ -81,10 +81,30 @@ interface UseConversationMessagesResult {
   addMessageIfNew: (msg: Message) => boolean;
   updateMessageAck: (messageId: number, ackCount: number, paths?: MessagePath[]) => void;
   triggerReconcile: () => void;
+  receiveRealtimeMessage: (msg: Message) => { added: boolean; activeConversation: boolean };
+  receiveMessageAck: (messageId: number, ackCount: number, paths?: MessagePath[]) => void;
+  reconcileOnReconnect: () => void;
+  renameConversationMessages: (oldId: string, newId: string) => void;
+  removeConversationMessages: (conversationId: string) => void;
+  clearConversationMessages: () => void;
 }
 
 function isMessageConversation(conversation: Conversation | null): conversation is Conversation {
   return !!conversation && !['raw', 'map', 'visualizer', 'search'].includes(conversation.type);
+}
+
+function isActiveConversationMessage(
+  activeConversation: Conversation | null,
+  msg: Message
+): boolean {
+  if (!activeConversation) return false;
+  if (msg.type === 'CHAN' && activeConversation.type === 'channel') {
+    return msg.conversation_key === activeConversation.id;
+  }
+  if (msg.type === 'PRIV' && activeConversation.type === 'contact') {
+    return msg.conversation_key === activeConversation.id;
+  }
+  return false;
 }
 
 function appendUniqueMessages(current: Message[], incoming: Message[]): Message[] {
@@ -165,6 +185,7 @@ export function useConversationMessages(
   const newerAbortControllerRef = useRef<AbortController | null>(null);
   const fetchingConversationIdRef = useRef<string | null>(null);
   const latestReconcileRequestIdRef = useRef(0);
+  const pendingReconnectReconcileRef = useRef(false);
   const messagesRef = useRef<Message[]>([]);
   const loadingOlderRef = useRef(false);
   const hasOlderMessagesRef = useRef(false);
@@ -208,6 +229,7 @@ export function useConversationMessages(
       }
 
       const conversationId = activeConversation.id;
+      pendingReconnectReconcileRef.current = false;
 
       if (showLoading) {
         setMessagesLoading(true);
@@ -401,7 +423,15 @@ export function useConversationMessages(
           seenMessageContent.current.add(getMessageContentKey(msg));
         }
       }
-      setHasNewerMessages(dataWithPendingAck.length >= MESSAGE_PAGE_SIZE);
+      const stillHasNewerMessages = dataWithPendingAck.length >= MESSAGE_PAGE_SIZE;
+      setHasNewerMessages(stillHasNewerMessages);
+      if (!stillHasNewerMessages && pendingReconnectReconcileRef.current) {
+        pendingReconnectReconcileRef.current = false;
+        const requestId = latestReconcileRequestIdRef.current + 1;
+        latestReconcileRequestIdRef.current = requestId;
+        const reconcileController = new AbortController();
+        reconcileFromBackend(activeConversation, reconcileController.signal, requestId);
+      }
     } catch (err) {
       if (isAbortError(err)) {
         return;
@@ -416,7 +446,14 @@ export function useConversationMessages(
       }
       setLoadingNewer(false);
     }
-  }, [activeConversation, applyPendingAck, hasNewerMessages, loadingNewer, messages]);
+  }, [
+    activeConversation,
+    applyPendingAck,
+    hasNewerMessages,
+    loadingNewer,
+    messages,
+    reconcileFromBackend,
+  ]);
 
   const jumpToBottom = useCallback(() => {
     if (!activeConversation) return;
@@ -434,6 +471,23 @@ export function useConversationMessages(
 
   const triggerReconcile = useCallback(() => {
     if (!isMessageConversation(activeConversation)) return;
+    const controller = new AbortController();
+    const requestId = latestReconcileRequestIdRef.current + 1;
+    latestReconcileRequestIdRef.current = requestId;
+    reconcileFromBackend(activeConversation, controller.signal, requestId);
+  }, [activeConversation, reconcileFromBackend]);
+
+  const reconcileOnReconnect = useCallback(() => {
+    if (!isMessageConversation(activeConversation)) {
+      return;
+    }
+
+    if (hasNewerMessagesRef.current) {
+      pendingReconnectReconcileRef.current = true;
+      return;
+    }
+
+    pendingReconnectReconcileRef.current = false;
     const controller = new AbortController();
     const requestId = latestReconcileRequestIdRef.current + 1;
     latestReconcileRequestIdRef.current = requestId;
@@ -461,6 +515,7 @@ export function useConversationMessages(
     prevConversationIdRef.current = newId;
     prevReloadVersionRef.current = reloadVersion;
     latestReconcileRequestIdRef.current = 0;
+    pendingReconnectReconcileRef.current = false;
 
     // Preserve around-loaded context on the same conversation when search clears targetMessageId.
     if (!conversationChanged && !targetMessageId && !reloadRequested) {
@@ -616,6 +671,58 @@ export function useConversationMessages(
     [messagesRef, setMessages, setPendingAck]
   );
 
+  const receiveMessageAck = useCallback(
+    (messageId: number, ackCount: number, paths?: MessagePath[]) => {
+      updateMessageAck(messageId, ackCount, paths);
+      messageCache.updateAck(messageId, ackCount, paths);
+    },
+    [updateMessageAck]
+  );
+
+  const receiveRealtimeMessage = useCallback(
+    (msg: Message): { added: boolean; activeConversation: boolean } => {
+      const msgWithPendingAck = applyPendingAck(msg);
+      const activeConversationMessage = isActiveConversationMessage(
+        activeConversation,
+        msgWithPendingAck
+      );
+
+      if (activeConversationMessage) {
+        if (hasNewerMessagesRef.current) {
+          return { added: false, activeConversation: true };
+        }
+
+        return {
+          added: addMessageIfNew(msgWithPendingAck),
+          activeConversation: true,
+        };
+      }
+
+      const contentKey = getMessageContentKey(msgWithPendingAck);
+      return {
+        added: messageCache.addMessage(
+          msgWithPendingAck.conversation_key,
+          msgWithPendingAck,
+          contentKey
+        ),
+        activeConversation: false,
+      };
+    },
+    [activeConversation, addMessageIfNew, applyPendingAck, hasNewerMessagesRef]
+  );
+
+  const renameConversationMessages = useCallback((oldId: string, newId: string) => {
+    messageCache.rename(oldId, newId);
+  }, []);
+
+  const removeConversationMessages = useCallback((conversationId: string) => {
+    messageCache.remove(conversationId);
+  }, []);
+
+  const clearConversationMessages = useCallback(() => {
+    messageCache.clear();
+  }, []);
+
   return {
     messages,
     messagesLoading,
@@ -632,5 +739,11 @@ export function useConversationMessages(
     addMessageIfNew,
     updateMessageAck,
     triggerReconcile,
+    receiveRealtimeMessage,
+    receiveMessageAck,
+    reconcileOnReconnect,
+    renameConversationMessages,
+    removeConversationMessages,
+    clearConversationMessages,
   };
 }

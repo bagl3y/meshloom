@@ -35,11 +35,6 @@ vi.mock('../components/ui/sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-// Mock messageCache
-vi.mock('../messageCache', () => ({
-  remove: vi.fn(),
-}));
-
 function makeContact(suffix: string): Contact {
   const key = suffix.padStart(64, '0');
   return {
@@ -69,6 +64,7 @@ function makeContacts(count: number, startIndex = 0): Contact[] {
 
 describe('useContactsAndChannels', () => {
   const setActiveConversation = vi.fn();
+  const removeConversationMessages = vi.fn();
   const pendingDeleteFallbackRef = { current: false };
   const hasSetDefaultConversation = { current: false };
 
@@ -88,6 +84,7 @@ describe('useContactsAndChannels', () => {
         setActiveConversation,
         pendingDeleteFallbackRef,
         hasSetDefaultConversation,
+        removeConversationMessages,
       })
     );
   }

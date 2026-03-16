@@ -35,8 +35,12 @@ const mocks = vi.hoisted(() => ({
     fetchMessages: vi.fn(async () => {}),
     fetchOlderMessages: vi.fn(async () => {}),
     addMessageIfNew: vi.fn(),
-    updateMessageAck: vi.fn(),
-    triggerReconcile: vi.fn(),
+    receiveRealtimeMessage: vi.fn(() => ({ added: false, activeConversation: false })),
+    receiveMessageAck: vi.fn(),
+    reconcileOnReconnect: vi.fn(),
+    renameConversationMessages: vi.fn(),
+    removeConversationMessages: vi.fn(),
+    clearConversationMessages: vi.fn(),
     incrementUnread: vi.fn(),
     markAllRead: vi.fn(),
     trackNewMessage: vi.fn(),
@@ -71,8 +75,12 @@ vi.mock('../hooks', async (importOriginal) => {
       jumpToBottom: vi.fn(),
       reloadCurrentConversation: vi.fn(),
       addMessageIfNew: mocks.hookFns.addMessageIfNew,
-      updateMessageAck: mocks.hookFns.updateMessageAck,
-      triggerReconcile: mocks.hookFns.triggerReconcile,
+      receiveRealtimeMessage: mocks.hookFns.receiveRealtimeMessage,
+      receiveMessageAck: mocks.hookFns.receiveMessageAck,
+      reconcileOnReconnect: mocks.hookFns.reconcileOnReconnect,
+      renameConversationMessages: mocks.hookFns.renameConversationMessages,
+      removeConversationMessages: mocks.hookFns.removeConversationMessages,
+      clearConversationMessages: mocks.hookFns.clearConversationMessages,
     }),
     useUnreadCounts: () => ({
       unreadCounts: {},
@@ -85,15 +93,8 @@ vi.mock('../hooks', async (importOriginal) => {
       trackNewMessage: mocks.hookFns.trackNewMessage,
       refreshUnreads: mocks.hookFns.refreshUnreads,
     }),
-    getMessageContentKey: () => 'content-key',
   };
 });
-
-vi.mock('../messageCache', () => ({
-  addMessage: vi.fn(),
-  updateAck: vi.fn(),
-  remove: vi.fn(),
-}));
 
 vi.mock('../components/StatusBar', () => ({
   StatusBar: ({
@@ -295,7 +296,7 @@ describe('App favorite toggle flow', () => {
     await waitFor(() => {
       expect(mocks.api.getChannels).toHaveBeenCalledTimes(2);
     });
-    expect(mocks.hookFns.triggerReconcile).toHaveBeenCalledTimes(1);
+    expect(mocks.hookFns.reconcileOnReconnect).toHaveBeenCalledTimes(1);
     expect(mocks.hookFns.refreshUnreads).toHaveBeenCalledTimes(1);
   });
 

@@ -2,7 +2,6 @@ import { useState, useCallback, type MutableRefObject } from 'react';
 import { api } from '../api';
 import { takePrefetchOrFetch } from '../prefetch';
 import { toast } from '../components/ui/sonner';
-import * as messageCache from '../messageCache';
 import { getContactDisplayName } from '../utils/pubkey';
 import { findPublicChannel, PUBLIC_CHANNEL_KEY, PUBLIC_CHANNEL_NAME } from '../utils/publicChannel';
 import type { Channel, Contact, Conversation } from '../types';
@@ -11,12 +10,14 @@ interface UseContactsAndChannelsArgs {
   setActiveConversation: (conv: Conversation | null) => void;
   pendingDeleteFallbackRef: MutableRefObject<boolean>;
   hasSetDefaultConversation: MutableRefObject<boolean>;
+  removeConversationMessages: (conversationId: string) => void;
 }
 
 export function useContactsAndChannels({
   setActiveConversation,
   pendingDeleteFallbackRef,
   hasSetDefaultConversation,
+  removeConversationMessages,
 }: UseContactsAndChannelsArgs) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactsLoaded, setContactsLoaded] = useState(false);
@@ -117,7 +118,7 @@ export function useContactsAndChannels({
       try {
         pendingDeleteFallbackRef.current = true;
         await api.deleteChannel(key);
-        messageCache.remove(key);
+        removeConversationMessages(key);
         const refreshedChannels = await api.getChannels();
         setChannels(refreshedChannels);
         const publicChannel = findPublicChannel(refreshedChannels);
@@ -135,7 +136,12 @@ export function useContactsAndChannels({
         });
       }
     },
-    [setActiveConversation, pendingDeleteFallbackRef, hasSetDefaultConversation]
+    [
+      hasSetDefaultConversation,
+      pendingDeleteFallbackRef,
+      removeConversationMessages,
+      setActiveConversation,
+    ]
   );
 
   const handleDeleteContact = useCallback(
@@ -144,7 +150,7 @@ export function useContactsAndChannels({
       try {
         pendingDeleteFallbackRef.current = true;
         await api.deleteContact(publicKey);
-        messageCache.remove(publicKey);
+        removeConversationMessages(publicKey);
         setContacts((prev) => prev.filter((c) => c.public_key !== publicKey));
         const refreshedChannels = await api.getChannels();
         setChannels(refreshedChannels);
@@ -163,7 +169,12 @@ export function useContactsAndChannels({
         });
       }
     },
-    [setActiveConversation, pendingDeleteFallbackRef, hasSetDefaultConversation]
+    [
+      hasSetDefaultConversation,
+      pendingDeleteFallbackRef,
+      removeConversationMessages,
+      setActiveConversation,
+    ]
   );
 
   return {

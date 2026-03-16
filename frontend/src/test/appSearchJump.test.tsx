@@ -44,8 +44,12 @@ vi.mock('../hooks', async (importOriginal) => {
         jumpToBottom: vi.fn(),
         reloadCurrentConversation: vi.fn(),
         addMessageIfNew: vi.fn(),
-        updateMessageAck: vi.fn(),
-        triggerReconcile: vi.fn(),
+        receiveRealtimeMessage: vi.fn(() => ({ added: false, activeConversation: false })),
+        receiveMessageAck: vi.fn(),
+        reconcileOnReconnect: vi.fn(),
+        renameConversationMessages: vi.fn(),
+        removeConversationMessages: vi.fn(),
+        clearConversationMessages: vi.fn(),
       };
     },
     useUnreadCounts: () => ({
@@ -59,15 +63,8 @@ vi.mock('../hooks', async (importOriginal) => {
       trackNewMessage: vi.fn(),
       refreshUnreads: vi.fn(),
     }),
-    getMessageContentKey: () => 'content-key',
   };
 });
-
-vi.mock('../messageCache', () => ({
-  addMessage: vi.fn(),
-  updateAck: vi.fn(),
-  remove: vi.fn(),
-}));
 
 vi.mock('../components/StatusBar', () => ({
   StatusBar: () => <div data-testid="status-bar" />,

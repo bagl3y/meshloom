@@ -627,6 +627,70 @@ describe('useConversationMessages forward pagination', () => {
     expect(dupes).toHaveLength(1);
   });
 
+  it('defers reconnect reconcile until forward pagination reaches the live tail', async () => {
+    const conv: Conversation = { type: 'channel', id: 'ch1', name: 'Channel' };
+
+    mockGetMessagesAround.mockResolvedValueOnce({
+      messages: [
+        createMessage({
+          id: 1,
+          conversation_key: 'ch1',
+          text: 'older-context',
+          sender_timestamp: 1700000000,
+          received_at: 1700000000,
+        }),
+      ],
+      has_older: false,
+      has_newer: true,
+    });
+
+    const { result } = renderHook(
+      ({ conv, target }: { conv: Conversation; target: number | null }) =>
+        useConversationMessages(conv, target),
+      { initialProps: { conv, target: 1 } }
+    );
+
+    await waitFor(() => expect(result.current.messagesLoading).toBe(false));
+    expect(result.current.hasNewerMessages).toBe(true);
+
+    act(() => {
+      result.current.reconcileOnReconnect();
+    });
+
+    expect(mockGetMessages).not.toHaveBeenCalled();
+
+    mockGetMessages
+      .mockResolvedValueOnce([
+        createMessage({
+          id: 2,
+          conversation_key: 'ch1',
+          text: 'newer-page',
+          sender_timestamp: 1700000001,
+          received_at: 1700000001,
+        }),
+      ])
+      .mockResolvedValueOnce([
+        createMessage({
+          id: 2,
+          conversation_key: 'ch1',
+          text: 'newer-page',
+          sender_timestamp: 1700000001,
+          received_at: 1700000001,
+          acked: 3,
+        }),
+      ]);
+
+    await act(async () => {
+      await result.current.fetchNewerMessages();
+    });
+
+    await waitFor(() => expect(mockGetMessages).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(result.current.messages.find((message) => message.id === 2)?.acked).toBe(3)
+    );
+    expect(result.current.hasNewerMessages).toBe(false);
+  });
+
   it('jumpToBottom clears hasNewerMessages and refetches latest', async () => {
     const conv: Conversation = { type: 'channel', id: 'ch1', name: 'Channel' };
 
@@ -675,6 +739,55 @@ describe('useConversationMessages forward pagination', () => {
     expect(result.current.hasNewerMessages).toBe(false);
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].text).toBe('latest-msg');
+  });
+
+  it('jumpToBottom clears deferred reconnect reconcile without an extra reconcile fetch', async () => {
+    const conv: Conversation = { type: 'channel', id: 'ch1', name: 'Channel' };
+
+    mockGetMessagesAround.mockResolvedValueOnce({
+      messages: [
+        createMessage({
+          id: 5,
+          conversation_key: 'ch1',
+          text: 'around-msg',
+          sender_timestamp: 1700000005,
+          received_at: 1700000005,
+        }),
+      ],
+      has_older: true,
+      has_newer: true,
+    });
+
+    const { result } = renderHook(
+      ({ conv, target }: { conv: Conversation; target: number | null }) =>
+        useConversationMessages(conv, target),
+      { initialProps: { conv, target: 5 } }
+    );
+
+    await waitFor(() => expect(result.current.messagesLoading).toBe(false));
+
+    act(() => {
+      result.current.reconcileOnReconnect();
+    });
+
+    mockGetMessages.mockResolvedValueOnce([
+      createMessage({
+        id: 10,
+        conversation_key: 'ch1',
+        text: 'latest-msg',
+        sender_timestamp: 1700000010,
+        received_at: 1700000010,
+      }),
+    ]);
+
+    act(() => {
+      result.current.jumpToBottom();
+    });
+
+    await waitFor(() => expect(result.current.messagesLoading).toBe(false));
+    await waitFor(() => expect(mockGetMessages).toHaveBeenCalledTimes(1));
+    expect(result.current.messages[0].text).toBe('latest-msg');
+    expect(result.current.hasNewerMessages).toBe(false);
   });
 
   it('aborts stale newer-page requests on conversation switch without toasting', async () => {

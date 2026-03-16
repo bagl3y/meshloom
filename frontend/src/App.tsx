@@ -1,6 +1,5 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { api } from './api';
-import * as messageCache from './messageCache';
 import { takePrefetchOrFetch } from './prefetch';
 import { useWebSocket } from './useWebSocket';
 import {
@@ -109,6 +108,7 @@ export function App() {
   // useConversationRouter, but useConversationRouter needs channels/contacts from
   // useContactsAndChannels. We break the cycle with a ref-based indirection.
   const setActiveConversationRef = useRef<(conv: Conversation | null) => void>(() => {});
+  const removeConversationMessagesRef = useRef<(conversationId: string) => void>(() => {});
 
   // --- Extracted hooks ---
 
@@ -180,6 +180,8 @@ export function App() {
     setActiveConversation: (conv) => setActiveConversationRef.current(conv),
     pendingDeleteFallbackRef,
     hasSetDefaultConversation,
+    removeConversationMessages: (conversationId) =>
+      removeConversationMessagesRef.current(conversationId),
   });
 
   // useConversationRouter is called second — it receives channels/contacts as inputs
@@ -228,15 +230,19 @@ export function App() {
     hasOlderMessages,
     hasNewerMessages,
     loadingNewer,
-    hasNewerMessagesRef,
     fetchOlderMessages,
     fetchNewerMessages,
     jumpToBottom,
     reloadCurrentConversation,
     addMessageIfNew,
-    updateMessageAck,
-    triggerReconcile,
+    receiveRealtimeMessage,
+    receiveMessageAck,
+    reconcileOnReconnect,
+    renameConversationMessages,
+    removeConversationMessages,
+    clearConversationMessages,
   } = useConversationMessages(activeConversation, targetMessageId);
+  removeConversationMessagesRef.current = removeConversationMessages;
 
   const {
     unreadCounts,
@@ -308,7 +314,7 @@ export function App() {
     setHealth,
     fetchConfig,
     setRawPackets,
-    triggerReconcile,
+    reconcileOnReconnect,
     refreshUnreads,
     setChannels,
     fetchAllContacts,
@@ -316,23 +322,24 @@ export function App() {
     blockedKeysRef,
     blockedNamesRef,
     activeConversationRef,
-    hasNewerMessagesRef,
-    addMessageIfNew,
+    receiveRealtimeMessage,
     trackNewMessage,
     incrementUnread,
     renameConversationState,
     checkMention,
     pendingDeleteFallbackRef,
     setActiveConversation,
-    updateMessageAck,
+    renameConversationMessages,
+    removeConversationMessages,
+    receiveMessageAck,
     notifyIncomingMessage,
   });
   const handleVisibilityPolicyChanged = useCallback(() => {
-    messageCache.clear();
+    clearConversationMessages();
     reloadCurrentConversation();
     void refreshUnreads();
     setVisibilityVersion((current) => current + 1);
-  }, [refreshUnreads, reloadCurrentConversation]);
+  }, [clearConversationMessages, refreshUnreads, reloadCurrentConversation]);
 
   const handleBlockKey = useCallback(
     async (key: string) => {

@@ -12,12 +12,6 @@ const mocks = vi.hoisted(() => ({
     success: vi.fn(),
     error: vi.fn(),
   },
-  messageCache: {
-    addMessage: vi.fn(),
-    remove: vi.fn(),
-    rename: vi.fn(),
-    updateAck: vi.fn(),
-  },
 }));
 
 vi.mock('../api', () => ({
@@ -27,8 +21,6 @@ vi.mock('../api', () => ({
 vi.mock('../components/ui/sonner', () => ({
   toast: mocks.toast,
 }));
-
-vi.mock('../messageCache', () => mocks.messageCache);
 
 const publicChannel: Channel = {
   key: '8B3387E9C5CDEA6AC9E5EDBAA115CD72',
@@ -66,7 +58,7 @@ function createRealtimeArgs(overrides: Partial<Parameters<typeof useRealtimeAppS
       setHealth,
       fetchConfig: vi.fn(),
       setRawPackets,
-      triggerReconcile: vi.fn(),
+      reconcileOnReconnect: vi.fn(),
       refreshUnreads: vi.fn(async () => {}),
       setChannels,
       fetchAllContacts: vi.fn(async () => [] as Contact[]),
@@ -74,15 +66,16 @@ function createRealtimeArgs(overrides: Partial<Parameters<typeof useRealtimeAppS
       blockedKeysRef: { current: [] as string[] },
       blockedNamesRef: { current: [] as string[] },
       activeConversationRef: { current: null as Conversation | null },
-      hasNewerMessagesRef: { current: false },
-      addMessageIfNew: vi.fn(),
+      receiveRealtimeMessage: vi.fn(() => ({ added: false, activeConversation: false })),
       trackNewMessage: vi.fn(),
       incrementUnread: vi.fn(),
       renameConversationState: vi.fn(),
       checkMention: vi.fn(() => false),
       pendingDeleteFallbackRef: { current: false },
       setActiveConversation: vi.fn(),
-      updateMessageAck: vi.fn(),
+      renameConversationMessages: vi.fn(),
+      removeConversationMessages: vi.fn(),
+      receiveMessageAck: vi.fn(),
       notifyIncomingMessage: vi.fn(),
       ...overrides,
     },
@@ -133,7 +126,7 @@ describe('useRealtimeAppState', () => {
     });
 
     await waitFor(() => {
-      expect(args.triggerReconcile).toHaveBeenCalledTimes(1);
+      expect(args.reconcileOnReconnect).toHaveBeenCalledTimes(1);
       expect(args.refreshUnreads).toHaveBeenCalledTimes(1);
       expect(mocks.api.getChannels).toHaveBeenCalledTimes(1);
       expect(args.fetchAllContacts).toHaveBeenCalledTimes(1);
@@ -166,14 +159,6 @@ describe('useRealtimeAppState', () => {
 
     const { args, fns } = createRealtimeArgs({
       fetchAllContacts: vi.fn(async () => contacts),
-      activeConversationRef: {
-        current: {
-          type: 'channel',
-          id: publicChannel.key,
-          name: publicChannel.name,
-        } satisfies Conversation,
-      },
-      hasNewerMessagesRef: { current: true },
     });
 
     const { result } = renderHook(() => useRealtimeAppState(args));
@@ -183,7 +168,7 @@ describe('useRealtimeAppState', () => {
     });
 
     await waitFor(() => {
-      expect(args.triggerReconcile).not.toHaveBeenCalled();
+      expect(args.reconcileOnReconnect).toHaveBeenCalledTimes(1);
       expect(args.refreshUnreads).toHaveBeenCalledTimes(1);
       expect(mocks.api.getChannels).toHaveBeenCalledTimes(1);
       expect(args.fetchAllContacts).toHaveBeenCalledTimes(1);
@@ -194,9 +179,9 @@ describe('useRealtimeAppState', () => {
   });
 
   it('tracks unread state for a new non-active incoming message', () => {
-    mocks.messageCache.addMessage.mockReturnValue(true);
     const { args } = createRealtimeArgs({
       checkMention: vi.fn(() => true),
+      receiveRealtimeMessage: vi.fn(() => ({ added: true, activeConversation: false })),
     });
 
     const { result } = renderHook(() => useRealtimeAppState(args));
@@ -205,13 +190,8 @@ describe('useRealtimeAppState', () => {
       result.current.onMessage?.(incomingDm);
     });
 
-    expect(args.addMessageIfNew).not.toHaveBeenCalled();
+    expect(args.receiveRealtimeMessage).toHaveBeenCalledWith(incomingDm);
     expect(args.trackNewMessage).toHaveBeenCalledWith(incomingDm);
-    expect(mocks.messageCache.addMessage).toHaveBeenCalledWith(
-      incomingDm.conversation_key,
-      incomingDm,
-      expect.any(String)
-    );
     expect(args.incrementUnread).toHaveBeenCalledWith(
       `contact-${incomingDm.conversation_key}`,
       true
@@ -240,7 +220,7 @@ describe('useRealtimeAppState', () => {
     });
 
     expect(fns.setContacts).toHaveBeenCalledWith(expect.any(Function));
-    expect(mocks.messageCache.remove).toHaveBeenCalledWith(incomingDm.conversation_key);
+    expect(args.removeConversationMessages).toHaveBeenCalledWith(incomingDm.conversation_key);
     expect(args.setActiveConversation).toHaveBeenCalledWith(null);
     expect(pendingDeleteFallbackRef.current).toBe(true);
   });
@@ -282,7 +262,7 @@ describe('useRealtimeAppState', () => {
     });
 
     expect(fns.setContacts).toHaveBeenCalledWith(expect.any(Function));
-    expect(mocks.messageCache.rename).toHaveBeenCalledWith(
+    expect(args.renameConversationMessages).toHaveBeenCalledWith(
       previousPublicKey,
       resolvedContact.public_key
     );
