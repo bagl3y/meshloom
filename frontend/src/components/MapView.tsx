@@ -104,7 +104,7 @@ function MapBoundsHandler({
 }
 
 export function MapView({ contacts, focusedKey }: MapViewProps) {
-  const sevenDaysAgo = Date.now() / 1000 - 7 * 24 * 60 * 60;
+  const [sevenDaysAgo] = useState(() => Date.now() / 1000 - 7 * 24 * 60 * 60);
 
   // Filter to contacts with GPS coordinates, heard within the last 7 days.
   // Always include the focused contact so "view on map" links work for older nodes.

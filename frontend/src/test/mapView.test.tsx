@@ -52,4 +52,43 @@ describe('MapView', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Last heard: Never heard by this server')).toBeInTheDocument();
   });
+
+  it('keeps the 7-day cutoff stable for the lifetime of the mounted map', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-03-15T12:00:00Z'));
+
+      const contact: Contact = {
+        public_key: 'bb'.repeat(32),
+        name: 'Almost Stale',
+        type: 1,
+        flags: 0,
+        last_path: null,
+        last_path_len: -1,
+        out_path_hash_mode: -1,
+        route_override_path: null,
+        route_override_len: null,
+        route_override_hash_mode: null,
+        last_advert: null,
+        lat: 41,
+        lon: -73,
+        last_seen: Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60 + 60,
+        on_radio: false,
+        last_contacted: null,
+        last_read_at: null,
+        first_seen: null,
+      };
+
+      const { rerender } = render(<MapView contacts={[contact]} focusedKey={null} />);
+
+      expect(screen.getByText(/showing 1 contact heard in the last 7 days/i)).toBeInTheDocument();
+
+      vi.advanceTimersByTime(2 * 60 * 1000);
+      rerender(<MapView contacts={[contact]} focusedKey={null} />);
+
+      expect(screen.getByText(/showing 1 contact heard in the last 7 days/i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
