@@ -85,6 +85,10 @@ function isActiveConversationMessage(
   return false;
 }
 
+function isMessageConversation(conversation: Conversation | null): boolean {
+  return conversation?.type === 'channel' || conversation?.type === 'contact';
+}
+
 export function useRealtimeAppState({
   prevHealthRef,
   setHealth,
@@ -180,7 +184,11 @@ export function useRealtimeAppState({
       },
       onReconnect: () => {
         setRawPackets([]);
-        triggerReconcile();
+        if (
+          !(hasNewerMessagesRef.current && isMessageConversation(activeConversationRef.current))
+        ) {
+          triggerReconcile();
+        }
         refreshUnreads();
         api.getChannels().then(setChannels).catch(console.error);
         fetchAllContacts()

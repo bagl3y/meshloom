@@ -143,6 +143,56 @@ describe('useRealtimeAppState', () => {
     });
   });
 
+  it('reconnect skips active-conversation reconcile while browsing mid-history', async () => {
+    const contacts: Contact[] = [
+      {
+        public_key: 'bb'.repeat(32),
+        name: 'Bob',
+        type: 1,
+        flags: 0,
+        last_path: null,
+        last_path_len: 0,
+        out_path_hash_mode: 0,
+        last_advert: null,
+        lat: null,
+        lon: null,
+        last_seen: null,
+        on_radio: false,
+        last_contacted: null,
+        last_read_at: null,
+        first_seen: null,
+      },
+    ];
+
+    const { args, fns } = createRealtimeArgs({
+      fetchAllContacts: vi.fn(async () => contacts),
+      activeConversationRef: {
+        current: {
+          type: 'channel',
+          id: publicChannel.key,
+          name: publicChannel.name,
+        } satisfies Conversation,
+      },
+      hasNewerMessagesRef: { current: true },
+    });
+
+    const { result } = renderHook(() => useRealtimeAppState(args));
+
+    act(() => {
+      result.current.onReconnect?.();
+    });
+
+    await waitFor(() => {
+      expect(args.triggerReconcile).not.toHaveBeenCalled();
+      expect(args.refreshUnreads).toHaveBeenCalledTimes(1);
+      expect(mocks.api.getChannels).toHaveBeenCalledTimes(1);
+      expect(args.fetchAllContacts).toHaveBeenCalledTimes(1);
+      expect(fns.setRawPackets).toHaveBeenCalledWith([]);
+      expect(fns.setChannels).toHaveBeenCalledWith([publicChannel]);
+      expect(fns.setContacts).toHaveBeenCalledWith(contacts);
+    });
+  });
+
   it('tracks unread state for a new non-active incoming message', () => {
     mocks.messageCache.addMessage.mockReturnValue(true);
     const { args } = createRealtimeArgs({
