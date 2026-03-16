@@ -7,6 +7,7 @@ import {
   formatRouteLabel,
   formatRoutingOverrideInput,
   getEffectiveContactRoute,
+  isValidLocation,
   resolvePath,
   formatDistance,
   formatHopCounts,
@@ -662,6 +663,24 @@ describe('resolvePath', () => {
     expect(result.hops[1].prefix).toBe('2B');
     expect(result.hops[2].prefix).toBe('3C');
     expect(result.hops[3].prefix).toBe('4D');
+  });
+});
+
+describe('isValidLocation', () => {
+  it('rejects null and unset coordinates', () => {
+    expect(isValidLocation(null, -122.3)).toBe(false);
+    expect(isValidLocation(47.6, null)).toBe(false);
+    expect(isValidLocation(0, 0)).toBe(false);
+  });
+
+  it('rejects out-of-range coordinates', () => {
+    expect(isValidLocation(-593.497573, -1659.939204)).toBe(false);
+    expect(isValidLocation(91, 0)).toBe(false);
+    expect(isValidLocation(0, 181)).toBe(false);
+  });
+
+  it('accepts sane coordinates', () => {
+    expect(isValidLocation(47.6062, -122.3321)).toBe(true);
   });
 });
 

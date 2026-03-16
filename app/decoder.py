@@ -85,6 +85,10 @@ class PacketInfo:
     path_hash_size: int = 1  # Bytes per hop: 1, 2, or 3
 
 
+def _is_valid_advert_location(lat: float, lon: float) -> bool:
+    return -90 <= lat <= 90 and -180 <= lon <= 180
+
+
 def extract_payload(raw_packet: bytes) -> bytes | None:
     """
     Extract just the payload from a raw packet, skipping header and path.
@@ -243,7 +247,9 @@ def get_packet_payload_type(raw_packet: bytes) -> PayloadType | None:
         return None
 
 
-def parse_advertisement(payload: bytes) -> ParsedAdvertisement | None:
+def parse_advertisement(
+    payload: bytes, raw_packet: bytes | None = None
+) -> ParsedAdvertisement | None:
     """
     Parse an advertisement payload.
 
@@ -299,6 +305,16 @@ def parse_advertisement(payload: bytes) -> ParsedAdvertisement | None:
         lon_raw = int.from_bytes(payload[offset + 4 : offset + 8], byteorder="little", signed=True)
         lat = lat_raw / 1_000_000
         lon = lon_raw / 1_000_000
+        if not _is_valid_advert_location(lat, lon):
+            packet_hex = (raw_packet if raw_packet is not None else payload).hex().upper()
+            logger.warning(
+                "Dropping location data for nonsensical packet -- packet %s implies lat/lon %s/%s. Outta this world!",
+                packet_hex,
+                lat,
+                lon,
+            )
+            lat = None
+            lon = None
         offset += 8
 
     # Skip feature fields if present

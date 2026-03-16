@@ -448,6 +448,38 @@ class TestAdvertisementParsing:
         assert result.lat is None
         assert result.lon is None
 
+    def test_parse_advertisement_discards_out_of_range_gps(self, caplog):
+        """Out-of-range advert coordinates are treated as missing."""
+        from app.decoder import parse_advertisement
+
+        payload = bytearray()
+        payload.extend(
+            bytes.fromhex("f29fdc7c560f9d813d1593a8587fa46a9e7efe2f5506d38c0af41307bf9e517a")
+        )
+        payload.extend((1718749967).to_bytes(4, byteorder="little"))
+        payload.extend(bytes(64))
+        payload.append(0x92)
+        payload.extend((-593497573).to_bytes(4, byteorder="little", signed=True))
+        payload.extend((-1659939204).to_bytes(4, byteorder="little", signed=True))
+        payload.extend(b"Tacompton")
+        raw_packet = bytes.fromhex("11") + bytes(payload)
+
+        with caplog.at_level("WARNING"):
+            result = parse_advertisement(bytes(payload), raw_packet=raw_packet)
+
+        assert result is not None
+        assert (
+            result.public_key == "f29fdc7c560f9d813d1593a8587fa46a9e7efe2f5506d38c0af41307bf9e517a"
+        )
+        assert result.name == "Tacompton"
+        assert result.device_role == 2
+        assert result.lat is None
+        assert result.lon is None
+        assert "Dropping location data for nonsensical packet -- packet" in caplog.text
+        assert raw_packet.hex().upper() in caplog.text
+        assert "-593.497573/-1659.939204" in caplog.text
+        assert "Outta this world!" in caplog.text
+
     def test_parse_advertisement_extracts_public_key(self):
         """Advertisement parsing extracts the public key correctly."""
         from app.decoder import parse_advertisement, parse_packet

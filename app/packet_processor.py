@@ -425,7 +425,7 @@ async def _process_advertisement(
         logger.debug("Failed to parse advertisement packet")
         return
 
-    advert = parse_advertisement(packet_info.payload)
+    advert = parse_advertisement(packet_info.payload, raw_packet=raw_bytes)
     if not advert:
         logger.debug("Failed to parse advertisement payload")
         return

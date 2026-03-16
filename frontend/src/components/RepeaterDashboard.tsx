@@ -225,7 +225,7 @@ export function RepeaterDashboard({
         ) : (
           <div className="space-y-4">
             {/* Top row: Telemetry + Radio Settings | Node Info + Neighbors */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-stretch">
               <div className="flex flex-col gap-4">
                 <NodeInfoPane
                   data={paneData.nodeInfo}
@@ -255,7 +255,7 @@ export function RepeaterDashboard({
                   disabled={anyLoading}
                 />
               </div>
-              <div className="flex flex-col gap-4">
+              <div className="flex min-h-0 flex-col gap-4">
                 <NeighborsPane
                   data={paneData.neighbors}
                   state={paneStates.neighbors}

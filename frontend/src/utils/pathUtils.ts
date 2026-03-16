@@ -273,6 +273,9 @@ export function isValidLocation(lat: number | null, lon: number | null): boolean
   if (lat === null || lon === null) {
     return false;
   }
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    return false;
+  }
   // (0, 0) is in the Atlantic Ocean - treat as unset
   if (lat === 0 && lon === 0) {
     return false;

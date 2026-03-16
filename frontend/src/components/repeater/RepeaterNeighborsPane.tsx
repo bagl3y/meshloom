@@ -99,16 +99,16 @@ export function NeighborsPane({
       state={state}
       onRefresh={onRefresh}
       disabled={disabled}
-      className="flex flex-col"
-      contentClassName="flex-1 flex flex-col"
+      className="flex min-h-0 flex-1 flex-col"
+      contentClassName="flex min-h-0 flex-1 flex-col"
     >
       {!data ? (
         <NotFetched />
       ) : sorted.length === 0 ? (
         <p className="text-sm text-muted-foreground">No neighbors reported</p>
       ) : (
-        <div className="flex-1 flex flex-col gap-2">
-          <div className="overflow-x-auto">
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
+          <div className="shrink-0 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-muted-foreground text-xs">
@@ -145,7 +145,7 @@ export function NeighborsPane({
           {hasValidRepeaterGps && (neighborsWithCoords.length > 0 || hasValidRepeaterGps) ? (
             <Suspense
               fallback={
-                <div className="h-48 flex items-center justify-center text-xs text-muted-foreground">
+                <div className="flex min-h-48 flex-1 items-center justify-center text-xs text-muted-foreground">
                   Loading map...
                 </div>
               }
