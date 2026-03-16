@@ -1,3 +1,14 @@
+## [3.4.0] - 2026-03-16
+
+Feature: Add radio model and stats display
+Feature: Add prebuilt frontends, then deleted that and moved to prebuilt release artifacts
+Bugfix: Misc. frontend performance and correctness fixes
+Bugfix: Fix same-second same-content DM send collition
+Bugfix: Discard clearly-wrong GPS data
+Bugfix: Prevent repeater clock skew drift on page nav
+Misc: Use repeater's advertised location if we haven't loaded one from repeater admin
+Misc: Don't permit invalid fanout configs to be saved ever`
+
 ## [3.3.0] - 2026-03-13
 
 Feature: Use dashed lines to show collapsed ambiguous router results
