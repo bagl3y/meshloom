@@ -331,12 +331,9 @@ class TestDMEchoDetection:
         assert msg_id is not None
         broadcasts.clear()
 
-        # Duplicate arrives via different path
-        pkt2, _ = await RawPacketRepository.create(b"dm_in_2", SENDER_TIMESTAMP + 1)
-
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
             result = await create_dm_message_from_decrypted(
-                packet_id=pkt2,
+                packet_id=pkt1,
                 decrypted=decrypted,
                 their_public_key=CONTACT_PUB,
                 our_public_key=OUR_PUB,
@@ -388,12 +385,9 @@ class TestDMEchoDetection:
         assert msg_id is not None
         broadcasts.clear()
 
-        # Duplicate arrives, also with no path
-        pkt2, _ = await RawPacketRepository.create(b"dm_np_2", SENDER_TIMESTAMP + 1)
-
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
             result = await create_dm_message_from_decrypted(
-                packet_id=pkt2,
+                packet_id=pkt1,
                 decrypted=decrypted,
                 their_public_key=CONTACT_PUB,
                 our_public_key=OUR_PUB,
@@ -832,21 +826,19 @@ class TestDirectMessageDirectionDetection:
 
 
 class TestConcurrentDMDedup:
-    """Test that concurrent DM processing deduplicates via atomic INSERT OR IGNORE.
+    """Test that concurrent DM processing deduplicates by raw-packet identity.
 
-    On a mesh network, the same DM packet can arrive via two RF paths nearly
-    simultaneously, causing two concurrent calls to create_dm_message_from_decrypted.
-    SQLite's INSERT OR IGNORE ensures only one message is stored.
+    On a mesh network, the same DM payload can be observed twice before the first
+    handler finishes. Both arrivals reuse the same raw_packets row and should end
+    up attached to a single message.
     """
 
     @pytest.mark.asyncio
-    async def test_concurrent_identical_dms_only_store_once(self, test_db, captured_broadcasts):
-        """Two concurrent create_dm_message_from_decrypted calls with identical content
-        should result in exactly one stored message."""
+    async def test_concurrent_same_packet_dms_only_store_once(self, test_db, captured_broadcasts):
+        """Two concurrent handlers for the same raw DM packet store one message."""
         from app.packet_processor import create_dm_message_from_decrypted
 
-        pkt1, _ = await RawPacketRepository.create(b"concurrent_dm_1", SENDER_TIMESTAMP)
-        pkt2, _ = await RawPacketRepository.create(b"concurrent_dm_2", SENDER_TIMESTAMP + 1)
+        packet_id, _ = await RawPacketRepository.create(b"concurrent_dm_1", SENDER_TIMESTAMP)
 
         decrypted = DecryptedDirectMessage(
             timestamp=SENDER_TIMESTAMP,
@@ -861,7 +853,7 @@ class TestConcurrentDMDedup:
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
             results = await asyncio.gather(
                 create_dm_message_from_decrypted(
-                    packet_id=pkt1,
+                    packet_id=packet_id,
                     decrypted=decrypted,
                     their_public_key=CONTACT_PUB,
                     our_public_key=OUR_PUB,
@@ -870,7 +862,7 @@ class TestConcurrentDMDedup:
                     outgoing=False,
                 ),
                 create_dm_message_from_decrypted(
-                    packet_id=pkt2,
+                    packet_id=packet_id,
                     decrypted=decrypted,
                     their_public_key=CONTACT_PUB,
                     our_public_key=OUR_PUB,

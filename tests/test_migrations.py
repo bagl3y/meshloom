@@ -574,7 +574,7 @@ class TestMigration019:
 
     @pytest.mark.asyncio
     async def test_migration_drops_messages_unique_constraint(self):
-        """Migration rebuilds messages without UNIQUE, preserving data and dedup index."""
+        """Migration rebuilds messages without UNIQUE, preserving data and channel dedup index."""
         conn = await aiosqlite.connect(":memory:")
         conn.row_factory = aiosqlite.Row
         try:
@@ -657,7 +657,7 @@ class TestMigration019:
             assert rows[1]["type"] == "PRIV"
             assert rows[1]["outgoing"] == 1
 
-            # Verify dedup index still works (INSERT OR IGNORE should ignore duplicates)
+            # Verify channel dedup index still works (INSERT OR IGNORE should ignore duplicates)
             cursor = await conn.execute(
                 "INSERT OR IGNORE INTO messages (type, conversation_key, text, sender_timestamp, received_at) "
                 "VALUES (?, ?, ?, ?, ?)",
@@ -665,11 +665,25 @@ class TestMigration019:
             )
             assert cursor.rowcount == 0  # Duplicate ignored
 
+            # Direct messages no longer use the shared dedup index.
+            cursor = await conn.execute(
+                "INSERT OR IGNORE INTO messages (type, conversation_key, text, sender_timestamp, received_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                ("PRIV", "abc123", "dm text", 2000, 9999),
+            )
+            assert cursor.rowcount == 1
+
             # Verify dedup index exists
             cursor = await conn.execute(
                 "SELECT name FROM sqlite_master WHERE name='idx_messages_dedup_null_safe'"
             )
             assert await cursor.fetchone() is not None
+
+            cursor = await conn.execute(
+                "SELECT sql FROM sqlite_master WHERE name='idx_messages_dedup_null_safe'"
+            )
+            index_sql = (await cursor.fetchone())["sql"]
+            assert "WHERE type = 'CHAN'" in index_sql
         finally:
             await conn.close()
 
@@ -1116,8 +1130,8 @@ class TestMigration039:
 
             applied = await run_migrations(conn)
 
-            assert applied == 4
-            assert await get_version(conn) == 42
+            assert applied == 5
+            assert await get_version(conn) == 43
 
             cursor = await conn.execute(
                 """
@@ -1186,8 +1200,8 @@ class TestMigration039:
 
             applied = await run_migrations(conn)
 
-            assert applied == 4
-            assert await get_version(conn) == 42
+            assert applied == 5
+            assert await get_version(conn) == 43
 
             cursor = await conn.execute(
                 """
@@ -1240,8 +1254,8 @@ class TestMigration040:
 
             applied = await run_migrations(conn)
 
-            assert applied == 3
-            assert await get_version(conn) == 42
+            assert applied == 4
+            assert await get_version(conn) == 43
 
             await conn.execute(
                 """
@@ -1302,8 +1316,8 @@ class TestMigration041:
 
             applied = await run_migrations(conn)
 
-            assert applied == 2
-            assert await get_version(conn) == 42
+            assert applied == 3
+            assert await get_version(conn) == 43
 
             await conn.execute(
                 """
@@ -1355,8 +1369,8 @@ class TestMigration042:
 
             applied = await run_migrations(conn)
 
-            assert applied == 1
-            assert await get_version(conn) == 42
+            assert applied == 2
+            assert await get_version(conn) == 43
 
             await conn.execute(
                 """

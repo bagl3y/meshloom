@@ -353,7 +353,7 @@ tests/
 
 The MeshCore radio protocol encodes `sender_timestamp` as a 4-byte little-endian integer (Unix seconds). This is a firmware-level wire format — the radio, the Python library (`commands/messaging.py`), and the decoder (`decoder.py`) all read/write exactly 4 bytes. Millisecond Unix timestamps would overflow 4 bytes, so higher resolution is not possible without a firmware change.
 
-**Consequence:** The dedup index `(type, conversation_key, text, COALESCE(sender_timestamp, 0))` operates at 1-second granularity. Sending identical text to the same conversation twice within one second will hit the UNIQUE constraint on the second insert, returning HTTP 500 *after* the radio has already transmitted. The message is sent over the air but not stored in the database. Do not attempt to fix this by switching to millisecond timestamps — it will break echo dedup (the echo's 4-byte timestamp won't match the stored value) and overflow `to_bytes(4, "little")`.
+**Consequence:** Channel-message dedup still operates at 1-second granularity because the radio protocol only provides second-resolution `sender_timestamp`. Do not attempt to fix this by switching to millisecond timestamps — it will break echo dedup (the echo's 4-byte timestamp won't match the stored value) and overflow `to_bytes(4, "little")`. Direct messages no longer share that channel dedup index; they are deduplicated by raw-packet identity instead so legitimate same-text same-second DMs can coexist.
 
 ### Outgoing DM echoes remain undecrypted
 

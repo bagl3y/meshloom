@@ -78,8 +78,8 @@ async def test_null_sender_timestamp_defaults_to_received_at(test_db):
 
 
 @pytest.mark.asyncio
-async def test_duplicate_with_same_text_and_null_timestamp_rejected(test_db):
-    """Two messages with same content and sender_timestamp should be deduped."""
+async def test_direct_messages_with_same_text_and_timestamp_are_allowed(test_db):
+    """Direct messages no longer share the channel echo dedup index."""
     received_at = 600
     msg_id1 = await MessageRepository.create(
         msg_type="PRIV",
@@ -97,7 +97,8 @@ async def test_duplicate_with_same_text_and_null_timestamp_rejected(test_db):
         sender_timestamp=received_at,
         received_at=received_at,
     )
-    assert msg_id2 is None  # duplicate rejected
+    assert msg_id2 is not None
+    assert msg_id2 != msg_id1
 
 
 @pytest.mark.asyncio

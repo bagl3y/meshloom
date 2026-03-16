@@ -110,6 +110,18 @@ class RawPacketRepository:
         await db.conn.commit()
 
     @staticmethod
+    async def get_linked_message_id(packet_id: int) -> int | None:
+        """Return the linked message ID for a raw packet, if any."""
+        cursor = await db.conn.execute(
+            "SELECT message_id FROM raw_packets WHERE id = ?",
+            (packet_id,),
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        return row["message_id"]
+
+    @staticmethod
     async def prune_old_undecrypted(max_age_days: int) -> int:
         """Delete undecrypted packets older than max_age_days. Returns count deleted."""
         cutoff = int(time.time()) - (max_age_days * 86400)

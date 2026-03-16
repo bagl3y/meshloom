@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from collections.abc import Callable
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 BroadcastFn = Callable[..., Any]
 LOG_MESSAGE_PREVIEW_LEN = 32
+_decrypted_dm_store_lock = asyncio.Lock()
 
 
 def _truncate_for_log(text: str, max_chars: int = LOG_MESSAGE_PREVIEW_LEN) -> str:
@@ -125,6 +127,45 @@ async def increment_ack_and_broadcast(
     return ack_count
 
 
+async def _reconcile_duplicate_message(
+    *,
+    existing_msg: Message,
+    packet_id: int | None,
+    path: str | None,
+    received_at: int,
+    path_len: int | None,
+    broadcast_fn: BroadcastFn,
+) -> None:
+    logger.debug(
+        "Duplicate %s for %s (msg_id=%d, outgoing=%s) - adding path",
+        existing_msg.type,
+        existing_msg.conversation_key[:12],
+        existing_msg.id,
+        existing_msg.outgoing,
+    )
+
+    if path is not None:
+        paths = await MessageRepository.add_path(existing_msg.id, path, received_at, path_len)
+    else:
+        paths = existing_msg.paths or []
+
+    if existing_msg.outgoing and existing_msg.type == "CHAN":
+        ack_count = await MessageRepository.increment_ack_count(existing_msg.id)
+    else:
+        ack_count = existing_msg.acked
+
+    if existing_msg.outgoing or path is not None:
+        broadcast_message_acked(
+            message_id=existing_msg.id,
+            ack_count=ack_count,
+            paths=paths,
+            broadcast_fn=broadcast_fn,
+        )
+
+    if packet_id is not None:
+        await RawPacketRepository.mark_decrypted(packet_id, existing_msg.id)
+
+
 async def handle_duplicate_message(
     *,
     packet_id: int | None,
@@ -153,34 +194,14 @@ async def handle_duplicate_message(
         )
         return
 
-    logger.debug(
-        "Duplicate %s for %s (msg_id=%d, outgoing=%s) - adding path",
-        msg_type,
-        conversation_key[:12],
-        existing_msg.id,
-        existing_msg.outgoing,
+    await _reconcile_duplicate_message(
+        existing_msg=existing_msg,
+        packet_id=packet_id,
+        path=path,
+        received_at=received_at,
+        path_len=path_len,
+        broadcast_fn=broadcast_fn,
     )
-
-    if path is not None:
-        paths = await MessageRepository.add_path(existing_msg.id, path, received_at, path_len)
-    else:
-        paths = existing_msg.paths or []
-
-    if existing_msg.outgoing and existing_msg.type == "CHAN":
-        ack_count = await MessageRepository.increment_ack_count(existing_msg.id)
-    else:
-        ack_count = existing_msg.acked
-
-    if existing_msg.outgoing or path is not None:
-        broadcast_message_acked(
-            message_id=existing_msg.id,
-            ack_count=ack_count,
-            paths=paths,
-            broadcast_fn=broadcast_fn,
-        )
-
-    if packet_id is not None:
-        await RawPacketRepository.mark_decrypted(packet_id, existing_msg.id)
 
 
 async def create_message_from_decrypted(
@@ -290,32 +311,64 @@ async def create_dm_message_from_decrypted(
     conversation_key = their_public_key.lower()
     sender_name = contact.name if contact and not outgoing else None
 
-    msg_id = await MessageRepository.create(
-        msg_type="PRIV",
-        text=decrypted.message,
-        conversation_key=conversation_key,
-        sender_timestamp=decrypted.timestamp,
-        received_at=received,
-        path=path,
-        path_len=path_len,
-        outgoing=outgoing,
-        sender_key=conversation_key if not outgoing else None,
-        sender_name=sender_name,
-    )
+    async with _decrypted_dm_store_lock:
+        linked_message_id = await RawPacketRepository.get_linked_message_id(packet_id)
+        if linked_message_id is not None:
+            existing_msg = await MessageRepository.get_by_id(linked_message_id)
+            if existing_msg is not None:
+                await _reconcile_duplicate_message(
+                    existing_msg=existing_msg,
+                    packet_id=packet_id,
+                    path=path,
+                    received_at=received,
+                    path_len=path_len,
+                    broadcast_fn=broadcast_fn,
+                )
+                return None
 
-    if msg_id is None:
-        await handle_duplicate_message(
-            packet_id=packet_id,
+        if outgoing:
+            existing_msg = await MessageRepository.get_by_content(
+                msg_type="PRIV",
+                conversation_key=conversation_key,
+                text=decrypted.message,
+                sender_timestamp=decrypted.timestamp,
+            )
+            if existing_msg is not None:
+                await _reconcile_duplicate_message(
+                    existing_msg=existing_msg,
+                    packet_id=packet_id,
+                    path=path,
+                    received_at=received,
+                    path_len=path_len,
+                    broadcast_fn=broadcast_fn,
+                )
+                return None
+
+        msg_id = await MessageRepository.create(
             msg_type="PRIV",
-            conversation_key=conversation_key,
             text=decrypted.message,
+            conversation_key=conversation_key,
             sender_timestamp=decrypted.timestamp,
-            path=path,
             received_at=received,
+            path=path,
             path_len=path_len,
-            broadcast_fn=broadcast_fn,
+            outgoing=outgoing,
+            sender_key=conversation_key if not outgoing else None,
+            sender_name=sender_name,
         )
-        return None
+        if msg_id is None:
+            await handle_duplicate_message(
+                packet_id=packet_id,
+                msg_type="PRIV",
+                conversation_key=conversation_key,
+                text=decrypted.message,
+                sender_timestamp=decrypted.timestamp,
+                path=path,
+                received_at=received,
+                path_len=path_len,
+                broadcast_fn=broadcast_fn,
+            )
+            return None
 
     logger.info(
         'Stored direct message "%s" for %r (msg ID %d in contact ID %s, outgoing=%s)',
@@ -364,6 +417,15 @@ async def create_fallback_direct_message(
     message_repository=MessageRepository,
 ) -> Message | None:
     """Store and broadcast a CONTACT_MSG_RECV fallback direct message."""
+    existing = await message_repository.get_by_content(
+        msg_type="PRIV",
+        conversation_key=conversation_key,
+        text=text,
+        sender_timestamp=sender_timestamp,
+    )
+    if existing is not None:
+        return None
+
     msg_id = await message_repository.create(
         msg_type="PRIV",
         text=text,

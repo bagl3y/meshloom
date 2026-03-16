@@ -50,9 +50,10 @@ CREATE TABLE IF NOT EXISTS messages (
     acked INTEGER DEFAULT 0,
     sender_name TEXT,
     sender_key TEXT
-    -- Deduplication: identical text + timestamp in the same conversation is treated as a
-    -- mesh echo/repeat. Outgoing sends allocate a collision-free sender_timestamp before
-    -- transmit so legitimate repeat sends do not collide with this index.
+    -- Deduplication: channel echoes/repeats use a channel-only unique index on
+    -- identical conversation/text/timestamp. Direct messages are deduplicated
+    -- separately via raw-packet linkage so legitimate same-text same-second DMs
+    -- can coexist.
     -- Enforced via idx_messages_dedup_null_safe (unique index) rather than a table constraint
     -- to avoid the storage overhead of SQLite's autoindex duplicating every message text.
 );
@@ -90,7 +91,8 @@ CREATE TABLE IF NOT EXISTS contact_name_history (
 
 CREATE INDEX IF NOT EXISTS idx_messages_received ON messages(received_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_dedup_null_safe
-    ON messages(type, conversation_key, text, COALESCE(sender_timestamp, 0));
+    ON messages(type, conversation_key, text, COALESCE(sender_timestamp, 0))
+    WHERE type = 'CHAN';
 CREATE INDEX IF NOT EXISTS idx_raw_packets_message_id ON raw_packets(message_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_packets_payload_hash ON raw_packets(payload_hash);
 CREATE INDEX IF NOT EXISTS idx_contacts_on_radio ON contacts(on_radio);

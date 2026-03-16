@@ -896,8 +896,58 @@ class TestCreateDMMessageFromDecrypted:
         assert message_broadcasts[0]["data"]["outgoing"] is True
 
     @pytest.mark.asyncio
-    async def test_returns_none_for_duplicate_dm(self, test_db, captured_broadcasts):
-        """create_dm_message_from_decrypted returns None for duplicate DM."""
+    async def test_returns_none_for_same_raw_packet_duplicate_dm(
+        self, test_db, captured_broadcasts
+    ):
+        """Reprocessing the same raw DM packet reuses the existing message."""
+        from app.decoder import DecryptedDirectMessage
+        from app.packet_processor import create_dm_message_from_decrypted
+
+        packet_id, _ = await RawPacketRepository.create(b"dm_packet_1", 1700000000)
+
+        decrypted = DecryptedDirectMessage(
+            timestamp=1700000000,
+            flags=0,
+            message="Duplicate DM test",
+            dest_hash="fa",
+            src_hash="a1",
+        )
+
+        broadcasts, mock_broadcast = captured_broadcasts
+
+        with patch("app.packet_processor.broadcast_event", mock_broadcast):
+            # First call creates the message
+            msg_id_1 = await create_dm_message_from_decrypted(
+                packet_id=packet_id,
+                decrypted=decrypted,
+                their_public_key=self.A1B2C3_PUB,
+                our_public_key=self.FACE12_PUB,
+                received_at=1700000001,
+                outgoing=False,
+            )
+
+            # Second call for the same packet returns None and does not create a new row
+            msg_id_2 = await create_dm_message_from_decrypted(
+                packet_id=packet_id,
+                decrypted=decrypted,
+                their_public_key=self.A1B2C3_PUB,
+                our_public_key=self.FACE12_PUB,
+                received_at=1700000002,
+                outgoing=False,
+            )
+
+        assert msg_id_1 is not None
+        assert msg_id_2 is None  # Duplicate detected
+
+        # Only one message broadcast
+        message_broadcasts = [b for b in broadcasts if b["type"] == "message"]
+        assert len(message_broadcasts) == 1
+
+    @pytest.mark.asyncio
+    async def test_allows_same_text_same_second_dms_from_distinct_packets(
+        self, test_db, captured_broadcasts
+    ):
+        """Distinct DM packets with the same text/timestamp both store."""
         from app.decoder import DecryptedDirectMessage
         from app.packet_processor import create_dm_message_from_decrypted
 
@@ -915,7 +965,6 @@ class TestCreateDMMessageFromDecrypted:
         broadcasts, mock_broadcast = captured_broadcasts
 
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
-            # First call creates the message
             msg_id_1 = await create_dm_message_from_decrypted(
                 packet_id=packet_id_1,
                 decrypted=decrypted,
@@ -924,8 +973,6 @@ class TestCreateDMMessageFromDecrypted:
                 received_at=1700000001,
                 outgoing=False,
             )
-
-            # Second call with same content returns None
             msg_id_2 = await create_dm_message_from_decrypted(
                 packet_id=packet_id_2,
                 decrypted=decrypted,
@@ -936,11 +983,16 @@ class TestCreateDMMessageFromDecrypted:
             )
 
         assert msg_id_1 is not None
-        assert msg_id_2 is None  # Duplicate detected
+        assert msg_id_2 is not None
+        assert msg_id_1 != msg_id_2
 
-        # Only one message broadcast
+        messages = await MessageRepository.get_all(
+            msg_type="PRIV", conversation_key=self.A1B2C3_PUB.lower(), limit=10
+        )
+        assert len(messages) == 2
+
         message_broadcasts = [b for b in broadcasts if b["type"] == "message"]
-        assert len(message_broadcasts) == 1
+        assert len(message_broadcasts) == 2
 
     @pytest.mark.asyncio
     async def test_links_raw_packet_to_dm_message(self, test_db, captured_broadcasts):
