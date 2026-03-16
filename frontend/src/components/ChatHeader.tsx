@@ -6,6 +6,7 @@ import { ContactPathDiscoveryModal } from './ContactPathDiscoveryModal';
 import { ChannelFloodScopeOverrideModal } from './ChannelFloodScopeOverrideModal';
 import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
+import { isPublicChannelKey } from '../utils/publicChannel';
 import { stripRegionScopePrefix } from '../utils/regionScope';
 import { isPrefixOnlyContact } from '../utils/pubkey';
 import { ContactAvatar } from './ContactAvatar';
@@ -379,7 +380,7 @@ export function ChatHeader({
             )}
           </button>
         )}
-        {!(conversation.type === 'channel' && conversation.name === 'Public') && (
+        {!(conversation.type === 'channel' && isPublicChannelKey(conversation.id)) && (
           <button
             className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => {

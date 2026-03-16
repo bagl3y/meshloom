@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 
 from meshcore import EventType, MeshCore
 
+from app.channel_constants import PUBLIC_CHANNEL_KEY, PUBLIC_CHANNEL_NAME
 from app.config import settings
 from app.event_handlers import cleanup_expired_acks
 from app.models import Contact, ContactUpsert
@@ -443,16 +444,13 @@ async def ensure_default_channels() -> None:
     This seeds the canonical Public channel row in the database if it is missing
     or misnamed. It does not make the channel undeletable through the router.
     """
-    # Public channel - no hashtag, specific well-known key
-    PUBLIC_CHANNEL_KEY_HEX = "8B3387E9C5CDEA6AC9E5EDBAA115CD72"
-
     # Check by KEY (not name) since that's what's fixed
-    existing = await ChannelRepository.get_by_key(PUBLIC_CHANNEL_KEY_HEX)
-    if not existing or existing.name != "Public":
+    existing = await ChannelRepository.get_by_key(PUBLIC_CHANNEL_KEY)
+    if not existing or existing.name != PUBLIC_CHANNEL_NAME:
         logger.info("Ensuring default Public channel exists with correct name")
         await ChannelRepository.upsert(
-            key=PUBLIC_CHANNEL_KEY_HEX,
-            name="Public",
+            key=PUBLIC_CHANNEL_KEY,
+            name=PUBLIC_CHANNEL_NAME,
             is_hashtag=False,
             on_radio=existing.on_radio if existing else False,
         )

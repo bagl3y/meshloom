@@ -30,6 +30,7 @@ import {
   type SidebarSortableSection,
   type SortOrder,
 } from '../utils/conversationState';
+import { isPublicChannelKey } from '../utils/publicChannel';
 import { getContactDisplayName } from '../utils/pubkey';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { ContactAvatar } from './ContactAvatar';
@@ -254,8 +255,8 @@ export function Sidebar({
     () =>
       [...uniqueChannels].sort((a, b) => {
         // Public channel always sorts to the top
-        if (a.name === 'Public') return -1;
-        if (b.name === 'Public') return 1;
+        if (isPublicChannelKey(a.key)) return -1;
+        if (isPublicChannelKey(b.key)) return 1;
 
         if (sectionSortOrders.channels === 'recent') {
           const timeA = getLastMessageTime('channel', a.key);

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ChatHeader } from '../components/ChatHeader';
 import type { Channel, Contact, Conversation, Favorite, PathDiscoveryResponse } from '../types';
+import { PUBLIC_CHANNEL_KEY } from '../utils/publicChannel';
 
 function makeChannel(key: string, name: string, isHashtag: boolean): Channel {
   return { key, name, is_hashtag: isHashtag, on_radio: false, last_read_at: null };
@@ -167,6 +168,25 @@ describe('ChatHeader key visibility', () => {
 
     expect(screen.getByText('Notifications On')).toBeInTheDocument();
     expect(onToggleNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the delete button for the canonical Public channel', () => {
+    const channel = makeChannel(PUBLIC_CHANNEL_KEY, 'Public', false);
+    const conversation: Conversation = { type: 'channel', id: PUBLIC_CHANNEL_KEY, name: 'Public' };
+
+    render(<ChatHeader {...baseProps} conversation={conversation} channels={[channel]} />);
+
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+  });
+
+  it('still shows the delete button for non-canonical channels named Public', () => {
+    const key = 'AB'.repeat(16);
+    const channel = makeChannel(key, 'Public', false);
+    const conversation: Conversation = { type: 'channel', id: key, name: 'Public' };
+
+    render(<ChatHeader {...baseProps} conversation={conversation} channels={[channel]} />);
+
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
   });
 
   it('opens path discovery modal for contacts and runs the request on demand', async () => {

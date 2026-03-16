@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Sidebar } from '../components/Sidebar';
 import { CONTACT_TYPE_REPEATER, type Channel, type Contact, type Favorite } from '../types';
 import { getStateKey, type ConversationTimes } from '../utils/conversationState';
+import { PUBLIC_CHANNEL_KEY } from '../utils/publicChannel';
 
 function makeChannel(key: string, name: string): Channel {
   return {
@@ -315,5 +316,39 @@ describe('Sidebar section summaries', () => {
     expect(getChannelsOrder()).toEqual(['#alpha', '#zebra']);
     expect(getContactsOrder()).toEqual(['Zed', 'Amy']);
     expect(getRepeatersOrder()).toEqual(['Zulu Relay', 'Alpha Relay']);
+  });
+
+  it('pins only the canonical Public channel to the top of channel sorting', () => {
+    const publicChannel = makeChannel(PUBLIC_CHANNEL_KEY, 'Public');
+    const fakePublic = makeChannel('DD'.repeat(16), 'Public');
+    const alphaChannel = makeChannel('CC'.repeat(16), '#alpha');
+    const onSelectConversation = vi.fn();
+
+    render(
+      <Sidebar
+        contacts={[]}
+        channels={[fakePublic, alphaChannel, publicChannel]}
+        activeConversation={null}
+        onSelectConversation={onSelectConversation}
+        onNewMessage={vi.fn()}
+        lastMessageTimes={{}}
+        unreadCounts={{}}
+        mentions={{}}
+        showCracker={false}
+        crackerRunning={false}
+        onToggleCracker={vi.fn()}
+        onMarkAllRead={vi.fn()}
+        favorites={[]}
+        legacySortOrder="alpha"
+      />
+    );
+
+    fireEvent.click(screen.getAllByText('Public')[0]);
+
+    expect(onSelectConversation).toHaveBeenCalledWith({
+      type: 'channel',
+      id: PUBLIC_CHANNEL_KEY,
+      name: 'Public',
+    });
   });
 });

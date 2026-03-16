@@ -10,10 +10,9 @@ import {
   getReopenLastConversationEnabled,
   saveLastViewedConversation,
 } from '../utils/lastViewedConversation';
+import { findPublicChannel } from '../utils/publicChannel';
 import { getContactDisplayName } from '../utils/pubkey';
 import type { Channel, Contact, Conversation } from '../types';
-
-const PUBLIC_CHANNEL_KEY = '8B3387E9C5CDEA6AC9E5EDBAA115CD72';
 
 interface UseConversationRouterArgs {
   channels: Channel[];
@@ -44,7 +43,7 @@ export function useConversationRouter({
   }, []);
 
   const getPublicChannelConversation = useCallback((): Conversation | null => {
-    const publicChannel = channels.find((c) => c.name === 'Public');
+    const publicChannel = findPublicChannel(channels);
     if (!publicChannel) return null;
     return {
       type: 'channel',
@@ -221,9 +220,7 @@ export function useConversationRouter({
       return;
     }
 
-    const publicChannel =
-      channels.find((c) => c.key === PUBLIC_CHANNEL_KEY) ||
-      channels.find((c) => c.name === 'Public');
+    const publicChannel = findPublicChannel(channels);
     if (!publicChannel) return;
 
     hasSetDefaultConversation.current = true;

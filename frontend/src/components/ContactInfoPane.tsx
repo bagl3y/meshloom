@@ -16,6 +16,7 @@ import {
   hasRoutingOverride,
   parsePathHops,
 } from '../utils/pathUtils';
+import { isPublicChannelKey } from '../utils/publicChannel';
 import { getMapFocusHash } from '../utils/urlHash';
 import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
@@ -611,7 +612,7 @@ function MostActiveRoomsSection({
               onKeyDown={onNavigateToChannel ? handleKeyboardActivate : undefined}
               onClick={() => onNavigateToChannel?.(room.channel_key)}
             >
-              {room.channel_name.startsWith('#') || room.channel_name === 'Public'
+              {room.channel_name.startsWith('#') || isPublicChannelKey(room.channel_key)
                 ? room.channel_name
                 : `#${room.channel_name}`}
             </span>

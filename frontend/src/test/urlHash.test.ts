@@ -13,6 +13,7 @@ import {
   resolveContactFromHashToken,
 } from '../utils/urlHash';
 import type { Channel, Contact } from '../types';
+import { PUBLIC_CHANNEL_KEY } from '../utils/publicChannel';
 
 describe('parseHashConversation', () => {
   let originalHash: string;
@@ -149,7 +150,7 @@ describe('parseHashConversation', () => {
 describe('resolveChannelFromHashToken', () => {
   const channels: Channel[] = [
     {
-      key: 'ABCDEF0123456789ABCDEF0123456789',
+      key: PUBLIC_CHANNEL_KEY,
       name: 'Public',
       is_hashtag: false,
       on_radio: true,
@@ -172,13 +173,13 @@ describe('resolveChannelFromHashToken', () => {
   ];
 
   it('prefers stable key lookup (case-insensitive)', () => {
-    const result = resolveChannelFromHashToken('abcdef0123456789abcdef0123456789', channels);
-    expect(result?.key).toBe('ABCDEF0123456789ABCDEF0123456789');
+    const result = resolveChannelFromHashToken(PUBLIC_CHANNEL_KEY.toLowerCase(), channels);
+    expect(result?.key).toBe(PUBLIC_CHANNEL_KEY);
   });
 
-  it('supports legacy name-based hash lookup', () => {
+  it('resolves legacy Public hashes to the canonical Public key', () => {
     const result = resolveChannelFromHashToken('Public', channels);
-    expect(result?.key).toBe('ABCDEF0123456789ABCDEF0123456789');
+    expect(result?.key).toBe(PUBLIC_CHANNEL_KEY);
   });
 
   it('supports legacy hashtag hash without leading #', () => {

@@ -1,4 +1,5 @@
 import type { Channel, Contact, Conversation } from '../types';
+import { findPublicChannel, PUBLIC_CHANNEL_NAME } from './publicChannel';
 import { getContactDisplayName } from './pubkey';
 
 interface ParsedHashConversation {
@@ -76,6 +77,13 @@ export function resolveChannelFromHashToken(token: string, channels: Channel[]):
   // Preferred path: stable identity by channel key.
   const byKey = channels.find((c) => c.key.toLowerCase() === normalizedToken.toLowerCase());
   if (byKey) return byKey;
+
+  // Legacy Public hashes should resolve to the canonical Public key, not any
+  // arbitrary row that happens to share the display name.
+  if (normalizedToken.toLowerCase() === PUBLIC_CHANNEL_NAME.toLowerCase()) {
+    const publicChannel = findPublicChannel(channels);
+    if (publicChannel) return publicChannel;
+  }
 
   // Backward compatibility for legacy name-based hashes.
   return (

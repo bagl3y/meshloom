@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
+from app.channel_constants import PUBLIC_CHANNEL_KEY, PUBLIC_CHANNEL_NAME
 from app.repository import ChannelRepository, MessageRepository
 
 
@@ -75,6 +76,55 @@ class TestCreateChannel:
         channel = await ChannelRepository.get_by_key(key)
         assert channel is not None
         assert channel.flood_scope_override is None
+
+
+class TestPublicChannelProtection:
+    @pytest.mark.asyncio
+    async def test_create_public_uses_canonical_key(self, test_db):
+        from app.routers.channels import CreateChannelRequest, create_channel
+
+        result = await create_channel(CreateChannelRequest(name="Public"))
+
+        assert result.key == PUBLIC_CHANNEL_KEY
+        assert result.name == PUBLIC_CHANNEL_NAME
+        assert result.is_hashtag is False
+
+    @pytest.mark.asyncio
+    async def test_create_public_rejects_conflicting_key(self, test_db, client):
+        response = await client.post(
+            "/api/channels",
+            json={"name": "Public", "key": "AA" * 16},
+        )
+
+        assert response.status_code == 400
+        assert "canonical Public key" in response.json()["detail"]
+        assert await ChannelRepository.get_by_key("AA" * 16) is None
+
+    @pytest.mark.asyncio
+    async def test_create_non_public_rejects_public_key(self, test_db, client):
+        response = await client.post(
+            "/api/channels",
+            json={"name": "Ops", "key": PUBLIC_CHANNEL_KEY},
+        )
+
+        assert response.status_code == 400
+        assert PUBLIC_CHANNEL_NAME in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_delete_public_channel_is_rejected(self, test_db, client):
+        await ChannelRepository.upsert(
+            key=PUBLIC_CHANNEL_KEY,
+            name=PUBLIC_CHANNEL_NAME,
+            is_hashtag=False,
+            on_radio=False,
+        )
+
+        response = await client.delete(f"/api/channels/{PUBLIC_CHANNEL_KEY}")
+
+        assert response.status_code == 400
+        assert "cannot be deleted" in response.json()["detail"]
+        channel = await ChannelRepository.get_by_key(PUBLIC_CHANNEL_KEY)
+        assert channel is not None
 
 
 class TestChannelDetail:

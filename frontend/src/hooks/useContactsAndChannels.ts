@@ -4,9 +4,8 @@ import { takePrefetchOrFetch } from '../prefetch';
 import { toast } from '../components/ui/sonner';
 import * as messageCache from '../messageCache';
 import { getContactDisplayName } from '../utils/pubkey';
+import { findPublicChannel, PUBLIC_CHANNEL_KEY, PUBLIC_CHANNEL_NAME } from '../utils/publicChannel';
 import type { Channel, Contact, Conversation } from '../types';
-
-const PUBLIC_CHANNEL_KEY = '8B3387E9C5CDEA6AC9E5EDBAA115CD72';
 
 interface UseContactsAndChannelsArgs {
   setActiveConversation: (conv: Conversation | null) => void;
@@ -121,14 +120,12 @@ export function useContactsAndChannels({
         messageCache.remove(key);
         const refreshedChannels = await api.getChannels();
         setChannels(refreshedChannels);
-        const publicChannel =
-          refreshedChannels.find((c) => c.key === PUBLIC_CHANNEL_KEY) ||
-          refreshedChannels.find((c) => c.name === 'Public');
+        const publicChannel = findPublicChannel(refreshedChannels);
         hasSetDefaultConversation.current = true;
         setActiveConversation({
           type: 'channel',
           id: publicChannel?.key || PUBLIC_CHANNEL_KEY,
-          name: publicChannel?.name || 'Public',
+          name: publicChannel?.name || PUBLIC_CHANNEL_NAME,
         });
         toast.success('Channel deleted');
       } catch (err) {
@@ -151,14 +148,12 @@ export function useContactsAndChannels({
         setContacts((prev) => prev.filter((c) => c.public_key !== publicKey));
         const refreshedChannels = await api.getChannels();
         setChannels(refreshedChannels);
-        const publicChannel =
-          refreshedChannels.find((c) => c.key === PUBLIC_CHANNEL_KEY) ||
-          refreshedChannels.find((c) => c.name === 'Public');
+        const publicChannel = findPublicChannel(refreshedChannels);
         hasSetDefaultConversation.current = true;
         setActiveConversation({
           type: 'channel',
           id: publicChannel?.key || PUBLIC_CHANNEL_KEY,
-          name: publicChannel?.name || 'Public',
+          name: publicChannel?.name || PUBLIC_CHANNEL_NAME,
         });
         toast.success('Contact deleted');
       } catch (err) {

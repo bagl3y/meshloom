@@ -4,6 +4,12 @@ from hashlib import sha256
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.channel_constants import (
+    PUBLIC_CHANNEL_KEY,
+    PUBLIC_CHANNEL_NAME,
+    is_public_channel_key,
+    is_public_channel_name,
+)
 from app.models import Channel, ChannelDetail, ChannelMessageCounts, ChannelTopSender
 from app.region_scope import normalize_region_scope
 from app.repository import ChannelRepository, MessageRepository
@@ -62,10 +68,31 @@ async def create_channel(request: CreateChannelRequest) -> Channel:
     Channels are NOT pushed to radio on creation. They are loaded to the radio
     automatically when sending a message (see messages.py send_channel_message).
     """
-    is_hashtag = request.name.startswith("#")
+    requested_name = request.name
+    is_hashtag = requested_name.startswith("#")
 
-    # Determine the channel secret
-    if request.key and not is_hashtag:
+    # Reserve the canonical Public room so it cannot drift to another key,
+    # and the well-known Public key cannot be renamed to something else.
+    if is_public_channel_name(requested_name):
+        if request.key:
+            try:
+                key_bytes = bytes.fromhex(request.key)
+                if len(key_bytes) != 16:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Channel key must be exactly 16 bytes (32 hex chars)",
+                    )
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid hex string for key") from None
+            if key_bytes.hex().upper() != PUBLIC_CHANNEL_KEY:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f'"{PUBLIC_CHANNEL_NAME}" must use the canonical Public key',
+                )
+        key_hex = PUBLIC_CHANNEL_KEY
+        channel_name = PUBLIC_CHANNEL_NAME
+        is_hashtag = False
+    elif request.key and not is_hashtag:
         try:
             key_bytes = bytes.fromhex(request.key)
             if len(key_bytes) != 16:
@@ -74,17 +101,25 @@ async def create_channel(request: CreateChannelRequest) -> Channel:
                 )
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid hex string for key") from None
+        key_hex = key_bytes.hex().upper()
+        if is_public_channel_key(key_hex):
+            raise HTTPException(
+                status_code=400,
+                detail=f'The canonical Public key may only be used for "{PUBLIC_CHANNEL_NAME}"',
+            )
+        channel_name = requested_name
     else:
         # Derive key from name hash (same as meshcore library does)
-        key_bytes = sha256(request.name.encode("utf-8")).digest()[:16]
+        key_bytes = sha256(requested_name.encode("utf-8")).digest()[:16]
+        key_hex = key_bytes.hex().upper()
+        channel_name = requested_name
 
-    key_hex = key_bytes.hex().upper()
-    logger.info("Creating channel %s: %s (hashtag=%s)", key_hex, request.name, is_hashtag)
+    logger.info("Creating channel %s: %s (hashtag=%s)", key_hex, channel_name, is_hashtag)
 
     # Store in database only - radio sync happens at send time
     await ChannelRepository.upsert(
         key=key_hex,
-        name=request.name,
+        name=channel_name,
         is_hashtag=is_hashtag,
         on_radio=False,
     )
@@ -140,6 +175,11 @@ async def delete_channel(key: str) -> dict:
     Note: This does not clear the channel from the radio. The radio's channel
     slots are managed separately (channels are loaded temporarily when sending).
     """
+    if is_public_channel_key(key):
+        raise HTTPException(
+            status_code=400, detail="The canonical Public channel cannot be deleted"
+        )
+
     logger.info("Deleting channel %s from database", key)
     await ChannelRepository.delete(key)
 
