@@ -25,10 +25,11 @@ If extending, have your LLM read the three `AGENTS.md` files: `./AGENTS.md`, `./
 ## Requirements
 
 - Python 3.10+
+- Node.js LTS or current (20, 22, 24, 25)
 - [UV](https://astral.sh/uv) package manager: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - MeshCore radio connected via USB serial, TCP, or BLE
 
-Node.js is not required to run the app when using the bundled prebuilt frontend. You only need Node>=20 + recent NPM if you want to develop the frontend or rebuild the web UI from source.
+If you are on a low-resource system and do not want to build the frontend locally, download the release zip named `remoteterm-prebuilt-frontend-vX.X.X-<short hash>.zip`. That bundle includes `frontend/prebuilt`, so you can run the app without doing a frontend build from source.
 
 <details>
 <summary>Finding your serial port</summary>
@@ -77,6 +78,9 @@ cd Remote-Terminal-for-MeshCore
 # Install backend dependencies
 uv sync
 
+# Build frontend
+cd frontend && npm install && npm run build && cd ..
+
 # Run server
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
@@ -103,7 +107,7 @@ Access at http://localhost:8000.
 
 > **Note:** WebGPU cracking requires HTTPS when not on localhost. See the HTTPS section under Additional Setup.
 >
-> If you're running from a source checkout and want to rebuild the UI yourself, install Node.js and run `cd frontend && npm install && npm run build`. The backend prefers `frontend/dist` when present and otherwise falls back to the bundled prebuilt frontend.
+> Source checkouts expect a normal frontend build in `frontend/dist`. The backend also supports `frontend/prebuilt` when you are running from the release zip artifact.
 
 ## Docker Compose
 
@@ -175,7 +179,7 @@ uv run uvicorn app.main:app --reload
 cd frontend
 npm install
 npm run dev      # Dev server at http://localhost:5173 (proxies API to :8000)
-npm run build    # Production build to dist/ (used preferentially) and prebuilt/ (bundled to save low-memory friends from needing to build)
+npm run build    # Production build to dist/
 ```
 
 Run both the backend and `npm run dev` for hot-reloading frontend development.
@@ -205,7 +209,7 @@ cd frontend
 npm run lint:fix                     # esLint + auto-fix
 npm run test:run                     # run tests
 npm run format                       # prettier (always writes)
-npm run build                        # build frontend/dist and frontend/prebuilt
+npm run build                        # build frontend/dist
 ```
 </details>
 
@@ -308,7 +312,7 @@ sudo journalctl -u remoteterm -f
 
 Edit `/etc/systemd/system/remoteterm.service` to set `MESHCORE_SERIAL_PORT` if needed.
 
-If you are deploying from a source checkout that does not include the bundled prebuilt frontend, install Node.js and run `cd /opt/remoteterm/frontend && sudo -u remoteterm npm install && sudo -u remoteterm npm run build` before starting the service.
+If you are deploying from a source checkout, install Node.js and run `cd /opt/remoteterm/frontend && sudo -u remoteterm npm install && sudo -u remoteterm npm run build` before starting the service. If you are deploying from the release zip artifact, the bundled `frontend/prebuilt` is already present.
 </details>
 
 <details>

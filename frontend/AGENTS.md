@@ -409,6 +409,10 @@ npm run test:run
 npm run build
 ```
 
+`npm run packaged-build` is release-only. It writes the fallback `frontend/prebuilt`
+directory used by the downloadable prebuilt release zip; normal development and
+validation should stick to `npm run build`.
+
 When touching cross-layer contracts, also run backend tests from repo root:
 
 ```bash

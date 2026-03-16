@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 echo -e "${YELLOW}=== Extended Quality Checks ===${NC}"
 echo
 
-echo -e "${BLUE}[all_quality]${NC} Running full lint, typecheck, unit tests, and builds..."
+echo -e "${BLUE}[all_quality]${NC} Running full lint, typecheck, unit tests, and the standard frontend build..."
 "$SCRIPT_DIR/scripts/all_quality.sh"
 echo -e "${GREEN}[all_quality]${NC} Passed!"
 echo

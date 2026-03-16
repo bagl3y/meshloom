@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && vite build --outDir prebuilt",
+    "build": "tsc && vite build",
+    "packaged-build": "vite build --outDir prebuilt",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",

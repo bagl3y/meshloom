@@ -12,7 +12,11 @@ frontend/test-results/
 
 # Frontend build output (built from source by end users)
 frontend/dist/
+frontend/prebuilt/
 frontend/.eslintcache
+
+# Release artifacts
+remoteterm-prebuilt-frontend-v*.zip
 
 # reference libraries
 references/

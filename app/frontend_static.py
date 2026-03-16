@@ -10,7 +10,10 @@ logger = logging.getLogger(__name__)
 INDEX_CACHE_CONTROL = "no-store"
 ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
 STATIC_FILE_CACHE_CONTROL = "public, max-age=3600"
-FRONTEND_BUILD_INSTRUCTIONS = "Run 'cd frontend && npm install && npm run build'."
+FRONTEND_BUILD_INSTRUCTIONS = (
+    "Run 'cd frontend && npm install && npm run build', "
+    "or use a release zip that includes frontend/prebuilt."
+)
 
 
 class CacheControlStaticFiles(StaticFiles):

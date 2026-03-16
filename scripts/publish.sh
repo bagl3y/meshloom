@@ -10,6 +10,19 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$SCRIPT_DIR"
 
+RELEASE_WORK_DIR=""
+
+cleanup_release_build_artifacts() {
+    if [ -d "$SCRIPT_DIR/frontend/prebuilt" ]; then
+        rm -rf "$SCRIPT_DIR/frontend/prebuilt"
+    fi
+    if [ -n "$RELEASE_WORK_DIR" ] && [ -d "$RELEASE_WORK_DIR" ]; then
+        rm -rf "$RELEASE_WORK_DIR"
+    fi
+}
+
+trap cleanup_release_build_artifacts EXIT
+
 echo -e "${YELLOW}=== RemoteTerm for MeshCore Publish Script ===${NC}"
 echo
 
@@ -157,6 +170,26 @@ echo
 # Get git hashes (after commit so they reflect the new commit)
 GIT_HASH=$(git rev-parse --short HEAD)
 FULL_GIT_HASH=$(git rev-parse HEAD)
+RELEASE_ASSET="remoteterm-prebuilt-frontend-v${VERSION}-${GIT_HASH}.zip"
+
+echo -e "${YELLOW}Building packaged frontend artifact...${NC}"
+cd "$SCRIPT_DIR/frontend"
+npm run packaged-build
+cd "$SCRIPT_DIR"
+
+RELEASE_WORK_DIR=$(mktemp -d)
+RELEASE_BUNDLE_DIR="$RELEASE_WORK_DIR/remoteterm-prebuilt-frontend-v${VERSION}-${GIT_HASH}"
+mkdir -p "$RELEASE_BUNDLE_DIR"
+git archive "$FULL_GIT_HASH" | tar -x -C "$RELEASE_BUNDLE_DIR"
+mkdir -p "$RELEASE_BUNDLE_DIR/frontend"
+cp -R "$SCRIPT_DIR/frontend/prebuilt" "$RELEASE_BUNDLE_DIR/frontend/prebuilt"
+rm -f "$SCRIPT_DIR/$RELEASE_ASSET"
+(
+    cd "$RELEASE_WORK_DIR"
+    zip -qr "$SCRIPT_DIR/$RELEASE_ASSET" "$(basename "$RELEASE_BUNDLE_DIR")"
+)
+echo -e "${GREEN}Packaged release artifact created: $RELEASE_ASSET${NC}"
+echo
 
 # Build docker image
 echo -e "${YELLOW}Building Docker image...${NC}"
@@ -200,6 +233,7 @@ else
 fi
 
 gh release create "$VERSION" \
+    "$RELEASE_ASSET" \
     --title "$VERSION" \
     --notes-file "$RELEASE_NOTES_FILE" \
     --verify-tag
@@ -217,3 +251,5 @@ echo -e "  - jkingsman/remoteterm-meshcore:$VERSION"
 echo -e "  - jkingsman/remoteterm-meshcore:$GIT_HASH"
 echo -e "GitHub release:"
 echo -e "  - $VERSION"
+echo -e "Release artifact:"
+echo -e "  - $RELEASE_ASSET"

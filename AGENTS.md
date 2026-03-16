@@ -194,7 +194,7 @@ This message-layer echo/path handling is independent of raw-packet storage dedup
 │   │       └── ...
 │   └── vite.config.ts
 ├── scripts/
-│   ├── all_quality.sh      # Run all lint, format, typecheck, tests, build (sequential)
+│   ├── all_quality.sh      # Run all lint, format, typecheck, tests, and the standard frontend build
 │   ├── collect_licenses.sh # Gather third-party license attributions
 │   ├── e2e.sh              # End-to-end test runner
 │   └── publish.sh          # Version bump, changelog, docker build & push
@@ -243,7 +243,7 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 Access at `http://localhost:8000`. All API routes are prefixed with `/api`.
 
-If `frontend/dist` (or `frontend/dist/index.html`) is missing, backend startup now logs an explicit error and continues serving API routes. In that case, frontend static routes are not mounted until a frontend build is present.
+If `frontend/dist` is missing, the backend falls back to `frontend/prebuilt` when present (for example from the release zip artifact). If neither build directory is available, startup logs an explicit error and continues serving API routes without frontend static routes mounted.
 
 ## Testing
 
@@ -281,7 +281,7 @@ npm run test:run
 
 ### Before Completing Changes
 
-**Always run `./scripts/all_quality.sh` before finishing any changes that have modified code or tests.** This runs all linting, formatting, type checking, tests, and builds sequentially, catching type mismatches, breaking changes, and compilation errors. This is not necessary for docs-only changes.
+**Always run `./scripts/all_quality.sh` before finishing any changes that have modified code or tests.** This runs all linting, formatting, type checking, tests, and the standard frontend build sequentially, catching type mismatches, breaking changes, and compilation errors. This is not necessary for docs-only changes.
 
 ## API Summary
 
