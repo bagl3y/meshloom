@@ -39,7 +39,10 @@ export function formatDuration(seconds: number): string {
   return `${mins}m`;
 }
 
-export function formatClockDrift(clockUtc: string): { text: string; isLarge: boolean } {
+export function formatClockDrift(
+  clockUtc: string,
+  referenceTimeMs: number = Date.now()
+): { text: string; isLarge: boolean } {
   // Firmware format: "HH:MM - D/M/YYYY UTC" or "HH:MM:SS - D/M/YYYY UTC"
   // Also handle ISO-like: "YYYY-MM-DD HH:MM:SS"
   let parsed: Date;
@@ -56,7 +59,7 @@ export function formatClockDrift(clockUtc: string): { text: string; isLarge: boo
   }
   if (isNaN(parsed.getTime())) return { text: '(invalid)', isLarge: false };
 
-  const driftMs = Math.abs(Date.now() - parsed.getTime());
+  const driftMs = Math.abs(referenceTimeMs - parsed.getTime());
   const driftSec = Math.floor(driftMs / 1000);
 
   if (driftSec >= 86400) return { text: '>24 hours!', isLarge: true };

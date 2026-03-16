@@ -401,6 +401,40 @@ describe('RepeaterDashboard', () => {
     expect(screen.getByText(/Fetched .*Just now/)).toBeInTheDocument();
   });
 
+  it('keeps repeater clock drift anchored to fetch time across remounts', () => {
+    vi.useFakeTimers();
+    try {
+      const fetchedAt = Date.UTC(2024, 0, 1, 12, 0, 0);
+      vi.setSystemTime(fetchedAt);
+
+      mockHook.loggedIn = true;
+      mockHook.paneData.nodeInfo = {
+        name: 'TestRepeater',
+        lat: null,
+        lon: null,
+        clock_utc: '11:59:30 - 1/1/2024 UTC',
+      };
+      mockHook.paneStates.nodeInfo = {
+        loading: false,
+        attempt: 1,
+        error: null,
+        fetched_at: fetchedAt,
+      };
+
+      const firstRender = render(<RepeaterDashboard {...defaultProps} />);
+      expect(screen.getByText(/\(drift: 30s\)/)).toBeInTheDocument();
+
+      vi.setSystemTime(fetchedAt + 10 * 60 * 1000);
+      firstRender.unmount();
+
+      render(<RepeaterDashboard {...defaultProps} />);
+      expect(screen.getByText(/\(drift: 30s\)/)).toBeInTheDocument();
+      expect(screen.queryByText(/\(drift: 10m30s\)/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('renders action buttons', () => {
     mockHook.loggedIn = true;
 
