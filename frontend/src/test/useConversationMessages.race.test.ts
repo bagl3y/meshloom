@@ -2,18 +2,26 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import * as messageCache from '../messageCache';
+import { api } from '../api';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import type { Conversation, Message } from '../types';
 
-const mockGetMessages = vi.fn<(...args: unknown[]) => Promise<Message[]>>();
+const mockGetMessages = vi.fn<typeof api.getMessages>();
 const mockGetMessagesAround = vi.fn();
 
 vi.mock('../api', () => ({
   api: {
-    getMessages: (...args: unknown[]) => mockGetMessages(...args),
+    getMessages: (...args: Parameters<typeof api.getMessages>) => mockGetMessages(...args),
     getMessagesAround: (...args: unknown[]) => mockGetMessagesAround(...args),
   },
   isAbortError: (err: unknown) => err instanceof DOMException && err.name === 'AbortError',
+}));
+
+const mockToastError = vi.fn();
+vi.mock('../components/ui/sonner', () => ({
+  toast: {
+    error: (...args: unknown[]) => mockToastError(...args),
+  },
 }));
 
 function createConversation(): Conversation {
@@ -55,6 +63,7 @@ describe('useConversationMessages ACK ordering', () => {
   beforeEach(() => {
     mockGetMessages.mockReset();
     messageCache.clear();
+    mockToastError.mockReset();
   });
 
   it('applies buffered ACK when message is added after ACK event', async () => {
@@ -447,6 +456,55 @@ describe('useConversationMessages older-page dedup and reentry', () => {
     expect(result.current.messages.filter((msg) => msg.id === 0)).toHaveLength(1);
     expect(result.current.messages).toHaveLength(201);
   });
+
+  it('aborts stale older-page requests on conversation switch without toasting', async () => {
+    const convA: Conversation = { type: 'contact', id: 'conv_a', name: 'Contact A' };
+    const convB: Conversation = { type: 'contact', id: 'conv_b', name: 'Contact B' };
+
+    const fullPage = Array.from({ length: 200 }, (_, i) =>
+      createMessage({
+        id: i + 1,
+        conversation_key: 'conv_a',
+        text: `msg-${i + 1}`,
+        sender_timestamp: 1700000000 + i,
+        received_at: 1700000000 + i,
+      })
+    );
+    mockGetMessages.mockResolvedValueOnce(fullPage);
+
+    const olderDeferred = createDeferred<Message[]>();
+    let olderSignal: AbortSignal | undefined;
+    mockGetMessages.mockImplementationOnce((_, signal?: AbortSignal) => {
+      olderSignal = signal;
+      signal?.addEventListener('abort', () => {
+        olderDeferred.resolve([]);
+      });
+      return new Promise<Message[]>((_, reject) => {
+        signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted', 'AbortError'));
+        });
+      });
+    });
+
+    const { result, rerender } = renderHook(
+      ({ conv }: { conv: Conversation }) => useConversationMessages(conv),
+      { initialProps: { conv: convA } }
+    );
+
+    await waitFor(() => expect(result.current.messagesLoading).toBe(false));
+    act(() => {
+      void result.current.fetchOlderMessages();
+    });
+
+    await waitFor(() => expect(result.current.loadingOlder).toBe(true));
+
+    mockGetMessages.mockResolvedValueOnce([createMessage({ id: 999, conversation_key: 'conv_b' })]);
+    rerender({ conv: convB });
+
+    await waitFor(() => expect(result.current.messagesLoading).toBe(false));
+    expect(olderSignal?.aborted).toBe(true);
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
 });
 
 describe('useConversationMessages forward pagination', () => {
@@ -454,6 +512,7 @@ describe('useConversationMessages forward pagination', () => {
     mockGetMessages.mockReset();
     mockGetMessagesAround.mockReset();
     messageCache.clear();
+    mockToastError.mockReset();
   });
 
   it('fetchNewerMessages loads newer messages and appends them', async () => {
@@ -616,6 +675,69 @@ describe('useConversationMessages forward pagination', () => {
     expect(result.current.hasNewerMessages).toBe(false);
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].text).toBe('latest-msg');
+  });
+
+  it('aborts stale newer-page requests on conversation switch without toasting', async () => {
+    const convA: Conversation = { type: 'channel', id: 'ch1', name: 'Channel A' };
+    const convB: Conversation = { type: 'channel', id: 'ch2', name: 'Channel B' };
+
+    mockGetMessagesAround.mockResolvedValueOnce({
+      messages: [
+        createMessage({
+          id: 1,
+          type: 'CHAN',
+          conversation_key: 'ch1',
+          text: 'msg-0',
+          sender_timestamp: 1700000000,
+          received_at: 1700000000,
+        }),
+      ],
+      has_older: false,
+      has_newer: true,
+    });
+
+    let newerSignal: AbortSignal | undefined;
+    mockGetMessages.mockImplementationOnce((_, signal?: AbortSignal) => {
+      newerSignal = signal;
+      return new Promise<Message[]>((_, reject) => {
+        signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted', 'AbortError'));
+        });
+      });
+    });
+
+    const initialProps: { conv: Conversation; target: number | null } = {
+      conv: convA,
+      target: 1,
+    };
+
+    const { result, rerender } = renderHook(
+      ({ conv, target }: { conv: Conversation; target: number | null }) =>
+        useConversationMessages(conv, target),
+      { initialProps }
+    );
+
+    await waitFor(() => expect(result.current.messagesLoading).toBe(false));
+
+    act(() => {
+      void result.current.fetchNewerMessages();
+    });
+
+    await waitFor(() => expect(result.current.loadingNewer).toBe(true));
+
+    mockGetMessages.mockResolvedValueOnce([
+      createMessage({
+        id: 999,
+        type: 'CHAN',
+        conversation_key: 'ch2',
+        text: 'conv-b',
+      }),
+    ]);
+    rerender({ conv: convB, target: null });
+
+    await waitFor(() => expect(result.current.messagesLoading).toBe(false));
+    expect(newerSignal?.aborted).toBe(true);
+    expect(mockToastError).not.toHaveBeenCalled();
   });
 
   it('preserves around-loaded messages when the jump target is cleared in the same conversation', async () => {

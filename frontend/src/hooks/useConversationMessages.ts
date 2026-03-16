@@ -161,6 +161,8 @@ export function useConversationMessages(
   const [loadingNewer, setLoadingNewer] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const olderAbortControllerRef = useRef<AbortController | null>(null);
+  const newerAbortControllerRef = useRef<AbortController | null>(null);
   const fetchingConversationIdRef = useRef<string | null>(null);
   const latestReconcileRequestIdRef = useRef(0);
   const messagesRef = useRef<Message[]>([]);
@@ -306,14 +308,19 @@ export function useConversationMessages(
 
     loadingOlderRef.current = true;
     setLoadingOlder(true);
+    const controller = new AbortController();
+    olderAbortControllerRef.current = controller;
     try {
-      const data = await api.getMessages({
-        type: activeConversation.type === 'channel' ? 'CHAN' : 'PRIV',
-        conversation_key: conversationId,
-        limit: MESSAGE_PAGE_SIZE,
-        before: oldestMessage.received_at,
-        before_id: oldestMessage.id,
-      });
+      const data = await api.getMessages(
+        {
+          type: activeConversation.type === 'channel' ? 'CHAN' : 'PRIV',
+          conversation_key: conversationId,
+          limit: MESSAGE_PAGE_SIZE,
+          before: oldestMessage.received_at,
+          before_id: oldestMessage.id,
+        },
+        controller.signal
+      );
 
       if (fetchingConversationIdRef.current !== conversationId) return;
 
@@ -335,11 +342,17 @@ export function useConversationMessages(
       }
       setHasOlderMessages(dataWithPendingAck.length >= MESSAGE_PAGE_SIZE);
     } catch (err) {
+      if (isAbortError(err)) {
+        return;
+      }
       console.error('Failed to fetch older messages:', err);
       toast.error('Failed to load older messages', {
         description: err instanceof Error ? err.message : 'Check your connection',
       });
     } finally {
+      if (olderAbortControllerRef.current === controller) {
+        olderAbortControllerRef.current = null;
+      }
       loadingOlderRef.current = false;
       setLoadingOlder(false);
     }
@@ -361,14 +374,19 @@ export function useConversationMessages(
     if (!newestMessage) return;
 
     setLoadingNewer(true);
+    const controller = new AbortController();
+    newerAbortControllerRef.current = controller;
     try {
-      const data = await api.getMessages({
-        type: activeConversation.type === 'channel' ? 'CHAN' : 'PRIV',
-        conversation_key: conversationId,
-        limit: MESSAGE_PAGE_SIZE,
-        after: newestMessage.received_at,
-        after_id: newestMessage.id,
-      });
+      const data = await api.getMessages(
+        {
+          type: activeConversation.type === 'channel' ? 'CHAN' : 'PRIV',
+          conversation_key: conversationId,
+          limit: MESSAGE_PAGE_SIZE,
+          after: newestMessage.received_at,
+          after_id: newestMessage.id,
+        },
+        controller.signal
+      );
 
       if (fetchingConversationIdRef.current !== conversationId) return;
 
@@ -385,11 +403,17 @@ export function useConversationMessages(
       }
       setHasNewerMessages(dataWithPendingAck.length >= MESSAGE_PAGE_SIZE);
     } catch (err) {
+      if (isAbortError(err)) {
+        return;
+      }
       console.error('Failed to fetch newer messages:', err);
       toast.error('Failed to load newer messages', {
         description: err instanceof Error ? err.message : 'Check your connection',
       });
     } finally {
+      if (newerAbortControllerRef.current === controller) {
+        newerAbortControllerRef.current = null;
+      }
       setLoadingNewer(false);
     }
   }, [activeConversation, applyPendingAck, hasNewerMessages, loadingNewer, messages]);
@@ -419,6 +443,14 @@ export function useConversationMessages(
   useEffect(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
+    }
+    if (olderAbortControllerRef.current) {
+      olderAbortControllerRef.current.abort();
+      olderAbortControllerRef.current = null;
+    }
+    if (newerAbortControllerRef.current) {
+      newerAbortControllerRef.current.abort();
+      newerAbortControllerRef.current = null;
     }
 
     const prevId = prevConversationIdRef.current;
