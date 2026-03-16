@@ -477,8 +477,9 @@ async def _process_advertisement(
         path_len,
     )
 
-    # Use device_role from advertisement for contact type (1=Chat, 2=Repeater, 3=Room, 4=Sensor)
-    # Use advert.timestamp for last_advert (sender's timestamp), receive timestamp for last_seen
+    # Use device_role from advertisement for contact type (1=Chat, 2=Repeater, 3=Room, 4=Sensor).
+    # Persist advert freshness fields using the server receive wall clock so
+    # route selection is not affected by sender clock skew.
     contact_type = (
         advert.device_role if advert.device_role > 0 else (existing.type if existing else 0)
     )
@@ -498,7 +499,7 @@ async def _process_advertisement(
         type=contact_type,
         lat=advert.lat,
         lon=advert.lon,
-        last_advert=advert.timestamp if advert.timestamp > 0 else timestamp,
+        last_advert=timestamp,
         last_seen=timestamp,
         last_path=path_hex,
         last_path_len=path_len,

@@ -355,10 +355,10 @@ class TestAdvertisementPipeline:
         assert contact.last_path_len == 1  # Still the shorter path
 
     @pytest.mark.asyncio
-    async def test_advertisement_path_freshness_uses_last_advert_not_last_seen(
+    async def test_advertisement_path_freshness_uses_receive_time_not_sender_clock(
         self, test_db, captured_broadcasts
     ):
-        """Non-advert contact activity should not keep an old advert path artificially fresh."""
+        """Sender clock skew should not keep an old advert path artificially fresh."""
         from unittest.mock import MagicMock
 
         from app.decoder import ParsedAdvertisement
@@ -385,22 +385,43 @@ class TestAdvertisementPipeline:
         longer_packet_info.path_hash_size = 1
         longer_packet_info.payload = b""
 
+        skewed_shorter_packet_info = MagicMock()
+        skewed_shorter_packet_info.path_length = 1
+        skewed_shorter_packet_info.path = bytes.fromhex("aa")
+        skewed_shorter_packet_info.path_hash_size = 1
+        skewed_shorter_packet_info.payload = b""
+
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
             with patch("app.packet_processor.parse_advertisement") as mock_parse:
                 mock_parse.return_value = ParsedAdvertisement(
                     public_key=test_pubkey,
                     name="TestNode",
-                    timestamp=1070,
+                    timestamp=5000,
                     lat=None,
                     lon=None,
                     device_role=1,
                 )
-                await _process_advertisement(b"", timestamp=1070, packet_info=longer_packet_info)
+                await _process_advertisement(
+                    b"", timestamp=1070, packet_info=skewed_shorter_packet_info
+                )
+
+        with patch("app.packet_processor.broadcast_event", mock_broadcast):
+            with patch("app.packet_processor.parse_advertisement") as mock_parse:
+                mock_parse.return_value = ParsedAdvertisement(
+                    public_key=test_pubkey,
+                    name="TestNode",
+                    timestamp=5005,
+                    lat=None,
+                    lon=None,
+                    device_role=1,
+                )
+                await _process_advertisement(b"", timestamp=1200, packet_info=longer_packet_info)
 
         contact = await ContactRepository.get_by_key(test_pubkey)
         assert contact is not None
         assert contact.last_path_len == 3
         assert contact.last_path == "aabbcc"
+        assert contact.last_advert == 1200
 
     @pytest.mark.asyncio
     async def test_advertisement_default_path_len_treated_as_infinity(
