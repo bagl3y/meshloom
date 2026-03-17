@@ -256,6 +256,37 @@ describe('App startup hash resolution', () => {
     expect(window.location.hash).toBe('');
   });
 
+  it('tracks the current conversation in local storage even before reopen is enabled', async () => {
+    const chatChannel = {
+      key: '11111111111111111111111111111111',
+      name: 'Ops',
+      is_hashtag: false,
+      on_radio: false,
+      last_read_at: null,
+    };
+
+    window.location.hash = '';
+    mocks.api.getChannels.mockResolvedValue([publicChannel, chatChannel]);
+    localStorage.setItem(
+      LAST_VIEWED_CONVERSATION_KEY,
+      JSON.stringify({
+        type: 'channel',
+        id: chatChannel.key,
+        name: chatChannel.name,
+      })
+    );
+
+    render(<App />);
+
+    await waitFor(() => {
+      for (const node of screen.getAllByTestId('active-conversation')) {
+        expect(node).toHaveTextContent(`channel:${publicChannel.key}:Public`);
+      }
+    });
+
+    expect(localStorage.getItem(LAST_VIEWED_CONVERSATION_KEY)).toContain(publicChannel.key);
+  });
+
   it('restores last viewed contact from legacy name token when hash is empty and reopen is enabled', async () => {
     const aliceContact = {
       public_key: 'b'.repeat(64),

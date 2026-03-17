@@ -211,7 +211,7 @@ export function useConversationRouter({
       if (hashSyncEnabledRef.current && !suspendHashSync) {
         updateUrlHash(activeConversation);
       }
-      if (getReopenLastConversationEnabled() && activeConversation.type !== 'search') {
+      if (activeConversation.type !== 'search') {
         saveLastViewedConversation(activeConversation);
       }
     }
