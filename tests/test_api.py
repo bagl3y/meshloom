@@ -129,7 +129,11 @@ class TestDebugEndpoint:
         from meshcore import EventType
 
         from app.config import clear_recent_log_lines
-        from app.routers.debug import DebugApplicationInfo
+        from app.routers.debug import (
+            LOG_COPY_BOUNDARY_LINE,
+            LOG_COPY_BOUNDARY_MESSAGE,
+            DebugApplicationInfo,
+        )
 
         clear_recent_log_lines()
 
@@ -205,6 +209,9 @@ class TestDebugEndpoint:
         assert payload["application"]["commit_hash"] == "deadbeef"
         assert payload["runtime"]["channel_slot_reuse_enabled"] is True
         assert payload["runtime"]["channels_with_incoming_messages"] == 1
+        assert payload["logs"][:4] == [LOG_COPY_BOUNDARY_LINE] * 4
+        assert payload["logs"][4] == LOG_COPY_BOUNDARY_MESSAGE
+        assert payload["logs"][5:9] == [LOG_COPY_BOUNDARY_LINE] * 4
         assert any("support snapshot marker" in line for line in payload["logs"])
 
         radio_probe = payload["radio_probe"]

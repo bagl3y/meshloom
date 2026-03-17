@@ -198,7 +198,8 @@ This message-layer echo/path handling is independent of raw-packet storage dedup
 │   ├── collect_licenses.sh # Gather third-party license attributions
 │   ├── e2e.sh              # End-to-end test runner
 │   └── publish.sh          # Version bump, changelog, docker build & push
-├── remoteterm.service      # Systemd unit file for production deployment
+├── README_ADVANCED.md      # Advanced setup, troubleshooting, and service guidance
+├── CONTRIBUTING.md         # Contributor workflow and testing guidance
 ├── tests/                  # Backend tests (pytest)
 ├── data/                   # SQLite database (runtime)
 └── pyproject.toml          # Python dependencies

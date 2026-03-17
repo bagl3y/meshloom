@@ -21,6 +21,20 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["debug"])
 
+LOG_COPY_BOUNDARY_MESSAGE = "STOP COPYING HERE IF YOU DO NOT WANT TO INCLUDE LOGS BELOW"
+LOG_COPY_BOUNDARY_LINE = "-" * 64
+LOG_COPY_BOUNDARY_PREFIX = [
+    LOG_COPY_BOUNDARY_LINE,
+    LOG_COPY_BOUNDARY_LINE,
+    LOG_COPY_BOUNDARY_LINE,
+    LOG_COPY_BOUNDARY_LINE,
+    LOG_COPY_BOUNDARY_MESSAGE,
+    LOG_COPY_BOUNDARY_LINE,
+    LOG_COPY_BOUNDARY_LINE,
+    LOG_COPY_BOUNDARY_LINE,
+    LOG_COPY_BOUNDARY_LINE,
+]
+
 
 class DebugApplicationInfo(BaseModel):
     version: str
@@ -295,5 +309,5 @@ async def debug_support_snapshot() -> DebugSnapshotResponse:
             },
         ),
         radio_probe=radio_probe,
-        logs=get_recent_log_lines(limit=1000),
+        logs=[*LOG_COPY_BOUNDARY_PREFIX, *get_recent_log_lines(limit=1000)],
     )

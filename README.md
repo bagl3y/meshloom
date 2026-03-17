@@ -22,10 +22,22 @@ This is developed with very heavy agentic assistance -- there is no warranty of 
 
 If extending, have your LLM read the three `AGENTS.md` files: `./AGENTS.md`, `./frontend/AGENTS.md`, and `./app/AGENTS.md`.
 
+## Start Here
+
+Most users should choose one of these paths:
+
+1. Clone and build from source.
+2. Download the prebuilt release zip if you are on a resource-constrained system and do not want to build the frontend locally.
+3. Use Docker if that better matches how you deploy.
+
+For advanced setup, troubleshooting, HTTPS, systemd service setup, and remediation environment variables, see [README_ADVANCED.md](README_ADVANCED.md).
+
+If you plan to contribute, read [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Requirements
 
 - Python 3.10+
-- Node.js LTS or current (20, 22, 24, 25)
+- Node.js LTS or current (20, 22, 24, 25) if you're not using a prebuilt release
 - [UV](https://astral.sh/uv) package manager: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - MeshCore radio connected via USB serial, TCP, or BLE
 
@@ -67,7 +79,7 @@ usbipd attach --wsl --busid 3-8
 ```
 </details>
 
-## Quick Start
+## Path 1: Clone And Build
 
 **This approach is recommended over Docker due to intermittent serial communications issues I've seen on \*nix systems.**
 
@@ -75,43 +87,33 @@ usbipd attach --wsl --busid 3-8
 git clone https://github.com/jkingsman/Remote-Terminal-for-MeshCore.git
 cd Remote-Terminal-for-MeshCore
 
-# Install backend dependencies
 uv sync
-
-# Build frontend
 cd frontend && npm install && npm run build && cd ..
 
-# Run server
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-The server auto-detects the serial port. To specify a transport manually:
+Access the app at http://localhost:8000.
+
+Source checkouts expect a normal frontend build in `frontend/dist`.
+
+## Path 1.5: Use The Prebuilt Release Zip
+
+Release zips can be found as an asset within the [releases listed here](https://github.com/jkingsman/Remote-Terminal-for-MeshCore/releases). This can be beneficial on resource constrained systems that cannot cope with the RAM-hungry frontend build process.
+
+If you downloaded the release zip instead of cloning the repo, unpack it and run:
+
 ```bash
-# Serial (explicit port)
-MESHCORE_SERIAL_PORT=/dev/ttyUSB0 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-# TCP (e.g. via wifi-enabled firmware)
-MESHCORE_TCP_HOST=192.168.1.100 MESHCORE_TCP_PORT=4000 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-# BLE (address and PIN both required)
-MESHCORE_BLE_ADDRESS=AA:BB:CC:DD:EE:FF MESHCORE_BLE_PIN=123456 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-On Windows (PowerShell), set environment variables as a separate statement:
-```powershell
-$env:MESHCORE_SERIAL_PORT="COM8" # or your COM port
+cd Remote-Terminal-for-MeshCore
+uv sync
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Access at http://localhost:8000.
+The release bundle includes `frontend/prebuilt`, so it does not require a local frontend build.
 
-> **Note:** WebGPU cracking requires HTTPS when not on localhost. See the HTTPS section under Additional Setup.
->
-> Source checkouts expect a normal frontend build in `frontend/dist`. The backend also supports `frontend/prebuilt` when you are running from the release zip artifact.
+## Path 2: Docker
 
-## Docker Compose
-
-> **Warning:** Docker has intermittent issues with serial event subscriptions. The native method above is more reliable.
+> **Warning:** Docker has had reports intermittent issues with serial event subscriptions. The native method above is more reliable.
 
 Edit `docker-compose.yaml` to set a serial device for passthrough, or uncomment your transport (serial or TCP). Then:
 
@@ -144,7 +146,7 @@ docker compose pull
 docker compose up -d
 ```
 
-The container runs as root by default for maximum serial passthrough compatibility across host setups. On Linux, if you switch between native and Docker runs, `./data` can end up root-owned. If you do not need that compatibility behavior, you can enable the optional `user: "${UID:-1000}:${GID:-1000}"` line in `docker-compose.yaml` to keep ownership aligned with your host user.
+The container runs as root by default for maximum serial passthrough compatibility across host setups. On Linux, if you switch between native and Docker runs, `./data` can end up root-owned. If you do not need that serial compatibility behavior, you can enable the optional `user: "${UID:-1000}:${GID:-1000}"` line in `docker-compose.yaml` to keep ownership aligned with your host user.
 
 To stop:
 
@@ -152,68 +154,9 @@ To stop:
 docker compose down
 ```
 
-## Development
+## Standard Environment Variables
 
-### Backend
-
-```bash
-uv sync
-uv run uvicorn app.main:app --reload # autodetects serial port
-
-# Or with explicit serial port
-MESHCORE_SERIAL_PORT=/dev/ttyUSB0 uv run uvicorn app.main:app --reload
-```
-
-On Windows (PowerShell):
-```powershell
-uv sync
-$env:MESHCORE_SERIAL_PORT="COM8" # or your COM port
-uv run uvicorn app.main:app --reload
-```
-
-> **Windows note:** I've seen an intermittent startup issue like `"Received empty packet: index out of range"` with failed contact sync. I can't figure out why this happens. The issue typically resolves on restart. If you can figure out why this happens, I will buy you a virtual or iRL six pack if you're in the PNW. As a former always-windows-girlie before embracing WSL2, I despise second-classing M$FT users, but I'm just stuck with this one.
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev      # Dev server at http://localhost:5173 (proxies API to :8000)
-npm run build    # Production build to dist/
-```
-
-Run both the backend and `npm run dev` for hot-reloading frontend development.
-
-### Code Quality & Tests
-
-Please test, lint, format, and quality check your code before PRing or committing. At the least, run a lint + autoformat + pyright check on the backend, and a lint + autoformat on the frontend.
-
-Run everything at once:
-
-```bash
-./scripts/all_quality.sh
-```
-
-<details>
-<summary>Or run individual checks</summary>
-
-```bash
-# python
-uv run ruff check app/ tests/ --fix  # lint + auto-fix
-uv run ruff format app/ tests/       # format (always writes)
-uv run pyright app/                  # type checking
-PYTHONPATH=. uv run pytest tests/ -v # backend tests
-
-# frontend
-cd frontend
-npm run lint:fix                     # esLint + auto-fix
-npm run test:run                     # run tests
-npm run format                       # prettier (always writes)
-npm run build                        # build frontend/dist
-```
-</details>
-
-## Configuration
+Only one transport may be active at a time. If multiple are set, the server will refuse to start.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -223,137 +166,36 @@ npm run build                        # build frontend/dist
 | `MESHCORE_TCP_PORT` | 4000 | TCP port |
 | `MESHCORE_BLE_ADDRESS` | | BLE device address (mutually exclusive with serial/TCP) |
 | `MESHCORE_BLE_PIN` | | BLE PIN (required when BLE address is set) |
-| `MESHCORE_LOG_LEVEL` | INFO | DEBUG, INFO, WARNING, ERROR |
-| `MESHCORE_DATABASE_PATH` | data/meshcore.db | SQLite database path |
-| `MESHCORE_DISABLE_BOTS` | false | Disable bot system entirely (blocks execution and config) |
+| `MESHCORE_LOG_LEVEL` | INFO | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `MESHCORE_DATABASE_PATH` | `data/meshcore.db` | SQLite database path |
+| `MESHCORE_DISABLE_BOTS` | false | Disable bot system entirely (blocks execution and config; an intermediate security precaution, but not as good as basic auth) |
 | `MESHCORE_BASIC_AUTH_USERNAME` | | Optional app-wide HTTP Basic auth username; must be set together with `MESHCORE_BASIC_AUTH_PASSWORD` |
 | `MESHCORE_BASIC_AUTH_PASSWORD` | | Optional app-wide HTTP Basic auth password; must be set together with `MESHCORE_BASIC_AUTH_USERNAME` |
 
-Only one transport may be active at a time. If multiple are set, the server will refuse to start.
+Common launch patterns:
+
+```bash
+# Serial (explicit port)
+MESHCORE_SERIAL_PORT=/dev/ttyUSB0 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# TCP
+MESHCORE_TCP_HOST=192.168.1.100 MESHCORE_TCP_PORT=4000 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# BLE
+MESHCORE_BLE_ADDRESS=AA:BB:CC:DD:EE:FF MESHCORE_BLE_PIN=123456 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+On Windows (PowerShell), set environment variables as a separate statement:
+
+```powershell
+$env:MESHCORE_SERIAL_PORT="COM8" # or your COM port
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
 
 If you enable Basic Auth, protect the app with HTTPS. HTTP Basic credentials are not safe on plain HTTP.
 
-### Remediation Environment Variables
+## Where To Go Next
 
-These are intended for diagnosing or working around radios that behave oddly.
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK` | false | Run aggressive 10-second `get_msg()` fallback polling instead of the default hourly sanity check |
-| `MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE` | false | Disable channel-slot reuse and force `set_channel(...)` before every channel send |
-
-By default the app relies on radio events plus MeshCore auto-fetch for incoming messages, and also runs a low-frequency hourly audit poll. That audit checks both:
-
-- whether messages were left on the radio without reaching the app through event subscription
-- whether the app's channel-slot expectations still match the radio's actual channel listing
-
-If the audit finds a mismatch, you'll see an error in the application UI and your logs. If you see that warning, or if messages on the radio never show up in the app, try `MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK=true` to switch that task into a more aggressive 10-second safety net. If room sends appear to be using the wrong channel slot or another client is changing slots underneath this app, try `MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE=true` to force the radio to validate the channel slot is valid before sending (will delay sending by ~500ms).
-
-## Additional Setup
-
-<details>
-<summary>HTTPS (Required for WebGPU room-finding outside localhost)</summary>
-
-WebGPU requires a secure context. When not on `localhost`, serve over HTTPS:
-
-```bash
-openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=localhost'
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --ssl-keyfile=key.pem --ssl-certfile=cert.pem
-```
-
-For Docker Compose, generate the cert and add the volume mounts and command override to `docker-compose.yaml`:
-
-```bash
-# generate snakeoil TLS cert
-openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=localhost'
-```
-
-Then add the key and cert to the `remoteterm` service in `docker-compose.yaml`, and add an explicit launch command that uses them:
-
-```yaml
-    volumes:
-      - ./data:/app/data
-      - ./cert.pem:/app/cert.pem:ro
-      - ./key.pem:/app/key.pem:ro
-    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --ssl-keyfile=/app/key.pem --ssl-certfile=/app/cert.pem
-```
-
-Accept the browser warning, or use [mkcert](https://github.com/FiloSottile/mkcert) for locally-trusted certs.
-</details>
-
-<details>
-<summary>Systemd Service (Linux)</summary>
-
-Assumes you're running from `/opt/remoteterm`; update commands and `remoteterm.service` if you're running elsewhere.
-
-```bash
-# Create service user
-sudo useradd -r -m -s /bin/false remoteterm
-
-# Install to /opt/remoteterm
-sudo mkdir -p /opt/remoteterm
-sudo cp -r . /opt/remoteterm/
-sudo chown -R remoteterm:remoteterm /opt/remoteterm
-
-# Install dependencies
-cd /opt/remoteterm
-sudo -u remoteterm uv venv
-sudo -u remoteterm uv sync
-
-# Install and start service
-sudo cp /opt/remoteterm/remoteterm.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now remoteterm
-
-# Check status
-sudo systemctl status remoteterm
-sudo journalctl -u remoteterm -f
-```
-
-Edit `/etc/systemd/system/remoteterm.service` to set `MESHCORE_SERIAL_PORT` if needed.
-
-If you are deploying from a source checkout, install Node.js and run `cd /opt/remoteterm/frontend && sudo -u remoteterm npm install && sudo -u remoteterm npm run build` before starting the service. If you are deploying from the release zip artifact, the bundled `frontend/prebuilt` is already present.
-</details>
-
-<details>
-<summary>Testing</summary>
-
-**Backend:**
-
-```bash
-PYTHONPATH=. uv run pytest tests/ -v
-```
-
-**Frontend:**
-
-```bash
-cd frontend
-npm run test:run
-```
-
-**E2E:**
-
-Warning: these tests are only guaranteed to run correctly in a narrow subset of environments; they require a busy mesh with messages arriving constantly and an available autodetect-able radio, as well as a contact in the test database (which you can provide in `tests/e2e/.tmp/e2e-test.db` after an initial run). E2E tests are generally not necessary to run for normal development work.
-
-```bash
-cd tests/e2e
-npx playwright test # headless
-npx playwright test --headed # show the browser window
-```
-</details>
-
-## API Documentation
-
-With the backend running: http://localhost:8000/docs
-
-## Debugging & Bug Reports
-
-If you're experiencing issues or opening a bug report, please start the backend with debug logging enabled. Debug mode provides a much more detailed breakdown of radio communication, packet processing, and other internal operations, which makes it significantly easier to diagnose problems.
-
-To start the server with debug logging:
-
-```bash
-MESHCORE_LOG_LEVEL=DEBUG uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-Please include the relevant debug log output when filing an issue on GitHub.
+- Advanced setup, troubleshooting, HTTPS, systemd, remediation variables, and debug logging: [README_ADVANCED.md](README_ADVANCED.md)
+- Contributing, tests, linting, E2E notes, and important AGENTS files: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Live API docs after the backend is running: http://localhost:8000/docs
