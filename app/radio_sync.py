@@ -799,6 +799,75 @@ async def stop_periodic_advert():
 # Prevents reboot-loop: once we've rebooted to fix clock skew this session,
 # don't do it again (the hardware RTC case can't be fixed by reboot).
 _clock_reboot_attempted: bool = False
+_CLOCK_WRAP_TARGET = 0xFFFFFFFF
+_CLOCK_WRAP_POLL_INTERVAL = 0.2
+_CLOCK_WRAP_TIMEOUT = 3.0
+
+
+async def _query_radio_time(mc: MeshCore) -> int | None:
+    """Return the radio's current epoch, or None if it can't be read."""
+    try:
+        result = await mc.commands.get_time()
+    except Exception:
+        return None
+    if result.payload is None:
+        return None
+    value = result.payload.get("time")
+    if isinstance(value, int):
+        return value
+    return None
+
+
+async def _attempt_clock_wraparound(mc: MeshCore, *, now: int, observed_radio_time: int) -> bool:
+    """Try the experimental uint32 wraparound trick, then retry normal time sync."""
+    logger.warning(
+        "Experimental __CLOWNTOWN_DO_CLOCK_WRAPAROUND enabled: attempting uint32 "
+        "clock wraparound before normal time sync (radio=%d, system=%d).",
+        observed_radio_time,
+        now,
+    )
+    result = await mc.commands.set_time(_CLOCK_WRAP_TARGET)
+    if result.type != EventType.OK:
+        logger.warning(
+            "Clock wraparound pre-step failed: set_time(%d) returned %s.",
+            _CLOCK_WRAP_TARGET,
+            result.type,
+        )
+        return False
+
+    deadline = time.monotonic() + _CLOCK_WRAP_TIMEOUT
+    wrapped_time: int | None = None
+    while time.monotonic() < deadline:
+        await asyncio.sleep(_CLOCK_WRAP_POLL_INTERVAL)
+        wrapped_time = await _query_radio_time(mc)
+        if wrapped_time is not None and wrapped_time < 60:
+            break
+    else:
+        wrapped_time = None
+
+    if wrapped_time is None:
+        logger.warning(
+            "Clock wraparound experiment did not observe a wrapped epoch within %.1f "
+            "seconds; falling back to normal recovery.",
+            _CLOCK_WRAP_TIMEOUT,
+        )
+        return False
+
+    logger.warning(
+        "Clock wraparound experiment observed wrapped epoch %d; retrying normal time sync.",
+        wrapped_time,
+    )
+    retry = await mc.commands.set_time(now)
+    if retry.type == EventType.OK:
+        logger.warning("Clock sync succeeded after experimental wraparound.")
+        return True
+
+    logger.warning(
+        "Clock sync still failed after experimental wraparound: set_time(%d) returned %s.",
+        now,
+        retry.type,
+    )
+    return False
 
 
 async def sync_radio_time(mc: MeshCore) -> bool:
@@ -821,6 +890,20 @@ async def sync_radio_time(mc: MeshCore) -> bool:
     global _clock_reboot_attempted  # noqa: PLW0603
     try:
         now = int(time.time())
+        preflight_radio_time: int | None = None
+        wraparound_attempted = False
+
+        if settings.clowntown_do_clock_wraparound:
+            preflight_radio_time = await _query_radio_time(mc)
+            if preflight_radio_time is not None and preflight_radio_time > now:
+                wraparound_attempted = True
+                if await _attempt_clock_wraparound(
+                    mc,
+                    now=now,
+                    observed_radio_time=preflight_radio_time,
+                ):
+                    return True
+
         result = await mc.commands.set_time(now)
 
         if result.type == EventType.OK:
@@ -829,11 +912,7 @@ async def sync_radio_time(mc: MeshCore) -> bool:
 
         # Firmware rejected the time (most likely radio clock is ahead).
         # Query actual radio time so we can report the delta.
-        try:
-            time_result = await mc.commands.get_time()
-            radio_time = time_result.payload.get("time") if time_result.payload else None
-        except Exception:
-            radio_time = None
+        radio_time = await _query_radio_time(mc)
 
         if radio_time is not None:
             delta = radio_time - now
@@ -852,6 +931,19 @@ async def sync_radio_time(mc: MeshCore) -> bool:
                 "and get_time query failed; cannot determine clock skew.",
                 result.type,
             )
+
+        if (
+            settings.clowntown_do_clock_wraparound
+            and not wraparound_attempted
+            and radio_time is not None
+            and radio_time > now
+            and await _attempt_clock_wraparound(
+                mc,
+                now=now,
+                observed_radio_time=radio_time,
+            )
+        ):
+            return True
 
         # If the clock is significantly ahead and we haven't already tried
         # a corrective reboot this session, reboot the radio.  Boards with

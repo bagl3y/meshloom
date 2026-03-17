@@ -4,7 +4,7 @@ from collections import deque
 from threading import Lock
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     disable_bots: bool = False
     enable_message_poll_fallback: bool = False
     force_channel_slot_reconfigure: bool = False
+    clowntown_do_clock_wraparound: bool = Field(
+        default=False,
+        validation_alias="__CLOWNTOWN_DO_CLOCK_WRAPAROUND",
+    )
     basic_auth_username: str = ""
     basic_auth_password: str = ""
 

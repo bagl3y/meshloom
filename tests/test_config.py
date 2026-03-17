@@ -118,3 +118,12 @@ class TestBasicAuthConfiguration:
                 basic_auth_username="",
                 basic_auth_password="secret",
             )
+
+
+class TestExperimentalAliases:
+    """Ensure exact-name experimental env vars still map into settings."""
+
+    def test_clowntown_wraparound_alias_reads_exact_env_var(self, monkeypatch):
+        monkeypatch.setenv("__CLOWNTOWN_DO_CLOCK_WRAPAROUND", "true")
+        s = Settings(serial_port="", tcp_host="", ble_address="")
+        assert s.clowntown_do_clock_wraparound is True
