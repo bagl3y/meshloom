@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from meshcore import EventType
+from meshcore.events import Event
 
 from app.models import Favorite
 from app.radio import RadioManager, radio_manager
@@ -162,11 +163,20 @@ class TestPollingPause:
 class TestSyncRadioTime:
     """Test the radio time sync function."""
 
+    @pytest.fixture(autouse=True)
+    def _reset_reboot_flag(self):
+        """Reset the module-level reboot guard between tests."""
+        import app.radio_sync as _mod
+
+        _mod._clock_reboot_attempted = False
+        yield
+        _mod._clock_reboot_attempted = False
+
     @pytest.mark.asyncio
     async def test_returns_true_on_success(self):
         """sync_radio_time returns True when time is set successfully."""
         mock_mc = MagicMock()
-        mock_mc.commands.set_time = AsyncMock()
+        mock_mc.commands.set_time = AsyncMock(return_value=Event(EventType.OK, {}))
 
         result = await sync_radio_time(mock_mc)
 
@@ -187,6 +197,86 @@ class TestSyncRadioTime:
         result = await sync_radio_time(mock_mc)
 
         assert result is False
+
+    @pytest.mark.asyncio
+    async def test_returns_false_when_firmware_rejects_and_reboots(self):
+        """sync_radio_time reboots radio on first rejection with significant skew."""
+        import time as _time
+
+        radio_time = int(_time.time()) + 86400  # radio is 1 day ahead
+        mock_mc = MagicMock()
+        mock_mc.commands.set_time = AsyncMock(
+            return_value=Event(EventType.ERROR, {"reason": "illegal_arg"})
+        )
+        mock_mc.commands.get_time = AsyncMock(
+            return_value=Event(EventType.CURRENT_TIME, {"time": radio_time})
+        )
+        mock_mc.commands.reboot = AsyncMock()
+
+        result = await sync_radio_time(mock_mc)
+
+        assert result is False
+        mock_mc.commands.get_time.assert_called_once()
+        mock_mc.commands.reboot.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_does_not_reboot_twice(self):
+        """Second rejection logs hardware RTC warning instead of rebooting."""
+        import time as _time
+
+        import app.radio_sync as _mod
+
+        _mod._clock_reboot_attempted = True  # simulate prior reboot
+
+        radio_time = int(_time.time()) + 86400
+        mock_mc = MagicMock()
+        mock_mc.commands.set_time = AsyncMock(
+            return_value=Event(EventType.ERROR, {"reason": "illegal_arg"})
+        )
+        mock_mc.commands.get_time = AsyncMock(
+            return_value=Event(EventType.CURRENT_TIME, {"time": radio_time})
+        )
+        mock_mc.commands.reboot = AsyncMock()
+
+        result = await sync_radio_time(mock_mc)
+
+        assert result is False
+        mock_mc.commands.reboot.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_returns_false_when_rejected_and_get_time_fails(self):
+        """sync_radio_time reboots even when get_time fails (unknown skew)."""
+        mock_mc = MagicMock()
+        mock_mc.commands.set_time = AsyncMock(
+            return_value=Event(EventType.ERROR, {"reason": "illegal_arg"})
+        )
+        mock_mc.commands.get_time = AsyncMock(side_effect=Exception("timeout"))
+        mock_mc.commands.reboot = AsyncMock()
+
+        result = await sync_radio_time(mock_mc)
+
+        assert result is False
+        mock_mc.commands.reboot.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_no_reboot_for_small_skew(self):
+        """No reboot when radio is only slightly ahead (within tolerance)."""
+        import time as _time
+
+        radio_time = int(_time.time()) + 5  # only 5 seconds ahead
+        mock_mc = MagicMock()
+        mock_mc.commands.set_time = AsyncMock(
+            return_value=Event(EventType.ERROR, {"reason": "illegal_arg"})
+        )
+        mock_mc.commands.get_time = AsyncMock(
+            return_value=Event(EventType.CURRENT_TIME, {"time": radio_time})
+        )
+        mock_mc.commands.reboot = AsyncMock()
+
+        result = await sync_radio_time(mock_mc)
+
+        assert result is False
+        mock_mc.commands.reboot.assert_not_called()
 
 
 class TestSyncRecentContactsToRadio:

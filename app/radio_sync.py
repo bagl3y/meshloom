@@ -796,16 +796,85 @@ async def stop_periodic_advert():
         logger.info("Stopped periodic advertisement")
 
 
+# Prevents reboot-loop: once we've rebooted to fix clock skew this session,
+# don't do it again (the hardware RTC case can't be fixed by reboot).
+_clock_reboot_attempted: bool = False
+
+
 async def sync_radio_time(mc: MeshCore) -> bool:
     """Sync the radio's clock with the system time.
 
-    Returns True if successful, False otherwise.
+    The firmware only accepts forward time adjustments (new >= current).
+    If the radio's clock is already ahead, set_time is silently rejected
+    with an ERROR response.  We detect this by checking the response and,
+    on failure, querying the radio's actual time so we can log the skew.
+
+    When significant forward skew is detected for the first time in a
+    session, the radio is rebooted so that boards with a volatile clock
+    (most companion radios) reset to their default epoch and accept the
+    correct time on the next connection setup.  The reboot is attempted
+    only once; if it doesn't help (hardware RTC persists the wrong time),
+    the skew is logged as a warning on subsequent syncs.
+
+    Returns True if the radio accepted the new time, False otherwise.
     """
+    global _clock_reboot_attempted  # noqa: PLW0603
     try:
         now = int(time.time())
-        await mc.commands.set_time(now)
-        logger.debug("Synced radio time to %d", now)
-        return True
+        result = await mc.commands.set_time(now)
+
+        if result.type == EventType.OK:
+            logger.debug("Synced radio time to %d", now)
+            return True
+
+        # Firmware rejected the time (most likely radio clock is ahead).
+        # Query actual radio time so we can report the delta.
+        try:
+            time_result = await mc.commands.get_time()
+            radio_time = time_result.payload.get("time") if time_result.payload else None
+        except Exception:
+            radio_time = None
+
+        if radio_time is not None:
+            delta = radio_time - now
+            logger.warning(
+                "Radio rejected time sync: radio clock is %+d seconds "
+                "(%+.1f hours) from system time (radio=%d, system=%d).",
+                delta,
+                delta / 3600.0,
+                radio_time,
+                now,
+            )
+        else:
+            delta = None
+            logger.warning(
+                "Radio rejected time sync (set_time returned %s) "
+                "and get_time query failed; cannot determine clock skew.",
+                result.type,
+            )
+
+        # If the clock is significantly ahead and we haven't already tried
+        # a corrective reboot this session, reboot the radio.  Boards with
+        # a volatile RTC (most companion radios) will reset their clock on
+        # reboot, allowing the next post-connect sync to succeed.
+        if not _clock_reboot_attempted and (delta is None or delta > 30):
+            _clock_reboot_attempted = True
+            logger.warning(
+                "Rebooting radio to reset clock skew.  Boards with a "
+                "volatile RTC will accept the correct time after restart."
+            )
+            try:
+                await mc.commands.reboot()
+            except Exception:
+                logger.warning("Reboot command failed", exc_info=True)
+        elif _clock_reboot_attempted:
+            logger.warning(
+                "Clock skew persists after reboot — the radio likely has a "
+                "hardware RTC that preserved the wrong time.  A manual "
+                "'clkreboot' CLI command is needed to reset it."
+            )
+
+        return False
     except Exception as e:
         logger.warning("Failed to sync radio time: %s", e, exc_info=True)
         return False
