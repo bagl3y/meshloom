@@ -11,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$SCRIPT_DIR"
 
 RELEASE_WORK_DIR=""
+RELEASE_BUNDLE_DIR_NAME="Remote-Terminal-for-MeshCore"
 
 cleanup_release_build_artifacts() {
     if [ -d "$SCRIPT_DIR/frontend/prebuilt" ]; then
@@ -178,11 +179,17 @@ npm run packaged-build
 cd "$SCRIPT_DIR"
 
 RELEASE_WORK_DIR=$(mktemp -d)
-RELEASE_BUNDLE_DIR="$RELEASE_WORK_DIR/remoteterm-prebuilt-frontend-v${VERSION}-${GIT_HASH}"
+RELEASE_BUNDLE_DIR="$RELEASE_WORK_DIR/$RELEASE_BUNDLE_DIR_NAME"
 mkdir -p "$RELEASE_BUNDLE_DIR"
 git archive "$FULL_GIT_HASH" | tar -x -C "$RELEASE_BUNDLE_DIR"
 mkdir -p "$RELEASE_BUNDLE_DIR/frontend"
 cp -R "$SCRIPT_DIR/frontend/prebuilt" "$RELEASE_BUNDLE_DIR/frontend/prebuilt"
+cat > "$RELEASE_BUNDLE_DIR/build_info.json" <<EOF
+{
+  "commit_hash": "$FULL_GIT_HASH",
+  "build_source": "prebuilt-release"
+}
+EOF
 rm -f "$SCRIPT_DIR/$RELEASE_ASSET"
 (
     cd "$RELEASE_WORK_DIR"

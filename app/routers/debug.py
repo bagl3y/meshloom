@@ -1,5 +1,6 @@
 import hashlib
 import importlib.metadata
+import json
 import logging
 import subprocess
 import sys
@@ -23,6 +24,7 @@ router = APIRouter(tags=["debug"])
 
 LOG_COPY_BOUNDARY_MESSAGE = "STOP COPYING HERE IF YOU DO NOT WANT TO INCLUDE LOGS BELOW"
 LOG_COPY_BOUNDARY_LINE = "-" * 64
+RELEASE_BUILD_INFO_FILENAME = "build_info.json"
 LOG_COPY_BOUNDARY_PREFIX = [
     LOG_COPY_BOUNDARY_LINE,
     LOG_COPY_BOUNDARY_LINE,
@@ -128,11 +130,30 @@ def _git_output(*args: str) -> str | None:
     return output or None
 
 
+def _release_build_info() -> dict[str, Any] | None:
+    build_info_path = _repo_root() / RELEASE_BUILD_INFO_FILENAME
+    try:
+        data = json.loads(build_info_path.read_text())
+    except Exception:
+        return None
+
+    if isinstance(data, dict):
+        return data
+    return None
+
+
 def _build_application_info() -> DebugApplicationInfo:
+    release_build_info = _release_build_info()
     dirty_output = _git_output("status", "--porcelain")
+    commit_hash = _git_output("rev-parse", "HEAD")
+    if commit_hash is None and release_build_info is not None:
+        commit_hash_value = release_build_info.get("commit_hash")
+        if isinstance(commit_hash_value, str) and commit_hash_value.strip():
+            commit_hash = commit_hash_value.strip()
+
     return DebugApplicationInfo(
         version=_get_app_version(),
-        commit_hash=_git_output("rev-parse", "HEAD"),
+        commit_hash=commit_hash,
         git_branch=_git_output("rev-parse", "--abbrev-ref", "HEAD"),
         git_dirty=(dirty_output is not None and dirty_output != ""),
         python_version=sys.version.split()[0],

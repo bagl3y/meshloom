@@ -5,6 +5,7 @@ Uses httpx.AsyncClient or direct function calls with real in-memory SQLite.
 """
 
 import hashlib
+import json
 import logging
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -272,6 +273,53 @@ class TestRadioDisconnectedHandler:
 
         assert response.status_code == 503
         assert "not connected" in response.json()["detail"].lower()
+
+
+class TestDebugApplicationInfo:
+    """Test debug application metadata resolution."""
+
+    def test_build_application_info_uses_release_build_info_without_git(self, tmp_path):
+        """Release bundles should still surface commit metadata without a .git directory."""
+        from app.routers import debug as debug_router
+
+        (tmp_path / "build_info.json").write_text(
+            json.dumps(
+                {
+                    "commit_hash": "cf1a55e25828ee62fb077d6202b174f69f6e6340",
+                    "build_source": "prebuilt-release",
+                }
+            )
+        )
+
+        with (
+            patch("app.routers.debug._repo_root", return_value=tmp_path),
+            patch("app.routers.debug._get_app_version", return_value="3.4.0"),
+            patch("app.routers.debug._git_output", return_value=None),
+        ):
+            info = debug_router._build_application_info()
+
+        assert info.version == "3.4.0"
+        assert info.commit_hash == "cf1a55e25828ee62fb077d6202b174f69f6e6340"
+        assert info.git_branch is None
+        assert info.git_dirty is False
+
+    def test_build_application_info_ignores_invalid_release_build_info(self, tmp_path):
+        """Malformed release metadata should not break the debug endpoint."""
+        from app.routers import debug as debug_router
+
+        (tmp_path / "build_info.json").write_text("{not-json")
+
+        with (
+            patch("app.routers.debug._repo_root", return_value=tmp_path),
+            patch("app.routers.debug._get_app_version", return_value="3.4.0"),
+            patch("app.routers.debug._git_output", return_value=None),
+        ):
+            info = debug_router._build_application_info()
+
+        assert info.version == "3.4.0"
+        assert info.commit_hash is None
+        assert info.git_branch is None
+        assert info.git_dirty is False
 
 
 class TestMessagesEndpoint:
