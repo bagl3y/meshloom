@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bell, Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
 import { toast } from './ui/sonner';
 import { DirectTraceIcon } from './DirectTraceIcon';
@@ -60,10 +60,8 @@ export function ChatHeader({
   onOpenChannelInfo,
 }: ChatHeaderProps) {
   const [showKey, setShowKey] = useState(false);
-  const [contactStatusInline, setContactStatusInline] = useState(true);
   const [pathDiscoveryOpen, setPathDiscoveryOpen] = useState(false);
   const [channelOverrideOpen, setChannelOverrideOpen] = useState(false);
-  const keyTextRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     setShowKey(false);
@@ -117,43 +115,6 @@ export function ChatHeader({
     }
   };
 
-  useEffect(() => {
-    if (conversation.type !== 'contact') {
-      setContactStatusInline(true);
-      return;
-    }
-
-    const measure = () => {
-      const keyElement = keyTextRef.current;
-      if (!keyElement) return;
-      const isTruncated = keyElement.scrollWidth > keyElement.clientWidth + 1;
-      setContactStatusInline(!isTruncated);
-    };
-
-    measure();
-
-    const onResize = () => {
-      window.requestAnimationFrame(measure);
-    };
-
-    window.addEventListener('resize', onResize);
-
-    let observer: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(() => {
-        window.requestAnimationFrame(measure);
-      });
-      if (keyTextRef.current?.parentElement) {
-        observer.observe(keyTextRef.current.parentElement);
-      }
-    }
-
-    return () => {
-      window.removeEventListener('resize', onResize);
-      observer?.disconnect();
-    };
-  }, [conversation.id, conversation.type, showKey]);
-
   return (
     <header className="conversation-header flex justify-between items-start px-4 py-2.5 border-b border-border gap-2">
       <span className="flex min-w-0 flex-1 items-start gap-2">
@@ -174,31 +135,16 @@ export function ChatHeader({
             />
           </button>
         )}
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="flex min-w-0 flex-1 items-baseline gap-2 whitespace-nowrap">
-              <h2 className="min-w-0 shrink font-semibold text-base">
-                {titleClickable ? (
-                  <button
-                    type="button"
-                    className="flex min-w-0 shrink items-center gap-1.5 text-left hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-                    aria-label={`View info for ${conversation.name}`}
-                    onClick={handleOpenConversationInfo}
-                  >
-                    <span className="truncate">
-                      {conversation.type === 'channel' &&
-                      !conversation.name.startsWith('#') &&
-                      activeChannel?.is_hashtag
-                        ? '#'
-                        : ''}
-                      {conversation.name}
-                    </span>
-                    <Info
-                      className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/80"
-                      aria-hidden="true"
-                    />
-                  </button>
-                ) : (
+        <span className="grid min-w-0 flex-1 grid-cols-1 gap-y-0.5 min-[1200px]:grid-cols-[minmax(0,1fr)_auto] min-[1200px]:items-baseline min-[1200px]:gap-x-2">
+          <span className="flex min-w-0 items-baseline gap-2 whitespace-nowrap">
+            <h2 className="min-w-0 shrink font-semibold text-base">
+              {titleClickable ? (
+                <button
+                  type="button"
+                  className="flex min-w-0 shrink items-center gap-1.5 text-left hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                  aria-label={`View info for ${conversation.name}`}
+                  onClick={handleOpenConversationInfo}
+                >
                   <span className="truncate">
                     {conversation.type === 'channel' &&
                     !conversation.name.startsWith('#') &&
@@ -207,56 +153,57 @@ export function ChatHeader({
                       : ''}
                     {conversation.name}
                   </span>
-                )}
-              </h2>
-              {isPrivateChannel && !showKey ? (
-                <button
-                  className="min-w-0 flex-shrink text-[11px] font-mono text-muted-foreground transition-colors hover:text-primary"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowKey(true);
-                  }}
-                  title="Reveal channel key"
-                >
-                  Show Key
+                  <Info
+                    className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/80"
+                    aria-hidden="true"
+                  />
                 </button>
               ) : (
-                <span
-                  ref={keyTextRef}
-                  className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground transition-colors hover:text-primary"
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={handleKeyboardActivate}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigator.clipboard.writeText(conversation.id);
-                    toast.success(
-                      conversation.type === 'channel' ? 'Room key copied!' : 'Contact key copied!'
-                    );
-                  }}
-                  title="Click to copy"
-                  aria-label={
-                    conversation.type === 'channel' ? 'Copy channel key' : 'Copy contact key'
-                  }
-                >
-                  {conversation.type === 'channel'
-                    ? conversation.id.toLowerCase()
-                    : conversation.id}
+                <span className="truncate">
+                  {conversation.type === 'channel' &&
+                  !conversation.name.startsWith('#') &&
+                  activeChannel?.is_hashtag
+                    ? '#'
+                    : ''}
+                  {conversation.name}
                 </span>
               )}
-            </span>
-            {conversation.type === 'contact' && activeContact && contactStatusInline && (
-              <span className="min-w-0 flex-none text-[11px] text-muted-foreground">
-                <ContactStatusInfo
-                  contact={activeContact}
-                  ourLat={config?.lat ?? null}
-                  ourLon={config?.lon ?? null}
-                />
+            </h2>
+            {isPrivateChannel && !showKey ? (
+              <button
+                className="min-w-0 flex-shrink text-[11px] font-mono text-muted-foreground transition-colors hover:text-primary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowKey(true);
+                }}
+                title="Reveal channel key"
+              >
+                Show Key
+              </button>
+            ) : (
+              <span
+                className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground transition-colors hover:text-primary"
+                role="button"
+                tabIndex={0}
+                onKeyDown={handleKeyboardActivate}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigator.clipboard.writeText(conversation.id);
+                  toast.success(
+                    conversation.type === 'channel' ? 'Room key copied!' : 'Contact key copied!'
+                  );
+                }}
+                title="Click to copy"
+                aria-label={
+                  conversation.type === 'channel' ? 'Copy channel key' : 'Copy contact key'
+                }
+              >
+                {conversation.type === 'channel' ? conversation.id.toLowerCase() : conversation.id}
               </span>
             )}
           </span>
-          {conversation.type === 'contact' && activeContact && !contactStatusInline && (
-            <span className="mt-0.5 min-w-0 text-[11px] text-muted-foreground">
+          {conversation.type === 'contact' && activeContact && (
+            <span className="min-w-0 text-[11px] text-muted-foreground min-[1200px]:justify-self-end">
               <ContactStatusInfo
                 contact={activeContact}
                 ourLat={config?.lat ?? null}
