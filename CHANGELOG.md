@@ -1,3 +1,10 @@
+## [3.4.1] - 2026-03-16
+
+Bugfix: Improve handling of version information on prebuilt bundles
+Bugfix: Improve frontend usability on disconnected radio
+Misc: Docs and readme updates
+Misc: Overhaul DM ingest and frontend state handling
+
 ## [3.4.0] - 2026-03-16
 
 Feature: Add radio model and stats display
