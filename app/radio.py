@@ -173,6 +173,20 @@ class RadioManager:
         else:
             logger.error("Attempted to release unlocked radio operation lock (%s)", name)
 
+    def _reset_connected_runtime_state(self) -> None:
+        """Clear cached runtime state after a transport teardown completes."""
+        self._setup_complete = False
+        self.device_info_loaded = False
+        self.max_contacts = None
+        self.device_model = None
+        self.firmware_build = None
+        self.firmware_version = None
+        self.max_channels = 40
+        self.path_hash_mode = 0
+        self.path_hash_mode_supported = False
+        self.reset_channel_send_cache()
+        self.clear_pending_message_channel_slots()
+
     @asynccontextmanager
     async def radio_operation(
         self,
@@ -503,25 +517,28 @@ class RadioManager:
         """Disconnect from the radio."""
         clear_keys()
         self._reset_reconnect_error_broadcasts()
-        if self._meshcore is not None:
-            logger.debug("Disconnecting from radio")
+        if self._meshcore is None:
+            return
+
+        await self._acquire_operation_lock("disconnect", blocking=True)
+        try:
             mc = self._meshcore
+            if mc is None:
+                return
+
+            logger.debug("Disconnecting from radio")
             await self._disable_meshcore_auto_reconnect(mc)
-            await mc.disconnect()
-            await self._disable_meshcore_auto_reconnect(mc)
-            self._meshcore = None
-            self._setup_complete = False
-            self.device_info_loaded = False
-            self.max_contacts = None
-            self.device_model = None
-            self.firmware_build = None
-            self.firmware_version = None
-            self.max_channels = 40
-            self.path_hash_mode = 0
-            self.path_hash_mode_supported = False
-            self.reset_channel_send_cache()
-            self.clear_pending_message_channel_slots()
+            try:
+                await mc.disconnect()
+            finally:
+                await self._disable_meshcore_auto_reconnect(mc)
+
+            if self._meshcore is mc:
+                self._meshcore = None
+            self._reset_connected_runtime_state()
             logger.debug("Radio disconnected")
+        finally:
+            self._release_operation_lock("disconnect")
 
     async def reconnect(self, *, broadcast_on_success: bool = True) -> bool:
         """Attempt to reconnect to the radio.
@@ -552,10 +569,9 @@ class RadioManager:
                 # Disconnect if we have a stale connection
                 if self._meshcore is not None:
                     try:
-                        await self._meshcore.disconnect()
+                        await self.disconnect()
                     except Exception:
                         pass
-                    self._meshcore = None
 
                 # Try to connect (will auto-detect if no port specified)
                 await self.connect()

@@ -567,6 +567,46 @@ class TestManualDisconnectCleanup:
         assert rm.get_cached_channel_slot("AA" * 16) is None
 
     @pytest.mark.asyncio
+    async def test_disconnect_waits_for_inflight_radio_operation_cleanup(self):
+        """Manual disconnect should wait for the shared radio-operation lock."""
+        from app.radio import RadioManager
+
+        rm = RadioManager()
+        mc = MagicMock()
+        mc.disconnect = AsyncMock()
+        rm._meshcore = mc
+
+        holder_entered = asyncio.Event()
+        allow_release = asyncio.Event()
+        disconnect_started = asyncio.Event()
+
+        async def holder():
+            async with rm.radio_operation("holder"):
+                holder_entered.set()
+                await allow_release.wait()
+
+        async def trigger_disconnect():
+            disconnect_started.set()
+            await rm.disconnect()
+
+        holder_task = asyncio.create_task(holder())
+        await holder_entered.wait()
+
+        disconnect_task = asyncio.create_task(trigger_disconnect())
+        await disconnect_started.wait()
+        await asyncio.sleep(0.02)
+
+        mc.disconnect.assert_not_awaited()
+        assert rm.meshcore is mc
+
+        allow_release.set()
+        await holder_task
+        await disconnect_task
+
+        mc.disconnect.assert_awaited_once()
+        assert rm.meshcore is None
+
+    @pytest.mark.asyncio
     async def test_pause_connection_marks_connection_undesired(self):
         """Pausing should flip connection_desired off and tear down transport."""
         from app.keystore import get_private_key, set_private_key
