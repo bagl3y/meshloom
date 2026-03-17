@@ -324,6 +324,22 @@ function getDetailTypeLabel(detailType: string) {
   return TYPE_LABELS[detailType] || detailType;
 }
 
+function fanoutDraftHasUnsavedChanges(
+  original: FanoutConfig | null,
+  current: {
+    name: string;
+    config: Record<string, unknown>;
+    scope: Record<string, unknown>;
+  }
+) {
+  if (!original) return false;
+  return (
+    current.name !== original.name ||
+    JSON.stringify(current.config) !== JSON.stringify(original.config) ||
+    JSON.stringify(current.scope) !== JSON.stringify(original.scope)
+  );
+}
+
 function formatBrokerSummary(
   config: Record<string, unknown>,
   defaults: { host: string; port: number }
@@ -1547,7 +1563,17 @@ export function SettingsFanoutSection({
   };
 
   const handleBackToList = () => {
-    if (!confirm('Leave without saving?')) return;
+    const shouldConfirm =
+      draftType !== null ||
+      fanoutDraftHasUnsavedChanges(
+        editingId ? (configs.find((c) => c.id === editingId) ?? null) : null,
+        {
+          name: editName,
+          config: editConfig,
+          scope: editScope,
+        }
+      );
+    if (shouldConfirm && !confirm('Leave without saving?')) return;
     setEditingId(null);
     setDraftType(null);
   };

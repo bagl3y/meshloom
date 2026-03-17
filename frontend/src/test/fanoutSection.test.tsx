@@ -342,11 +342,12 @@ describe('SettingsFanoutSection', () => {
 
     fireEvent.click(screen.getByText('← Back to list'));
 
+    expect(window.confirm).toHaveBeenCalledWith('Leave without saving?');
     await waitFor(() => expect(screen.queryByText('← Back to list')).not.toBeInTheDocument());
     expect(mockedApi.createFanoutConfig).not.toHaveBeenCalled();
   });
 
-  it('back to list asks for confirmation before leaving', async () => {
+  it('back to list does not ask for confirmation when an existing integration is unchanged', async () => {
     mockedApi.getFanoutConfigs.mockResolvedValue([webhookConfig]);
     renderSection();
     await waitFor(() => expect(screen.getByText('Test Hook')).toBeInTheDocument());
@@ -356,11 +357,28 @@ describe('SettingsFanoutSection', () => {
 
     fireEvent.click(screen.getByText('← Back to list'));
 
+    expect(window.confirm).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByText('← Back to list')).not.toBeInTheDocument());
+  });
+
+  it('back to list asks for confirmation after editing an existing integration', async () => {
+    mockedApi.getFanoutConfigs.mockResolvedValue([webhookConfig]);
+    renderSection();
+    await waitFor(() => expect(screen.getByText('Test Hook')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('URL'), {
+      target: { value: 'https://example.com/new' },
+    });
+    fireEvent.click(screen.getByText('← Back to list'));
+
     expect(window.confirm).toHaveBeenCalledWith('Leave without saving?');
     await waitFor(() => expect(screen.queryByText('← Back to list')).not.toBeInTheDocument());
   });
 
-  it('back to list stays on the edit screen when confirmation is cancelled', async () => {
+  it('back to list stays on the edit screen when confirmation is cancelled after edits', async () => {
     vi.mocked(window.confirm).mockReturnValue(false);
     mockedApi.getFanoutConfigs.mockResolvedValue([webhookConfig]);
     renderSection();
@@ -369,6 +387,9 @@ describe('SettingsFanoutSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
 
+    fireEvent.change(screen.getByLabelText('URL'), {
+      target: { value: 'https://example.com/new' },
+    });
     fireEvent.click(screen.getByText('← Back to list'));
 
     expect(window.confirm).toHaveBeenCalledWith('Leave without saving?');
