@@ -85,8 +85,11 @@ describe('SettingsFanoutSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
 
     expect(screen.getByRole('menuitem', { name: 'Private MQTT' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'MeshRank' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'LetsMesh (US)' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'LetsMesh (EU)' })).toBeInTheDocument();
     expect(
-      screen.getByRole('menuitem', { name: 'meshcoretomqtt/LetsMesh/MeshRank' })
+      screen.getByRole('menuitem', { name: 'Community MQTT/meshcoretomqtt' })
     ).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Webhook' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Apprise' })).toBeInTheDocument();
@@ -628,6 +631,238 @@ describe('SettingsFanoutSection', () => {
     );
     expect(screen.getByText('mesh2mqtt/{IATA}/node/{PUBLIC_KEY}')).toBeInTheDocument();
     expect(screen.queryByText('Region: LAX')).not.toBeInTheDocument();
+  });
+
+  it('MeshRank preset pre-fills the broker settings and asks for the topic template', async () => {
+    renderSection();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'MeshRank' }));
+
+    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+
+    expect(screen.getByLabelText('Name')).toHaveValue('MeshRank');
+    expect(screen.getByLabelText('Packet Topic Template')).toHaveValue('');
+    expect(screen.queryByLabelText('Broker Host')).not.toBeInTheDocument();
+  });
+
+  it('creates MeshRank preset as a regular mqtt_community config', async () => {
+    const createdConfig: FanoutConfig = {
+      id: 'comm-meshrank',
+      type: 'mqtt_community',
+      name: 'MeshRank',
+      enabled: true,
+      config: {
+        broker_host: 'meshrank.net',
+        broker_port: 8883,
+        transport: 'tcp',
+        use_tls: true,
+        tls_verify: true,
+        auth_mode: 'none',
+        username: '',
+        password: '',
+        iata: 'XYZ',
+        email: '',
+        token_audience: '',
+        topic_template: 'meshrank/uplink/B435F6D5F7896B74C6B995FE221C2C1F/{PUBLIC_KEY}/packets',
+      },
+      scope: { messages: 'none', raw_packets: 'all' },
+      sort_order: 0,
+      created_at: 2000,
+    };
+    mockedApi.createFanoutConfig.mockResolvedValue(createdConfig);
+    mockedApi.getFanoutConfigs.mockResolvedValueOnce([]).mockResolvedValueOnce([createdConfig]);
+
+    renderSection();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'MeshRank' }));
+    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Packet Topic Template'), {
+      target: {
+        value: 'meshrank/uplink/B435F6D5F7896B74C6B995FE221C2C1F/{PUBLIC_KEY}/packets',
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save as Enabled' }));
+
+    await waitFor(() =>
+      expect(mockedApi.createFanoutConfig).toHaveBeenCalledWith({
+        type: 'mqtt_community',
+        name: 'MeshRank',
+        config: {
+          broker_host: 'meshrank.net',
+          broker_port: 8883,
+          transport: 'tcp',
+          use_tls: true,
+          tls_verify: true,
+          auth_mode: 'none',
+          username: '',
+          password: '',
+          iata: 'XYZ',
+          email: '',
+          token_audience: '',
+          topic_template: 'meshrank/uplink/B435F6D5F7896B74C6B995FE221C2C1F/{PUBLIC_KEY}/packets',
+        },
+        scope: { messages: 'none', raw_packets: 'all' },
+        enabled: true,
+      })
+    );
+  });
+
+  it('LetsMesh (US) preset pre-fills the expected broker defaults', async () => {
+    const createdConfig: FanoutConfig = {
+      id: 'comm-letsmesh-us',
+      type: 'mqtt_community',
+      name: 'LetsMesh (US)',
+      enabled: false,
+      config: {
+        broker_host: 'mqtt-us-v1.letsmesh.net',
+        broker_port: 443,
+        transport: 'websockets',
+        use_tls: true,
+        tls_verify: true,
+        auth_mode: 'token',
+        username: '',
+        password: '',
+        iata: 'LAX',
+        email: 'user@example.com',
+        token_audience: 'mqtt-us-v1.letsmesh.net',
+        topic_template: 'meshcore/{IATA}/{PUBLIC_KEY}/packets',
+      },
+      scope: { messages: 'none', raw_packets: 'all' },
+      sort_order: 0,
+      created_at: 2000,
+    };
+    mockedApi.createFanoutConfig.mockResolvedValue(createdConfig);
+    mockedApi.getFanoutConfigs.mockResolvedValueOnce([]).mockResolvedValueOnce([createdConfig]);
+
+    renderSection();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'LetsMesh (US)' }));
+    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+
+    expect(screen.getByLabelText('Name')).toHaveValue('LetsMesh (US)');
+    expect(screen.queryByLabelText('Authentication')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Packet Topic Template')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } });
+    fireEvent.change(screen.getByLabelText('Region Code (IATA)'), { target: { value: 'lax' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save as Disabled' }));
+
+    await waitFor(() =>
+      expect(mockedApi.createFanoutConfig).toHaveBeenCalledWith({
+        type: 'mqtt_community',
+        name: 'LetsMesh (US)',
+        config: {
+          broker_host: 'mqtt-us-v1.letsmesh.net',
+          broker_port: 443,
+          transport: 'websockets',
+          use_tls: true,
+          tls_verify: true,
+          auth_mode: 'token',
+          username: '',
+          password: '',
+          iata: 'LAX',
+          email: 'user@example.com',
+          token_audience: 'mqtt-us-v1.letsmesh.net',
+          topic_template: 'meshcore/{IATA}/{PUBLIC_KEY}/packets',
+        },
+        scope: { messages: 'none', raw_packets: 'all' },
+        enabled: false,
+      })
+    );
+  });
+
+  it('LetsMesh (EU) preset saves the EU broker defaults', async () => {
+    const createdConfig: FanoutConfig = {
+      id: 'comm-letsmesh-eu',
+      type: 'mqtt_community',
+      name: 'LetsMesh (EU)',
+      enabled: true,
+      config: {
+        broker_host: 'mqtt-eu-v1.letsmesh.net',
+        broker_port: 443,
+        transport: 'websockets',
+        use_tls: true,
+        tls_verify: true,
+        auth_mode: 'token',
+        username: '',
+        password: '',
+        iata: 'AMS',
+        email: 'user@example.com',
+        token_audience: 'mqtt-eu-v1.letsmesh.net',
+        topic_template: 'meshcore/{IATA}/{PUBLIC_KEY}/packets',
+      },
+      scope: { messages: 'none', raw_packets: 'all' },
+      sort_order: 0,
+      created_at: 2000,
+    };
+    mockedApi.createFanoutConfig.mockResolvedValue(createdConfig);
+    mockedApi.getFanoutConfigs.mockResolvedValueOnce([]).mockResolvedValueOnce([createdConfig]);
+
+    renderSection();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'LetsMesh (EU)' }));
+    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } });
+    fireEvent.change(screen.getByLabelText('Region Code (IATA)'), { target: { value: 'ams' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save as Enabled' }));
+
+    await waitFor(() =>
+      expect(mockedApi.createFanoutConfig).toHaveBeenCalledWith({
+        type: 'mqtt_community',
+        name: 'LetsMesh (EU)',
+        config: {
+          broker_host: 'mqtt-eu-v1.letsmesh.net',
+          broker_port: 443,
+          transport: 'websockets',
+          use_tls: true,
+          tls_verify: true,
+          auth_mode: 'token',
+          username: '',
+          password: '',
+          iata: 'AMS',
+          email: 'user@example.com',
+          token_audience: 'mqtt-eu-v1.letsmesh.net',
+          topic_template: 'meshcore/{IATA}/{PUBLIC_KEY}/packets',
+        },
+        scope: { messages: 'none', raw_packets: 'all' },
+        enabled: true,
+      })
+    );
+  });
+
+  it('generic Community MQTT entry still opens the full editor', async () => {
+    renderSection();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Community MQTT/meshcoretomqtt' }));
+
+    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+
+    expect(screen.getByLabelText('Name')).toHaveValue('Community MQTT #1');
+    expect(screen.getByLabelText('Broker Host')).toBeInTheDocument();
+    expect(screen.getByLabelText('Authentication')).toBeInTheDocument();
+    expect(screen.getByLabelText('Packet Topic Template')).toBeInTheDocument();
   });
 
   it('private MQTT list shows broker and topic summary', async () => {

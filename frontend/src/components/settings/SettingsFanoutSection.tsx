@@ -14,16 +14,16 @@ const BotCodeEditor = lazy(() =>
 
 const TYPE_LABELS: Record<string, string> = {
   mqtt_private: 'Private MQTT',
-  mqtt_community: 'meshcoretomqtt/LetsMesh/MeshRank',
+  mqtt_community: 'Community MQTT',
   bot: 'Bot',
   webhook: 'Webhook',
   apprise: 'Apprise',
   sqs: 'Amazon SQS',
 };
 
-const TYPE_OPTIONS = [
+const LIST_TYPE_OPTIONS = [
   { value: 'mqtt_private', label: 'Private MQTT' },
-  { value: 'mqtt_community', label: 'meshcoretomqtt/LetsMesh/MeshRank' },
+  { value: 'mqtt_community', label: 'Community MQTT' },
   { value: 'bot', label: 'Bot' },
   { value: 'webhook', label: 'Webhook' },
   { value: 'apprise', label: 'Apprise' },
@@ -32,9 +32,297 @@ const TYPE_OPTIONS = [
 
 const DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE = 'meshcore/{IATA}/{PUBLIC_KEY}/packets';
 const DEFAULT_COMMUNITY_BROKER_HOST = 'mqtt-us-v1.letsmesh.net';
+const DEFAULT_COMMUNITY_BROKER_HOST_EU = 'mqtt-eu-v1.letsmesh.net';
 const DEFAULT_COMMUNITY_BROKER_PORT = 443;
 const DEFAULT_COMMUNITY_TRANSPORT = 'websockets';
 const DEFAULT_COMMUNITY_AUTH_MODE = 'token';
+const DEFAULT_MESHRANK_BROKER_HOST = 'meshrank.net';
+const DEFAULT_MESHRANK_BROKER_PORT = 8883;
+const DEFAULT_MESHRANK_TRANSPORT = 'tcp';
+const DEFAULT_MESHRANK_AUTH_MODE = 'none';
+const DEFAULT_MESHRANK_IATA = 'XYZ';
+
+const CREATE_TYPE_OPTIONS = [
+  { value: 'mqtt_private', label: 'Private MQTT' },
+  { value: 'mqtt_community_meshrank', label: 'MeshRank' },
+  { value: 'mqtt_community_letsmesh_us', label: 'LetsMesh (US)' },
+  { value: 'mqtt_community_letsmesh_eu', label: 'LetsMesh (EU)' },
+  { value: 'mqtt_community', label: 'Community MQTT/meshcoretomqtt' },
+  { value: 'bot', label: 'Bot' },
+  { value: 'webhook', label: 'Webhook' },
+  { value: 'apprise', label: 'Apprise' },
+  { value: 'sqs', label: 'Amazon SQS' },
+] as const;
+
+type DraftType = (typeof CREATE_TYPE_OPTIONS)[number]['value'];
+
+type DraftRecipe = {
+  savedType: string;
+  detailLabel: string;
+  defaultName: string;
+  defaults: {
+    config: Record<string, unknown>;
+    scope: Record<string, unknown>;
+  };
+};
+
+function createCommunityConfigDefaults(
+  overrides: Partial<Record<string, unknown>> = {}
+): Record<string, unknown> {
+  return {
+    broker_host: DEFAULT_COMMUNITY_BROKER_HOST,
+    broker_port: DEFAULT_COMMUNITY_BROKER_PORT,
+    transport: DEFAULT_COMMUNITY_TRANSPORT,
+    use_tls: true,
+    tls_verify: true,
+    auth_mode: DEFAULT_COMMUNITY_AUTH_MODE,
+    username: '',
+    password: '',
+    iata: '',
+    email: '',
+    token_audience: '',
+    topic_template: DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE,
+    ...overrides,
+  };
+}
+
+const DEFAULT_BOT_CODE = `def bot(**kwargs) -> str | list[str] | None:
+    """
+    Process messages and optionally return a reply.
+
+    Args:
+        kwargs keys currently provided:
+            sender_name: Display name of sender (may be None)
+            sender_key: 64-char hex public key (None for channel msgs)
+            message_text: The message content
+            is_dm: True for direct messages, False for channel
+            channel_key: 32-char hex key for channels, None for DMs
+            channel_name: Channel name with hash (e.g. "#bot"), None for DMs
+            sender_timestamp: Sender's timestamp (unix seconds, may be None)
+            path: Hex-encoded routing path (may be None)
+            is_outgoing: True if this is our own outgoing message
+            path_bytes_per_hop: Bytes per hop in path (1, 2, or 3) when known
+
+    Returns:
+        None for no reply, a string for a single reply,
+        or a list of strings to send multiple messages in order
+    """
+    sender_name = kwargs.get("sender_name")
+    message_text = kwargs.get("message_text", "")
+    channel_name = kwargs.get("channel_name")
+    is_outgoing = kwargs.get("is_outgoing", False)
+    path_bytes_per_hop = kwargs.get("path_bytes_per_hop")
+
+    # Don't reply to our own outgoing messages
+    if is_outgoing:
+        return None
+
+    # Example: Only respond in #bot channel to "!pling" command
+    if channel_name == "#bot" and "!pling" in message_text.lower():
+        return "[BOT] Plong!"
+    return None`;
+
+const DRAFT_RECIPES: Record<DraftType, DraftRecipe> = {
+  mqtt_private: {
+    savedType: 'mqtt_private',
+    detailLabel: 'Private MQTT',
+    defaultName: 'Private MQTT',
+    defaults: {
+      config: {
+        broker_host: '',
+        broker_port: 1883,
+        username: '',
+        password: '',
+        use_tls: false,
+        tls_insecure: false,
+        topic_prefix: 'meshcore',
+      },
+      scope: { messages: 'all', raw_packets: 'all' },
+    },
+  },
+  mqtt_community_meshrank: {
+    savedType: 'mqtt_community',
+    detailLabel: 'MeshRank',
+    defaultName: 'MeshRank',
+    defaults: {
+      config: createCommunityConfigDefaults({
+        broker_host: DEFAULT_MESHRANK_BROKER_HOST,
+        broker_port: DEFAULT_MESHRANK_BROKER_PORT,
+        transport: DEFAULT_MESHRANK_TRANSPORT,
+        auth_mode: DEFAULT_MESHRANK_AUTH_MODE,
+        iata: DEFAULT_MESHRANK_IATA,
+        email: '',
+        token_audience: '',
+        topic_template: '',
+      }),
+      scope: { messages: 'none', raw_packets: 'all' },
+    },
+  },
+  mqtt_community_letsmesh_us: {
+    savedType: 'mqtt_community',
+    detailLabel: 'LetsMesh (US)',
+    defaultName: 'LetsMesh (US)',
+    defaults: {
+      config: createCommunityConfigDefaults({
+        broker_host: DEFAULT_COMMUNITY_BROKER_HOST,
+        token_audience: DEFAULT_COMMUNITY_BROKER_HOST,
+      }),
+      scope: { messages: 'none', raw_packets: 'all' },
+    },
+  },
+  mqtt_community_letsmesh_eu: {
+    savedType: 'mqtt_community',
+    detailLabel: 'LetsMesh (EU)',
+    defaultName: 'LetsMesh (EU)',
+    defaults: {
+      config: createCommunityConfigDefaults({
+        broker_host: DEFAULT_COMMUNITY_BROKER_HOST_EU,
+        token_audience: DEFAULT_COMMUNITY_BROKER_HOST_EU,
+      }),
+      scope: { messages: 'none', raw_packets: 'all' },
+    },
+  },
+  mqtt_community: {
+    savedType: 'mqtt_community',
+    detailLabel: 'Community MQTT/meshcoretomqtt',
+    defaultName: 'Community MQTT',
+    defaults: {
+      config: createCommunityConfigDefaults(),
+      scope: { messages: 'none', raw_packets: 'all' },
+    },
+  },
+  bot: {
+    savedType: 'bot',
+    detailLabel: 'Bot',
+    defaultName: 'Bot',
+    defaults: {
+      config: {
+        code: DEFAULT_BOT_CODE,
+      },
+      scope: { messages: 'all', raw_packets: 'none' },
+    },
+  },
+  webhook: {
+    savedType: 'webhook',
+    detailLabel: 'Webhook',
+    defaultName: 'Webhook',
+    defaults: {
+      config: {
+        url: '',
+        method: 'POST',
+        headers: {},
+        hmac_secret: '',
+        hmac_header: '',
+      },
+      scope: { messages: 'all', raw_packets: 'none' },
+    },
+  },
+  apprise: {
+    savedType: 'apprise',
+    detailLabel: 'Apprise',
+    defaultName: 'Apprise',
+    defaults: {
+      config: {
+        urls: '',
+        preserve_identity: true,
+        include_path: true,
+      },
+      scope: { messages: 'all', raw_packets: 'none' },
+    },
+  },
+  sqs: {
+    savedType: 'sqs',
+    detailLabel: 'Amazon SQS',
+    defaultName: 'Amazon SQS',
+    defaults: {
+      config: {
+        queue_url: '',
+        region_name: '',
+        endpoint_url: '',
+        access_key_id: '',
+        secret_access_key: '',
+        session_token: '',
+      },
+      scope: { messages: 'all', raw_packets: 'none' },
+    },
+  },
+};
+
+function isDraftType(value: string): value is DraftType {
+  return value in DRAFT_RECIPES;
+}
+
+function normalizeDraftName(draftType: DraftType, name: string, configs: FanoutConfig[]) {
+  const recipe = DRAFT_RECIPES[draftType];
+  return name || getDefaultIntegrationName(recipe.savedType, configs);
+}
+
+function normalizeDraftConfig(draftType: DraftType, config: Record<string, unknown>) {
+  if (draftType === 'mqtt_community_meshrank') {
+    const topicTemplate = String(config.topic_template || '').trim();
+    if (!topicTemplate) {
+      throw new Error('MeshRank packet topic is required');
+    }
+
+    return {
+      ...config,
+      broker_host: DEFAULT_MESHRANK_BROKER_HOST,
+      broker_port: DEFAULT_MESHRANK_BROKER_PORT,
+      transport: DEFAULT_MESHRANK_TRANSPORT,
+      auth_mode: DEFAULT_MESHRANK_AUTH_MODE,
+      use_tls: true,
+      tls_verify: true,
+      iata: DEFAULT_MESHRANK_IATA,
+      email: '',
+      token_audience: '',
+      topic_template: topicTemplate,
+      username: '',
+      password: '',
+    };
+  }
+
+  if (draftType === 'mqtt_community_letsmesh_us' || draftType === 'mqtt_community_letsmesh_eu') {
+    const brokerHost =
+      draftType === 'mqtt_community_letsmesh_eu'
+        ? DEFAULT_COMMUNITY_BROKER_HOST_EU
+        : DEFAULT_COMMUNITY_BROKER_HOST;
+    return {
+      ...config,
+      broker_host: brokerHost,
+      broker_port: DEFAULT_COMMUNITY_BROKER_PORT,
+      transport: DEFAULT_COMMUNITY_TRANSPORT,
+      auth_mode: DEFAULT_COMMUNITY_AUTH_MODE,
+      use_tls: true,
+      tls_verify: true,
+      token_audience: brokerHost,
+      topic_template: (config.topic_template as string) || DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE,
+      username: '',
+      password: '',
+    };
+  }
+
+  return config;
+}
+
+function normalizeDraftScope(draftType: DraftType, scope: Record<string, unknown>) {
+  if (draftType.startsWith('mqtt_community_')) {
+    return { messages: 'none', raw_packets: 'all' };
+  }
+  return scope;
+}
+
+function cloneDraftDefaults(draftType: DraftType) {
+  const recipe = DRAFT_RECIPES[draftType];
+  return {
+    config: structuredClone(recipe.defaults.config),
+    scope: structuredClone(recipe.defaults.scope),
+  };
+}
+
+function getDetailTypeLabel(detailType: string) {
+  if (isDraftType(detailType)) return DRAFT_RECIPES[detailType].detailLabel;
+  return TYPE_LABELS[detailType] || detailType;
+}
 
 function formatBrokerSummary(
   config: Record<string, unknown>,
@@ -73,42 +361,6 @@ function getDefaultIntegrationName(type: string, configs: FanoutConfig[]) {
   const nextIndex = configs.filter((cfg) => cfg.type === type).length + 1;
   return `${label} #${nextIndex}`;
 }
-
-const DEFAULT_BOT_CODE = `def bot(**kwargs) -> str | list[str] | None:
-    """
-    Process messages and optionally return a reply.
-
-    Args:
-        kwargs keys currently provided:
-            sender_name: Display name of sender (may be None)
-            sender_key: 64-char hex public key (None for channel msgs)
-            message_text: The message content
-            is_dm: True for direct messages, False for channel
-            channel_key: 32-char hex key for channels, None for DMs
-            channel_name: Channel name with hash (e.g. "#bot"), None for DMs
-            sender_timestamp: Sender's timestamp (unix seconds, may be None)
-            path: Hex-encoded routing path (may be None)
-            is_outgoing: True if this is our own outgoing message
-            path_bytes_per_hop: Bytes per hop in path (1, 2, or 3) when known
-
-    Returns:
-        None for no reply, a string for a single reply,
-        or a list of strings to send multiple messages in order
-    """
-    sender_name = kwargs.get("sender_name")
-    message_text = kwargs.get("message_text", "")
-    channel_name = kwargs.get("channel_name")
-    is_outgoing = kwargs.get("is_outgoing", False)
-    path_bytes_per_hop = kwargs.get("path_bytes_per_hop")
-
-    # Don't reply to our own outgoing messages
-    if is_outgoing:
-        return None
-
-    # Example: Only respond in #bot channel to "!pling" command
-    if channel_name == "#bot" and "!pling" in message_text.lower():
-        return "[BOT] Plong!"
-    return None`;
 
 function getStatusLabel(status: string | undefined, type?: string) {
   if (status === 'connected')
@@ -251,8 +503,9 @@ function MqttCommunityConfigEditor({
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Share raw packet data with the MeshCore community for coverage mapping and network analysis.
-        Only raw RF packets are shared &mdash; never decrypted messages.
+        Advanced community MQTT editor. Use this for manual meshcoretomqtt-compatible setups or for
+        modifying a saved preset after creation. Only raw RF packets are shared &mdash; never
+        decrypted messages.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -419,6 +672,110 @@ function MqttCommunityConfigEditor({
           Use <code>{'{IATA}'}</code> and <code>{'{PUBLIC_KEY}'}</code>. Default:{' '}
           <code>{DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE}</code>
         </p>
+      </div>
+    </div>
+  );
+}
+
+function MeshRankConfigEditor({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown>;
+  onChange: (config: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Pre-filled MeshRank setup. This saves as a regular Community MQTT integration once created,
+        but only asks for the MeshRank packet topic you were given.
+      </p>
+
+      <div className="rounded-md border border-input bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        Broker <code>{DEFAULT_MESHRANK_BROKER_HOST}</code> on port{' '}
+        <code>{DEFAULT_MESHRANK_BROKER_PORT}</code> via <code>{DEFAULT_MESHRANK_TRANSPORT}</code>,
+        auth <code>{DEFAULT_MESHRANK_AUTH_MODE}</code>, TLS on, certificate verification on, region
+        code fixed to <code>{DEFAULT_MESHRANK_IATA}</code>.
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="fanout-meshrank-topic-template">Packet Topic Template</Label>
+        <Input
+          id="fanout-meshrank-topic-template"
+          type="text"
+          placeholder="meshrank/uplink/B435F6D5F7896B74C6B995FE221C2C1F/{PUBLIC_KEY}/packets"
+          value={(config.topic_template as string) || ''}
+          onChange={(e) =>
+            onChange({
+              ...config,
+              iata: DEFAULT_MESHRANK_IATA,
+              topic_template: e.target.value,
+            })
+          }
+        />
+        <p className="text-xs text-muted-foreground">
+          Paste the full topic template from your MeshRank config, for example{' '}
+          <code>meshrank/uplink/B435F6D5F7896B74C6B995FE221C2C1F/{'{PUBLIC_KEY}'}/packets</code>.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function LetsMeshConfigEditor({
+  config,
+  onChange,
+  brokerHost,
+}: {
+  config: Record<string, unknown>;
+  onChange: (config: Record<string, unknown>) => void;
+  brokerHost: string;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Pre-filled LetsMesh setup. This saves as a regular Community MQTT integration once created,
+        but only asks for the values LetsMesh expects from you.
+      </p>
+
+      <div className="rounded-md border border-input bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        Broker <code>{brokerHost}</code> on port <code>{DEFAULT_COMMUNITY_BROKER_PORT}</code> via{' '}
+        <code>{DEFAULT_COMMUNITY_TRANSPORT}</code>, auth <code>{DEFAULT_COMMUNITY_AUTH_MODE}</code>,
+        TLS on, certificate verification on, token audience fixed to <code>{brokerHost}</code>.
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="fanout-letsmesh-email">Email</Label>
+          <Input
+            id="fanout-letsmesh-email"
+            type="email"
+            placeholder="you@example.com"
+            value={(config.email as string) || ''}
+            onChange={(e) =>
+              onChange({ ...config, email: e.target.value, broker_host: brokerHost })
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="fanout-letsmesh-iata">Region Code (IATA)</Label>
+          <Input
+            id="fanout-letsmesh-iata"
+            type="text"
+            maxLength={3}
+            placeholder="e.g. DEN, LAX, NYC"
+            value={(config.iata as string) || ''}
+            onChange={(e) =>
+              onChange({
+                ...config,
+                broker_host: brokerHost,
+                token_audience: brokerHost,
+                iata: e.target.value.toUpperCase(),
+              })
+            }
+            className="w-32"
+          />
+        </div>
       </div>
     </div>
   );
@@ -1120,7 +1477,7 @@ export function SettingsFanoutSection({
 }) {
   const [configs, setConfigs] = useState<FanoutConfig[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [draftType, setDraftType] = useState<string | null>(null);
+  const [draftType, setDraftType] = useState<DraftType | null>(null);
   const [editConfig, setEditConfig] = useState<Record<string, unknown>>({});
   const [editScope, setEditScope] = useState<Record<string, unknown>>({});
   const [editName, setEditName] = useState('');
@@ -1228,11 +1585,12 @@ export function SettingsFanoutSection({
     setBusy(true);
     try {
       if (currentDraftType) {
+        const recipe = DRAFT_RECIPES[currentDraftType];
         await api.createFanoutConfig({
-          type: currentDraftType,
-          name: editName,
-          config: editConfig,
-          scope: editScope,
+          type: recipe.savedType,
+          name: normalizeDraftName(currentDraftType, editName.trim(), configs),
+          config: normalizeDraftConfig(currentDraftType, editConfig),
+          scope: normalizeDraftScope(currentDraftType, editScope),
           enabled: enabled ?? true,
         });
       } else {
@@ -1280,74 +1638,26 @@ export function SettingsFanoutSection({
   };
 
   const handleAddCreate = async (type: string) => {
-    const defaults: Record<string, Record<string, unknown>> = {
-      mqtt_private: {
-        broker_host: '',
-        broker_port: 1883,
-        username: '',
-        password: '',
-        use_tls: false,
-        tls_insecure: false,
-        topic_prefix: 'meshcore',
-      },
-      mqtt_community: {
-        broker_host: 'mqtt-us-v1.letsmesh.net',
-        broker_port: DEFAULT_COMMUNITY_BROKER_PORT,
-        transport: DEFAULT_COMMUNITY_TRANSPORT,
-        use_tls: true,
-        tls_verify: true,
-        auth_mode: DEFAULT_COMMUNITY_AUTH_MODE,
-        username: '',
-        password: '',
-        iata: '',
-        email: '',
-        token_audience: '',
-        topic_template: DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE,
-      },
-      bot: {
-        code: DEFAULT_BOT_CODE,
-      },
-      webhook: {
-        url: '',
-        method: 'POST',
-        headers: {},
-        hmac_secret: '',
-        hmac_header: '',
-      },
-      apprise: {
-        urls: '',
-        preserve_identity: true,
-        include_path: true,
-      },
-      sqs: {
-        queue_url: '',
-        region_name: '',
-        endpoint_url: '',
-        access_key_id: '',
-        secret_access_key: '',
-        session_token: '',
-      },
-    };
-    const defaultScopes: Record<string, Record<string, unknown>> = {
-      mqtt_private: { messages: 'all', raw_packets: 'all' },
-      mqtt_community: { messages: 'none', raw_packets: 'all' },
-      bot: { messages: 'all', raw_packets: 'none' },
-      webhook: { messages: 'all', raw_packets: 'none' },
-      apprise: { messages: 'all', raw_packets: 'none' },
-      sqs: { messages: 'all', raw_packets: 'none' },
-    };
+    if (!isDraftType(type)) return;
+    const defaults = cloneDraftDefaults(type);
     setAddMenuOpen(false);
     setEditingId(null);
     setDraftType(type);
-    setEditName(getDefaultIntegrationName(type, configs));
-    setEditConfig(defaults[type] || {});
-    setEditScope(defaultScopes[type] || {});
+    setEditName(
+      type === 'mqtt_community_meshrank' ||
+        type === 'mqtt_community_letsmesh_us' ||
+        type === 'mqtt_community_letsmesh_eu'
+        ? DRAFT_RECIPES[type].defaultName
+        : getDefaultIntegrationName(DRAFT_RECIPES[type].savedType, configs)
+    );
+    setEditConfig(defaults.config);
+    setEditScope(defaults.scope);
   };
 
   const editingConfig = editingId ? configs.find((c) => c.id === editingId) : null;
   const detailType = draftType ?? editingConfig?.type ?? null;
   const isDraft = draftType !== null;
-  const configGroups = TYPE_OPTIONS.map((opt) => ({
+  const configGroups = LIST_TYPE_OPTIONS.map((opt) => ({
     type: opt.value,
     label: opt.label,
     configs: configs
@@ -1377,9 +1687,7 @@ export function SettingsFanoutSection({
           />
         </div>
 
-        <div className="text-xs text-muted-foreground">
-          Type: {TYPE_LABELS[detailType] || detailType}
-        </div>
+        <div className="text-xs text-muted-foreground">Type: {getDetailTypeLabel(detailType)}</div>
 
         <Separator />
 
@@ -1394,6 +1702,26 @@ export function SettingsFanoutSection({
 
         {detailType === 'mqtt_community' && (
           <MqttCommunityConfigEditor config={editConfig} onChange={setEditConfig} />
+        )}
+
+        {detailType === 'mqtt_community_meshrank' && (
+          <MeshRankConfigEditor config={editConfig} onChange={setEditConfig} />
+        )}
+
+        {detailType === 'mqtt_community_letsmesh_us' && (
+          <LetsMeshConfigEditor
+            config={editConfig}
+            onChange={setEditConfig}
+            brokerHost={DEFAULT_COMMUNITY_BROKER_HOST}
+          />
+        )}
+
+        {detailType === 'mqtt_community_letsmesh_eu' && (
+          <LetsMeshConfigEditor
+            config={editConfig}
+            onChange={setEditConfig}
+            brokerHost={DEFAULT_COMMUNITY_BROKER_HOST_EU}
+          />
         )}
 
         {detailType === 'bot' && <BotConfigEditor config={editConfig} onChange={setEditConfig} />}
@@ -1481,9 +1809,9 @@ export function SettingsFanoutSection({
         {addMenuOpen && (
           <div
             role="menu"
-            className="absolute left-0 top-full z-10 mt-2 min-w-56 rounded-md border border-input bg-background p-1 shadow-md"
+            className="absolute left-0 top-full z-10 mt-2 min-w-72 rounded-md border border-input bg-background p-1 shadow-md"
           >
-            {TYPE_OPTIONS.filter((opt) => opt.value !== 'bot' || !health?.bots_disabled).map(
+            {CREATE_TYPE_OPTIONS.filter((opt) => opt.value !== 'bot' || !health?.bots_disabled).map(
               (opt) => (
                 <button
                   key={opt.value}
