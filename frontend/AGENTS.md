@@ -35,7 +35,6 @@ frontend/src/
 ├── types.ts                # Shared TS contracts
 ├── useWebSocket.ts         # WS lifecycle + event dispatch
 ├── wsEvents.ts             # Typed WS event parsing / discriminated union
-├── messageCache.ts         # Conversation-scoped cache
 ├── prefetch.ts             # Consumes prefetched API promises started in index.html
 ├── index.css               # Global styles/utilities
 ├── styles.css              # Additional global app styles
@@ -201,7 +200,7 @@ High-level state is delegated to hooks:
 - `useConversationRouter`: URL hash → active conversation routing
 - `useConversationNavigation`: search target, conversation selection reset, and info-pane state
 - `useConversationActions`: send/resend/trace/block handlers and channel override updates
-- `useConversationMessages`: conversation switch loading, cache restore, jump-target loading, pagination, dedup/update helpers, and pending ACK buffering
+- `useConversationMessages`: conversation switch loading, embedded conversation-scoped cache, jump-target loading, pagination, dedup/update helpers, reconnect reconciliation, and pending ACK buffering
 - `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps
 - `useRealtimeAppState`: typed WS event application, reconnect recovery, cache/unread coordination
 - `useRepeaterDashboard`: repeater dashboard state (login, pane data/retries, console, actions)
@@ -233,6 +232,8 @@ High-level state is delegated to hooks:
 - Backend also emits WS `message` for outgoing sends so other clients stay in sync.
 - ACK/repeat updates arrive as `message_acked` events.
 - Outgoing channel messages show a 30-second resend control; resend calls `POST /api/messages/channel/{message_id}/resend`.
+- Conversation-scoped message caching now lives inside `useConversationMessages.ts` rather than a standalone `messageCache.ts` module. If you touch message timeline restore/dedup/reconnect behavior, start there.
+- `contact_resolved` is a real-time identity migration event, not just a contact-list update. Changes in that area need to consider active conversation state, cached messages, unread state keys, and reconnect reconciliation together.
 
 ### Visualizer behavior
 

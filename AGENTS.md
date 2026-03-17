@@ -10,7 +10,7 @@ If instructed to "run all tests" or "get ready for a commit" or other summative,
 ./scripts/all_quality.sh
 ```
 
-This runs all linting, formatting, type checking, tests, and builds for both backend and frontend sequentially. All checks must pass green.
+This is the repo's end-to-end quality gate. It runs backend/frontend autofixers first, then type checking, tests, and the standard frontend build. All checks must pass green, and the script may leave formatting/lint edits behind.
 
 ## Overview
 
@@ -193,8 +193,8 @@ This message-layer echo/path handling is independent of raw-packet storage dedup
 │   │       ├── MapView.tsx       # Leaflet map showing node locations
 │   │       └── ...
 │   └── vite.config.ts
-├── scripts/
-│   ├── all_quality.sh      # Run all lint, format, typecheck, tests, and the standard frontend build
+├── scripts/                # Quality / release helpers (listing below is representative, not exhaustive)
+│   ├── all_quality.sh      # Repo-standard autofix + validate gate
 │   ├── collect_licenses.sh # Gather third-party license attributions
 │   ├── e2e.sh              # End-to-end test runner
 │   └── publish.sh          # Version bump, changelog, docker build & push
@@ -282,7 +282,7 @@ npm run test:run
 
 ### Before Completing Changes
 
-**Always run `./scripts/all_quality.sh` before finishing any changes that have modified code or tests.** This runs all linting, formatting, type checking, tests, and the standard frontend build sequentially, catching type mismatches, breaking changes, and compilation errors. This is not necessary for docs-only changes.
+**Always run `./scripts/all_quality.sh` before finishing any changes that have modified code or tests.** It is the standard repo gate: autofix first, then type checks, tests, and the standard frontend build. This is not necessary for docs-only changes.
 
 ## API Summary
 

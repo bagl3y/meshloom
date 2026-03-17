@@ -32,6 +32,7 @@ app/
 ├── services/            # Shared orchestration/domain services
 │   ├── messages.py              # Shared message creation, dedup, ACK application
 │   ├── message_send.py          # Direct send, channel send, resend workflows
+│   ├── dm_ingest.py             # Shared direct-message ingest / dedup seam for packet + fallback paths
 │   ├── dm_ack_tracker.py        # Pending DM ACK state
 │   ├── contact_reconciliation.py # Prefix-claim, sender-key backfill, name-history wiring
 │   ├── radio_lifecycle.py       # Post-connect setup and reconnect/setup helpers
@@ -74,7 +75,7 @@ app/
 1. Radio emits events.
 2. `on_rx_log_data` stores raw packet and tries decrypt/pipeline handling.
 3. Shared message-domain services create/update `messages` and shape WS payloads.
-4. `CONTACT_MSG_RECV` is a fallback DM path when packet pipeline cannot decrypt.
+4. Direct-message storage is centralized in `services/dm_ingest.py`; packet-processor DMs and `CONTACT_MSG_RECV` fallback events both route through that seam.
 
 ### Outgoing messages
 
@@ -111,6 +112,12 @@ app/
 
 - Server is source of truth (`contacts.last_read_at`, `channels.last_read_at`).
 - `GET /api/read-state/unreads` returns counts, mention flags, and `last_message_times`.
+
+### DM ingest + ACKs
+
+- `services/dm_ingest.py` is the one place that should decide fallback-context resolution, DM dedup/reconciliation, and packet-linked vs. content-based storage behavior.
+- `CONTACT_MSG_RECV` is a fallback path, not a parallel source of truth. If you change DM storage behavior, trace both `event_handlers.py` and `packet_processor.py`.
+- DM ACK tracking is an in-memory pending/buffered map in `services/dm_ack_tracker.py`, with periodic expiry from `radio_sync.py`.
 
 ### Echo/repeat dedup
 
@@ -278,7 +285,7 @@ Note: MQTT, community MQTT, and bot configs were migrated to the `fanout_configs
 
 ## Security Posture (intentional)
 
-- No authn/authz.
+- No per-user authn/authz model; optionally, operators may enable app-wide HTTP Basic auth for both HTTP and WS entrypoints.
 - No CORS restriction (`*`).
 - Bot code executes user-provided Python via `exec()`.
 
