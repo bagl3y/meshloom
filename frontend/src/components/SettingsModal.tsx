@@ -155,13 +155,11 @@ export function SettingsModal(props: SettingsModalProps) {
   const renderSectionHeader = (section: SettingsSection): ReactNode => {
     if (!showSectionButton) return null;
     const Icon = SETTINGS_SECTION_ICONS[section];
-    const disabled = section === 'radio' && !config;
     return (
       <button
         type="button"
-        className={`${sectionButtonClasses} disabled:cursor-not-allowed disabled:opacity-50`}
+        className={sectionButtonClasses}
         aria-expanded={expandedSections[section]}
-        disabled={disabled}
         onClick={() => toggleSection(section)}
       >
         <span className="inline-flex items-center gap-2 font-medium" role="heading" aria-level={3}>
@@ -206,8 +204,8 @@ export function SettingsModal(props: SettingsModalProps) {
               />
             ) : (
               <div className={sectionContentClass}>
-                <div className="rounded-md border border-input bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-                  Radio settings are unavailable until a radio connects.
+                <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                  Radio is not available.
                 </div>
               </div>
             ))}

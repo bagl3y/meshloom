@@ -327,19 +327,17 @@ describe('App startup hash resolution', () => {
     expect(window.location.hash).toBe('');
   });
 
-  it('opens settings from a settings hash and falls back away from radio when disconnected', async () => {
+  it('stays on radio settings section even when radio is disconnected', async () => {
     window.location.hash = '#settings/radio';
     mocks.api.getRadioConfig.mockRejectedValue(new Error('radio offline'));
 
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('settings-modal-section')).toHaveTextContent('local');
+      expect(screen.getByTestId('settings-modal-section')).toHaveTextContent('radio');
     });
 
-    for (const button of screen.getAllByRole('button', { name: 'Radio' })) {
-      expect(button).toBeDisabled();
-    }
-    expect(window.location.hash).toBe('#settings/local');
+    // Section stays on radio (no redirect to local) and hash is preserved
+    expect(window.location.hash).toBe('#settings/radio');
   });
 });

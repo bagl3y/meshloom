@@ -206,30 +206,24 @@ describe('SettingsModal', () => {
     expect(screen.getByText(/Configured radio contact capacity/i)).toBeInTheDocument();
   });
 
-  it('keeps non-radio settings available when radio config is unavailable', () => {
+  it('shows radio-unavailable message when config is null', () => {
     renderModal({ config: null });
 
     const radioToggle = screen.getByRole('button', { name: /Radio/i });
-    expect(radioToggle).toBeDisabled();
+    expect(radioToggle).not.toBeDisabled();
 
-    openLocalSection();
-    expect(screen.getByLabelText('Local label text')).toBeInTheDocument();
-
-    openDatabaseSection();
-    expect(screen.getByText('Delete Undecrypted Packets')).toBeInTheDocument();
+    fireEvent.click(radioToggle);
+    expect(screen.getByText('Radio is not available.')).toBeInTheDocument();
   });
 
-  it('shows a radio-unavailable message instead of blocking the whole settings page', () => {
+  it('shows radio-unavailable message in sidebar-nav mode when config is null', () => {
     renderModal({
       config: null,
       externalSidebarNav: true,
       desktopSection: 'radio',
     });
 
-    expect(
-      screen.getByText('Radio settings are unavailable until a radio connects.')
-    ).toBeInTheDocument();
-    expect(screen.queryByText('Loading configuration...')).not.toBeInTheDocument();
+    expect(screen.getByText('Radio is not available.')).toBeInTheDocument();
   });
 
   it('shows cached radio firmware and capacity info under the connection status', () => {

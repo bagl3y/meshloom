@@ -256,12 +256,6 @@ export function App() {
   } = useUnreadCounts(channels, contacts, activeConversation);
 
   useEffect(() => {
-    if (showSettings && !config && settingsSection === 'radio') {
-      setSettingsSection('local');
-    }
-  }, [config, settingsSection, setSettingsSection, showSettings]);
-
-  useEffect(() => {
     if (activeConversation?.type !== 'channel') {
       setChannelUnreadMarker(null);
       return;
@@ -573,7 +567,6 @@ export function App() {
       settingsSection={settingsSection}
       sidebarOpen={sidebarOpen}
       showCracker={showCracker}
-      disabledSettingsSections={config ? [] : ['radio']}
       onSettingsSectionChange={setSettingsSection}
       onSidebarOpenChange={setSidebarOpen}
       onCrackerRunningChange={setCrackerRunning}
