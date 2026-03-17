@@ -449,6 +449,66 @@ class TestReconnectLock:
         assert result is False
         rm.connect.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_reconnect_broadcasts_only_first_three_failures(self):
+        """Frontend only sees the first few reconnect failures before suppression kicks in."""
+        from app.radio import MAX_FRONTEND_RECONNECT_ERROR_BROADCASTS, RadioManager
+
+        rm = RadioManager()
+        rm.connect = AsyncMock(side_effect=RuntimeError("radio unavailable"))
+
+        with (
+            patch("app.websocket.broadcast_health"),
+            patch("app.websocket.broadcast_error") as mock_broadcast_error,
+        ):
+            for _ in range(MAX_FRONTEND_RECONNECT_ERROR_BROADCASTS + 2):
+                result = await rm.reconnect(broadcast_on_success=False)
+                assert result is False
+
+        assert mock_broadcast_error.call_count == MAX_FRONTEND_RECONNECT_ERROR_BROADCASTS
+        assert mock_broadcast_error.call_args_list[0].args == (
+            "Reconnection failed",
+            "radio unavailable",
+        )
+        assert mock_broadcast_error.call_args_list[-1].args == (
+            "Reconnection failed",
+            "radio unavailable Further reconnect failures will be logged only until a connection succeeds.",
+        )
+
+    @pytest.mark.asyncio
+    async def test_reconnect_success_resets_error_broadcast_suppression(self):
+        """A successful reconnect re-enables frontend error broadcasts for later failures."""
+        from app.radio import RadioManager
+
+        rm = RadioManager()
+        attempts = 0
+
+        async def mock_connect():
+            nonlocal attempts
+            attempts += 1
+            if attempts in (1, 2, 4):
+                raise RuntimeError("radio unavailable")
+            mock_mc = MagicMock()
+            mock_mc.is_connected = True
+            rm._meshcore = mock_mc
+            rm._connection_info = "TCP: test:4000"
+
+        rm.connect = AsyncMock(side_effect=mock_connect)
+
+        with (
+            patch("app.websocket.broadcast_health"),
+            patch("app.websocket.broadcast_error") as mock_broadcast_error,
+        ):
+            assert await rm.reconnect(broadcast_on_success=False) is False
+            assert await rm.reconnect(broadcast_on_success=False) is False
+            assert await rm.reconnect(broadcast_on_success=False) is True
+            rm._meshcore = None
+            assert await rm.reconnect(broadcast_on_success=False) is False
+
+        assert mock_broadcast_error.call_count == 3
+        for call in mock_broadcast_error.call_args_list:
+            assert call.args == ("Reconnection failed", "radio unavailable")
+
 
 class TestManualDisconnectCleanup:
     """Tests for manual disconnect teardown behavior."""

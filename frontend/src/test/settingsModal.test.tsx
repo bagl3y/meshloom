@@ -63,6 +63,7 @@ const baseSettings: AppSettings = {
 };
 
 function renderModal(overrides?: {
+  config?: RadioConfig | null;
   appSettings?: AppSettings;
   health?: HealthStatus;
   onSaveAppSettings?: (update: AppSettingsUpdate) => Promise<void>;
@@ -97,7 +98,7 @@ function renderModal(overrides?: {
   const commonProps = {
     open: overrides?.open ?? true,
     pageMode: overrides?.pageMode,
-    config: baseConfig,
+    config: overrides?.config === undefined ? baseConfig : overrides.config,
     health: overrides?.health ?? baseHealth,
     appSettings: overrides?.appSettings ?? baseSettings,
     onClose,
@@ -203,6 +204,32 @@ describe('SettingsModal', () => {
     openRadioSection();
 
     expect(screen.getByText(/Configured radio contact capacity/i)).toBeInTheDocument();
+  });
+
+  it('keeps non-radio settings available when radio config is unavailable', () => {
+    renderModal({ config: null });
+
+    const radioToggle = screen.getByRole('button', { name: /Radio/i });
+    expect(radioToggle).toBeDisabled();
+
+    openLocalSection();
+    expect(screen.getByLabelText('Local label text')).toBeInTheDocument();
+
+    openDatabaseSection();
+    expect(screen.getByText('Delete Undecrypted Packets')).toBeInTheDocument();
+  });
+
+  it('shows a radio-unavailable message instead of blocking the whole settings page', () => {
+    renderModal({
+      config: null,
+      externalSidebarNav: true,
+      desktopSection: 'radio',
+    });
+
+    expect(
+      screen.getByText('Radio settings are unavailable until a radio connects.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Loading configuration...')).not.toBeInTheDocument();
   });
 
   it('shows cached radio firmware and capacity info under the connection status', () => {

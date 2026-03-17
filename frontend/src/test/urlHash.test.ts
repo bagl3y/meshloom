@@ -8,6 +8,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   parseHashConversation,
+  parseHashSettingsSection,
+  getSettingsHash,
   getMapFocusHash,
   resolveChannelFromHashToken,
   resolveContactFromHashToken,
@@ -144,6 +146,34 @@ describe('parseHashConversation', () => {
     const result = parseHashConversation();
 
     expect(result).toEqual({ type: 'channel', name: 'Test Channel!' });
+  });
+});
+
+describe('settings URL hashes', () => {
+  let originalHash: string;
+
+  beforeEach(() => {
+    originalHash = window.location.hash;
+  });
+
+  afterEach(() => {
+    window.location.hash = originalHash;
+  });
+
+  it('parses a valid settings section hash', () => {
+    window.location.hash = '#settings/database';
+
+    expect(parseHashSettingsSection()).toBe('database');
+  });
+
+  it('returns null for an invalid settings section hash', () => {
+    window.location.hash = '#settings/not-a-section';
+
+    expect(parseHashSettingsSection()).toBeNull();
+  });
+
+  it('builds a stable settings hash', () => {
+    expect(getSettingsHash('local')).toBe('#settings/local');
   });
 });
 

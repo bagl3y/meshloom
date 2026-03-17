@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, type MutableRefObject } from 'react';
 import {
   parseHashConversation,
+  parseHashSettingsSection,
   updateUrlHash,
   resolveChannelFromHashToken,
   resolveContactFromHashToken,
@@ -18,6 +19,7 @@ interface UseConversationRouterArgs {
   channels: Channel[];
   contacts: Contact[];
   contactsLoaded: boolean;
+  suspendHashSync: boolean;
   setSidebarOpen: (open: boolean) => void;
   pendingDeleteFallbackRef: MutableRefObject<boolean>;
   hasSetDefaultConversation: MutableRefObject<boolean>;
@@ -27,6 +29,7 @@ export function useConversationRouter({
   channels,
   contacts,
   contactsLoaded,
+  suspendHashSync,
   setSidebarOpen,
   pendingDeleteFallbackRef,
   hasSetDefaultConversation,
@@ -34,7 +37,9 @@ export function useConversationRouter({
   const [activeConversation, setActiveConversationState] = useState<Conversation | null>(null);
   const activeConversationRef = useRef<Conversation | null>(null);
   const hashSyncEnabledRef = useRef(
-    typeof window !== 'undefined' ? window.location.hash.length > 0 : false
+    typeof window !== 'undefined'
+      ? window.location.hash.length > 0 && parseHashSettingsSection() === null
+      : false
   );
 
   const setActiveConversation = useCallback((conv: Conversation | null) => {
@@ -58,7 +63,7 @@ export function useConversationRouter({
     if (hasSetDefaultConversation.current || activeConversation) return;
     if (channels.length === 0) return;
 
-    const hashConv = parseHashConversation();
+    const hashConv = parseHashSettingsSection() ? null : parseHashConversation();
 
     // Handle non-data views immediately
     if (hashConv?.type === 'raw') {
@@ -141,7 +146,7 @@ export function useConversationRouter({
   useEffect(() => {
     if (hasSetDefaultConversation.current || activeConversation) return;
 
-    const hashConv = parseHashConversation();
+    const hashConv = parseHashSettingsSection() ? null : parseHashConversation();
     if (hashConv?.type === 'contact') {
       if (!contactsLoaded) return;
 
@@ -203,14 +208,14 @@ export function useConversationRouter({
   useEffect(() => {
     activeConversationRef.current = activeConversation;
     if (activeConversation) {
-      if (hashSyncEnabledRef.current) {
+      if (hashSyncEnabledRef.current && !suspendHashSync) {
         updateUrlHash(activeConversation);
       }
       if (getReopenLastConversationEnabled() && activeConversation.type !== 'search') {
         saveLastViewedConversation(activeConversation);
       }
     }
-  }, [activeConversation]);
+  }, [activeConversation, suspendHashSync]);
 
   // If a delete action left us without an active conversation, recover to Public
   useEffect(() => {

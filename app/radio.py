@@ -12,6 +12,7 @@ from app.config import settings
 from app.keystore import clear_keys
 
 logger = logging.getLogger(__name__)
+MAX_FRONTEND_RECONNECT_ERROR_BROADCASTS = 3
 
 
 class RadioOperationError(RuntimeError):
@@ -131,6 +132,7 @@ class RadioManager:
         self._setup_lock: asyncio.Lock | None = None
         self._setup_in_progress: bool = False
         self._setup_complete: bool = False
+        self._frontend_reconnect_error_broadcasts: int = 0
         self.device_info_loaded: bool = False
         self.max_contacts: int | None = None
         self.device_model: str | None = None
@@ -387,6 +389,21 @@ class RadioManager:
         self._last_connected = False
         await self.disconnect()
 
+    def _reset_reconnect_error_broadcasts(self) -> None:
+        self._frontend_reconnect_error_broadcasts = 0
+
+    def _broadcast_reconnect_error_if_needed(self, details: str) -> None:
+        from app.websocket import broadcast_error
+
+        self._frontend_reconnect_error_broadcasts += 1
+        if self._frontend_reconnect_error_broadcasts > MAX_FRONTEND_RECONNECT_ERROR_BROADCASTS:
+            return
+
+        if self._frontend_reconnect_error_broadcasts == MAX_FRONTEND_RECONNECT_ERROR_BROADCASTS:
+            details = f"{details} Further reconnect failures will be logged only until a connection succeeds."
+
+        broadcast_error("Reconnection failed", details)
+
     async def _disable_meshcore_auto_reconnect(self, mc: MeshCore) -> None:
         """Disable library-managed reconnects so manual teardown fully releases transport."""
         connection_manager = getattr(mc, "connection_manager", None)
@@ -485,6 +502,7 @@ class RadioManager:
     async def disconnect(self) -> None:
         """Disconnect from the radio."""
         clear_keys()
+        self._reset_reconnect_error_broadcasts()
         if self._meshcore is not None:
             logger.debug("Disconnecting from radio")
             mc = self._meshcore
@@ -511,7 +529,7 @@ class RadioManager:
         Returns True if reconnection was successful, False otherwise.
         Uses a lock to prevent concurrent reconnection attempts.
         """
-        from app.websocket import broadcast_error, broadcast_health
+        from app.websocket import broadcast_health
 
         # Lazily initialize lock (can't create in __init__ before event loop exists)
         if self._reconnect_lock is None:
@@ -549,6 +567,7 @@ class RadioManager:
 
                 if self.is_connected:
                     logger.info("Radio reconnected successfully at %s", self._connection_info)
+                    self._reset_reconnect_error_broadcasts()
                     if broadcast_on_success:
                         broadcast_health(True, self._connection_info)
                     return True
@@ -558,7 +577,7 @@ class RadioManager:
 
             except Exception as e:
                 logger.warning("Reconnection failed: %s", e, exc_info=True)
-                broadcast_error("Reconnection failed", str(e))
+                self._broadcast_reconnect_error_if_needed(str(e))
                 return False
 
     async def start_connection_monitor(self) -> None:

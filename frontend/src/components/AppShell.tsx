@@ -41,6 +41,7 @@ interface AppShellProps {
   settingsSection: SettingsSection;
   sidebarOpen: boolean;
   showCracker: boolean;
+  disabledSettingsSections?: SettingsSection[];
   onSettingsSectionChange: (section: SettingsSection) => void;
   onSidebarOpenChange: (open: boolean) => void;
   onCrackerRunningChange: (running: boolean) => void;
@@ -69,6 +70,7 @@ export function AppShell({
   settingsSection,
   sidebarOpen,
   showCracker,
+  disabledSettingsSections = [],
   onSettingsSectionChange,
   onSidebarOpenChange,
   onCrackerRunningChange,
@@ -118,13 +120,16 @@ export function AppShell({
       <div className="flex-1 min-h-0 overflow-y-auto py-1 [contain:layout_paint]">
         {SETTINGS_SECTION_ORDER.map((section) => {
           const Icon = SETTINGS_SECTION_ICONS[section];
+          const disabled = disabledSettingsSections.includes(section);
           return (
             <button
               key={section}
               type="button"
+              disabled={disabled}
               className={cn(
-                'w-full px-3 py-2 text-left text-[13px] border-l-2 border-transparent hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-                settingsSection === section && 'bg-accent border-l-primary'
+                'w-full px-3 py-2 text-left text-[13px] border-l-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-50',
+                !disabled && 'hover:bg-accent',
+                settingsSection === section && !disabled && 'bg-accent border-l-primary'
               )}
               aria-current={settingsSection === section ? 'true' : undefined}
               onClick={() => onSettingsSectionChange(section)}

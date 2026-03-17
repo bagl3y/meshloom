@@ -155,11 +155,13 @@ export function SettingsModal(props: SettingsModalProps) {
   const renderSectionHeader = (section: SettingsSection): ReactNode => {
     if (!showSectionButton) return null;
     const Icon = SETTINGS_SECTION_ICONS[section];
+    const disabled = section === 'radio' && !config;
     return (
       <button
         type="button"
-        className={sectionButtonClasses}
+        className={`${sectionButtonClasses} disabled:cursor-not-allowed disabled:opacity-50`}
         aria-expanded={expandedSections[section]}
+        disabled={disabled}
         onClick={() => toggleSection(section)}
       >
         <span className="inline-flex items-center gap-2 font-medium" role="heading" aria-level={3}>
@@ -177,33 +179,38 @@ export function SettingsModal(props: SettingsModalProps) {
     return null;
   }
 
-  return !config ? (
-    <div className="py-8 text-center text-muted-foreground">Loading configuration...</div>
-  ) : (
+  return (
     <div className={settingsContainerClass}>
       {shouldRenderSection('radio') && (
         <section className={sectionWrapperClass}>
           {renderSectionHeader('radio')}
-          {isSectionVisible('radio') && appSettings && (
-            <SettingsRadioSection
-              config={config}
-              health={health}
-              appSettings={appSettings}
-              pageMode={pageMode}
-              onSave={onSave}
-              onSaveAppSettings={onSaveAppSettings}
-              onSetPrivateKey={onSetPrivateKey}
-              onReboot={onReboot}
-              onDisconnect={onDisconnect}
-              onReconnect={onReconnect}
-              onAdvertise={onAdvertise}
-              meshDiscovery={meshDiscovery}
-              meshDiscoveryLoadingTarget={meshDiscoveryLoadingTarget}
-              onDiscoverMesh={onDiscoverMesh}
-              onClose={onClose}
-              className={sectionContentClass}
-            />
-          )}
+          {isSectionVisible('radio') &&
+            (config && appSettings ? (
+              <SettingsRadioSection
+                config={config}
+                health={health}
+                appSettings={appSettings}
+                pageMode={pageMode}
+                onSave={onSave}
+                onSaveAppSettings={onSaveAppSettings}
+                onSetPrivateKey={onSetPrivateKey}
+                onReboot={onReboot}
+                onDisconnect={onDisconnect}
+                onReconnect={onReconnect}
+                onAdvertise={onAdvertise}
+                meshDiscovery={meshDiscovery}
+                meshDiscoveryLoadingTarget={meshDiscoveryLoadingTarget}
+                onDiscoverMesh={onDiscoverMesh}
+                onClose={onClose}
+                className={sectionContentClass}
+              />
+            ) : (
+              <div className={sectionContentClass}>
+                <div className="rounded-md border border-input bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                  Radio settings are unavailable until a radio connects.
+                </div>
+              </div>
+            ))}
         </section>
       )}
 
@@ -222,19 +229,26 @@ export function SettingsModal(props: SettingsModalProps) {
       {shouldRenderSection('database') && (
         <section className={sectionWrapperClass}>
           {renderSectionHeader('database')}
-          {isSectionVisible('database') && appSettings && (
-            <SettingsDatabaseSection
-              appSettings={appSettings}
-              health={health}
-              onSaveAppSettings={onSaveAppSettings}
-              onHealthRefresh={onHealthRefresh}
-              blockedKeys={blockedKeys}
-              blockedNames={blockedNames}
-              onToggleBlockedKey={onToggleBlockedKey}
-              onToggleBlockedName={onToggleBlockedName}
-              className={sectionContentClass}
-            />
-          )}
+          {isSectionVisible('database') &&
+            (appSettings ? (
+              <SettingsDatabaseSection
+                appSettings={appSettings}
+                health={health}
+                onSaveAppSettings={onSaveAppSettings}
+                onHealthRefresh={onHealthRefresh}
+                blockedKeys={blockedKeys}
+                blockedNames={blockedNames}
+                onToggleBlockedKey={onToggleBlockedKey}
+                onToggleBlockedName={onToggleBlockedName}
+                className={sectionContentClass}
+              />
+            ) : (
+              <div className={sectionContentClass}>
+                <div className="rounded-md border border-input bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                  Loading app settings...
+                </div>
+              </div>
+            ))}
         </section>
       )}
 

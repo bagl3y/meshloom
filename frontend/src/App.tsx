@@ -194,6 +194,7 @@ export function App() {
     channels,
     contacts,
     contactsLoaded,
+    suspendHashSync: showSettings,
     setSidebarOpen,
     pendingDeleteFallbackRef,
     hasSetDefaultConversation,
@@ -253,6 +254,12 @@ export function App() {
     markAllRead,
     refreshUnreads,
   } = useUnreadCounts(channels, contacts, activeConversation);
+
+  useEffect(() => {
+    if (showSettings && !config && settingsSection === 'radio') {
+      setSettingsSection('local');
+    }
+  }, [config, settingsSection, setSettingsSection, showSettings]);
 
   useEffect(() => {
     if (activeConversation?.type !== 'channel') {
@@ -566,6 +573,7 @@ export function App() {
       settingsSection={settingsSection}
       sidebarOpen={sidebarOpen}
       showCracker={showCracker}
+      disabledSettingsSections={config ? [] : ['radio']}
       onSettingsSectionChange={setSettingsSection}
       onSidebarOpenChange={setSidebarOpen}
       onCrackerRunningChange={setCrackerRunning}

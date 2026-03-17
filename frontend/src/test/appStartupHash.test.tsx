@@ -90,7 +90,9 @@ vi.mock('../components/NewMessageModal', () => ({
 }));
 
 vi.mock('../components/SettingsModal', () => ({
-  SettingsModal: () => null,
+  SettingsModal: ({ desktopSection }: { desktopSection?: string }) => (
+    <div data-testid="settings-modal-section">{desktopSection ?? 'none'}</div>
+  ),
   SETTINGS_SECTION_ORDER: ['radio', 'local', 'database', 'bot'],
   SETTINGS_SECTION_LABELS: {
     radio: 'Radio',
@@ -292,5 +294,21 @@ describe('App startup hash resolution', () => {
       }
     });
     expect(window.location.hash).toBe('');
+  });
+
+  it('opens settings from a settings hash and falls back away from radio when disconnected', async () => {
+    window.location.hash = '#settings/radio';
+    mocks.api.getRadioConfig.mockRejectedValue(new Error('radio offline'));
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-modal-section')).toHaveTextContent('local');
+    });
+
+    for (const button of screen.getAllByRole('button', { name: 'Radio' })) {
+      expect(button).toBeDisabled();
+    }
+    expect(window.location.hash).toBe('#settings/local');
   });
 });

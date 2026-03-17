@@ -164,7 +164,10 @@ vi.mock('../components/ui/sonner', () => ({
 
 vi.mock('../utils/urlHash', () => ({
   parseHashConversation: () => null,
+  parseHashSettingsSection: () => null,
   updateUrlHash: vi.fn(),
+  updateSettingsHash: vi.fn(),
+  getSettingsHash: (section: string) => `#settings/${section}`,
   getMapFocusHash: () => '#map',
 }));
 
