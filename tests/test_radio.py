@@ -6,6 +6,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from serial.serialutil import SerialException
 
 
 class TestRadioManagerConnect:
@@ -508,6 +509,43 @@ class TestReconnectLock:
         assert mock_broadcast_error.call_count == 3
         for call in mock_broadcast_error.call_args_list:
             assert call.args == ("Reconnection failed", "radio unavailable")
+
+    @pytest.mark.asyncio
+    async def test_reconnect_serial_missing_port_logs_clean_message_without_traceback(self):
+        """Missing serial ports should log a concise operator-facing warning."""
+        from app.radio import RadioManager
+
+        rm = RadioManager()
+        rm.connect = AsyncMock(
+            side_effect=SerialException(
+                2,
+                "could not open port /dev/serial/by-id/test-radio: "
+                "[Errno 2] No such file or directory: '/dev/serial/by-id/test-radio'",
+            )
+        )
+
+        with (
+            patch("app.radio.settings") as mock_settings,
+            patch("app.radio.logger") as mock_logger,
+            patch("app.websocket.broadcast_health"),
+            patch("app.websocket.broadcast_error") as mock_broadcast_error,
+        ):
+            mock_settings.connection_type = "serial"
+            mock_settings.serial_port = "/dev/serial/by-id/test-radio"
+
+            result = await rm.reconnect(broadcast_on_success=False)
+
+        assert result is False
+        mock_logger.warning.assert_called_once_with(
+            "Could not connect to serial port /dev/serial/by-id/test-radio. "
+            "Did the radio get disconnected or change serial ports?",
+            exc_info=False,
+        )
+        assert mock_broadcast_error.call_args.args == (
+            "Reconnection failed",
+            "Could not connect to serial port /dev/serial/by-id/test-radio. "
+            "Did the radio get disconnected or change serial ports?",
+        )
 
 
 class TestManualDisconnectCleanup:

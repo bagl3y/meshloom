@@ -2,17 +2,20 @@ import asyncio
 import glob
 import logging
 import platform
+import re
 from collections import OrderedDict
 from contextlib import asynccontextmanager, nullcontext
 from pathlib import Path
 
 from meshcore import MeshCore
+from serial.serialutil import SerialException
 
 from app.config import settings
 from app.keystore import clear_keys
 
 logger = logging.getLogger(__name__)
 MAX_FRONTEND_RECONNECT_ERROR_BROADCASTS = 3
+_SERIAL_PORT_ERROR_RE = re.compile(r"could not open port (?P<port>.+?):")
 
 
 class RadioOperationError(RuntimeError):
@@ -67,6 +70,36 @@ def detect_serial_devices() -> list[str]:
         devices.sort()
 
     return devices
+
+
+def _extract_serial_port_from_error(exc: Exception) -> str | None:
+    """Best-effort extraction of a serial port path from a pyserial error."""
+    message = str(exc)
+    match = _SERIAL_PORT_ERROR_RE.search(message)
+    if match:
+        return match.group("port")
+    return None
+
+
+def _format_reconnect_failure(exc: Exception) -> tuple[str, str, bool]:
+    """Return log message, frontend detail, and whether to log a traceback."""
+    if settings.connection_type == "serial":
+        if isinstance(exc, RuntimeError) and str(exc).startswith("No MeshCore radio found"):
+            message = (
+                "Could not find a MeshCore radio on any serial port. "
+                "Did the radio get disconnected or change serial ports?"
+            )
+            return (message, message, False)
+
+        if isinstance(exc, SerialException):
+            port = settings.serial_port or _extract_serial_port_from_error(exc) or "the serial port"
+            message = (
+                f"Could not connect to serial port {port}. "
+                "Did the radio get disconnected or change serial ports?"
+            )
+            return (message, message, False)
+
+    return (f"Reconnection failed: {exc}", str(exc), True)
 
 
 async def test_serial_device(port: str, baudrate: int, timeout: float = 3.0) -> bool:
@@ -592,8 +625,9 @@ class RadioManager:
                     return False
 
             except Exception as e:
-                logger.warning("Reconnection failed: %s", e, exc_info=True)
-                self._broadcast_reconnect_error_if_needed(str(e))
+                log_message, frontend_detail, include_traceback = _format_reconnect_failure(e)
+                logger.warning(log_message, exc_info=include_traceback)
+                self._broadcast_reconnect_error_if_needed(frontend_detail)
                 return False
 
     async def start_connection_monitor(self) -> None:
