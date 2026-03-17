@@ -234,8 +234,7 @@ export function App() {
     fetchNewerMessages,
     jumpToBottom,
     reloadCurrentConversation,
-    addMessageIfNew,
-    receiveRealtimeMessage,
+    observeMessage,
     receiveMessageAck,
     reconcileOnReconnect,
     renameConversationMessages,
@@ -249,10 +248,9 @@ export function App() {
     mentions,
     lastMessageTimes,
     unreadLastReadAts,
-    incrementUnread,
+    recordMessageEvent,
     renameConversationState,
     markAllRead,
-    trackNewMessage,
     refreshUnreads,
   } = useUnreadCounts(channels, contacts, activeConversation);
 
@@ -322,9 +320,8 @@ export function App() {
     blockedKeysRef,
     blockedNamesRef,
     activeConversationRef,
-    receiveRealtimeMessage,
-    trackNewMessage,
-    incrementUnread,
+    observeMessage,
+    recordMessageEvent,
     renameConversationState,
     checkMention,
     pendingDeleteFallbackRef,
@@ -368,7 +365,7 @@ export function App() {
     activeConversationRef,
     setContacts,
     setChannels,
-    addMessageIfNew,
+    observeMessage,
     messageInputRef,
   });
   const handleCreateCrackedChannel = useCallback(

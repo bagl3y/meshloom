@@ -8,17 +8,21 @@
  */
 
 import type { Message, MessagePath } from './types';
+import { getMessageContentKey } from './utils/messageIdentity';
 
 export const MAX_CACHED_CONVERSATIONS = 20;
 export const MAX_MESSAGES_PER_ENTRY = 200;
 
 interface CacheEntry {
   messages: Message[];
-  seenContent: Set<string>;
   hasOlderMessages: boolean;
 }
 
-const cache = new Map<string, CacheEntry>();
+interface InternalCacheEntry extends CacheEntry {
+  contentKeys: Set<string>;
+}
+
+const cache = new Map<string, InternalCacheEntry>();
 
 /** Get a cached entry and promote it to most-recently-used. */
 export function get(id: string): CacheEntry | undefined {
@@ -27,11 +31,15 @@ export function get(id: string): CacheEntry | undefined {
   // Promote to MRU: delete and re-insert
   cache.delete(id);
   cache.set(id, entry);
-  return entry;
+  return {
+    messages: entry.messages,
+    hasOlderMessages: entry.hasOlderMessages,
+  };
 }
 
 /** Insert or update an entry at MRU position, evicting LRU if over capacity. */
 export function set(id: string, entry: CacheEntry): void {
+  const contentKeys = new Set(entry.messages.map((message) => getMessageContentKey(message)));
   // Trim to most recent messages to bound memory
   if (entry.messages.length > MAX_MESSAGES_PER_ENTRY) {
     const trimmed = [...entry.messages]
@@ -39,9 +47,13 @@ export function set(id: string, entry: CacheEntry): void {
       .slice(0, MAX_MESSAGES_PER_ENTRY);
     entry = { ...entry, messages: trimmed, hasOlderMessages: true };
   }
+  const internalEntry: InternalCacheEntry = {
+    ...entry,
+    contentKeys,
+  };
   // Remove first so re-insert moves to end
   cache.delete(id);
-  cache.set(id, entry);
+  cache.set(id, internalEntry);
   // Evict LRU (first entry) if over capacity
   if (cache.size > MAX_CACHED_CONVERSATIONS) {
     const lruKey = cache.keys().next().value as string;
@@ -50,14 +62,15 @@ export function set(id: string, entry: CacheEntry): void {
 }
 
 /** Add a message to a cached conversation with dedup. Returns true if new, false if duplicate. */
-export function addMessage(id: string, msg: Message, contentKey: string): boolean {
+export function addMessage(id: string, msg: Message): boolean {
   const entry = cache.get(id);
+  const contentKey = getMessageContentKey(msg);
   if (!entry) {
     // Auto-create a minimal entry for never-visited conversations
     cache.set(id, {
       messages: [msg],
-      seenContent: new Set([contentKey]),
       hasOlderMessages: true,
+      contentKeys: new Set([contentKey]),
     });
     // Evict LRU if over capacity
     if (cache.size > MAX_CACHED_CONVERSATIONS) {
@@ -66,9 +79,9 @@ export function addMessage(id: string, msg: Message, contentKey: string): boolea
     }
     return true;
   }
-  if (entry.seenContent.has(contentKey)) return false;
+  if (entry.contentKeys.has(contentKey)) return false;
   if (entry.messages.some((m) => m.id === msg.id)) return false;
-  entry.seenContent.add(contentKey);
+  entry.contentKeys.add(contentKey);
   entry.messages = [...entry.messages, msg];
   // Trim if over limit (drop oldest by received_at)
   if (entry.messages.length > MAX_MESSAGES_PER_ENTRY) {
@@ -163,8 +176,8 @@ export function rename(oldId: string, newId: string): void {
   cache.delete(oldId);
   cache.set(newId, {
     messages: mergedMessages,
-    seenContent: new Set([...newEntry.seenContent, ...oldEntry.seenContent]),
     hasOlderMessages: newEntry.hasOlderMessages || oldEntry.hasOlderMessages,
+    contentKeys: new Set([...newEntry.contentKeys, ...oldEntry.contentKeys]),
   });
 }
 

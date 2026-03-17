@@ -10,9 +10,9 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import fixtures from './fixtures/websocket_events.json';
-import { getMessageContentKey } from '../hooks/useConversationMessages';
 import { getStateKey } from '../utils/conversationState';
 import { mergeContactIntoList } from '../utils/contactMerge';
+import { getMessageContentKey } from '../utils/messageIdentity';
 import * as messageCache from '../messageCache';
 import type { Contact, Message } from '../types';
 
@@ -68,7 +68,7 @@ function handleMessageEvent(
   state.lastMessageTimes[stateKey] = msg.received_at;
 
   if (!isForActiveConversation) {
-    const isNew = messageCache.addMessage(msg.conversation_key, msg, contentKey);
+    const isNew = messageCache.addMessage(msg.conversation_key, msg);
     if (!msg.outgoing && isNew) {
       state.unreadCounts[stateKey] = (state.unreadCounts[stateKey] || 0) + 1;
       unreadIncremented = true;
@@ -180,7 +180,7 @@ describe('Integration: No phantom unreads from mesh echoes (hitlist #8 regressio
     // dual-set design the global set would drop msg-0's key during pruning,
     // so a later mesh echo of msg-0 would pass the global check and
     // phantom-increment unread. With the fix, messageCache's per-conversation
-    // seenContent is the single source of truth and is never pruned.
+    // Cached messages remain the source of truth for inactive-conversation dedup.
     const MESSAGE_COUNT = 1001;
     for (let i = 0; i < MESSAGE_COUNT; i++) {
       const msg: Message = {
@@ -362,7 +362,7 @@ describe('Integration: ACK + messageCache propagation', () => {
       acked: 0,
       sender_name: null,
     };
-    messageCache.addMessage('pk_abc', msg, 'key-100');
+    messageCache.addMessage('pk_abc', msg);
 
     messageCache.updateAck(100, 1);
 
@@ -387,7 +387,7 @@ describe('Integration: ACK + messageCache propagation', () => {
       acked: 1,
       sender_name: null,
     };
-    messageCache.addMessage('pk_abc', msg, 'key-101');
+    messageCache.addMessage('pk_abc', msg);
 
     const longerPaths = [
       { path: 'aa', received_at: 1700000001 },
@@ -416,7 +416,7 @@ describe('Integration: ACK + messageCache propagation', () => {
       acked: 5,
       sender_name: null,
     };
-    messageCache.addMessage('pk_abc', msg, 'key-102');
+    messageCache.addMessage('pk_abc', msg);
 
     // Try to update with a lower ack count
     messageCache.updateAck(102, 3);
@@ -441,7 +441,7 @@ describe('Integration: ACK + messageCache propagation', () => {
       acked: 0,
       sender_name: null,
     };
-    messageCache.addMessage('pk_abc', msg, 'key-103');
+    messageCache.addMessage('pk_abc', msg);
 
     // Update a non-existent message ID — should not throw or modify anything
     messageCache.updateAck(999, 1);

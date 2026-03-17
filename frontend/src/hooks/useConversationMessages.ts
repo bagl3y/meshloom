@@ -1,16 +1,9 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type Dispatch,
-  type MutableRefObject,
-  type SetStateAction,
-} from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from '../components/ui/sonner';
 import { api, isAbortError } from '../api';
 import * as messageCache from '../messageCache';
 import type { Conversation, Message, MessagePath } from '../types';
+import { getMessageContentKey } from '../utils/messageIdentity';
 
 const MAX_PENDING_ACKS = 500;
 const MESSAGE_PAGE_SIZE = 200;
@@ -56,15 +49,6 @@ export function mergePendingAck(
   return existing;
 }
 
-// Generate a key for deduplicating messages by content
-export function getMessageContentKey(msg: Message): string {
-  // When sender_timestamp exists, dedup by content (catches radio-path duplicates with different IDs).
-  // When null, include msg.id so each message gets a unique key — avoids silently dropping
-  // different messages that share the same text and received_at second.
-  const ts = msg.sender_timestamp ?? `r${msg.received_at}-${msg.id}`;
-  return `${msg.type}-${msg.conversation_key}-${msg.text}-${ts}`;
-}
-
 interface UseConversationMessagesResult {
   messages: Message[];
   messagesLoading: boolean;
@@ -72,16 +56,11 @@ interface UseConversationMessagesResult {
   hasOlderMessages: boolean;
   hasNewerMessages: boolean;
   loadingNewer: boolean;
-  hasNewerMessagesRef: MutableRefObject<boolean>;
-  setMessages: Dispatch<SetStateAction<Message[]>>;
   fetchOlderMessages: () => Promise<void>;
   fetchNewerMessages: () => Promise<void>;
   jumpToBottom: () => void;
   reloadCurrentConversation: () => void;
-  addMessageIfNew: (msg: Message) => boolean;
-  updateMessageAck: (messageId: number, ackCount: number, paths?: MessagePath[]) => void;
-  triggerReconcile: () => void;
-  receiveRealtimeMessage: (msg: Message) => { added: boolean; activeConversation: boolean };
+  observeMessage: (msg: Message) => { added: boolean; activeConversation: boolean };
   receiveMessageAck: (messageId: number, ackCount: number, paths?: MessagePath[]) => void;
   reconcileOnReconnect: () => void;
   renameConversationMessages: (oldId: string, newId: string) => void;
@@ -469,14 +448,6 @@ export function useConversationMessages(
     setReloadVersion((current) => current + 1);
   }, [activeConversation]);
 
-  const triggerReconcile = useCallback(() => {
-    if (!isMessageConversation(activeConversation)) return;
-    const controller = new AbortController();
-    const requestId = latestReconcileRequestIdRef.current + 1;
-    latestReconcileRequestIdRef.current = requestId;
-    reconcileFromBackend(activeConversation, controller.signal, requestId);
-  }, [activeConversation, reconcileFromBackend]);
-
   const reconcileOnReconnect = useCallback(() => {
     if (!isMessageConversation(activeConversation)) {
       return;
@@ -537,7 +508,6 @@ export function useConversationMessages(
     ) {
       messageCache.set(prevId, {
         messages: messagesRef.current,
-        seenContent: new Set(seenMessageContent.current),
         hasOlderMessages: hasOlderMessagesRef.current,
       });
     }
@@ -582,7 +552,9 @@ export function useConversationMessages(
       const cached = messageCache.get(activeConversation.id);
       if (cached) {
         setMessages(cached.messages);
-        seenMessageContent.current = new Set(cached.seenContent);
+        seenMessageContent.current = new Set(
+          cached.messages.map((message) => getMessageContentKey(message))
+        );
         setHasOlderMessages(cached.hasOlderMessages);
         setMessagesLoading(false);
         const requestId = latestReconcileRequestIdRef.current + 1;
@@ -599,9 +571,8 @@ export function useConversationMessages(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversation?.id, activeConversation?.type, targetMessageId, reloadVersion]);
 
-  // Add a message if it's new (deduplication)
-  // Returns true if the message was added, false if it was a duplicate
-  const addMessageIfNew = useCallback(
+  // Add a message to the active conversation if it is new.
+  const appendActiveMessageIfNew = useCallback(
     (msg: Message): boolean => {
       const msgWithPendingAck = applyPendingAck(msg);
       const contentKey = getMessageContentKey(msgWithPendingAck);
@@ -679,7 +650,7 @@ export function useConversationMessages(
     [updateMessageAck]
   );
 
-  const receiveRealtimeMessage = useCallback(
+  const observeMessage = useCallback(
     (msg: Message): { added: boolean; activeConversation: boolean } => {
       const msgWithPendingAck = applyPendingAck(msg);
       const activeConversationMessage = isActiveConversationMessage(
@@ -693,22 +664,17 @@ export function useConversationMessages(
         }
 
         return {
-          added: addMessageIfNew(msgWithPendingAck),
+          added: appendActiveMessageIfNew(msgWithPendingAck),
           activeConversation: true,
         };
       }
 
-      const contentKey = getMessageContentKey(msgWithPendingAck);
       return {
-        added: messageCache.addMessage(
-          msgWithPendingAck.conversation_key,
-          msgWithPendingAck,
-          contentKey
-        ),
+        added: messageCache.addMessage(msgWithPendingAck.conversation_key, msgWithPendingAck),
         activeConversation: false,
       };
     },
-    [activeConversation, addMessageIfNew, applyPendingAck, hasNewerMessagesRef]
+    [activeConversation, appendActiveMessageIfNew, applyPendingAck, hasNewerMessagesRef]
   );
 
   const renameConversationMessages = useCallback((oldId: string, newId: string) => {
@@ -730,16 +696,11 @@ export function useConversationMessages(
     hasOlderMessages,
     hasNewerMessages,
     loadingNewer,
-    hasNewerMessagesRef,
-    setMessages,
     fetchOlderMessages,
     fetchNewerMessages,
     jumpToBottom,
     reloadCurrentConversation,
-    addMessageIfNew,
-    updateMessageAck,
-    triggerReconcile,
-    receiveRealtimeMessage,
+    observeMessage,
     receiveMessageAck,
     reconcileOnReconnect,
     renameConversationMessages,

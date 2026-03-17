@@ -10,7 +10,7 @@ interface UseConversationActionsArgs {
   activeConversationRef: MutableRefObject<Conversation | null>;
   setContacts: React.Dispatch<React.SetStateAction<Contact[]>>;
   setChannels: React.Dispatch<React.SetStateAction<Channel[]>>;
-  addMessageIfNew: (msg: Message) => boolean;
+  observeMessage: (msg: Message) => { added: boolean; activeConversation: boolean };
   messageInputRef: RefObject<MessageInputHandle | null>;
 }
 
@@ -31,7 +31,7 @@ export function useConversationActions({
   activeConversationRef,
   setContacts,
   setChannels,
-  addMessageIfNew,
+  observeMessage,
   messageInputRef,
 }: UseConversationActionsArgs): UseConversationActionsResult {
   const mergeChannelIntoList = useCallback(
@@ -60,10 +60,10 @@ export function useConversationActions({
           : await api.sendDirectMessage(activeConversation.id, text);
 
       if (activeConversationRef.current?.id === conversationId) {
-        addMessageIfNew(sent);
+        observeMessage(sent);
       }
     },
-    [activeConversation, activeConversationRef, addMessageIfNew]
+    [activeConversation, activeConversationRef, observeMessage]
   );
 
   const handleResendChannelMessage = useCallback(
@@ -77,7 +77,7 @@ export function useConversationActions({
           activeConversationRef.current?.type === 'channel' &&
           activeConversationRef.current.id === resentMessage.conversation_key
         ) {
-          addMessageIfNew(resentMessage);
+          observeMessage(resentMessage);
         }
         toast.success(newTimestamp ? 'Message resent with new timestamp' : 'Message resent');
       } catch (err) {
@@ -86,7 +86,7 @@ export function useConversationActions({
         });
       }
     },
-    [activeConversationRef, addMessageIfNew]
+    [activeConversationRef, observeMessage]
   );
 
   const handleSetChannelFloodScopeOverride = useCallback(

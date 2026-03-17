@@ -27,11 +27,7 @@ function createMessage(overrides: Partial<Message> = {}): Message {
 }
 
 function createEntry(messages: Message[] = [], hasOlderMessages = false) {
-  const seenContent = new Set<string>();
-  for (const msg of messages) {
-    seenContent.add(`${msg.type}-${msg.conversation_key}-${msg.text}-${msg.sender_timestamp}`);
-  }
-  return { messages, seenContent, hasOlderMessages };
+  return { messages, hasOlderMessages };
 }
 
 describe('messageCache', () => {
@@ -155,11 +151,7 @@ describe('messageCache', () => {
       messageCache.set('conv1', createEntry([]));
 
       const msg = createMessage({ id: 10, text: 'New message' });
-      const result = messageCache.addMessage(
-        'conv1',
-        msg,
-        'CHAN-channel123-New message-1700000000'
-      );
+      const result = messageCache.addMessage('conv1', msg);
 
       expect(result).toBe(true);
       const entry = messageCache.get('conv1');
@@ -171,12 +163,11 @@ describe('messageCache', () => {
       messageCache.set('conv1', createEntry([]));
 
       const msg1 = createMessage({ id: 10, text: 'Hello' });
-      const contentKey = 'CHAN-channel123-Hello-1700000000';
-      expect(messageCache.addMessage('conv1', msg1, contentKey)).toBe(true);
+      expect(messageCache.addMessage('conv1', msg1)).toBe(true);
 
       // Same content key, different message id
       const msg2 = createMessage({ id: 11, text: 'Hello' });
-      expect(messageCache.addMessage('conv1', msg2, contentKey)).toBe(false);
+      expect(messageCache.addMessage('conv1', msg2)).toBe(false);
 
       const entry = messageCache.get('conv1');
       expect(entry!.messages).toHaveLength(1);
@@ -187,9 +178,7 @@ describe('messageCache', () => {
 
       // Same id, different content key
       const msg = createMessage({ id: 10, text: 'Different' });
-      expect(messageCache.addMessage('conv1', msg, 'CHAN-channel123-Different-1700000000')).toBe(
-        false
-      );
+      expect(messageCache.addMessage('conv1', msg)).toBe(false);
 
       const entry = messageCache.get('conv1');
       expect(entry!.messages).toHaveLength(1);
@@ -208,11 +197,7 @@ describe('messageCache', () => {
         text: 'newest',
         received_at: 1700000000 + MAX_MESSAGES_PER_ENTRY,
       });
-      const result = messageCache.addMessage(
-        'conv1',
-        newMsg,
-        `CHAN-channel123-newest-${newMsg.sender_timestamp}`
-      );
+      const result = messageCache.addMessage('conv1', newMsg);
 
       expect(result).toBe(true);
       const entry = messageCache.get('conv1');
@@ -225,11 +210,7 @@ describe('messageCache', () => {
 
     it('auto-creates a minimal entry for never-visited conversations and returns true', () => {
       const msg = createMessage({ id: 10, text: 'First contact' });
-      const result = messageCache.addMessage(
-        'new_conv',
-        msg,
-        'CHAN-channel123-First contact-1700000000'
-      );
+      const result = messageCache.addMessage('new_conv', msg);
 
       expect(result).toBe(true);
       const entry = messageCache.get('new_conv');
@@ -237,7 +218,6 @@ describe('messageCache', () => {
       expect(entry!.messages).toHaveLength(1);
       expect(entry!.messages[0].text).toBe('First contact');
       expect(entry!.hasOlderMessages).toBe(true);
-      expect(entry!.seenContent.has('CHAN-channel123-First contact-1700000000')).toBe(true);
     });
 
     it('promotes entry to MRU on addMessage', () => {
@@ -248,7 +228,7 @@ describe('messageCache', () => {
 
       // addMessage to conv0 (currently LRU) should promote it
       const msg = createMessage({ id: 999, text: 'Incoming WS message' });
-      messageCache.addMessage('conv0', msg, 'CHAN-channel123-Incoming WS message-1700000000');
+      messageCache.addMessage('conv0', msg);
 
       // Add one more — conv1 should now be LRU and get evicted, not conv0
       messageCache.set('conv_new', createEntry());
@@ -259,11 +239,10 @@ describe('messageCache', () => {
 
     it('returns false for duplicate delivery to auto-created entry', () => {
       const msg = createMessage({ id: 10, text: 'Echo' });
-      const contentKey = 'CHAN-channel123-Echo-1700000000';
 
-      expect(messageCache.addMessage('new_conv', msg, contentKey)).toBe(true);
+      expect(messageCache.addMessage('new_conv', msg)).toBe(true);
       // Duplicate via mesh echo
-      expect(messageCache.addMessage('new_conv', msg, contentKey)).toBe(false);
+      expect(messageCache.addMessage('new_conv', msg)).toBe(false);
 
       const entry = messageCache.get('new_conv');
       expect(entry!.messages).toHaveLength(1);

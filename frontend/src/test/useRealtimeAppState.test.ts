@@ -66,9 +66,8 @@ function createRealtimeArgs(overrides: Partial<Parameters<typeof useRealtimeAppS
       blockedKeysRef: { current: [] as string[] },
       blockedNamesRef: { current: [] as string[] },
       activeConversationRef: { current: null as Conversation | null },
-      receiveRealtimeMessage: vi.fn(() => ({ added: false, activeConversation: false })),
-      trackNewMessage: vi.fn(),
-      incrementUnread: vi.fn(),
+      observeMessage: vi.fn(() => ({ added: false, activeConversation: false })),
+      recordMessageEvent: vi.fn(),
       renameConversationState: vi.fn(),
       checkMention: vi.fn(() => false),
       pendingDeleteFallbackRef: { current: false },
@@ -181,7 +180,7 @@ describe('useRealtimeAppState', () => {
   it('tracks unread state for a new non-active incoming message', () => {
     const { args } = createRealtimeArgs({
       checkMention: vi.fn(() => true),
-      receiveRealtimeMessage: vi.fn(() => ({ added: true, activeConversation: false })),
+      observeMessage: vi.fn(() => ({ added: true, activeConversation: false })),
     });
 
     const { result } = renderHook(() => useRealtimeAppState(args));
@@ -190,12 +189,13 @@ describe('useRealtimeAppState', () => {
       result.current.onMessage?.(incomingDm);
     });
 
-    expect(args.receiveRealtimeMessage).toHaveBeenCalledWith(incomingDm);
-    expect(args.trackNewMessage).toHaveBeenCalledWith(incomingDm);
-    expect(args.incrementUnread).toHaveBeenCalledWith(
-      `contact-${incomingDm.conversation_key}`,
-      true
-    );
+    expect(args.observeMessage).toHaveBeenCalledWith(incomingDm);
+    expect(args.recordMessageEvent).toHaveBeenCalledWith({
+      msg: incomingDm,
+      activeConversation: false,
+      isNewMessage: true,
+      hasMention: true,
+    });
     expect(args.notifyIncomingMessage).toHaveBeenCalledWith(incomingDm);
   });
 

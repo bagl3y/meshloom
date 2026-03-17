@@ -63,7 +63,7 @@ function createArgs(overrides: Partial<Parameters<typeof useConversationActions>
     activeConversationRef: { current: activeConversation },
     setContacts: vi.fn(),
     setChannels: vi.fn(),
-    addMessageIfNew: vi.fn(() => true),
+    observeMessage: vi.fn(() => ({ added: true, activeConversation: true })),
     messageInputRef: { current: { appendText: vi.fn() } },
     ...overrides,
   };
@@ -85,7 +85,7 @@ describe('useConversationActions', () => {
     });
 
     expect(mocks.api.sendChannelMessage).toHaveBeenCalledWith(publicChannel.key, sentMessage.text);
-    expect(args.addMessageIfNew).toHaveBeenCalledWith(sentMessage);
+    expect(args.observeMessage).toHaveBeenCalledWith(sentMessage);
   });
 
   it('does not append a sent message after the active conversation changes', async () => {
@@ -111,7 +111,7 @@ describe('useConversationActions', () => {
       await sendPromise;
     });
 
-    expect(args.addMessageIfNew).not.toHaveBeenCalled();
+    expect(args.observeMessage).not.toHaveBeenCalled();
   });
 
   it('appends sender mentions into the message input', () => {
@@ -146,7 +146,7 @@ describe('useConversationActions', () => {
     });
 
     expect(mocks.api.resendChannelMessage).toHaveBeenCalledWith(sentMessage.id, true);
-    expect(args.addMessageIfNew).toHaveBeenCalledWith(resentMessage);
+    expect(args.observeMessage).toHaveBeenCalledWith(resentMessage);
   });
 
   it('does not append a byte-perfect resend locally', async () => {
@@ -162,7 +162,7 @@ describe('useConversationActions', () => {
       await result.current.handleResendChannelMessage(sentMessage.id, false);
     });
 
-    expect(args.addMessageIfNew).not.toHaveBeenCalled();
+    expect(args.observeMessage).not.toHaveBeenCalled();
   });
 
   it('does not append a resend if the user has switched conversations', async () => {
@@ -190,7 +190,7 @@ describe('useConversationActions', () => {
       await resendPromise;
     });
 
-    expect(args.addMessageIfNew).not.toHaveBeenCalled();
+    expect(args.observeMessage).not.toHaveBeenCalled();
   });
 
   it('merges returned contact data after path discovery', async () => {

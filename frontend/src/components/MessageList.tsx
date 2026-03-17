@@ -329,7 +329,7 @@ export function MessageList({
   }, [messages, onResendChannelMessage]);
 
   // Sort messages by received_at ascending (oldest first)
-  // Note: Deduplication is handled by useConversationMessages.addMessageIfNew()
+  // Note: Deduplication is handled by useConversationMessages.observeMessage()
   // and the database UNIQUE constraint on (type, conversation_key, text, sender_timestamp)
   const sortedMessages = useMemo(
     () => [...messages].sort((a, b) => a.received_at - b.received_at || a.id - b.id),

@@ -35,9 +35,13 @@ interface UseRealtimeAppStateArgs {
   blockedKeysRef: MutableRefObject<string[]>;
   blockedNamesRef: MutableRefObject<string[]>;
   activeConversationRef: MutableRefObject<Conversation | null>;
-  receiveRealtimeMessage: (msg: Message) => { added: boolean; activeConversation: boolean };
-  trackNewMessage: (msg: Message) => void;
-  incrementUnread: (stateKey: string, hasMention?: boolean) => void;
+  observeMessage: (msg: Message) => { added: boolean; activeConversation: boolean };
+  recordMessageEvent: (args: {
+    msg: Message;
+    activeConversation: boolean;
+    isNewMessage: boolean;
+    hasMention?: boolean;
+  }) => void;
   renameConversationState: (oldStateKey: string, newStateKey: string) => void;
   checkMention: (text: string) => boolean;
   pendingDeleteFallbackRef: MutableRefObject<boolean>;
@@ -83,9 +87,8 @@ export function useRealtimeAppState({
   blockedKeysRef,
   blockedNamesRef,
   activeConversationRef,
-  receiveRealtimeMessage,
-  trackNewMessage,
-  incrementUnread,
+  observeMessage,
+  recordMessageEvent,
   renameConversationState,
   checkMention,
   pendingDeleteFallbackRef,
@@ -179,23 +182,13 @@ export function useRealtimeAppState({
         }
 
         const { added: isNewMessage, activeConversation: isForActiveConversation } =
-          receiveRealtimeMessage(msg);
-
-        trackNewMessage(msg);
-
-        if (!isForActiveConversation) {
-          if (!msg.outgoing && isNewMessage) {
-            let stateKey: string | null = null;
-            if (msg.type === 'CHAN' && msg.conversation_key) {
-              stateKey = getStateKey('channel', msg.conversation_key);
-            } else if (msg.type === 'PRIV' && msg.conversation_key) {
-              stateKey = getStateKey('contact', msg.conversation_key);
-            }
-            if (stateKey) {
-              incrementUnread(stateKey, checkMention(msg.text));
-            }
-          }
-        }
+          observeMessage(msg);
+        recordMessageEvent({
+          msg,
+          activeConversation: isForActiveConversation,
+          isNewMessage,
+          hasMention: checkMention(msg.text),
+        });
 
         if (!msg.outgoing && isNewMessage) {
           notifyIncomingMessage?.(msg);
@@ -261,15 +254,15 @@ export function useRealtimeAppState({
       checkMention,
       fetchAllContacts,
       fetchConfig,
-      incrementUnread,
       renameConversationState,
       renameConversationMessages,
       maxRawPackets,
       mergeChannelIntoList,
       pendingDeleteFallbackRef,
       prevHealthRef,
+      recordMessageEvent,
       receiveMessageAck,
-      receiveRealtimeMessage,
+      observeMessage,
       refreshUnreads,
       reconcileOnReconnect,
       removeConversationMessages,
@@ -278,7 +271,6 @@ export function useRealtimeAppState({
       setContacts,
       setHealth,
       setRawPackets,
-      trackNewMessage,
       notifyIncomingMessage,
     ]
   );

@@ -76,11 +76,11 @@ describe('useConversationMessages ACK ordering', () => {
 
     const paths = [{ path: 'A1B2', received_at: 1700000010 }];
     act(() => {
-      result.current.updateMessageAck(42, 2, paths);
+      result.current.receiveMessageAck(42, 2, paths);
     });
 
     act(() => {
-      const added = result.current.addMessageIfNew(
+      const { added } = result.current.observeMessage(
         createMessage({ id: 42, acked: 0, paths: null })
       );
       expect(added).toBe(true);
@@ -100,7 +100,7 @@ describe('useConversationMessages ACK ordering', () => {
 
     const paths = [{ path: 'C3D4', received_at: 1700000011 }];
     act(() => {
-      result.current.updateMessageAck(42, 1, paths);
+      result.current.receiveMessageAck(42, 1, paths);
     });
 
     deferred.resolve([createMessage({ id: 42, acked: 0, paths: null })]);
@@ -118,7 +118,7 @@ describe('useConversationMessages ACK ordering', () => {
     await waitFor(() => expect(mockGetMessages).toHaveBeenCalledTimes(1));
 
     act(() => {
-      const added = result.current.addMessageIfNew(
+      const { added } = result.current.observeMessage(
         createMessage({
           id: 99,
           text: 'ws-arrived',
@@ -153,7 +153,7 @@ describe('useConversationMessages ACK ordering', () => {
     await waitFor(() => expect(result.current.messagesLoading).toBe(false));
 
     act(() => {
-      result.current.addMessageIfNew(createMessage({ id: 42, acked: 0, paths: null }));
+      result.current.observeMessage(createMessage({ id: 42, acked: 0, paths: null }));
     });
 
     const highAckPaths = [
@@ -163,8 +163,8 @@ describe('useConversationMessages ACK ordering', () => {
     const staleAckPaths = [{ path: 'A1B2', received_at: 1700000010 }];
 
     act(() => {
-      result.current.updateMessageAck(42, 3, highAckPaths);
-      result.current.updateMessageAck(42, 2, staleAckPaths);
+      result.current.receiveMessageAck(42, 3, highAckPaths);
+      result.current.receiveMessageAck(42, 2, staleAckPaths);
     });
 
     expect(result.current.messages[0].acked).toBe(3);
@@ -321,8 +321,8 @@ describe('useConversationMessages background reconcile ordering', () => {
       .mockReturnValueOnce(secondReconcile.promise);
 
     act(() => {
-      result.current.triggerReconcile();
-      result.current.triggerReconcile();
+      result.current.reconcileOnReconnect();
+      result.current.reconcileOnReconnect();
     });
 
     secondReconcile.resolve([createMessage({ id: 42, text: 'newer snapshot', acked: 2 })]);
@@ -344,9 +344,6 @@ describe('useConversationMessages background reconcile ordering', () => {
 
     messageCache.set(conv.id, {
       messages: [cachedMessage],
-      seenContent: new Set([
-        `PRIV-${cachedMessage.conversation_key}-${cachedMessage.text}-${cachedMessage.sender_timestamp}`,
-      ]),
       hasOlderMessages: true,
     });
 
@@ -596,7 +593,7 @@ describe('useConversationMessages forward pagination', () => {
 
     // Simulate WS adding a message with the same content key
     act(() => {
-      result.current.addMessageIfNew(
+      result.current.observeMessage(
         createMessage({
           id: 2,
           conversation_key: 'ch1',

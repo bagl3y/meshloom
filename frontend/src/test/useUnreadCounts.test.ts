@@ -10,7 +10,8 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { useUnreadCounts } from '../hooks/useUnreadCounts';
-import type { Channel, Contact, Conversation } from '../types';
+import type { Channel, Contact, Conversation, Message } from '../types';
+import { getStateKey } from '../utils/conversationState';
 
 // Mock api module
 vi.mock('../api', () => ({
@@ -54,6 +55,25 @@ function makeContact(pubkey: string): Contact {
     last_contacted: null,
     last_read_at: null,
     first_seen: null,
+  };
+}
+
+function makeMessage(overrides: Partial<Message> = {}): Message {
+  return {
+    id: 1,
+    type: 'PRIV',
+    conversation_key: CONTACT_KEY,
+    text: 'hello',
+    sender_timestamp: 1700000000,
+    received_at: 1700000001,
+    paths: null,
+    txt_type: 0,
+    signature: null,
+    sender_key: null,
+    outgoing: false,
+    acked: 0,
+    sender_name: null,
+    ...overrides,
   };
 }
 
@@ -331,5 +351,75 @@ describe('useUnreadCounts', () => {
 
     // Raw view doesn't filter any conversation's unreads
     expect(result.current.unreadCounts[`channel-${CHANNEL_KEY}`]).toBe(5);
+  });
+
+  it('recordMessageEvent updates last-message time and unread count for new inactive incoming messages', async () => {
+    const mocks = await getMockedApi();
+    const { result } = renderWith({});
+
+    await act(async () => {
+      await vi.waitFor(() => expect(mocks.getUnreads).toHaveBeenCalled());
+    });
+
+    const msg = makeMessage({
+      id: 5,
+      type: 'CHAN',
+      conversation_key: CHANNEL_KEY,
+      received_at: 1700001234,
+    });
+
+    await act(async () => {
+      result.current.recordMessageEvent({
+        msg,
+        activeConversation: false,
+        isNewMessage: true,
+        hasMention: true,
+      });
+    });
+
+    expect(result.current.unreadCounts[getStateKey('channel', CHANNEL_KEY)]).toBe(1);
+    expect(result.current.mentions[getStateKey('channel', CHANNEL_KEY)]).toBe(true);
+    expect(result.current.lastMessageTimes[getStateKey('channel', CHANNEL_KEY)]).toBe(1700001234);
+  });
+
+  it('recordMessageEvent skips unread increment for active or non-new messages but still tracks time', async () => {
+    const mocks = await getMockedApi();
+    const { result } = renderWith({});
+
+    await act(async () => {
+      await vi.waitFor(() => expect(mocks.getUnreads).toHaveBeenCalled());
+    });
+
+    const activeMsg = makeMessage({
+      id: 6,
+      type: 'PRIV',
+      conversation_key: CONTACT_KEY,
+      received_at: 1700002000,
+    });
+
+    await act(async () => {
+      result.current.recordMessageEvent({
+        msg: activeMsg,
+        activeConversation: true,
+        isNewMessage: true,
+        hasMention: true,
+      });
+      result.current.recordMessageEvent({
+        msg: makeMessage({
+          id: 7,
+          type: 'CHAN',
+          conversation_key: CHANNEL_KEY,
+          received_at: 1700002001,
+        }),
+        activeConversation: false,
+        isNewMessage: false,
+        hasMention: true,
+      });
+    });
+
+    expect(result.current.unreadCounts[getStateKey('contact', CONTACT_KEY)]).toBeUndefined();
+    expect(result.current.unreadCounts[getStateKey('channel', CHANNEL_KEY)]).toBeUndefined();
+    expect(result.current.lastMessageTimes[getStateKey('contact', CONTACT_KEY)]).toBe(1700002000);
+    expect(result.current.lastMessageTimes[getStateKey('channel', CHANNEL_KEY)]).toBe(1700002001);
   });
 });

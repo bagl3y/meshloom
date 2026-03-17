@@ -5,7 +5,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { getMessageContentKey, mergePendingAck } from '../hooks/useConversationMessages';
+import { mergePendingAck } from '../hooks/useConversationMessages';
+import { getMessageContentKey } from '../utils/messageIdentity';
 import type { Message } from '../types';
 
 function createMessage(overrides: Partial<Message> = {}): Message {
