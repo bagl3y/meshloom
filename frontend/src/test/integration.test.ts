@@ -8,12 +8,12 @@
  * between backend and frontend - both sides test against the same data.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import fixtures from './fixtures/websocket_events.json';
 import { getStateKey } from '../utils/conversationState';
 import { mergeContactIntoList } from '../utils/contactMerge';
+import { ConversationMessageCache } from '../hooks/useConversationMessages';
 import { getMessageContentKey } from '../utils/messageIdentity';
-import * as messageCache from '../messageCache';
 import type { Contact, Message } from '../types';
 
 /**
@@ -25,6 +25,7 @@ interface MockState {
   unreadCounts: Record<string, number>;
   lastMessageTimes: Record<string, number>;
   seenActiveContent: Set<string>;
+  messageCache: ConversationMessageCache;
 }
 
 function createMockState(): MockState {
@@ -33,6 +34,7 @@ function createMockState(): MockState {
     unreadCounts: {},
     lastMessageTimes: {},
     seenActiveContent: new Set(),
+    messageCache: new ConversationMessageCache(),
   };
 }
 
@@ -68,7 +70,7 @@ function handleMessageEvent(
   state.lastMessageTimes[stateKey] = msg.received_at;
 
   if (!isForActiveConversation) {
-    const isNew = messageCache.addMessage(msg.conversation_key, msg);
+    const isNew = state.messageCache.addMessage(msg.conversation_key, msg);
     if (!msg.outgoing && isNew) {
       state.unreadCounts[stateKey] = (state.unreadCounts[stateKey] || 0) + 1;
       unreadIncremented = true;
@@ -77,11 +79,6 @@ function handleMessageEvent(
 
   return { added, unreadIncremented };
 }
-
-// Clear messageCache between tests to avoid cross-test contamination
-beforeEach(() => {
-  messageCache.clear();
-});
 
 describe('Integration: Channel Message Events', () => {
   const fixture = fixtures.channel_message;
@@ -342,11 +339,8 @@ describe('Integration: Contact Merge', () => {
 // --- ACK + messageCache propagation tests ---
 
 describe('Integration: ACK + messageCache propagation', () => {
-  beforeEach(() => {
-    messageCache.clear();
-  });
-
   it('updateAck updates acked count on cached message', () => {
+    const messageCache = new ConversationMessageCache();
     const msg: Message = {
       id: 100,
       type: 'PRIV',
@@ -372,6 +366,7 @@ describe('Integration: ACK + messageCache propagation', () => {
   });
 
   it('updateAck updates paths when longer', () => {
+    const messageCache = new ConversationMessageCache();
     const msg: Message = {
       id: 101,
       type: 'PRIV',
@@ -401,6 +396,7 @@ describe('Integration: ACK + messageCache propagation', () => {
   });
 
   it('preserves higher existing ack count (max semantics)', () => {
+    const messageCache = new ConversationMessageCache();
     const msg: Message = {
       id: 102,
       type: 'PRIV',
@@ -426,6 +422,7 @@ describe('Integration: ACK + messageCache propagation', () => {
   });
 
   it('is a no-op for unknown message ID', () => {
+    const messageCache = new ConversationMessageCache();
     const msg: Message = {
       id: 103,
       type: 'PRIV',

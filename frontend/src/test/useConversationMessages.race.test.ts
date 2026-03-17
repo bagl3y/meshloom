@@ -1,9 +1,11 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-import * as messageCache from '../messageCache';
 import { api } from '../api';
-import { useConversationMessages } from '../hooks/useConversationMessages';
+import {
+  conversationMessageCache,
+  useConversationMessages,
+} from '../hooks/useConversationMessages';
 import type { Conversation, Message } from '../types';
 
 const mockGetMessages = vi.fn<typeof api.getMessages>();
@@ -62,7 +64,7 @@ function createDeferred<T>() {
 describe('useConversationMessages ACK ordering', () => {
   beforeEach(() => {
     mockGetMessages.mockReset();
-    messageCache.clear();
+    conversationMessageCache.clear();
     mockToastError.mockReset();
   });
 
@@ -175,7 +177,7 @@ describe('useConversationMessages ACK ordering', () => {
 describe('useConversationMessages conversation switch', () => {
   beforeEach(() => {
     mockGetMessages.mockReset();
-    messageCache.clear();
+    conversationMessageCache.clear();
   });
 
   it('resets loadingOlder when switching conversations mid-fetch', async () => {
@@ -300,7 +302,7 @@ describe('useConversationMessages conversation switch', () => {
 describe('useConversationMessages background reconcile ordering', () => {
   beforeEach(() => {
     mockGetMessages.mockReset();
-    messageCache.clear();
+    conversationMessageCache.clear();
   });
 
   it('ignores stale reconnect reconcile responses that finish after newer ones', async () => {
@@ -342,7 +344,7 @@ describe('useConversationMessages background reconcile ordering', () => {
     const conv = createConversation();
     const cachedMessage = createMessage({ id: 42, text: 'cached snapshot' });
 
-    messageCache.set(conv.id, {
+    conversationMessageCache.set(conv.id, {
       messages: [cachedMessage],
       hasOlderMessages: true,
     });
@@ -362,7 +364,7 @@ describe('useConversationMessages background reconcile ordering', () => {
 describe('useConversationMessages older-page dedup and reentry', () => {
   beforeEach(() => {
     mockGetMessages.mockReset();
-    messageCache.clear();
+    conversationMessageCache.clear();
   });
 
   it('prevents duplicate overlapping older-page fetches in the same tick', async () => {
@@ -508,7 +510,7 @@ describe('useConversationMessages forward pagination', () => {
   beforeEach(() => {
     mockGetMessages.mockReset();
     mockGetMessagesAround.mockReset();
-    messageCache.clear();
+    conversationMessageCache.clear();
     mockToastError.mockReset();
   });
 

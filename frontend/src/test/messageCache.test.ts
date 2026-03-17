@@ -3,8 +3,12 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import * as messageCache from '../messageCache';
-import { MAX_CACHED_CONVERSATIONS, MAX_MESSAGES_PER_ENTRY } from '../messageCache';
+import {
+  ConversationMessageCache,
+  MAX_CACHED_CONVERSATIONS,
+  MAX_MESSAGES_PER_ENTRY,
+  reconcileConversationMessages,
+} from '../hooks/useConversationMessages';
 import type { Message } from '../types';
 
 function createMessage(overrides: Partial<Message> = {}): Message {
@@ -31,8 +35,10 @@ function createEntry(messages: Message[] = [], hasOlderMessages = false) {
 }
 
 describe('messageCache', () => {
+  let messageCache: ConversationMessageCache;
+
   beforeEach(() => {
-    messageCache.clear();
+    messageCache = new ConversationMessageCache();
   });
 
   describe('get/set', () => {
@@ -337,7 +343,7 @@ describe('messageCache', () => {
         createMessage({ id: 3, acked: 1 }),
       ];
 
-      expect(messageCache.reconcile(msgs, fetched)).toBeNull();
+      expect(reconcileConversationMessages(msgs, fetched)).toBeNull();
     });
 
     it('detects new messages missing from cache', () => {
@@ -348,7 +354,7 @@ describe('messageCache', () => {
         createMessage({ id: 3, text: 'missed via WS' }),
       ];
 
-      const merged = messageCache.reconcile(current, fetched);
+      const merged = reconcileConversationMessages(current, fetched);
       expect(merged).not.toBeNull();
       expect(merged!.map((m) => m.id)).toEqual([1, 2, 3]);
     });
@@ -357,7 +363,7 @@ describe('messageCache', () => {
       const current = [createMessage({ id: 1, acked: 0 })];
       const fetched = [createMessage({ id: 1, acked: 3 })];
 
-      const merged = messageCache.reconcile(current, fetched);
+      const merged = reconcileConversationMessages(current, fetched);
       expect(merged).not.toBeNull();
       expect(merged![0].acked).toBe(3);
     });
@@ -376,20 +382,20 @@ describe('messageCache', () => {
         createMessage({ id: 2 }),
       ];
 
-      const merged = messageCache.reconcile(current, fetched);
+      const merged = reconcileConversationMessages(current, fetched);
       expect(merged).not.toBeNull();
       // Should have fetched page + older paginated message
       expect(merged!.map((m) => m.id)).toEqual([4, 3, 2, 1]);
     });
 
     it('returns null for empty fetched and empty current', () => {
-      expect(messageCache.reconcile([], [])).toBeNull();
+      expect(reconcileConversationMessages([], [])).toBeNull();
     });
 
     it('detects difference when current is empty but fetch has messages', () => {
       const fetched = [createMessage({ id: 1 })];
 
-      const merged = messageCache.reconcile([], fetched);
+      const merged = reconcileConversationMessages([], fetched);
       expect(merged).not.toBeNull();
       expect(merged!).toHaveLength(1);
     });
@@ -409,7 +415,7 @@ describe('messageCache', () => {
         }),
       ];
 
-      const merged = messageCache.reconcile(current, fetched);
+      const merged = reconcileConversationMessages(current, fetched);
       expect(merged).not.toBeNull();
       expect(merged![0].paths).toHaveLength(2);
     });
@@ -418,7 +424,7 @@ describe('messageCache', () => {
       const current = [createMessage({ id: 1, text: '[encrypted]' })];
       const fetched = [createMessage({ id: 1, text: 'Hello world' })];
 
-      const merged = messageCache.reconcile(current, fetched);
+      const merged = reconcileConversationMessages(current, fetched);
       expect(merged).not.toBeNull();
       expect(merged![0].text).toBe('Hello world');
     });
@@ -428,7 +434,7 @@ describe('messageCache', () => {
       const current = [createMessage({ id: 1, acked: 2, paths, text: 'Hello' })];
       const fetched = [createMessage({ id: 1, acked: 2, paths, text: 'Hello' })];
 
-      expect(messageCache.reconcile(current, fetched)).toBeNull();
+      expect(reconcileConversationMessages(current, fetched)).toBeNull();
     });
   });
 });

@@ -1,12 +1,174 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from '../components/ui/sonner';
 import { api, isAbortError } from '../api';
-import * as messageCache from '../messageCache';
 import type { Conversation, Message, MessagePath } from '../types';
 import { getMessageContentKey } from '../utils/messageIdentity';
 
 const MAX_PENDING_ACKS = 500;
 const MESSAGE_PAGE_SIZE = 200;
+export const MAX_CACHED_CONVERSATIONS = 20;
+export const MAX_MESSAGES_PER_ENTRY = 200;
+
+interface CachedConversationEntry {
+  messages: Message[];
+  hasOlderMessages: boolean;
+}
+
+interface InternalCachedConversationEntry extends CachedConversationEntry {
+  contentKeys: Set<string>;
+}
+
+export class ConversationMessageCache {
+  private readonly cache = new Map<string, InternalCachedConversationEntry>();
+
+  get(id: string): CachedConversationEntry | undefined {
+    const entry = this.cache.get(id);
+    if (!entry) return undefined;
+    this.cache.delete(id);
+    this.cache.set(id, entry);
+    return {
+      messages: entry.messages,
+      hasOlderMessages: entry.hasOlderMessages,
+    };
+  }
+
+  set(id: string, entry: CachedConversationEntry): void {
+    const contentKeys = new Set(entry.messages.map((message) => getMessageContentKey(message)));
+    if (entry.messages.length > MAX_MESSAGES_PER_ENTRY) {
+      const trimmed = [...entry.messages]
+        .sort((a, b) => b.received_at - a.received_at)
+        .slice(0, MAX_MESSAGES_PER_ENTRY);
+      entry = { ...entry, messages: trimmed, hasOlderMessages: true };
+    }
+    const internalEntry: InternalCachedConversationEntry = {
+      ...entry,
+      contentKeys,
+    };
+    this.cache.delete(id);
+    this.cache.set(id, internalEntry);
+    if (this.cache.size > MAX_CACHED_CONVERSATIONS) {
+      const lruKey = this.cache.keys().next().value as string;
+      this.cache.delete(lruKey);
+    }
+  }
+
+  addMessage(id: string, msg: Message): boolean {
+    const entry = this.cache.get(id);
+    const contentKey = getMessageContentKey(msg);
+    if (!entry) {
+      this.cache.set(id, {
+        messages: [msg],
+        hasOlderMessages: true,
+        contentKeys: new Set([contentKey]),
+      });
+      if (this.cache.size > MAX_CACHED_CONVERSATIONS) {
+        const lruKey = this.cache.keys().next().value as string;
+        this.cache.delete(lruKey);
+      }
+      return true;
+    }
+    if (entry.contentKeys.has(contentKey)) return false;
+    if (entry.messages.some((message) => message.id === msg.id)) return false;
+    entry.contentKeys.add(contentKey);
+    entry.messages = [...entry.messages, msg];
+    if (entry.messages.length > MAX_MESSAGES_PER_ENTRY) {
+      entry.messages = [...entry.messages]
+        .sort((a, b) => b.received_at - a.received_at)
+        .slice(0, MAX_MESSAGES_PER_ENTRY);
+    }
+    this.cache.delete(id);
+    this.cache.set(id, entry);
+    return true;
+  }
+
+  updateAck(messageId: number, ackCount: number, paths?: MessagePath[]): void {
+    for (const entry of this.cache.values()) {
+      const index = entry.messages.findIndex((message) => message.id === messageId);
+      if (index < 0) continue;
+      const current = entry.messages[index];
+      const updated = [...entry.messages];
+      updated[index] = {
+        ...current,
+        acked: Math.max(current.acked, ackCount),
+        ...(paths !== undefined && paths.length >= (current.paths?.length ?? 0) && { paths }),
+      };
+      entry.messages = updated;
+      return;
+    }
+  }
+
+  remove(id: string): void {
+    this.cache.delete(id);
+  }
+
+  rename(oldId: string, newId: string): void {
+    if (oldId === newId) return;
+    const oldEntry = this.cache.get(oldId);
+    if (!oldEntry) return;
+
+    const newEntry = this.cache.get(newId);
+    if (!newEntry) {
+      this.cache.delete(oldId);
+      this.cache.set(newId, oldEntry);
+      return;
+    }
+
+    const mergedMessages = [...newEntry.messages];
+    const seenIds = new Set(mergedMessages.map((message) => message.id));
+    for (const message of oldEntry.messages) {
+      if (!seenIds.has(message.id)) {
+        mergedMessages.push(message);
+        seenIds.add(message.id);
+      }
+    }
+
+    this.cache.delete(oldId);
+    this.cache.set(newId, {
+      messages: mergedMessages,
+      hasOlderMessages: newEntry.hasOlderMessages || oldEntry.hasOlderMessages,
+      contentKeys: new Set([...newEntry.contentKeys, ...oldEntry.contentKeys]),
+    });
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+}
+
+export function reconcileConversationMessages(
+  current: Message[],
+  fetched: Message[]
+): Message[] | null {
+  const currentById = new Map<number, { acked: number; pathsLen: number; text: string }>();
+  for (const message of current) {
+    currentById.set(message.id, {
+      acked: message.acked,
+      pathsLen: message.paths?.length ?? 0,
+      text: message.text,
+    });
+  }
+
+  let needsUpdate = false;
+  for (const message of fetched) {
+    const currentMessage = currentById.get(message.id);
+    if (
+      !currentMessage ||
+      currentMessage.acked !== message.acked ||
+      currentMessage.pathsLen !== (message.paths?.length ?? 0) ||
+      currentMessage.text !== message.text
+    ) {
+      needsUpdate = true;
+      break;
+    }
+  }
+  if (!needsUpdate) return null;
+
+  const fetchedIds = new Set(fetched.map((message) => message.id));
+  const olderMessages = current.filter((message) => !fetchedIds.has(message.id));
+  return [...fetched, ...olderMessages];
+}
+
+export const conversationMessageCache = new ConversationMessageCache();
 
 interface PendingAckUpdate {
   ackCount: number;
@@ -167,6 +329,7 @@ export function useConversationMessages(
   const pendingReconnectReconcileRef = useRef(false);
   const messagesRef = useRef<Message[]>([]);
   const loadingOlderRef = useRef(false);
+  const loadingNewerRef = useRef(false);
   const hasOlderMessagesRef = useRef(false);
   const hasNewerMessagesRef = useRef(false);
   const prevConversationIdRef = useRef<string | null>(null);
@@ -180,6 +343,10 @@ export function useConversationMessages(
   useEffect(() => {
     loadingOlderRef.current = loadingOlder;
   }, [loadingOlder]);
+
+  useEffect(() => {
+    loadingNewerRef.current = loadingNewer;
+  }, [loadingNewer]);
 
   useEffect(() => {
     hasOlderMessagesRef.current = hasOlderMessages;
@@ -230,7 +397,7 @@ export function useConversationMessages(
         }
 
         const messagesWithPendingAck = data.map((msg) => applyPendingAck(msg));
-        const merged = messageCache.reconcile(messagesRef.current, messagesWithPendingAck);
+        const merged = reconcileConversationMessages(messagesRef.current, messagesWithPendingAck);
         const nextMessages = merged ?? messagesRef.current;
         if (merged) {
           setMessages(merged);
@@ -272,7 +439,7 @@ export function useConversationMessages(
 
           const dataWithPendingAck = data.map((msg) => applyPendingAck(msg));
           setHasOlderMessages(dataWithPendingAck.length >= MESSAGE_PAGE_SIZE);
-          const merged = messageCache.reconcile(messagesRef.current, dataWithPendingAck);
+          const merged = reconcileConversationMessages(messagesRef.current, dataWithPendingAck);
           if (!merged) return;
 
           setMessages(merged);
@@ -296,7 +463,7 @@ export function useConversationMessages(
     }
 
     const conversationId = activeConversation.id;
-    const oldestMessage = messages.reduce(
+    const oldestMessage = messagesRef.current.reduce(
       (oldest, msg) => {
         if (!oldest) return msg;
         if (msg.received_at < oldest.received_at) return msg;
@@ -357,13 +524,19 @@ export function useConversationMessages(
       loadingOlderRef.current = false;
       setLoadingOlder(false);
     }
-  }, [activeConversation, applyPendingAck, messages, syncSeenContent]);
+  }, [activeConversation, applyPendingAck, syncSeenContent]);
 
   const fetchNewerMessages = useCallback(async () => {
-    if (!isMessageConversation(activeConversation) || loadingNewer || !hasNewerMessages) return;
+    if (
+      !isMessageConversation(activeConversation) ||
+      loadingNewerRef.current ||
+      !hasNewerMessagesRef.current
+    ) {
+      return;
+    }
 
     const conversationId = activeConversation.id;
-    const newestMessage = messages.reduce(
+    const newestMessage = messagesRef.current.reduce(
       (newest, msg) => {
         if (!newest) return msg;
         if (msg.received_at > newest.received_at) return msg;
@@ -374,6 +547,7 @@ export function useConversationMessages(
     );
     if (!newestMessage) return;
 
+    loadingNewerRef.current = true;
     setLoadingNewer(true);
     const controller = new AbortController();
     newerAbortControllerRef.current = controller;
@@ -423,28 +597,22 @@ export function useConversationMessages(
       if (newerAbortControllerRef.current === controller) {
         newerAbortControllerRef.current = null;
       }
+      loadingNewerRef.current = false;
       setLoadingNewer(false);
     }
-  }, [
-    activeConversation,
-    applyPendingAck,
-    hasNewerMessages,
-    loadingNewer,
-    messages,
-    reconcileFromBackend,
-  ]);
+  }, [activeConversation, applyPendingAck, reconcileFromBackend]);
 
   const jumpToBottom = useCallback(() => {
     if (!activeConversation) return;
     setHasNewerMessages(false);
-    messageCache.remove(activeConversation.id);
+    conversationMessageCache.remove(activeConversation.id);
     void fetchLatestMessages(true);
   }, [activeConversation, fetchLatestMessages]);
 
   const reloadCurrentConversation = useCallback(() => {
     if (!isMessageConversation(activeConversation)) return;
     setHasNewerMessages(false);
-    messageCache.remove(activeConversation.id);
+    conversationMessageCache.remove(activeConversation.id);
     setReloadVersion((current) => current + 1);
   }, [activeConversation]);
 
@@ -506,7 +674,7 @@ export function useConversationMessages(
       messagesRef.current.length > 0 &&
       !hasNewerMessagesRef.current
     ) {
-      messageCache.set(prevId, {
+      conversationMessageCache.set(prevId, {
         messages: messagesRef.current,
         hasOlderMessages: hasOlderMessagesRef.current,
       });
@@ -549,7 +717,7 @@ export function useConversationMessages(
           setMessagesLoading(false);
         });
     } else {
-      const cached = messageCache.get(activeConversation.id);
+      const cached = conversationMessageCache.get(activeConversation.id);
       if (cached) {
         setMessages(cached.messages);
         seenMessageContent.current = new Set(
@@ -645,7 +813,7 @@ export function useConversationMessages(
   const receiveMessageAck = useCallback(
     (messageId: number, ackCount: number, paths?: MessagePath[]) => {
       updateMessageAck(messageId, ackCount, paths);
-      messageCache.updateAck(messageId, ackCount, paths);
+      conversationMessageCache.updateAck(messageId, ackCount, paths);
     },
     [updateMessageAck]
   );
@@ -670,7 +838,10 @@ export function useConversationMessages(
       }
 
       return {
-        added: messageCache.addMessage(msgWithPendingAck.conversation_key, msgWithPendingAck),
+        added: conversationMessageCache.addMessage(
+          msgWithPendingAck.conversation_key,
+          msgWithPendingAck
+        ),
         activeConversation: false,
       };
     },
@@ -678,15 +849,15 @@ export function useConversationMessages(
   );
 
   const renameConversationMessages = useCallback((oldId: string, newId: string) => {
-    messageCache.rename(oldId, newId);
+    conversationMessageCache.rename(oldId, newId);
   }, []);
 
   const removeConversationMessages = useCallback((conversationId: string) => {
-    messageCache.remove(conversationId);
+    conversationMessageCache.remove(conversationId);
   }, []);
 
   const clearConversationMessages = useCallback(() => {
-    messageCache.clear();
+    conversationMessageCache.clear();
   }, []);
 
   return {
