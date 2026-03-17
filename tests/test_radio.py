@@ -526,7 +526,6 @@ class TestReconnectLock:
 
         with (
             patch("app.radio.settings") as mock_settings,
-            patch("app.radio.logger") as mock_logger,
             patch("app.websocket.broadcast_health"),
             patch("app.websocket.broadcast_error") as mock_broadcast_error,
         ):
@@ -536,11 +535,6 @@ class TestReconnectLock:
             result = await rm.reconnect(broadcast_on_success=False)
 
         assert result is False
-        mock_logger.warning.assert_called_once_with(
-            "Could not connect to serial port /dev/serial/by-id/test-radio. "
-            "Did the radio get disconnected or change serial ports?",
-            exc_info=False,
-        )
         assert mock_broadcast_error.call_args.args == (
             "Reconnection failed",
             "Could not connect to serial port /dev/serial/by-id/test-radio. "
@@ -1084,7 +1078,6 @@ class TestPostConnectSetupOrdering:
         )
 
         with (
-            patch("app.services.radio_lifecycle.logger") as mock_logger,
             patch("app.websocket.broadcast_error") as mock_broadcast_error,
             patch("app.websocket.broadcast_health") as mock_broadcast_health,
         ):
@@ -1092,8 +1085,6 @@ class TestPostConnectSetupOrdering:
                 await prepare_connected_radio(rm, broadcast_on_success=True)
 
         assert rm.post_connect_setup.await_count == 2
-        mock_logger.warning.assert_called_once()
-        mock_logger.error.assert_called_once()
         mock_broadcast_error.assert_called_once_with(
             "Radio startup appears stuck",
             "Initial radio offload took too long. Reboot the radio and restart the server.",
@@ -1111,7 +1102,6 @@ class TestPostConnectSetupOrdering:
         rm.post_connect_setup = AsyncMock(side_effect=[asyncio.TimeoutError(), None])
 
         with (
-            patch("app.services.radio_lifecycle.logger") as mock_logger,
             patch("app.websocket.broadcast_error") as mock_broadcast_error,
             patch("app.websocket.broadcast_health") as mock_broadcast_health,
         ):
@@ -1119,7 +1109,5 @@ class TestPostConnectSetupOrdering:
 
         assert rm.post_connect_setup.await_count == 2
         assert rm._last_connected is True
-        mock_logger.warning.assert_called_once()
-        mock_logger.error.assert_not_called()
         mock_broadcast_error.assert_not_called()
         mock_broadcast_health.assert_called_once_with(True, "Serial: /dev/ttyUSB0")

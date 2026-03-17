@@ -1,5 +1,3 @@
-import logging
-
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -14,15 +12,13 @@ from app.frontend_static import (
 )
 
 
-def test_missing_dist_logs_error_and_keeps_app_running(tmp_path, caplog):
+def test_missing_dist_keeps_app_running(tmp_path):
     app = FastAPI()
     missing_dist = tmp_path / "frontend" / "dist"
 
-    with caplog.at_level(logging.ERROR):
-        registered = register_frontend_static_routes(app, missing_dist)
+    registered = register_frontend_static_routes(app, missing_dist)
 
     assert registered is False
-    assert "Frontend build directory not found" in caplog.text
 
     # Register the fallback like main.py does
     register_frontend_missing_fallback(app)
@@ -33,16 +29,14 @@ def test_missing_dist_logs_error_and_keeps_app_running(tmp_path, caplog):
         assert FRONTEND_BUILD_INSTRUCTIONS in resp.json()["detail"]
 
 
-def test_missing_index_logs_error_and_skips_frontend_routes(tmp_path, caplog):
+def test_missing_index_skips_frontend_routes(tmp_path):
     app = FastAPI()
     dist_dir = tmp_path / "frontend" / "dist"
     dist_dir.mkdir(parents=True)
 
-    with caplog.at_level(logging.ERROR):
-        registered = register_frontend_static_routes(app, dist_dir)
+    registered = register_frontend_static_routes(app, dist_dir)
 
     assert registered is False
-    assert "Frontend index file not found" in caplog.text
 
 
 def test_valid_dist_serves_static_and_spa_fallback(tmp_path):

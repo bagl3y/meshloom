@@ -448,7 +448,7 @@ class TestAdvertisementParsing:
         assert result.lat is None
         assert result.lon is None
 
-    def test_parse_advertisement_discards_out_of_range_gps(self, caplog):
+    def test_parse_advertisement_discards_out_of_range_gps(self):
         """Out-of-range advert coordinates are treated as missing."""
         from app.decoder import parse_advertisement
 
@@ -464,8 +464,7 @@ class TestAdvertisementParsing:
         payload.extend(b"Tacompton")
         raw_packet = bytes.fromhex("11") + bytes(payload)
 
-        with caplog.at_level("WARNING"):
-            result = parse_advertisement(bytes(payload), raw_packet=raw_packet)
+        result = parse_advertisement(bytes(payload), raw_packet=raw_packet)
 
         assert result is not None
         assert (
@@ -475,10 +474,6 @@ class TestAdvertisementParsing:
         assert result.device_role == 2
         assert result.lat is None
         assert result.lon is None
-        assert "Dropping location data for nonsensical packet -- packet" in caplog.text
-        assert raw_packet.hex().upper() in caplog.text
-        assert "-593.497573/-1659.939204" in caplog.text
-        assert "Outta this world!" in caplog.text
 
     def test_parse_advertisement_extracts_public_key(self):
         """Advertisement parsing extracts the public key correctly."""

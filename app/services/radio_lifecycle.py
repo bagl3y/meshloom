@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +181,23 @@ async def run_post_connect_setup(radio_manager) -> None:
                             else "unknown",
                             radio_manager.max_channels,
                         )
+                        try:
+                            time_result = await mc.commands.get_time()
+                            radio_time = (
+                                time_result.payload.get("time")
+                                if time_result is not None and time_result.payload
+                                else None
+                            )
+                            if isinstance(radio_time, int):
+                                logger.info(
+                                    "Radio clock at connect: epoch=%d utc=%s",
+                                    radio_time,
+                                    datetime.fromtimestamp(radio_time, timezone.utc).strftime(
+                                        "%Y-%m-%d %H:%M:%S UTC"
+                                    ),
+                                )
+                        except Exception as exc:
+                            logger.debug("Failed to query radio clock after device info: %s", exc)
                     logger.info("Max channel slots: %d", radio_manager.max_channels)
                 except Exception as exc:
                     logger.debug("Failed to query device info capabilities: %s", exc)

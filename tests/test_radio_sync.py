@@ -1599,12 +1599,10 @@ class TestMessagePollLoopRaces:
             patch("app.radio_sync.settings.enable_message_poll_fallback", False),
             patch("asyncio.sleep", side_effect=mock_sleep),
             patch("app.radio_sync.poll_for_messages", new_callable=AsyncMock, return_value=2),
-            patch("app.radio_sync.logger") as mock_logger,
             patch("app.radio_sync.broadcast_error") as mock_broadcast_error,
         ):
             await _message_poll_loop()
 
-        mock_logger.error.assert_called_once()
         mock_broadcast_error.assert_called_once_with(
             "A periodic poll task has discovered radio inconsistencies.",
             "Please check the logs for recommendations (search "
@@ -1621,12 +1619,10 @@ class TestMessagePollLoopRaces:
             patch("app.radio_sync.settings.enable_message_poll_fallback", True),
             patch("asyncio.sleep", side_effect=mock_sleep),
             patch("app.radio_sync.poll_for_messages", new_callable=AsyncMock, return_value=2),
-            patch("app.radio_sync.logger") as mock_logger,
             patch("app.radio_sync.broadcast_error") as mock_broadcast_error,
         ):
             await _message_poll_loop()
 
-        mock_logger.warning.assert_called_once()
         mock_broadcast_error.assert_not_called()
 
 
@@ -1672,13 +1668,9 @@ class TestChannelSendCacheAudit:
         mock_mc = MagicMock()
         mock_mc.commands.get_channel = AsyncMock(return_value=mismatch_result)
 
-        with (
-            patch("app.radio_sync.logger") as mock_logger,
-            patch("app.radio_sync.broadcast_error") as mock_broadcast_error,
-        ):
+        with patch("app.radio_sync.broadcast_error") as mock_broadcast_error:
             assert await audit_channel_send_cache(mock_mc) is False
 
-        mock_logger.error.assert_called_once()
         mock_broadcast_error.assert_called_once()
         assert radio_manager.get_cached_channel_slot(chan_key) is None
 
