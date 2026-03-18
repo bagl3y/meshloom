@@ -163,6 +163,8 @@ MeshCore firmware can encode path hops as 1-byte, 2-byte, or 3-byte identifiers.
 
 **Direct messages**: Expected ACK code is tracked. When ACK event arrives, message marked as acked.
 
+Outgoing DMs send once immediately, then may retry up to 2 more times in the background if still unacked. Retry timing follows the radio's `suggested_timeout` from `PACKET_MSG_SENT`, and the final retry is sent as flood even when a routing override is configured. DM ACK state is terminal on first ACK: sibling retry ACK codes are cleared so one DM should not accumulate multiple delivery confirmations from different retry attempts.
+
 **Channel messages**: Flood messages echo back through repeaters. Repeats are identified by the database UNIQUE constraint on `(type, conversation_key, text, sender_timestamp)` — when an INSERT hits a duplicate, `_handle_duplicate_message()` in `packet_processor.py` adds the new path and, for outgoing messages only, increments the ack count. Incoming repeats add path data but do not change the ack count. There is no timestamp-windowed matching; deduplication is exact-match only.
 
 This message-layer echo/path handling is independent of raw-packet storage deduplication.

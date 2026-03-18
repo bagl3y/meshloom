@@ -202,6 +202,42 @@ class TestAckEventHandler:
             assert "different" in _buffered_acks
 
     @pytest.mark.asyncio
+    async def test_first_dm_ack_clears_sibling_retry_codes(self, test_db):
+        """A DM should stop at ack_count=1 even if retry ACK codes arrive later."""
+        from app.event_handlers import on_ack
+
+        msg_id = await MessageRepository.create(
+            msg_type="PRIV",
+            text="Hello",
+            received_at=1700000000,
+            conversation_key="aa" * 32,
+            sender_timestamp=1700000000,
+            outgoing=True,
+        )
+
+        track_pending_ack("ack1", message_id=msg_id, timeout_ms=10000)
+        track_pending_ack("ack2", message_id=msg_id, timeout_ms=10000)
+
+        with patch("app.event_handlers.broadcast_event") as mock_broadcast:
+
+            class FirstAckEvent:
+                payload = {"code": "ack1"}
+
+            class SecondAckEvent:
+                payload = {"code": "ack2"}
+
+            await on_ack(FirstAckEvent())
+            await on_ack(SecondAckEvent())
+
+            ack_count, _ = await MessageRepository.get_ack_and_paths(msg_id)
+            assert ack_count == 1
+            assert "ack2" not in _pending_acks
+            assert "ack2" in _buffered_acks
+            mock_broadcast.assert_called_once_with(
+                "message_acked", {"message_id": msg_id, "ack_count": 1}
+            )
+
+    @pytest.mark.asyncio
     async def test_ack_empty_code_ignored(self, test_db):
         """ACK with empty code is ignored."""
         from app.event_handlers import on_ack

@@ -71,3 +71,15 @@ def pop_pending_ack(ack_code: str) -> int | None:
         return None
     message_id, _, _ = pending
     return message_id
+
+
+def clear_pending_acks_for_message(message_id: int) -> None:
+    """Remove any still-pending ACK codes for a message once one ACK wins."""
+    sibling_codes = [
+        code
+        for code, (pending_message_id, _created_at, _timeout_ms) in _pending_acks.items()
+        if pending_message_id == message_id
+    ]
+    for code in sibling_codes:
+        del _pending_acks[code]
+        logger.debug("Cleared sibling pending ACK %s for message %d", code, message_id)

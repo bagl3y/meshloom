@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+import app.services.message_send as message_send_service
 from app.radio import radio_manager
 from app.repository import (
     ChannelRepository,
@@ -37,6 +38,12 @@ def _reset_radio_state():
     radio_manager._connection_info = prev_connection_info
     radio_manager._channel_slot_by_key = prev_slot_by_key
     radio_manager._channel_key_by_slot = prev_key_by_slot
+
+
+@pytest.fixture(autouse=True)
+def _disable_background_dm_retries(monkeypatch):
+    monkeypatch.setattr(message_send_service, "DM_SEND_MAX_ATTEMPTS", 1)
+    yield
 
 
 def _patch_require_connected(mc=None, *, detail="Radio not connected"):

@@ -273,6 +273,7 @@ async def on_ack(event: "Event") -> None:
 
     message_id = dm_ack_tracker.pop_pending_ack(ack_code)
     if message_id is not None:
+        dm_ack_tracker.clear_pending_acks_for_message(message_id)
         logger.info("ACK received for message %d", message_id)
         # DM ACKs don't carry path data, so paths is intentionally omitted.
         # The frontend's mergePendingAck handles the missing field correctly,

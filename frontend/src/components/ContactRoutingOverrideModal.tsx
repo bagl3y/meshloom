@@ -118,6 +118,10 @@ export function ContactRoutingOverrideModal({
             />
             <div className="space-y-1 text-xs text-muted-foreground">
               <p>Use comma-separated 1, 2, or 3 byte hop IDs for an explicit path.</p>
+              <p>
+                Note: direct messages that do not see an ACK retry up to 3 times. The final retry is
+                sent as flood, even when forced routing is configured.
+              </p>
             </div>
           </div>
 

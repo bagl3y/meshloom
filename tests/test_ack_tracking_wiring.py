@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from meshcore import EventType
 
+import app.services.message_send as message_send_service
 from app.models import SendDirectMessageRequest
 from app.radio import radio_manager
 from app.repository import ContactRepository
@@ -24,6 +25,12 @@ def _reset_radio_state():
     yield
     radio_manager._meshcore = prev
     radio_manager._operation_lock = prev_lock
+
+
+@pytest.fixture(autouse=True)
+def _disable_background_dm_retries(monkeypatch):
+    monkeypatch.setattr(message_send_service, "DM_SEND_MAX_ATTEMPTS", 1)
+    yield
 
 
 def _make_mc(name="TestNode"):

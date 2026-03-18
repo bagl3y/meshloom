@@ -8,6 +8,7 @@ import pytest
 from fastapi import HTTPException
 from meshcore import EventType
 
+import app.services.message_send as message_send_service
 from app.models import (
     SendChannelMessageRequest,
     SendDirectMessageRequest,
@@ -69,6 +70,7 @@ def _make_mc(name="TestNode"):
     mc.commands.send_msg = AsyncMock(return_value=_make_radio_result())
     mc.commands.send_chan_msg = AsyncMock(return_value=_make_radio_result())
     mc.commands.add_contact = AsyncMock(return_value=_make_radio_result())
+    mc.commands.reset_path = AsyncMock(return_value=MagicMock(type=EventType.OK, payload={}))
     mc.commands.set_channel = AsyncMock(return_value=_make_radio_result())
     mc.get_contact_by_key_prefix = MagicMock(return_value=None)
     return mc
@@ -92,6 +94,12 @@ async def _insert_contact(public_key, name="Alice", **overrides):
     }
     data.update(overrides)
     await ContactRepository.upsert(data)
+
+
+@pytest.fixture(autouse=True)
+def _disable_background_dm_retries(monkeypatch):
+    monkeypatch.setattr(message_send_service, "DM_SEND_MAX_ATTEMPTS", 1)
+    yield
 
 
 class TestOutgoingDMBroadcast:
@@ -271,6 +279,185 @@ class TestOutgoingDMBroadcast:
         assert ack_count == 1
         assert message.acked == 1
         assert any(event_type == "message_acked" for event_type, _data in broadcasts)
+
+    @pytest.mark.asyncio
+    async def test_send_dm_without_expected_ack_does_not_schedule_retries(self, test_db):
+        mc = _make_mc()
+        pub_key = "fb" * 32
+        await _insert_contact(pub_key, "Alice")
+
+        mc.commands.send_msg = AsyncMock(return_value=_make_radio_result({}))
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event"),
+            patch("app.services.message_send.asyncio.create_task") as mock_create_task,
+        ):
+            message = await send_direct_message(
+                SendDirectMessageRequest(destination=pub_key, text="Hello")
+            )
+
+        assert message.acked == 0
+        mock_create_task.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_send_dm_background_retries_reset_path_before_final_attempt(self, test_db):
+        mc = _make_mc()
+        pub_key = "fc" * 32
+        await _insert_contact(pub_key, "Alice")
+
+        mc.commands.send_msg = AsyncMock(
+            side_effect=[
+                _make_radio_result(
+                    {"expected_ack": b"\x00\x00\x00\x01", "suggested_timeout": 8000}
+                ),
+                _make_radio_result(
+                    {"expected_ack": b"\x00\x00\x00\x02", "suggested_timeout": 7000}
+                ),
+                _make_radio_result(
+                    {"expected_ack": b"\x00\x00\x00\x03", "suggested_timeout": 6000}
+                ),
+            ]
+        )
+
+        retry_tasks = []
+        loop = asyncio.get_running_loop()
+        slept_for = []
+
+        def schedule_retry(coro):
+            task = loop.create_task(coro)
+            retry_tasks.append(task)
+            return task
+
+        async def no_wait(seconds):
+            slept_for.append(seconds)
+            return None
+
+        with (
+            patch.object(message_send_service, "DM_SEND_MAX_ATTEMPTS", 3),
+            patch("app.routers.messages.track_pending_ack", return_value=False),
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event"),
+            patch("app.services.message_send.asyncio.create_task", side_effect=schedule_retry),
+            patch("app.services.message_send.asyncio.sleep", side_effect=no_wait),
+        ):
+            await send_direct_message(SendDirectMessageRequest(destination=pub_key, text="Hello"))
+            await asyncio.gather(*retry_tasks)
+
+        assert mc.commands.send_msg.await_count == 3
+        assert mc.commands.add_contact.await_count == 3
+        assert mc.commands.send_msg.await_args_list[1].kwargs["attempt"] == 1
+        assert mc.commands.send_msg.await_args_list[2].kwargs["attempt"] == 2
+        mc.commands.reset_path.assert_awaited_once_with(pub_key)
+        assert slept_for == pytest.approx([9.6, 8.4])
+
+    @pytest.mark.asyncio
+    async def test_send_dm_background_retry_stops_after_late_ack(self, test_db):
+        from app.event_handlers import on_ack
+
+        mc = _make_mc()
+        pub_key = "fd" * 32
+        await _insert_contact(pub_key, "Alice")
+
+        mc.commands.send_msg = AsyncMock(
+            return_value=_make_radio_result(
+                {"expected_ack": b"\xde\xad\xbe\xef", "suggested_timeout": 8000}
+            )
+        )
+
+        retry_tasks = []
+        sleep_gate = asyncio.Event()
+        loop = asyncio.get_running_loop()
+
+        def schedule_retry(coro):
+            task = loop.create_task(coro)
+            retry_tasks.append(task)
+            return task
+
+        async def gated_sleep(_seconds):
+            await sleep_gate.wait()
+
+        class MockAckEvent:
+            payload = {"code": "deadbeef"}
+
+        with (
+            patch.object(message_send_service, "DM_SEND_MAX_ATTEMPTS", 3),
+            patch("app.event_handlers.broadcast_event"),
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event"),
+            patch("app.services.message_send.asyncio.create_task", side_effect=schedule_retry),
+            patch("app.services.message_send.asyncio.sleep", side_effect=gated_sleep),
+        ):
+            message = await send_direct_message(
+                SendDirectMessageRequest(destination=pub_key, text="Hello")
+            )
+            await on_ack(MockAckEvent())
+            sleep_gate.set()
+            await asyncio.gather(*retry_tasks)
+
+        ack_count, _ = await MessageRepository.get_ack_and_paths(message.id)
+        assert ack_count == 1
+        assert mc.commands.send_msg.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_buffered_retry_ack_clears_older_dm_ack_codes(self, test_db):
+        from app.event_handlers import on_ack
+
+        mc = _make_mc()
+        pub_key = "fe" * 32
+        await _insert_contact(pub_key, "Alice")
+
+        mc.commands.send_msg = AsyncMock(
+            side_effect=[
+                _make_radio_result(
+                    {"expected_ack": b"\xaa\xaa\xaa\x01", "suggested_timeout": 8000}
+                ),
+                _make_radio_result(
+                    {"expected_ack": b"\xbb\xbb\xbb\x02", "suggested_timeout": 8000}
+                ),
+            ]
+        )
+
+        retry_tasks = []
+        sleep_gate = asyncio.Event()
+        loop = asyncio.get_running_loop()
+
+        def schedule_retry(coro):
+            task = loop.create_task(coro)
+            retry_tasks.append(task)
+            return task
+
+        async def gated_sleep(_seconds):
+            await sleep_gate.wait()
+
+        class RetryAckEvent:
+            payload = {"code": "bbbbbb02"}
+
+        class FirstAckEvent:
+            payload = {"code": "aaaaaa01"}
+
+        with (
+            patch.object(message_send_service, "DM_SEND_MAX_ATTEMPTS", 3),
+            patch("app.event_handlers.broadcast_event"),
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event"),
+            patch("app.services.message_send.asyncio.create_task", side_effect=schedule_retry),
+            patch("app.services.message_send.asyncio.sleep", side_effect=gated_sleep),
+        ):
+            message = await send_direct_message(
+                SendDirectMessageRequest(destination=pub_key, text="Hello")
+            )
+            await on_ack(RetryAckEvent())
+            sleep_gate.set()
+            await asyncio.gather(*retry_tasks)
+            await on_ack(FirstAckEvent())
+
+        ack_count, _ = await MessageRepository.get_ack_and_paths(message.id)
+        assert ack_count == 1
 
 
 class TestOutgoingChannelBroadcast:
