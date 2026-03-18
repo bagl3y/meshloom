@@ -16,7 +16,12 @@ function makeChannel(key: string, name: string): Channel {
   };
 }
 
-function makeContact(public_key: string, name: string, type = 1): Contact {
+function makeContact(
+  public_key: string,
+  name: string,
+  type = 1,
+  overrides: Partial<Contact> = {}
+): Contact {
   return {
     public_key,
     name,
@@ -33,6 +38,7 @@ function makeContact(public_key: string, name: string, type = 1): Contact {
     last_contacted: null,
     last_read_at: null,
     first_seen: null,
+    ...overrides,
   };
 }
 
@@ -257,10 +263,14 @@ describe('Sidebar section summaries', () => {
     const publicChannel = makeChannel('AA'.repeat(16), 'Public');
     const zebraChannel = makeChannel('BB'.repeat(16), '#zebra');
     const alphaChannel = makeChannel('CC'.repeat(16), '#alpha');
-    const zed = makeContact('11'.repeat(32), 'Zed');
+    const zed = makeContact('11'.repeat(32), 'Zed', 1, { last_advert: 150 });
     const amy = makeContact('22'.repeat(32), 'Amy');
-    const relayZulu = makeContact('33'.repeat(32), 'Zulu Relay', CONTACT_TYPE_REPEATER);
-    const relayAlpha = makeContact('44'.repeat(32), 'Alpha Relay', CONTACT_TYPE_REPEATER);
+    const relayZulu = makeContact('33'.repeat(32), 'Zulu Relay', CONTACT_TYPE_REPEATER, {
+      last_seen: 100,
+    });
+    const relayAlpha = makeContact('44'.repeat(32), 'Alpha Relay', CONTACT_TYPE_REPEATER, {
+      last_seen: 300,
+    });
 
     const props = {
       contacts: [zed, amy, relayZulu, relayAlpha],
@@ -272,9 +282,6 @@ describe('Sidebar section summaries', () => {
         [getStateKey('channel', zebraChannel.key)]: 300,
         [getStateKey('channel', alphaChannel.key)]: 100,
         [getStateKey('contact', zed.public_key)]: 200,
-        [getStateKey('contact', amy.public_key)]: 100,
-        [getStateKey('contact', relayZulu.public_key)]: 300,
-        [getStateKey('contact', relayAlpha.public_key)]: 100,
       },
       unreadCounts: {},
       mentions: {},
@@ -302,20 +309,104 @@ describe('Sidebar section summaries', () => {
 
     expect(getChannelsOrder()).toEqual(['#zebra', '#alpha']);
     expect(getContactsOrder()).toEqual(['Zed', 'Amy']);
-    expect(getRepeatersOrder()).toEqual(['Zulu Relay', 'Alpha Relay']);
+    expect(getRepeatersOrder()).toEqual(['Alpha Relay', 'Zulu Relay']);
 
     fireEvent.click(screen.getByRole('button', { name: 'Sort Channels alphabetically' }));
 
     expect(getChannelsOrder()).toEqual(['#alpha', '#zebra']);
     expect(getContactsOrder()).toEqual(['Zed', 'Amy']);
-    expect(getRepeatersOrder()).toEqual(['Zulu Relay', 'Alpha Relay']);
+    expect(getRepeatersOrder()).toEqual(['Alpha Relay', 'Zulu Relay']);
 
     unmount();
     render(<Sidebar {...props} />);
 
     expect(getChannelsOrder()).toEqual(['#alpha', '#zebra']);
     expect(getContactsOrder()).toEqual(['Zed', 'Amy']);
-    expect(getRepeatersOrder()).toEqual(['Zulu Relay', 'Alpha Relay']);
+    expect(getRepeatersOrder()).toEqual(['Alpha Relay', 'Zulu Relay']);
+  });
+
+  it('sorts contacts by DM recency first, then advert recency, then no-recency at the bottom', () => {
+    const publicChannel = makeChannel(PUBLIC_CHANNEL_KEY, 'Public');
+    const dmRecent = makeContact('11'.repeat(32), 'DM Recent', 1, { last_advert: 100 });
+    const advertOnly = makeContact('22'.repeat(32), 'Advert Only', 1, { last_seen: 300 });
+    const noRecency = makeContact('33'.repeat(32), 'No Recency');
+
+    render(
+      <Sidebar
+        contacts={[noRecency, advertOnly, dmRecent]}
+        channels={[publicChannel]}
+        activeConversation={null}
+        onSelectConversation={vi.fn()}
+        onNewMessage={vi.fn()}
+        lastMessageTimes={{
+          [getStateKey('contact', dmRecent.public_key)]: 400,
+        }}
+        unreadCounts={{}}
+        mentions={{}}
+        showCracker={false}
+        crackerRunning={false}
+        onToggleCracker={vi.fn()}
+        onMarkAllRead={vi.fn()}
+        favorites={[]}
+        legacySortOrder="recent"
+      />
+    );
+
+    const contactRows = screen
+      .getAllByText(/^(DM Recent|Advert Only|No Recency)$/)
+      .map((node) => node.textContent)
+      .filter((text): text is string => Boolean(text));
+
+    expect(contactRows).toEqual(['DM Recent', 'Advert Only', 'No Recency']);
+  });
+
+  it('sorts repeaters by heard recency even when message times disagree', () => {
+    const publicChannel = makeChannel(PUBLIC_CHANNEL_KEY, 'Public');
+    const staleMessageRelay = makeContact(
+      '44'.repeat(32),
+      'Stale Message Relay',
+      CONTACT_TYPE_REPEATER,
+      {
+        last_seen: 100,
+      }
+    );
+    const freshAdvertRelay = makeContact(
+      '55'.repeat(32),
+      'Fresh Advert Relay',
+      CONTACT_TYPE_REPEATER,
+      {
+        last_advert: 500,
+      }
+    );
+
+    render(
+      <Sidebar
+        contacts={[staleMessageRelay, freshAdvertRelay]}
+        channels={[publicChannel]}
+        activeConversation={null}
+        onSelectConversation={vi.fn()}
+        onNewMessage={vi.fn()}
+        lastMessageTimes={{
+          [getStateKey('contact', staleMessageRelay.public_key)]: 1000,
+          [getStateKey('contact', freshAdvertRelay.public_key)]: 50,
+        }}
+        unreadCounts={{}}
+        mentions={{}}
+        showCracker={false}
+        crackerRunning={false}
+        onToggleCracker={vi.fn()}
+        onMarkAllRead={vi.fn()}
+        favorites={[]}
+        legacySortOrder="recent"
+      />
+    );
+
+    const repeaterRows = screen
+      .getAllByText(/Relay$/)
+      .map((node) => node.textContent)
+      .filter((text): text is string => Boolean(text));
+
+    expect(repeaterRows).toEqual(['Fresh Advert Relay', 'Stale Message Relay']);
   });
 
   it('pins only the canonical Public channel to the top of channel sorting', () => {

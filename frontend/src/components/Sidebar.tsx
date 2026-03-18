@@ -216,6 +216,20 @@ export function Sidebar({
     [lastMessageTimes]
   );
 
+  const getContactHeardTime = useCallback((contact: Contact): number => {
+    return Math.max(contact.last_seen ?? 0, contact.last_advert ?? 0);
+  }, []);
+
+  const getContactRecentTime = useCallback(
+    (contact: Contact): number => {
+      if (contact.type === CONTACT_TYPE_REPEATER) {
+        return getContactHeardTime(contact);
+      }
+      return getLastMessageTime('contact', contact.public_key) || getContactHeardTime(contact);
+    },
+    [getContactHeardTime, getLastMessageTime]
+  );
+
   // Deduplicate channels by key only.
   // Channel names are not unique; distinct keys must remain visible.
   const uniqueChannels = useMemo(
@@ -274,15 +288,30 @@ export function Sidebar({
     (items: Contact[], order: SortOrder) =>
       [...items].sort((a, b) => {
         if (order === 'recent') {
-          const timeA = getLastMessageTime('contact', a.public_key);
-          const timeB = getLastMessageTime('contact', b.public_key);
+          const timeA = getContactRecentTime(a);
+          const timeB = getContactRecentTime(b);
           if (timeA && timeB) return timeB - timeA;
           if (timeA && !timeB) return -1;
           if (!timeA && timeB) return 1;
         }
         return (a.name || a.public_key).localeCompare(b.name || b.public_key);
       }),
-    [getLastMessageTime]
+    [getContactRecentTime]
+  );
+
+  const sortRepeatersByOrder = useCallback(
+    (items: Contact[], order: SortOrder) =>
+      [...items].sort((a, b) => {
+        if (order === 'recent') {
+          const timeA = getContactHeardTime(a);
+          const timeB = getContactHeardTime(b);
+          if (timeA && timeB) return timeB - timeA;
+          if (timeA && !timeB) return -1;
+          if (!timeA && timeB) return 1;
+        }
+        return (a.name || a.public_key).localeCompare(b.name || b.public_key);
+      }),
+    [getContactHeardTime]
   );
 
   // Split non-repeater contacts and repeater contacts into separate sorted lists
@@ -297,11 +326,11 @@ export function Sidebar({
 
   const sortedRepeaters = useMemo(
     () =>
-      sortContactsByOrder(
+      sortRepeatersByOrder(
         uniqueContacts.filter((c) => c.type === CONTACT_TYPE_REPEATER),
         sectionSortOrders.repeaters
       ),
-    [uniqueContacts, sectionSortOrders.repeaters, sortContactsByOrder]
+    [uniqueContacts, sectionSortOrders.repeaters, sortRepeatersByOrder]
   );
 
   // Filter by search query
@@ -436,11 +465,11 @@ export function Sidebar({
         const timeA =
           a.type === 'channel'
             ? getLastMessageTime('channel', a.channel.key)
-            : getLastMessageTime('contact', a.contact.public_key);
+            : getContactRecentTime(a.contact);
         const timeB =
           b.type === 'channel'
             ? getLastMessageTime('channel', b.channel.key)
-            : getLastMessageTime('contact', b.contact.public_key);
+            : getContactRecentTime(b.contact);
         if (timeA && timeB) return timeB - timeA;
         if (timeA && !timeB) return -1;
         if (!timeA && timeB) return 1;
@@ -462,6 +491,7 @@ export function Sidebar({
       filteredNonRepeaterContacts,
       filteredRepeaters,
       favorites,
+      getContactRecentTime,
       getLastMessageTime,
     ]);
 
