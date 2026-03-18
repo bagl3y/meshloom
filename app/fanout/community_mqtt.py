@@ -12,7 +12,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
-import importlib.metadata
 import json
 import logging
 import ssl
@@ -25,12 +24,13 @@ import nacl.bindings
 
 from app.fanout.mqtt_base import BaseMqttPublisher
 from app.path_utils import parse_packet_envelope, split_path_hex
+from app.version_info import get_app_build_info
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_BROKER = "mqtt-us-v1.letsmesh.net"
 _DEFAULT_PORT = 443  # Community protocol uses WSS on port 443 by default
-_CLIENT_ID = "RemoteTerm (github.com/jkingsman/Remote-Terminal-for-MeshCore)"
+_CLIENT_ID = "RemoteTerm"
 
 # Proactive JWT renewal: reconnect 1 hour before the 24h token expires
 _TOKEN_LIFETIME = 86400  # 24 hours (must match _generate_jwt_token exp)
@@ -261,11 +261,7 @@ def _build_radio_info() -> str:
 
 def _get_client_version() -> str:
     """Return a client version string like ``'RemoteTerm 2.4.0'``."""
-    try:
-        version = importlib.metadata.version("remoteterm-meshcore")
-        return f"RemoteTerm {version}"
-    except Exception:
-        return "RemoteTerm unknown"
+    return f"RemoteTerm {get_app_build_info().version}"
 
 
 class CommunityMqttPublisher(BaseMqttPublisher):

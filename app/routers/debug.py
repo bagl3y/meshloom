@@ -1,11 +1,7 @@
 import hashlib
-import importlib.metadata
-import json
 import logging
-import subprocess
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
@@ -17,6 +13,7 @@ from app.radio_sync import get_contacts_selected_for_radio_sync, get_radio_chann
 from app.repository import MessageRepository
 from app.routers.health import HealthResponse, build_health_data
 from app.services.radio_runtime import radio_runtime
+from app.version_info import get_app_build_info, git_output
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +21,6 @@ router = APIRouter(tags=["debug"])
 
 LOG_COPY_BOUNDARY_MESSAGE = "STOP COPYING HERE IF YOU DO NOT WANT TO INCLUDE LOGS BELOW"
 LOG_COPY_BOUNDARY_LINE = "-" * 64
-RELEASE_BUILD_INFO_FILENAME = "build_info.json"
 LOG_COPY_BOUNDARY_PREFIX = [
     LOG_COPY_BOUNDARY_LINE,
     LOG_COPY_BOUNDARY_LINE,
@@ -40,7 +36,9 @@ LOG_COPY_BOUNDARY_PREFIX = [
 
 class DebugApplicationInfo(BaseModel):
     version: str
+    version_source: str
     commit_hash: str | None = None
+    commit_source: str | None = None
     git_branch: str | None = None
     git_dirty: bool | None = None
     python_version: str
@@ -97,64 +95,15 @@ class DebugSnapshotResponse(BaseModel):
     logs: list[str]
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
-def _get_app_version() -> str:
-    try:
-        return importlib.metadata.version("remoteterm-meshcore")
-    except Exception:
-        pyproject = _repo_root() / "pyproject.toml"
-        try:
-            for line in pyproject.read_text().splitlines():
-                if line.startswith("version = "):
-                    return line.split('"')[1]
-        except Exception:
-            pass
-    return "0.0.0"
-
-
-def _git_output(*args: str) -> str | None:
-    try:
-        result = subprocess.run(
-            ["git", *args],
-            cwd=_repo_root(),
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except Exception:
-        return None
-    output = result.stdout.strip()
-    return output or None
-
-
-def _release_build_info() -> dict[str, Any] | None:
-    build_info_path = _repo_root() / RELEASE_BUILD_INFO_FILENAME
-    try:
-        data = json.loads(build_info_path.read_text())
-    except Exception:
-        return None
-
-    if isinstance(data, dict):
-        return data
-    return None
-
-
 def _build_application_info() -> DebugApplicationInfo:
-    release_build_info = _release_build_info()
-    dirty_output = _git_output("status", "--porcelain")
-    commit_hash = _git_output("rev-parse", "HEAD")
-    if commit_hash is None and release_build_info is not None:
-        commit_hash_value = release_build_info.get("commit_hash")
-        if isinstance(commit_hash_value, str) and commit_hash_value.strip():
-            commit_hash = commit_hash_value.strip()
-
+    build_info = get_app_build_info()
+    dirty_output = git_output("status", "--porcelain")
     return DebugApplicationInfo(
-        version=_get_app_version(),
-        commit_hash=commit_hash,
-        git_branch=_git_output("rev-parse", "--abbrev-ref", "HEAD"),
+        version=build_info.version,
+        version_source=build_info.version_source,
+        commit_hash=build_info.commit_hash,
+        commit_source=build_info.commit_source,
+        git_branch=git_output("rev-parse", "--abbrev-ref", "HEAD"),
         git_dirty=(dirty_output is not None and dirty_output != ""),
         python_version=sys.version.split()[0],
     )

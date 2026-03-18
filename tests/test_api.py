@@ -5,7 +5,6 @@ Uses httpx.AsyncClient or direct function calls with real in-memory SQLite.
 """
 
 import hashlib
-import json
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -20,6 +19,7 @@ from app.repository import (
     MessageRepository,
     RawPacketRepository,
 )
+from app.version_info import AppBuildInfo
 
 
 @pytest.fixture(autouse=True)
@@ -144,7 +144,9 @@ class TestDebugEndpoint:
             "app.routers.debug._build_application_info",
             return_value=DebugApplicationInfo(
                 version="3.2.0",
+                version_source="pyproject",
                 commit_hash="deadbeef",
+                commit_source="git",
                 git_branch="main",
                 git_dirty=False,
                 python_version="3.12.0",
@@ -186,24 +188,24 @@ class TestDebugApplicationInfo:
         """Release bundles should still surface commit metadata without a .git directory."""
         from app.routers import debug as debug_router
 
-        (tmp_path / "build_info.json").write_text(
-            json.dumps(
-                {
-                    "commit_hash": "cf1a55e25828ee62fb077d6202b174f69f6e6340",
-                    "build_source": "prebuilt-release",
-                }
-            )
-        )
-
         with (
-            patch("app.routers.debug._repo_root", return_value=tmp_path),
-            patch("app.routers.debug._get_app_version", return_value="3.4.0"),
-            patch("app.routers.debug._git_output", return_value=None),
+            patch(
+                "app.routers.debug.get_app_build_info",
+                return_value=AppBuildInfo(
+                    version="3.4.0",
+                    version_source="pyproject",
+                    commit_hash="cf1a55e2",
+                    commit_source="build_info",
+                ),
+            ),
+            patch("app.routers.debug.git_output", return_value=None),
         ):
             info = debug_router._build_application_info()
 
         assert info.version == "3.4.0"
-        assert info.commit_hash == "cf1a55e25828ee62fb077d6202b174f69f6e6340"
+        assert info.version_source == "pyproject"
+        assert info.commit_hash == "cf1a55e2"
+        assert info.commit_source == "build_info"
         assert info.git_branch is None
         assert info.git_dirty is False
 
@@ -211,17 +213,24 @@ class TestDebugApplicationInfo:
         """Malformed release metadata should not break the debug endpoint."""
         from app.routers import debug as debug_router
 
-        (tmp_path / "build_info.json").write_text("{not-json")
-
         with (
-            patch("app.routers.debug._repo_root", return_value=tmp_path),
-            patch("app.routers.debug._get_app_version", return_value="3.4.0"),
-            patch("app.routers.debug._git_output", return_value=None),
+            patch(
+                "app.routers.debug.get_app_build_info",
+                return_value=AppBuildInfo(
+                    version="3.4.0",
+                    version_source="pyproject",
+                    commit_hash=None,
+                    commit_source=None,
+                ),
+            ),
+            patch("app.routers.debug.git_output", return_value=None),
         ):
             info = debug_router._build_application_info()
 
         assert info.version == "3.4.0"
+        assert info.version_source == "pyproject"
         assert info.commit_hash is None
+        assert info.commit_source is None
         assert info.git_branch is None
         assert info.git_dirty is False
 

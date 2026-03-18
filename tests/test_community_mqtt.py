@@ -631,15 +631,18 @@ class TestCommunityMqttPublisher:
 
 class TestPublishFailureSetsDisconnected:
     @pytest.mark.asyncio
-    async def test_publish_error_sets_connected_false(self):
+    async def test_publish_error_sets_connected_false(self, caplog):
         """A publish error should set connected=False so the loop can detect it."""
         pub = CommunityMqttPublisher()
+        pub.set_integration_name("LetsMesh West")
         pub.connected = True
         mock_client = MagicMock()
         mock_client.publish = MagicMock(side_effect=Exception("broker gone"))
         pub._client = mock_client
         await pub.publish("topic", {"data": "test"})
         assert pub.connected is False
+        assert "LetsMesh West" in caplog.text
+        assert "if it self-resolves" in caplog.text
 
 
 class TestBuildStatusTopic:
@@ -1217,20 +1220,12 @@ class TestGetClientVersion:
         result = _get_client_version()
         assert result.startswith("RemoteTerm ")
 
-    def test_returns_version_from_metadata(self):
-        """Should use importlib.metadata to get version."""
-        with patch("app.fanout.community_mqtt.importlib.metadata.version", return_value="1.2.3"):
+    def test_returns_version_from_build_helper(self):
+        """Should use the shared backend build-info helper."""
+        with patch("app.fanout.community_mqtt.get_app_build_info") as mock_build_info:
+            mock_build_info.return_value.version = "1.2.3"
             result = _get_client_version()
         assert result == "RemoteTerm 1.2.3"
-
-    def test_fallback_on_error(self):
-        """Should return 'RemoteTerm unknown' if metadata lookup fails."""
-        with patch(
-            "app.fanout.community_mqtt.importlib.metadata.version",
-            side_effect=Exception("not found"),
-        ):
-            result = _get_client_version()
-        assert result == "RemoteTerm unknown"
 
 
 class TestPublishStatus:

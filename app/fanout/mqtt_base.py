@@ -54,6 +54,17 @@ class BaseMqttPublisher(ABC):
         self._settings_version: int = 0
         self._version_event: asyncio.Event = asyncio.Event()
         self.connected: bool = False
+        self.integration_name: str = ""
+
+    def set_integration_name(self, name: str) -> None:
+        """Attach the configured fanout-module name for operator-facing logs."""
+        self.integration_name = name.strip()
+
+    def _integration_label(self) -> str:
+        """Return a concise label for logs, including the configured module name."""
+        if self.integration_name:
+            return f"{self._log_prefix} [{self.integration_name}]"
+        return self._log_prefix
 
     # ── Lifecycle ──────────────────────────────────────────────────────
 
@@ -90,8 +101,9 @@ class BaseMqttPublisher(ABC):
             await self._client.publish(topic, json.dumps(payload), retain=retain)
         except Exception as e:
             logger.warning(
-                "%s publish failed on %s: %s",
-                self._log_prefix,
+                "%s publish failed on %s. This is usually transient network noise; "
+                "if it self-resolves and reconnects, it is generally not a concern: %s",
+                self._integration_label(),
                 topic,
                 e,
                 exc_info=True,
@@ -225,8 +237,10 @@ class BaseMqttPublisher(ABC):
                 broadcast_error(title, detail)
                 _broadcast_health()
                 logger.warning(
-                    "%s connection error: %s (reconnecting in %ds)",
-                    self._log_prefix,
+                    "%s connection error. This is usually transient network noise; "
+                    "if it self-resolves, it is generally not a concern: %s "
+                    "(reconnecting in %ds)",
+                    self._integration_label(),
                     e,
                     backoff,
                     exc_info=True,

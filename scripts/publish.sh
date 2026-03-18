@@ -186,7 +186,8 @@ mkdir -p "$RELEASE_BUNDLE_DIR/frontend"
 cp -R "$SCRIPT_DIR/frontend/prebuilt" "$RELEASE_BUNDLE_DIR/frontend/prebuilt"
 cat > "$RELEASE_BUNDLE_DIR/build_info.json" <<EOF
 {
-  "commit_hash": "$FULL_GIT_HASH",
+  "version": "$VERSION",
+  "commit_hash": "$GIT_HASH",
   "build_source": "prebuilt-release"
 }
 EOF

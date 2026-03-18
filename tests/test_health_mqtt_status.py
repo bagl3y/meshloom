@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from app.routers.health import build_health_data
+from app.version_info import AppBuildInfo
 
 
 class TestHealthFanoutStatus:
@@ -48,6 +49,15 @@ class TestHealthFanoutStatus:
                 "app.routers.health.RawPacketRepository.get_oldest_undecrypted", return_value=None
             ),
             patch("app.routers.health.radio_manager") as mock_rm,
+            patch(
+                "app.routers.health.get_app_build_info",
+                return_value=AppBuildInfo(
+                    version="3.4.1",
+                    version_source="pyproject",
+                    commit_hash="abcdef12",
+                    commit_source="git",
+                ),
+            ),
         ):
             mock_rm.is_setup_in_progress = False
             mock_rm.is_setup_complete = True
@@ -58,6 +68,10 @@ class TestHealthFanoutStatus:
         assert data["radio_initializing"] is False
         assert data["radio_state"] == "connected"
         assert data["connection_info"] == "Serial: /dev/ttyUSB0"
+        assert data["app_info"] == {
+            "version": "3.4.1",
+            "commit_hash": "abcdef12",
+        }
 
     @pytest.mark.asyncio
     async def test_health_includes_cached_radio_device_info(self, test_db):

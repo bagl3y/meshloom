@@ -275,7 +275,9 @@ export function SettingsModal(props: SettingsModalProps) {
       {shouldRenderSection('about') && (
         <section className={sectionWrapperClass}>
           {renderSectionHeader('about')}
-          {isSectionVisible('about') && <SettingsAboutSection className={sectionContentClass} />}
+          {isSectionVisible('about') && (
+            <SettingsAboutSection health={health} className={sectionContentClass} />
+          )}
         </section>
       )}
     </div>

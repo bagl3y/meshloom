@@ -51,12 +51,18 @@ export interface FanoutStatusEntry {
   status: string;
 }
 
+export interface AppInfo {
+  version: string;
+  commit_hash: string | null;
+}
+
 export interface HealthStatus {
   status: string;
   radio_connected: boolean;
   radio_initializing: boolean;
   radio_state?: 'connected' | 'initializing' | 'connecting' | 'disconnected' | 'paused';
   connection_info: string | null;
+  app_info?: AppInfo | null;
   radio_device_info?: {
     model: string | null;
     firmware_build: string | null;

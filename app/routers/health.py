@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from app.config import settings
 from app.repository import RawPacketRepository
 from app.services.radio_runtime import radio_runtime as radio_manager
+from app.version_info import get_app_build_info
 
 router = APIRouter(tags=["health"])
 
@@ -19,12 +20,18 @@ class RadioDeviceInfoResponse(BaseModel):
     max_channels: int | None = None
 
 
+class AppInfoResponse(BaseModel):
+    version: str
+    commit_hash: str | None = None
+
+
 class HealthResponse(BaseModel):
     status: str
     radio_connected: bool
     radio_initializing: bool = False
     radio_state: str = "disconnected"
     connection_info: str | None
+    app_info: AppInfoResponse | None = None
     radio_device_info: RadioDeviceInfoResponse | None = None
     database_size_mb: float
     oldest_undecrypted_timestamp: int | None
@@ -41,6 +48,7 @@ def _clean_optional_str(value: object) -> str | None:
 
 async def build_health_data(radio_connected: bool, connection_info: str | None) -> dict:
     """Build the health status payload used by REST endpoint and WebSocket broadcasts."""
+    app_build_info = get_app_build_info()
     db_size_mb = 0.0
     try:
         db_size_bytes = os.path.getsize(settings.database_path)
@@ -102,6 +110,10 @@ async def build_health_data(radio_connected: bool, connection_info: str | None) 
         "radio_initializing": radio_initializing,
         "radio_state": radio_state,
         "connection_info": connection_info,
+        "app_info": {
+            "version": app_build_info.version,
+            "commit_hash": app_build_info.commit_hash,
+        },
         "radio_device_info": radio_device_info,
         "database_size_mb": db_size_mb,
         "oldest_undecrypted_timestamp": oldest_ts,

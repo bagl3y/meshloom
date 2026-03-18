@@ -32,6 +32,7 @@ class MqttPrivateModule(FanoutModule):
     def __init__(self, config_id: str, config: dict, *, name: str = "") -> None:
         super().__init__(config_id, config, name=name)
         self._publisher = MqttPublisher()
+        self._publisher.set_integration_name(name or config_id)
 
     async def start(self) -> None:
         settings = _config_to_settings(self.config)

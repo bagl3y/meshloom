@@ -129,8 +129,7 @@ frontend/src/
 │   │   └── RepeaterConsolePane.tsx      # CLI console with history
 │   └── ui/                     # shadcn/ui primitives
 ├── types/
-│   ├── d3-force-3d.d.ts       # Type declarations for d3-force-3d
-│   └── globals.d.ts           # Global type declarations (__APP_VERSION__, __COMMIT_HASH__)
+│   └── d3-force-3d.d.ts       # Type declarations for d3-force-3d
 └── test/
     ├── setup.ts
     ├── fixtures/websocket_events.json

@@ -38,6 +38,7 @@ from app.routers import (
 )
 from app.security import add_optional_basic_auth_middleware
 from app.services.radio_runtime import radio_runtime as radio_manager
+from app.version_info import get_app_build_info
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -102,22 +103,10 @@ async def lifespan(app: FastAPI):
     await db.disconnect()
 
 
-def _get_version() -> str:
-    """Read version from pyproject.toml so it stays in sync automatically."""
-    try:
-        pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
-        for line in pyproject.read_text().splitlines():
-            if line.startswith("version = "):
-                return line.split('"')[1]
-    except Exception:
-        pass
-    return "0.0.0"
-
-
 app = FastAPI(
     title="RemoteTerm for MeshCore API",
     description="API for interacting with MeshCore mesh radio networks",
-    version=_get_version(),
+    version=get_app_build_info().version,
     lifespan=lifespan,
 )
 
