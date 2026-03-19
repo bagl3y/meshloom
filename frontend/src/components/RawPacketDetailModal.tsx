@@ -33,50 +33,50 @@ const FIELD_PALETTE: FieldPaletteEntry[] = [
   {
     box: 'border-sky-500/30 bg-sky-500/10',
     boxActive: 'border-sky-600 bg-sky-500/20 shadow-sm shadow-sky-500/20',
-    hex: 'border-sky-500/40 bg-sky-500/20',
-    hexActive: 'border-sky-600 bg-sky-500/40',
+    hex: 'bg-sky-500/20 ring-1 ring-inset ring-sky-500/35',
+    hexActive: 'bg-sky-500/40 ring-1 ring-inset ring-sky-600/70',
   },
   {
     box: 'border-emerald-500/30 bg-emerald-500/10',
     boxActive: 'border-emerald-600 bg-emerald-500/20 shadow-sm shadow-emerald-500/20',
-    hex: 'border-emerald-500/40 bg-emerald-500/20',
-    hexActive: 'border-emerald-600 bg-emerald-500/40',
+    hex: 'bg-emerald-500/20 ring-1 ring-inset ring-emerald-500/35',
+    hexActive: 'bg-emerald-500/40 ring-1 ring-inset ring-emerald-600/70',
   },
   {
     box: 'border-amber-500/30 bg-amber-500/10',
     boxActive: 'border-amber-600 bg-amber-500/20 shadow-sm shadow-amber-500/20',
-    hex: 'border-amber-500/40 bg-amber-500/20',
-    hexActive: 'border-amber-600 bg-amber-500/40',
+    hex: 'bg-amber-500/20 ring-1 ring-inset ring-amber-500/35',
+    hexActive: 'bg-amber-500/40 ring-1 ring-inset ring-amber-600/70',
   },
   {
     box: 'border-rose-500/30 bg-rose-500/10',
     boxActive: 'border-rose-600 bg-rose-500/20 shadow-sm shadow-rose-500/20',
-    hex: 'border-rose-500/40 bg-rose-500/20',
-    hexActive: 'border-rose-600 bg-rose-500/40',
+    hex: 'bg-rose-500/20 ring-1 ring-inset ring-rose-500/35',
+    hexActive: 'bg-rose-500/40 ring-1 ring-inset ring-rose-600/70',
   },
   {
     box: 'border-violet-500/30 bg-violet-500/10',
     boxActive: 'border-violet-600 bg-violet-500/20 shadow-sm shadow-violet-500/20',
-    hex: 'border-violet-500/40 bg-violet-500/20',
-    hexActive: 'border-violet-600 bg-violet-500/40',
+    hex: 'bg-violet-500/20 ring-1 ring-inset ring-violet-500/35',
+    hexActive: 'bg-violet-500/40 ring-1 ring-inset ring-violet-600/70',
   },
   {
     box: 'border-cyan-500/30 bg-cyan-500/10',
     boxActive: 'border-cyan-600 bg-cyan-500/20 shadow-sm shadow-cyan-500/20',
-    hex: 'border-cyan-500/40 bg-cyan-500/20',
-    hexActive: 'border-cyan-600 bg-cyan-500/40',
+    hex: 'bg-cyan-500/20 ring-1 ring-inset ring-cyan-500/35',
+    hexActive: 'bg-cyan-500/40 ring-1 ring-inset ring-cyan-600/70',
   },
   {
     box: 'border-lime-500/30 bg-lime-500/10',
     boxActive: 'border-lime-600 bg-lime-500/20 shadow-sm shadow-lime-500/20',
-    hex: 'border-lime-500/40 bg-lime-500/20',
-    hexActive: 'border-lime-600 bg-lime-500/40',
+    hex: 'bg-lime-500/20 ring-1 ring-inset ring-lime-500/35',
+    hexActive: 'bg-lime-500/40 ring-1 ring-inset ring-lime-600/70',
   },
   {
     box: 'border-fuchsia-500/30 bg-fuchsia-500/10',
     boxActive: 'border-fuchsia-600 bg-fuchsia-500/20 shadow-sm shadow-fuchsia-500/20',
-    hex: 'border-fuchsia-500/40 bg-fuchsia-500/20',
-    hexActive: 'border-fuchsia-600 bg-fuchsia-500/40',
+    hex: 'bg-fuchsia-500/20 ring-1 ring-inset ring-fuchsia-500/35',
+    hexActive: 'bg-fuchsia-500/40 ring-1 ring-inset ring-fuchsia-600/70',
   },
 ];
 
@@ -246,6 +246,26 @@ function buildByteOwners(totalBytes: number, fields: PacketByteField[]) {
   return owners;
 }
 
+function buildByteRuns(bytes: string[], owners: Array<string | null>) {
+  const runs: Array<{ fieldId: string | null; text: string }> = [];
+
+  for (let index = 0; index < bytes.length; index += 1) {
+    const fieldId = owners[index];
+    const lastRun = runs[runs.length - 1];
+    if (lastRun && lastRun.fieldId === fieldId) {
+      lastRun.text += ` ${bytes[index]}`;
+      continue;
+    }
+
+    runs.push({
+      fieldId,
+      text: bytes[index],
+    });
+  }
+
+  return runs;
+}
+
 function CompactMetaCard({
   label,
   primary,
@@ -280,36 +300,61 @@ function FullPacketHex({
   onHoverField: (fieldId: string | null) => void;
 }) {
   const normalized = packetHex.toUpperCase();
-  const bytes = normalized.match(/.{1,2}/g) ?? [];
+  const bytes = useMemo(() => normalized.match(/.{1,2}/g) ?? [], [normalized]);
   const byteOwners = useMemo(() => buildByteOwners(bytes.length, fields), [bytes.length, fields]);
+  const byteRuns = useMemo(() => buildByteRuns(bytes, byteOwners), [byteOwners, bytes]);
 
   return (
-    <div className="rounded-lg border border-border/70 bg-muted/20 p-1.5 sm:p-2">
-      <div className="flex flex-wrap gap-1 font-mono text-[15px]">
-        {bytes.map((byte, byteIndex) => {
-          const fieldId = byteOwners[byteIndex];
-          const palette = fieldId ? colorMap.get(fieldId) : null;
-          const active = fieldId !== null && hoveredFieldId === fieldId;
-          return (
+    <div className="font-mono text-[15px] leading-7 text-foreground">
+      {byteRuns.map((run, index) => {
+        const fieldId = run.fieldId;
+        const palette = fieldId ? colorMap.get(fieldId) : null;
+        const active = fieldId !== null && hoveredFieldId === fieldId;
+        return (
+          <span key={`${fieldId ?? 'plain'}-${index}`}>
             <span
-              key={byteIndex}
               onMouseEnter={() => onHoverField(fieldId)}
               onMouseLeave={() => onHoverField(null)}
               className={cn(
-                'rounded border px-1.5 py-1 leading-none transition-colors',
-                palette
-                  ? active
-                    ? palette.hexActive
-                    : palette.hex
-                  : 'border-border/70 bg-background/70 text-foreground'
+                'inline rounded-sm px-0.5 py-0.5 transition-colors',
+                palette ? (active ? palette.hexActive : palette.hex) : ''
               )}
             >
-              {byte}
+              {run.text}
             </span>
-          );
-        })}
-      </div>
+            {index < byteRuns.length - 1 ? ' ' : ''}
+          </span>
+        );
+      })}
     </div>
+  );
+}
+
+function renderFieldValue(field: PacketByteField) {
+  if (field.name !== 'Path Data') {
+    return field.value.toUpperCase();
+  }
+
+  const parts = field.value
+    .toUpperCase()
+    .split(' → ')
+    .filter((part) => part.length > 0);
+
+  if (parts.length <= 1) {
+    return field.value.toUpperCase();
+  }
+
+  return (
+    <span className="inline-flex flex-wrap justify-start gap-x-1 sm:justify-end">
+      {parts.map((part, index) => {
+        const isLast = index === parts.length - 1;
+        return (
+          <span key={`${field.id}-${part}-${index}`} className="whitespace-nowrap">
+            {isLast ? part : `${part} →`}
+          </span>
+        );
+      })}
+    </span>
   );
 }
 
@@ -338,8 +383,13 @@ function FieldBox({
           <div className="text-base font-semibold leading-tight text-foreground">{field.name}</div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">{formatByteRange(field)}</div>
         </div>
-        <div className="w-full break-all font-mono text-sm leading-5 text-foreground sm:max-w-[14rem] sm:text-right">
-          {field.value.toUpperCase()}
+        <div
+          className={cn(
+            'w-full font-mono text-sm leading-5 text-foreground sm:max-w-[14rem] sm:text-right',
+            field.name === 'Path Data' ? 'break-normal' : 'break-all'
+          )}
+        >
+          {renderFieldValue(field)}
         </div>
       </div>
 
