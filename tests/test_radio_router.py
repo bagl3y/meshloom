@@ -13,6 +13,7 @@ from app.models import Contact
 from app.radio import RadioManager, radio_manager
 from app.routers.radio import (
     PrivateKeyUpdate,
+    RadioAdvertiseRequest,
     RadioConfigResponse,
     RadioConfigUpdate,
     RadioDiscoveryRequest,
@@ -599,13 +600,50 @@ class TestAdvertise:
         assert exc.value.status_code == 500
 
     @pytest.mark.asyncio
+    async def test_defaults_to_flood_mode(self):
+        radio_manager._meshcore = MagicMock()
+        with (
+            patch("app.routers.radio.require_connected"),
+            patch(
+                "app.routers.radio.do_send_advertisement",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_send,
+        ):
+            result = await send_advertisement()
+
+        assert result == {"status": "ok"}
+        mock_send.assert_awaited_once()
+        assert mock_send.await_args.kwargs["force"] is True
+        assert mock_send.await_args.kwargs["mode"] == "flood"
+
+    @pytest.mark.asyncio
+    async def test_accepts_zero_hop_mode(self):
+        radio_manager._meshcore = MagicMock()
+        with (
+            patch("app.routers.radio.require_connected"),
+            patch(
+                "app.routers.radio.do_send_advertisement",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_send,
+        ):
+            result = await send_advertisement(RadioAdvertiseRequest(mode="zero_hop"))
+
+        assert result == {"status": "ok"}
+        mock_send.assert_awaited_once()
+        assert mock_send.await_args.kwargs["force"] is True
+        assert mock_send.await_args.kwargs["mode"] == "zero_hop"
+
+    @pytest.mark.asyncio
     async def test_concurrent_advertise_calls_are_serialized(self):
         active = 0
         max_active = 0
 
-        async def fake_send(mc, *, force: bool):
+        async def fake_send(mc, *, force: bool, mode: str):
             nonlocal active, max_active
             assert force is True
+            assert mode == "flood"
             active += 1
             max_active = max(max_active, active)
             await asyncio.sleep(0.05)

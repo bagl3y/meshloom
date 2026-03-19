@@ -15,6 +15,7 @@ import type {
   MessagesAroundResponse,
   MigratePreferencesRequest,
   MigratePreferencesResponse,
+  RadioAdvertMode,
   RadioConfig,
   RadioConfigUpdate,
   RadioDiscoveryResponse,
@@ -95,9 +96,10 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ private_key: privateKey }),
     }),
-  sendAdvertisement: () =>
+  sendAdvertisement: (mode: RadioAdvertMode = 'flood') =>
     fetchJson<{ status: string }>('/radio/advertise', {
       method: 'POST',
+      body: JSON.stringify({ mode }),
     }),
   discoverMesh: (target: RadioDiscoveryTarget) =>
     fetchJson<RadioDiscoveryResponse>('/radio/discover', {

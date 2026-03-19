@@ -14,6 +14,7 @@ import logging
 import math
 import time
 from contextlib import asynccontextmanager
+from typing import Literal
 
 from meshcore import EventType, MeshCore
 
@@ -36,6 +37,8 @@ from app.websocket import broadcast_error, broadcast_event
 logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_CHANNELS = 40
+
+AdvertMode = Literal["flood", "zero_hop"]
 
 
 def _contact_sync_debug_fields(contact: Contact) -> dict[str, object]:
@@ -686,7 +689,12 @@ async def stop_message_polling():
         logger.info("Stopped periodic message polling")
 
 
-async def send_advertisement(mc: MeshCore, *, force: bool = False) -> bool:
+async def send_advertisement(
+    mc: MeshCore,
+    *,
+    force: bool = False,
+    mode: AdvertMode = "flood",
+) -> bool:
     """Send an advertisement to announce presence on the mesh.
 
     Respects the configured advert_interval - won't send if not enough time
@@ -695,11 +703,15 @@ async def send_advertisement(mc: MeshCore, *, force: bool = False) -> bool:
     Args:
         mc: The MeshCore instance to use for the advertisement.
         force: If True, send immediately regardless of interval.
+        mode: Advertisement mode. Flood adverts use the persisted flood-advert
+            throttle state; zero-hop adverts currently send immediately.
 
     Returns True if successful, False otherwise (including if throttled).
     """
-    # Check if enough time has elapsed (unless forced)
-    if not force:
+    use_flood = mode == "flood"
+
+    # Only flood adverts currently participate in persisted throttle state.
+    if use_flood and not force:
         settings = await AppSettingsRepository.get()
         interval = settings.advert_interval
         last_time = settings.last_advert_time
@@ -726,18 +738,19 @@ async def send_advertisement(mc: MeshCore, *, force: bool = False) -> bool:
             return False
 
     try:
-        result = await mc.commands.send_advert(flood=True)
+        result = await mc.commands.send_advert(flood=use_flood)
         if result.type == EventType.OK:
-            # Update last_advert_time in database
-            now = int(time.time())
-            await AppSettingsRepository.update(last_advert_time=now)
-            logger.info("Advertisement sent successfully")
+            if use_flood:
+                # Track flood advert timing for periodic/startup throttling.
+                now = int(time.time())
+                await AppSettingsRepository.update(last_advert_time=now)
+            logger.info("%s advertisement sent successfully", mode.replace("_", "-"))
             return True
         else:
-            logger.warning("Failed to send advertisement: %s", result.payload)
+            logger.warning("Failed to send %s advertisement: %s", mode, result.payload)
             return False
     except Exception as e:
-        logger.warning("Error sending advertisement: %s", e, exc_info=True)
+        logger.warning("Error sending %s advertisement: %s", mode, e, exc_info=True)
         return False
 
 

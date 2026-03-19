@@ -45,6 +45,8 @@ export interface RadioDiscoveryResponse {
   results: RadioDiscoveryResult[];
 }
 
+export type RadioAdvertMode = 'flood' | 'zero_hop';
+
 export interface FanoutStatusEntry {
   name: string;
   type: string;

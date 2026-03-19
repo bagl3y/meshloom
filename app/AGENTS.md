@@ -168,7 +168,7 @@ app/
 - `GET /radio/config` — includes `path_hash_mode`, `path_hash_mode_supported`, and advert-location on/off
 - `PATCH /radio/config` — may update `path_hash_mode` (`0..2`) when firmware supports it
 - `PUT /radio/private-key`
-- `POST /radio/advertise`
+- `POST /radio/advertise` — manual advert send; request body may set `mode` to `flood` or `zero_hop` (defaults to `flood`)
 - `POST /radio/discover` — short mesh discovery sweep for nearby repeaters/sensors
 - `POST /radio/disconnect`
 - `POST /radio/reboot`

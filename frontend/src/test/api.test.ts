@@ -305,7 +305,7 @@ describe('fetchJson (via api methods)', () => {
       expect(options.method).toBe('DELETE');
     });
 
-    it('sends POST without body for sendAdvertisement', async () => {
+    it('sends POST with flood mode for sendAdvertisement', async () => {
       installMockFetch();
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -317,7 +317,22 @@ describe('fetchJson (via api methods)', () => {
       const [url, options] = mockFetch.mock.calls[0];
       expect(url).toBe('/api/radio/advertise');
       expect(options.method).toBe('POST');
-      expect(options.body).toBeUndefined();
+      expect(options.body).toBe(JSON.stringify({ mode: 'flood' }));
+    });
+
+    it('sends POST with zero-hop mode for sendAdvertisement', async () => {
+      installMockFetch();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ status: 'ok' }),
+      });
+
+      await api.sendAdvertisement('zero_hop');
+
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).toBe('/api/radio/advertise');
+      expect(options.method).toBe('POST');
+      expect(options.body).toBe(JSON.stringify({ mode: 'zero_hop' }));
     });
   });
 

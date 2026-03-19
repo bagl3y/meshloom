@@ -6,6 +6,7 @@ import type {
   AppSettings,
   AppSettingsUpdate,
   HealthStatus,
+  RadioAdvertMode,
   RadioConfig,
   RadioConfigUpdate,
   RadioDiscoveryResponse,
@@ -74,6 +75,7 @@ function renderModal(overrides?: {
   onReboot?: () => Promise<void>;
   onDisconnect?: () => Promise<void>;
   onReconnect?: () => Promise<void>;
+  onAdvertise?: (mode: RadioAdvertMode) => Promise<void>;
   meshDiscovery?: RadioDiscoveryResponse | null;
   meshDiscoveryLoadingTarget?: RadioDiscoveryTarget | null;
   onDiscoverMesh?: (target: RadioDiscoveryTarget) => Promise<void>;
@@ -93,6 +95,7 @@ function renderModal(overrides?: {
   const onReboot = overrides?.onReboot ?? vi.fn(async () => {});
   const onDisconnect = overrides?.onDisconnect ?? vi.fn(async () => {});
   const onReconnect = overrides?.onReconnect ?? vi.fn(async () => {});
+  const onAdvertise = overrides?.onAdvertise ?? vi.fn(async (_mode: RadioAdvertMode) => {});
   const onDiscoverMesh = overrides?.onDiscoverMesh ?? vi.fn(async () => {});
 
   const commonProps = {
@@ -108,7 +111,7 @@ function renderModal(overrides?: {
     onReboot,
     onDisconnect,
     onReconnect,
-    onAdvertise: vi.fn(async () => {}),
+    onAdvertise,
     meshDiscovery: overrides?.meshDiscovery ?? null,
     meshDiscoveryLoadingTarget: overrides?.meshDiscoveryLoadingTarget ?? null,
     onDiscoverMesh,
@@ -135,6 +138,7 @@ function renderModal(overrides?: {
     onReboot,
     onDisconnect,
     onReconnect,
+    onAdvertise,
     onDiscoverMesh,
     view,
   };
@@ -204,6 +208,22 @@ describe('SettingsModal', () => {
     openRadioSection();
 
     expect(screen.getByText(/Configured radio contact capacity/i)).toBeInTheDocument();
+  });
+
+  it('renders flood and zero-hop advert buttons and passes the selected mode', async () => {
+    const onAdvertise = vi.fn(async (_mode: RadioAdvertMode) => {});
+    renderModal({ onAdvertise });
+    openRadioSection();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send Flood Advertisement' }));
+    await waitFor(() => {
+      expect(onAdvertise).toHaveBeenCalledWith('flood');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send Zero-Hop Advertisement' }));
+    await waitFor(() => {
+      expect(onAdvertise).toHaveBeenCalledWith('zero_hop');
+    });
   });
 
   it('shows radio-unavailable message when config is null', () => {

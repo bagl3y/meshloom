@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/radio", tags=["radio"])
 
 AdvertLocationSource = Literal["off", "current"]
+RadioAdvertMode = Literal["flood", "zero_hop"]
 DiscoveryNodeType: TypeAlias = Literal["repeater", "sensor"]
 DISCOVERY_WINDOW_SECONDS = 8.0
 _DISCOVERY_TARGET_BITS = {
@@ -102,6 +103,13 @@ class RadioConfigUpdate(BaseModel):
 
 class PrivateKeyUpdate(BaseModel):
     private_key: str = Field(description="Private key as hex string")
+
+
+class RadioAdvertiseRequest(BaseModel):
+    mode: RadioAdvertMode = Field(
+        default="flood",
+        description="Advertisement mode: flood through repeaters or zero-hop local only",
+    )
 
 
 def _monotonic() -> float:
@@ -266,24 +274,25 @@ async def set_private_key(update: PrivateKeyUpdate) -> dict:
 
 
 @router.post("/advertise")
-async def send_advertisement() -> dict:
-    """Send a flood advertisement to announce presence on the mesh.
+async def send_advertisement(request: RadioAdvertiseRequest | None = None) -> dict:
+    """Send an advertisement to announce presence on the mesh.
 
-    Manual advertisement requests always send immediately, updating the
-    last_advert_time which affects when the next periodic/startup advert
-    can occur.
+    Manual advertisement requests always send immediately. Flood adverts update
+    the shared flood-advert timing state used by periodic/startup advertising;
+    zero-hop adverts currently do not.
 
     Returns:
         status: "ok" if sent successfully
     """
     require_connected()
+    mode: RadioAdvertMode = request.mode if request is not None else "flood"
 
-    logger.info("Sending flood advertisement")
+    logger.info("Sending %s advertisement", mode.replace("_", "-"))
     async with radio_manager.radio_operation("manual_advertisement") as mc:
-        success = await do_send_advertisement(mc, force=True)
+        success = await do_send_advertisement(mc, force=True, mode=mode)
 
     if not success:
-        raise HTTPException(status_code=500, detail="Failed to send advertisement")
+        raise HTTPException(status_code=500, detail=f"Failed to send {mode} advertisement")
 
     return {"status": "ok"}
 

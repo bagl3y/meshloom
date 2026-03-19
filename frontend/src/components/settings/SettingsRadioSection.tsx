@@ -11,6 +11,7 @@ import type {
   AppSettings,
   AppSettingsUpdate,
   HealthStatus,
+  RadioAdvertMode,
   RadioConfig,
   RadioConfigUpdate,
   RadioDiscoveryResponse,
@@ -45,7 +46,7 @@ export function SettingsRadioSection({
   onReboot: () => Promise<void>;
   onDisconnect: () => Promise<void>;
   onReconnect: () => Promise<void>;
-  onAdvertise: () => Promise<void>;
+  onAdvertise: (mode: RadioAdvertMode) => Promise<void>;
   meshDiscovery: RadioDiscoveryResponse | null;
   meshDiscoveryLoadingTarget: RadioDiscoveryTarget | null;
   onDiscoverMesh: (target: RadioDiscoveryTarget) => Promise<void>;
@@ -82,7 +83,7 @@ export function SettingsRadioSection({
   const [floodError, setFloodError] = useState<string | null>(null);
 
   // Advertise state
-  const [advertising, setAdvertising] = useState(false);
+  const [advertisingMode, setAdvertisingMode] = useState<RadioAdvertMode | null>(null);
   const [discoverError, setDiscoverError] = useState<string | null>(null);
   const [connectionBusy, setConnectionBusy] = useState(false);
 
@@ -295,12 +296,12 @@ export function SettingsRadioSection({
     }
   };
 
-  const handleAdvertise = async () => {
-    setAdvertising(true);
+  const handleAdvertise = async (mode: RadioAdvertMode) => {
+    setAdvertisingMode(mode);
     try {
-      await onAdvertise();
+      await onAdvertise(mode);
     } finally {
-      setAdvertising(false);
+      setAdvertisingMode(null);
     }
   };
 
@@ -742,15 +743,25 @@ export function SettingsRadioSection({
       <div className="space-y-2">
         <Label>Send Advertisement</Label>
         <p className="text-xs text-muted-foreground">
-          Send a flood advertisement to announce your presence on the mesh network.
+          Flood adverts propagate through repeaters. Zero-hop adverts are local-only and use less
+          airtime.
         </p>
-        <Button
-          onClick={handleAdvertise}
-          disabled={advertising || !health?.radio_connected}
-          className="w-full bg-warning hover:bg-warning/90 text-warning-foreground"
-        >
-          {advertising ? 'Sending...' : 'Send Advertisement'}
-        </Button>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <Button
+            onClick={() => handleAdvertise('flood')}
+            disabled={advertisingMode !== null || !health?.radio_connected}
+            className="w-full bg-warning hover:bg-warning/90 text-warning-foreground"
+          >
+            {advertisingMode === 'flood' ? 'Sending...' : 'Send Flood Advertisement'}
+          </Button>
+          <Button
+            onClick={() => handleAdvertise('zero_hop')}
+            disabled={advertisingMode !== null || !health?.radio_connected}
+            className="w-full"
+          >
+            {advertisingMode === 'zero_hop' ? 'Sending...' : 'Send Zero-Hop Advertisement'}
+          </Button>
+        </div>
         {!health?.radio_connected && (
           <p className="text-sm text-destructive">Radio not connected</p>
         )}

@@ -4,6 +4,7 @@ import { takePrefetchOrFetch } from '../prefetch';
 import { toast } from '../components/ui/sonner';
 import type {
   HealthStatus,
+  RadioAdvertMode,
   RadioConfig,
   RadioConfigUpdate,
   RadioDiscoveryResponse,
@@ -93,13 +94,14 @@ export function useRadioControl() {
     }
   }, [fetchConfig]);
 
-  const handleAdvertise = useCallback(async () => {
+  const handleAdvertise = useCallback(async (mode: RadioAdvertMode = 'flood') => {
     try {
-      await api.sendAdvertisement();
-      toast.success('Advertisement sent');
+      await api.sendAdvertisement(mode);
+      toast.success(mode === 'zero_hop' ? 'Zero-hop advertisement sent' : 'Advertisement sent');
     } catch (err) {
-      console.error('Failed to send advertisement:', err);
-      toast.error('Failed to send advertisement', {
+      const label = mode === 'zero_hop' ? 'zero-hop advertisement' : 'advertisement';
+      console.error(`Failed to send ${label}:`, err);
+      toast.error(`Failed to send ${label}`, {
         description: err instanceof Error ? err.message : 'Check radio connection',
       });
     }

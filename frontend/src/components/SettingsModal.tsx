@@ -3,6 +3,7 @@ import type {
   AppSettings,
   AppSettingsUpdate,
   HealthStatus,
+  RadioAdvertMode,
   RadioConfig,
   RadioConfigUpdate,
   RadioDiscoveryResponse,
@@ -35,7 +36,7 @@ interface SettingsModalBaseProps {
   onReboot: () => Promise<void>;
   onDisconnect: () => Promise<void>;
   onReconnect: () => Promise<void>;
-  onAdvertise: () => Promise<void>;
+  onAdvertise: (mode: RadioAdvertMode) => Promise<void>;
   meshDiscovery: RadioDiscoveryResponse | null;
   meshDiscoveryLoadingTarget: RadioDiscoveryTarget | null;
   onDiscoverMesh: (target: RadioDiscoveryTarget) => Promise<void>;
