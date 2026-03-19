@@ -615,6 +615,82 @@ class TestDualPathDedup:
         assert any(p.path == "bbcc" for p in msg.paths)
 
     @pytest.mark.asyncio
+    async def test_incoming_duplicate_does_not_reconcile_onto_matching_outgoing_dm(
+        self, test_db, captured_broadcasts
+    ):
+        """Incoming DM duplicates must merge onto the incoming row, not a sent row."""
+        from app.event_handlers import on_contact_message
+        from app.packet_processor import create_dm_message_from_decrypted
+
+        await ContactRepository.upsert(
+            {
+                "public_key": CONTACT_PUB.lower(),
+                "name": "TestContact",
+                "type": 1,
+                "last_seen": SENDER_TIMESTAMP,
+                "last_contacted": SENDER_TIMESTAMP,
+                "first_seen": SENDER_TIMESTAMP,
+                "on_radio": False,
+                "out_path_hash_mode": 0,
+            }
+        )
+
+        outgoing_id = await MessageRepository.create(
+            msg_type="PRIV",
+            text="Mirror text",
+            conversation_key=CONTACT_PUB.lower(),
+            sender_timestamp=SENDER_TIMESTAMP,
+            received_at=SENDER_TIMESTAMP - 1,
+            outgoing=True,
+        )
+        assert outgoing_id is not None
+
+        pkt_id, _ = await RawPacketRepository.create(b"incoming_primary", SENDER_TIMESTAMP)
+        decrypted = DecryptedDirectMessage(
+            timestamp=SENDER_TIMESTAMP,
+            flags=0,
+            message="Mirror text",
+            dest_hash="fa",
+            src_hash="a1",
+        )
+
+        broadcasts, mock_broadcast = captured_broadcasts
+
+        with patch("app.packet_processor.broadcast_event", mock_broadcast):
+            incoming_id = await create_dm_message_from_decrypted(
+                packet_id=pkt_id,
+                decrypted=decrypted,
+                their_public_key=CONTACT_PUB,
+                our_public_key=OUR_PUB,
+                received_at=SENDER_TIMESTAMP,
+                outgoing=False,
+            )
+
+        assert incoming_id is not None
+        broadcasts.clear()
+
+        mock_event = MagicMock()
+        mock_event.payload = {
+            "public_key": CONTACT_PUB,
+            "text": "Mirror text",
+            "txt_type": 0,
+            "sender_timestamp": SENDER_TIMESTAMP,
+            "path": "bbcc",
+            "path_len": 2,
+        }
+
+        with patch("app.event_handlers.broadcast_event", mock_broadcast):
+            await on_contact_message(mock_event)
+
+        incoming_msg = await MessageRepository.get_by_id(incoming_id)
+        outgoing_msg = await MessageRepository.get_by_id(outgoing_id)
+        assert incoming_msg is not None
+        assert outgoing_msg is not None
+        assert incoming_msg.paths is not None
+        assert any(p.path == "bbcc" for p in incoming_msg.paths)
+        assert outgoing_msg.paths is None
+
+    @pytest.mark.asyncio
     async def test_fallback_path_duplicate_reconciles_path_without_new_row(
         self, test_db, captured_broadcasts
     ):

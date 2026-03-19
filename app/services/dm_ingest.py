@@ -152,6 +152,7 @@ async def _store_direct_message(
                 conversation_key=conversation_key,
                 text=text,
                 sender_timestamp=sender_timestamp,
+                outgoing=outgoing,
             )
             if existing_msg is not None:
                 await reconcile_duplicate_message(
@@ -185,6 +186,7 @@ async def _store_direct_message(
                 conversation_key=conversation_key,
                 text=text,
                 sender_timestamp=sender_timestamp,
+                outgoing=outgoing,
                 path=path,
                 received_at=received_at,
                 path_len=path_len,

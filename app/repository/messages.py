@@ -66,9 +66,10 @@ class MessageRepository:
     ) -> int | None:
         """Create a message, returning the ID or None if duplicate.
 
-        Uses INSERT OR IGNORE to handle the UNIQUE constraint on
-        (type, conversation_key, text, sender_timestamp). This prevents
-        duplicate messages when the same message arrives via multiple RF paths.
+        Uses INSERT OR IGNORE to handle the message dedup indexes:
+        - channel messages dedupe by content/timestamp for echo reconciliation
+        - incoming direct messages dedupe by conversation/text/timestamp so
+          raw-packet and fallback observations merge onto one row
 
         The path parameter is converted to the paths JSON array format.
         """
@@ -559,16 +560,20 @@ class MessageRepository:
         conversation_key: str,
         text: str,
         sender_timestamp: int | None,
+        outgoing: bool | None = None,
     ) -> "Message | None":
         """Look up a message by its unique content fields."""
-        cursor = await db.conn.execute(
-            """
+        query = """
             SELECT * FROM messages
             WHERE type = ? AND conversation_key = ? AND text = ?
               AND (sender_timestamp = ? OR (sender_timestamp IS NULL AND ? IS NULL))
-            """,
-            (msg_type, conversation_key, text, sender_timestamp, sender_timestamp),
-        )
+        """
+        params: list[Any] = [msg_type, conversation_key, text, sender_timestamp, sender_timestamp]
+        if outgoing is not None:
+            query += " AND outgoing = ?"
+            params.append(1 if outgoing else 0)
+        query += " ORDER BY id ASC"
+        cursor = await db.conn.execute(query, params)
         row = await cursor.fetchone()
         if not row:
             return None

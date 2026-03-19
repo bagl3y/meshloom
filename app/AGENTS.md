@@ -126,7 +126,7 @@ app/
 ### Echo/repeat dedup
 
 - Message uniqueness: `(type, conversation_key, text, sender_timestamp)`.
-- Duplicate insert is treated as an echo/repeat: the new path (if any) is appended, and the ACK count is incremented only for outgoing channel messages. Incoming repeats and direct-message duplicates may still add path data, but DM delivery state advances only from real ACK events.
+- Duplicate insert is treated as an echo/repeat: the new path (if any) is appended, and the ACK count is incremented only for outgoing channel messages. Incoming direct messages with the same conversation/text/sender timestamp also collapse onto one stored row, with later observations merging path data instead of creating a second DM.
 
 ### Raw packet dedup policy
 
@@ -364,7 +364,7 @@ tests/
 
 The MeshCore radio protocol encodes `sender_timestamp` as a 4-byte little-endian integer (Unix seconds). This is a firmware-level wire format — the radio, the Python library (`commands/messaging.py`), and the decoder (`decoder.py`) all read/write exactly 4 bytes. Millisecond Unix timestamps would overflow 4 bytes, so higher resolution is not possible without a firmware change.
 
-**Consequence:** Channel-message dedup still operates at 1-second granularity because the radio protocol only provides second-resolution `sender_timestamp`. Do not attempt to fix this by switching to millisecond timestamps — it will break echo dedup (the echo's 4-byte timestamp won't match the stored value) and overflow `to_bytes(4, "little")`. Direct messages no longer share that channel dedup index; they are deduplicated by raw-packet identity instead so legitimate same-text same-second DMs can coexist.
+**Consequence:** Message dedup still operates at 1-second granularity because the radio protocol only provides second-resolution `sender_timestamp`. Do not attempt to fix this by switching to millisecond timestamps — it will break echo dedup (the echo's 4-byte timestamp won't match the stored value) and overflow `to_bytes(4, "little")`. Incoming DMs now share the same second-resolution content identity tradeoff as channel echoes: same-contact same-text same-second observations collapse onto one stored row.
 
 ### Outgoing DM echoes remain undecrypted
 

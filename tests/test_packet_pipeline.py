@@ -944,10 +944,10 @@ class TestCreateDMMessageFromDecrypted:
         assert len(message_broadcasts) == 1
 
     @pytest.mark.asyncio
-    async def test_allows_same_text_same_second_dms_from_distinct_packets(
+    async def test_dedupes_same_text_same_second_incoming_dms_from_distinct_packets(
         self, test_db, captured_broadcasts
     ):
-        """Distinct DM packets with the same text/timestamp both store."""
+        """Distinct incoming DM observations with the same text/timestamp merge."""
         from app.decoder import DecryptedDirectMessage
         from app.packet_processor import create_dm_message_from_decrypted
 
@@ -983,16 +983,15 @@ class TestCreateDMMessageFromDecrypted:
             )
 
         assert msg_id_1 is not None
-        assert msg_id_2 is not None
-        assert msg_id_1 != msg_id_2
+        assert msg_id_2 is None
 
         messages = await MessageRepository.get_all(
             msg_type="PRIV", conversation_key=self.A1B2C3_PUB.lower(), limit=10
         )
-        assert len(messages) == 2
+        assert len(messages) == 1
 
         message_broadcasts = [b for b in broadcasts if b["type"] == "message"]
-        assert len(message_broadcasts) == 2
+        assert len(message_broadcasts) == 1
 
     @pytest.mark.asyncio
     async def test_links_raw_packet_to_dm_message(self, test_db, captured_broadcasts):

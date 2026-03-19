@@ -50,10 +50,9 @@ CREATE TABLE IF NOT EXISTS messages (
     acked INTEGER DEFAULT 0,
     sender_name TEXT,
     sender_key TEXT
-    -- Deduplication: channel echoes/repeats use a channel-only unique index on
-    -- identical conversation/text/timestamp. Direct messages are deduplicated
-    -- separately via raw-packet linkage so legitimate same-text same-second DMs
-    -- can coexist.
+    -- Deduplication: channel echoes/repeats use a content/time unique index so
+    -- duplicate observations reconcile onto a single stored row. Legacy
+    -- databases may also gain an incoming-DM content index via migration 44.
     -- Enforced via idx_messages_dedup_null_safe (unique index) rather than a table constraint
     -- to avoid the storage overhead of SQLite's autoindex duplicating every message text.
 );
@@ -97,6 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_raw_packets_message_id ON raw_packets(message_id)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_packets_payload_hash ON raw_packets(payload_hash);
 CREATE INDEX IF NOT EXISTS idx_contacts_on_radio ON contacts(on_radio);
 -- idx_messages_sender_key is created by migration 25 (after adding the sender_key column)
+-- idx_messages_incoming_priv_dedup is created by migration 44 after legacy rows are reconciled
 CREATE INDEX IF NOT EXISTS idx_contact_advert_paths_recent
     ON contact_advert_paths(public_key, last_seen DESC);
 CREATE INDEX IF NOT EXISTS idx_contact_name_history_key

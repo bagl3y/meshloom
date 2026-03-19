@@ -172,6 +172,47 @@ class TestMessageRepositoryGetByContent:
         assert result.outgoing is True
 
     @pytest.mark.asyncio
+    async def test_get_by_content_can_filter_incoming_vs_outgoing(self, test_db):
+        """Outgoing filter keeps incoming duplicate reconciliation on the right row."""
+        conversation_key = "abc123abc123abc123abc123abc12300"
+        incoming_id = await _create_message(
+            test_db,
+            msg_type="PRIV",
+            conversation_key=conversation_key,
+            text="Same text",
+            sender_timestamp=1700000000,
+            outgoing=False,
+        )
+        outgoing_id = await _create_message(
+            test_db,
+            msg_type="PRIV",
+            conversation_key=conversation_key,
+            text="Same text",
+            sender_timestamp=1700000000,
+            outgoing=True,
+        )
+
+        incoming = await MessageRepository.get_by_content(
+            msg_type="PRIV",
+            conversation_key=conversation_key,
+            text="Same text",
+            sender_timestamp=1700000000,
+            outgoing=False,
+        )
+        outgoing = await MessageRepository.get_by_content(
+            msg_type="PRIV",
+            conversation_key=conversation_key,
+            text="Same text",
+            sender_timestamp=1700000000,
+            outgoing=True,
+        )
+
+        assert incoming is not None
+        assert outgoing is not None
+        assert incoming.id == incoming_id
+        assert outgoing.id == outgoing_id
+
+    @pytest.mark.asyncio
     async def test_get_by_content_distinguishes_by_timestamp(self, test_db):
         """Different sender_timestamps are distinguished correctly."""
         await _create_message(test_db, text="Same text", sender_timestamp=1700000000)

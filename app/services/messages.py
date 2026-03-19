@@ -171,6 +171,7 @@ async def handle_duplicate_message(
     conversation_key: str,
     text: str,
     sender_timestamp: int,
+    outgoing: bool | None = None,
     path: str | None,
     received_at: int,
     path_len: int | None = None,
@@ -182,6 +183,7 @@ async def handle_duplicate_message(
         conversation_key=conversation_key,
         text=text,
         sender_timestamp=sender_timestamp,
+        outgoing=outgoing,
     )
     if not existing_msg:
         label = "message" if msg_type == "CHAN" else "DM"
@@ -246,6 +248,7 @@ async def create_message_from_decrypted(
             conversation_key=channel_key_normalized,
             text=text,
             sender_timestamp=timestamp,
+            outgoing=None,
             path=path,
             received_at=received,
             path_len=path_len,
@@ -355,6 +358,7 @@ async def create_fallback_channel_message(
             conversation_key=conversation_key_normalized,
             text=text,
             sender_timestamp=sender_timestamp,
+            outgoing=None,
             path=path,
             received_at=received_at,
             path_len=path_len,
