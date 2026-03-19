@@ -257,14 +257,6 @@ export function AppShell({
       </div>
 
       <div
-        ref={(el) => {
-          if (showCracker && el) {
-            const focusable = el.querySelector<HTMLElement>('input, button:not([disabled])');
-            if (focusable) {
-              setTimeout(() => focusable.focus(), 210);
-            }
-          }
-        }}
         className={cn(
           'border-t border-border bg-background transition-all duration-200 overflow-hidden',
           showCracker ? 'h-[275px]' : 'h-0'
