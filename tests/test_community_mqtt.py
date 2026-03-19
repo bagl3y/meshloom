@@ -1215,17 +1215,18 @@ class TestBuildRadioInfo:
 
 
 class TestGetClientVersion:
-    def test_returns_remoteterm_prefix(self):
-        """Should return 'RemoteTerm ...' string."""
+    def test_returns_plain_version(self):
+        """Should return a bare version string with no product prefix."""
         result = _get_client_version()
-        assert result.startswith("RemoteTerm ")
+        assert result
+        assert "RemoteTerm" not in result
 
     def test_returns_version_from_build_helper(self):
         """Should use the shared backend build-info helper."""
         with patch("app.fanout.community_mqtt.get_app_build_info") as mock_build_info:
             mock_build_info.return_value.version = "1.2.3"
             result = _get_client_version()
-        assert result == "RemoteTerm 1.2.3"
+        assert result == "1.2.3"
 
 
 class TestPublishStatus:

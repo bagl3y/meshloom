@@ -260,8 +260,8 @@ def _build_radio_info() -> str:
 
 
 def _get_client_version() -> str:
-    """Return a client version string like ``'RemoteTerm 2.4.0'``."""
-    return f"RemoteTerm {get_app_build_info().version}"
+    """Return the app version string for community MQTT payloads."""
+    return get_app_build_info().version
 
 
 class CommunityMqttPublisher(BaseMqttPublisher):
