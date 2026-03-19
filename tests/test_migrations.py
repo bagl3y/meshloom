@@ -1201,8 +1201,8 @@ class TestMigration039:
     """Test migration 039: persist contacts.out_path_hash_mode."""
 
     @pytest.mark.asyncio
-    async def test_adds_column_and_backfills_legacy_rows(self):
-        """Pre-039 contacts get flood=-1 and legacy routed paths=0."""
+    async def test_legacy_advert_paths_do_not_become_direct_routes_after_upgrade(self):
+        """Pre-045 advert-derived last_path data is dropped from active direct-route columns."""
         conn = await aiosqlite.connect(":memory:")
         conn.row_factory = aiosqlite.Row
         try:
@@ -1259,19 +1259,19 @@ class TestMigration039:
             )
             rows = await cursor.fetchall()
             assert rows[0]["public_key"] == "aa" * 32
-            assert rows[0]["direct_path"] == ""
-            assert rows[0]["direct_path_len"] == -1
-            assert rows[0]["direct_path_hash_mode"] == -1
+            assert rows[0]["direct_path"] is None
+            assert rows[0]["direct_path_len"] is None
+            assert rows[0]["direct_path_hash_mode"] is None
             assert rows[1]["public_key"] == "bb" * 32
-            assert rows[1]["direct_path"] == "1122"
-            assert rows[1]["direct_path_len"] == 1
-            assert rows[1]["direct_path_hash_mode"] == 0
+            assert rows[1]["direct_path"] is None
+            assert rows[1]["direct_path_len"] is None
+            assert rows[1]["direct_path_hash_mode"] is None
         finally:
             await conn.close()
 
     @pytest.mark.asyncio
-    async def test_existing_valid_modes_are_preserved_when_column_already_exists(self):
-        """Migration does not clobber post-upgrade multibyte rows."""
+    async def test_legacy_out_path_hash_mode_is_not_promoted_into_direct_routes(self):
+        """Pre-045 out_path_hash_mode does not make advert paths become active direct routes."""
         conn = await aiosqlite.connect(":memory:")
         conn.row_factory = aiosqlite.Row
         try:
@@ -1324,7 +1324,7 @@ class TestMigration039:
 
             cursor = await conn.execute(
                 """
-                SELECT public_key, direct_path_hash_mode
+                SELECT public_key, direct_path, direct_path_len, direct_path_hash_mode
                 FROM contacts
                 WHERE public_key IN (?, ?)
                 ORDER BY public_key
@@ -1333,9 +1333,75 @@ class TestMigration039:
             )
             rows = await cursor.fetchall()
             assert rows[0]["public_key"] == "cc" * 32
-            assert rows[0]["direct_path_hash_mode"] == 1
+            assert rows[0]["direct_path"] is None
+            assert rows[0]["direct_path_len"] is None
+            assert rows[0]["direct_path_hash_mode"] is None
             assert rows[1]["public_key"] == "dd" * 32
-            assert rows[1]["direct_path_hash_mode"] == -1
+            assert rows[1]["direct_path"] is None
+            assert rows[1]["direct_path_len"] is None
+            assert rows[1]["direct_path_hash_mode"] is None
+        finally:
+            await conn.close()
+
+    @pytest.mark.asyncio
+    async def test_existing_direct_route_columns_are_preserved(self):
+        """Already-migrated databases keep canonical direct-route data intact."""
+        conn = await aiosqlite.connect(":memory:")
+        conn.row_factory = aiosqlite.Row
+        try:
+            await set_version(conn, 44)
+            await conn.execute("""
+                CREATE TABLE contacts (
+                    public_key TEXT PRIMARY KEY,
+                    name TEXT,
+                    type INTEGER DEFAULT 0,
+                    flags INTEGER DEFAULT 0,
+                    direct_path TEXT,
+                    direct_path_len INTEGER,
+                    direct_path_hash_mode INTEGER,
+                    direct_path_updated_at INTEGER,
+                    route_override_path TEXT,
+                    route_override_len INTEGER,
+                    route_override_hash_mode INTEGER,
+                    last_advert INTEGER,
+                    lat REAL,
+                    lon REAL,
+                    last_seen INTEGER,
+                    on_radio INTEGER DEFAULT 0,
+                    last_contacted INTEGER,
+                    first_seen INTEGER,
+                    last_read_at INTEGER
+                )
+            """)
+            await conn.execute(
+                """
+                INSERT INTO contacts (
+                    public_key, name, direct_path, direct_path_len, direct_path_hash_mode,
+                    direct_path_updated_at, last_seen
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                ("ee" * 32, "Direct", "aa00bb00", 2, 1, 123456, 123457),
+            )
+            await conn.commit()
+
+            applied = await run_migrations(conn)
+
+            assert applied == 1
+            assert await get_version(conn) == 45
+
+            cursor = await conn.execute(
+                """
+                SELECT direct_path, direct_path_len, direct_path_hash_mode, direct_path_updated_at
+                FROM contacts
+                WHERE public_key = ?
+                """,
+                ("ee" * 32,),
+            )
+            row = await cursor.fetchone()
+            assert row["direct_path"] == "aa00bb00"
+            assert row["direct_path_len"] == 2
+            assert row["direct_path_hash_mode"] == 1
+            assert row["direct_path_updated_at"] == 123456
         finally:
             await conn.close()
 

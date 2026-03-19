@@ -2738,18 +2738,12 @@ async def _migrate_045_rebuild_contacts_direct_route_columns(conn: aiosqlite.Con
 
     if "direct_path" in columns:
         select_expr["direct_path"] = "direct_path"
-    elif "last_path" in columns:
-        select_expr["direct_path"] = "last_path"
 
     if "direct_path_len" in columns:
         select_expr["direct_path_len"] = "direct_path_len"
-    elif "last_path_len" in columns:
-        select_expr["direct_path_len"] = "last_path_len"
 
     if "direct_path_hash_mode" in columns:
         select_expr["direct_path_hash_mode"] = "direct_path_hash_mode"
-    elif "out_path_hash_mode" in columns:
-        select_expr["direct_path_hash_mode"] = "out_path_hash_mode"
 
     for name in (
         "route_override_path",
