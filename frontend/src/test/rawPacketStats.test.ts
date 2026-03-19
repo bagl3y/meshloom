@@ -25,6 +25,7 @@ function createSession(
         sourceLabel: 'AA11',
         pathTokenCount: 2,
         pathSignature: '01>02',
+        hopByteWidth: 1,
       },
       {
         observationKey: 'obs-2',
@@ -38,6 +39,7 @@ function createSession(
         sourceLabel: 'BB22',
         pathTokenCount: 0,
         pathSignature: null,
+        hopByteWidth: null,
       },
       {
         observationKey: 'obs-3',
@@ -51,6 +53,7 @@ function createSession(
         sourceLabel: 'AA11',
         pathTokenCount: 1,
         pathSignature: '02',
+        hopByteWidth: 2,
       },
       {
         observationKey: 'obs-4',
@@ -64,6 +67,7 @@ function createSession(
         sourceLabel: null,
         pathTokenCount: 0,
         pathSignature: null,
+        hopByteWidth: null,
       },
     ],
     ...overrides,
@@ -86,6 +90,13 @@ describe('buildRawPacketStatsSnapshot', () => {
       expect.arrayContaining([
         expect.objectContaining({ label: 'GroupText', count: 0 }),
         expect.objectContaining({ label: 'Control', count: 0 }),
+      ])
+    );
+    expect(stats.hopByteWidthProfile).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'No path', count: 2 }),
+        expect.objectContaining({ label: '1 byte / hop', count: 1 }),
+        expect.objectContaining({ label: '2 bytes / hop', count: 1 }),
       ])
     );
     expect(stats.strongestNeighbors[0]).toMatchObject({ label: 'AA11', bestRssi: -64 });

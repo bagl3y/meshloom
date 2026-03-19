@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { RawPacketList } from './RawPacketList';
-import type { Contact, RawPacket } from '../types';
+import { RawPacketDetailModal } from './RawPacketDetailModal';
+import type { Channel, Contact, RawPacket } from '../types';
 import {
   RAW_PACKET_STATS_WINDOWS,
   buildRawPacketStatsSnapshot,
@@ -19,6 +20,7 @@ interface RawPacketFeedViewProps {
   packets: RawPacket[];
   rawPacketStatsSession: RawPacketStatsSessionState;
   contacts: Contact[];
+  channels: Channel[];
 }
 
 const WINDOW_LABELS: Record<RawPacketStatsWindow, string> = {
@@ -312,6 +314,7 @@ export function RawPacketFeedView({
   packets,
   rawPacketStatsSession,
   contacts,
+  channels,
 }: RawPacketFeedViewProps) {
   const [statsOpen, setStatsOpen] = useState(() =>
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
@@ -320,6 +323,7 @@ export function RawPacketFeedView({
   );
   const [selectedWindow, setSelectedWindow] = useState<RawPacketStatsWindow>('10m');
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+  const [selectedPacket, setSelectedPacket] = useState<RawPacket | null>(null);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -376,7 +380,7 @@ export function RawPacketFeedView({
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <div className={cn('min-h-0 min-w-0 flex-1', statsOpen && 'md:border-r md:border-border')}>
-          <RawPacketList packets={packets} />
+          <RawPacketList packets={packets} channels={channels} onPacketClick={setSelectedPacket} />
         </div>
 
         <aside
@@ -494,6 +498,12 @@ export function RawPacketFeedView({
                 />
 
                 <RankedBars
+                  title="Hop Byte Width"
+                  items={stats.hopByteWidthProfile}
+                  emptyLabel="No packets in this window yet."
+                />
+
+                <RankedBars
                   title="Signal Distribution"
                   items={stats.rssiBuckets}
                   emptyLabel="No RSSI samples in this window yet."
@@ -527,6 +537,12 @@ export function RawPacketFeedView({
           ) : null}
         </aside>
       </div>
+
+      <RawPacketDetailModal
+        packet={selectedPacket}
+        channels={channels}
+        onClose={() => setSelectedPacket(null)}
+      />
     </>
   );
 }

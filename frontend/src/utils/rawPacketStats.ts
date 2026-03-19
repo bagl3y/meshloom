@@ -51,6 +51,7 @@ export interface RawPacketStatsObservation {
   sourceLabel: string | null;
   pathTokenCount: number;
   pathSignature: string | null;
+  hopByteWidth?: number | null;
 }
 
 export interface RawPacketStatsSessionState {
@@ -97,6 +98,7 @@ export interface RawPacketStatsSnapshot {
   routeBreakdown: RankedPacketStat[];
   topPacketTypes: RankedPacketStat[];
   hopProfile: RankedPacketStat[];
+  hopByteWidthProfile: RankedPacketStat[];
   strongestNeighbors: NeighborStat[];
   mostActiveNeighbors: NeighborStat[];
   newestNeighbors: NeighborStat[];
@@ -228,6 +230,7 @@ export function summarizeRawPacketForStats(packet: RawPacket): RawPacketStatsObs
       sourceLabel: sourceInfo.sourceLabel,
       pathTokenCount: pathTokens.length,
       pathSignature: pathTokens.length > 0 ? pathTokens.join('>') : null,
+      hopByteWidth: pathTokens.length > 0 ? (decoded.pathHashSize ?? 1) : null,
     };
   } catch {
     return {
@@ -242,8 +245,24 @@ export function summarizeRawPacketForStats(packet: RawPacket): RawPacketStatsObs
       sourceLabel: null,
       pathTokenCount: 0,
       pathSignature: null,
+      hopByteWidth: null,
     };
   }
+}
+
+function inferHopByteWidth(packet: RawPacketStatsObservation): number | null {
+  if (packet.pathTokenCount <= 0) {
+    return null;
+  }
+  if (packet.hopByteWidth && packet.hopByteWidth > 0) {
+    return packet.hopByteWidth;
+  }
+  const firstToken = packet.pathSignature?.split('>')[0] ?? null;
+  if (!firstToken || firstToken.length % 2 !== 0) {
+    return null;
+  }
+  const inferred = firstToken.length / 2;
+  return inferred >= 1 && inferred <= 3 ? inferred : null;
 }
 
 function share(count: number, total: number): number {
@@ -306,6 +325,13 @@ export function buildRawPacketStatsSnapshot(
     ['1 hop', 0],
     ['2+ hops', 0],
   ]);
+  const hopByteWidthCounts = new Map<string, number>([
+    ['No path', 0],
+    ['1 byte / hop', 0],
+    ['2 bytes / hop', 0],
+    ['3 bytes / hop', 0],
+    ['Unknown width', 0],
+  ]);
   const neighborMap = new Map<string, NeighborStat>();
   const rssiValues: number[] = [];
   const rssiBucketCounts = new Map<string, number>([
@@ -326,6 +352,19 @@ export function buildRawPacketStatsSnapshot(
       hopCounts.set('1 hop', (hopCounts.get('1 hop') ?? 0) + 1);
     } else {
       hopCounts.set('2+ hops', (hopCounts.get('2+ hops') ?? 0) + 1);
+    }
+
+    const hopByteWidth = inferHopByteWidth(packet);
+    if (packet.pathTokenCount <= 0) {
+      hopByteWidthCounts.set('No path', (hopByteWidthCounts.get('No path') ?? 0) + 1);
+    } else if (hopByteWidth === 1) {
+      hopByteWidthCounts.set('1 byte / hop', (hopByteWidthCounts.get('1 byte / hop') ?? 0) + 1);
+    } else if (hopByteWidth === 2) {
+      hopByteWidthCounts.set('2 bytes / hop', (hopByteWidthCounts.get('2 bytes / hop') ?? 0) + 1);
+    } else if (hopByteWidth === 3) {
+      hopByteWidthCounts.set('3 bytes / hop', (hopByteWidthCounts.get('3 bytes / hop') ?? 0) + 1);
+    } else {
+      hopByteWidthCounts.set('Unknown width', (hopByteWidthCounts.get('Unknown width') ?? 0) + 1);
     }
 
     if (packet.sourceKey && packet.sourceLabel) {
@@ -448,6 +487,7 @@ export function buildRawPacketStatsSnapshot(
     routeBreakdown: rankedBreakdown(routeCounts, packetCount),
     topPacketTypes: rankedBreakdown(payloadCounts, packetCount).slice(0, 5),
     hopProfile: rankedBreakdown(hopCounts, packetCount),
+    hopByteWidthProfile: rankedBreakdown(hopByteWidthCounts, packetCount),
     strongestNeighbors,
     mostActiveNeighbors,
     newestNeighbors,

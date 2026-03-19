@@ -185,6 +185,7 @@ export function ConversationPane({
         packets={rawPackets}
         rawPacketStatsSession={rawPacketStatsSession}
         contacts={contacts}
+        channels={channels}
       />
     );
   }
