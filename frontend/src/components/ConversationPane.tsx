@@ -3,7 +3,7 @@ import { lazy, Suspense, useMemo, type Ref } from 'react';
 import { ChatHeader } from './ChatHeader';
 import { MessageInput, type MessageInputHandle } from './MessageInput';
 import { MessageList } from './MessageList';
-import { RawPacketList } from './RawPacketList';
+import { RawPacketFeedView } from './RawPacketFeedView';
 import type {
   Channel,
   Contact,
@@ -15,6 +15,7 @@ import type {
   RawPacket,
   RadioConfig,
 } from '../types';
+import type { RawPacketStatsSessionState } from '../utils/rawPacketStats';
 import { CONTACT_TYPE_REPEATER } from '../types';
 import { isPrefixOnlyContact, isUnknownFullKeyContact } from '../utils/pubkey';
 
@@ -31,6 +32,7 @@ interface ConversationPaneProps {
   contacts: Contact[];
   channels: Channel[];
   rawPackets: RawPacket[];
+  rawPacketStatsSession: RawPacketStatsSessionState;
   config: RadioConfig | null;
   health: HealthStatus | null;
   notificationsSupported: boolean;
@@ -95,6 +97,7 @@ export function ConversationPane({
   contacts,
   channels,
   rawPackets,
+  rawPacketStatsSession,
   config,
   health,
   notificationsSupported,
@@ -178,14 +181,11 @@ export function ConversationPane({
 
   if (activeConversation.type === 'raw') {
     return (
-      <>
-        <h2 className="flex justify-between items-center px-4 py-2.5 border-b border-border font-semibold text-base">
-          Raw Packet Feed
-        </h2>
-        <div className="flex-1 overflow-hidden">
-          <RawPacketList packets={rawPackets} />
-        </div>
-      </>
+      <RawPacketFeedView
+        packets={rawPackets}
+        rawPacketStatsSession={rawPacketStatsSession}
+        contacts={contacts}
+      />
     );
   }
 

@@ -245,6 +245,7 @@ High-level state is delegated to hooks:
   - `id`: backend storage row identity (payload-level dedup)
   - `observation_id`: realtime per-arrival identity (session fidelity)
 - Packet feed/visualizer render keys and dedup logic should use `observation_id` (fallback to `id` only for older payloads).
+- The dedicated raw packet feed view now includes a frontend-only stats drawer. It tracks a separate lightweight per-observation session history for charts/rankings, so its windows are not limited by the visible packet list cap. Coverage messaging should stay honest when detailed in-memory stats history has been trimmed or the selected window predates the current browser session.
 
 ### Radio settings behavior
 

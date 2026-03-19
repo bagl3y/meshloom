@@ -14,6 +14,7 @@ import {
   useConversationNavigation,
   useRealtimeAppState,
   useBrowserNotifications,
+  useRawPacketStatsSession,
 } from './hooks';
 import { AppShell } from './components/AppShell';
 import type { MessageInputHandle } from './components/MessageInput';
@@ -81,6 +82,7 @@ export function App() {
     toggleConversationNotifications,
     notifyIncomingMessage,
   } = useBrowserNotifications();
+  const { rawPacketStatsSession, recordRawPacketObservation } = useRawPacketStatsSession();
   const {
     showNewMessage,
     showSettings,
@@ -331,6 +333,7 @@ export function App() {
     removeConversationMessages,
     receiveMessageAck,
     notifyIncomingMessage,
+    recordRawPacketObservation,
   });
   const handleVisibilityPolicyChanged = useCallback(() => {
     clearConversationMessages();
@@ -413,6 +416,7 @@ export function App() {
     contacts,
     channels,
     rawPackets,
+    rawPacketStatsSession,
     config,
     health,
     favorites,

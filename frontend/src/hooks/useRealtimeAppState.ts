@@ -50,6 +50,7 @@ interface UseRealtimeAppStateArgs {
   removeConversationMessages: (conversationId: string) => void;
   receiveMessageAck: (messageId: number, ackCount: number, paths?: MessagePath[]) => void;
   notifyIncomingMessage?: (msg: Message) => void;
+  recordRawPacketObservation?: (packet: RawPacket) => void;
   maxRawPackets?: number;
 }
 
@@ -97,6 +98,7 @@ export function useRealtimeAppState({
   removeConversationMessages,
   receiveMessageAck,
   notifyIncomingMessage,
+  recordRawPacketObservation,
   maxRawPackets = 500,
 }: UseRealtimeAppStateArgs): UseWebSocketOptions {
   const mergeChannelIntoList = useCallback(
@@ -241,6 +243,7 @@ export function useRealtimeAppState({
         }
       },
       onRawPacket: (packet: RawPacket) => {
+        recordRawPacketObservation?.(packet);
         setRawPackets((prev) => appendRawPacketUnique(prev, packet, maxRawPackets));
       },
       onMessageAcked: (messageId: number, ackCount: number, paths?: MessagePath[]) => {
@@ -261,6 +264,7 @@ export function useRealtimeAppState({
       pendingDeleteFallbackRef,
       prevHealthRef,
       recordMessageEvent,
+      recordRawPacketObservation,
       receiveMessageAck,
       observeMessage,
       refreshUnreads,

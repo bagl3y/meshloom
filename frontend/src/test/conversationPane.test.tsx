@@ -12,6 +12,7 @@ import type {
   Message,
   RadioConfig,
 } from '../types';
+import type { RawPacketStatsSessionState } from '../utils/rawPacketStats';
 
 const mocks = vi.hoisted(() => ({
   messageList: vi.fn(() => <div data-testid="message-list" />),
@@ -95,12 +96,20 @@ const message: Message = {
   sender_name: null,
 };
 
+const rawPacketStatsSession: RawPacketStatsSessionState = {
+  sessionStartedAt: 1_700_000_000_000,
+  totalObservedPackets: 0,
+  trimmedObservationCount: 0,
+  observations: [],
+};
+
 function createProps(overrides: Partial<React.ComponentProps<typeof ConversationPane>> = {}) {
   return {
     activeConversation: null as Conversation | null,
     contacts: [] as Contact[],
     channels: [channel],
     rawPackets: [],
+    rawPacketStatsSession,
     config,
     health,
     notificationsSupported: true,
