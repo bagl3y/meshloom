@@ -71,9 +71,9 @@ async def _insert_contact(
     contact_type=0,
     last_contacted=None,
     last_advert=None,
-    last_path=None,
-    last_path_len=-1,
-    out_path_hash_mode=0,
+    direct_path=None,
+    direct_path_len=-1,
+    direct_path_hash_mode=-1,
 ):
     """Insert a contact into the test database."""
     await ContactRepository.upsert(
@@ -82,9 +82,9 @@ async def _insert_contact(
             "name": name,
             "type": contact_type,
             "flags": 0,
-            "last_path": last_path,
-            "last_path_len": last_path_len,
-            "out_path_hash_mode": out_path_hash_mode,
+            "direct_path": direct_path,
+            "direct_path_len": direct_path_len,
+            "direct_path_hash_mode": direct_path_hash_mode,
             "last_advert": last_advert,
             "lat": None,
             "lon": None,
@@ -597,9 +597,9 @@ class TestSyncAndOffloadAll:
             KEY_A,
             "Alice",
             last_contacted=2000,
-            last_path="aa00bb00",
-            last_path_len=2,
-            out_path_hash_mode=1,
+            direct_path="aa00bb00",
+            direct_path_len=2,
+            direct_path_hash_mode=1,
         )
         await AppSettingsRepository.update(favorites=[Favorite(type="contact", id=KEY_A)])
 
@@ -626,9 +626,9 @@ class TestSyncAndOffloadAll:
             KEY_A,
             "Alice",
             last_contacted=2000,
-            last_path="3f3f69de1c7b7e7662",
-            last_path_len=-125,
-            out_path_hash_mode=2,
+            direct_path="3f3f69de1c7b7e7662",
+            direct_path_len=-125,
+            direct_path_hash_mode=2,
         )
         await AppSettingsRepository.update(favorites=[Favorite(type="contact", id=KEY_A)])
 

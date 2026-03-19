@@ -588,12 +588,13 @@ class TestRoutingOverride:
         assert contact.last_path_len == 1
 
     @pytest.mark.asyncio
-    async def test_blank_route_clears_override_and_resets_learned_path(self, test_db, client):
+    async def test_blank_route_clears_override_and_preserves_learned_path(self, test_db, client):
         await _insert_contact(
             KEY_A,
-            last_path="11",
-            last_path_len=1,
-            out_path_hash_mode=0,
+            direct_path="11",
+            direct_path_len=1,
+            direct_path_hash_mode=0,
+            direct_path_updated_at=1700000000,
             route_override_path="ae92f13e",
             route_override_len=2,
             route_override_hash_mode=1,
@@ -613,9 +614,10 @@ class TestRoutingOverride:
         contact = await ContactRepository.get_by_key(KEY_A)
         assert contact is not None
         assert contact.route_override_len is None
-        assert contact.last_path == ""
-        assert contact.last_path_len == -1
-        assert contact.out_path_hash_mode == -1
+        assert contact.direct_path == "11"
+        assert contact.direct_path_len == 1
+        assert contact.direct_path_hash_mode == 0
+        assert contact.direct_path_updated_at == 1700000000
 
     @pytest.mark.asyncio
     async def test_rejects_invalid_explicit_route(self, test_db, client):

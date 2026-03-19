@@ -4,6 +4,7 @@ import type { Contact, PathDiscoveryResponse, PathDiscoveryRoute } from '../type
 import {
   findContactsByPrefix,
   formatRouteLabel,
+  getDirectContactRoute,
   getEffectiveContactRoute,
   hasRoutingOverride,
   parsePathHops,
@@ -99,16 +100,17 @@ export function ContactPathDiscoveryModal({
   const [result, setResult] = useState<PathDiscoveryResponse | null>(null);
 
   const effectiveRoute = useMemo(() => getEffectiveContactRoute(contact), [contact]);
+  const directRoute = useMemo(() => getDirectContactRoute(contact), [contact]);
   const hasForcedRoute = hasRoutingOverride(contact);
   const learnedRouteSummary = useMemo(() => {
-    if (contact.last_path_len === -1) {
+    if (!directRoute) {
       return 'Flood';
     }
-    const hops = parsePathHops(contact.last_path, contact.last_path_len);
+    const hops = parsePathHops(directRoute.path, directRoute.path_len);
     return hops.length > 0
-      ? `${formatRouteLabel(contact.last_path_len, true)} (${hops.join(' -> ')})`
-      : formatRouteLabel(contact.last_path_len, true);
-  }, [contact.last_path, contact.last_path_len]);
+      ? `${formatRouteLabel(directRoute.path_len, true)} (${hops.join(' -> ')})`
+      : formatRouteLabel(directRoute.path_len, true);
+  }, [directRoute]);
   const forcedRouteSummary = useMemo(() => {
     if (!hasForcedRoute) {
       return null;

@@ -153,12 +153,12 @@ def first_hop_hex(path_hex: str, hop_count: int) -> str | None:
 def normalize_contact_route(
     path_hex: str | None,
     path_len: int | None,
-    out_path_hash_mode: int | None,
+    path_hash_mode: int | None,
 ) -> tuple[str, int, int]:
     """Normalize stored contact route fields.
 
     Handles legacy/bad rows where the packed wire path byte was stored directly
-    in `last_path_len` (sometimes as a signed byte, e.g. `-125` for `0x83`).
+    in the hop-count column (sometimes as a signed byte, e.g. `-125` for `0x83`).
     Returns `(path_hex, hop_count, hash_mode)`.
     """
     normalized_path = path_hex or ""
@@ -169,7 +169,7 @@ def normalize_contact_route(
         normalized_len = -1
 
     try:
-        normalized_mode = int(out_path_hash_mode) if out_path_hash_mode is not None else None
+        normalized_mode = int(path_hash_mode) if path_hash_mode is not None else None
     except (TypeError, ValueError):
         normalized_mode = None
 
@@ -207,7 +207,7 @@ def normalize_contact_route(
 def normalize_route_override(
     path_hex: str | None,
     path_len: int | None,
-    out_path_hash_mode: int | None,
+    path_hash_mode: int | None,
 ) -> tuple[str | None, int | None, int | None]:
     """Normalize optional route-override fields while preserving the unset state."""
     if path_len is None:
@@ -216,7 +216,7 @@ def normalize_route_override(
     normalized_path, normalized_len, normalized_mode = normalize_contact_route(
         path_hex,
         path_len,
-        out_path_hash_mode,
+        path_hash_mode,
     )
     return normalized_path, normalized_len, normalized_mode
 

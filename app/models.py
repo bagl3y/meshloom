@@ -1,8 +1,19 @@
-from typing import Literal
+from collections.abc import Mapping
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from app.path_utils import normalize_contact_route
+from app.path_utils import normalize_contact_route, normalize_route_override
+
+
+class ContactRoute(BaseModel):
+    """A normalized contact route."""
+
+    path: str = Field(description="Hex-encoded path bytes (empty string for direct/flood)")
+    path_len: int = Field(description="Hop count (-1=flood, 0=direct, >0=explicit route)")
+    path_hash_mode: int = Field(
+        description="Path hash mode (-1=flood, 0=1-byte, 1=2-byte, 2=3-byte hop identifiers)"
+    )
 
 
 class ContactUpsert(BaseModel):
@@ -12,9 +23,10 @@ class ContactUpsert(BaseModel):
     name: str | None = None
     type: int = 0
     flags: int = 0
-    last_path: str | None = None
-    last_path_len: int = -1
-    out_path_hash_mode: int | None = None
+    direct_path: str | None = None
+    direct_path_len: int | None = None
+    direct_path_hash_mode: int | None = None
+    direct_path_updated_at: int | None = None
     route_override_path: str | None = None
     route_override_len: int | None = None
     route_override_hash_mode: int | None = None
@@ -25,6 +37,20 @@ class ContactUpsert(BaseModel):
     on_radio: bool | None = None
     last_contacted: int | None = None
     first_seen: int | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _translate_legacy_route_fields(cls, data: Any) -> Any:
+        if not isinstance(data, Mapping):
+            return data
+        translated = dict(data)
+        if "direct_path" not in translated and "last_path" in translated:
+            translated["direct_path"] = translated.get("last_path")
+        if "direct_path_len" not in translated and "last_path_len" in translated:
+            translated["direct_path_len"] = translated.get("last_path_len")
+        if "direct_path_hash_mode" not in translated and "out_path_hash_mode" in translated:
+            translated["direct_path_hash_mode"] = translated.get("out_path_hash_mode")
+        return translated
 
     @classmethod
     def from_contact(cls, contact: "Contact", **changes) -> "ContactUpsert":
@@ -40,7 +66,7 @@ class ContactUpsert(BaseModel):
         cls, public_key: str, radio_data: dict, on_radio: bool = False
     ) -> "ContactUpsert":
         """Convert radio contact data to the contact-row write shape."""
-        last_path, last_path_len, out_path_hash_mode = normalize_contact_route(
+        direct_path, direct_path_len, direct_path_hash_mode = normalize_contact_route(
             radio_data.get("out_path"),
             radio_data.get("out_path_len", -1),
             radio_data.get(
@@ -53,9 +79,9 @@ class ContactUpsert(BaseModel):
             name=radio_data.get("adv_name"),
             type=radio_data.get("type", 0),
             flags=radio_data.get("flags", 0),
-            last_path=last_path,
-            last_path_len=last_path_len,
-            out_path_hash_mode=out_path_hash_mode,
+            direct_path=direct_path,
+            direct_path_len=direct_path_len,
+            direct_path_hash_mode=direct_path_hash_mode,
             lat=radio_data.get("adv_lat"),
             lon=radio_data.get("adv_lon"),
             last_advert=radio_data.get("last_advert"),
@@ -68,9 +94,10 @@ class Contact(BaseModel):
     name: str | None = None
     type: int = 0  # 0=unknown, 1=client, 2=repeater, 3=room, 4=sensor
     flags: int = 0
-    last_path: str | None = None
-    last_path_len: int = -1
-    out_path_hash_mode: int = 0
+    direct_path: str | None = None
+    direct_path_len: int = -1
+    direct_path_hash_mode: int = -1
+    direct_path_updated_at: int | None = None
     route_override_path: str | None = None
     route_override_len: int | None = None
     route_override_hash_mode: int | None = None
@@ -82,38 +109,125 @@ class Contact(BaseModel):
     last_contacted: int | None = None  # Last time we sent/received a message
     last_read_at: int | None = None  # Server-side read state tracking
     first_seen: int | None = None
+    effective_route: ContactRoute | None = None
+    effective_route_source: Literal["override", "direct", "flood"] = "flood"
+    direct_route: ContactRoute | None = None
+    route_override: ContactRoute | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _translate_legacy_route_fields(cls, data: Any) -> Any:
+        if not isinstance(data, Mapping):
+            return data
+        translated = dict(data)
+        if "direct_path" not in translated and "last_path" in translated:
+            translated["direct_path"] = translated.get("last_path")
+        if "direct_path_len" not in translated and "last_path_len" in translated:
+            translated["direct_path_len"] = translated.get("last_path_len")
+        if "direct_path_hash_mode" not in translated and "out_path_hash_mode" in translated:
+            translated["direct_path_hash_mode"] = translated.get("out_path_hash_mode")
+        return translated
+
+    def model_post_init(self, __context) -> None:
+        direct_path, direct_path_len, direct_path_hash_mode = normalize_contact_route(
+            self.direct_path,
+            self.direct_path_len,
+            self.direct_path_hash_mode,
+        )
+        self.direct_path = direct_path or None
+        self.direct_path_len = direct_path_len
+        self.direct_path_hash_mode = direct_path_hash_mode
+
+        route_override_path, route_override_len, route_override_hash_mode = (
+            normalize_route_override(
+                self.route_override_path,
+                self.route_override_len,
+                self.route_override_hash_mode,
+            )
+        )
+        self.route_override_path = route_override_path or None
+        self.route_override_len = route_override_len
+        self.route_override_hash_mode = route_override_hash_mode
+        if (
+            route_override_path is not None
+            and route_override_len is not None
+            and route_override_hash_mode is not None
+        ):
+            self.route_override = ContactRoute(
+                path=route_override_path,
+                path_len=route_override_len,
+                path_hash_mode=route_override_hash_mode,
+            )
+        else:
+            self.route_override = None
+
+        if direct_path_len >= 0:
+            self.direct_route = ContactRoute(
+                path=direct_path,
+                path_len=direct_path_len,
+                path_hash_mode=direct_path_hash_mode,
+            )
+        else:
+            self.direct_route = None
+
+        path, path_len, path_hash_mode = self.effective_route_tuple()
+        if self.has_route_override():
+            self.effective_route_source = "override"
+        elif self.direct_route is not None:
+            self.effective_route_source = "direct"
+        else:
+            self.effective_route_source = "flood"
+        self.effective_route = ContactRoute(
+            path=path,
+            path_len=path_len,
+            path_hash_mode=path_hash_mode,
+        )
 
     def has_route_override(self) -> bool:
         return self.route_override_len is not None
 
-    def effective_route(self) -> tuple[str, int, int]:
+    @property
+    def last_path(self) -> str | None:
+        return self.direct_path
+
+    @property
+    def last_path_len(self) -> int:
+        return self.direct_path_len
+
+    @property
+    def out_path_hash_mode(self) -> int:
+        return self.direct_path_hash_mode
+
+    def effective_route_tuple(self) -> tuple[str, int, int]:
         if self.has_route_override():
             return normalize_contact_route(
                 self.route_override_path,
                 self.route_override_len,
                 self.route_override_hash_mode,
             )
-        return normalize_contact_route(
-            self.last_path,
-            self.last_path_len,
-            self.out_path_hash_mode,
-        )
+        if self.direct_path_len >= 0:
+            return normalize_contact_route(
+                self.direct_path,
+                self.direct_path_len,
+                self.direct_path_hash_mode,
+            )
+        return "", -1, -1
 
     def to_radio_dict(self) -> dict:
         """Convert to the dict format expected by meshcore radio commands.
 
         The radio API uses different field names (adv_name, out_path, etc.)
-        than our database schema (name, last_path, etc.).
+        than our database schema (name, direct_path, etc.).
         """
-        last_path, last_path_len, out_path_hash_mode = self.effective_route()
+        effective_path, effective_path_len, effective_path_hash_mode = self.effective_route_tuple()
         return {
             "public_key": self.public_key,
             "adv_name": self.name or "",
             "type": self.type,
             "flags": self.flags,
-            "out_path": last_path,
-            "out_path_len": last_path_len,
-            "out_path_hash_mode": out_path_hash_mode,
+            "out_path": effective_path,
+            "out_path_len": effective_path_len,
+            "out_path_hash_mode": effective_path_hash_mode,
             "adv_lat": self.lat if self.lat is not None else 0.0,
             "adv_lon": self.lon if self.lon is not None else 0.0,
             "last_advert": self.last_advert if self.last_advert is not None else 0,
@@ -149,7 +263,7 @@ class ContactRoutingOverrideRequest(BaseModel):
 
     route: str = Field(
         description=(
-            "Blank clears the override and resets learned routing to flood, "
+            "Blank clears the override, "
             '"-1" forces flood, "0" forces direct, and explicit routes are '
             "comma-separated 1/2/3-byte hop hex values"
         )

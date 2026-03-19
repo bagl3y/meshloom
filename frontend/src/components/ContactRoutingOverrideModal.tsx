@@ -5,6 +5,7 @@ import type { Contact } from '../types';
 import {
   formatRouteLabel,
   formatRoutingOverrideInput,
+  getDirectContactRoute,
   hasRoutingOverride,
 } from '../utils/pathUtils';
 import { Button } from './ui/button';
@@ -28,7 +29,7 @@ interface ContactRoutingOverrideModalProps {
 }
 
 function summarizeLearnedRoute(contact: Contact): string {
-  return formatRouteLabel(contact.last_path_len, true);
+  return formatRouteLabel(getDirectContactRoute(contact)?.path_len ?? -1, true);
 }
 
 function summarizeForcedRoute(contact: Contact): string | null {

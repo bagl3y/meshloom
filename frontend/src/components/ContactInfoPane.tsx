@@ -12,6 +12,7 @@ import {
   calculateDistance,
   formatDistance,
   formatRouteLabel,
+  getDirectContactRoute,
   getEffectiveContactRoute,
   hasRoutingOverride,
   parsePathHops,
@@ -134,11 +135,12 @@ export function ContactInfoPane({
       ? calculateDistance(config.lat, config.lon, contact.lat, contact.lon)
       : null;
   const effectiveRoute = contact ? getEffectiveContactRoute(contact) : null;
+  const directRoute = contact ? getDirectContactRoute(contact) : null;
   const pathHashModeLabel =
     effectiveRoute && effectiveRoute.pathLen >= 0
       ? formatPathHashMode(effectiveRoute.pathHashMode)
       : null;
-  const learnedRouteLabel = contact ? formatRouteLabel(contact.last_path_len, true) : null;
+  const learnedRouteLabel = directRoute ? formatRouteLabel(directRoute.path_len, true) : null;
   const isPrefixOnlyResolvedContact = contact ? isPrefixOnlyContact(contact.public_key) : false;
   const isUnknownFullKeyResolvedContact =
     contact !== null &&
@@ -330,7 +332,7 @@ export function ContactInfoPane({
                     }
                   />
                 )}
-                {contact && hasRoutingOverride(contact) && learnedRouteLabel && (
+                {hasRoutingOverride(contact) && learnedRouteLabel && (
                   <InfoItem label="Learned Route" value={learnedRouteLabel} />
                 )}
                 {pathHashModeLabel && <InfoItem label="Hop Width" value={pathHashModeLabel} />}

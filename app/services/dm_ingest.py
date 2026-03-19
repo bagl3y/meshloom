@@ -92,7 +92,6 @@ async def resolve_fallback_direct_message_context(
             last_contacted=received_at,
             first_seen=received_at,
             on_radio=False,
-            out_path_hash_mode=-1,
         )
         await contact_repository.upsert(placeholder_upsert)
         contact = await contact_repository.get_by_key(normalized_sender)

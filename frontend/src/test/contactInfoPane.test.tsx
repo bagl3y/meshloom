@@ -39,9 +39,9 @@ function createContact(overrides: Partial<Contact> = {}): Contact {
     name: 'Alice',
     type: 1,
     flags: 0,
-    last_path: null,
-    last_path_len: 0,
-    out_path_hash_mode: 0,
+    direct_path: null,
+    direct_path_len: 0,
+    direct_path_hash_mode: 0,
     last_advert: null,
     lat: null,
     lon: null,
@@ -104,7 +104,7 @@ describe('ContactInfoPane', () => {
   });
 
   it('shows hop width when contact has a stored path hash mode', async () => {
-    const contact = createContact({ out_path_hash_mode: 1 });
+    const contact = createContact({ direct_path_hash_mode: 1, direct_path_len: 1 });
     getContactAnalytics.mockResolvedValue(createAnalytics(contact));
 
     render(<ContactInfoPane {...baseProps} contactKey={contact.public_key} />);
@@ -117,7 +117,7 @@ describe('ContactInfoPane', () => {
   });
 
   it('does not show hop width for flood-routed contacts', async () => {
-    const contact = createContact({ last_path_len: -1, out_path_hash_mode: -1 });
+    const contact = createContact({ direct_path_len: -1, direct_path_hash_mode: -1 });
     getContactAnalytics.mockResolvedValue(createAnalytics(contact));
 
     render(<ContactInfoPane {...baseProps} contactKey={contact.public_key} />);
@@ -131,8 +131,8 @@ describe('ContactInfoPane', () => {
 
   it('shows forced routing override and learned route separately', async () => {
     const contact = createContact({
-      last_path_len: 1,
-      out_path_hash_mode: 0,
+      direct_path_len: 1,
+      direct_path_hash_mode: 0,
       route_override_path: 'ae92f13e',
       route_override_len: 2,
       route_override_hash_mode: 1,

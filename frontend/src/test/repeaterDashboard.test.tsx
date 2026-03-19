@@ -82,9 +82,9 @@ const contacts: Contact[] = [
     name: 'TestRepeater',
     type: 2,
     flags: 0,
-    last_path: null,
-    last_path_len: -1,
-    out_path_hash_mode: 0,
+    direct_path: null,
+    direct_path_len: -1,
+    direct_path_hash_mode: 0,
     last_advert: null,
     lat: null,
     lon: null,
@@ -305,9 +305,9 @@ describe('RepeaterDashboard', () => {
         name: 'Neighbor',
         type: 1,
         flags: 0,
-        last_path: null,
-        last_path_len: 0,
-        out_path_hash_mode: 0,
+        direct_path: null,
+        direct_path_len: 0,
+        direct_path_hash_mode: 0,
         route_override_path: null,
         route_override_len: null,
         route_override_hash_mode: null,
@@ -365,9 +365,9 @@ describe('RepeaterDashboard', () => {
         name: 'Neighbor',
         type: 1,
         flags: 0,
-        last_path: null,
-        last_path_len: 0,
-        out_path_hash_mode: 0,
+        direct_path: null,
+        direct_path_len: 0,
+        direct_path_hash_mode: 0,
         route_override_path: null,
         route_override_len: null,
         route_override_hash_mode: null,
@@ -520,15 +520,15 @@ describe('RepeaterDashboard', () => {
   });
 
   describe('path type display and reset', () => {
-    it('shows flood when last_path_len is -1', () => {
+    it('shows flood when direct_path_len is -1', () => {
       render(<RepeaterDashboard {...defaultProps} />);
 
       expect(screen.getByText('flood')).toBeInTheDocument();
     });
 
-    it('shows direct when last_path_len is 0', () => {
+    it('shows direct when direct_path_len is 0', () => {
       const directContacts: Contact[] = [
-        { ...contacts[0], last_path_len: 0, last_seen: 1700000000 },
+        { ...contacts[0], direct_path_len: 0, last_seen: 1700000000 },
       ];
 
       render(<RepeaterDashboard {...defaultProps} contacts={directContacts} />);
@@ -536,9 +536,9 @@ describe('RepeaterDashboard', () => {
       expect(screen.getByText('direct')).toBeInTheDocument();
     });
 
-    it('shows N hops when last_path_len > 0', () => {
+    it('shows N hops when direct_path_len > 0', () => {
       const hoppedContacts: Contact[] = [
-        { ...contacts[0], last_path_len: 3, last_seen: 1700000000 },
+        { ...contacts[0], direct_path_len: 3, last_seen: 1700000000 },
       ];
 
       render(<RepeaterDashboard {...defaultProps} contacts={hoppedContacts} />);
@@ -548,7 +548,7 @@ describe('RepeaterDashboard', () => {
 
     it('shows 1 hop (singular) for single hop', () => {
       const oneHopContacts: Contact[] = [
-        { ...contacts[0], last_path_len: 1, last_seen: 1700000000 },
+        { ...contacts[0], direct_path_len: 1, last_seen: 1700000000 },
       ];
 
       render(<RepeaterDashboard {...defaultProps} contacts={oneHopContacts} />);
@@ -558,7 +558,7 @@ describe('RepeaterDashboard', () => {
 
     it('direct path is clickable, underlined, and marked as editable', () => {
       const directContacts: Contact[] = [
-        { ...contacts[0], last_path_len: 0, last_seen: 1700000000 },
+        { ...contacts[0], direct_path_len: 0, last_seen: 1700000000 },
       ];
 
       render(<RepeaterDashboard {...defaultProps} contacts={directContacts} />);
@@ -573,7 +573,7 @@ describe('RepeaterDashboard', () => {
       const forcedContacts: Contact[] = [
         {
           ...contacts[0],
-          last_path_len: 1,
+          direct_path_len: 1,
           last_seen: 1700000000,
           route_override_path: 'ae92f13e',
           route_override_len: 2,
@@ -589,7 +589,7 @@ describe('RepeaterDashboard', () => {
 
     it('clicking direct path opens modal and can force direct routing', async () => {
       const directContacts: Contact[] = [
-        { ...contacts[0], last_path_len: 0, last_seen: 1700000000 },
+        { ...contacts[0], direct_path_len: 0, last_seen: 1700000000 },
       ];
 
       const { api } = await import('../api');
@@ -613,7 +613,7 @@ describe('RepeaterDashboard', () => {
 
     it('closing the routing override modal does not call the API', async () => {
       const directContacts: Contact[] = [
-        { ...contacts[0], last_path_len: 0, last_seen: 1700000000 },
+        { ...contacts[0], direct_path_len: 0, last_seen: 1700000000 },
       ];
 
       const { api } = await import('../api');

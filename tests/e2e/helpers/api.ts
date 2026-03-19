@@ -90,9 +90,9 @@ export interface Contact {
   name: string | null;
   type: number;
   flags: number;
-  last_path: string | null;
-  last_path_len: number;
-  out_path_hash_mode: number;
+  direct_path: string | null;
+  direct_path_len: number;
+  direct_path_hash_mode: number;
   route_override_path?: string | null;
   route_override_len?: number | null;
   route_override_hash_mode?: number | null;

@@ -22,8 +22,9 @@ function createContact(overrides: Partial<Contact> = {}): Contact {
     name: 'Test Contact',
     type: CONTACT_TYPE_REPEATER,
     flags: 0,
-    last_path: null,
-    last_path_len: -1,
+    direct_path: null,
+    direct_path_len: -1,
+    direct_path_hash_mode: -1,
     last_advert: null,
     lat: null,
     lon: null,
@@ -33,7 +34,6 @@ function createContact(overrides: Partial<Contact> = {}): Contact {
     last_read_at: null,
     first_seen: null,
     ...overrides,
-    out_path_hash_mode: overrides.out_path_hash_mode ?? 0,
   };
 }
 
@@ -139,9 +139,9 @@ describe('contact routing helpers', () => {
   it('prefers routing override over learned route', () => {
     const effective = getEffectiveContactRoute(
       createContact({
-        last_path: 'AABB',
-        last_path_len: 1,
-        out_path_hash_mode: 0,
+        direct_path: 'AABB',
+        direct_path_len: 1,
+        direct_path_hash_mode: 0,
         route_override_path: 'AE92F13E',
         route_override_len: 2,
         route_override_hash_mode: 1,

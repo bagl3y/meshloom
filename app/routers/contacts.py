@@ -304,7 +304,6 @@ async def create_contact(
     contact_upsert = ContactUpsert(
         public_key=lower_key,
         name=request.name,
-        out_path_hash_mode=-1,
         on_radio=False,
     )
     await ContactRepository.upsert(contact_upsert)
@@ -474,7 +473,7 @@ async def request_path_discovery(public_key: str) -> PathDiscoveryResponse:
         return_len = int(payload.get("in_path_len") or 0)
         return_mode = _path_hash_mode_from_hop_width(payload.get("in_path_hash_len"))
 
-        await ContactRepository.update_path(
+        await ContactRepository.update_direct_path(
             contact.public_key,
             forward_path,
             forward_len,
@@ -524,9 +523,8 @@ async def set_contact_routing_override(
     route_text = request.route.strip()
     if route_text == "":
         await ContactRepository.clear_routing_override(contact.public_key)
-        await ContactRepository.update_path(contact.public_key, "", -1, -1)
         logger.info(
-            "Cleared routing override and reset learned path to flood for %s",
+            "Cleared routing override for %s",
             contact.public_key[:12],
         )
     elif route_text == "-1":

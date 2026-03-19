@@ -1247,23 +1247,25 @@ class TestMigration039:
 
             applied = await run_migrations(conn)
 
-            assert applied == 6
-            assert await get_version(conn) == 44
+            assert applied == 7
+            assert await get_version(conn) == 45
 
             cursor = await conn.execute(
                 """
-                SELECT public_key, last_path_len, out_path_hash_mode
+                SELECT public_key, direct_path, direct_path_len, direct_path_hash_mode
                 FROM contacts
                 ORDER BY public_key
                 """
             )
             rows = await cursor.fetchall()
             assert rows[0]["public_key"] == "aa" * 32
-            assert rows[0]["last_path_len"] == -1
-            assert rows[0]["out_path_hash_mode"] == -1
+            assert rows[0]["direct_path"] == ""
+            assert rows[0]["direct_path_len"] == -1
+            assert rows[0]["direct_path_hash_mode"] == -1
             assert rows[1]["public_key"] == "bb" * 32
-            assert rows[1]["last_path_len"] == 1
-            assert rows[1]["out_path_hash_mode"] == 0
+            assert rows[1]["direct_path"] == "1122"
+            assert rows[1]["direct_path_len"] == 1
+            assert rows[1]["direct_path_hash_mode"] == 0
         finally:
             await conn.close()
 
@@ -1317,12 +1319,12 @@ class TestMigration039:
 
             applied = await run_migrations(conn)
 
-            assert applied == 6
-            assert await get_version(conn) == 44
+            assert applied == 7
+            assert await get_version(conn) == 45
 
             cursor = await conn.execute(
                 """
-                SELECT public_key, out_path_hash_mode
+                SELECT public_key, direct_path_hash_mode
                 FROM contacts
                 WHERE public_key IN (?, ?)
                 ORDER BY public_key
@@ -1331,9 +1333,9 @@ class TestMigration039:
             )
             rows = await cursor.fetchall()
             assert rows[0]["public_key"] == "cc" * 32
-            assert rows[0]["out_path_hash_mode"] == 1
+            assert rows[0]["direct_path_hash_mode"] == 1
             assert rows[1]["public_key"] == "dd" * 32
-            assert rows[1]["out_path_hash_mode"] == -1
+            assert rows[1]["direct_path_hash_mode"] == -1
         finally:
             await conn.close()
 
@@ -1371,8 +1373,8 @@ class TestMigration040:
 
             applied = await run_migrations(conn)
 
-            assert applied == 5
-            assert await get_version(conn) == 44
+            assert applied == 6
+            assert await get_version(conn) == 45
 
             await conn.execute(
                 """
@@ -1433,8 +1435,8 @@ class TestMigration041:
 
             applied = await run_migrations(conn)
 
-            assert applied == 4
-            assert await get_version(conn) == 44
+            assert applied == 5
+            assert await get_version(conn) == 45
 
             await conn.execute(
                 """
@@ -1486,8 +1488,8 @@ class TestMigration042:
 
             applied = await run_migrations(conn)
 
-            assert applied == 3
-            assert await get_version(conn) == 44
+            assert applied == 4
+            assert await get_version(conn) == 45
 
             await conn.execute(
                 """

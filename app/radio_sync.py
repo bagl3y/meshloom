@@ -46,9 +46,10 @@ def _contact_sync_debug_fields(contact: Contact) -> dict[str, object]:
     return {
         "type": contact.type,
         "flags": contact.flags,
-        "last_path": contact.last_path,
-        "last_path_len": contact.last_path_len,
-        "out_path_hash_mode": contact.out_path_hash_mode,
+        "direct_path": contact.direct_path,
+        "direct_path_len": contact.direct_path_len,
+        "direct_path_hash_mode": contact.direct_path_hash_mode,
+        "direct_path_updated_at": contact.direct_path_updated_at,
         "route_override_path": contact.route_override_path,
         "route_override_len": contact.route_override_len,
         "route_override_hash_mode": contact.route_override_hash_mode,

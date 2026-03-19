@@ -274,8 +274,8 @@ function makeContact(overrides: Partial<Contact> = {}): Contact {
     name: 'TestNode',
     type: 1,
     flags: 0,
-    last_path: null,
-    last_path_len: 0,
+    direct_path: null,
+    direct_path_len: 0,
     last_advert: null,
     lat: null,
     lon: null,
@@ -285,7 +285,7 @@ function makeContact(overrides: Partial<Contact> = {}): Contact {
     last_read_at: null,
     first_seen: null,
     ...overrides,
-    out_path_hash_mode: overrides.out_path_hash_mode ?? 0,
+    direct_path_hash_mode: overrides.direct_path_hash_mode ?? 0,
   };
 }
 

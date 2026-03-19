@@ -61,6 +61,19 @@ class DecryptedDirectMessage:
 
 
 @dataclass
+class DecryptedPathPayload:
+    """Result of decrypting a PATH payload."""
+
+    dest_hash: str
+    src_hash: str
+    returned_path: bytes
+    returned_path_len: int
+    returned_path_hash_mode: int
+    extra_type: int
+    extra: bytes
+
+
+@dataclass
 class ParsedAdvertisement:
     """Result of parsing an advertisement packet."""
 
@@ -563,3 +576,88 @@ def try_decrypt_dm(
         return None
 
     return decrypt_direct_message(packet_info.payload, shared_secret)
+
+
+def decrypt_path_payload(payload: bytes, shared_secret: bytes) -> DecryptedPathPayload | None:
+    """Decrypt a PATH payload using the ECDH shared secret."""
+    if len(payload) < 4:
+        return None
+
+    dest_hash = format(payload[0], "02x")
+    src_hash = format(payload[1], "02x")
+    mac = payload[2:4]
+    ciphertext = payload[4:]
+
+    if len(ciphertext) == 0 or len(ciphertext) % 16 != 0:
+        return None
+
+    calculated_mac = hmac.new(shared_secret, ciphertext, hashlib.sha256).digest()[:2]
+    if calculated_mac != mac:
+        return None
+
+    try:
+        cipher = AES.new(shared_secret[:16], AES.MODE_ECB)
+        decrypted = cipher.decrypt(ciphertext)
+    except Exception as e:
+        logger.debug("AES decryption failed for PATH payload: %s", e)
+        return None
+
+    if len(decrypted) < 2:
+        return None
+
+    from app.path_utils import decode_path_byte
+
+    packed_len = decrypted[0]
+    try:
+        returned_path_len, hash_size = decode_path_byte(packed_len)
+    except ValueError:
+        return None
+
+    path_byte_len = returned_path_len * hash_size
+    if len(decrypted) < 1 + path_byte_len + 1:
+        return None
+
+    offset = 1
+    returned_path = decrypted[offset : offset + path_byte_len]
+    offset += path_byte_len
+    extra_type = decrypted[offset] & 0x0F
+    offset += 1
+    extra = decrypted[offset:]
+
+    return DecryptedPathPayload(
+        dest_hash=dest_hash,
+        src_hash=src_hash,
+        returned_path=returned_path,
+        returned_path_len=returned_path_len,
+        returned_path_hash_mode=hash_size - 1,
+        extra_type=extra_type,
+        extra=extra,
+    )
+
+
+def try_decrypt_path(
+    raw_packet: bytes,
+    our_private_key: bytes,
+    their_public_key: bytes,
+    our_public_key: bytes,
+) -> DecryptedPathPayload | None:
+    """Try to decrypt a raw packet as a PATH packet."""
+    packet_info = parse_packet(raw_packet)
+    if packet_info is None or packet_info.payload_type != PayloadType.PATH:
+        return None
+
+    if len(packet_info.payload) < 4:
+        return None
+
+    dest_hash = packet_info.payload[0]
+    src_hash = packet_info.payload[1]
+    if dest_hash != our_public_key[0] or src_hash != their_public_key[0]:
+        return None
+
+    try:
+        shared_secret = derive_shared_secret(our_private_key, their_public_key)
+    except Exception as e:
+        logger.debug("Failed to derive shared secret for PATH payload: %s", e)
+        return None
+
+    return decrypt_path_payload(packet_info.payload, shared_secret)

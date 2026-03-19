@@ -36,11 +36,20 @@ class ContactRepository:
     @staticmethod
     async def upsert(contact: ContactUpsert | Contact | Mapping[str, Any]) -> None:
         contact_row = ContactRepository._coerce_contact_upsert(contact)
-        last_path, last_path_len, out_path_hash_mode = normalize_contact_route(
-            contact_row.last_path,
-            contact_row.last_path_len,
-            contact_row.out_path_hash_mode,
-        )
+        if (
+            contact_row.direct_path is None
+            and contact_row.direct_path_len is None
+            and contact_row.direct_path_hash_mode is None
+        ):
+            direct_path = None
+            direct_path_len = None
+            direct_path_hash_mode = None
+        else:
+            direct_path, direct_path_len, direct_path_hash_mode = normalize_contact_route(
+                contact_row.direct_path,
+                contact_row.direct_path_len,
+                contact_row.direct_path_hash_mode,
+            )
         route_override_path, route_override_len, route_override_hash_mode = (
             normalize_route_override(
                 contact_row.route_override_path,
@@ -51,20 +60,25 @@ class ContactRepository:
 
         await db.conn.execute(
             """
-            INSERT INTO contacts (public_key, name, type, flags, last_path, last_path_len,
-                                  out_path_hash_mode,
+            INSERT INTO contacts (public_key, name, type, flags, direct_path, direct_path_len,
+                                  direct_path_hash_mode, direct_path_updated_at,
                                   route_override_path, route_override_len,
                                   route_override_hash_mode,
                                   last_advert, lat, lon, last_seen,
                                   on_radio, last_contacted, first_seen)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(public_key) DO UPDATE SET
                 name = COALESCE(excluded.name, contacts.name),
                 type = CASE WHEN excluded.type = 0 THEN contacts.type ELSE excluded.type END,
                 flags = excluded.flags,
-                last_path = COALESCE(excluded.last_path, contacts.last_path),
-                last_path_len = excluded.last_path_len,
-                out_path_hash_mode = excluded.out_path_hash_mode,
+                direct_path = COALESCE(excluded.direct_path, contacts.direct_path),
+                direct_path_len = COALESCE(excluded.direct_path_len, contacts.direct_path_len),
+                direct_path_hash_mode = COALESCE(
+                    excluded.direct_path_hash_mode, contacts.direct_path_hash_mode
+                ),
+                direct_path_updated_at = COALESCE(
+                    excluded.direct_path_updated_at, contacts.direct_path_updated_at
+                ),
                 route_override_path = COALESCE(
                     excluded.route_override_path, contacts.route_override_path
                 ),
@@ -87,9 +101,10 @@ class ContactRepository:
                 contact_row.name,
                 contact_row.type,
                 contact_row.flags,
-                last_path,
-                last_path_len,
-                out_path_hash_mode,
+                direct_path,
+                direct_path_len,
+                direct_path_hash_mode,
+                contact_row.direct_path_updated_at,
                 route_override_path,
                 route_override_len,
                 route_override_hash_mode,
@@ -107,12 +122,12 @@ class ContactRepository:
     @staticmethod
     def _row_to_contact(row) -> Contact:
         """Convert a database row to a Contact model."""
-        last_path, last_path_len, out_path_hash_mode = normalize_contact_route(
-            row["last_path"],
-            row["last_path_len"],
-            row["out_path_hash_mode"],
-        )
         available_columns = set(row.keys())
+        direct_path, direct_path_len, direct_path_hash_mode = normalize_contact_route(
+            row["direct_path"] if "direct_path" in available_columns else None,
+            row["direct_path_len"] if "direct_path_len" in available_columns else None,
+            row["direct_path_hash_mode"] if "direct_path_hash_mode" in available_columns else None,
+        )
         route_override_path = (
             row["route_override_path"] if "route_override_path" in available_columns else None
         )
@@ -136,9 +151,14 @@ class ContactRepository:
             name=row["name"],
             type=row["type"],
             flags=row["flags"],
-            last_path=last_path,
-            last_path_len=last_path_len,
-            out_path_hash_mode=out_path_hash_mode,
+            direct_path=direct_path,
+            direct_path_len=direct_path_len,
+            direct_path_hash_mode=direct_path_hash_mode,
+            direct_path_updated_at=(
+                row["direct_path_updated_at"]
+                if "direct_path_updated_at" in available_columns
+                else None
+            ),
             route_override_path=route_override_path,
             route_override_len=route_override_len,
             route_override_hash_mode=route_override_hash_mode,
@@ -286,42 +306,63 @@ class ContactRepository:
         return [ContactRepository._row_to_contact(row) for row in rows]
 
     @staticmethod
-    async def update_path(
+    async def update_direct_path(
         public_key: str,
         path: str,
         path_len: int,
-        out_path_hash_mode: int | None = None,
+        path_hash_mode: int | None = None,
+        updated_at: int | None = None,
     ) -> None:
         normalized_path, normalized_path_len, normalized_hash_mode = normalize_contact_route(
             path,
             path_len,
-            out_path_hash_mode,
+            path_hash_mode,
         )
+        ts = updated_at if updated_at is not None else int(time.time())
         await db.conn.execute(
-            """UPDATE contacts SET last_path = ?, last_path_len = ?,
-               out_path_hash_mode = COALESCE(?, out_path_hash_mode),
+            """UPDATE contacts SET direct_path = ?, direct_path_len = ?,
+               direct_path_hash_mode = COALESCE(?, direct_path_hash_mode),
+               direct_path_updated_at = ?,
                last_seen = ? WHERE public_key = ?""",
             (
                 normalized_path,
                 normalized_path_len,
                 normalized_hash_mode,
-                int(time.time()),
+                ts,
+                ts,
                 public_key.lower(),
             ),
         )
         await db.conn.commit()
 
     @staticmethod
+    async def update_path(
+        public_key: str,
+        path: str,
+        path_len: int,
+        path_hash_mode: int | None = None,
+        updated_at: int | None = None,
+    ) -> None:
+        """Compatibility shim for legacy callers/tests."""
+        await ContactRepository.update_direct_path(
+            public_key,
+            path,
+            path_len,
+            path_hash_mode,
+            updated_at=updated_at,
+        )
+
+    @staticmethod
     async def set_routing_override(
         public_key: str,
         path: str | None,
         path_len: int | None,
-        out_path_hash_mode: int | None = None,
+        path_hash_mode: int | None = None,
     ) -> None:
         normalized_path, normalized_len, normalized_hash_mode = normalize_route_override(
             path,
             path_len,
-            out_path_hash_mode,
+            path_hash_mode,
         )
         await db.conn.execute(
             """

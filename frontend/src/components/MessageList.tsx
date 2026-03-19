@@ -12,6 +12,7 @@ import type { Contact, Message, MessagePath, RadioConfig } from '../types';
 import { CONTACT_TYPE_REPEATER } from '../types';
 import { formatTime, parseSenderFromText } from '../utils/messageParser';
 import { formatHopCounts, type SenderInfo } from '../utils/pathUtils';
+import { getDirectContactRoute } from '../utils/pathUtils';
 import { ContactAvatar } from './ContactAvatar';
 import { PathModal } from './PathModal';
 import { handleKeyboardActivate } from '../utils/a11y';
@@ -500,12 +501,13 @@ export function MessageList({
     parsedSender: string | null
   ): SenderInfo => {
     if (msg.type === 'PRIV' && contact) {
+      const directRoute = getDirectContactRoute(contact);
       return {
         name: contact.name || contact.public_key.slice(0, 12),
         publicKeyOrPrefix: contact.public_key,
         lat: contact.lat,
         lon: contact.lon,
-        pathHashMode: contact.out_path_hash_mode,
+        pathHashMode: directRoute?.path_hash_mode ?? null,
       };
     }
     if (msg.type === 'CHAN') {
@@ -515,12 +517,13 @@ export function MessageList({
           ? contacts.find((candidate) => candidate.public_key === msg.sender_key)
           : null) || (senderName ? getContactByName(senderName) : null);
       if (senderContact) {
+        const directRoute = getDirectContactRoute(senderContact);
         return {
           name: senderContact.name || senderName || senderContact.public_key.slice(0, 12),
           publicKeyOrPrefix: senderContact.public_key,
           lat: senderContact.lat,
           lon: senderContact.lon,
-          pathHashMode: senderContact.out_path_hash_mode,
+          pathHashMode: directRoute?.path_hash_mode ?? null,
         };
       }
       if (senderName || msg.sender_key) {
@@ -538,12 +541,13 @@ export function MessageList({
     if (parsedSender) {
       const senderContact = getContactByName(parsedSender);
       if (senderContact) {
+        const directRoute = getDirectContactRoute(senderContact);
         return {
           name: parsedSender,
           publicKeyOrPrefix: senderContact.public_key,
           lat: senderContact.lat,
           lon: senderContact.lon,
-          pathHashMode: senderContact.out_path_hash_mode,
+          pathHashMode: directRoute?.path_hash_mode ?? null,
         };
       }
     }

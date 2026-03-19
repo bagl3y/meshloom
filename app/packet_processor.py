@@ -26,6 +26,7 @@ from app.decoder import (
     parse_packet,
     try_decrypt_dm,
     try_decrypt_packet_with_channel_key,
+    try_decrypt_path,
 )
 from app.keystore import get_private_key, get_public_key, has_private_key
 from app.models import (
@@ -44,6 +45,7 @@ from app.services.contact_reconciliation import (
     promote_prefix_contacts_for_contact,
     record_contact_name_and_reconcile,
 )
+from app.services.dm_ack_apply import apply_dm_ack_code
 from app.services.messages import (
     create_dm_message_from_decrypted as _create_dm_message_from_decrypted,
 )
@@ -318,8 +320,7 @@ async def process_raw_packet(
 
     elif payload_type == PayloadType.ADVERT:
         # Process all advert arrivals (even payload-hash duplicates) so the
-        # path-freshness logic in _process_advertisement can pick the shortest
-        # path heard within the freshness window.
+        # advert-history table retains recent path observations.
         await _process_advertisement(raw_bytes, ts, packet_info)
 
     elif payload_type == PayloadType.TEXT_MESSAGE:
@@ -327,6 +328,9 @@ async def process_raw_packet(
         decrypt_result = await _process_direct_message(raw_bytes, packet_id, ts, packet_info)
         if decrypt_result:
             result.update(decrypt_result)
+
+    elif payload_type == PayloadType.PATH:
+        await _process_path_packet(raw_bytes, ts, packet_info)
 
     # Always broadcast raw packet for the packet feed UI (even duplicates)
     # This enables the frontend cracker to see all incoming packets in real-time
@@ -430,51 +434,20 @@ async def _process_advertisement(
         logger.debug("Failed to parse advertisement payload")
         return
 
-    # Extract path info from packet
     new_path_len = packet_info.path_length
     new_path_hex = packet_info.path.hex() if packet_info.path else ""
 
     # Try to find existing contact
     existing = await ContactRepository.get_by_key(advert.public_key.lower())
 
-    # Determine which path to use: keep shorter path if heard recently (within 60s)
-    # This handles advertisement echoes through different routes
-    PATH_FRESHNESS_SECONDS = 60
-    use_existing_path = False
-
-    if existing and existing.last_advert:
-        path_age = timestamp - existing.last_advert
-        existing_path_len = existing.last_path_len if existing.last_path_len >= 0 else float("inf")
-
-        # Keep existing path if it's fresh and shorter (or equal)
-        if path_age <= PATH_FRESHNESS_SECONDS and existing_path_len <= new_path_len:
-            use_existing_path = True
-            logger.debug(
-                "Keeping existing shorter path for %s (existing=%d, new=%d, age=%ds)",
-                advert.public_key[:12],
-                existing_path_len,
-                new_path_len,
-                path_age,
-            )
-
-    if use_existing_path:
-        assert existing is not None  # Guaranteed by the conditions that set use_existing_path
-        path_len = existing.last_path_len if existing.last_path_len is not None else -1
-        path_hex = existing.last_path or ""
-        out_path_hash_mode = existing.out_path_hash_mode
-    else:
-        path_len = new_path_len
-        path_hex = new_path_hex
-        out_path_hash_mode = packet_info.path_hash_size - 1
-
     logger.debug(
-        "Parsed advertisement from %s: %s (role=%d, lat=%s, lon=%s, path_len=%d)",
+        "Parsed advertisement from %s: %s (role=%d, lat=%s, lon=%s, advert_path_len=%d)",
         advert.public_key[:12],
         advert.name,
         advert.device_role,
         advert.lat,
         advert.lon,
-        path_len,
+        new_path_len,
     )
 
     # Use device_role from advertisement for contact type (1=Chat, 2=Repeater, 3=Room, 4=Sensor).
@@ -501,9 +474,6 @@ async def _process_advertisement(
         lon=advert.lon,
         last_advert=timestamp,
         last_seen=timestamp,
-        last_path=path_hex,
-        last_path_len=path_len,
-        out_path_hash_mode=out_path_hash_mode,
         first_seen=timestamp,  # COALESCE in upsert preserves existing value
     )
 
@@ -667,3 +637,90 @@ async def _process_direct_message(
     # Couldn't decrypt with any known contact
     logger.debug("Could not decrypt DM with any of %d candidate contacts", len(candidate_contacts))
     return None
+
+
+async def _process_path_packet(
+    raw_bytes: bytes,
+    timestamp: int,
+    packet_info: PacketInfo | None,
+) -> None:
+    """Process a PATH packet and update the learned direct route."""
+    if not has_private_key():
+        return
+
+    private_key = get_private_key()
+    our_public_key = get_public_key()
+    if private_key is None or our_public_key is None:
+        return
+
+    if packet_info is None:
+        packet_info = parse_packet(raw_bytes)
+    if packet_info is None or packet_info.payload is None or len(packet_info.payload) < 4:
+        return
+
+    dest_hash = format(packet_info.payload[0], "02x").lower()
+    src_hash = format(packet_info.payload[1], "02x").lower()
+    our_first_byte = format(our_public_key[0], "02x").lower()
+    if dest_hash != our_first_byte:
+        return
+
+    candidate_contacts = await ContactRepository.get_by_pubkey_first_byte(src_hash)
+    if not candidate_contacts:
+        logger.debug("No contacts found matching hash %s for PATH decryption", src_hash)
+        return
+
+    for contact in candidate_contacts:
+        if len(contact.public_key) != 64:
+            continue
+        try:
+            contact_public_key = bytes.fromhex(contact.public_key)
+        except ValueError:
+            continue
+
+        result = try_decrypt_path(
+            raw_packet=raw_bytes,
+            our_private_key=private_key,
+            their_public_key=contact_public_key,
+            our_public_key=our_public_key,
+        )
+        if result is None:
+            continue
+
+        await ContactRepository.update_direct_path(
+            contact.public_key,
+            result.returned_path.hex(),
+            result.returned_path_len,
+            result.returned_path_hash_mode,
+            updated_at=timestamp,
+        )
+
+        if result.extra_type == PayloadType.ACK and len(result.extra) >= 4:
+            ack_code = result.extra[:4].hex()
+            matched = await apply_dm_ack_code(ack_code, broadcast_fn=broadcast_event)
+            if matched:
+                logger.info(
+                    "Applied bundled PATH ACK for %s via contact %s",
+                    ack_code,
+                    contact.public_key[:12],
+                )
+            else:
+                logger.debug(
+                    "Buffered bundled PATH ACK %s via contact %s",
+                    ack_code,
+                    contact.public_key[:12],
+                )
+        elif result.extra_type == PayloadType.RESPONSE and len(result.extra) > 0:
+            logger.debug(
+                "Observed bundled PATH RESPONSE from %s (%d bytes)",
+                contact.public_key[:12],
+                len(result.extra),
+            )
+
+        refreshed_contact = await ContactRepository.get_by_key(contact.public_key)
+        if refreshed_contact is not None:
+            broadcast_event("contact", refreshed_contact.model_dump())
+        return
+
+    logger.debug(
+        "Could not decrypt PATH packet with any of %d candidate contacts", len(candidate_contacts)
+    )

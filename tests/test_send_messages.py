@@ -83,8 +83,9 @@ async def _insert_contact(public_key, name="Alice", **overrides):
         "name": name,
         "type": 0,
         "flags": 0,
-        "last_path": None,
-        "last_path_len": -1,
+        "direct_path": None,
+        "direct_path_len": -1,
+        "direct_path_hash_mode": -1,
         "last_advert": None,
         "lat": None,
         "lon": None,
@@ -152,16 +153,16 @@ class TestOutgoingDMBroadcast:
         assert "ambiguous" in exc_info.value.detail.lower()
 
     @pytest.mark.asyncio
-    async def test_send_dm_preserves_stored_out_path_hash_mode(self, test_db):
+    async def test_send_dm_preserves_stored_direct_path_hash_mode(self, test_db):
         """Direct-message send pushes the persisted path hash mode back to the radio."""
         mc = _make_mc()
         pub_key = "cd" * 32
         await _insert_contact(
             pub_key,
             "Alice",
-            last_path="aa00bb00",
-            last_path_len=2,
-            out_path_hash_mode=1,
+            direct_path="aa00bb00",
+            direct_path_len=2,
+            direct_path_hash_mode=1,
         )
 
         with (
@@ -185,9 +186,9 @@ class TestOutgoingDMBroadcast:
         await _insert_contact(
             pub_key,
             "Alice",
-            last_path="aabb",
-            last_path_len=1,
-            out_path_hash_mode=0,
+            direct_path="aabb",
+            direct_path_len=1,
+            direct_path_hash_mode=0,
             route_override_path="cc00dd00",
             route_override_len=2,
             route_override_hash_mode=1,

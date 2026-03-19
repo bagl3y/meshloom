@@ -138,8 +138,10 @@ MeshCore firmware can encode path hops as 1-byte, 2-byte, or 3-byte identifiers.
 - `path_hash_mode` values are `0` = 1-byte, `1` = 2-byte, `2` = 3-byte.
 - `GET /api/radio/config` exposes both the current `path_hash_mode` and `path_hash_mode_supported`.
 - `PATCH /api/radio/config` may update `path_hash_mode` only when the connected firmware supports it.
-- Contacts persist `out_path_hash_mode` separately from `last_path` so contact sync and DM send paths can round-trip correctly even when hop bytes are ambiguous.
-- Contacts may also persist an explicit routing override (`route_override_*`). When set, radio-bound operations use the override instead of the learned `last_path*`, but learned paths still keep updating from adverts.
+- Contact routing now uses canonical route fields: `direct_path`, `direct_path_len`, `direct_path_hash_mode`, plus optional `route_override_*`.
+- Route precedence for direct-message sends is: explicit override, then learned direct route, then flood.
+- The learned direct route is sourced from radio contact sync (`out_path`) and PATH/path-discovery updates, matching how firmware updates `ContactInfo.out_path`.
+- Advertisement paths are informational only. They are retained in `contact_advert_paths` for the contact pane and visualizer, but they are not used as DM send routes.
 - `path_len` in API payloads is always hop count, not byte count. The actual path byte length is `hop_count * hash_size`.
 
 ## Data Flow
@@ -159,11 +161,20 @@ MeshCore firmware can encode path hops as 1-byte, 2-byte, or 3-byte identifiers.
 4. Message stored in database with `outgoing=true`
 5. For direct messages: ACK tracked; for channel: repeat detection
 
+Direct-message send behavior intentionally mirrors the firmware/library `send_msg_with_retry(...)` flow:
+- We push the contact's effective route to the radio via `add_contact(...)` before sending.
+- Non-final attempts use the effective route (`override > direct > flood`).
+- Retry timing follows the radio's `suggested_timeout`.
+- The final retry is sent as flood by resetting the path on the radio first, even if an override or direct route exists.
+- Path math is always hop-count based; hop bytes are interpreted using the stored `path_hash_mode`.
+
 ### ACK and Repeat Detection
 
 **Direct messages**: Expected ACK code is tracked. When ACK event arrives, message marked as acked.
 
 Outgoing DMs send once immediately, then may retry up to 2 more times in the background if still unacked. Retry timing follows the radio's `suggested_timeout` from `PACKET_MSG_SENT`, and the final retry is sent as flood even when a routing override is configured. DM ACK state is terminal on first ACK: sibling retry ACK codes are cleared so one DM should not accumulate multiple delivery confirmations from different retry attempts.
+
+ACKs are not a contact-route source. They drive message delivery state and may appear in analytics/detail surfaces, but they do not update `direct_path*` or otherwise influence route selection for future sends.
 
 **Channel messages**: Flood messages echo back through repeaters. Repeats are identified by the database UNIQUE constraint on `(type, conversation_key, text, sender_timestamp)` — when an INSERT hits a duplicate, `_handle_duplicate_message()` in `packet_processor.py` adds the new path and, for outgoing messages only, increments the ack count. Incoming repeats add path data but do not change the ack count. There is no timestamp-windowed matching; deduplication is exact-match only.
 

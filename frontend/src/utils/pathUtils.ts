@@ -1,4 +1,4 @@
-import type { Contact, RadioConfig, MessagePath } from '../types';
+import type { Contact, ContactRoute, RadioConfig, MessagePath } from '../types';
 import { CONTACT_TYPE_REPEATER } from '../types';
 
 const MAX_PATH_BYTES = 64;
@@ -37,6 +37,7 @@ export interface EffectiveContactRoute {
   pathLen: number;
   pathHashMode: number;
   forced: boolean;
+  source: 'override' | 'direct' | 'flood';
 }
 
 function normalizePathHashMode(mode: number | null | undefined): number | null {
@@ -114,29 +115,86 @@ export function parsePathHops(path: string | null | undefined, hopCount?: number
 }
 
 export function hasRoutingOverride(contact: Contact): boolean {
-  return contact.route_override_len !== null && contact.route_override_len !== undefined;
+  return (
+    (contact.route_override !== null && contact.route_override !== undefined) ||
+    (contact.route_override_len !== null && contact.route_override_len !== undefined)
+  );
+}
+
+export function getDirectContactRoute(contact: Contact): ContactRoute | null {
+  if (contact.direct_route) {
+    return contact.direct_route;
+  }
+
+  if (contact.direct_path_len < 0) {
+    return null;
+  }
+
+  return {
+    path: contact.direct_path ?? '',
+    path_len: contact.direct_path_len,
+    path_hash_mode:
+      normalizePathHashMode(contact.direct_path_hash_mode) ??
+      inferPathHashMode(contact.direct_path, contact.direct_path_len) ??
+      0,
+  };
+}
+
+function getRouteOverride(contact: Contact): ContactRoute | null {
+  if (contact.route_override) {
+    return contact.route_override;
+  }
+
+  if (!hasRoutingOverride(contact)) {
+    return null;
+  }
+
+  const pathLen = contact.route_override_len ?? -1;
+  let pathHashMode = normalizePathHashMode(contact.route_override_hash_mode);
+  if (pathLen === -1) {
+    pathHashMode = -1;
+  } else if (pathHashMode == null) {
+    pathHashMode = inferPathHashMode(contact.route_override_path, pathLen) ?? 0;
+  }
+
+  return {
+    path: contact.route_override_path ?? '',
+    path_len: pathLen,
+    path_hash_mode: pathHashMode,
+  };
 }
 
 export function getEffectiveContactRoute(contact: Contact): EffectiveContactRoute {
-  const forced = hasRoutingOverride(contact);
-  const pathLen = forced ? (contact.route_override_len ?? -1) : contact.last_path_len;
-  const path = forced ? (contact.route_override_path ?? '') : (contact.last_path ?? '');
+  const route = contact.effective_route;
+  if (route) {
+    return {
+      path: route.path || null,
+      pathLen: route.path_len,
+      pathHashMode: route.path_hash_mode,
+      forced: contact.effective_route_source === 'override',
+      source: contact.effective_route_source ?? 'flood',
+    };
+  }
 
-  let pathHashMode = forced
-    ? (contact.route_override_hash_mode ?? null)
-    : (contact.out_path_hash_mode ?? null);
+  const directRoute = getDirectContactRoute(contact);
+  const overrideRoute = getRouteOverride(contact);
+  const resolvedRoute = overrideRoute ?? directRoute;
+  const source = overrideRoute ? 'override' : directRoute ? 'direct' : 'flood';
+  const pathLen = resolvedRoute?.path_len ?? -1;
+  let pathHashMode = resolvedRoute?.path_hash_mode ?? null;
 
   if (pathLen === -1) {
     pathHashMode = -1;
   } else if (pathHashMode == null || pathHashMode < 0 || pathHashMode > 2) {
-    pathHashMode = inferPathHashMode(path, pathLen) ?? 0;
+    pathHashMode = inferPathHashMode(resolvedRoute?.path, pathLen) ?? 0;
   }
 
   return {
-    path: path || null,
+    path: resolvedRoute?.path || null,
     pathLen,
     pathHashMode,
-    forced,
+    forced: source === 'override',
+    source,
   };
 }
 
@@ -151,16 +209,17 @@ export function formatRouteLabel(pathLen: number, capitalize: boolean = false): 
 }
 
 export function formatRoutingOverrideInput(contact: Contact): string {
-  if (!hasRoutingOverride(contact)) {
+  const routeOverride = getRouteOverride(contact);
+  if (!routeOverride) {
     return '';
   }
-  if (contact.route_override_len === -1) {
+  if (routeOverride.path_len === -1) {
     return '-1';
   }
-  if (contact.route_override_len === 0) {
+  if (routeOverride.path_len === 0) {
     return '0';
   }
-  return parsePathHops(contact.route_override_path, contact.route_override_len)
+  return parsePathHops(routeOverride.path, routeOverride.path_len)
     .map((hop) => hop.toLowerCase())
     .join(',');
 }

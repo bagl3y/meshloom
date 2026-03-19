@@ -13,9 +13,10 @@ CREATE TABLE IF NOT EXISTS contacts (
     name TEXT,
     type INTEGER DEFAULT 0,
     flags INTEGER DEFAULT 0,
-    last_path TEXT,
-    last_path_len INTEGER DEFAULT -1,
-    out_path_hash_mode INTEGER DEFAULT 0,
+    direct_path TEXT,
+    direct_path_len INTEGER,
+    direct_path_hash_mode INTEGER,
+    direct_path_updated_at INTEGER,
     route_override_path TEXT,
     route_override_len INTEGER,
     route_override_hash_mode INTEGER,
@@ -25,7 +26,8 @@ CREATE TABLE IF NOT EXISTS contacts (
     last_seen INTEGER,
     on_radio INTEGER DEFAULT 0,
     last_contacted INTEGER,
-    first_seen INTEGER
+    first_seen INTEGER,
+    last_read_at INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS channels (
@@ -33,7 +35,8 @@ CREATE TABLE IF NOT EXISTS channels (
     name TEXT NOT NULL,
     is_hashtag INTEGER DEFAULT 0,
     on_radio INTEGER DEFAULT 0,
-    flood_scope_override TEXT
+    flood_scope_override TEXT,
+    last_read_at INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS messages (

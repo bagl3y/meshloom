@@ -99,12 +99,17 @@ export interface Contact {
   name: string | null;
   type: number;
   flags: number;
-  last_path: string | null;
-  last_path_len: number;
-  out_path_hash_mode: number;
+  direct_path: string | null;
+  direct_path_len: number;
+  direct_path_hash_mode: number;
+  direct_path_updated_at?: number | null;
   route_override_path?: string | null;
   route_override_len?: number | null;
   route_override_hash_mode?: number | null;
+  effective_route?: ContactRoute | null;
+  effective_route_source?: 'override' | 'direct' | 'flood';
+  direct_route?: ContactRoute | null;
+  route_override?: ContactRoute | null;
   last_advert: number | null;
   lat: number | null;
   lon: number | null;
@@ -113,6 +118,12 @@ export interface Contact {
   last_contacted: number | null;
   last_read_at: number | null;
   first_seen: number | null;
+}
+
+export interface ContactRoute {
+  path: string;
+  path_len: number;
+  path_hash_mode: number;
 }
 
 export interface ContactAdvertPath {
