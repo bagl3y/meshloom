@@ -216,8 +216,8 @@ class TestAdvertisementPipeline:
         assert contact.lon is not None
         assert abs(contact.lat - expected["lat"]) < 0.001
         assert abs(contact.lon - expected["lon"]) < 0.001
-        assert contact.last_path_len == -1
-        assert contact.last_path in (None, "")
+        assert contact.direct_path_len == -1
+        assert contact.direct_path in (None, "")
 
         advert_paths = await ContactAdvertPathRepository.get_recent_for_contact(contact.public_key)
         assert len(advert_paths) == 1
@@ -559,7 +559,7 @@ class TestAdvertisementPipeline:
 
         contact = await ContactRepository.get_by_key(test_pubkey)
         assert contact is not None
-        assert contact.last_path_len == -1
+        assert contact.direct_path_len == -1
         advert_paths = await ContactAdvertPathRepository.get_recent_for_contact(test_pubkey)
         assert [(path.path, path.path_len) for path in advert_paths] == [
             ("aabbccdd", 4),
@@ -1878,7 +1878,7 @@ class TestProcessRawPacketIntegration:
 
         contact = await ContactRepository.get_by_key(test_pubkey)
         assert contact is not None
-        assert contact.last_path_len == -1
+        assert contact.direct_path_len == -1
         advert_paths = await ContactAdvertPathRepository.get_recent_for_contact(test_pubkey)
         assert [(path.path, path.path_len) for path in advert_paths] == [
             ("dd", 1),

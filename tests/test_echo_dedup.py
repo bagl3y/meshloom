@@ -559,7 +559,6 @@ class TestDualPathDedup:
                 "last_contacted": SENDER_TIMESTAMP,
                 "first_seen": SENDER_TIMESTAMP,
                 "on_radio": False,
-                "out_path_hash_mode": 0,
             }
         )
 
@@ -631,7 +630,6 @@ class TestDualPathDedup:
                 "last_contacted": SENDER_TIMESTAMP,
                 "first_seen": SENDER_TIMESTAMP,
                 "on_radio": False,
-                "out_path_hash_mode": 0,
             }
         )
 
@@ -706,7 +704,6 @@ class TestDualPathDedup:
                 "last_contacted": SENDER_TIMESTAMP,
                 "first_seen": SENDER_TIMESTAMP,
                 "on_radio": False,
-                "out_path_hash_mode": 0,
             }
         )
 

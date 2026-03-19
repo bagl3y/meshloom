@@ -1,7 +1,6 @@
-from collections.abc import Mapping
-from typing import Any, Literal
+from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from app.path_utils import normalize_contact_route, normalize_route_override
 
@@ -37,20 +36,6 @@ class ContactUpsert(BaseModel):
     on_radio: bool | None = None
     last_contacted: int | None = None
     first_seen: int | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def _translate_legacy_route_fields(cls, data: Any) -> Any:
-        if not isinstance(data, Mapping):
-            return data
-        translated = dict(data)
-        if "direct_path" not in translated and "last_path" in translated:
-            translated["direct_path"] = translated.get("last_path")
-        if "direct_path_len" not in translated and "last_path_len" in translated:
-            translated["direct_path_len"] = translated.get("last_path_len")
-        if "direct_path_hash_mode" not in translated and "out_path_hash_mode" in translated:
-            translated["direct_path_hash_mode"] = translated.get("out_path_hash_mode")
-        return translated
 
     @classmethod
     def from_contact(cls, contact: "Contact", **changes) -> "ContactUpsert":
@@ -114,20 +99,6 @@ class Contact(BaseModel):
     direct_route: ContactRoute | None = None
     route_override: ContactRoute | None = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def _translate_legacy_route_fields(cls, data: Any) -> Any:
-        if not isinstance(data, Mapping):
-            return data
-        translated = dict(data)
-        if "direct_path" not in translated and "last_path" in translated:
-            translated["direct_path"] = translated.get("last_path")
-        if "direct_path_len" not in translated and "last_path_len" in translated:
-            translated["direct_path_len"] = translated.get("last_path_len")
-        if "direct_path_hash_mode" not in translated and "out_path_hash_mode" in translated:
-            translated["direct_path_hash_mode"] = translated.get("out_path_hash_mode")
-        return translated
-
     def model_post_init(self, __context) -> None:
         direct_path, direct_path_len, direct_path_hash_mode = normalize_contact_route(
             self.direct_path,
@@ -185,18 +156,6 @@ class Contact(BaseModel):
 
     def has_route_override(self) -> bool:
         return self.route_override_len is not None
-
-    @property
-    def last_path(self) -> str | None:
-        return self.direct_path
-
-    @property
-    def last_path_len(self) -> int:
-        return self.direct_path_len
-
-    @property
-    def out_path_hash_mode(self) -> int:
-        return self.direct_path_hash_mode
 
     def effective_route_tuple(self) -> tuple[str, int, int]:
         if self.has_route_override():

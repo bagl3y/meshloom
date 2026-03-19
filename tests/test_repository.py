@@ -750,7 +750,7 @@ class TestContactRepositoryUpsertContracts:
                 name="Bob",
                 type=2,
                 on_radio=True,
-                out_path_hash_mode=-1,
+                direct_path_hash_mode=-1,
             )
         )
 

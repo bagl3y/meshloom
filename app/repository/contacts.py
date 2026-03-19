@@ -336,23 +336,6 @@ class ContactRepository:
         await db.conn.commit()
 
     @staticmethod
-    async def update_path(
-        public_key: str,
-        path: str,
-        path_len: int,
-        path_hash_mode: int | None = None,
-        updated_at: int | None = None,
-    ) -> None:
-        """Compatibility shim for legacy callers/tests."""
-        await ContactRepository.update_direct_path(
-            public_key,
-            path,
-            path_len,
-            path_hash_mode,
-            updated_at=updated_at,
-        )
-
-    @staticmethod
     async def set_routing_override(
         public_key: str,
         path: str | None,

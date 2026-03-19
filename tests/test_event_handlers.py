@@ -850,9 +850,9 @@ class TestOnPathUpdate:
         # Verify path was updated in DB
         contact = await ContactRepository.get_by_key("aa" * 32)
         assert contact is not None
-        assert contact.last_path == "0102"
-        assert contact.last_path_len == 2
-        assert contact.out_path_hash_mode == 0
+        assert contact.direct_path == "0102"
+        assert contact.direct_path_len == 2
+        assert contact.direct_path_hash_mode == 0
 
     @pytest.mark.asyncio
     async def test_updates_path_hash_mode_when_present(self, test_db):
@@ -880,9 +880,9 @@ class TestOnPathUpdate:
 
         contact = await ContactRepository.get_by_key("ab" * 32)
         assert contact is not None
-        assert contact.last_path == "aa00bb00"
-        assert contact.last_path_len == 2
-        assert contact.out_path_hash_mode == 1
+        assert contact.direct_path == "aa00bb00"
+        assert contact.direct_path_len == 2
+        assert contact.direct_path_hash_mode == 1
 
     @pytest.mark.asyncio
     async def test_does_nothing_when_contact_not_found(self, test_db):
@@ -924,8 +924,8 @@ class TestOnPathUpdate:
 
         contact = await ContactRepository.get_by_key("bb" * 32)
         assert contact is not None
-        assert contact.last_path == "0a0b"
-        assert contact.last_path_len == 2
+        assert contact.direct_path == "0a0b"
+        assert contact.direct_path_len == 2
 
     @pytest.mark.asyncio
     async def test_missing_path_fields_does_not_modify_contact(self, test_db):
@@ -940,7 +940,7 @@ class TestOnPathUpdate:
                 "flags": 0,
             }
         )
-        await ContactRepository.update_path("dd" * 32, "beef", 2)
+        await ContactRepository.update_direct_path("dd" * 32, "beef", 2)
 
         class MockEvent:
             payload = {"public_key": "dd" * 32}
@@ -949,8 +949,8 @@ class TestOnPathUpdate:
 
         contact = await ContactRepository.get_by_key("dd" * 32)
         assert contact is not None
-        assert contact.last_path == "beef"
-        assert contact.last_path_len == 2
+        assert contact.direct_path == "beef"
+        assert contact.direct_path_len == 2
 
     @pytest.mark.asyncio
     async def test_missing_identity_fields_noop(self, test_db):
@@ -965,7 +965,7 @@ class TestOnPathUpdate:
                 "flags": 0,
             }
         )
-        await ContactRepository.update_path("ee" * 32, "abcd", 2)
+        await ContactRepository.update_direct_path("ee" * 32, "abcd", 2)
 
         class MockEvent:
             payload = {}
@@ -974,8 +974,8 @@ class TestOnPathUpdate:
 
         contact = await ContactRepository.get_by_key("ee" * 32)
         assert contact is not None
-        assert contact.last_path == "abcd"
-        assert contact.last_path_len == 2
+        assert contact.direct_path == "abcd"
+        assert contact.direct_path_len == 2
 
 
 class TestOnNewContact:

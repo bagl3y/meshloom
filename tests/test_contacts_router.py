@@ -44,8 +44,9 @@ async def _insert_contact(public_key=KEY_A, name="Alice", on_radio=False, **over
         "name": name,
         "type": 0,
         "flags": 0,
-        "last_path": None,
-        "last_path_len": -1,
+        "direct_path": None,
+        "direct_path_len": -1,
+        "direct_path_hash_mode": -1,
         "last_advert": None,
         "lat": None,
         "lon": None,
@@ -307,9 +308,9 @@ class TestPathDiscovery:
 
         updated = await ContactRepository.get_by_key(KEY_A)
         assert updated is not None
-        assert updated.last_path == "11223344"
-        assert updated.last_path_len == 2
-        assert updated.out_path_hash_mode == 1
+        assert updated.direct_path == "11223344"
+        assert updated.direct_path_len == 2
+        assert updated.direct_path_hash_mode == 1
         mc.commands.add_contact.assert_awaited()
         mock_broadcast.assert_called_once_with("contact", updated.model_dump())
 
@@ -527,7 +528,7 @@ class TestRoutingOverride:
 
     @pytest.mark.asyncio
     async def test_set_explicit_routing_override(self, test_db, client):
-        await _insert_contact(KEY_A, last_path="11", last_path_len=1, out_path_hash_mode=0)
+        await _insert_contact(KEY_A, direct_path="11", direct_path_len=1, direct_path_hash_mode=0)
 
         with (
             patch("app.routers.contacts.radio_manager") as mock_rm,
@@ -542,8 +543,8 @@ class TestRoutingOverride:
         assert response.status_code == 200
         contact = await ContactRepository.get_by_key(KEY_A)
         assert contact is not None
-        assert contact.last_path == "11"
-        assert contact.last_path_len == 1
+        assert contact.direct_path == "11"
+        assert contact.direct_path_len == 1
         assert contact.route_override_path == "ae92f13e"
         assert contact.route_override_len == 2
         assert contact.route_override_hash_mode == 1
@@ -554,9 +555,9 @@ class TestRoutingOverride:
         await _insert_contact(
             KEY_A,
             on_radio=True,
-            last_path="11",
-            last_path_len=1,
-            out_path_hash_mode=0,
+            direct_path="11",
+            direct_path_len=1,
+            direct_path_hash_mode=0,
         )
 
         mock_mc = MagicMock()
@@ -584,8 +585,8 @@ class TestRoutingOverride:
         contact = await ContactRepository.get_by_key(KEY_A)
         assert contact is not None
         assert contact.route_override_len == -1
-        assert contact.last_path == "11"
-        assert contact.last_path_len == 1
+        assert contact.direct_path == "11"
+        assert contact.direct_path_len == 1
 
     @pytest.mark.asyncio
     async def test_blank_route_clears_override_and_preserves_learned_path(self, test_db, client):
