@@ -340,9 +340,10 @@ Clicking a contact's avatar in `ChatHeader` or `MessageList` opens a `ContactInf
 - Name history ("Also Known As") — shown only when the contact has used multiple names
 - Message stats: DM count, channel message count
 - Most active rooms (clickable → navigate to channel)
+- Route details from the canonical backend surface (`effective_route`, `effective_route_source`, `direct_route`, `route_override`)
 - Advert observation rate
 - Nearest repeaters (resolved from first-hop path prefixes)
-- Recent advert paths
+- Recent advert paths (informational only; not part of DM route selection)
 
 State: `useConversationNavigation` controls open/close via `infoPaneContactKey`. Live contact data from WebSocket updates is preferred over the initial detail snapshot.
 

@@ -139,6 +139,8 @@ MeshCore firmware can encode path hops as 1-byte, 2-byte, or 3-byte identifiers.
 - `GET /api/radio/config` exposes both the current `path_hash_mode` and `path_hash_mode_supported`.
 - `PATCH /api/radio/config` may update `path_hash_mode` only when the connected firmware supports it.
 - Contact routing now uses canonical route fields: `direct_path`, `direct_path_len`, `direct_path_hash_mode`, plus optional `route_override_*`.
+- The contact/API surface also exposes backend-computed `effective_route`, `effective_route_source`, `direct_route`, and `route_override` so send logic and UI do not reimplement precedence rules independently.
+- Legacy `last_path`, `last_path_len`, and `out_path_hash_mode` are no longer part of the contact model or API contract.
 - Route precedence for direct-message sends is: explicit override, then learned direct route, then flood.
 - The learned direct route is sourced from radio contact sync (`out_path`) and PATH/path-discovery updates, matching how firmware updates `ContactInfo.out_path`.
 - Advertisement paths are informational only. They are retained in `contact_advert_paths` for the contact pane and visualizer, but they are not used as DM send routes.

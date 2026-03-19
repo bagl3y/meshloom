@@ -271,6 +271,13 @@ Main tables:
 - `contact_name_history` (tracks name changes over time)
 - `app_settings`
 
+Contact route state is canonicalized on the backend:
+- stored route inputs: `direct_path`, `direct_path_len`, `direct_path_hash_mode`, `direct_path_updated_at`, plus optional `route_override_*`
+- computed route surface: `effective_route`, `effective_route_source`, `direct_route`, `route_override`
+- removed legacy names: `last_path`, `last_path_len`, `out_path_hash_mode`
+
+Frontend and send paths should consume the canonical route surface rather than reconstructing precedence from raw fields.
+
 Repository writes should prefer typed models such as `ContactUpsert` over ad hoc dict payloads when adding or updating schema-coupled data.
 
 `max_radio_contacts` is the configured radio contact capacity baseline. Favorites reload first, the app refills non-favorite working-set contacts to about 80% of that capacity, and periodic offload triggers once occupancy reaches about 95%.
