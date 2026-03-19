@@ -43,6 +43,8 @@ export interface RadioConfig {
   cr: number;
 }
 
+export type RadioAdvertMode = 'flood' | 'zero_hop';
+
 export function getRadioConfig(): Promise<RadioConfig> {
   return fetchJson('/radio/config');
 }
@@ -56,6 +58,13 @@ export function updateRadioConfig(patch: Partial<RadioConfig>): Promise<RadioCon
 
 export function rebootRadio(): Promise<{ status: string; message: string }> {
   return fetchJson('/radio/reboot', { method: 'POST' });
+}
+
+export function sendAdvertisement(mode: RadioAdvertMode = 'flood'): Promise<{ status: string }> {
+  return fetchJson('/radio/advertise', {
+    method: 'POST',
+    body: JSON.stringify({ mode }),
+  });
 }
 
 // --- Channels ---
@@ -126,6 +135,22 @@ export function createContact(
 
 export function deleteContact(publicKey: string): Promise<{ status: string }> {
   return fetchJson(`/contacts/${publicKey}`, { method: 'DELETE' });
+}
+
+export async function getContactByKey(publicKey: string): Promise<Contact | undefined> {
+  const normalized = publicKey.toLowerCase();
+  const contacts = await getContacts(500, 0);
+  return contacts.find((contact) => contact.public_key.toLowerCase() === normalized);
+}
+
+export function setContactRoutingOverride(
+  publicKey: string,
+  route: string
+): Promise<{ status: string; public_key: string }> {
+  return fetchJson(`/contacts/${publicKey}/routing-override`, {
+    method: 'POST',
+    body: JSON.stringify({ route }),
+  });
 }
 
 // --- Messages ---
