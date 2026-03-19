@@ -24,6 +24,7 @@ import { handleKeyboardActivate } from '../utils/a11y';
 import { ContactAvatar } from './ContactAvatar';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
 import { toast } from './ui/sonner';
+import { useDistanceUnit } from '../contexts/DistanceUnitContext';
 import type {
   Contact,
   ContactActiveRoom,
@@ -82,6 +83,7 @@ export function ContactInfoPane({
   onToggleBlockedKey,
   onToggleBlockedName,
 }: ContactInfoPaneProps) {
+  const { distanceUnit } = useDistanceUnit();
   const isNameOnly = contactKey?.startsWith('name:') ?? false;
   const nameOnlyValue = isNameOnly && contactKey ? contactKey.slice(5) : null;
 
@@ -315,7 +317,7 @@ export function ContactInfoPane({
                   <InfoItem label="Last Contacted" value={formatTime(contact.last_contacted)} />
                 )}
                 {distFromUs !== null && (
-                  <InfoItem label="Distance" value={formatDistance(distFromUs)} />
+                  <InfoItem label="Distance" value={formatDistance(distFromUs, distanceUnit)} />
                 )}
                 {effectiveRoute && (
                   <InfoItem

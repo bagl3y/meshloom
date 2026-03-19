@@ -19,6 +19,7 @@ import {
   REOPEN_LAST_CONVERSATION_KEY,
 } from '../utils/lastViewedConversation';
 import { api } from '../api';
+import { DISTANCE_UNIT_KEY } from '../utils/distanceUnits';
 
 const baseConfig: RadioConfig = {
   public_key: 'aa'.repeat(32),
@@ -507,6 +508,18 @@ describe('SettingsModal', () => {
 
     expect(localStorage.getItem(REOPEN_LAST_CONVERSATION_KEY)).toBeNull();
     expect(localStorage.getItem(LAST_VIEWED_CONVERSATION_KEY)).toBeNull();
+  });
+
+  it('defaults distance units to imperial and stores local changes', () => {
+    renderModal();
+    openLocalSection();
+
+    const select = screen.getByLabelText('Distance Units');
+    expect(select).toHaveValue('imperial');
+
+    fireEvent.change(select, { target: { value: 'smoots' } });
+
+    expect(localStorage.getItem(DISTANCE_UNIT_KEY)).toBe('smoots');
   });
 
   it('purges decrypted raw packets via maintenance endpoint action', async () => {

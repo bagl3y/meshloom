@@ -2,6 +2,7 @@ import { useMemo, lazy, Suspense } from 'react';
 import { cn } from '@/lib/utils';
 import { RepeaterPane, NotFetched, formatDuration } from './repeaterPaneShared';
 import { isValidLocation, calculateDistance, formatDistance } from '../../utils/pathUtils';
+import { useDistanceUnit } from '../../contexts/DistanceUnitContext';
 import type {
   Contact,
   RepeaterNeighborsResponse,
@@ -35,6 +36,7 @@ export function NeighborsPane({
   nodeInfoState: PaneState;
   repeaterName: string | null;
 }) {
+  const { distanceUnit } = useDistanceUnit();
   const advertLat = repeaterContact?.lat ?? null;
   const advertLon = repeaterContact?.lon ?? null;
 
@@ -93,7 +95,7 @@ export function NeighborsPane({
       if (hasValidRepeaterGps && isValidLocation(nLat, nLon)) {
         const distKm = calculateDistance(positionSource.lat, positionSource.lon, nLat, nLon);
         if (distKm != null) {
-          dist = formatDistance(distKm);
+          dist = formatDistance(distKm, distanceUnit);
           anyDist = true;
         }
       }
@@ -111,7 +113,7 @@ export function NeighborsPane({
       sorted: enriched,
       hasDistances: anyDist,
     };
-  }, [contacts, data, hasValidRepeaterGps, positionSource.lat, positionSource.lon]);
+  }, [contacts, data, distanceUnit, hasValidRepeaterGps, positionSource.lat, positionSource.lon]);
 
   return (
     <RepeaterPane

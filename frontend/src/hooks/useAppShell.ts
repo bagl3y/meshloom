@@ -1,6 +1,7 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 
 import { getLocalLabel, type LocalLabel } from '../utils/localLabel';
+import { getSavedDistanceUnit, type DistanceUnit } from '../utils/distanceUnits';
 import type { SettingsSection } from '../components/settings/settingsConstants';
 import { parseHashSettingsSection, updateSettingsHash } from '../utils/urlHash';
 
@@ -12,10 +13,12 @@ interface UseAppShellResult {
   showCracker: boolean;
   crackerRunning: boolean;
   localLabel: LocalLabel;
+  distanceUnit: DistanceUnit;
   setSettingsSection: (section: SettingsSection) => void;
   setSidebarOpen: (open: boolean) => void;
   setCrackerRunning: (running: boolean) => void;
   setLocalLabel: (label: LocalLabel) => void;
+  setDistanceUnit: (unit: DistanceUnit) => void;
   handleCloseSettingsView: () => void;
   handleToggleSettingsView: () => void;
   handleOpenNewMessage: () => void;
@@ -34,6 +37,7 @@ export function useAppShell(): UseAppShellResult {
   const [showCracker, setShowCracker] = useState(false);
   const [crackerRunning, setCrackerRunning] = useState(false);
   const [localLabel, setLocalLabel] = useState(getLocalLabel);
+  const [distanceUnit, setDistanceUnit] = useState(getSavedDistanceUnit);
   const previousHashRef = useRef('');
 
   useEffect(() => {
@@ -87,10 +91,12 @@ export function useAppShell(): UseAppShellResult {
     showCracker,
     crackerRunning,
     localLabel,
+    distanceUnit,
     setSettingsSection,
     setSidebarOpen,
     setCrackerRunning,
     setLocalLabel,
+    setDistanceUnit,
     handleCloseSettingsView,
     handleToggleSettingsView,
     handleOpenNewMessage,

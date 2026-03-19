@@ -1,4 +1,5 @@
 import type { Contact, ContactRoute, RadioConfig, MessagePath } from '../types';
+import type { DistanceUnit } from './distanceUnits';
 import { CONTACT_TYPE_REPEATER } from '../types';
 
 const MAX_PATH_BYTES = 64;
@@ -343,13 +344,35 @@ export function isValidLocation(lat: number | null, lon: number | null): boolean
 }
 
 /**
- * Format distance in human-readable form (m or km)
+ * Format distance in human-readable form using the selected display unit.
  */
-export function formatDistance(km: number): string {
-  if (km < 1) {
-    return `${Math.round(km * 1000)}m`;
+export function formatDistance(km: number, unit: DistanceUnit = 'imperial'): string {
+  const formatInteger = (value: number) => value.toLocaleString();
+  const formatOneDecimal = (value: number) =>
+    value.toLocaleString(undefined, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    });
+
+  if (unit === 'metric') {
+    if (km < 1) {
+      return `${formatInteger(Math.round(km * 1000))}m`;
+    }
+    return `${formatOneDecimal(km)}km`;
   }
-  return `${km.toFixed(1)}km`;
+
+  if (unit === 'smoots') {
+    const smoots = (km * 1000) / 1.7018;
+    const rounded = smoots < 10 ? Number(smoots.toFixed(1)) : Math.round(smoots);
+    const display = smoots < 10 ? formatOneDecimal(rounded) : formatInteger(rounded);
+    return `${display} ${rounded === 1 ? 'smoot' : 'smoots'}`;
+  }
+
+  const miles = km * 0.621371;
+  if (miles < 0.1) {
+    return `${formatInteger(Math.round(km * 3280.839895))}ft`;
+  }
+  return `${formatOneDecimal(miles)}mi`;
 }
 
 /**

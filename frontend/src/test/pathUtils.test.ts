@@ -685,22 +685,39 @@ describe('isValidLocation', () => {
 });
 
 describe('formatDistance', () => {
-  it('formats distances under 1km in meters', () => {
-    expect(formatDistance(0.5)).toBe('500m');
-    expect(formatDistance(0.123)).toBe('123m');
-    expect(formatDistance(0.9999)).toBe('1000m');
+  const formatInteger = (value: number) => value.toLocaleString();
+  const formatOneDecimal = (value: number) =>
+    value.toLocaleString(undefined, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    });
+
+  it('defaults to imperial formatting', () => {
+    expect(formatDistance(0.01)).toBe(`${formatInteger(33)}ft`);
+    expect(formatDistance(0.5)).toBe(`${formatOneDecimal(0.5 * 0.621371)}mi`);
+    expect(formatDistance(1)).toBe(`${formatOneDecimal(0.621371)}mi`);
   });
 
-  it('formats distances at or above 1km with one decimal', () => {
-    expect(formatDistance(1)).toBe('1.0km');
-    expect(formatDistance(1.5)).toBe('1.5km');
-    expect(formatDistance(12.34)).toBe('12.3km');
-    expect(formatDistance(100)).toBe('100.0km');
+  it('formats metric distances in meters and kilometers', () => {
+    expect(formatDistance(0.5, 'metric')).toBe(`${formatInteger(500)}m`);
+    expect(formatDistance(0.123, 'metric')).toBe(`${formatInteger(123)}m`);
+    expect(formatDistance(0.9999, 'metric')).toBe(`${formatInteger(1000)}m`);
+    expect(formatDistance(1, 'metric')).toBe(`${formatOneDecimal(1)}km`);
+    expect(formatDistance(12.34, 'metric')).toBe(`${formatOneDecimal(12.34)}km`);
   });
 
-  it('rounds meters to nearest integer', () => {
-    expect(formatDistance(0.4567)).toBe('457m');
-    expect(formatDistance(0.001)).toBe('1m');
+  it('formats smoot distances using 1.7018 meters per smoot', () => {
+    expect(formatDistance(0.0017018, 'smoots')).toBe(`${formatOneDecimal(1)} smoot`);
+    expect(formatDistance(0.001, 'smoots')).toBe(`${formatOneDecimal(0.6)} smoots`);
+    expect(formatDistance(1, 'smoots')).toBe(`${formatInteger(588)} smoots`);
+  });
+
+  it('applies locale separators to large values', () => {
+    expect(formatDistance(1.234, 'metric')).toBe(`${formatOneDecimal(1.234)}km`);
+    expect(formatDistance(1234, 'metric')).toBe(`${formatOneDecimal(1234)}km`);
+    expect(formatDistance(2.1, 'smoots')).toContain(
+      formatInteger(Math.round((2.1 * 1000) / 1.7018))
+    );
   });
 });
 

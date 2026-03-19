@@ -18,6 +18,7 @@ import {
 } from './hooks';
 import { AppShell } from './components/AppShell';
 import type { MessageInputHandle } from './components/MessageInput';
+import { DistanceUnitProvider } from './contexts/DistanceUnitContext';
 import { messageContainsMention } from './utils/messageParser';
 import { getStateKey } from './utils/conversationState';
 import type { Conversation, Message, RawPacket } from './types';
@@ -91,10 +92,12 @@ export function App() {
     showCracker,
     crackerRunning,
     localLabel,
+    distanceUnit,
     setSettingsSection,
     setSidebarOpen,
     setCrackerRunning,
     setLocalLabel,
+    setDistanceUnit,
     handleCloseSettingsView,
     handleToggleSettingsView,
     handleOpenNewMessage,
@@ -564,29 +567,31 @@ export function App() {
     setContactsLoaded,
   ]);
   return (
-    <AppShell
-      localLabel={localLabel}
-      showNewMessage={showNewMessage}
-      showSettings={showSettings}
-      settingsSection={settingsSection}
-      sidebarOpen={sidebarOpen}
-      showCracker={showCracker}
-      onSettingsSectionChange={setSettingsSection}
-      onSidebarOpenChange={setSidebarOpen}
-      onCrackerRunningChange={setCrackerRunning}
-      onToggleSettingsView={handleToggleSettingsView}
-      onCloseSettingsView={handleCloseSettingsView}
-      onCloseNewMessage={handleCloseNewMessage}
-      onLocalLabelChange={setLocalLabel}
-      statusProps={statusProps}
-      sidebarProps={sidebarProps}
-      conversationPaneProps={conversationPaneProps}
-      searchProps={searchProps}
-      settingsProps={settingsProps}
-      crackerProps={crackerProps}
-      newMessageModalProps={newMessageModalProps}
-      contactInfoPaneProps={contactInfoPaneProps}
-      channelInfoPaneProps={channelInfoPaneProps}
-    />
+    <DistanceUnitProvider distanceUnit={distanceUnit} setDistanceUnit={setDistanceUnit}>
+      <AppShell
+        localLabel={localLabel}
+        showNewMessage={showNewMessage}
+        showSettings={showSettings}
+        settingsSection={settingsSection}
+        sidebarOpen={sidebarOpen}
+        showCracker={showCracker}
+        onSettingsSectionChange={setSettingsSection}
+        onSidebarOpenChange={setSidebarOpen}
+        onCrackerRunningChange={setCrackerRunning}
+        onToggleSettingsView={handleToggleSettingsView}
+        onCloseSettingsView={handleCloseSettingsView}
+        onCloseNewMessage={handleCloseNewMessage}
+        onLocalLabelChange={setLocalLabel}
+        statusProps={statusProps}
+        sidebarProps={sidebarProps}
+        conversationPaneProps={conversationPaneProps}
+        searchProps={searchProps}
+        settingsProps={settingsProps}
+        crackerProps={crackerProps}
+        newMessageModalProps={newMessageModalProps}
+        contactInfoPaneProps={contactInfoPaneProps}
+        channelInfoPaneProps={channelInfoPaneProps}
+      />
+    </DistanceUnitProvider>
   );
 }

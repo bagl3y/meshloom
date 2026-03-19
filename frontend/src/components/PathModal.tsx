@@ -14,6 +14,8 @@ import {
 } from '../utils/pathUtils';
 import { formatTime } from '../utils/messageParser';
 import { getMapFocusHash } from '../utils/urlHash';
+import { useDistanceUnit } from '../contexts/DistanceUnitContext';
+import type { DistanceUnit } from '../utils/distanceUnits';
 
 const PathRouteMap = lazy(() =>
   import('./PathRouteMap').then((m) => ({ default: m.PathRouteMap }))
@@ -44,6 +46,7 @@ export function PathModal({
   isResendable,
   onResend,
 }: PathModalProps) {
+  const { distanceUnit } = useDistanceUnit();
   const [expandedMaps, setExpandedMaps] = useState<Set<number>>(new Set());
   const hasResendActions = isOutgoingChan && messageId !== undefined && onResend;
   const hasPaths = paths.length > 0;
@@ -120,7 +123,8 @@ export function PathModal({
                         resolvedPaths[0].resolved.sender.lon,
                         resolvedPaths[0].resolved.receiver.lat,
                         resolvedPaths[0].resolved.receiver.lon
-                      )!
+                      )!,
+                      distanceUnit
                     )}
                   </span>
                 </div>
@@ -171,7 +175,11 @@ export function PathModal({
                       </Suspense>
                     </div>
                   )}
-                  <PathVisualization resolved={pathData.resolved} senderInfo={senderInfo} />
+                  <PathVisualization
+                    resolved={pathData.resolved}
+                    senderInfo={senderInfo}
+                    distanceUnit={distanceUnit}
+                  />
                 </div>
               );
             })}
@@ -227,9 +235,10 @@ export function PathModal({
 interface PathVisualizationProps {
   resolved: ResolvedPath;
   senderInfo: SenderInfo;
+  distanceUnit: DistanceUnit;
 }
 
-function PathVisualization({ resolved, senderInfo }: PathVisualizationProps) {
+function PathVisualization({ resolved, senderInfo, distanceUnit }: PathVisualizationProps) {
   // Track previous location for each hop to calculate distances
   // Returns null if previous hop was ambiguous or has invalid location
   const getPrevLocation = (hopIndex: number): { lat: number | null; lon: number | null } | null => {
@@ -264,6 +273,7 @@ function PathVisualization({ resolved, senderInfo }: PathVisualizationProps) {
         name={resolved.sender.name}
         prefix={resolved.sender.prefix}
         distance={null}
+        distanceUnit={distanceUnit}
         isFirst
         lat={resolved.sender.lat}
         lon={resolved.sender.lon}
@@ -277,6 +287,7 @@ function PathVisualization({ resolved, senderInfo }: PathVisualizationProps) {
           hop={hop}
           hopNumber={index + 1}
           prevLocation={getPrevLocation(index)}
+          distanceUnit={distanceUnit}
         />
       ))}
 
@@ -286,6 +297,7 @@ function PathVisualization({ resolved, senderInfo }: PathVisualizationProps) {
         name={resolved.receiver.name}
         prefix={resolved.receiver.prefix}
         distance={calculateReceiverDistance(resolved)}
+        distanceUnit={distanceUnit}
         isLast
         lat={resolved.receiver.lat}
         lon={resolved.receiver.lon}
@@ -300,7 +312,7 @@ function PathVisualization({ resolved, senderInfo }: PathVisualizationProps) {
           </span>
           <span className="text-sm font-medium">
             {resolved.hasGaps ? '>' : ''}
-            {formatDistance(resolved.totalDistances[0])}
+            {formatDistance(resolved.totalDistances[0], distanceUnit)}
           </span>
         </div>
       )}
@@ -313,6 +325,7 @@ interface PathNodeProps {
   name: string;
   prefix: string;
   distance: number | null;
+  distanceUnit: DistanceUnit;
   isFirst?: boolean;
   isLast?: boolean;
   /** Optional coordinates for map link */
@@ -327,6 +340,7 @@ function PathNode({
   name,
   prefix,
   distance,
+  distanceUnit,
   isFirst,
   isLast,
   lat,
@@ -353,7 +367,9 @@ function PathNode({
         <div className="font-medium truncate">
           {name}
           {distance !== null && (
-            <span className="text-xs text-muted-foreground ml-1">- {formatDistance(distance)}</span>
+            <span className="text-xs text-muted-foreground ml-1">
+              - {formatDistance(distance, distanceUnit)}
+            </span>
           )}
           {hasLocation && <CoordinateLink lat={lat!} lon={lon!} publicKey={publicKey!} />}
         </div>
@@ -366,9 +382,10 @@ interface HopNodeProps {
   hop: PathHop;
   hopNumber: number;
   prevLocation: { lat: number | null; lon: number | null } | null;
+  distanceUnit: DistanceUnit;
 }
 
-function HopNode({ hop, hopNumber, prevLocation }: HopNodeProps) {
+function HopNode({ hop, hopNumber, prevLocation, distanceUnit }: HopNodeProps) {
   const isAmbiguous = hop.matches.length > 1;
   const isUnknown = hop.matches.length === 0;
 
@@ -417,7 +434,7 @@ function HopNode({ hop, hopNumber, prevLocation }: HopNodeProps) {
                   {contact.name || contact.public_key.slice(0, 12)}
                   {dist !== null && (
                     <span className="text-xs text-muted-foreground ml-1">
-                      - {formatDistance(dist)}
+                      - {formatDistance(dist, distanceUnit)}
                     </span>
                   )}
                   {hasLocation && (
@@ -436,7 +453,7 @@ function HopNode({ hop, hopNumber, prevLocation }: HopNodeProps) {
             {hop.matches[0].name || hop.matches[0].public_key.slice(0, 12)}
             {hop.distanceFromPrev !== null && (
               <span className="text-xs text-muted-foreground ml-1">
-                - {formatDistance(hop.distanceFromPrev)}
+                - {formatDistance(hop.distanceFromPrev, distanceUnit)}
               </span>
             )}
             {isValidLocation(hop.matches[0].lat, hop.matches[0].lon) && (

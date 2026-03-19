@@ -11,6 +11,12 @@ import {
 } from '../../utils/lastViewedConversation';
 import { ThemeSelector } from './ThemeSelector';
 import { getLocalLabel, setLocalLabel, type LocalLabel } from '../../utils/localLabel';
+import {
+  DISTANCE_UNIT_LABELS,
+  DISTANCE_UNITS,
+  setSavedDistanceUnit,
+} from '../../utils/distanceUnits';
+import { useDistanceUnit } from '../../contexts/DistanceUnitContext';
 
 export function SettingsLocalSection({
   onLocalLabelChange,
@@ -19,6 +25,7 @@ export function SettingsLocalSection({
   onLocalLabelChange?: (label: LocalLabel) => void;
   className?: string;
 }) {
+  const { distanceUnit, setDistanceUnit } = useDistanceUnit();
   const [reopenLastConversation, setReopenLastConversation] = useState(
     getReopenLastConversationEnabled
   );
@@ -77,6 +84,31 @@ export function SettingsLocalSection({
         </div>
         <p className="text-xs text-muted-foreground">
           Display a colored banner at the top of the page to identify this instance.
+        </p>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <Label htmlFor="distance-units">Distance Units</Label>
+        <select
+          id="distance-units"
+          value={distanceUnit}
+          onChange={(event) => {
+            const nextUnit = event.target.value as (typeof DISTANCE_UNITS)[number];
+            setSavedDistanceUnit(nextUnit);
+            setDistanceUnit(nextUnit);
+          }}
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+        >
+          {DISTANCE_UNITS.map((unit) => (
+            <option key={unit} value={unit}>
+              {DISTANCE_UNIT_LABELS[unit]}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-muted-foreground">
+          Controls how distances are shown throughout the app.
         </p>
       </div>
 

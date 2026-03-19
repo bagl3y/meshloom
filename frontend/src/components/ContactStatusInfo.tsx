@@ -11,6 +11,7 @@ import {
 import { getMapFocusHash } from '../utils/urlHash';
 import { handleKeyboardActivate } from '../utils/a11y';
 import type { Contact } from '../types';
+import { useDistanceUnit } from '../contexts/DistanceUnitContext';
 import { ContactRoutingOverrideModal } from './ContactRoutingOverrideModal';
 
 interface ContactStatusInfoProps {
@@ -24,6 +25,7 @@ interface ContactStatusInfoProps {
  * shared between ChatHeader and RepeaterDashboard.
  */
 export function ContactStatusInfo({ contact, ourLat, ourLon }: ContactStatusInfoProps) {
+  const { distanceUnit } = useDistanceUnit();
   const [routingModalOpen, setRoutingModalOpen] = useState(false);
   const parts: ReactNode[] = [];
   const effectiveRoute = getEffectiveContactRoute(contact);
@@ -74,7 +76,7 @@ export function ContactStatusInfo({ contact, ourLat, ourLon }: ContactStatusInfo
         >
           {contact.lat!.toFixed(3)}, {contact.lon!.toFixed(3)}
         </span>
-        {distFromUs !== null && ` (${formatDistance(distFromUs)})`}
+        {distFromUs !== null && ` (${formatDistance(distFromUs, distanceUnit)})`}
       </span>
     );
   }
