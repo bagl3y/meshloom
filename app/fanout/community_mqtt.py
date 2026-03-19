@@ -115,7 +115,7 @@ def _generate_jwt_token(
         "exp": now + _TOKEN_LIFETIME,
         "aud": audience,
         "owner": pubkey_hex,
-        "client": _CLIENT_ID,
+        "client": _get_client_version(),
     }
     if email:
         payload["email"] = email
@@ -260,8 +260,10 @@ def _build_radio_info() -> str:
 
 
 def _get_client_version() -> str:
-    """Return the app version string for community MQTT payloads."""
-    return get_app_build_info().version
+    """Return the canonical client/version identifier for community MQTT."""
+    build = get_app_build_info()
+    commit_hash = build.commit_hash or "unknown"
+    return f"{_CLIENT_ID}/{build.version}-{commit_hash}"
 
 
 class CommunityMqttPublisher(BaseMqttPublisher):

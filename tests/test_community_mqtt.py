@@ -108,20 +108,24 @@ class TestJwtGeneration:
 
     def test_payload_contains_required_fields(self):
         private_key, public_key = _make_test_keys()
-        token = _generate_jwt_token(private_key, public_key)
-        payload_b64 = token.split(".")[1]
-        import base64
+        with patch(
+            "app.fanout.community_mqtt.get_app_build_info",
+            return_value=SimpleNamespace(version="1.2.3", commit_hash="abcdef"),
+        ):
+            token = _generate_jwt_token(private_key, public_key)
+            payload_b64 = token.split(".")[1]
+            import base64
 
-        padded = payload_b64 + "=" * (4 - len(payload_b64) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(padded))
-        assert payload["publicKey"] == public_key.hex().upper()
-        assert "iat" in payload
-        assert "exp" in payload
-        assert payload["exp"] - payload["iat"] == 86400
-        assert payload["aud"] == _DEFAULT_BROKER
-        assert payload["owner"] == public_key.hex().upper()
-        assert payload["client"] == _CLIENT_ID
-        assert "email" not in payload  # omitted when empty
+            padded = payload_b64 + "=" * (4 - len(payload_b64) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(padded))
+            assert payload["publicKey"] == public_key.hex().upper()
+            assert "iat" in payload
+            assert "exp" in payload
+            assert payload["exp"] - payload["iat"] == 86400
+            assert payload["aud"] == _DEFAULT_BROKER
+            assert payload["owner"] == public_key.hex().upper()
+            assert payload["client"] == f"{_CLIENT_ID}/1.2.3-abcdef"
+            assert "email" not in payload  # omitted when empty
 
     def test_payload_includes_email_when_provided(self):
         private_key, public_key = _make_test_keys()
@@ -822,7 +826,10 @@ class TestLwtAndStatusPublish:
                 pub, "_fetch_stats", new_callable=AsyncMock, return_value={"battery_mv": 4200}
             ),
             patch("app.fanout.community_mqtt._build_radio_info", return_value="915.0,250.0,10,8"),
-            patch("app.fanout.community_mqtt._get_client_version", return_value="RemoteTerm 2.4.0"),
+            patch(
+                "app.fanout.community_mqtt._get_client_version",
+                return_value="RemoteTerm/2.4.0-abcdef",
+            ),
             patch.object(pub, "publish", new_callable=AsyncMock) as mock_publish,
         ):
             await pub._on_connected_async(settings)
@@ -842,7 +849,7 @@ class TestLwtAndStatusPublish:
         assert payload["model"] == "T-Deck"
         assert payload["firmware_version"] == "v2.2.2 (Build: 2025-01-15)"
         assert payload["radio"] == "915.0,250.0,10,8"
-        assert payload["client_version"] == "RemoteTerm 2.4.0"
+        assert payload["client_version"] == "RemoteTerm/2.4.0-abcdef"
         assert payload["stats"] == {"battery_mv": 4200}
 
     def test_lwt_and_online_share_same_topic(self):
@@ -902,7 +909,8 @@ class TestLwtAndStatusPublish:
             patch.object(pub, "_fetch_stats", new_callable=AsyncMock, return_value=None),
             patch("app.fanout.community_mqtt._build_radio_info", return_value="0,0,0,0"),
             patch(
-                "app.fanout.community_mqtt._get_client_version", return_value="RemoteTerm unknown"
+                "app.fanout.community_mqtt._get_client_version",
+                return_value="RemoteTerm/0.0.0-unknown",
             ),
             patch.object(pub, "publish", new_callable=AsyncMock) as mock_publish,
         ):
@@ -1215,18 +1223,21 @@ class TestBuildRadioInfo:
 
 
 class TestGetClientVersion:
-    def test_returns_plain_version(self):
-        """Should return a bare version string with no product prefix."""
-        result = _get_client_version()
-        assert result
-        assert "RemoteTerm" not in result
-
-    def test_returns_version_from_build_helper(self):
-        """Should use the shared backend build-info helper."""
+    def test_returns_canonical_client_identifier(self):
+        """Should return the canonical client/version/hash identifier."""
         with patch("app.fanout.community_mqtt.get_app_build_info") as mock_build_info:
             mock_build_info.return_value.version = "1.2.3"
+            mock_build_info.return_value.commit_hash = "abcdef"
             result = _get_client_version()
-        assert result == "1.2.3"
+        assert result == "RemoteTerm/1.2.3-abcdef"
+
+    def test_falls_back_to_unknown_hash_when_commit_missing(self):
+        """Should keep the canonical shape even when the commit hash is unavailable."""
+        with patch("app.fanout.community_mqtt.get_app_build_info") as mock_build_info:
+            mock_build_info.return_value.version = "1.2.3"
+            mock_build_info.return_value.commit_hash = None
+            result = _get_client_version()
+        assert result == "RemoteTerm/1.2.3-unknown"
 
 
 class TestPublishStatus:
@@ -1255,7 +1266,10 @@ class TestPublishStatus:
             ),
             patch.object(pub, "_fetch_stats", new_callable=AsyncMock, return_value=stats),
             patch("app.fanout.community_mqtt._build_radio_info", return_value="915.0,250.0,10,8"),
-            patch("app.fanout.community_mqtt._get_client_version", return_value="RemoteTerm 2.4.0"),
+            patch(
+                "app.fanout.community_mqtt._get_client_version",
+                return_value="RemoteTerm/2.4.0-abcdef",
+            ),
             patch.object(pub, "publish", new_callable=AsyncMock) as mock_publish,
         ):
             await pub._publish_status(settings)
@@ -1268,7 +1282,7 @@ class TestPublishStatus:
         assert payload["model"] == "T-Deck"
         assert payload["firmware_version"] == "v2.2.2 (Build: 2025-01-15)"
         assert payload["radio"] == "915.0,250.0,10,8"
-        assert payload["client_version"] == "RemoteTerm 2.4.0"
+        assert payload["client_version"] == "RemoteTerm/2.4.0-abcdef"
         assert payload["stats"] == stats
 
     @pytest.mark.asyncio
@@ -1293,7 +1307,8 @@ class TestPublishStatus:
             patch.object(pub, "_fetch_stats", new_callable=AsyncMock, return_value=None),
             patch("app.fanout.community_mqtt._build_radio_info", return_value="0,0,0,0"),
             patch(
-                "app.fanout.community_mqtt._get_client_version", return_value="RemoteTerm unknown"
+                "app.fanout.community_mqtt._get_client_version",
+                return_value="RemoteTerm/0.0.0-unknown",
             ),
             patch.object(pub, "publish", new_callable=AsyncMock) as mock_publish,
         ):
@@ -1326,7 +1341,8 @@ class TestPublishStatus:
             patch.object(pub, "_fetch_stats", new_callable=AsyncMock, return_value=None),
             patch("app.fanout.community_mqtt._build_radio_info", return_value="0,0,0,0"),
             patch(
-                "app.fanout.community_mqtt._get_client_version", return_value="RemoteTerm unknown"
+                "app.fanout.community_mqtt._get_client_version",
+                return_value="RemoteTerm/0.0.0-unknown",
             ),
             patch.object(pub, "publish", new_callable=AsyncMock),
         ):
