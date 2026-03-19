@@ -129,7 +129,7 @@ describe('Sidebar section summaries', () => {
     );
   });
 
-  it('keeps contact row badges normal while the contacts rollup is always red', () => {
+  it('turns contact row badges red while the contacts rollup remains red', () => {
     const { aliceName } = renderSidebar();
 
     expect(within(getSectionHeaderContainer('Contacts')).getByText('3')).toHaveClass(
@@ -140,6 +140,30 @@ describe('Sidebar section summaries', () => {
     const aliceRow = screen.getByText(aliceName).closest('div');
     if (!aliceRow) throw new Error('Missing Alice row');
     expect(within(aliceRow).getByText('3')).toHaveClass(
+      'bg-badge-mention',
+      'text-badge-mention-foreground'
+    );
+  });
+
+  it('turns favorite contact row badges red', () => {
+    const { aliceName } = renderSidebar({
+      favorites: [{ type: 'contact', id: '11'.repeat(32) }],
+    });
+
+    const aliceRow = screen.getByText(aliceName).closest('div');
+    if (!aliceRow) throw new Error('Missing Alice row');
+    expect(within(aliceRow).getByText('3')).toHaveClass(
+      'bg-badge-mention',
+      'text-badge-mention-foreground'
+    );
+  });
+
+  it('keeps repeater row badges neutral', () => {
+    renderSidebar();
+
+    const relayRow = screen.getByText('Relay').closest('div');
+    if (!relayRow) throw new Error('Missing Relay row');
+    expect(within(relayRow).getByText('4')).toHaveClass(
       'bg-badge-unread/90',
       'text-badge-unread-foreground'
     );

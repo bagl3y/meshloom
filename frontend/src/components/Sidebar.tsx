@@ -517,57 +517,65 @@ export function Sidebar({
     contact,
   });
 
-  const renderConversationRow = (row: ConversationRow) => (
-    <div
-      key={row.key}
-      className={cn(
-        'px-3 py-2 cursor-pointer flex items-center gap-2 border-l-2 border-transparent hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        isActive(row.type, row.id) && 'bg-accent border-l-primary',
-        row.unreadCount > 0 && '[&_.name]:font-semibold [&_.name]:text-foreground'
-      )}
-      role="button"
-      tabIndex={0}
-      aria-current={isActive(row.type, row.id) ? 'page' : undefined}
-      onKeyDown={handleKeyboardActivate}
-      onClick={() =>
-        handleSelectConversation({
-          type: row.type,
-          id: row.id,
-          name: row.name,
-        })
-      }
-    >
-      {row.type === 'contact' && row.contact && (
-        <ContactAvatar
-          name={row.contact.name}
-          publicKey={row.contact.public_key}
-          size={24}
-          contactType={row.contact.type}
-        />
-      )}
-      <span className="name flex-1 truncate text-[13px]">{row.name}</span>
-      <span className="ml-auto flex items-center gap-1">
-        {row.notificationsEnabled && (
-          <span aria-label="Notifications enabled" title="Notifications enabled">
-            <Bell className="h-3.5 w-3.5 text-muted-foreground" />
-          </span>
+  const renderConversationRow = (row: ConversationRow) => {
+    const highlightUnread =
+      row.isMention ||
+      (row.type === 'contact' &&
+        row.contact?.type !== CONTACT_TYPE_REPEATER &&
+        row.unreadCount > 0);
+
+    return (
+      <div
+        key={row.key}
+        className={cn(
+          'px-3 py-2 cursor-pointer flex items-center gap-2 border-l-2 border-transparent hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          isActive(row.type, row.id) && 'bg-accent border-l-primary',
+          row.unreadCount > 0 && '[&_.name]:font-semibold [&_.name]:text-foreground'
         )}
-        {row.unreadCount > 0 && (
-          <span
-            className={cn(
-              'text-[10px] font-semibold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
-              row.isMention
-                ? 'bg-badge-mention text-badge-mention-foreground'
-                : 'bg-badge-unread/90 text-badge-unread-foreground'
-            )}
-            aria-label={`${row.unreadCount} unread message${row.unreadCount !== 1 ? 's' : ''}`}
-          >
-            {row.unreadCount}
-          </span>
+        role="button"
+        tabIndex={0}
+        aria-current={isActive(row.type, row.id) ? 'page' : undefined}
+        onKeyDown={handleKeyboardActivate}
+        onClick={() =>
+          handleSelectConversation({
+            type: row.type,
+            id: row.id,
+            name: row.name,
+          })
+        }
+      >
+        {row.type === 'contact' && row.contact && (
+          <ContactAvatar
+            name={row.contact.name}
+            publicKey={row.contact.public_key}
+            size={24}
+            contactType={row.contact.type}
+          />
         )}
-      </span>
-    </div>
-  );
+        <span className="name flex-1 truncate text-[13px]">{row.name}</span>
+        <span className="ml-auto flex items-center gap-1">
+          {row.notificationsEnabled && (
+            <span aria-label="Notifications enabled" title="Notifications enabled">
+              <Bell className="h-3.5 w-3.5 text-muted-foreground" />
+            </span>
+          )}
+          {row.unreadCount > 0 && (
+            <span
+              className={cn(
+                'text-[10px] font-semibold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
+                highlightUnread
+                  ? 'bg-badge-mention text-badge-mention-foreground'
+                  : 'bg-badge-unread/90 text-badge-unread-foreground'
+              )}
+              aria-label={`${row.unreadCount} unread message${row.unreadCount !== 1 ? 's' : ''}`}
+            >
+              {row.unreadCount}
+            </span>
+          )}
+        </span>
+      </div>
+    );
+  };
 
   const renderSidebarActionRow = ({
     key,

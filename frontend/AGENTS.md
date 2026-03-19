@@ -423,9 +423,9 @@ PYTHONPATH=. uv run pytest tests/ -v
 
 ## Errata & Known Non-Issues
 
-### Contacts rollup uses mention styling for unread DMs
+### Contacts use mention styling for unread DMs
 
-This is intentional. In the sidebar section headers, unread direct messages are treated as mention-equivalent, so the Contacts rollup uses the highlighted mention-style badge for any unread DM. Row-level mention detection remains separate; this note is only about the section summary styling.
+This is intentional. In the sidebar, unread direct messages for actual contact conversations are treated as mention-equivalent for badge styling. That means both the Contacts section header and contact unread badges themselves use the highlighted mention-style colors for unread DMs, including when those contacts appear in Favorites. Repeaters do not inherit this rule, and channel badges still use mention styling only for real `@[name]` mentions.
 
 ### RawPacketList always scrolls to bottom
 
