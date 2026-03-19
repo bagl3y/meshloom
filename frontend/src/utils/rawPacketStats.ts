@@ -280,6 +280,14 @@ function rankedBreakdown(counts: Map<string, number>, total: number): RankedPack
     .map(([label, count]) => ({ label, count, share: share(count, total) }));
 }
 
+function orderedBreakdown(counts: Map<string, number>, total: number): RankedPacketStat[] {
+  return Array.from(counts.entries()).map(([label, count]) => ({
+    label,
+    count,
+    share: share(count, total),
+  }));
+}
+
 function median(values: number[]): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -295,6 +303,25 @@ function formatTimelineLabel(timestamp: number): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function getHopProfileBucket(pathTokenCount: number): string {
+  if (pathTokenCount <= 0) {
+    return '0';
+  }
+  if (pathTokenCount === 1) {
+    return '1';
+  }
+  if (pathTokenCount <= 5) {
+    return '2-5';
+  }
+  if (pathTokenCount <= 10) {
+    return '6-10';
+  }
+  if (pathTokenCount <= 15) {
+    return '11-15';
+  }
+  return '16+';
 }
 
 export function buildRawPacketStatsSnapshot(
@@ -321,9 +348,12 @@ export function buildRawPacketStatsSnapshot(
   const payloadCounts = createCountsMap(KNOWN_PAYLOAD_TYPES);
   const routeCounts = createCountsMap(KNOWN_ROUTE_TYPES);
   const hopCounts = new Map<string, number>([
-    ['Direct', 0],
-    ['1 hop', 0],
-    ['2+ hops', 0],
+    ['0', 0],
+    ['1', 0],
+    ['2-5', 0],
+    ['6-10', 0],
+    ['11-15', 0],
+    ['16+', 0],
   ]);
   const hopByteWidthCounts = new Map<string, number>([
     ['No path', 0],
@@ -346,13 +376,8 @@ export function buildRawPacketStatsSnapshot(
     payloadCounts.set(packet.payloadType, (payloadCounts.get(packet.payloadType) ?? 0) + 1);
     routeCounts.set(packet.routeType, (routeCounts.get(packet.routeType) ?? 0) + 1);
 
-    if (packet.pathTokenCount <= 0) {
-      hopCounts.set('Direct', (hopCounts.get('Direct') ?? 0) + 1);
-    } else if (packet.pathTokenCount === 1) {
-      hopCounts.set('1 hop', (hopCounts.get('1 hop') ?? 0) + 1);
-    } else {
-      hopCounts.set('2+ hops', (hopCounts.get('2+ hops') ?? 0) + 1);
-    }
+    const hopProfileBucket = getHopProfileBucket(packet.pathTokenCount);
+    hopCounts.set(hopProfileBucket, (hopCounts.get(hopProfileBucket) ?? 0) + 1);
 
     const hopByteWidth = inferHopByteWidth(packet);
     if (packet.pathTokenCount <= 0) {
@@ -486,7 +511,7 @@ export function buildRawPacketStatsSnapshot(
     payloadBreakdown: rankedBreakdown(payloadCounts, packetCount),
     routeBreakdown: rankedBreakdown(routeCounts, packetCount),
     topPacketTypes: rankedBreakdown(payloadCounts, packetCount).slice(0, 5),
-    hopProfile: rankedBreakdown(hopCounts, packetCount),
+    hopProfile: orderedBreakdown(hopCounts, packetCount),
     hopByteWidthProfile: rankedBreakdown(hopByteWidthCounts, packetCount),
     strongestNeighbors,
     mostActiveNeighbors,

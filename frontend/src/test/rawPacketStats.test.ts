@@ -92,6 +92,24 @@ describe('buildRawPacketStatsSnapshot', () => {
         expect.objectContaining({ label: 'Control', count: 0 }),
       ])
     );
+    expect(stats.hopProfile.map((item) => item.label)).toEqual([
+      '0',
+      '1',
+      '2-5',
+      '6-10',
+      '11-15',
+      '16+',
+    ]);
+    expect(stats.hopProfile).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: '0', count: 2 }),
+        expect.objectContaining({ label: '1', count: 1 }),
+        expect.objectContaining({ label: '2-5', count: 1 }),
+        expect.objectContaining({ label: '6-10', count: 0 }),
+        expect.objectContaining({ label: '11-15', count: 0 }),
+        expect.objectContaining({ label: '16+', count: 0 }),
+      ])
+    );
     expect(stats.hopByteWidthProfile).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ label: 'No path', count: 2 }),
