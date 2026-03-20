@@ -536,12 +536,12 @@ describe('SettingsModal', () => {
     expect(localStorage.getItem(LAST_VIEWED_CONVERSATION_KEY)).toBeNull();
   });
 
-  it('defaults distance units to imperial and stores local changes', () => {
+  it('defaults distance units to metric and stores local changes', () => {
     renderModal();
     openLocalSection();
 
     const select = screen.getByLabelText('Distance Units');
-    expect(select).toHaveValue('imperial');
+    expect(select).toHaveValue('metric');
 
     fireEvent.change(select, { target: { value: 'smoots' } });
 

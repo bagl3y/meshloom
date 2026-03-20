@@ -11,8 +11,8 @@ describe('distanceUnits utilities', () => {
     localStorage.clear();
   });
 
-  it('defaults to imperial when unset', () => {
-    expect(getSavedDistanceUnit()).toBe('imperial');
+  it('defaults to metric when unset', () => {
+    expect(getSavedDistanceUnit()).toBe('metric');
   });
 
   it('returns the stored unit when valid', () => {
@@ -20,9 +20,9 @@ describe('distanceUnits utilities', () => {
     expect(getSavedDistanceUnit()).toBe('metric');
   });
 
-  it('falls back to imperial for invalid stored values', () => {
+  it('falls back to metric for invalid stored values', () => {
     localStorage.setItem(DISTANCE_UNIT_KEY, 'parsecs');
-    expect(getSavedDistanceUnit()).toBe('imperial');
+    expect(getSavedDistanceUnit()).toBe('metric');
   });
 
   it('stores the selected distance unit', () => {

@@ -10,7 +10,7 @@ interface DistanceUnitContextValue {
 const noop = () => {};
 
 const DistanceUnitContext = createContext<DistanceUnitContextValue>({
-  distanceUnit: 'imperial',
+  distanceUnit: 'metric',
   setDistanceUnit: noop,
 });
 

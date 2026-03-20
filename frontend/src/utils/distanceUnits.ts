@@ -17,9 +17,9 @@ function isDistanceUnit(value: unknown): value is DistanceUnit {
 export function getSavedDistanceUnit(): DistanceUnit {
   try {
     const raw = localStorage.getItem(DISTANCE_UNIT_KEY);
-    return isDistanceUnit(raw) ? raw : 'imperial';
+    return isDistanceUnit(raw) ? raw : 'metric';
   } catch {
-    return 'imperial';
+    return 'metric';
   }
 }
 
