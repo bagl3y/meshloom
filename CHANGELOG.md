@@ -1,3 +1,28 @@
+## [3.5.0] - 2026-03-19
+
+Feature: Add room server alpha support
+Feature: Add option to force-reset node clock when it's too far ahead
+Feature: DMs auto-retry before resorting to flood
+Feature: Add impulse zero-hop advert
+Feature: Utilize PATH packets to correctly source a contact's route
+Feature: Metrics view on raw packet pane
+Feature: Metric, Imperial, and Smoots are now selectable for distance display
+Feature: Allow favorites to be sorted
+Feature: Add multi-ack support
+Feature: Password-remember checkbox on repeaters + room servers
+Bugfix: Serialize radio disconnect in a lock
+Bugfix: Fix contact bar layout issues
+Bugfix: Fix sidebar ordering for contacts by advert recency
+Bugfix: Fix version reporting in community MQTT
+Bugfix: Fix Apprise duplicate names
+Bugfix: Be better about identity resolution in the stats pane
+Misc: Docs, test, and performance enhancements
+Misc: Don't prompt "Are you sure" when leaving an unedited interation
+Misc: Log node time on startup
+Misc: Improve community MQTT error bubble-up
+Misc: Unread DMs always have a red unread counter
+Misc: Improve information in the debug view to show DB status
+
 ## [3.4.1] - 2026-03-16
 
 Bugfix: Improve handling of version information on prebuilt bundles
