@@ -898,6 +898,33 @@ class TestDirectMessageDecryption:
 
         assert result is None
 
+    def test_decrypt_signed_room_post_extracts_author_prefix(self):
+        """TXT_TYPE_SIGNED_PLAIN room posts expose the 4-byte author prefix separately."""
+        shared_secret = bytes(range(32))
+        timestamp = 1_700_000_000
+        flags = (2 << 2) | 1
+        author_prefix = bytes.fromhex("aabbccdd")
+        plaintext = (
+            timestamp.to_bytes(4, "little")
+            + bytes([flags])
+            + author_prefix
+            + b"hello room"
+            + b"\x00"
+        )
+        padded = plaintext + (b"\x00" * ((16 - (len(plaintext) % 16)) % 16))
+        cipher = AES.new(shared_secret[:16], AES.MODE_ECB)
+        ciphertext = cipher.encrypt(padded)
+        mac = hmac.new(shared_secret, ciphertext, hashlib.sha256).digest()[:2]
+        payload = bytes.fromhex("1020") + mac + ciphertext
+
+        result = decrypt_direct_message(payload, shared_secret)
+
+        assert result is not None
+        assert result.txt_type == 2
+        assert result.attempt == 1
+        assert result.signed_sender_prefix == "aabbccdd"
+        assert result.message == "hello room"
+
 
 class TestTryDecryptDM:
     """Test full packet decryption for direct messages."""

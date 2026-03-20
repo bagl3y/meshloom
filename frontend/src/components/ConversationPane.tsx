@@ -1,9 +1,10 @@
-import { lazy, Suspense, useMemo, type Ref } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState, type Ref } from 'react';
 
 import { ChatHeader } from './ChatHeader';
 import { MessageInput, type MessageInputHandle } from './MessageInput';
 import { MessageList } from './MessageList';
 import { RawPacketFeedView } from './RawPacketFeedView';
+import { RoomServerPanel } from './RoomServerPanel';
 import type {
   Channel,
   Contact,
@@ -16,7 +17,7 @@ import type {
   RadioConfig,
 } from '../types';
 import type { RawPacketStatsSessionState } from '../utils/rawPacketStats';
-import { CONTACT_TYPE_REPEATER } from '../types';
+import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM } from '../types';
 import { isPrefixOnlyContact, isUnknownFullKeyContact } from '../utils/pubkey';
 
 const RepeaterDashboard = lazy(() =>
@@ -131,6 +132,7 @@ export function ConversationPane({
   onSendMessage,
   onToggleNotifications,
 }: ConversationPaneProps) {
+  const [roomAuthenticated, setRoomAuthenticated] = useState(false);
   const activeContactIsRepeater = useMemo(() => {
     if (!activeConversation || activeConversation.type !== 'contact') return false;
     const contact = contacts.find((candidate) => candidate.public_key === activeConversation.id);
@@ -140,6 +142,10 @@ export function ConversationPane({
     if (!activeConversation || activeConversation.type !== 'contact') return null;
     return contacts.find((candidate) => candidate.public_key === activeConversation.id) ?? null;
   }, [activeConversation, contacts]);
+  const activeContactIsRoom = activeContact?.type === CONTACT_TYPE_ROOM;
+  useEffect(() => {
+    setRoomAuthenticated(false);
+  }, [activeConversation?.id]);
   const isPrefixOnlyActiveContact = activeContact
     ? isPrefixOnlyContact(activeContact.public_key)
     : false;
@@ -218,6 +224,8 @@ export function ConversationPane({
     );
   }
 
+  const showRoomChat = !activeContactIsRoom || roomAuthenticated;
+
   return (
     <>
       <ChatHeader
@@ -245,35 +253,40 @@ export function ConversationPane({
       {activeConversation.type === 'contact' && isUnknownFullKeyActiveContact && (
         <ContactResolutionBanner variant="unknown-full-key" />
       )}
-      <MessageList
-        key={activeConversation.id}
-        messages={messages}
-        contacts={contacts}
-        loading={messagesLoading}
-        loadingOlder={loadingOlder}
-        hasOlderMessages={hasOlderMessages}
-        unreadMarkerLastReadAt={
-          activeConversation.type === 'channel' ? unreadMarkerLastReadAt : undefined
-        }
-        onDismissUnreadMarker={
-          activeConversation.type === 'channel' ? onDismissUnreadMarker : undefined
-        }
-        onSenderClick={activeConversation.type === 'channel' ? onSenderClick : undefined}
-        onLoadOlder={onLoadOlder}
-        onResendChannelMessage={
-          activeConversation.type === 'channel' ? onResendChannelMessage : undefined
-        }
-        radioName={config?.name}
-        config={config}
-        onOpenContactInfo={onOpenContactInfo}
-        targetMessageId={targetMessageId}
-        onTargetReached={onTargetReached}
-        hasNewerMessages={hasNewerMessages}
-        loadingNewer={loadingNewer}
-        onLoadNewer={onLoadNewer}
-        onJumpToBottom={onJumpToBottom}
-      />
-      {activeConversation.type === 'contact' && isPrefixOnlyActiveContact ? null : (
+      {activeContactIsRoom && activeContact && (
+        <RoomServerPanel contact={activeContact} onAuthenticatedChange={setRoomAuthenticated} />
+      )}
+      {showRoomChat && (
+        <MessageList
+          key={activeConversation.id}
+          messages={messages}
+          contacts={contacts}
+          loading={messagesLoading}
+          loadingOlder={loadingOlder}
+          hasOlderMessages={hasOlderMessages}
+          unreadMarkerLastReadAt={
+            activeConversation.type === 'channel' ? unreadMarkerLastReadAt : undefined
+          }
+          onDismissUnreadMarker={
+            activeConversation.type === 'channel' ? onDismissUnreadMarker : undefined
+          }
+          onSenderClick={activeConversation.type === 'channel' ? onSenderClick : undefined}
+          onLoadOlder={onLoadOlder}
+          onResendChannelMessage={
+            activeConversation.type === 'channel' ? onResendChannelMessage : undefined
+          }
+          radioName={config?.name}
+          config={config}
+          onOpenContactInfo={onOpenContactInfo}
+          targetMessageId={targetMessageId}
+          onTargetReached={onTargetReached}
+          hasNewerMessages={hasNewerMessages}
+          loadingNewer={loadingNewer}
+          onLoadNewer={onLoadNewer}
+          onJumpToBottom={onJumpToBottom}
+        />
+      )}
+      {showRoomChat && !(activeConversation.type === 'contact' && isPrefixOnlyActiveContact) ? (
         <MessageInput
           ref={messageInputRef}
           onSend={onSendMessage}
@@ -286,7 +299,7 @@ export function ConversationPane({
               : `Message ${activeConversation.name}...`
           }
         />
-      )}
+      ) : null}
     </>
   );
 }

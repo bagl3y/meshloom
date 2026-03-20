@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConversationPane } from '../components/ConversationPane';
@@ -39,6 +39,21 @@ vi.mock('../components/RawPacketList', () => ({
 
 vi.mock('../components/RepeaterDashboard', () => ({
   RepeaterDashboard: () => <div data-testid="repeater-dashboard" />,
+}));
+
+vi.mock('../components/RoomServerPanel', () => ({
+  RoomServerPanel: ({
+    onAuthenticatedChange,
+  }: {
+    onAuthenticatedChange?: (value: boolean) => void;
+  }) => (
+    <div>
+      <div data-testid="room-server-panel" />
+      <button type="button" onClick={() => onAuthenticatedChange?.(true)}>
+        Authenticate room
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('../components/MapView', () => ({
@@ -211,6 +226,54 @@ describe('ConversationPane', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('chat-header')).toBeInTheDocument();
+      expect(screen.getByTestId('message-list')).toBeInTheDocument();
+      expect(screen.getByTestId('message-input')).toBeInTheDocument();
+    });
+  });
+
+  it('gates room chat behind room login controls until authenticated', async () => {
+    render(
+      <ConversationPane
+        {...createProps({
+          activeConversation: {
+            type: 'contact',
+            id: 'cc'.repeat(32),
+            name: 'Ops Board',
+          },
+          contacts: [
+            {
+              public_key: 'cc'.repeat(32),
+              name: 'Ops Board',
+              type: 3,
+              flags: 0,
+              direct_path: null,
+              direct_path_len: -1,
+              direct_path_hash_mode: -1,
+              last_advert: null,
+              lat: null,
+              lon: null,
+              last_seen: null,
+              on_radio: false,
+              last_contacted: null,
+              last_read_at: null,
+              first_seen: null,
+            },
+          ],
+        })}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('room-server-panel')).toBeInTheDocument();
+      expect(screen.getByTestId('chat-header')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('message-list')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('message-input')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Authenticate room' }));
+
+    await waitFor(() => {
       expect(screen.getByTestId('message-list')).toBeInTheDocument();
       expect(screen.getByTestId('message-input')).toBeInTheDocument();
     });

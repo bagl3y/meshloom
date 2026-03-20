@@ -8,6 +8,10 @@ interface RepeaterLoginProps {
   error: string | null;
   onLogin: (password: string) => Promise<void>;
   onLoginAsGuest: () => Promise<void>;
+  description?: string;
+  passwordPlaceholder?: string;
+  loginLabel?: string;
+  guestLabel?: string;
 }
 
 export function RepeaterLogin({
@@ -16,6 +20,10 @@ export function RepeaterLogin({
   error,
   onLogin,
   onLoginAsGuest,
+  description = 'Log in to access repeater dashboard',
+  passwordPlaceholder = 'Repeater password...',
+  loginLabel = 'Login with Password',
+  guestLabel = 'Login as Guest / ACLs',
 }: RepeaterLoginProps) {
   const [password, setPassword] = useState('');
 
@@ -33,7 +41,7 @@ export function RepeaterLogin({
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-1">
           <h2 className="text-lg font-semibold">{repeaterName}</h2>
-          <p className="text-sm text-muted-foreground">Log in to access repeater dashboard</p>
+          <p className="text-sm text-muted-foreground">{description}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
@@ -46,7 +54,7 @@ export function RepeaterLogin({
             data-bwignore="true"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Repeater password..."
+            placeholder={passwordPlaceholder}
             aria-label="Repeater password"
             disabled={loading}
             autoFocus
@@ -60,7 +68,7 @@ export function RepeaterLogin({
 
           <div className="flex flex-col gap-2">
             <Button type="submit" disabled={loading} className="w-full">
-              {loading ? 'Logging in...' : 'Login with Password'}
+              {loading ? 'Logging in...' : loginLabel}
             </Button>
             <Button
               type="button"
@@ -69,7 +77,7 @@ export function RepeaterLogin({
               className="w-full"
               onClick={onLoginAsGuest}
             >
-              Login as Guest / ACLs
+              {guestLabel}
             </Button>
           </div>
         </form>

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageList } from '../components/MessageList';
-import type { Message } from '../types';
+import { CONTACT_TYPE_ROOM, type Contact, type Message } from '../types';
 
 const scrollIntoViewMock = vi.fn();
 const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
@@ -79,6 +79,46 @@ describe('MessageList channel sender rendering', () => {
 
     expect(screen.getByText('Alice')).toBeInTheDocument();
     expect(screen.getByText('A')).toBeInTheDocument();
+  });
+
+  it('renders room-server DM messages using stored sender attribution instead of the room contact', () => {
+    const roomContact: Contact = {
+      public_key: 'ab'.repeat(32),
+      name: 'Ops Board',
+      type: CONTACT_TYPE_ROOM,
+      flags: 0,
+      direct_path: null,
+      direct_path_len: -1,
+      direct_path_hash_mode: -1,
+      last_advert: null,
+      lat: null,
+      lon: null,
+      last_seen: null,
+      on_radio: false,
+      last_contacted: null,
+      last_read_at: null,
+      first_seen: null,
+    };
+
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            type: 'PRIV',
+            conversation_key: roomContact.public_key,
+            text: 'status update: ready',
+            sender_name: 'Alice',
+            sender_key: '12'.repeat(32),
+          }),
+        ]}
+        contacts={[roomContact]}
+        loading={false}
+      />
+    );
+
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByText('Ops Board')).not.toBeInTheDocument();
+    expect(screen.getByText('status update: ready')).toBeInTheDocument();
   });
 
   it('gives clickable sender avatars an accessible label', () => {

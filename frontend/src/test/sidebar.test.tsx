@@ -2,7 +2,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Sidebar } from '../components/Sidebar';
-import { CONTACT_TYPE_REPEATER, type Channel, type Contact, type Favorite } from '../types';
+import {
+  CONTACT_TYPE_REPEATER,
+  CONTACT_TYPE_ROOM,
+  type Channel,
+  type Contact,
+  type Favorite,
+} from '../types';
 import { getStateKey, type ConversationTimes } from '../utils/conversationState';
 import { PUBLIC_CHANNEL_KEY } from '../utils/publicChannel';
 
@@ -51,16 +57,19 @@ function renderSidebar(overrides?: {
   isConversationNotificationsEnabled?: (type: 'channel' | 'contact', id: string) => boolean;
 }) {
   const aliceName = 'Alice';
+  const roomName = 'Ops Board';
   const publicChannel = makeChannel('AA'.repeat(16), 'Public');
   const flightChannel = makeChannel('BB'.repeat(16), '#flight');
   const opsChannel = makeChannel('CC'.repeat(16), '#ops');
   const alice = makeContact('11'.repeat(32), aliceName);
+  const board = makeContact('33'.repeat(32), roomName, CONTACT_TYPE_ROOM);
   const relay = makeContact('22'.repeat(32), 'Relay', CONTACT_TYPE_REPEATER);
 
   const unreadCounts = overrides?.unreadCounts ?? {
     [getStateKey('channel', flightChannel.key)]: 2,
     [getStateKey('channel', opsChannel.key)]: 1,
     [getStateKey('contact', alice.public_key)]: 3,
+    [getStateKey('contact', board.public_key)]: 5,
     [getStateKey('contact', relay.public_key)]: 4,
   };
 
@@ -69,7 +78,7 @@ function renderSidebar(overrides?: {
 
   const view = render(
     <Sidebar
-      contacts={[alice, relay]}
+      contacts={[alice, board, relay]}
       channels={channels}
       activeConversation={null}
       onSelectConversation={vi.fn()}
@@ -87,7 +96,7 @@ function renderSidebar(overrides?: {
     />
   );
 
-  return { ...view, flightChannel, opsChannel, aliceName };
+  return { ...view, flightChannel, opsChannel, aliceName, roomName };
 }
 
 function getSectionHeaderContainer(title: string): HTMLElement {
@@ -108,6 +117,7 @@ describe('Sidebar section summaries', () => {
     expect(within(getSectionHeaderContainer('Favorites')).getByText('2')).toBeInTheDocument();
     expect(within(getSectionHeaderContainer('Channels')).getByText('1')).toBeInTheDocument();
     expect(within(getSectionHeaderContainer('Contacts')).getByText('3')).toBeInTheDocument();
+    expect(within(getSectionHeaderContainer('Room Servers')).getByText('5')).toBeInTheDocument();
     expect(within(getSectionHeaderContainer('Repeaters')).getByText('4')).toBeInTheDocument();
   });
 
@@ -169,16 +179,25 @@ describe('Sidebar section summaries', () => {
     );
   });
 
+  it('renders room servers in their own section', () => {
+    const { roomName } = renderSidebar();
+
+    expect(screen.getByRole('button', { name: 'Room Servers' })).toBeInTheDocument();
+    expect(screen.getByText(roomName)).toBeInTheDocument();
+  });
+
   it('expands collapsed sections during search and restores collapse state after clearing search', async () => {
-    const { opsChannel, aliceName } = renderSidebar();
+    const { opsChannel, aliceName, roomName } = renderSidebar();
 
     fireEvent.click(screen.getByRole('button', { name: 'Tools' }));
     fireEvent.click(screen.getByRole('button', { name: 'Channels' }));
     fireEvent.click(screen.getByRole('button', { name: 'Contacts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Room Servers' }));
 
     expect(screen.queryByText('Packet Feed')).not.toBeInTheDocument();
     expect(screen.queryByText(opsChannel.name)).not.toBeInTheDocument();
     expect(screen.queryByText(aliceName)).not.toBeInTheDocument();
+    expect(screen.queryByText(roomName)).not.toBeInTheDocument();
 
     const search = screen.getByLabelText('Search conversations');
     fireEvent.change(search, { target: { value: 'alice' } });
@@ -193,19 +212,22 @@ describe('Sidebar section summaries', () => {
       expect(screen.queryByText('Packet Feed')).not.toBeInTheDocument();
       expect(screen.queryByText(opsChannel.name)).not.toBeInTheDocument();
       expect(screen.queryByText(aliceName)).not.toBeInTheDocument();
+      expect(screen.queryByText(roomName)).not.toBeInTheDocument();
     });
   });
 
   it('persists collapsed section state across unmount and remount', () => {
-    const { opsChannel, aliceName, unmount } = renderSidebar();
+    const { opsChannel, aliceName, roomName, unmount } = renderSidebar();
 
     fireEvent.click(screen.getByRole('button', { name: 'Tools' }));
     fireEvent.click(screen.getByRole('button', { name: 'Channels' }));
     fireEvent.click(screen.getByRole('button', { name: 'Contacts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Room Servers' }));
 
     expect(screen.queryByText('Packet Feed')).not.toBeInTheDocument();
     expect(screen.queryByText(opsChannel.name)).not.toBeInTheDocument();
     expect(screen.queryByText(aliceName)).not.toBeInTheDocument();
+    expect(screen.queryByText(roomName)).not.toBeInTheDocument();
 
     unmount();
     renderSidebar();
@@ -213,6 +235,7 @@ describe('Sidebar section summaries', () => {
     expect(screen.queryByText('Packet Feed')).not.toBeInTheDocument();
     expect(screen.queryByText(opsChannel.name)).not.toBeInTheDocument();
     expect(screen.queryByText(aliceName)).not.toBeInTheDocument();
+    expect(screen.queryByText(roomName)).not.toBeInTheDocument();
   });
 
   it('renders same-name channels when keys differ and allows selecting both', () => {
@@ -289,6 +312,12 @@ describe('Sidebar section summaries', () => {
     const alphaChannel = makeChannel('CC'.repeat(16), '#alpha');
     const zed = makeContact('11'.repeat(32), 'Zed', 1, { last_advert: 150 });
     const amy = makeContact('22'.repeat(32), 'Amy');
+    const zebraRoom = makeContact('55'.repeat(32), 'Zebra Room', CONTACT_TYPE_ROOM, {
+      last_seen: 100,
+    });
+    const alphaRoom = makeContact('66'.repeat(32), 'Alpha Room', CONTACT_TYPE_ROOM, {
+      last_advert: 300,
+    });
     const relayZulu = makeContact('33'.repeat(32), 'Zulu Relay', CONTACT_TYPE_REPEATER, {
       last_seen: 100,
     });
@@ -297,7 +326,7 @@ describe('Sidebar section summaries', () => {
     });
 
     const props = {
-      contacts: [zed, amy, relayZulu, relayAlpha],
+      contacts: [zed, amy, zebraRoom, alphaRoom, relayZulu, relayAlpha],
       channels: [publicChannel, zebraChannel, alphaChannel],
       activeConversation: null,
       onSelectConversation: vi.fn(),
@@ -306,6 +335,7 @@ describe('Sidebar section summaries', () => {
         [getStateKey('channel', zebraChannel.key)]: 300,
         [getStateKey('channel', alphaChannel.key)]: 100,
         [getStateKey('contact', zed.public_key)]: 200,
+        [getStateKey('contact', zebraRoom.public_key)]: 350,
       },
       unreadCounts: {},
       mentions: {},
@@ -328,18 +358,26 @@ describe('Sidebar section summaries', () => {
         .getAllByText(/Relay$/)
         .map((node) => node.textContent)
         .filter((text): text is string => Boolean(text));
+    const getRoomsOrder = () =>
+      screen
+        .getAllByText(/Room$/)
+        .map((node) => node.textContent)
+        .filter((text): text is string => Boolean(text));
 
     const { unmount } = render(<Sidebar {...props} />);
 
     expect(getChannelsOrder()).toEqual(['#zebra', '#alpha']);
     expect(getContactsOrder()).toEqual(['Zed', 'Amy']);
+    expect(getRoomsOrder()).toEqual(['Zebra Room', 'Alpha Room']);
     expect(getRepeatersOrder()).toEqual(['Alpha Relay', 'Zulu Relay']);
 
     fireEvent.click(screen.getByRole('button', { name: 'Sort Channels alphabetically' }));
     fireEvent.click(screen.getByRole('button', { name: 'Sort Contacts alphabetically' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sort Room Servers alphabetically' }));
 
     expect(getChannelsOrder()).toEqual(['#alpha', '#zebra']);
     expect(getContactsOrder()).toEqual(['Amy', 'Zed']);
+    expect(getRoomsOrder()).toEqual(['Alpha Room', 'Zebra Room']);
     expect(getRepeatersOrder()).toEqual(['Alpha Relay', 'Zulu Relay']);
 
     unmount();
@@ -347,7 +385,47 @@ describe('Sidebar section summaries', () => {
 
     expect(getChannelsOrder()).toEqual(['#alpha', '#zebra']);
     expect(getContactsOrder()).toEqual(['Amy', 'Zed']);
+    expect(getRoomsOrder()).toEqual(['Alpha Room', 'Zebra Room']);
     expect(getRepeatersOrder()).toEqual(['Alpha Relay', 'Zulu Relay']);
+  });
+
+  it('sorts room servers like contacts by DM recency first, then advert recency', () => {
+    const publicChannel = makeChannel(PUBLIC_CHANNEL_KEY, 'Public');
+    const dmRecentRoom = makeContact('77'.repeat(32), 'DM Recent Room', CONTACT_TYPE_ROOM, {
+      last_advert: 100,
+    });
+    const advertOnlyRoom = makeContact('88'.repeat(32), 'Advert Only Room', CONTACT_TYPE_ROOM, {
+      last_seen: 300,
+    });
+    const noRecencyRoom = makeContact('99'.repeat(32), 'No Recency Room', CONTACT_TYPE_ROOM);
+
+    render(
+      <Sidebar
+        contacts={[noRecencyRoom, advertOnlyRoom, dmRecentRoom]}
+        channels={[publicChannel]}
+        activeConversation={null}
+        onSelectConversation={vi.fn()}
+        onNewMessage={vi.fn()}
+        lastMessageTimes={{
+          [getStateKey('contact', dmRecentRoom.public_key)]: 400,
+        }}
+        unreadCounts={{}}
+        mentions={{}}
+        showCracker={false}
+        crackerRunning={false}
+        onToggleCracker={vi.fn()}
+        onMarkAllRead={vi.fn()}
+        favorites={[]}
+        legacySortOrder="recent"
+      />
+    );
+
+    const roomRows = screen
+      .getAllByText(/Room$/)
+      .map((node) => node.textContent)
+      .filter((text): text is string => Boolean(text));
+
+    expect(roomRows).toEqual(['DM Recent Room', 'Advert Only Room', 'No Recency Room']);
   });
 
   it('sorts contacts by DM recency first, then advert recency, then no-recency at the bottom', () => {

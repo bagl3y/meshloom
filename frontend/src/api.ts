@@ -383,4 +383,21 @@ export const api = {
     fetchJson<RepeaterLppTelemetryResponse>(`/contacts/${publicKey}/repeater/lpp-telemetry`, {
       method: 'POST',
     }),
+  roomLogin: (publicKey: string, password: string) =>
+    fetchJson<RepeaterLoginResponse>(`/contacts/${publicKey}/room/login`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
+  roomStatus: (publicKey: string) =>
+    fetchJson<RepeaterStatusResponse>(`/contacts/${publicKey}/room/status`, {
+      method: 'POST',
+    }),
+  roomAcl: (publicKey: string) =>
+    fetchJson<RepeaterAclResponse>(`/contacts/${publicKey}/room/acl`, {
+      method: 'POST',
+    }),
+  roomLppTelemetry: (publicKey: string) =>
+    fetchJson<RepeaterLppTelemetryResponse>(`/contacts/${publicKey}/room/lpp-telemetry`, {
+      method: 'POST',
+    }),
 };
