@@ -5,6 +5,7 @@ import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
 import { toast } from '../ui/sonner';
+import { Checkbox } from '../ui/checkbox';
 import { RADIO_PRESETS } from '../../utils/radioPresets';
 import { stripRegionScopePrefix } from '../../utils/regionScope';
 import type {
@@ -64,6 +65,7 @@ export function SettingsRadioSection({
   const [cr, setCr] = useState('');
   const [pathHashMode, setPathHashMode] = useState('0');
   const [advertLocationSource, setAdvertLocationSource] = useState<'off' | 'current'>('current');
+  const [multiAcksEnabled, setMultiAcksEnabled] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rebooting, setRebooting] = useState(false);
@@ -98,6 +100,7 @@ export function SettingsRadioSection({
     setCr(String(config.radio.cr));
     setPathHashMode(String(config.path_hash_mode));
     setAdvertLocationSource(config.advert_location_source ?? 'current');
+    setMultiAcksEnabled(config.multi_acks_enabled ?? false);
   }, [config]);
 
   useEffect(() => {
@@ -189,6 +192,9 @@ export function SettingsRadioSection({
       tx_power: parsedTxPower,
       ...(advertLocationSource !== (config.advert_location_source ?? 'current')
         ? { advert_location_source: advertLocationSource }
+        : {}),
+      ...(multiAcksEnabled !== (config.multi_acks_enabled ?? false)
+        ? { multi_acks_enabled: multiAcksEnabled }
         : {}),
       radio: {
         freq: parsedFreq,
@@ -578,6 +584,24 @@ export function SettingsRadioSection({
             is already updating them. RemoteTerm cannot enable GPS on the node through the interface
             library.
           </p>
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+            <Checkbox
+              id="multi-acks-enabled"
+              checked={multiAcksEnabled}
+              onCheckedChange={(checked) => setMultiAcksEnabled(checked === true)}
+              className="mt-0.5"
+            />
+            <div className="space-y-1">
+              <Label htmlFor="multi-acks-enabled">Extra Direct ACK Transmission</Label>
+              <p className="text-xs text-muted-foreground">
+                When enabled, the radio sends one extra direct ACK transmission before the normal
+                ACK for received direct messages. This is a firmware-level receive behavior, not a
+                RemoteTerm retry setting.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 

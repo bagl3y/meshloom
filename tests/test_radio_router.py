@@ -75,6 +75,7 @@ def _mock_meshcore_with_info():
         "radio_sf": 7,
         "radio_cr": 5,
         "adv_loc_policy": 2,
+        "multi_acks": 0,
     }
     mc.commands = MagicMock()
     mc.commands.set_name = AsyncMock()
@@ -82,6 +83,7 @@ def _mock_meshcore_with_info():
     mc.commands.set_tx_power = AsyncMock()
     mc.commands.set_radio = AsyncMock()
     mc.commands.set_advert_loc_policy = AsyncMock(return_value=_radio_result())
+    mc.commands.set_multi_acks = AsyncMock(return_value=_radio_result())
     mc.commands.send_appstart = AsyncMock()
     mc.commands.import_private_key = AsyncMock(return_value=_radio_result())
     mc.commands.send_node_discover_req = AsyncMock(return_value=_radio_result())
@@ -104,6 +106,17 @@ class TestGetRadioConfig:
         assert response.radio.freq == 910.525
         assert response.radio.cr == 5
         assert response.advert_location_source == "current"
+        assert response.multi_acks_enabled is False
+
+    @pytest.mark.asyncio
+    async def test_maps_multi_acks_to_response(self):
+        mc = _mock_meshcore_with_info()
+        mc.self_info["multi_acks"] = 1
+
+        with patch("app.routers.radio.require_connected", return_value=mc):
+            response = await get_radio_config()
+
+        assert response.multi_acks_enabled is True
 
     @pytest.mark.asyncio
     async def test_maps_any_nonzero_advert_location_policy_to_current(self):
@@ -172,6 +185,7 @@ class TestUpdateRadioConfig:
             path_hash_mode=0,
             path_hash_mode_supported=False,
             advert_location_source="current",
+            multi_acks_enabled=False,
         )
 
         with (
@@ -185,6 +199,36 @@ class TestUpdateRadioConfig:
             result = await update_radio_config(RadioConfigUpdate(advert_location_source="current"))
 
         mc.commands.set_advert_loc_policy.assert_awaited_once_with(1)
+        assert result == expected
+
+    @pytest.mark.asyncio
+    async def test_updates_multi_acks_enabled(self):
+        mc = _mock_meshcore_with_info()
+        expected = RadioConfigResponse(
+            public_key="aa" * 32,
+            name="NodeA",
+            lat=10.0,
+            lon=20.0,
+            tx_power=17,
+            max_tx_power=22,
+            radio=RadioSettings(freq=910.525, bw=62.5, sf=7, cr=5),
+            path_hash_mode=0,
+            path_hash_mode_supported=False,
+            advert_location_source="current",
+            multi_acks_enabled=True,
+        )
+
+        with (
+            patch("app.routers.radio.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.radio.sync_radio_time", new_callable=AsyncMock),
+            patch(
+                "app.routers.radio.get_radio_config", new_callable=AsyncMock, return_value=expected
+            ),
+        ):
+            result = await update_radio_config(RadioConfigUpdate(multi_acks_enabled=True))
+
+        mc.commands.set_multi_acks.assert_awaited_once_with(1)
         assert result == expected
 
     def test_model_rejects_negative_path_hash_mode(self):

@@ -16,6 +16,7 @@ export interface RadioConfig {
   path_hash_mode: number;
   path_hash_mode_supported: boolean;
   advert_location_source?: 'off' | 'current';
+  multi_acks_enabled?: boolean;
 }
 
 export interface RadioConfigUpdate {
@@ -26,6 +27,7 @@ export interface RadioConfigUpdate {
   radio?: RadioSettings;
   path_hash_mode?: number;
   advert_location_source?: 'off' | 'current';
+  multi_acks_enabled?: boolean;
 }
 
 export type RadioDiscoveryTarget = 'repeaters' | 'sensors' | 'all';

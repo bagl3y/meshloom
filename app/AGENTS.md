@@ -169,8 +169,8 @@ app/
 - `GET /debug` — support snapshot with recent logs, live radio probe, slot/contact audits, and version/git info
 
 ### Radio
-- `GET /radio/config` — includes `path_hash_mode`, `path_hash_mode_supported`, and advert-location on/off
-- `PATCH /radio/config` — may update `path_hash_mode` (`0..2`) when firmware supports it
+- `GET /radio/config` — includes `path_hash_mode`, `path_hash_mode_supported`, advert-location on/off, and `multi_acks_enabled`
+- `PATCH /radio/config` — may update `path_hash_mode` (`0..2`) when firmware supports it, and `multi_acks_enabled`
 - `PUT /radio/private-key`
 - `POST /radio/advertise` — manual advert send; request body may set `mode` to `flood` or `zero_hop` (defaults to `flood`)
 - `POST /radio/discover` — short mesh discovery sweep for nearby repeaters/sensors

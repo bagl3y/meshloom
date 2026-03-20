@@ -78,6 +78,7 @@ class DebugChannelAudit(BaseModel):
 class DebugRadioProbe(BaseModel):
     performed: bool
     errors: list[str] = Field(default_factory=list)
+    multi_acks_enabled: bool | None = None
     self_info: dict[str, Any] | None = None
     device_info: dict[str, Any] | None = None
     stats_core: dict[str, Any] | None = None
@@ -234,6 +235,9 @@ async def _probe_radio() -> DebugRadioProbe:
             return DebugRadioProbe(
                 performed=True,
                 errors=errors,
+                multi_acks_enabled=bool(mc.self_info.get("multi_acks", 0))
+                if mc.self_info is not None
+                else None,
                 self_info=dict(mc.self_info or {}),
                 device_info=device_info,
                 stats_core=stats_core,

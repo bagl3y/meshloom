@@ -307,8 +307,8 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 |--------|----------|-------------|
 | GET | `/api/health` | Connection status, fanout statuses, bots_disabled flag |
 | GET | `/api/debug` | Support snapshot: recent logs, live radio probe, contact/channel drift audit, and running version/git info |
-| GET | `/api/radio/config` | Radio configuration, including `path_hash_mode`, `path_hash_mode_supported`, and whether adverts include current node location |
-| PATCH | `/api/radio/config` | Update name, location, advert-location on/off, radio params, and `path_hash_mode` when supported |
+| GET | `/api/radio/config` | Radio configuration, including `path_hash_mode`, `path_hash_mode_supported`, advert-location on/off, and `multi_acks_enabled` |
+| PATCH | `/api/radio/config` | Update name, location, advert-location on/off, `multi_acks_enabled`, radio params, and `path_hash_mode` when supported |
 | PUT | `/api/radio/private-key` | Import private key to radio |
 | POST | `/api/radio/advertise` | Send advertisement (`mode`: `flood` or `zero_hop`, default `flood`) |
 | POST | `/api/radio/discover` | Run a short mesh discovery sweep for nearby repeaters/sensors |

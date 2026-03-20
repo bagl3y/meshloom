@@ -44,6 +44,13 @@ async def apply_radio_config_update(
                 f"Failed to set advert location policy: {result.payload}"
             )
 
+    if update.multi_acks_enabled is not None:
+        multi_acks = 1 if update.multi_acks_enabled else 0
+        logger.info("Setting multi ACKs to %d", multi_acks)
+        result = await mc.commands.set_multi_acks(multi_acks)
+        if result is not None and result.type == EventType.ERROR:
+            raise RadioCommandRejectedError(f"Failed to set multi ACKs: {result.payload}")
+
     if update.name is not None:
         logger.info("Setting radio name to %s", update.name)
         await mc.commands.set_name(update.name)

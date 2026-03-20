@@ -81,6 +81,10 @@ class RadioConfigResponse(BaseModel):
         default="current",
         description="Whether adverts include the node's current location state",
     )
+    multi_acks_enabled: bool = Field(
+        default=False,
+        description="Whether the radio sends an extra direct ACK transmission",
+    )
 
 
 class RadioConfigUpdate(BaseModel):
@@ -98,6 +102,10 @@ class RadioConfigUpdate(BaseModel):
     advert_location_source: AdvertLocationSource | None = Field(
         default=None,
         description="Whether adverts include the node's current location state",
+    )
+    multi_acks_enabled: bool | None = Field(
+        default=None,
+        description="Whether the radio sends an extra direct ACK transmission",
     )
 
 
@@ -222,6 +230,7 @@ async def get_radio_config() -> RadioConfigResponse:
         path_hash_mode=radio_manager.path_hash_mode,
         path_hash_mode_supported=radio_manager.path_hash_mode_supported,
         advert_location_source=advert_location_source,
+        multi_acks_enabled=bool(info.get("multi_acks", 0)),
     )
 
 

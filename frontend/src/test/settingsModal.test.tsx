@@ -37,6 +37,7 @@ const baseConfig: RadioConfig = {
   path_hash_mode: 0,
   path_hash_mode_supported: false,
   advert_location_source: 'current',
+  multi_acks_enabled: false,
 };
 
 const baseHealth: HealthStatus = {
@@ -329,6 +330,18 @@ describe('SettingsModal', () => {
       expect(onSave).toHaveBeenCalledWith(
         expect.objectContaining({ advert_location_source: 'off' })
       );
+    });
+  });
+
+  it('saves multi-acks through radio config save', async () => {
+    const { onSave } = renderModal();
+    openRadioSection();
+
+    fireEvent.click(screen.getByLabelText('Extra Direct ACK Transmission'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ multi_acks_enabled: true }));
     });
   });
 
