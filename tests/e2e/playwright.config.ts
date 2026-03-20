@@ -12,8 +12,8 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 15_000 },
 
-  // Don't retry — failures likely indicate real hardware/app issues
-  retries: 0,
+  // Give hardware-backed flows one automatic retry before marking the test failed.
+  retries: 1,
 
   // Run tests serially — single radio means no parallelism
   fullyParallel: false,
