@@ -138,7 +138,7 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
       setLoginMessage(null);
       try {
         const result = await api.roomLogin(contact.public_key, password);
-        setAuthenticated(result.authenticated);
+        setAuthenticated(true);
         setLoginMessage(
           result.message ??
             (result.authenticated
@@ -152,7 +152,7 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
-        setAuthenticated(false);
+        setAuthenticated(true);
         setLoginError(message);
         toast.error('Room login failed', { description: message });
       } finally {

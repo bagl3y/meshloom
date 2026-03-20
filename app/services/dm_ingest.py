@@ -132,20 +132,6 @@ async def resolve_direct_message_sender_metadata(
         )
         return contact.name, contact.public_key.lower()
 
-    if normalized_sender:
-        placeholder_upsert = ContactUpsert(
-            public_key=normalized_sender,
-            type=0,
-            last_seen=received_at,
-            last_contacted=received_at,
-            first_seen=received_at,
-            on_radio=False,
-        )
-        await contact_repository.upsert(placeholder_upsert)
-        placeholder = await contact_repository.get_by_key(normalized_sender)
-        if placeholder is not None:
-            broadcast_fn("contact", placeholder.model_dump())
-
     return None, normalized_sender or None
 
 

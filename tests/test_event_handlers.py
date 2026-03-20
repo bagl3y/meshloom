@@ -493,6 +493,58 @@ class TestContactMessageCLIFiltering:
             assert payload["signature"] == author_key[:8]
 
     @pytest.mark.asyncio
+    async def test_room_server_message_does_not_create_placeholder_contact_for_unknown_author(
+        self, test_db
+    ):
+        from app.event_handlers import on_contact_message
+
+        room_key = "ab" * 32
+        author_prefix = "12345678"
+        await ContactRepository.upsert(
+            {
+                "public_key": room_key,
+                "name": "Ops Board",
+                "type": 3,
+                "flags": 0,
+                "direct_path": None,
+                "direct_path_len": -1,
+                "direct_path_hash_mode": -1,
+                "last_advert": None,
+                "lat": None,
+                "lon": None,
+                "last_seen": None,
+                "on_radio": False,
+                "last_contacted": None,
+                "first_seen": None,
+            }
+        )
+
+        with patch("app.event_handlers.broadcast_event") as mock_broadcast:
+
+            class MockEvent:
+                payload = {
+                    "pubkey_prefix": room_key[:12],
+                    "text": "hello room",
+                    "txt_type": 2,
+                    "signature": author_prefix,
+                    "sender_timestamp": 1700000000,
+                }
+
+            await on_contact_message(MockEvent())
+
+            message = (await MessageRepository.get_all(msg_type="PRIV", conversation_key=room_key))[
+                0
+            ]
+            assert message.sender_name is None
+            assert message.sender_key == author_prefix
+            assert await ContactRepository.get_by_key(author_prefix) is None
+
+            assert len(mock_broadcast.call_args_list) == 1
+            event_type, payload = mock_broadcast.call_args_list[0][0]
+            assert event_type == "message"
+            assert payload["sender_key"] == author_prefix
+
+    @pytest.mark.asyncio
     async def test_missing_txt_type_defaults_to_normal(self, test_db):
         """Messages without txt_type field are treated as normal (not filtered)."""
         from app.event_handlers import on_contact_message
