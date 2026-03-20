@@ -214,6 +214,76 @@ describe('messageCache', () => {
       expect(entry!.messages.some((m) => m.id === 0)).toBe(false);
     });
 
+    it('allows a trimmed-out message to be re-added after set() trimming', () => {
+      const messages = Array.from({ length: MAX_MESSAGES_PER_ENTRY + 1 }, (_, i) =>
+        createMessage({
+          id: i,
+          text: `message-${i}`,
+          received_at: 1700000000 + i,
+          sender_timestamp: 1700000000 + i,
+        })
+      );
+
+      messageCache.set('conv1', createEntry(messages));
+
+      const trimmedOut = createMessage({
+        id: 10_000,
+        text: 'message-0',
+        received_at: 1800000000,
+        sender_timestamp: 1700000000,
+      });
+
+      expect(messageCache.addMessage('conv1', trimmedOut)).toBe(true);
+      const entry = messageCache.get('conv1');
+      expect(entry!.messages.some((m) => m.id === 10_000)).toBe(true);
+    });
+
+    it('allows a trimmed-out message to be re-added after addMessage() trimming', () => {
+      const messages = Array.from({ length: MAX_MESSAGES_PER_ENTRY - 1 }, (_, i) =>
+        createMessage({
+          id: i,
+          text: `message-${i}`,
+          received_at: 1700000000 + i,
+          sender_timestamp: 1700000000 + i,
+        })
+      );
+      messageCache.set('conv1', createEntry(messages));
+
+      expect(
+        messageCache.addMessage(
+          'conv1',
+          createMessage({
+            id: MAX_MESSAGES_PER_ENTRY,
+            text: 'newest-a',
+            received_at: 1800000000,
+            sender_timestamp: 1800000000,
+          })
+        )
+      ).toBe(true);
+      expect(
+        messageCache.addMessage(
+          'conv1',
+          createMessage({
+            id: MAX_MESSAGES_PER_ENTRY + 1,
+            text: 'newest-b',
+            received_at: 1800000001,
+            sender_timestamp: 1800000001,
+          })
+        )
+      ).toBe(true);
+
+      const readdedTrimmedMessage = createMessage({
+        id: 10_001,
+        text: 'message-0',
+        received_at: 1900000000,
+        sender_timestamp: 1700000000,
+      });
+
+      expect(messageCache.addMessage('conv1', readdedTrimmedMessage)).toBe(true);
+      const entry = messageCache.get('conv1');
+      expect(entry!.messages.some((m) => m.id === 10_001)).toBe(true);
+    });
+
     it('auto-creates a minimal entry for never-visited conversations and returns true', () => {
       const msg = createMessage({ id: 10, text: 'First contact' });
       const result = messageCache.addMessage('new_conv', msg);

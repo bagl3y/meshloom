@@ -21,6 +21,24 @@ interface InternalCachedConversationEntry extends CachedConversationEntry {
 export class ConversationMessageCache {
   private readonly cache = new Map<string, InternalCachedConversationEntry>();
 
+  private normalizeEntry(entry: CachedConversationEntry): InternalCachedConversationEntry {
+    let messages = entry.messages;
+    let hasOlderMessages = entry.hasOlderMessages;
+
+    if (messages.length > MAX_MESSAGES_PER_ENTRY) {
+      messages = [...messages]
+        .sort((a, b) => b.received_at - a.received_at)
+        .slice(0, MAX_MESSAGES_PER_ENTRY);
+      hasOlderMessages = true;
+    }
+
+    return {
+      messages,
+      hasOlderMessages,
+      contentKeys: new Set(messages.map((message) => getMessageContentKey(message))),
+    };
+  }
+
   get(id: string): CachedConversationEntry | undefined {
     const entry = this.cache.get(id);
     if (!entry) return undefined;
@@ -33,17 +51,7 @@ export class ConversationMessageCache {
   }
 
   set(id: string, entry: CachedConversationEntry): void {
-    const contentKeys = new Set(entry.messages.map((message) => getMessageContentKey(message)));
-    if (entry.messages.length > MAX_MESSAGES_PER_ENTRY) {
-      const trimmed = [...entry.messages]
-        .sort((a, b) => b.received_at - a.received_at)
-        .slice(0, MAX_MESSAGES_PER_ENTRY);
-      entry = { ...entry, messages: trimmed, hasOlderMessages: true };
-    }
-    const internalEntry: InternalCachedConversationEntry = {
-      ...entry,
-      contentKeys,
-    };
+    const internalEntry = this.normalizeEntry(entry);
     this.cache.delete(id);
     this.cache.set(id, internalEntry);
     if (this.cache.size > MAX_CACHED_CONVERSATIONS) {
@@ -69,15 +77,12 @@ export class ConversationMessageCache {
     }
     if (entry.contentKeys.has(contentKey)) return false;
     if (entry.messages.some((message) => message.id === msg.id)) return false;
-    entry.contentKeys.add(contentKey);
-    entry.messages = [...entry.messages, msg];
-    if (entry.messages.length > MAX_MESSAGES_PER_ENTRY) {
-      entry.messages = [...entry.messages]
-        .sort((a, b) => b.received_at - a.received_at)
-        .slice(0, MAX_MESSAGES_PER_ENTRY);
-    }
+    const nextEntry = this.normalizeEntry({
+      messages: [...entry.messages, msg],
+      hasOlderMessages: entry.hasOlderMessages,
+    });
     this.cache.delete(id);
-    this.cache.set(id, entry);
+    this.cache.set(id, nextEntry);
     return true;
   }
 
@@ -123,11 +128,13 @@ export class ConversationMessageCache {
     }
 
     this.cache.delete(oldId);
-    this.cache.set(newId, {
-      messages: mergedMessages,
-      hasOlderMessages: newEntry.hasOlderMessages || oldEntry.hasOlderMessages,
-      contentKeys: new Set([...newEntry.contentKeys, ...oldEntry.contentKeys]),
-    });
+    this.cache.set(
+      newId,
+      this.normalizeEntry({
+        messages: mergedMessages,
+        hasOlderMessages: newEntry.hasOlderMessages || oldEntry.hasOlderMessages,
+      })
+    );
   }
 
   clear(): void {

@@ -167,17 +167,15 @@ describe('Integration: Duplicate Message Handling', () => {
   });
 });
 
-describe('Integration: No phantom unreads from mesh echoes (hitlist #8 regression)', () => {
-  it('does not increment unread when a mesh echo arrives after many unique messages', () => {
+describe('Integration: Trimmed cache entries can reappear (hitlist #7 regression)', () => {
+  it('increments unread when an evicted inactive-conversation message arrives again', () => {
     const state = createMockState();
     const convKey = 'channel_busy';
 
-    // Deliver 1001 unique messages — exceeding the old global
-    // seenMessageContentRef prune threshold (1000→500). Under the old
-    // dual-set design the global set would drop msg-0's key during pruning,
-    // so a later mesh echo of msg-0 would pass the global check and
-    // phantom-increment unread. With the fix, messageCache's per-conversation
-    // Cached messages remain the source of truth for inactive-conversation dedup.
+    // Deliver enough unique messages to evict msg-0 from the inactive
+    // conversation cache. Once it falls out of that window, a later arrival
+    // with the same content should be allowed back in instead of being
+    // suppressed forever by a stale content key.
     const MESSAGE_COUNT = 1001;
     for (let i = 0; i < MESSAGE_COUNT; i++) {
       const msg: Message = {
@@ -219,9 +217,8 @@ describe('Integration: No phantom unreads from mesh echoes (hitlist #8 regressio
     };
     const result = handleMessageEvent(state, echo, 'other_active_conv');
 
-    // Must NOT increment unread — the echo is a duplicate
-    expect(result.unreadIncremented).toBe(false);
-    expect(state.unreadCounts[stateKey]).toBe(MESSAGE_COUNT);
+    expect(result.unreadIncremented).toBe(true);
+    expect(state.unreadCounts[stateKey]).toBe(MESSAGE_COUNT + 1);
   });
 });
 
