@@ -297,6 +297,54 @@ describe('RawPacketFeedView', () => {
     expect(screen.getAllByText('Identity not resolvable').length).toBeGreaterThan(0);
   });
 
+  it('collapses uniquely resolved hash buckets into the same visible contact row', () => {
+    const alphaContact = createContact({
+      public_key: 'aa11bb22cc33' + '0'.repeat(52),
+      name: 'Alpha',
+    });
+
+    renderView({
+      rawPacketStatsSession: createSession({
+        totalObservedPackets: 2,
+        observations: [
+          {
+            observationKey: 'obs-1',
+            timestamp: 1_700_000_000,
+            payloadType: 'TextMessage',
+            routeType: 'Direct',
+            decrypted: true,
+            rssi: -70,
+            snr: 6,
+            sourceKey: 'hash1:AA',
+            sourceLabel: 'AA',
+            pathTokenCount: 0,
+            pathSignature: null,
+          },
+          {
+            observationKey: 'obs-2',
+            timestamp: 1_700_000_030,
+            payloadType: 'TextMessage',
+            routeType: 'Direct',
+            decrypted: true,
+            rssi: -67,
+            snr: 7,
+            sourceKey: alphaContact.public_key.toUpperCase(),
+            sourceLabel: alphaContact.public_key.slice(0, 12).toUpperCase(),
+            pathTokenCount: 0,
+            pathSignature: null,
+          },
+        ],
+      }),
+      contacts: [alphaContact],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /show stats/i }));
+    fireEvent.change(screen.getByLabelText('Stats window'), { target: { value: 'session' } });
+
+    expect(screen.getAllByText('Alpha').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Identity not resolvable')).not.toBeInTheDocument();
+  });
+
   it('opens a packet detail modal from the raw feed and decrypts room messages when a key is loaded', () => {
     renderView({
       packets: [

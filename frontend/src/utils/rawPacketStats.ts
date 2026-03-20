@@ -163,10 +163,17 @@ function getSourceInfo(
     case PayloadType.TextMessage:
     case PayloadType.Request:
     case PayloadType.Response: {
+      const contactKey = packet.decrypted_info?.contact_key?.toUpperCase() ?? null;
+      if (contactKey) {
+        return {
+          sourceKey: contactKey,
+          sourceLabel: packet.decrypted_info?.sender || toSourceLabel(contactKey),
+        };
+      }
       const sourceHash = (decoded.payload.decoded as { sourceHash?: string }).sourceHash;
       if (!sourceHash) return { sourceKey: null, sourceLabel: null };
       return {
-        sourceKey: sourceHash.toUpperCase(),
+        sourceKey: `hash1:${sourceHash.toUpperCase()}`,
         sourceLabel: sourceHash.toUpperCase(),
       };
     }

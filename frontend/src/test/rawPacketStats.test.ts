@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildRawPacketStatsSnapshot,
+  summarizeRawPacketForStats,
   type RawPacketStatsSessionState,
 } from '../utils/rawPacketStats';
+import type { RawPacket } from '../types';
+
+const TEXT_MESSAGE_PACKET = '09046F17C47ED00A13E16AB5B94B1CC2D1A5059C6E5A6253C60D';
 
 function createSession(
   overrides: Partial<RawPacketStatsSessionState> = {}
@@ -75,6 +79,49 @@ function createSession(
 }
 
 describe('buildRawPacketStatsSnapshot', () => {
+  it('prefers decrypted contact identity over one-byte sourceHash for stats bucketing', () => {
+    const packet: RawPacket = {
+      id: 1,
+      observation_id: 10,
+      timestamp: 1_700_000_000,
+      data: TEXT_MESSAGE_PACKET,
+      payload_type: 'TextMessage',
+      snr: 4,
+      rssi: -72,
+      decrypted: true,
+      decrypted_info: {
+        channel_name: null,
+        sender: 'Alpha',
+        channel_key: null,
+        contact_key: '0a'.repeat(32),
+      },
+    };
+
+    const summary = summarizeRawPacketForStats(packet);
+
+    expect(summary.sourceKey).toBe('0A'.repeat(32));
+    expect(summary.sourceLabel).toBe('Alpha');
+  });
+
+  it('tags unresolved one-byte source hashes so they do not collide with full contact keys', () => {
+    const packet: RawPacket = {
+      id: 2,
+      observation_id: 11,
+      timestamp: 1_700_000_000,
+      data: TEXT_MESSAGE_PACKET,
+      payload_type: 'TextMessage',
+      snr: 4,
+      rssi: -72,
+      decrypted: false,
+      decrypted_info: null,
+    };
+
+    const summary = summarizeRawPacketForStats(packet);
+
+    expect(summary.sourceKey).toBe('hash1:0A');
+    expect(summary.sourceLabel).toBe('0A');
+  });
+
   it('computes counts, rankings, and rolling-window coverage from session observations', () => {
     const stats = buildRawPacketStatsSnapshot(createSession(), '5m', 1_000);
 

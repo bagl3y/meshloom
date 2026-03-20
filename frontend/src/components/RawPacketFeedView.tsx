@@ -77,12 +77,16 @@ function formatRssi(value: number | null): string {
   return value === null ? '-' : `${Math.round(value)} dBm`;
 }
 
-function resolveContactLabel(sourceKey: string | null, contacts: Contact[]): string | null {
+function normalizeResolvableSourceKey(sourceKey: string): string {
+  return sourceKey.startsWith('hash1:') ? sourceKey.slice(6) : sourceKey;
+}
+
+function resolveContact(sourceKey: string | null, contacts: Contact[]): Contact | null {
   if (!sourceKey || sourceKey.startsWith('name:')) {
     return null;
   }
 
-  const normalizedSourceKey = sourceKey.toLowerCase();
+  const normalizedSourceKey = normalizeResolvableSourceKey(sourceKey).toLowerCase();
   const matches = contacts.filter((contact) =>
     contact.public_key.toLowerCase().startsWith(normalizedSourceKey)
   );
@@ -90,7 +94,14 @@ function resolveContactLabel(sourceKey: string | null, contacts: Contact[]): str
     return null;
   }
 
-  const contact = matches[0];
+  return matches[0];
+}
+
+function resolveContactLabel(sourceKey: string | null, contacts: Contact[]): string | null {
+  const contact = resolveContact(sourceKey, contacts);
+  if (!contact) {
+    return null;
+  }
   return getContactDisplayName(contact.name, contact.public_key, contact.last_advert);
 }
 
@@ -101,11 +112,46 @@ function resolveNeighbor(item: NeighborStat, contacts: Contact[]): NeighborStat 
   };
 }
 
+function mergeResolvedNeighbors(items: NeighborStat[], contacts: Contact[]): NeighborStat[] {
+  const merged = new Map<string, NeighborStat>();
+
+  for (const item of items) {
+    const contact = resolveContact(item.key, contacts);
+    const canonicalKey = contact?.public_key ?? item.key;
+    const resolvedLabel =
+      contact != null
+        ? getContactDisplayName(contact.name, contact.public_key, contact.last_advert)
+        : item.label;
+    const existing = merged.get(canonicalKey);
+
+    if (!existing) {
+      merged.set(canonicalKey, {
+        ...item,
+        key: canonicalKey,
+        label: resolvedLabel,
+      });
+      continue;
+    }
+
+    existing.count += item.count;
+    existing.lastSeen = Math.max(existing.lastSeen, item.lastSeen);
+    existing.bestRssi =
+      existing.bestRssi === null
+        ? item.bestRssi
+        : item.bestRssi === null
+          ? existing.bestRssi
+          : Math.max(existing.bestRssi, item.bestRssi);
+    existing.label = resolvedLabel;
+  }
+
+  return Array.from(merged.values());
+}
+
 function isNeighborIdentityResolvable(item: NeighborStat, contacts: Contact[]): boolean {
   if (item.key.startsWith('name:')) {
     return true;
   }
-  return resolveContactLabel(item.key, contacts) !== null;
+  return resolveContact(item.key, contacts) !== null;
 }
 
 function formatStrongestPacketDetail(
@@ -219,14 +265,29 @@ function NeighborList({
   mode: 'heard' | 'signal' | 'recent';
   contacts: Contact[];
 }) {
+  const mergedItems = mergeResolvedNeighbors(items, contacts);
+  const sortedItems = [...mergedItems].sort((a, b) => {
+    if (mode === 'heard') {
+      return b.count - a.count || b.lastSeen - a.lastSeen || a.label.localeCompare(b.label);
+    }
+    if (mode === 'signal') {
+      return (
+        (b.bestRssi ?? Number.NEGATIVE_INFINITY) - (a.bestRssi ?? Number.NEGATIVE_INFINITY) ||
+        b.count - a.count ||
+        a.label.localeCompare(b.label)
+      );
+    }
+    return b.lastSeen - a.lastSeen || b.count - a.count || a.label.localeCompare(b.label);
+  });
+
   return (
     <section className="mb-4 break-inside-avoid rounded-lg border border-border/70 bg-card/70 p-3">
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      {items.length === 0 ? (
+      {sortedItems.length === 0 ? (
         <p className="mt-3 text-sm text-muted-foreground">{emptyLabel}</p>
       ) : (
         <div className="mt-3 space-y-2">
-          {items.map((item) => (
+          {sortedItems.map((item) => (
             <div
               key={item.key}
               className="flex items-center justify-between gap-3 rounded-md bg-background/70 px-2 py-1.5"
