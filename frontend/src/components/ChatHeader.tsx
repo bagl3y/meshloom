@@ -9,6 +9,7 @@ import { handleKeyboardActivate } from '../utils/a11y';
 import { isPublicChannelKey } from '../utils/publicChannel';
 import { stripRegionScopePrefix } from '../utils/regionScope';
 import { isPrefixOnlyContact } from '../utils/pubkey';
+import { cn } from '../lib/utils';
 import { ContactAvatar } from './ContactAvatar';
 import { ContactStatusInfo } from './ContactStatusInfo';
 import type {
@@ -118,8 +119,15 @@ export function ChatHeader({
   };
 
   return (
-    <header className="conversation-header flex justify-between items-start px-4 py-2.5 border-b border-border gap-2">
-      <span className="flex min-w-0 flex-1 items-start gap-2">
+    <header
+      className={cn(
+        'conversation-header grid items-start gap-x-2 gap-y-0.5 border-b border-border px-4 py-2.5',
+        conversation.type === 'contact' && activeContact
+          ? 'grid-cols-[minmax(0,1fr)_auto] min-[1100px]:grid-cols-[minmax(0,1fr)_auto_auto]'
+          : 'grid-cols-[minmax(0,1fr)_auto]'
+      )}
+    >
+      <span className="flex min-w-0 items-start gap-2">
         {conversation.type === 'contact' && onOpenContactInfo && (
           <button
             type="button"
@@ -137,16 +145,31 @@ export function ChatHeader({
             />
           </button>
         )}
-        <span className="grid min-w-0 flex-1 grid-cols-1 gap-y-0.5 min-[1200px]:grid-cols-[minmax(0,1fr)_auto] min-[1200px]:items-baseline min-[1200px]:gap-x-2">
-          <span className="flex min-w-0 items-baseline gap-2 whitespace-nowrap">
-            <h2 className="min-w-0 shrink font-semibold text-base">
-              {titleClickable ? (
-                <button
-                  type="button"
-                  className="flex min-w-0 shrink items-center gap-1.5 text-left hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-                  aria-label={`View info for ${conversation.name}`}
-                  onClick={handleOpenConversationInfo}
-                >
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="flex min-w-0 flex-1 items-baseline gap-2 whitespace-nowrap">
+              <h2 className="min-w-0 flex-shrink font-semibold text-base">
+                {titleClickable ? (
+                  <button
+                    type="button"
+                    className="flex max-w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-sm text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`View info for ${conversation.name}`}
+                    onClick={handleOpenConversationInfo}
+                  >
+                    <span className="truncate">
+                      {conversation.type === 'channel' &&
+                      !conversation.name.startsWith('#') &&
+                      activeChannel?.is_hashtag
+                        ? '#'
+                        : ''}
+                      {conversation.name}
+                    </span>
+                    <Info
+                      className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/80"
+                      aria-hidden="true"
+                    />
+                  </button>
+                ) : (
                   <span className="truncate">
                     {conversation.type === 'channel' &&
                     !conversation.name.startsWith('#') &&
@@ -155,83 +178,72 @@ export function ChatHeader({
                       : ''}
                     {conversation.name}
                   </span>
-                  <Info
-                    className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/80"
-                    aria-hidden="true"
-                  />
+                )}
+              </h2>
+              {isPrivateChannel && !showKey ? (
+                <button
+                  className="min-w-0 flex-shrink text-[11px] font-mono text-muted-foreground transition-colors hover:text-primary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowKey(true);
+                  }}
+                  title="Reveal channel key"
+                >
+                  Show Key
                 </button>
               ) : (
-                <span className="truncate">
-                  {conversation.type === 'channel' &&
-                  !conversation.name.startsWith('#') &&
-                  activeChannel?.is_hashtag
-                    ? '#'
-                    : ''}
-                  {conversation.name}
+                <span
+                  className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground transition-colors hover:text-primary"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={handleKeyboardActivate}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(conversation.id);
+                    toast.success(
+                      conversation.type === 'channel' ? 'Room key copied!' : 'Contact key copied!'
+                    );
+                  }}
+                  title="Click to copy"
+                  aria-label={
+                    conversation.type === 'channel' ? 'Copy channel key' : 'Copy contact key'
+                  }
+                >
+                  {conversation.type === 'channel'
+                    ? conversation.id.toLowerCase()
+                    : conversation.id}
                 </span>
               )}
-            </h2>
-            {isPrivateChannel && !showKey ? (
+            </span>
+            {conversation.type === 'channel' && activeFloodScopeDisplay && (
               <button
-                className="min-w-0 flex-shrink text-[11px] font-mono text-muted-foreground transition-colors hover:text-primary"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowKey(true);
-                }}
-                title="Reveal channel key"
+                className="mt-0.5 flex basis-full items-center gap-1 text-left sm:hidden"
+                onClick={handleEditFloodScopeOverride}
+                title="Set regional override"
+                aria-label="Set regional override"
               >
-                Show Key
+                <Globe2
+                  className="h-3.5 w-3.5 flex-shrink-0 text-[hsl(var(--region-override))]"
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 truncate text-[11px] font-medium text-[hsl(var(--region-override))]">
+                  {activeFloodScopeDisplay}
+                </span>
               </button>
-            ) : (
-              <span
-                className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground transition-colors hover:text-primary"
-                role="button"
-                tabIndex={0}
-                onKeyDown={handleKeyboardActivate}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigator.clipboard.writeText(conversation.id);
-                  toast.success(
-                    conversation.type === 'channel' ? 'Room key copied!' : 'Contact key copied!'
-                  );
-                }}
-                title="Click to copy"
-                aria-label={
-                  conversation.type === 'channel' ? 'Copy channel key' : 'Copy contact key'
-                }
-              >
-                {conversation.type === 'channel' ? conversation.id.toLowerCase() : conversation.id}
-              </span>
             )}
           </span>
-          {conversation.type === 'contact' && activeContact && (
-            <span className="min-w-0 text-[11px] text-muted-foreground min-[1200px]:justify-self-end">
-              <ContactStatusInfo
-                contact={activeContact}
-                ourLat={config?.lat ?? null}
-                ourLon={config?.lon ?? null}
-              />
-            </span>
-          )}
-          {conversation.type === 'channel' && activeFloodScopeDisplay && (
-            <button
-              className="mt-0.5 flex items-center gap-1 text-left sm:hidden"
-              onClick={handleEditFloodScopeOverride}
-              title="Set regional override"
-              aria-label="Set regional override"
-            >
-              <Globe2
-                className="h-3.5 w-3.5 flex-shrink-0 text-[hsl(var(--region-override))]"
-                aria-hidden="true"
-              />
-              <span className="min-w-0 truncate text-[11px] font-medium text-[hsl(var(--region-override))]">
-                {activeFloodScopeDisplay}
-              </span>
-            </button>
-          )}
         </span>
       </span>
-      <div className="flex items-center justify-end gap-0.5 flex-shrink-0">
+      {conversation.type === 'contact' && activeContact && (
+        <div className="col-span-2 row-start-2 min-w-0 text-[11px] text-muted-foreground min-[1100px]:col-span-1 min-[1100px]:col-start-2 min-[1100px]:row-start-1">
+          <ContactStatusInfo
+            contact={activeContact}
+            ourLat={config?.lat ?? null}
+            ourLon={config?.lon ?? null}
+          />
+        </div>
+      )}
+      <div className="flex items-center justify-end gap-0.5">
         {conversation.type === 'contact' && !activeContactIsRoomServer && (
           <button
             className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

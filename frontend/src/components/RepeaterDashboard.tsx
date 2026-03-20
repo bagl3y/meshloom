@@ -12,6 +12,7 @@ import { handleKeyboardActivate } from '../utils/a11y';
 import { isValidLocation } from '../utils/pathUtils';
 import { ContactStatusInfo } from './ContactStatusInfo';
 import type { Contact, Conversation, Favorite, PathDiscoveryResponse } from '../types';
+import { cn } from '../lib/utils';
 import { TelemetryPane } from './repeater/RepeaterTelemetryPane';
 import { NeighborsPane } from './repeater/RepeaterNeighborsPane';
 import { AclPane } from './repeater/RepeaterAclPane';
@@ -101,8 +102,15 @@ export function RepeaterDashboard({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Header */}
-      <header className="flex justify-between items-start px-4 py-2.5 border-b border-border gap-2">
-        <span className="flex min-w-0 flex-1 flex-col">
+      <header
+        className={cn(
+          'grid items-start gap-x-2 gap-y-0.5 border-b border-border px-4 py-2.5',
+          contact
+            ? 'grid-cols-[minmax(0,1fr)_auto] min-[1100px]:grid-cols-[minmax(0,1fr)_auto_auto]'
+            : 'grid-cols-[minmax(0,1fr)_auto]'
+        )}
+      >
+        <span className="flex min-w-0 flex-col">
           <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="flex min-w-0 flex-1 items-baseline gap-2">
               <span className="min-w-0 flex-shrink truncate font-semibold text-base">
@@ -122,14 +130,14 @@ export function RepeaterDashboard({
                 {conversation.id}
               </span>
             </span>
-            {contact && (
-              <span className="min-w-0 flex-none text-[11px] text-muted-foreground max-sm:basis-full">
-                <ContactStatusInfo contact={contact} ourLat={radioLat} ourLon={radioLon} />
-              </span>
-            )}
           </span>
         </span>
-        <div className="flex items-center gap-0.5 flex-shrink-0">
+        {contact && (
+          <div className="col-span-2 row-start-2 min-w-0 text-[11px] text-muted-foreground min-[1100px]:col-span-1 min-[1100px]:col-start-2 min-[1100px]:row-start-1">
+            <ContactStatusInfo contact={contact} ourLat={radioLat} ourLon={radioLon} />
+          </div>
+        )}
+        <div className="flex items-center gap-0.5">
           {loggedIn && (
             <Button
               variant="outline"
