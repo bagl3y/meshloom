@@ -555,6 +555,12 @@ class MessageRepository:
         return MessageRepository._row_to_message(row)
 
     @staticmethod
+    async def delete_by_id(message_id: int) -> None:
+        """Delete a message row by ID."""
+        await db.conn.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+        await db.conn.commit()
+
+    @staticmethod
     async def get_by_content(
         msg_type: str,
         conversation_key: str,

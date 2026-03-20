@@ -13,7 +13,8 @@ from app.region_scope import normalize_region_scope
 from app.repository import AppSettingsRepository, ContactRepository, MessageRepository
 from app.services import dm_ack_tracker
 from app.services.messages import (
-    build_message_model,
+    broadcast_message,
+    build_stored_outgoing_channel_message,
     create_outgoing_channel_message,
     create_outgoing_direct_message,
     increment_ack_and_broadcast,
@@ -586,6 +587,23 @@ async def send_channel_message_to_channel(
                 requested_timestamp=sent_at,
             )
             timestamp_bytes = sender_timestamp.to_bytes(4, "little")
+            outgoing_message = await create_outgoing_channel_message(
+                conversation_key=channel_key_upper,
+                text=text_with_sender,
+                sender_timestamp=sender_timestamp,
+                received_at=sent_at,
+                sender_name=radio_name or None,
+                sender_key=our_public_key,
+                channel_name=channel.name,
+                broadcast_fn=broadcast_fn,
+                broadcast=False,
+                message_repository=message_repository,
+            )
+            if outgoing_message is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to store outgoing message - unexpected duplicate",
+                )
 
             result = await send_channel_message_with_effective_scope(
                 mc=mc,
@@ -611,23 +629,11 @@ async def send_channel_message_to_channel(
                 raise HTTPException(
                     status_code=500, detail=f"Failed to send message: {result.payload}"
                 )
-
-        outgoing_message = await create_outgoing_channel_message(
-            conversation_key=channel_key_upper,
-            text=text_with_sender,
-            sender_timestamp=sender_timestamp,
-            received_at=sent_at,
-            sender_name=radio_name or None,
-            sender_key=our_public_key,
-            channel_name=channel.name,
-            broadcast_fn=broadcast_fn,
-            message_repository=message_repository,
-        )
-        if outgoing_message is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to store outgoing message - unexpected duplicate",
-            )
+    except Exception:
+        if outgoing_message is not None:
+            await message_repository.delete_by_id(outgoing_message.id)
+            outgoing_message = None
+        raise
     finally:
         if sender_timestamp is not None:
             await release_outgoing_sender_timestamp(
@@ -640,22 +646,19 @@ async def send_channel_message_to_channel(
     if sent_at is None or sender_timestamp is None or outgoing_message is None:
         raise HTTPException(status_code=500, detail="Failed to store outgoing message")
 
-    message_id = outgoing_message.id
-    acked_count, paths = await message_repository.get_ack_and_paths(message_id)
-    return build_message_model(
-        message_id=message_id,
-        msg_type="CHAN",
+    outgoing_message = await build_stored_outgoing_channel_message(
+        message_id=outgoing_message.id,
         conversation_key=channel_key_upper,
         text=text_with_sender,
         sender_timestamp=sender_timestamp,
         received_at=sent_at,
-        paths=paths,
-        outgoing=True,
-        acked=acked_count,
         sender_name=radio_name or None,
         sender_key=our_public_key,
         channel_name=channel.name,
+        message_repository=message_repository,
     )
+    broadcast_message(message=outgoing_message, broadcast_fn=broadcast_fn)
+    return outgoing_message
 
 
 async def resend_channel_message_record(
@@ -705,6 +708,23 @@ async def resend_channel_message_record(
                     requested_timestamp=sent_at,
                 )
                 timestamp_bytes = sender_timestamp.to_bytes(4, "little")
+                new_message = await create_outgoing_channel_message(
+                    conversation_key=message.conversation_key,
+                    text=message.text,
+                    sender_timestamp=sender_timestamp,
+                    received_at=sent_at,
+                    sender_name=radio_name or None,
+                    sender_key=resend_public_key,
+                    channel_name=channel.name,
+                    broadcast_fn=broadcast_fn,
+                    broadcast=False,
+                    message_repository=message_repository,
+                )
+                if new_message is None:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Failed to store resent message - unexpected duplicate",
+                    )
 
             result = await send_channel_message_with_effective_scope(
                 mc=mc,
@@ -729,26 +749,11 @@ async def resend_channel_message_record(
                     status_code=500,
                     detail=f"Failed to resend message: {result.payload}",
                 )
-
-        if new_timestamp:
-            if sent_at is None:
-                raise HTTPException(status_code=500, detail="Failed to assign resend timestamp")
-            new_message = await create_outgoing_channel_message(
-                conversation_key=message.conversation_key,
-                text=message.text,
-                sender_timestamp=sender_timestamp,
-                received_at=sent_at,
-                sender_name=radio_name or None,
-                sender_key=resend_public_key,
-                channel_name=channel.name,
-                broadcast_fn=broadcast_fn,
-                message_repository=message_repository,
-            )
-            if new_message is None:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Failed to store resent message - unexpected duplicate",
-                )
+    except Exception:
+        if new_message is not None:
+            await message_repository.delete_by_id(new_message.id)
+            new_message = None
+        raise
     finally:
         if new_timestamp and sent_at is not None:
             await release_outgoing_sender_timestamp(
@@ -761,6 +766,19 @@ async def resend_channel_message_record(
     if new_timestamp:
         if sent_at is None or new_message is None:
             raise HTTPException(status_code=500, detail="Failed to assign resend timestamp")
+
+        new_message = await build_stored_outgoing_channel_message(
+            message_id=new_message.id,
+            conversation_key=message.conversation_key,
+            text=message.text,
+            sender_timestamp=sender_timestamp,
+            received_at=sent_at,
+            sender_name=radio_name or None,
+            sender_key=resend_public_key,
+            channel_name=channel.name,
+            message_repository=message_repository,
+        )
+        broadcast_message(message=new_message, broadcast_fn=broadcast_fn)
 
         logger.info(
             "Resent channel message %d as new message %d to %s",

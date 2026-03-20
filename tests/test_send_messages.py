@@ -1521,10 +1521,10 @@ class TestConcurrentChannelSends:
 
 
 class TestChannelSendLockScope:
-    """Channel send should release the radio lock before DB persistence work."""
+    """Channel send should persist the outgoing row while the radio lock is held."""
 
     @pytest.mark.asyncio
-    async def test_channel_message_row_created_after_radio_lock_released(self, test_db):
+    async def test_channel_message_row_created_inside_radio_lock(self, test_db):
         mc = _make_mc(name="TestNode")
         chan_key = "de" * 16
         await ChannelRepository.upsert(key=chan_key, name="#lockscope")
@@ -1549,4 +1549,66 @@ class TestChannelSendLockScope:
                 SendChannelMessageRequest(channel_key=chan_key, text="Lock scope test")
             )
 
-        assert observed_lock_states == [False]
+        assert observed_lock_states == [True]
+
+    @pytest.mark.asyncio
+    async def test_channel_self_observation_during_send_reconciles_to_reserved_outgoing_row(
+        self, test_db
+    ):
+        """A self-observation that arrives during send should update the reserved outgoing row."""
+        from app.services.messages import create_fallback_channel_message
+
+        mc = _make_mc(name="TestNode")
+        chan_key = "ef" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#race")
+
+        broadcasts = []
+
+        def capture_broadcast(event_type, data, *args, **kwargs):
+            broadcasts.append({"type": event_type, "data": data})
+
+        async def send_with_self_observation(*args, **kwargs):
+            timestamp_bytes = kwargs["timestamp"]
+            sender_timestamp = int.from_bytes(timestamp_bytes, "little")
+            await create_fallback_channel_message(
+                conversation_key=chan_key.upper(),
+                message_text="Hello race",
+                sender_timestamp=sender_timestamp,
+                received_at=int(time.time()),
+                path="a1b2",
+                path_len=2,
+                txt_type=0,
+                sender_name="TestNode",
+                channel_name="#race",
+                broadcast_fn=capture_broadcast,
+            )
+            return _make_radio_result()
+
+        mc.commands.send_chan_msg = AsyncMock(side_effect=send_with_self_observation)
+
+        with (
+            patch("app.routers.messages.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event", side_effect=capture_broadcast),
+        ):
+            message = await send_channel_message(
+                SendChannelMessageRequest(channel_key=chan_key, text="Hello race")
+            )
+
+        assert message.outgoing is True
+        assert message.acked == 1
+        assert message.paths is not None
+        assert len(message.paths) == 1
+        assert message.paths[0].path == "a1b2"
+
+        stored = await MessageRepository.get_all(
+            msg_type="CHAN", conversation_key=chan_key.upper(), limit=10
+        )
+        assert len(stored) == 1
+        assert stored[0].outgoing is True
+        assert stored[0].acked == 1
+
+        message_events = [entry for entry in broadcasts if entry["type"] == "message"]
+        ack_events = [entry for entry in broadcasts if entry["type"] == "message_acked"]
+        assert len(message_events) == 1
+        assert len(ack_events) == 1

@@ -96,6 +96,36 @@ def broadcast_message(
         broadcast_fn("message", payload, realtime=realtime)
 
 
+async def build_stored_outgoing_channel_message(
+    *,
+    message_id: int,
+    conversation_key: str,
+    text: str,
+    sender_timestamp: int,
+    received_at: int,
+    sender_name: str | None,
+    sender_key: str | None,
+    channel_name: str | None,
+    message_repository=MessageRepository,
+) -> Message:
+    """Build the current payload for a stored outgoing channel message."""
+    acked_count, paths = await message_repository.get_ack_and_paths(message_id)
+    return build_message_model(
+        message_id=message_id,
+        msg_type="CHAN",
+        conversation_key=conversation_key,
+        text=text,
+        sender_timestamp=sender_timestamp,
+        received_at=received_at,
+        paths=paths,
+        outgoing=True,
+        acked=acked_count,
+        sender_name=sender_name,
+        sender_key=sender_key,
+        channel_name=channel_name,
+    )
+
+
 def broadcast_message_acked(
     *,
     message_id: int,
@@ -428,6 +458,7 @@ async def create_outgoing_channel_message(
     sender_key: str | None,
     channel_name: str | None,
     broadcast_fn: BroadcastFn,
+    broadcast: bool = True,
     message_repository=MessageRepository,
 ) -> Message | None:
     """Store and broadcast an outgoing channel message."""
@@ -444,18 +475,17 @@ async def create_outgoing_channel_message(
     if msg_id is None:
         return None
 
-    message = build_message_model(
+    message = await build_stored_outgoing_channel_message(
         message_id=msg_id,
-        msg_type="CHAN",
         conversation_key=conversation_key,
         text=text,
         sender_timestamp=sender_timestamp,
         received_at=received_at,
-        outgoing=True,
-        acked=0,
         sender_name=sender_name,
         sender_key=sender_key,
         channel_name=channel_name,
+        message_repository=message_repository,
     )
-    broadcast_message(message=message, broadcast_fn=broadcast_fn)
+    if broadcast:
+        broadcast_message(message=message, broadcast_fn=broadcast_fn)
     return message
