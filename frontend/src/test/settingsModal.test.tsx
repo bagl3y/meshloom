@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SettingsModal } from '../components/SettingsModal';
 import type {
@@ -177,6 +177,10 @@ function openDatabaseSection() {
 }
 
 describe('SettingsModal', () => {
+  beforeEach(() => {
+    vi.spyOn(api, 'getFanoutConfigs').mockResolvedValue([]);
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     localStorage.clear();
@@ -365,17 +369,21 @@ describe('SettingsModal', () => {
       desktopSection: 'fanout',
     });
 
+    await waitFor(() => {
+      expect(api.getFanoutConfigs).toHaveBeenCalled();
+    });
+    expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Local Configuration/i })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Preset')).not.toBeInTheDocument();
   });
 
-  it('does not clip the fanout add-integration menu in external desktop mode', () => {
+  it('does not clip the fanout add-integration menu in external desktop mode', async () => {
     renderModal({
       externalSidebarNav: true,
       desktopSection: 'fanout',
     });
 
-    const addIntegrationButton = screen.getByRole('button', { name: 'Add Integration' });
+    const addIntegrationButton = await screen.findByRole('button', { name: 'Add Integration' });
     const wrapperSection = addIntegrationButton.closest('section');
     expect(wrapperSection).not.toHaveClass('overflow-hidden');
   });
@@ -428,30 +436,35 @@ describe('SettingsModal', () => {
       expect(screen.getByText('Save failed')).toBeInTheDocument();
     });
 
-    view.rerender(
-      <SettingsModal
-        open
-        externalSidebarNav
-        desktopSection="fanout"
-        config={baseConfig}
-        health={baseHealth}
-        appSettings={baseSettings}
-        onClose={vi.fn()}
-        onSave={vi.fn(async () => {})}
-        onSaveAppSettings={onSaveAppSettings}
-        onSetPrivateKey={vi.fn(async () => {})}
-        onReboot={vi.fn(async () => {})}
-        onDisconnect={vi.fn(async () => {})}
-        onReconnect={vi.fn(async () => {})}
-        onAdvertise={vi.fn(async () => {})}
-        meshDiscovery={null}
-        meshDiscoveryLoadingTarget={null}
-        onDiscoverMesh={vi.fn(async () => {})}
-        onHealthRefresh={vi.fn(async () => {})}
-        onRefreshAppSettings={vi.fn(async () => {})}
-      />
-    );
+    await act(async () => {
+      view.rerender(
+        <SettingsModal
+          open
+          externalSidebarNav
+          desktopSection="fanout"
+          config={baseConfig}
+          health={baseHealth}
+          appSettings={baseSettings}
+          onClose={vi.fn()}
+          onSave={vi.fn(async () => {})}
+          onSaveAppSettings={onSaveAppSettings}
+          onSetPrivateKey={vi.fn(async () => {})}
+          onReboot={vi.fn(async () => {})}
+          onDisconnect={vi.fn(async () => {})}
+          onReconnect={vi.fn(async () => {})}
+          onAdvertise={vi.fn(async () => {})}
+          meshDiscovery={null}
+          meshDiscoveryLoadingTarget={null}
+          onDiscoverMesh={vi.fn(async () => {})}
+          onHealthRefresh={vi.fn(async () => {})}
+          onRefreshAppSettings={vi.fn(async () => {})}
+        />
+      );
+      await Promise.resolve();
+    });
 
+    expect(api.getFanoutConfigs).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument();
     expect(screen.queryByText('Save failed')).not.toBeInTheDocument();
   });
 

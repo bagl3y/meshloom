@@ -318,7 +318,11 @@ export function Sidebar({
     (item: FavoriteItem) =>
       item.type === 'channel'
         ? item.channel.name
-        : getContactDisplayName(item.contact.name, item.contact.public_key, item.contact.last_advert),
+        : getContactDisplayName(
+            item.contact.name,
+            item.contact.public_key,
+            item.contact.last_advert
+          ),
     []
   );
 
@@ -504,8 +508,6 @@ export function Sidebar({
       filteredNonRepeaterContacts,
       filteredRepeaters,
       favorites,
-      getContactRecentTime,
-      getLastMessageTime,
       sectionSortOrders.favorites,
       sortFavoriteItemsByOrder,
     ]);

@@ -514,4 +514,43 @@ describe('Sidebar section summaries', () => {
 
     expect(getFavoritesOrder()).toEqual(['Amy', 'Zed']);
   });
+
+  it('seeds favorites sort from the legacy global sort order when section prefs are missing', () => {
+    localStorage.setItem('remoteterm-sortOrder', 'alpha');
+
+    const publicChannel = makeChannel(PUBLIC_CHANNEL_KEY, 'Public');
+    const zed = makeContact('11'.repeat(32), 'Zed', 1, { last_advert: 150 });
+    const amy = makeContact('22'.repeat(32), 'Amy');
+
+    render(
+      <Sidebar
+        contacts={[zed, amy]}
+        channels={[publicChannel]}
+        activeConversation={null}
+        onSelectConversation={vi.fn()}
+        onNewMessage={vi.fn()}
+        lastMessageTimes={{
+          [getStateKey('contact', zed.public_key)]: 200,
+        }}
+        unreadCounts={{}}
+        mentions={{}}
+        showCracker={false}
+        crackerRunning={false}
+        onToggleCracker={vi.fn()}
+        onMarkAllRead={vi.fn()}
+        favorites={[
+          { type: 'contact', id: zed.public_key },
+          { type: 'contact', id: amy.public_key },
+        ]}
+      />
+    );
+
+    const favoriteRows = screen
+      .getAllByText(/^(Amy|Zed)$/)
+      .map((node) => node.textContent)
+      .filter((text): text is string => Boolean(text));
+
+    expect(favoriteRows).toEqual(['Amy', 'Zed']);
+    expect(screen.getByRole('button', { name: 'Sort Favorites by recent' })).toBeInTheDocument();
+  });
 });

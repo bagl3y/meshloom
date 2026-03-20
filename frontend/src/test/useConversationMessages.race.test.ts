@@ -217,7 +217,9 @@ describe('useConversationMessages conversation switch', () => {
 
     // Switch to conv B while older-messages fetch is still pending
     mockGetMessages.mockResolvedValueOnce([createMessage({ id: 999, conversation_key: 'conv_b' })]);
-    rerender({ conv: convB });
+    await act(async () => {
+      rerender({ conv: convB });
+    });
 
     // loadingOlder must reset immediately — no phantom spinner in conv B
     await waitFor(() => expect(result.current.loadingOlder).toBe(false));
@@ -226,12 +228,13 @@ describe('useConversationMessages conversation switch', () => {
     expect(result.current.messages[0].conversation_key).toBe('conv_b');
 
     // Resolve the stale older-messages fetch — should not affect conv B's state
-    olderDeferred.resolve([
-      createMessage({ id: 500, conversation_key: 'conv_a', text: 'stale-old' }),
-    ]);
+    await act(async () => {
+      olderDeferred.resolve([
+        createMessage({ id: 500, conversation_key: 'conv_a', text: 'stale-old' }),
+      ]);
+      await Promise.resolve();
+    });
 
-    // Give the stale response time to be processed (it should be discarded)
-    await new Promise((r) => setTimeout(r, 50));
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].conversation_key).toBe('conv_b');
   });
