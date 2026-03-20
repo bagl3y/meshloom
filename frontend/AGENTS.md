@@ -198,9 +198,9 @@ High-level state is delegated to hooks:
 - `useContactsAndChannels`: contact/channel lists, creation, deletion
 - `useConversationRouter`: URL hash → active conversation routing
 - `useConversationNavigation`: search target, conversation selection reset, and info-pane state
-- `useConversationActions`: send/resend/trace/block handlers and channel override updates
+- `useConversationActions`: send/resend/trace/path-discovery/block handlers and channel override updates
 - `useConversationMessages`: conversation switch loading, embedded conversation-scoped cache, jump-target loading, pagination, dedup/update helpers, reconnect reconciliation, and pending ACK buffering
-- `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps
+- `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps, and server `last_read_ats` boundaries
 - `useRealtimeAppState`: typed WS event application, reconnect recovery, cache/unread coordination
 - `useRepeaterDashboard`: repeater dashboard state (login, pane data/retries, console, actions)
 
@@ -330,6 +330,8 @@ Note: MQTT, bot, and community MQTT settings were migrated to the `fanout_config
 `FanoutConfig` represents a single fanout integration: `{id, type, name, enabled, config, scope, sort_order, created_at}`.
 
 `RawPacket.decrypted_info` includes `channel_key` and `contact_key` for MQTT topic routing.
+
+`UnreadCounts` includes `counts`, `mentions`, `last_message_times`, and `last_read_ats`. The unread-boundary/jump-to-unread behavior uses the server-provided `last_read_ats` map keyed by `getStateKey(...)`.
 
 ## Contact Info Pane
 

@@ -113,16 +113,16 @@ app/
 ### Read/unread state
 
 - Server is source of truth (`contacts.last_read_at`, `channels.last_read_at`).
-- `GET /api/read-state/unreads` returns counts, mention flags, and `last_message_times`.
+- `GET /api/read-state/unreads` returns counts, mention flags, `last_message_times`, and `last_read_ats`.
 
 ### DM ingest + ACKs
 
 - `services/dm_ingest.py` is the one place that should decide fallback-context resolution, DM dedup/reconciliation, and packet-linked vs. content-based storage behavior.
 - `CONTACT_MSG_RECV` is a fallback path, not a parallel source of truth. If you change DM storage behavior, trace both `event_handlers.py` and `packet_processor.py`.
 - DM ACK tracking is an in-memory pending/buffered map in `services/dm_ack_tracker.py`, with periodic expiry from `radio_sync.py`.
-- Outgoing DMs send once inline, store/broadcast immediately after the first successful `MSG_SENT`, then may retry up to 2 more times in the background if still unacked.
+- Outgoing DMs send once inline, store/broadcast immediately after the first successful `MSG_SENT`, then may retry up to 2 more times in the background only when the initial `MSG_SENT` result includes an expected ACK code and the message remains unacked.
 - DM retry timing follows the firmware-provided `suggested_timeout` from `PACKET_MSG_SENT`; do not replace it with a fixed app timeout unless you intentionally want more aggressive duplicate-prone retries.
-- Direct-message send behavior is intended to emulate `meshcore_py.commands.send_msg_with_retry(...)`: stage the effective contact route on the radio, send, wait for ACK, and on the final retry force flood via `reset_path(...)`.
+- Direct-message send behavior is intended to emulate `meshcore_py.commands.send_msg_with_retry(...)` when the radio provides an expected ACK code: stage the effective contact route on the radio, send, wait for ACK, and on the final retry force flood via `reset_path(...)`.
 - Non-final DM attempts use the contact's effective route (`override > direct > flood`). The final retry is intentionally sent as flood even when a routing override exists.
 - DM ACK state is terminal on first ACK. Retry attempts may register multiple expected ACK codes for the same message, but sibling pending codes are cleared once one ACK wins so a DM should not accrue multiple delivery confirmations from retries.
 - ACKs are delivery state, not routing state. Bundled ACKs inside PATH packets still satisfy pending DM sends, but ACK history does not feed contact route learning.
@@ -188,6 +188,7 @@ app/
 - `POST /contacts/{public_key}/command`
 - `POST /contacts/{public_key}/routing-override`
 - `POST /contacts/{public_key}/trace`
+- `POST /contacts/{public_key}/path-discovery` — discover forward/return paths, persist the learned direct route, and sync it back to the radio best-effort
 - `POST /contacts/{public_key}/repeater/login`
 - `POST /contacts/{public_key}/repeater/status`
 - `POST /contacts/{public_key}/repeater/lpp-telemetry`
@@ -219,7 +220,7 @@ app/
 - `POST /packets/maintenance`
 
 ### Read state
-- `GET /read-state/unreads`
+- `GET /read-state/unreads` — counts, mention flags, `last_message_times`, and `last_read_ats`
 - `POST /read-state/mark-all-read`
 
 ### Settings
