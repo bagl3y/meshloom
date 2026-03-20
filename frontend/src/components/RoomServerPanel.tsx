@@ -15,6 +15,7 @@ import { AclPane } from './repeater/RepeaterAclPane';
 import { LppTelemetryPane } from './repeater/RepeaterLppTelemetryPane';
 import { ConsolePane } from './repeater/RepeaterConsolePane';
 import { RepeaterLogin } from './RepeaterLogin';
+import { useRememberedServerPassword } from '../hooks/useRememberedServerPassword';
 
 interface RoomServerPanelProps {
   contact: Contact;
@@ -54,6 +55,8 @@ function createInitialPaneStates(): RoomPaneStates {
 }
 
 export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPanelProps) {
+  const { password, setPassword, rememberPassword, setRememberPassword, persistAfterLogin } =
+    useRememberedServerPassword('room', contact.public_key);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginMessage, setLoginMessage] = useState<string | null>(null);
@@ -162,13 +165,15 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
   const handleLogin = useCallback(
     async (password: string) => {
       await performLogin(password);
+      persistAfterLogin(password);
     },
-    [performLogin]
+    [performLogin, persistAfterLogin]
   );
 
   const handleLoginAsGuest = useCallback(async () => {
     await performLogin('');
-  }, [performLogin]);
+    persistAfterLogin('');
+  }, [performLogin, persistAfterLogin]);
 
   const handleConsoleCommand = useCallback(
     async (command: string) => {
@@ -211,17 +216,35 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
 
   if (!authenticated) {
     return (
-      <div className="flex-1 overflow-y-auto">
-        <RepeaterLogin
-          repeaterName={panelTitle}
-          loading={loginLoading}
-          error={loginError}
-          onLogin={handleLogin}
-          onLoginAsGuest={handleLoginAsGuest}
-          description="Log in with the room password or use ACL/guest access to enter this room server"
-          passwordPlaceholder="Room server password..."
-          guestLabel="Login with ACL / Guest"
-        />
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
+          <div className="rounded-md border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
+            Room server access is experimental and in public alpha. Please report any issues on{' '}
+            <a
+              href="https://github.com/jkingsman/Remote-Terminal-for-MeshCore/issues"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium underline underline-offset-2 hover:text-warning/80"
+            >
+              GitHub
+            </a>
+            .
+          </div>
+          <RepeaterLogin
+            repeaterName={panelTitle}
+            loading={loginLoading}
+            error={loginError}
+            password={password}
+            onPasswordChange={setPassword}
+            rememberPassword={rememberPassword}
+            onRememberPasswordChange={setRememberPassword}
+            onLogin={handleLogin}
+            onLoginAsGuest={handleLoginAsGuest}
+            description="Log in with the room password or use ACL/guest access to enter this room server"
+            passwordPlaceholder="Room server password..."
+            guestLabel="Login with ACL / Guest"
+          />
+        </div>
       </div>
     );
   }
