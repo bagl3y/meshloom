@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.config import get_recent_log_lines, settings
 from app.radio_sync import get_contacts_selected_for_radio_sync, get_radio_channel_limit
-from app.repository import MessageRepository
+from app.repository import MessageRepository, StatisticsRepository
 from app.routers.health import HealthResponse, build_health_data
 from app.services.radio_runtime import radio_runtime
 from app.version_info import get_app_build_info, git_output
@@ -87,11 +87,18 @@ class DebugRadioProbe(BaseModel):
     channels: DebugChannelAudit | None = None
 
 
+class DebugDatabaseInfo(BaseModel):
+    total_dms: int
+    total_channel_messages: int
+    total_outgoing: int
+
+
 class DebugSnapshotResponse(BaseModel):
     captured_at: str
     application: DebugApplicationInfo
     health: HealthResponse
     runtime: DebugRuntimeInfo
+    database: DebugDatabaseInfo
     radio_probe: DebugRadioProbe
     logs: list[str]
 
@@ -258,6 +265,7 @@ async def _probe_radio() -> DebugRadioProbe:
 async def debug_support_snapshot() -> DebugSnapshotResponse:
     """Return a support/debug snapshot with recent logs and live radio state."""
     health_data = await build_health_data(radio_runtime.is_connected, radio_runtime.connection_info)
+    statistics = await StatisticsRepository.get_all()
     radio_probe = await _probe_radio()
     channels_with_incoming_messages = (
         await MessageRepository.count_channels_with_incoming_messages()
@@ -281,6 +289,11 @@ async def debug_support_snapshot() -> DebugSnapshotResponse:
                 "enable_message_poll_fallback": settings.enable_message_poll_fallback,
                 "force_channel_slot_reconfigure": settings.force_channel_slot_reconfigure,
             },
+        ),
+        database=DebugDatabaseInfo(
+            total_dms=statistics["total_dms"],
+            total_channel_messages=statistics["total_channel_messages"],
+            total_outgoing=statistics["total_outgoing"],
         ),
         radio_probe=radio_probe,
         logs=[*LOG_COPY_BOUNDARY_PREFIX, *get_recent_log_lines(limit=1000)],

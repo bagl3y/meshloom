@@ -160,6 +160,35 @@ class TestDebugEndpoint:
         assert payload["radio_probe"]["performed"] is False
         assert payload["radio_probe"]["errors"] == ["Radio not connected"]
         assert payload["runtime"]["channels_with_incoming_messages"] == 0
+        assert payload["database"]["total_dms"] == 0
+        assert payload["database"]["total_channel_messages"] == 0
+        assert payload["database"]["total_outgoing"] == 0
+
+    @pytest.mark.asyncio
+    async def test_support_snapshot_includes_database_message_totals(self, test_db, client):
+        """Debug snapshot includes stored DM/channel/outgoing totals."""
+        await _insert_contact("ab" * 32, "Alice")
+        await test_db.conn.execute(
+            "INSERT INTO channels (key, name, is_hashtag, on_radio) VALUES (?, ?, ?, ?)",
+            ("CD" * 16, "#ops", 1, 0),
+        )
+        await test_db.conn.execute(
+            "INSERT INTO messages (type, conversation_key, text, received_at, outgoing) VALUES (?, ?, ?, ?, ?)",
+            ("PRIV", "ab" * 32, "hello", 1000, 0),
+        )
+        await test_db.conn.execute(
+            "INSERT INTO messages (type, conversation_key, text, received_at, outgoing) VALUES (?, ?, ?, ?, ?)",
+            ("CHAN", "CD" * 16, "room msg", 1001, 1),
+        )
+        await test_db.conn.commit()
+
+        response = await client.get("/api/debug")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["database"]["total_dms"] == 1
+        assert payload["database"]["total_channel_messages"] == 1
+        assert payload["database"]["total_outgoing"] == 1
 
 
 class TestRadioDisconnectedHandler:
