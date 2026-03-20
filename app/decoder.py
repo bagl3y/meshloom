@@ -58,6 +58,15 @@ class DecryptedDirectMessage:
     message: str
     dest_hash: str  # First byte of destination pubkey as hex
     src_hash: str  # First byte of sender pubkey as hex
+    signed_sender_prefix: str | None = None
+
+    @property
+    def txt_type(self) -> int:
+        return self.flags >> 2
+
+    @property
+    def attempt(self) -> int:
+        return self.flags & 0x03
 
 
 @dataclass
@@ -498,6 +507,13 @@ def decrypt_direct_message(payload: bytes, shared_secret: bytes) -> DecryptedDir
 
     # Extract message text (UTF-8, null-padded)
     message_bytes = decrypted[5:]
+    signed_sender_prefix: str | None = None
+    txt_type = flags >> 2
+    if txt_type == 2:
+        if len(message_bytes) < 4:
+            return None
+        signed_sender_prefix = message_bytes[:4].hex()
+        message_bytes = message_bytes[4:]
     try:
         message_text = message_bytes.decode("utf-8")
         # Truncate at first null terminator (consistent with channel message handling)
@@ -513,6 +529,7 @@ def decrypt_direct_message(payload: bytes, shared_secret: bytes) -> DecryptedDir
         message=message_text,
         dest_hash=dest_hash,
         src_hash=src_hash,
+        signed_sender_prefix=signed_sender_prefix,
     )
 
 

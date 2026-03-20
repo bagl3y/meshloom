@@ -5,6 +5,7 @@ import { Button } from './ui/button';
 import { Bell, Route, Star, Trash2 } from 'lucide-react';
 import { DirectTraceIcon } from './DirectTraceIcon';
 import { RepeaterLogin } from './RepeaterLogin';
+import { useRememberedServerPassword } from '../hooks/useRememberedServerPassword';
 import { useRepeaterDashboard } from '../hooks/useRepeaterDashboard';
 import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
@@ -81,8 +82,18 @@ export function RepeaterDashboard({
     rebootRepeater,
     syncClock,
   } = useRepeaterDashboard(conversation, { hasAdvertLocation });
+  const { password, setPassword, rememberPassword, setRememberPassword, persistAfterLogin } =
+    useRememberedServerPassword('repeater', conversation.id);
 
   const isFav = isFavorite(favorites, 'contact', conversation.id);
+  const handleRepeaterLogin = async (nextPassword: string) => {
+    await login(nextPassword);
+    persistAfterLogin(nextPassword);
+  };
+  const handleRepeaterGuestLogin = async () => {
+    await loginAsGuest();
+    persistAfterLogin('');
+  };
 
   // Loading all panes indicator
   const anyLoading = Object.values(paneStates).some((s) => s.loading);
@@ -221,8 +232,12 @@ export function RepeaterDashboard({
             repeaterName={conversation.name}
             loading={loginLoading}
             error={loginError}
-            onLogin={login}
-            onLoginAsGuest={loginAsGuest}
+            password={password}
+            onPasswordChange={setPassword}
+            rememberPassword={rememberPassword}
+            onRememberPasswordChange={setRememberPassword}
+            onLogin={handleRepeaterLogin}
+            onLoginAsGuest={handleRepeaterGuestLogin}
           />
         ) : (
           <div className="space-y-4">

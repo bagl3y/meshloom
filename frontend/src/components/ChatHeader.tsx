@@ -19,6 +19,7 @@ import type {
   PathDiscoveryResponse,
   RadioConfig,
 } from '../types';
+import { CONTACT_TYPE_ROOM } from '../types';
 
 interface ChatHeaderProps {
   conversation: Conversation;
@@ -84,6 +85,7 @@ export function ChatHeader({
     conversation.type === 'contact'
       ? contacts.find((contact) => contact.public_key === conversation.id)
       : null;
+  const activeContactIsRoomServer = activeContact?.type === CONTACT_TYPE_ROOM;
   const activeContactIsPrefixOnly = activeContact
     ? isPrefixOnlyContact(activeContact.public_key)
     : false;
@@ -230,7 +232,7 @@ export function ChatHeader({
         </span>
       </span>
       <div className="flex items-center justify-end gap-0.5 flex-shrink-0">
-        {conversation.type === 'contact' && (
+        {conversation.type === 'contact' && !activeContactIsRoomServer && (
           <button
             className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => setPathDiscoveryOpen(true)}
@@ -245,7 +247,7 @@ export function ChatHeader({
             <Route className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           </button>
         )}
-        {conversation.type === 'contact' && (
+        {conversation.type === 'contact' && !activeContactIsRoomServer && (
           <button
             className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={onTrace}
@@ -260,7 +262,7 @@ export function ChatHeader({
             <DirectTraceIcon className="h-4 w-4 text-muted-foreground" />
           </button>
         )}
-        {notificationsSupported && (
+        {notificationsSupported && !activeContactIsRoomServer && (
           <button
             className="flex items-center gap-1 rounded px-1 py-1 hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={onToggleNotifications}

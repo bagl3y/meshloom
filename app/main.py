@@ -32,6 +32,7 @@ from app.routers import (
     radio,
     read_state,
     repeaters,
+    rooms,
     settings,
     statistics,
     ws,
@@ -134,6 +135,7 @@ app.include_router(fanout.router, prefix="/api")
 app.include_router(radio.router, prefix="/api")
 app.include_router(contacts.router, prefix="/api")
 app.include_router(repeaters.router, prefix="/api")
+app.include_router(rooms.router, prefix="/api")
 app.include_router(channels.router, prefix="/api")
 app.include_router(messages.router, prefix="/api")
 app.include_router(packets.router, prefix="/api")

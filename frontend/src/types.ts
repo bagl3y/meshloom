@@ -352,6 +352,7 @@ export interface MigratePreferencesResponse {
 
 /** Contact type constants */
 export const CONTACT_TYPE_REPEATER = 2;
+export const CONTACT_TYPE_ROOM = 3;
 
 export interface NeighborInfo {
   pubkey_prefix: string;

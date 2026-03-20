@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { Contact, Message, MessagePath, RadioConfig } from '../types';
-import { CONTACT_TYPE_REPEATER } from '../types';
+import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM } from '../types';
 import { formatTime, parseSenderFromText } from '../utils/messageParser';
 import { formatHopCounts, type SenderInfo } from '../utils/pathUtils';
 import { getDirectContactRoute } from '../utils/pathUtils';
@@ -500,6 +500,33 @@ export function MessageList({
     contact: Contact | null,
     parsedSender: string | null
   ): SenderInfo => {
+    if (
+      msg.type === 'PRIV' &&
+      contact?.type === CONTACT_TYPE_ROOM &&
+      (msg.sender_key || msg.sender_name)
+    ) {
+      const authorContact =
+        (msg.sender_key
+          ? contacts.find((candidate) => candidate.public_key === msg.sender_key)
+          : null) || (msg.sender_name ? getContactByName(msg.sender_name) : null);
+      if (authorContact) {
+        const directRoute = getDirectContactRoute(authorContact);
+        return {
+          name: authorContact.name || msg.sender_name || authorContact.public_key.slice(0, 12),
+          publicKeyOrPrefix: authorContact.public_key,
+          lat: authorContact.lat,
+          lon: authorContact.lon,
+          pathHashMode: directRoute?.path_hash_mode ?? null,
+        };
+      }
+      return {
+        name: msg.sender_name || msg.sender_key || 'Unknown',
+        publicKeyOrPrefix: msg.sender_key || '',
+        lat: null,
+        lon: null,
+        pathHashMode: null,
+      };
+    }
     if (msg.type === 'PRIV' && contact) {
       const directRoute = getDirectContactRoute(contact);
       return {
@@ -584,6 +611,8 @@ export function MessageList({
     isCorruptChannelMessage: boolean
   ): string => {
     if (msg.outgoing) return '__outgoing__';
+    if (msg.type === 'PRIV' && msg.sender_key) return `key:${msg.sender_key}`;
+    if (msg.type === 'PRIV' && senderName) return `name:${senderName}`;
     if (msg.type === 'PRIV' && msg.conversation_key) return msg.conversation_key;
     if (msg.sender_key) return `key:${msg.sender_key}`;
     if (senderName) return `name:${senderName}`;
@@ -612,18 +641,24 @@ export function MessageList({
           // For DMs, look up contact; for channel messages, use parsed sender
           const contact = msg.type === 'PRIV' ? getContact(msg.conversation_key) : null;
           const isRepeater = contact?.type === CONTACT_TYPE_REPEATER;
+          const isRoomServer = contact?.type === CONTACT_TYPE_ROOM;
 
           // Skip sender parsing for repeater messages (CLI responses often have colons)
-          const { sender, content } = isRepeater
-            ? { sender: null, content: msg.text }
-            : parseSenderFromText(msg.text);
+          const { sender, content } =
+            isRepeater || (isRoomServer && msg.type === 'PRIV')
+              ? { sender: null, content: msg.text }
+              : parseSenderFromText(msg.text);
+          const directSenderName =
+            msg.type === 'PRIV' && isRoomServer ? msg.sender_name || null : null;
           const channelSenderName = msg.type === 'CHAN' ? msg.sender_name || sender : null;
           const channelSenderContact =
             msg.type === 'CHAN' && channelSenderName ? getContactByName(channelSenderName) : null;
           const isCorruptChannelMessage = isCorruptUnnamedChannelMessage(msg, sender);
           const displaySender = msg.outgoing
             ? 'You'
-            : contact?.name ||
+            : directSenderName ||
+              (isRoomServer && msg.sender_key ? msg.sender_key.slice(0, 8) : null) ||
+              contact?.name ||
               channelSenderName ||
               (isCorruptChannelMessage
                 ? CORRUPT_SENDER_LABEL
@@ -636,15 +671,22 @@ export function MessageList({
             displaySender !== CORRUPT_SENDER_LABEL;
 
           // Determine if we should show avatar (first message in a chunk from same sender)
-          const currentSenderKey = getSenderKey(msg, channelSenderName, isCorruptChannelMessage);
+          const currentSenderKey = getSenderKey(
+            msg,
+            directSenderName || channelSenderName,
+            isCorruptChannelMessage
+          );
           const prevMsg = sortedMessages[index - 1];
           const prevParsedSender = prevMsg ? parseSenderFromText(prevMsg.text).sender : null;
           const prevSenderKey = prevMsg
             ? getSenderKey(
                 prevMsg,
-                prevMsg.type === 'CHAN'
-                  ? prevMsg.sender_name || prevParsedSender
-                  : prevParsedSender,
+                prevMsg.type === 'PRIV' &&
+                  getContact(prevMsg.conversation_key)?.type === CONTACT_TYPE_ROOM
+                  ? prevMsg.sender_name
+                  : prevMsg.type === 'CHAN'
+                    ? prevMsg.sender_name || prevParsedSender
+                    : prevParsedSender,
                 isCorruptUnnamedChannelMessage(prevMsg, prevParsedSender)
               )
             : null;
@@ -658,9 +700,14 @@ export function MessageList({
           let avatarVariant: 'default' | 'corrupt' = 'default';
           if (!msg.outgoing) {
             if (msg.type === 'PRIV' && msg.conversation_key) {
-              // DM: use conversation_key (sender's public key)
-              avatarName = contact?.name || null;
-              avatarKey = msg.conversation_key;
+              if (isRoomServer) {
+                avatarName = directSenderName;
+                avatarKey =
+                  msg.sender_key || (avatarName ? `name:${avatarName}` : msg.conversation_key);
+              } else {
+                avatarName = contact?.name || null;
+                avatarKey = msg.conversation_key;
+              }
             } else if (isCorruptChannelMessage) {
               avatarName = CORRUPT_SENDER_LABEL;
               avatarKey = `corrupt:${msg.id}`;
@@ -725,7 +772,12 @@ export function MessageList({
                           type="button"
                           className="avatar-action-button rounded-full border-none bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           aria-label={avatarActionLabel}
-                          onClick={() => onOpenContactInfo(avatarKey, msg.type === 'CHAN')}
+                          onClick={() =>
+                            onOpenContactInfo(
+                              avatarKey,
+                              msg.type === 'CHAN' || (msg.type === 'PRIV' && isRoomServer)
+                            )
+                          }
                         >
                           <ContactAvatar
                             name={avatarName}
@@ -780,7 +832,7 @@ export function MessageList({
                           onClick={() =>
                             setSelectedPath({
                               paths: msg.paths!,
-                              senderInfo: getSenderInfo(msg, contact, sender),
+                              senderInfo: getSenderInfo(msg, contact, directSenderName || sender),
                             })
                           }
                         />
@@ -806,7 +858,7 @@ export function MessageList({
                             onClick={() =>
                               setSelectedPath({
                                 paths: msg.paths!,
-                                senderInfo: getSenderInfo(msg, contact, sender),
+                                senderInfo: getSenderInfo(msg, contact, directSenderName || sender),
                               })
                             }
                           />

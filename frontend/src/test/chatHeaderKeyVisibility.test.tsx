@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ChatHeader } from '../components/ChatHeader';
 import type { Channel, Contact, Conversation, Favorite, PathDiscoveryResponse } from '../types';
+import { CONTACT_TYPE_ROOM } from '../types';
 import { PUBLIC_CHANNEL_KEY } from '../utils/publicChannel';
 
 function makeChannel(key: string, name: string, isHashtag: boolean): Channel {
@@ -168,6 +169,38 @@ describe('ChatHeader key visibility', () => {
 
     expect(screen.getByText('Notifications On')).toBeInTheDocument();
     expect(onToggleNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides trace and notification controls for room-server contacts', () => {
+    const pubKey = '41'.repeat(32);
+    const contact: Contact = {
+      public_key: pubKey,
+      name: 'Ops Board',
+      type: CONTACT_TYPE_ROOM,
+      flags: 0,
+      direct_path: null,
+      direct_path_len: -1,
+      direct_path_hash_mode: -1,
+      last_advert: null,
+      lat: null,
+      lon: null,
+      last_seen: null,
+      on_radio: false,
+      last_contacted: null,
+      last_read_at: null,
+      first_seen: null,
+    };
+    const conversation: Conversation = { type: 'contact', id: pubKey, name: 'Ops Board' };
+
+    render(
+      <ChatHeader {...baseProps} conversation={conversation} channels={[]} contacts={[contact]} />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Path Discovery' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Direct Trace' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Enable notifications for this conversation' })
+    ).not.toBeInTheDocument();
   });
 
   it('hides the delete button for the canonical Public channel', () => {

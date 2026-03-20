@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import {
+  CONTACT_TYPE_ROOM,
   CONTACT_TYPE_REPEATER,
   type Contact,
   type Channel,
@@ -57,6 +58,7 @@ type CollapseState = {
   favorites: boolean;
   channels: boolean;
   contacts: boolean;
+  rooms: boolean;
   repeaters: boolean;
 };
 
@@ -67,6 +69,7 @@ const DEFAULT_COLLAPSE_STATE: CollapseState = {
   favorites: false,
   channels: false,
   contacts: false,
+  rooms: false,
   repeaters: false,
 };
 
@@ -80,6 +83,7 @@ function loadCollapsedState(): CollapseState {
       favorites: parsed.favorites ?? DEFAULT_COLLAPSE_STATE.favorites,
       channels: parsed.channels ?? DEFAULT_COLLAPSE_STATE.channels,
       contacts: parsed.contacts ?? DEFAULT_COLLAPSE_STATE.contacts,
+      rooms: parsed.rooms ?? DEFAULT_COLLAPSE_STATE.rooms,
       repeaters: parsed.repeaters ?? DEFAULT_COLLAPSE_STATE.repeaters,
     };
   } catch {
@@ -157,6 +161,7 @@ export function Sidebar({
   const [favoritesCollapsed, setFavoritesCollapsed] = useState(initialCollapsedState.favorites);
   const [channelsCollapsed, setChannelsCollapsed] = useState(initialCollapsedState.channels);
   const [contactsCollapsed, setContactsCollapsed] = useState(initialCollapsedState.contacts);
+  const [roomsCollapsed, setRoomsCollapsed] = useState(initialCollapsedState.rooms);
   const [repeatersCollapsed, setRepeatersCollapsed] = useState(initialCollapsedState.repeaters);
   const collapseSnapshotRef = useRef<CollapseState | null>(null);
   const sectionSortSourceRef = useRef(initialSectionSortState.source);
@@ -352,10 +357,21 @@ export function Sidebar({
   const sortedNonRepeaterContacts = useMemo(
     () =>
       sortContactsByOrder(
-        uniqueContacts.filter((c) => c.type !== CONTACT_TYPE_REPEATER),
+        uniqueContacts.filter(
+          (c) => c.type !== CONTACT_TYPE_REPEATER && c.type !== CONTACT_TYPE_ROOM
+        ),
         sectionSortOrders.contacts
       ),
     [uniqueContacts, sectionSortOrders.contacts, sortContactsByOrder]
+  );
+
+  const sortedRooms = useMemo(
+    () =>
+      sortContactsByOrder(
+        uniqueContacts.filter((c) => c.type === CONTACT_TYPE_ROOM),
+        sectionSortOrders.rooms
+      ),
+    [uniqueContacts, sectionSortOrders.rooms, sortContactsByOrder]
   );
 
   const sortedRepeaters = useMemo(
@@ -392,6 +408,17 @@ export function Sidebar({
     [sortedNonRepeaterContacts, query]
   );
 
+  const filteredRooms = useMemo(
+    () =>
+      query
+        ? sortedRooms.filter(
+            (c) =>
+              c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().includes(query)
+          )
+        : sortedRooms,
+    [sortedRooms, query]
+  );
+
   const filteredRepeaters = useMemo(
     () =>
       query
@@ -412,6 +439,7 @@ export function Sidebar({
           favorites: favoritesCollapsed,
           channels: channelsCollapsed,
           contacts: contactsCollapsed,
+          rooms: roomsCollapsed,
           repeaters: repeatersCollapsed,
         };
       }
@@ -421,12 +449,14 @@ export function Sidebar({
         favoritesCollapsed ||
         channelsCollapsed ||
         contactsCollapsed ||
+        roomsCollapsed ||
         repeatersCollapsed
       ) {
         setToolsCollapsed(false);
         setFavoritesCollapsed(false);
         setChannelsCollapsed(false);
         setContactsCollapsed(false);
+        setRoomsCollapsed(false);
         setRepeatersCollapsed(false);
       }
       return;
@@ -439,6 +469,7 @@ export function Sidebar({
       setFavoritesCollapsed(prev.favorites);
       setChannelsCollapsed(prev.channels);
       setContactsCollapsed(prev.contacts);
+      setRoomsCollapsed(prev.rooms);
       setRepeatersCollapsed(prev.repeaters);
     }
   }, [
@@ -447,6 +478,7 @@ export function Sidebar({
     favoritesCollapsed,
     channelsCollapsed,
     contactsCollapsed,
+    roomsCollapsed,
     repeatersCollapsed,
   ]);
 
@@ -458,6 +490,7 @@ export function Sidebar({
       favorites: favoritesCollapsed,
       channels: channelsCollapsed,
       contacts: contactsCollapsed,
+      rooms: roomsCollapsed,
       repeaters: repeatersCollapsed,
     };
 
@@ -472,45 +505,56 @@ export function Sidebar({
     favoritesCollapsed,
     channelsCollapsed,
     contactsCollapsed,
+    roomsCollapsed,
     repeatersCollapsed,
   ]);
 
   // Separate favorites from regular items, and build combined favorites list
-  const { favoriteItems, nonFavoriteChannels, nonFavoriteContacts, nonFavoriteRepeaters } =
-    useMemo(() => {
-      const favChannels = filteredChannels.filter((c) => isFavorite(favorites, 'channel', c.key));
-      const favContacts = [...filteredNonRepeaterContacts, ...filteredRepeaters].filter((c) =>
-        isFavorite(favorites, 'contact', c.public_key)
-      );
-      const nonFavChannels = filteredChannels.filter(
-        (c) => !isFavorite(favorites, 'channel', c.key)
-      );
-      const nonFavContacts = filteredNonRepeaterContacts.filter(
-        (c) => !isFavorite(favorites, 'contact', c.public_key)
-      );
-      const nonFavRepeaters = filteredRepeaters.filter(
-        (c) => !isFavorite(favorites, 'contact', c.public_key)
-      );
+  const {
+    favoriteItems,
+    nonFavoriteChannels,
+    nonFavoriteContacts,
+    nonFavoriteRooms,
+    nonFavoriteRepeaters,
+  } = useMemo(() => {
+    const favChannels = filteredChannels.filter((c) => isFavorite(favorites, 'channel', c.key));
+    const favContacts = [
+      ...filteredNonRepeaterContacts,
+      ...filteredRooms,
+      ...filteredRepeaters,
+    ].filter((c) => isFavorite(favorites, 'contact', c.public_key));
+    const nonFavChannels = filteredChannels.filter((c) => !isFavorite(favorites, 'channel', c.key));
+    const nonFavContacts = filteredNonRepeaterContacts.filter(
+      (c) => !isFavorite(favorites, 'contact', c.public_key)
+    );
+    const nonFavRooms = filteredRooms.filter(
+      (c) => !isFavorite(favorites, 'contact', c.public_key)
+    );
+    const nonFavRepeaters = filteredRepeaters.filter(
+      (c) => !isFavorite(favorites, 'contact', c.public_key)
+    );
 
-      const items: FavoriteItem[] = [
-        ...favChannels.map((channel) => ({ type: 'channel' as const, channel })),
-        ...favContacts.map((contact) => ({ type: 'contact' as const, contact })),
-      ];
+    const items: FavoriteItem[] = [
+      ...favChannels.map((channel) => ({ type: 'channel' as const, channel })),
+      ...favContacts.map((contact) => ({ type: 'contact' as const, contact })),
+    ];
 
-      return {
-        favoriteItems: sortFavoriteItemsByOrder(items, sectionSortOrders.favorites),
-        nonFavoriteChannels: nonFavChannels,
-        nonFavoriteContacts: nonFavContacts,
-        nonFavoriteRepeaters: nonFavRepeaters,
-      };
-    }, [
-      filteredChannels,
-      filteredNonRepeaterContacts,
-      filteredRepeaters,
-      favorites,
-      sectionSortOrders.favorites,
-      sortFavoriteItemsByOrder,
-    ]);
+    return {
+      favoriteItems: sortFavoriteItemsByOrder(items, sectionSortOrders.favorites),
+      nonFavoriteChannels: nonFavChannels,
+      nonFavoriteContacts: nonFavContacts,
+      nonFavoriteRooms: nonFavRooms,
+      nonFavoriteRepeaters: nonFavRepeaters,
+    };
+  }, [
+    filteredChannels,
+    filteredNonRepeaterContacts,
+    filteredRooms,
+    filteredRepeaters,
+    favorites,
+    sectionSortOrders.favorites,
+    sortFavoriteItemsByOrder,
+  ]);
 
   const buildChannelRow = (channel: Channel, keyPrefix: string): ConversationRow => ({
     key: `${keyPrefix}-${channel.key}`,
@@ -638,11 +682,13 @@ export function Sidebar({
   );
   const channelRows = nonFavoriteChannels.map((channel) => buildChannelRow(channel, 'chan'));
   const contactRows = nonFavoriteContacts.map((contact) => buildContactRow(contact, 'contact'));
+  const roomRows = nonFavoriteRooms.map((contact) => buildContactRow(contact, 'room'));
   const repeaterRows = nonFavoriteRepeaters.map((contact) => buildContactRow(contact, 'repeater'));
 
   const favoritesUnreadCount = getSectionUnreadCount(favoriteRows);
   const channelsUnreadCount = getSectionUnreadCount(channelRows);
   const contactsUnreadCount = getSectionUnreadCount(contactRows);
+  const roomsUnreadCount = getSectionUnreadCount(roomRows);
   const repeatersUnreadCount = getSectionUnreadCount(repeaterRows);
   const favoritesHasMention = sectionHasMention(favoriteRows);
   const channelsHasMention = sectionHasMention(channelRows);
@@ -899,6 +945,21 @@ export function Sidebar({
           </>
         )}
 
+        {/* Room Servers */}
+        {nonFavoriteRooms.length > 0 && (
+          <>
+            {renderSectionHeader(
+              'Room Servers',
+              roomsCollapsed,
+              () => setRoomsCollapsed((prev) => !prev),
+              'rooms',
+              roomsUnreadCount,
+              roomsUnreadCount > 0
+            )}
+            {(isSearching || !roomsCollapsed) && roomRows.map((row) => renderConversationRow(row))}
+          </>
+        )}
+
         {/* Repeaters */}
         {nonFavoriteRepeaters.length > 0 && (
           <>
@@ -916,6 +977,7 @@ export function Sidebar({
 
         {/* Empty state */}
         {nonFavoriteContacts.length === 0 &&
+          nonFavoriteRooms.length === 0 &&
           nonFavoriteChannels.length === 0 &&
           nonFavoriteRepeaters.length === 0 &&
           favoriteItems.length === 0 && (

@@ -15,7 +15,7 @@ const SIDEBAR_SECTION_SORT_ORDERS_KEY = 'remoteterm-sidebar-section-sort-orders'
 
 export type ConversationTimes = Record<string, number>;
 export type SortOrder = 'recent' | 'alpha';
-export type SidebarSortableSection = 'favorites' | 'channels' | 'contacts' | 'repeaters';
+export type SidebarSortableSection = 'favorites' | 'channels' | 'contacts' | 'rooms' | 'repeaters';
 export type SidebarSectionSortOrders = Record<SidebarSortableSection, SortOrder>;
 
 // In-memory cache of last message times (loaded from server on init)
@@ -116,6 +116,7 @@ export function buildSidebarSectionSortOrders(
     favorites: defaultOrder,
     channels: defaultOrder,
     contacts: defaultOrder,
+    rooms: defaultOrder,
     repeaters: defaultOrder,
   };
 }
@@ -133,6 +134,7 @@ export function loadLocalStorageSidebarSectionSortOrders(): SidebarSectionSortOr
       favorites: parsed.favorites === 'alpha' ? 'alpha' : 'recent',
       channels: parsed.channels === 'alpha' ? 'alpha' : 'recent',
       contacts: parsed.contacts === 'alpha' ? 'alpha' : 'recent',
+      rooms: parsed.rooms === 'alpha' ? 'alpha' : 'recent',
       repeaters: parsed.repeaters === 'alpha' ? 'alpha' : 'recent',
     };
   } catch {

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from meshcore import EventType
 
-from app.models import Contact, ContactUpsert
+from app.models import CONTACT_TYPE_ROOM, Contact, ContactUpsert
 from app.packet_processor import process_raw_packet
 from app.repository import (
     ContactRepository,
@@ -17,6 +17,7 @@ from app.services.contact_reconciliation import (
 from app.services.dm_ack_apply import apply_dm_ack_code
 from app.services.dm_ingest import (
     ingest_fallback_direct_message,
+    resolve_direct_message_sender_metadata,
     resolve_fallback_direct_message_context,
 )
 from app.websocket import broadcast_event
@@ -87,6 +88,23 @@ async def on_contact_message(event: "Event") -> None:
     sender_timestamp = ts if ts is not None else received_at
     path = payload.get("path")
     path_len = payload.get("path_len")
+    sender_name = context.sender_name
+    sender_key = context.sender_key
+    signature = payload.get("signature")
+    if (
+        context.contact is not None
+        and context.contact.type == CONTACT_TYPE_ROOM
+        and txt_type == 2
+        and isinstance(signature, str)
+        and signature
+    ):
+        sender_name, sender_key = await resolve_direct_message_sender_metadata(
+            sender_public_key=signature,
+            received_at=received_at,
+            broadcast_fn=broadcast_event,
+            contact_repository=ContactRepository,
+            log=logger,
+        )
     message = await ingest_fallback_direct_message(
         conversation_key=context.conversation_key,
         text=payload.get("text", ""),
@@ -95,9 +113,9 @@ async def on_contact_message(event: "Event") -> None:
         path=path,
         path_len=path_len,
         txt_type=txt_type,
-        signature=payload.get("signature"),
-        sender_name=context.sender_name,
-        sender_key=context.sender_key,
+        signature=signature,
+        sender_name=sender_name,
+        sender_key=sender_key,
         broadcast_fn=broadcast_event,
         update_last_contacted_key=context.contact.public_key.lower() if context.contact else None,
     )

@@ -1389,6 +1389,56 @@ class TestRepeaterMessageFiltering:
         assert len(messages) == 0
 
     @pytest.mark.asyncio
+    async def test_room_cli_response_not_stored(self, test_db, captured_broadcasts):
+        """Room-server CLI responses should not be stored in chat history."""
+        from app.decoder import DecryptedDirectMessage
+        from app.models import CONTACT_TYPE_ROOM
+        from app.packet_processor import create_dm_message_from_decrypted
+        from app.repository import ContactRepository, MessageRepository, RawPacketRepository
+
+        room_pub = "c3d4e5f6cb0a6fb9816ca956ff22dd7f12e2e5adbbf5e233bd8232774d6cffee"
+
+        await ContactRepository.upsert(
+            {
+                "public_key": room_pub,
+                "name": "Test Room",
+                "type": CONTACT_TYPE_ROOM,
+                "flags": 0,
+                "on_radio": False,
+            }
+        )
+
+        packet_id, _ = await RawPacketRepository.create(b"\x09\x00test", 1700000000)
+
+        decrypted = DecryptedDirectMessage(
+            timestamp=1700000000,
+            flags=(1 << 2),
+            message="> status ok",
+            dest_hash="fa",
+            src_hash="c3",
+        )
+
+        broadcasts, mock_broadcast = captured_broadcasts
+
+        with patch("app.packet_processor.broadcast_event", mock_broadcast):
+            msg_id = await create_dm_message_from_decrypted(
+                packet_id=packet_id,
+                decrypted=decrypted,
+                their_public_key=room_pub,
+                our_public_key=self.OUR_PUB,
+                received_at=1700000001,
+                outgoing=False,
+            )
+
+        assert msg_id is None
+        assert len(broadcasts) == 0
+
+        messages = await MessageRepository.get_all(
+            msg_type="PRIV", conversation_key=room_pub.lower(), limit=10
+        )
+        assert len(messages) == 0
+
+    @pytest.mark.asyncio
     async def test_client_message_still_stored(self, test_db, captured_broadcasts):
         """Messages from normal clients should still be stored."""
         from app.decoder import DecryptedDirectMessage

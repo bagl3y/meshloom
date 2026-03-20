@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import time
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException
@@ -28,6 +27,14 @@ from app.models import (
 )
 from app.repository import ContactRepository
 from app.routers.contacts import _ensure_on_radio, _resolve_contact_or_404
+from app.routers.server_control import (
+    _monotonic,
+    batch_cli_fetch,
+    extract_response_text,
+    prepare_authenticated_contact_connection,
+    require_server_capable_contact,
+    send_contact_cli_command,
+)
 from app.services.radio_runtime import radio_runtime as radio_manager
 
 if TYPE_CHECKING:
@@ -43,39 +50,11 @@ ACL_PERMISSION_NAMES = {
     3: "Admin",
 }
 router = APIRouter(prefix="/contacts", tags=["repeaters"])
-
 REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS = 5.0
-REPEATER_LOGIN_REJECTED_MESSAGE = (
-    "The repeater replied but did not confirm this login. "
-    "Existing access may still allow some repeater operations, but admin actions may fail."
-)
-REPEATER_LOGIN_SEND_FAILED_MESSAGE = (
-    "The login request could not be sent to the repeater. "
-    "The dashboard is still available, but repeater operations may fail until a login succeeds."
-)
-REPEATER_LOGIN_TIMEOUT_MESSAGE = (
-    "No login confirmation was heard from the repeater. "
-    "On current repeater firmware, that can mean the password was wrong, "
-    "blank-password login was not allowed by the ACL, or the reply was missed in transit. "
-    "The dashboard is still available; try logging in again if admin actions fail."
-)
-
-
-def _monotonic() -> float:
-    """Wrapper around time.monotonic() for testability.
-
-    Patching time.monotonic directly breaks the asyncio event loop which also
-    uses it. This indirection allows tests to control the clock safely.
-    """
-    return time.monotonic()
 
 
 def _extract_response_text(event) -> str:
-    """Extract text from a CLI response event, stripping the firmware '> ' prefix."""
-    text = event.payload.get("text", str(event.payload))
-    if text.startswith("> "):
-        text = text[2:]
-    return text
+    return extract_response_text(event)
 
 
 async def _fetch_repeater_response(
@@ -83,21 +62,6 @@ async def _fetch_repeater_response(
     target_pubkey_prefix: str,
     timeout: float = 20.0,
 ) -> "Event | None":
-    """Fetch a CLI response from a specific repeater via a validated get_msg() loop.
-
-    Calls get_msg() repeatedly until a matching CLI response (txt_type=1) from the
-    target repeater arrives or the wall-clock deadline expires. Unrelated messages
-    are safe to skip — meshcore's event dispatcher already delivers them to the
-    normal subscription handlers (on_contact_message, etc.) when get_msg() returns.
-
-    Args:
-        mc: MeshCore instance
-        target_pubkey_prefix: 12-char hex prefix of the repeater's public key
-        timeout: Wall-clock seconds before giving up
-
-    Returns:
-        The matching Event, or None if no response arrived before the deadline.
-    """
     deadline = _monotonic() + timeout
 
     while _monotonic() < deadline:
@@ -105,13 +69,12 @@ async def _fetch_repeater_response(
             result = await mc.commands.get_msg(timeout=2.0)
         except asyncio.TimeoutError:
             continue
-        except Exception as e:
-            logger.debug("get_msg() exception: %s", e)
+        except Exception as exc:
+            logger.debug("get_msg() exception: %s", exc)
             await asyncio.sleep(1.0)
             continue
 
         if result.type == EventType.NO_MORE_MSGS:
-            # No messages queued yet — wait and retry
             await asyncio.sleep(1.0)
             continue
 
@@ -125,8 +88,6 @@ async def _fetch_repeater_response(
             txt_type = result.payload.get("txt_type", 0)
             if msg_prefix == target_pubkey_prefix and txt_type == 1:
                 return result
-            # Not our target — already dispatched to subscribers by meshcore,
-            # so just continue draining the queue.
             logger.debug(
                 "Skipping non-target message (from=%s, txt_type=%d) while waiting for %s",
                 msg_prefix,
@@ -136,7 +97,6 @@ async def _fetch_repeater_response(
             continue
 
         if result.type == EventType.CHANNEL_MSG_RECV:
-            # Already dispatched to subscribers by meshcore; skip.
             logger.debug(
                 "Skipping channel message (channel_idx=%s) during repeater fetch",
                 result.payload.get("channel_idx"),
@@ -150,87 +110,13 @@ async def _fetch_repeater_response(
 
 
 async def prepare_repeater_connection(mc, contact: Contact, password: str) -> RepeaterLoginResponse:
-    """Prepare connection to a repeater by adding to radio and attempting login.
-
-    Args:
-        mc: MeshCore instance
-        contact: The repeater contact
-        password: Password for login (empty string for no password)
-    """
-    pubkey_prefix = contact.public_key[:12].lower()
-    loop = asyncio.get_running_loop()
-    login_future = loop.create_future()
-
-    def _resolve_login(event_type: EventType, message: str | None = None) -> None:
-        if login_future.done():
-            return
-        login_future.set_result(
-            RepeaterLoginResponse(
-                status="ok" if event_type == EventType.LOGIN_SUCCESS else "error",
-                authenticated=event_type == EventType.LOGIN_SUCCESS,
-                message=message,
-            )
-        )
-
-    success_subscription = mc.subscribe(
-        EventType.LOGIN_SUCCESS,
-        lambda _event: _resolve_login(EventType.LOGIN_SUCCESS),
-        attribute_filters={"pubkey_prefix": pubkey_prefix},
+    return await prepare_authenticated_contact_connection(
+        mc,
+        contact,
+        password,
+        label="repeater",
+        response_timeout=REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS,
     )
-    failed_subscription = mc.subscribe(
-        EventType.LOGIN_FAILED,
-        lambda _event: _resolve_login(
-            EventType.LOGIN_FAILED,
-            REPEATER_LOGIN_REJECTED_MESSAGE,
-        ),
-        attribute_filters={"pubkey_prefix": pubkey_prefix},
-    )
-
-    # Add contact to radio with path from DB (non-fatal — contact may already be loaded)
-    try:
-        logger.info("Adding repeater %s to radio", contact.public_key[:12])
-        await _ensure_on_radio(mc, contact)
-
-        logger.info("Sending login to repeater %s", contact.public_key[:12])
-        login_result = await mc.commands.send_login(contact.public_key, password)
-
-        if login_result.type == EventType.ERROR:
-            return RepeaterLoginResponse(
-                status="error",
-                authenticated=False,
-                message=f"{REPEATER_LOGIN_SEND_FAILED_MESSAGE} ({login_result.payload})",
-            )
-
-        try:
-            return await asyncio.wait_for(
-                login_future,
-                timeout=REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS,
-            )
-        except asyncio.TimeoutError:
-            logger.warning(
-                "No login response from repeater %s within %.1fs",
-                contact.public_key[:12],
-                REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS,
-            )
-            return RepeaterLoginResponse(
-                status="timeout",
-                authenticated=False,
-                message=REPEATER_LOGIN_TIMEOUT_MESSAGE,
-            )
-    except HTTPException as exc:
-        logger.warning(
-            "Repeater login setup failed for %s: %s",
-            contact.public_key[:12],
-            exc.detail,
-        )
-        return RepeaterLoginResponse(
-            status="error",
-            authenticated=False,
-            message=f"{REPEATER_LOGIN_SEND_FAILED_MESSAGE} ({exc.detail})",
-        )
-    finally:
-        success_subscription.unsubscribe()
-        failed_subscription.unsubscribe()
 
 
 def _require_repeater(contact: Contact) -> None:
@@ -403,43 +289,7 @@ async def _batch_cli_fetch(
     operation_name: str,
     commands: list[tuple[str, str]],
 ) -> dict[str, str | None]:
-    """Send a batch of CLI commands to a repeater and collect responses.
-
-    Opens a radio operation with polling paused and auto-fetch suspended (since
-    we call get_msg() directly via _fetch_repeater_response), adds the contact
-    to the radio for routing, then sends each command sequentially with a 1-second
-    gap between them.
-
-    Returns a dict mapping field names to response strings (or None on timeout).
-    """
-    results: dict[str, str | None] = {field: None for _, field in commands}
-
-    async with radio_manager.radio_operation(
-        operation_name,
-        pause_polling=True,
-        suspend_auto_fetch=True,
-    ) as mc:
-        await _ensure_on_radio(mc, contact)
-        await asyncio.sleep(1.0)
-
-        for i, (cmd, field) in enumerate(commands):
-            if i > 0:
-                await asyncio.sleep(1.0)
-
-            send_result = await mc.commands.send_cmd(contact.public_key, cmd)
-            if send_result.type == EventType.ERROR:
-                logger.debug("Command '%s' send error: %s", cmd, send_result.payload)
-                continue
-
-            response_event = await _fetch_repeater_response(
-                mc, contact.public_key[:12], timeout=10.0
-            )
-            if response_event is not None:
-                results[field] = _extract_response_text(response_event)
-            else:
-                logger.warning("No response for command '%s' (%s)", cmd, field)
-
-    return results
+    return await batch_cli_fetch(contact, operation_name, commands)
 
 
 @router.post("/{public_key}/repeater/node-info", response_model=RepeaterNodeInfoResponse)
@@ -524,72 +374,13 @@ async def repeater_owner_info(public_key: str) -> RepeaterOwnerInfoResponse:
 
 @router.post("/{public_key}/command", response_model=CommandResponse)
 async def send_repeater_command(public_key: str, request: CommandRequest) -> CommandResponse:
-    """Send a CLI command to a repeater.
-
-    The contact must be a repeater (type=2). The user must have already logged in
-    via the repeater/login endpoint. This endpoint ensures the contact is on the
-    radio before sending commands (the repeater remembers ACL permissions after login).
-
-    Common commands:
-    - get name, set name <value>
-    - get tx, set tx <dbm>
-    - get radio, set radio <freq,bw,sf,cr>
-    - tempradio <freq,bw,sf,cr,minutes>
-    - setperm <pubkey> <permission>  (0=guest, 1=read-only, 2=read-write, 3=admin)
-    - clock, clock sync, time <epoch_seconds>
-    - reboot
-    - ver
-    """
+    """Send a CLI command to a repeater or room server."""
     require_connected()
 
-    # Get contact from database
     contact = await _resolve_contact_or_404(public_key)
-    _require_repeater(contact)
-
-    async with radio_manager.radio_operation(
-        "send_repeater_command",
-        pause_polling=True,
-        suspend_auto_fetch=True,
-    ) as mc:
-        # Add contact to radio with path from DB (non-fatal — contact may already be loaded)
-        logger.info("Adding repeater %s to radio", contact.public_key[:12])
-        await _ensure_on_radio(mc, contact)
-        await asyncio.sleep(1.0)
-
-        # Send the command
-        logger.info("Sending command to repeater %s: %s", contact.public_key[:12], request.command)
-
-        send_result = await mc.commands.send_cmd(contact.public_key, request.command)
-
-        if send_result.type == EventType.ERROR:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to send command: {send_result.payload}"
-            )
-
-        # Wait for response using validated fetch loop
-        response_event = await _fetch_repeater_response(mc, contact.public_key[:12])
-
-        if response_event is None:
-            logger.warning(
-                "No response from repeater %s for command: %s",
-                contact.public_key[:12],
-                request.command,
-            )
-            return CommandResponse(
-                command=request.command,
-                response="(no response - command may have been processed)",
-            )
-
-        # CONTACT_MSG_RECV payloads use sender_timestamp in meshcore.
-        response_text = _extract_response_text(response_event)
-        sender_timestamp = response_event.payload.get(
-            "sender_timestamp",
-            response_event.payload.get("timestamp"),
-        )
-        logger.info("Received response from %s: %s", contact.public_key[:12], response_text)
-
-        return CommandResponse(
-            command=request.command,
-            response=response_text,
-            sender_timestamp=sender_timestamp,
-        )
+    require_server_capable_contact(contact)
+    return await send_contact_cli_command(
+        contact,
+        request.command,
+        operation_name="send_repeater_command",
+    )

@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from app.models import CONTACT_TYPE_REPEATER, Contact, ContactUpsert, Message
+from app.models import CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM, Contact, ContactUpsert, Message
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
     ContactRepository,
@@ -104,6 +104,35 @@ async def resolve_fallback_direct_message_context(
         sender_name=contact.name if contact else None,
         sender_key=normalized_sender or None,
     )
+
+
+async def resolve_direct_message_sender_metadata(
+    *,
+    sender_public_key: str,
+    received_at: int,
+    broadcast_fn: BroadcastFn,
+    contact_repository=ContactRepository,
+    log: logging.Logger | None = None,
+) -> tuple[str | None, str | None]:
+    """Resolve sender attribution for direct-message variants such as room-server posts."""
+    normalized_sender = sender_public_key.lower()
+
+    try:
+        contact = await contact_repository.get_by_key_or_prefix(normalized_sender)
+    except AmbiguousPublicKeyPrefixError:
+        (log or logger).warning(
+            "Sender prefix '%s' is ambiguous; preserving prefix-only attribution",
+            sender_public_key,
+        )
+        contact = None
+
+    if contact is not None:
+        await claim_prefix_messages_for_contact(
+            public_key=contact.public_key.lower(), log=log or logger
+        )
+        return contact.name, contact.public_key.lower()
+
+    return None, normalized_sender or None
 
 
 async def _store_direct_message(
@@ -237,8 +266,19 @@ async def ingest_decrypted_direct_message(
     contact_repository=ContactRepository,
 ) -> Message | None:
     conversation_key = their_public_key.lower()
+
+    if not outgoing and decrypted.txt_type == 1:
+        logger.debug(
+            "Skipping CLI response from %s (txt_type=1): %s",
+            conversation_key[:12],
+            (decrypted.message or "")[:50],
+        )
+        return None
+
     contact = await contact_repository.get_by_key(conversation_key)
     sender_name: str | None = None
+    sender_key: str | None = conversation_key if not outgoing else None
+    signature: str | None = None
     if contact is not None:
         conversation_key, skip_storage = await _prepare_resolved_contact(contact, log=logger)
         if skip_storage:
@@ -249,7 +289,17 @@ async def ingest_decrypted_direct_message(
             )
             return None
         if not outgoing:
-            sender_name = contact.name
+            if contact.type == CONTACT_TYPE_ROOM and decrypted.signed_sender_prefix:
+                sender_name, sender_key = await resolve_direct_message_sender_metadata(
+                    sender_public_key=decrypted.signed_sender_prefix,
+                    received_at=received_at or int(time.time()),
+                    broadcast_fn=broadcast_fn,
+                    contact_repository=contact_repository,
+                    log=logger,
+                )
+                signature = decrypted.signed_sender_prefix
+            else:
+                sender_name = contact.name
 
     received = received_at or int(time.time())
     message = await _store_direct_message(
@@ -261,10 +311,10 @@ async def ingest_decrypted_direct_message(
         path=path,
         path_len=path_len,
         outgoing=outgoing,
-        txt_type=0,
-        signature=None,
+        txt_type=decrypted.txt_type,
+        signature=signature,
         sender_name=sender_name,
-        sender_key=conversation_key if not outgoing else None,
+        sender_key=sender_key,
         realtime=realtime,
         broadcast_fn=broadcast_fn,
         update_last_contacted_key=conversation_key,
