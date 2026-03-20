@@ -314,6 +314,36 @@ export function Sidebar({
     [getContactHeardTime]
   );
 
+  const getFavoriteItemName = useCallback(
+    (item: FavoriteItem) =>
+      item.type === 'channel'
+        ? item.channel.name
+        : getContactDisplayName(item.contact.name, item.contact.public_key, item.contact.last_advert),
+    []
+  );
+
+  const sortFavoriteItemsByOrder = useCallback(
+    (items: FavoriteItem[], order: SortOrder) =>
+      [...items].sort((a, b) => {
+        if (order === 'recent') {
+          const timeA =
+            a.type === 'channel'
+              ? getLastMessageTime('channel', a.channel.key)
+              : getContactRecentTime(a.contact);
+          const timeB =
+            b.type === 'channel'
+              ? getLastMessageTime('channel', b.channel.key)
+              : getContactRecentTime(b.contact);
+          if (timeA && timeB) return timeB - timeA;
+          if (timeA && !timeB) return -1;
+          if (!timeA && timeB) return 1;
+        }
+
+        return getFavoriteItemName(a).localeCompare(getFavoriteItemName(b));
+      }),
+    [getContactRecentTime, getFavoriteItemName, getLastMessageTime]
+  );
+
   // Split non-repeater contacts and repeater contacts into separate sorted lists
   const sortedNonRepeaterContacts = useMemo(
     () =>
@@ -461,27 +491,10 @@ export function Sidebar({
       const items: FavoriteItem[] = [
         ...favChannels.map((channel) => ({ type: 'channel' as const, channel })),
         ...favContacts.map((contact) => ({ type: 'contact' as const, contact })),
-      ].sort((a, b) => {
-        const timeA =
-          a.type === 'channel'
-            ? getLastMessageTime('channel', a.channel.key)
-            : getContactRecentTime(a.contact);
-        const timeB =
-          b.type === 'channel'
-            ? getLastMessageTime('channel', b.channel.key)
-            : getContactRecentTime(b.contact);
-        if (timeA && timeB) return timeB - timeA;
-        if (timeA && !timeB) return -1;
-        if (!timeA && timeB) return 1;
-        const nameA =
-          a.type === 'channel' ? a.channel.name : a.contact.name || a.contact.public_key;
-        const nameB =
-          b.type === 'channel' ? b.channel.name : b.contact.name || b.contact.public_key;
-        return nameA.localeCompare(nameB);
-      });
+      ];
 
       return {
-        favoriteItems: items,
+        favoriteItems: sortFavoriteItemsByOrder(items, sectionSortOrders.favorites),
         nonFavoriteChannels: nonFavChannels,
         nonFavoriteContacts: nonFavContacts,
         nonFavoriteRepeaters: nonFavRepeaters,
@@ -493,6 +506,8 @@ export function Sidebar({
       favorites,
       getContactRecentTime,
       getLastMessageTime,
+      sectionSortOrders.favorites,
+      sortFavoriteItemsByOrder,
     ]);
 
   const buildChannelRow = (channel: Channel, keyPrefix: string): ConversationRow => ({
@@ -841,7 +856,7 @@ export function Sidebar({
               'Favorites',
               favoritesCollapsed,
               () => setFavoritesCollapsed((prev) => !prev),
-              null,
+              'favorites',
               favoritesUnreadCount,
               favoritesHasMention
             )}

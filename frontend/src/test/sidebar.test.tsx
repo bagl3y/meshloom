@@ -336,16 +336,17 @@ describe('Sidebar section summaries', () => {
     expect(getRepeatersOrder()).toEqual(['Alpha Relay', 'Zulu Relay']);
 
     fireEvent.click(screen.getByRole('button', { name: 'Sort Channels alphabetically' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sort Contacts alphabetically' }));
 
     expect(getChannelsOrder()).toEqual(['#alpha', '#zebra']);
-    expect(getContactsOrder()).toEqual(['Zed', 'Amy']);
+    expect(getContactsOrder()).toEqual(['Amy', 'Zed']);
     expect(getRepeatersOrder()).toEqual(['Alpha Relay', 'Zulu Relay']);
 
     unmount();
     render(<Sidebar {...props} />);
 
     expect(getChannelsOrder()).toEqual(['#alpha', '#zebra']);
-    expect(getContactsOrder()).toEqual(['Zed', 'Amy']);
+    expect(getContactsOrder()).toEqual(['Amy', 'Zed']);
     expect(getRepeatersOrder()).toEqual(['Alpha Relay', 'Zulu Relay']);
   });
 
@@ -465,5 +466,52 @@ describe('Sidebar section summaries', () => {
       id: PUBLIC_CHANNEL_KEY,
       name: 'Public',
     });
+  });
+
+  it('sorts favorites independently and persists the favorites sort preference', () => {
+    const publicChannel = makeChannel(PUBLIC_CHANNEL_KEY, 'Public');
+    const zed = makeContact('11'.repeat(32), 'Zed', 1, { last_advert: 150 });
+    const amy = makeContact('22'.repeat(32), 'Amy');
+
+    const props = {
+      contacts: [zed, amy],
+      channels: [publicChannel],
+      activeConversation: null,
+      onSelectConversation: vi.fn(),
+      onNewMessage: vi.fn(),
+      lastMessageTimes: {
+        [getStateKey('contact', zed.public_key)]: 200,
+      },
+      unreadCounts: {},
+      mentions: {},
+      showCracker: false,
+      crackerRunning: false,
+      onToggleCracker: vi.fn(),
+      onMarkAllRead: vi.fn(),
+      favorites: [
+        { type: 'contact', id: zed.public_key },
+        { type: 'contact', id: amy.public_key },
+      ] satisfies Favorite[],
+      legacySortOrder: 'recent' as const,
+    };
+
+    const getFavoritesOrder = () =>
+      screen
+        .getAllByText(/^(Amy|Zed)$/)
+        .map((node) => node.textContent)
+        .filter((text): text is string => Boolean(text));
+
+    const { unmount } = render(<Sidebar {...props} />);
+
+    expect(getFavoritesOrder()).toEqual(['Zed', 'Amy']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sort Favorites alphabetically' }));
+
+    expect(getFavoritesOrder()).toEqual(['Amy', 'Zed']);
+
+    unmount();
+    render(<Sidebar {...props} />);
+
+    expect(getFavoritesOrder()).toEqual(['Amy', 'Zed']);
   });
 });
