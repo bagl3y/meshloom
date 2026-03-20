@@ -431,6 +431,43 @@ class ContactRepository:
 
         Returns the placeholder public keys that were merged into the full key.
         """
+
+        async def migrate_child_rows(old_key: str, new_key: str) -> None:
+            await db.conn.execute(
+                """
+                INSERT INTO contact_name_history (public_key, name, first_seen, last_seen)
+                SELECT ?, name, first_seen, last_seen
+                FROM contact_name_history
+                WHERE public_key = ?
+                ON CONFLICT(public_key, name) DO UPDATE SET
+                    first_seen = MIN(contact_name_history.first_seen, excluded.first_seen),
+                    last_seen = MAX(contact_name_history.last_seen, excluded.last_seen)
+                """,
+                (new_key, old_key),
+            )
+            await db.conn.execute(
+                """
+                INSERT INTO contact_advert_paths
+                    (public_key, path_hex, path_len, first_seen, last_seen, heard_count)
+                SELECT ?, path_hex, path_len, first_seen, last_seen, heard_count
+                FROM contact_advert_paths
+                WHERE public_key = ?
+                ON CONFLICT(public_key, path_hex, path_len) DO UPDATE SET
+                    first_seen = MIN(contact_advert_paths.first_seen, excluded.first_seen),
+                    last_seen = MAX(contact_advert_paths.last_seen, excluded.last_seen),
+                    heard_count = contact_advert_paths.heard_count + excluded.heard_count
+                """,
+                (new_key, old_key),
+            )
+            await db.conn.execute(
+                "DELETE FROM contact_name_history WHERE public_key = ?",
+                (old_key,),
+            )
+            await db.conn.execute(
+                "DELETE FROM contact_advert_paths WHERE public_key = ?",
+                (old_key,),
+            )
+
         normalized_full_key = full_key.lower()
         cursor = await db.conn.execute(
             """
@@ -466,6 +503,8 @@ class ContactRepository:
             match_row = await match_cursor.fetchone()
             if (match_row["match_count"] if match_row is not None else 0) != 1:
                 continue
+
+            await migrate_child_rows(old_key, normalized_full_key)
 
             if full_exists:
                 await db.conn.execute(

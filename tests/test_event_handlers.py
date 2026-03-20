@@ -18,6 +18,8 @@ from app.event_handlers import (
     track_pending_ack,
 )
 from app.repository import (
+    ContactAdvertPathRepository,
+    ContactNameHistoryRepository,
     ContactRepository,
     MessageRepository,
 )
@@ -618,6 +620,8 @@ class TestContactMessageCLIFiltering:
             sender_timestamp=1700000000,
             received_at=1700000000,
         )
+        await ContactNameHistoryRepository.record_name(prefix, "Prefix Sender", 1699999990)
+        await ContactAdvertPathRepository.record_observation(prefix, "1122", 1699999995)
 
         with patch("app.event_handlers.broadcast_event") as mock_broadcast:
 
@@ -645,6 +649,19 @@ class TestContactMessageCLIFiltering:
             messages = await MessageRepository.get_all(conversation_key=full_key)
             assert len(messages) == 1
             assert messages[0].conversation_key == full_key
+
+            assert await ContactNameHistoryRepository.get_history(prefix) == []
+            assert await ContactAdvertPathRepository.get_recent_for_contact(prefix) == []
+
+            resolved_history = await ContactNameHistoryRepository.get_history(full_key)
+            assert {entry.name for entry in resolved_history} == {
+                "Prefix Sender",
+                "Resolved Sender",
+            }
+
+            resolved_paths = await ContactAdvertPathRepository.get_recent_for_contact(full_key)
+            assert len(resolved_paths) == 1
+            assert resolved_paths[0].path == "1122"
 
             event_types = [call.args[0] for call in mock_broadcast.call_args_list]
             assert "contact" in event_types
