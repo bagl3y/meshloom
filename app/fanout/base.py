@@ -33,3 +33,30 @@ class FanoutModule:
     def status(self) -> str:
         """Return 'connected', 'disconnected', or 'error'."""
         raise NotImplementedError
+
+
+def get_fanout_message_text(data: dict) -> str:
+    """Return the best human-readable message body for fanout consumers.
+
+    Channel messages are stored with the rendered sender label embedded in the
+    text (for example ``"Alice: hello"``). Human-facing integrations that also
+    carry ``sender_name`` should strip that duplicated prefix when it matches
+    the payload sender exactly.
+    """
+
+    text = data.get("text", "")
+    if not isinstance(text, str):
+        return ""
+
+    if data.get("type") != "CHAN":
+        return text
+
+    sender_name = data.get("sender_name")
+    if not isinstance(sender_name, str) or not sender_name:
+        return text
+
+    prefix, separator, remainder = text.partition(": ")
+    if separator and prefix == sender_name:
+        return remainder
+
+    return text

@@ -65,6 +65,7 @@ Wraps bot code execution via `app/fanout/bot_exec.py`. Config blob:
 - `code` — Python bot function source code
 - Executes in a thread pool with timeout and semaphore concurrency control
 - Rate-limits outgoing messages for repeater compatibility
+- Channel `message_text` passed to bot code is normalized for human readability by stripping a leading `"{sender_name}: "` prefix when it matches the payload sender.
 
 ### webhook (webhook.py)
 HTTP webhook delivery. Config blob:
@@ -78,6 +79,7 @@ Push notifications via Apprise library. Config blob:
 - `urls` — newline-separated Apprise notification service URLs
 - `preserve_identity` — suppress Discord webhook name/avatar override
 - `include_path` — include routing path in notification body
+- Channel notifications normalize stored message text by stripping a leading `"{sender_name}: "` prefix when it matches the payload sender so alerts do not duplicate the name.
 
 ### sqs (sqs.py)
 Amazon SQS delivery. Config blob:

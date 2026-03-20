@@ -781,6 +781,20 @@ class TestAppriseFormatBody:
         )
         assert body == "**#general:** Bob: hi"
 
+    def test_channel_format_strips_stored_sender_prefix(self):
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {
+                "type": "CHAN",
+                "text": "Bob: hi",
+                "sender_name": "Bob",
+                "channel_name": "#general",
+            },
+            include_path=False,
+        )
+        assert body == "**#general:** Bob: hi"
+
     def test_dm_with_path(self):
         from app.fanout.apprise_mod import _format_body
 
@@ -887,6 +901,34 @@ class TestAppriseNormalizeDiscordUrl:
 
         result = _normalize_discord_url("https://discord.com/api/webhooks/123/abc")
         assert "avatar=no" in result
+
+
+class TestFanoutMessageText:
+    def test_channel_text_strips_matching_sender_prefix(self):
+        from app.fanout.base import get_fanout_message_text
+
+        text = get_fanout_message_text(
+            {
+                "type": "CHAN",
+                "text": "Alice: hello world",
+                "sender_name": "Alice",
+            }
+        )
+
+        assert text == "hello world"
+
+    def test_channel_text_keeps_nonmatching_prefix(self):
+        from app.fanout.base import get_fanout_message_text
+
+        text = get_fanout_message_text(
+            {
+                "type": "CHAN",
+                "text": "Alice: hello world",
+                "sender_name": "Bob",
+            }
+        )
+
+        assert text == "Alice: hello world"
 
     def test_non_discord_unchanged(self):
         from app.fanout.apprise_mod import _normalize_discord_url

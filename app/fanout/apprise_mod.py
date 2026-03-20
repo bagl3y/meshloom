@@ -6,7 +6,7 @@ import asyncio
 import logging
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from app.fanout.base import FanoutModule
+from app.fanout.base import FanoutModule, get_fanout_message_text
 from app.path_utils import split_path_hex
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def _normalize_discord_url(url: str) -> str:
 def _format_body(data: dict, *, include_path: bool) -> str:
     """Build a human-readable notification body from message data."""
     msg_type = data.get("type", "")
-    text = data.get("text", "")
+    text = get_fanout_message_text(data)
     sender_name = data.get("sender_name") or "Unknown"
 
     via = ""
