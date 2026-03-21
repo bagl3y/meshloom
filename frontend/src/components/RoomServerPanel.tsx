@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { toast } from './ui/sonner';
 import { Button } from './ui/button';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
 import type {
   Contact,
   PaneState,
@@ -244,25 +245,37 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
 
   return (
     <section className="border-b border-border bg-muted/20 px-4 py-3">
-      <div className="flex flex-col gap-3">
-        <div className="flex justify-end">
-          <Button type="button" variant="outline" onClick={() => setAdvancedOpen((prev) => !prev)}>
-            {advancedOpen ? 'Hide Tools' : 'Show Tools'}
-          </Button>
-        </div>
-
-        {advancedOpen && (
-          <div className="flex flex-col gap-3">
-            <div className="flex justify-end">
+      <div className="flex justify-end">
+        <Button type="button" variant="outline" onClick={() => setAdvancedOpen((prev) => !prev)}>
+          {advancedOpen ? 'Hide Tools' : 'Show Tools'}
+        </Button>
+      </div>
+      <Sheet open={advancedOpen} onOpenChange={setAdvancedOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-4xl p-0 flex flex-col">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Room Server Tools</SheetTitle>
+            <SheetDescription>
+              Room server telemetry, ACL tools, sensor data, and CLI console
+            </SheetDescription>
+          </SheetHeader>
+          <div className="border-b border-border px-4 py-3 pr-14">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <h2 className="truncate text-base font-semibold">Room Server Tools</h2>
+                <p className="text-sm text-muted-foreground">{panelTitle}</p>
+              </div>
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleLoginAsGuest}
                 disabled={loginLoading}
+                className="self-start sm:self-auto"
               >
                 Refresh ACL Login
               </Button>
             </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
             <div className="grid gap-3 xl:grid-cols-2">
               <TelemetryPane
                 data={paneData.status}
@@ -288,8 +301,8 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
               />
             </div>
           </div>
-        )}
-      </div>
+        </SheetContent>
+      </Sheet>
     </section>
   );
 }
