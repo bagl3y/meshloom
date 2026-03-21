@@ -945,21 +945,6 @@ export function Sidebar({
           </>
         )}
 
-        {/* Room Servers */}
-        {nonFavoriteRooms.length > 0 && (
-          <>
-            {renderSectionHeader(
-              'Room Servers',
-              roomsCollapsed,
-              () => setRoomsCollapsed((prev) => !prev),
-              'rooms',
-              roomsUnreadCount,
-              roomsUnreadCount > 0
-            )}
-            {(isSearching || !roomsCollapsed) && roomRows.map((row) => renderConversationRow(row))}
-          </>
-        )}
-
         {/* Repeaters */}
         {nonFavoriteRepeaters.length > 0 && (
           <>
@@ -972,6 +957,21 @@ export function Sidebar({
             )}
             {(isSearching || !repeatersCollapsed) &&
               repeaterRows.map((row) => renderConversationRow(row))}
+          </>
+        )}
+
+        {/* Room Servers */}
+        {nonFavoriteRooms.length > 0 && (
+          <>
+            {renderSectionHeader(
+              'Room Servers',
+              roomsCollapsed,
+              () => setRoomsCollapsed((prev) => !prev),
+              'rooms',
+              roomsUnreadCount,
+              roomsUnreadCount > 0
+            )}
+            {(isSearching || !roomsCollapsed) && roomRows.map((row) => renderConversationRow(row))}
           </>
         )}
 
