@@ -24,6 +24,8 @@ vi.mock('../components/ui/sonner', () => ({
 
 const { api: _rawApi } = await import('../api');
 const mockApi = _rawApi as unknown as Record<string, Mock>;
+const { toast } = await import('../components/ui/sonner');
+const mockToast = toast as unknown as Record<string, Mock>;
 
 const roomContact: Contact = {
   public_key: 'aa'.repeat(32),
@@ -63,9 +65,13 @@ describe('RoomServerPanel', () => {
     fireEvent.click(screen.getByText('Login with ACL / Guest'));
 
     await waitFor(() => {
-      expect(screen.getByText('Room Server Controls')).toBeInTheDocument();
+      expect(screen.getByText('Show Tools')).toBeInTheDocument();
     });
-    expect(screen.getByText(/control panel is still available/i)).toBeInTheDocument();
+    expect(screen.getByText('Show Tools')).toBeInTheDocument();
+    expect(mockToast.warning).toHaveBeenCalledWith('Room login not confirmed', {
+      description:
+        'No login confirmation was heard from the room server. The control panel is still available; try logging in again if authenticated actions fail.',
+    });
     expect(onAuthenticatedChange).toHaveBeenLastCalledWith(true);
   });
 });

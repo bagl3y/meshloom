@@ -59,7 +59,6 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
     useRememberedServerPassword('room', contact.public_key);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [loginMessage, setLoginMessage] = useState<string | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [paneData, setPaneData] = useState<RoomPaneData>({
@@ -74,7 +73,6 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
   useEffect(() => {
     setLoginLoading(false);
     setLoginError(null);
-    setLoginMessage(null);
     setAuthenticated(false);
     setAdvancedOpen(false);
     setPaneData({
@@ -135,20 +133,15 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
 
       setLoginLoading(true);
       setLoginError(null);
-      setLoginMessage(null);
       try {
         const result = await api.roomLogin(contact.public_key, password);
         setAuthenticated(true);
-        setLoginMessage(
-          result.message ??
-            (result.authenticated
-              ? 'Login confirmed. You can now send room messages and open admin tools.'
-              : 'Login request sent, but authentication was not confirmed.')
-        );
         if (result.authenticated) {
           toast.success('Room login confirmed');
         } else {
-          toast(result.message ?? 'Room login was not confirmed');
+          toast.warning('Room login not confirmed', {
+            description: result.message ?? 'Room login was not confirmed',
+          });
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
@@ -252,58 +245,48 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
   return (
     <section className="border-b border-border bg-muted/20 px-4 py-3">
       <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-1">
-            <div className="text-sm font-medium">Room Server Controls</div>
-            <p className="text-xs text-muted-foreground">
-              Room access is active. Use the chat history and message box below to participate, and
-              open admin tools when needed.
-            </p>
-            {loginMessage && <p className="text-xs text-muted-foreground">{loginMessage}</p>}
-          </div>
-          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleLoginAsGuest}
-              disabled={loginLoading}
-            >
-              Refresh ACL Login
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setAdvancedOpen((prev) => !prev)}
-            >
-              {advancedOpen ? 'Hide Tools' : 'Show Tools'}
-            </Button>
-          </div>
+        <div className="flex justify-end">
+          <Button type="button" variant="outline" onClick={() => setAdvancedOpen((prev) => !prev)}>
+            {advancedOpen ? 'Hide Tools' : 'Show Tools'}
+          </Button>
         </div>
 
         {advancedOpen && (
-          <div className="grid gap-3 xl:grid-cols-2">
-            <TelemetryPane
-              data={paneData.status}
-              state={paneStates.status}
-              onRefresh={() => refreshPane('status', () => api.roomStatus(contact.public_key))}
-            />
-            <AclPane
-              data={paneData.acl}
-              state={paneStates.acl}
-              onRefresh={() => refreshPane('acl', () => api.roomAcl(contact.public_key))}
-            />
-            <LppTelemetryPane
-              data={paneData.lppTelemetry}
-              state={paneStates.lppTelemetry}
-              onRefresh={() =>
-                refreshPane('lppTelemetry', () => api.roomLppTelemetry(contact.public_key))
-              }
-            />
-            <ConsolePane
-              history={consoleHistory}
-              loading={consoleLoading}
-              onSend={handleConsoleCommand}
-            />
+          <div className="flex flex-col gap-3">
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleLoginAsGuest}
+                disabled={loginLoading}
+              >
+                Refresh ACL Login
+              </Button>
+            </div>
+            <div className="grid gap-3 xl:grid-cols-2">
+              <TelemetryPane
+                data={paneData.status}
+                state={paneStates.status}
+                onRefresh={() => refreshPane('status', () => api.roomStatus(contact.public_key))}
+              />
+              <AclPane
+                data={paneData.acl}
+                state={paneStates.acl}
+                onRefresh={() => refreshPane('acl', () => api.roomAcl(contact.public_key))}
+              />
+              <LppTelemetryPane
+                data={paneData.lppTelemetry}
+                state={paneStates.lppTelemetry}
+                onRefresh={() =>
+                  refreshPane('lppTelemetry', () => api.roomLppTelemetry(contact.public_key))
+                }
+              />
+              <ConsolePane
+                history={consoleHistory}
+                loading={consoleLoading}
+                onSend={handleConsoleCommand}
+              />
+            </div>
           </div>
         )}
       </div>
