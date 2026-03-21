@@ -246,7 +246,12 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
   return (
     <section className="border-b border-border bg-muted/20 px-4 py-3">
       <div className="flex justify-end">
-        <Button type="button" variant="outline" onClick={() => setAdvancedOpen((prev) => !prev)}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setAdvancedOpen((prev) => !prev)}
+        >
           {advancedOpen ? 'Hide Tools' : 'Show Tools'}
         </Button>
       </div>

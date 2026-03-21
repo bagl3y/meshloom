@@ -4,6 +4,19 @@ import { describe, expect, it, vi } from 'vitest';
 import { RawPacketDetailModal } from '../components/RawPacketDetailModal';
 import type { Channel, RawPacket } from '../types';
 
+vi.mock('../components/ui/sonner', () => ({
+  toast: Object.assign(vi.fn(), {
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+  }),
+}));
+
+const { toast } = await import('../components/ui/sonner');
+const mockToast = toast as unknown as {
+  success: ReturnType<typeof vi.fn>;
+};
+
 const BOT_CHANNEL: Channel = {
   key: 'eb50a1bcb3e4e5d7bf69a57c9dada211',
   name: '#bot',
@@ -25,6 +38,20 @@ const BOT_PACKET: RawPacket = {
 };
 
 describe('RawPacketDetailModal', () => {
+  it('copies the full packet hex to the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText },
+    });
+
+    render(<RawPacketDetailModal packet={BOT_PACKET} channels={[BOT_CHANNEL]} onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledWith(BOT_PACKET.data);
+    expect(mockToast.success).toHaveBeenCalledWith('Packet hex copied!');
+  });
+
   it('renders path hops as nowrap arrow-delimited groups and links hover state to the full packet hex', () => {
     render(<RawPacketDetailModal packet={BOT_PACKET} channels={[BOT_CHANNEL]} onClose={vi.fn()} />);
 

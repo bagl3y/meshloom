@@ -8,12 +8,19 @@ import {
   inspectRawPacketWithOptions,
   type PacketByteField,
 } from '../utils/rawPacketInspector';
+import { toast } from './ui/sonner';
+import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 
 interface RawPacketDetailModalProps {
   packet: RawPacket | null;
   channels: Channel[];
   onClose: () => void;
+}
+
+interface RawPacketInspectionPanelProps {
+  packet: RawPacket;
+  channels: Channel[];
 }
 
 interface FieldPaletteEntry {
@@ -500,37 +507,146 @@ function FieldSection({
   );
 }
 
-export function RawPacketDetailModal({ packet, channels, onClose }: RawPacketDetailModalProps) {
+export function RawPacketInspectionPanel({ packet, channels }: RawPacketInspectionPanelProps) {
   const decoderOptions = useMemo(() => createDecoderOptions(channels), [channels]);
   const groupTextCandidates = useMemo(
     () => buildGroupTextResolutionCandidates(channels),
     [channels]
   );
   const inspection = useMemo(
-    () => (packet ? inspectRawPacketWithOptions(packet, decoderOptions) : null),
+    () => inspectRawPacketWithOptions(packet, decoderOptions),
     [decoderOptions, packet]
   );
   const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null);
 
   const packetDisplayFields = useMemo(
-    () => (inspection ? inspection.packetFields.filter((field) => field.name !== 'Payload') : []),
+    () => inspection.packetFields.filter((field) => field.name !== 'Payload'),
     [inspection]
   );
-  const fullPacketFields = useMemo(
-    () => (inspection ? buildDisplayFields(inspection) : []),
-    [inspection]
-  );
+  const fullPacketFields = useMemo(() => buildDisplayFields(inspection), [inspection]);
   const colorMap = useMemo(() => buildFieldColorMap(fullPacketFields), [fullPacketFields]);
   const packetContext = useMemo(
-    () => (packet && inspection ? getPacketContext(packet, inspection, groupTextCandidates) : null),
+    () => getPacketContext(packet, inspection, groupTextCandidates),
     [groupTextCandidates, inspection, packet]
   );
   const packetIsDecrypted = useMemo(
-    () => (packet && inspection ? packetShowsDecryptedState(packet, inspection) : false),
+    () => packetShowsDecryptedState(packet, inspection),
     [inspection, packet]
   );
 
-  if (!packet || !inspection) {
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="grid gap-2 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+        <section className="rounded-lg border border-border/70 bg-card/70 p-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                Summary
+              </div>
+              <div className="mt-1 text-base font-semibold leading-tight text-foreground">
+                {inspection.summary.summary}
+              </div>
+            </div>
+            <div className="shrink-0 text-xs text-muted-foreground">
+              {formatTimestamp(packet.timestamp)}
+            </div>
+          </div>
+          {packetContext ? (
+            <div className="mt-2 rounded-md border border-border/60 bg-background/35 px-2.5 py-2">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                {packetContext.title}
+              </div>
+              <div className="mt-1 text-sm font-medium leading-tight text-foreground">
+                {packetContext.primary}
+              </div>
+              {packetContext.secondary ? (
+                <div className="mt-1 text-xs leading-tight text-muted-foreground">
+                  {packetContext.secondary}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+
+        <section className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+          <CompactMetaCard
+            label="Packet"
+            primary={`${packet.data.length / 2} bytes · ${packetIsDecrypted ? 'Decrypted' : 'Encrypted'}`}
+            secondary={`Storage #${packet.id}${packet.observation_id !== undefined ? ` · Observation #${packet.observation_id}` : ''}`}
+          />
+          <CompactMetaCard
+            label="Transport"
+            primary={`${inspection.routeTypeName} · ${inspection.payloadTypeName}`}
+            secondary={`${inspection.payloadVersionName} · ${formatPathMode(inspection.decoded?.pathHashSize, inspection.pathTokens.length)}`}
+          />
+          <CompactMetaCard
+            label="Signal"
+            primary={formatSignal(packet)}
+            secondary={packetContext ? null : undefined}
+          />
+        </section>
+      </div>
+
+      {inspection.validationErrors.length > 0 ? (
+        <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-2.5">
+          <div className="text-sm font-semibold text-foreground">Validation notes</div>
+          <div className="mt-1.5 space-y-1 text-sm text-foreground">
+            {inspection.validationErrors.map((error) => (
+              <div key={error}>{error}</div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-3 rounded-lg border border-border/70 bg-card/70 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-xl font-semibold text-foreground">Full packet hex</div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              navigator.clipboard.writeText(packet.data);
+              toast.success('Packet hex copied!');
+            }}
+          >
+            Copy
+          </Button>
+        </div>
+        <div className="mt-2.5">
+          <FullPacketHex
+            packetHex={packet.data}
+            fields={fullPacketFields}
+            colorMap={colorMap}
+            hoveredFieldId={hoveredFieldId}
+            onHoverField={setHoveredFieldId}
+          />
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <FieldSection
+          title="Packet fields"
+          fields={packetDisplayFields}
+          colorMap={colorMap}
+          hoveredFieldId={hoveredFieldId}
+          onHoverField={setHoveredFieldId}
+        />
+
+        <FieldSection
+          title="Payload fields"
+          fields={inspection.payloadFields}
+          colorMap={colorMap}
+          hoveredFieldId={hoveredFieldId}
+          onHoverField={setHoveredFieldId}
+        />
+      </div>
+    </div>
+  );
+}
+
+export function RawPacketDetailModal({ packet, channels, onClose }: RawPacketDetailModalProps) {
+  if (!packet) {
     return null;
   }
 
@@ -543,101 +659,7 @@ export function RawPacketDetailModal({ packet, channels, onClose }: RawPacketDet
             Detailed byte and field breakdown for the selected raw packet.
           </DialogDescription>
         </DialogHeader>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <div className="grid gap-2 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
-            <section className="rounded-lg border border-border/70 bg-card/70 p-3">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                    Summary
-                  </div>
-                  <div className="mt-1 text-base font-semibold leading-tight text-foreground">
-                    {inspection.summary.summary}
-                  </div>
-                </div>
-                <div className="shrink-0 text-xs text-muted-foreground">
-                  {formatTimestamp(packet.timestamp)}
-                </div>
-              </div>
-              {packetContext ? (
-                <div className="mt-2 rounded-md border border-border/60 bg-background/35 px-2.5 py-2">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                    {packetContext.title}
-                  </div>
-                  <div className="mt-1 text-sm font-medium leading-tight text-foreground">
-                    {packetContext.primary}
-                  </div>
-                  {packetContext.secondary ? (
-                    <div className="mt-1 text-xs leading-tight text-muted-foreground">
-                      {packetContext.secondary}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </section>
-
-            <section className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-              <CompactMetaCard
-                label="Packet"
-                primary={`${packet.data.length / 2} bytes · ${packetIsDecrypted ? 'Decrypted' : 'Encrypted'}`}
-                secondary={`Storage #${packet.id}${packet.observation_id !== undefined ? ` · Observation #${packet.observation_id}` : ''}`}
-              />
-              <CompactMetaCard
-                label="Transport"
-                primary={`${inspection.routeTypeName} · ${inspection.payloadTypeName}`}
-                secondary={`${inspection.payloadVersionName} · ${formatPathMode(inspection.decoded?.pathHashSize, inspection.pathTokens.length)}`}
-              />
-              <CompactMetaCard
-                label="Signal"
-                primary={formatSignal(packet)}
-                secondary={packetContext ? null : undefined}
-              />
-            </section>
-          </div>
-
-          {inspection.validationErrors.length > 0 ? (
-            <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-2.5">
-              <div className="text-sm font-semibold text-foreground">Validation notes</div>
-              <div className="mt-1.5 space-y-1 text-sm text-foreground">
-                {inspection.validationErrors.map((error) => (
-                  <div key={error}>{error}</div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          <div className="mt-3 rounded-lg border border-border/70 bg-card/70 p-3">
-            <div className="text-xl font-semibold text-foreground">Full packet hex</div>
-            <div className="mt-2.5">
-              <FullPacketHex
-                packetHex={packet.data}
-                fields={fullPacketFields}
-                colorMap={colorMap}
-                hoveredFieldId={hoveredFieldId}
-                onHoverField={setHoveredFieldId}
-              />
-            </div>
-          </div>
-
-          <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-            <FieldSection
-              title="Packet fields"
-              fields={packetDisplayFields}
-              colorMap={colorMap}
-              hoveredFieldId={hoveredFieldId}
-              onHoverField={setHoveredFieldId}
-            />
-
-            <FieldSection
-              title="Payload fields"
-              fields={inspection.payloadFields}
-              colorMap={colorMap}
-              hoveredFieldId={hoveredFieldId}
-              onHoverField={setHoveredFieldId}
-            />
-          </div>
-        </div>
+        <RawPacketInspectionPanel packet={packet} channels={channels} />
       </DialogContent>
     </Dialog>
   );

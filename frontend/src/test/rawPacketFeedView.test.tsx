@@ -135,6 +135,22 @@ describe('RawPacketFeedView', () => {
     expect(screen.getByText('Traffic Timeline')).toBeInTheDocument();
   });
 
+  it('analyzes a pasted raw packet without adding it to the live feed', () => {
+    renderView({ channels: [TEST_CHANNEL] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Analyze Packet' }));
+
+    expect(screen.getByRole('heading', { name: 'Analyze Packet' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Packet Hex'), {
+      target: { value: GROUP_TEXT_PACKET_HEX },
+    });
+
+    expect(screen.getByText('Full packet hex')).toBeInTheDocument();
+    expect(screen.getByText('Packet fields')).toBeInTheDocument();
+    expect(screen.getByText('Payload fields')).toBeInTheDocument();
+  });
+
   it('shows stats by default on desktop', () => {
     vi.stubGlobal(
       'matchMedia',

@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { RawPacketList } from './RawPacketList';
-import { RawPacketDetailModal } from './RawPacketDetailModal';
+import { RawPacketDetailModal, RawPacketInspectionPanel } from './RawPacketDetailModal';
+import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import type { Channel, Contact, RawPacket } from '../types';
 import {
   RAW_PACKET_STATS_WINDOWS,
@@ -371,6 +373,36 @@ function TimelineChart({ bins }: { bins: PacketTimelineBin[] }) {
   );
 }
 
+function normalizePacketHex(input: string): string {
+  return input.replace(/\s+/g, '').toUpperCase();
+}
+
+function validatePacketHex(input: string): string | null {
+  if (!input) {
+    return 'Paste a packet hex string to analyze.';
+  }
+  if (!/^[0-9A-F]+$/.test(input)) {
+    return 'Packet hex may only contain 0-9 and A-F characters.';
+  }
+  if (input.length % 2 !== 0) {
+    return 'Packet hex must contain an even number of characters.';
+  }
+  return null;
+}
+
+function buildPastedRawPacket(packetHex: string): RawPacket {
+  return {
+    id: -1,
+    timestamp: Math.floor(Date.now() / 1000),
+    data: packetHex,
+    payload_type: 'Unknown',
+    snr: null,
+    rssi: null,
+    decrypted: false,
+    decrypted_info: null,
+  };
+}
+
 export function RawPacketFeedView({
   packets,
   rawPacketStatsSession,
@@ -385,6 +417,8 @@ export function RawPacketFeedView({
   const [selectedWindow, setSelectedWindow] = useState<RawPacketStatsWindow>('10m');
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
   const [selectedPacket, setSelectedPacket] = useState<RawPacket | null>(null);
+  const [analyzeModalOpen, setAnalyzeModalOpen] = useState(false);
+  const [packetInput, setPacketInput] = useState('');
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -418,6 +452,26 @@ export function RawPacketFeedView({
     () => stats.newestNeighbors.map((item) => resolveNeighbor(item, contacts)),
     [contacts, stats.newestNeighbors]
   );
+  const normalizedPacketInput = useMemo(() => normalizePacketHex(packetInput), [packetInput]);
+  const packetInputError = useMemo(
+    () => (normalizedPacketInput.length > 0 ? validatePacketHex(normalizedPacketInput) : null),
+    [normalizedPacketInput]
+  );
+  const analyzedPacket = useMemo(
+    () =>
+      normalizedPacketInput.length > 0 && packetInputError === null
+        ? buildPastedRawPacket(normalizedPacketInput)
+        : null,
+    [normalizedPacketInput, packetInputError]
+  );
+
+  const handleAnalyzeModalChange = (isOpen: boolean) => {
+    setAnalyzeModalOpen(isOpen);
+    if (isOpen) {
+      return;
+    }
+    setPacketInput('');
+  };
 
   return (
     <>
@@ -428,15 +482,26 @@ export function RawPacketFeedView({
             Collecting stats since {formatTimestamp(rawPacketStatsSession.sessionStartedAt)}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setStatsOpen((current) => !current)}
-          aria-expanded={statsOpen}
-          className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {statsOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          {statsOpen ? 'Hide Stats' : 'Show Stats'}
-        </button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setAnalyzeModalOpen(true)}
+          >
+            Analyze Packet
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setStatsOpen((current) => !current)}
+            aria-expanded={statsOpen}
+          >
+            {statsOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            {statsOpen ? 'Hide Stats' : 'Show Stats'}
+          </Button>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
@@ -604,6 +669,40 @@ export function RawPacketFeedView({
         channels={channels}
         onClose={() => setSelectedPacket(null)}
       />
+
+      <Dialog open={analyzeModalOpen} onOpenChange={handleAnalyzeModalChange}>
+        <DialogContent className="flex h-[92vh] max-w-[min(96vw,82rem)] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Analyze Packet</DialogTitle>
+            <DialogDescription>Paste and inspect a raw packet hex string.</DialogDescription>
+          </DialogHeader>
+          <div className="border-b border-border px-4 py-3 pr-14">
+            <div className="flex flex-col gap-3">
+              <label className="text-sm font-medium text-foreground" htmlFor="raw-packet-input">
+                Packet Hex
+              </label>
+              <textarea
+                id="raw-packet-input"
+                value={packetInput}
+                onChange={(event) => setPacketInput(event.target.value)}
+                placeholder="Paste raw packet hex here..."
+                className="min-h-14 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+                spellCheck={false}
+              />
+              {packetInputError ? (
+                <div className="text-sm text-destructive">{packetInputError}</div>
+              ) : null}
+            </div>
+          </div>
+          {analyzedPacket ? (
+            <RawPacketInspectionPanel packet={analyzedPacket} channels={channels} />
+          ) : (
+            <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted-foreground">
+              Paste a packet above and click Analyze to inspect it.
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
