@@ -45,6 +45,40 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
+def _install_meshcore_serial_junk_prefix_patch(serial_connection_cls=None) -> None:
+    """Make meshcore serial framing tolerant of leading junk bytes.
+
+    Some radios emit console/debug text on the same UART as the companion
+    protocol. The current meshcore serial parser searches for the frame start
+    marker but then incorrectly begins parsing at byte 0 of the chunk instead
+    of the located marker offset, which can drop valid response frames.
+
+    TODO: Remove this monkeypatch once meshcore_py includes the upstream fix:
+    https://github.com/meshcore-dev/meshcore_py/pull/67
+    """
+    if serial_connection_cls is None:
+        from meshcore.serial_cx import SerialConnection as serial_connection_cls
+
+    original_handle_rx = serial_connection_cls.handle_rx
+    if getattr(original_handle_rx, "_rtmesh_junk_prefix_patch", False):
+        return
+
+    def patched_handle_rx(self, data: bytearray):
+        if len(self.header) == 0:
+            idx = data.find(b"\x3e")
+            if idx < 0:
+                return
+            if idx > 0:
+                data = data[idx:]
+        return original_handle_rx(self, data)
+
+    patched_handle_rx._rtmesh_junk_prefix_patch = True
+    serial_connection_cls.handle_rx = patched_handle_rx
+
+
+_install_meshcore_serial_junk_prefix_patch()
+
+
 async def _startup_radio_connect_and_setup() -> None:
     """Connect/setup the radio in the background so HTTP serving can start immediately."""
     try:
