@@ -29,9 +29,11 @@ interface PathModalProps {
   contacts: Contact[];
   config: RadioConfig | null;
   messageId?: number;
+  packetId?: number | null;
   isOutgoingChan?: boolean;
   isResendable?: boolean;
   onResend?: (messageId: number, newTimestamp?: boolean) => void;
+  onAnalyzePacket?: () => void;
 }
 
 export function PathModal({
@@ -42,14 +44,17 @@ export function PathModal({
   contacts,
   config,
   messageId,
+  packetId,
   isOutgoingChan,
   isResendable,
   onResend,
+  onAnalyzePacket,
 }: PathModalProps) {
   const { distanceUnit } = useDistanceUnit();
   const [expandedMaps, setExpandedMaps] = useState<Set<number>>(new Set());
   const hasResendActions = isOutgoingChan && messageId !== undefined && onResend;
   const hasPaths = paths.length > 0;
+  const showAnalyzePacket = hasPaths && packetId != null && onAnalyzePacket;
 
   // Resolve all paths
   const resolvedPaths = hasPaths
@@ -90,6 +95,12 @@ export function PathModal({
 
         {hasPaths && (
           <div className="flex-1 overflow-y-auto py-2 space-y-4">
+            {showAnalyzePacket ? (
+              <Button type="button" variant="outline" className="w-full" onClick={onAnalyzePacket}>
+                Analyze Packet
+              </Button>
+            ) : null}
+
             {/* Raw path summary */}
             <div className="text-sm">
               {paths.map((p, index) => {

@@ -8,8 +8,9 @@ from pydantic import BaseModel, Field
 
 from app.database import db
 from app.decoder import parse_packet, try_decrypt_packet_with_channel_key
+from app.models import RawPacketDecryptedInfo, RawPacketDetail
 from app.packet_processor import create_message_from_decrypted, run_historical_dm_decryption
-from app.repository import ChannelRepository, RawPacketRepository
+from app.repository import ChannelRepository, MessageRepository, RawPacketRepository
 from app.websocket import broadcast_success
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,45 @@ async def get_undecrypted_count() -> dict:
     """Get the count of undecrypted packets."""
     count = await RawPacketRepository.get_undecrypted_count()
     return {"count": count}
+
+
+@router.get("/{packet_id}", response_model=RawPacketDetail)
+async def get_raw_packet(packet_id: int) -> RawPacketDetail:
+    """Fetch one stored raw packet by row ID for on-demand inspection."""
+    packet_row = await RawPacketRepository.get_by_id(packet_id)
+    if packet_row is None:
+        raise HTTPException(status_code=404, detail="Raw packet not found")
+
+    stored_packet_id, packet_data, packet_timestamp, message_id = packet_row
+    packet_info = parse_packet(packet_data)
+    payload_type_name = packet_info.payload_type.name if packet_info else "Unknown"
+
+    decrypted_info: RawPacketDecryptedInfo | None = None
+    if message_id is not None:
+        message = await MessageRepository.get_by_id(message_id)
+        if message is not None:
+            if message.type == "CHAN":
+                channel = await ChannelRepository.get_by_key(message.conversation_key)
+                decrypted_info = RawPacketDecryptedInfo(
+                    channel_name=channel.name if channel else None,
+                    sender=message.sender_name,
+                    channel_key=message.conversation_key,
+                    contact_key=message.sender_key,
+                )
+            else:
+                decrypted_info = RawPacketDecryptedInfo(
+                    sender=message.sender_name,
+                    contact_key=message.conversation_key,
+                )
+
+    return RawPacketDetail(
+        id=stored_packet_id,
+        timestamp=packet_timestamp,
+        data=packet_data.hex(),
+        payload_type=payload_type_name,
+        decrypted=message_id is not None,
+        decrypted_info=decrypted_info,
+    )
 
 
 @router.post("/decrypt/historical", response_model=DecryptResult)

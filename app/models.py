@@ -413,6 +413,10 @@ class Message(BaseModel):
     acked: int = 0
     sender_name: str | None = None
     channel_name: str | None = None
+    packet_id: int | None = Field(
+        default=None,
+        description="Representative raw packet row ID when archival raw bytes exist",
+    )
 
 
 class MessagesAroundResponse(BaseModel):
@@ -454,6 +458,21 @@ class RawPacketBroadcast(BaseModel):
     payload_type: str = Field(description="Packet type name (e.g., GROUP_TEXT, ADVERT)")
     snr: float | None = Field(default=None, description="Signal-to-noise ratio in dB")
     rssi: int | None = Field(default=None, description="Received signal strength in dBm")
+    decrypted: bool = False
+    decrypted_info: RawPacketDecryptedInfo | None = None
+
+
+class RawPacketDetail(BaseModel):
+    """Stored raw-packet detail returned by the packet API."""
+
+    id: int
+    timestamp: int
+    data: str = Field(description="Hex-encoded packet data")
+    payload_type: str = Field(description="Packet type name (e.g. GROUP_TEXT, ADVERT)")
+    snr: float | None = Field(default=None, description="Signal-to-noise ratio in dB if available")
+    rssi: int | None = Field(
+        default=None, description="Received signal strength in dBm if available"
+    )
     decrypted: bool = False
     decrypted_info: RawPacketDecryptedInfo | None = None
 

@@ -56,6 +56,48 @@ class TestUndecryptedCount:
         assert response.json()["count"] == 3
 
 
+class TestGetRawPacket:
+    """Test GET /api/packets/{id}."""
+
+    @pytest.mark.asyncio
+    async def test_returns_404_when_missing(self, test_db, client):
+        response = await client.get("/api/packets/999999")
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_linked_packet_details(self, test_db, client):
+        channel_key = "DEADBEEF" * 4
+        await ChannelRepository.upsert(key=channel_key, name="#ops", is_hashtag=False)
+        packet_id, _ = await RawPacketRepository.create(b"\x09\x00test-packet", 1700000000)
+        msg_id = await MessageRepository.create(
+            msg_type="CHAN",
+            text="Alice: hello",
+            conversation_key=channel_key,
+            sender_timestamp=1700000000,
+            received_at=1700000000,
+            sender_name="Alice",
+        )
+        assert msg_id is not None
+        await RawPacketRepository.mark_decrypted(packet_id, msg_id)
+
+        response = await client.get(f"/api/packets/{packet_id}")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == packet_id
+        assert data["timestamp"] == 1700000000
+        assert data["data"] == "0900746573742d7061636b6574"
+        assert data["decrypted"] is True
+        assert data["decrypted_info"] == {
+            "channel_name": "#ops",
+            "sender": "Alice",
+            "channel_key": channel_key,
+            "contact_key": None,
+        }
+
+
 class TestDecryptHistoricalPackets:
     """Test POST /api/packets/decrypt/historical."""
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ChannelCrypto, PayloadType } from '@michaelhart/meshcore-decoder';
 
 import type { Channel, RawPacket } from '../types';
@@ -16,6 +16,33 @@ interface RawPacketDetailModalProps {
   packet: RawPacket | null;
   channels: Channel[];
   onClose: () => void;
+}
+
+type RawPacketInspectorDialogSource =
+  | {
+      kind: 'packet';
+      packet: RawPacket;
+    }
+  | {
+      kind: 'paste';
+    }
+  | {
+      kind: 'loading';
+      message: string;
+    }
+  | {
+      kind: 'unavailable';
+      message: string;
+    };
+
+interface RawPacketInspectorDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  channels: Channel[];
+  source: RawPacketInspectorDialogSource;
+  title: string;
+  description: string;
+  notice?: ReactNode;
 }
 
 interface RawPacketInspectionPanelProps {
@@ -365,6 +392,36 @@ function renderFieldValue(field: PacketByteField) {
   );
 }
 
+function normalizePacketHex(input: string): string {
+  return input.replace(/\s+/g, '').toUpperCase();
+}
+
+function validatePacketHex(input: string): string | null {
+  if (!input) {
+    return 'Paste a packet hex string to analyze.';
+  }
+  if (!/^[0-9A-F]+$/.test(input)) {
+    return 'Packet hex may only contain 0-9 and A-F characters.';
+  }
+  if (input.length % 2 !== 0) {
+    return 'Packet hex must contain an even number of characters.';
+  }
+  return null;
+}
+
+function buildPastedRawPacket(packetHex: string): RawPacket {
+  return {
+    id: -1,
+    timestamp: Math.floor(Date.now() / 1000),
+    data: packetHex,
+    payload_type: 'Unknown',
+    snr: null,
+    rssi: null,
+    decrypted: false,
+    decrypted_info: null,
+  };
+}
+
 function FieldBox({
   field,
   palette,
@@ -645,22 +702,118 @@ export function RawPacketInspectionPanel({ packet, channels }: RawPacketInspecti
   );
 }
 
+export function RawPacketInspectorDialog({
+  open,
+  onOpenChange,
+  channels,
+  source,
+  title,
+  description,
+  notice,
+}: RawPacketInspectorDialogProps) {
+  const [packetInput, setPacketInput] = useState('');
+
+  useEffect(() => {
+    if (!open || source.kind !== 'paste') {
+      setPacketInput('');
+    }
+  }, [open, source.kind]);
+
+  const normalizedPacketInput = useMemo(() => normalizePacketHex(packetInput), [packetInput]);
+  const packetInputError = useMemo(
+    () => (normalizedPacketInput.length > 0 ? validatePacketHex(normalizedPacketInput) : null),
+    [normalizedPacketInput]
+  );
+  const analyzedPacket = useMemo(
+    () =>
+      normalizedPacketInput.length > 0 && packetInputError === null
+        ? buildPastedRawPacket(normalizedPacketInput)
+        : null,
+    [normalizedPacketInput, packetInputError]
+  );
+
+  let body: ReactNode;
+  if (source.kind === 'packet') {
+    body = <RawPacketInspectionPanel packet={source.packet} channels={channels} />;
+  } else if (source.kind === 'paste') {
+    body = (
+      <>
+        <div className="border-b border-border px-4 py-3 pr-14">
+          <div className="flex flex-col gap-3">
+            <label className="text-sm font-medium text-foreground" htmlFor="raw-packet-input">
+              Packet Hex
+            </label>
+            <textarea
+              id="raw-packet-input"
+              value={packetInput}
+              onChange={(event) => setPacketInput(event.target.value)}
+              placeholder="Paste raw packet hex here..."
+              className="min-h-14 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+              spellCheck={false}
+            />
+            {packetInputError ? (
+              <div className="text-sm text-destructive">{packetInputError}</div>
+            ) : null}
+          </div>
+        </div>
+        {analyzedPacket ? (
+          <RawPacketInspectionPanel packet={analyzedPacket} channels={channels} />
+        ) : (
+          <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted-foreground">
+            Paste a packet above to inspect it.
+          </div>
+        )}
+      </>
+    );
+  } else if (source.kind === 'loading') {
+    body = (
+      <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted-foreground">
+        {source.message}
+      </div>
+    );
+  } else {
+    body = (
+      <div className="flex flex-1 items-center justify-center p-6">
+        <div className="max-w-xl rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-foreground">
+          {source.message}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-[92vh] max-w-[min(96vw,82rem)] flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-border px-5 py-3">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription className="sr-only">{description}</DialogDescription>
+        </DialogHeader>
+        {notice ? (
+          <div className="border-b border-border px-3 py-3 text-sm text-foreground">
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">
+              {notice}
+            </div>
+          </div>
+        ) : null}
+        {body}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function RawPacketDetailModal({ packet, channels, onClose }: RawPacketDetailModalProps) {
   if (!packet) {
     return null;
   }
 
   return (
-    <Dialog open={packet !== null} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="flex h-[92vh] max-w-[min(96vw,82rem)] flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border px-5 py-3">
-          <DialogTitle>Packet Details</DialogTitle>
-          <DialogDescription className="sr-only">
-            Detailed byte and field breakdown for the selected raw packet.
-          </DialogDescription>
-        </DialogHeader>
-        <RawPacketInspectionPanel packet={packet} channels={channels} />
-      </DialogContent>
-    </Dialog>
+    <RawPacketInspectorDialog
+      open={packet !== null}
+      onOpenChange={(isOpen) => !isOpen && onClose()}
+      channels={channels}
+      source={{ kind: 'packet', packet }}
+      title="Packet Details"
+      description="Detailed byte and field breakdown for the selected raw packet."
+    />
   );
 }

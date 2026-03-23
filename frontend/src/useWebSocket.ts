@@ -21,7 +21,12 @@ export interface UseWebSocketOptions {
   onChannel?: (channel: Channel) => void;
   onChannelDeleted?: (key: string) => void;
   onRawPacket?: (packet: RawPacket) => void;
-  onMessageAcked?: (messageId: number, ackCount: number, paths?: MessagePath[]) => void;
+  onMessageAcked?: (
+    messageId: number,
+    ackCount: number,
+    paths?: MessagePath[],
+    packetId?: number | null
+  ) => void;
   onError?: (error: ErrorEvent) => void;
   onSuccess?: (success: SuccessEvent) => void;
   onReconnect?: () => void;
@@ -128,8 +133,14 @@ export function useWebSocket(options: UseWebSocketOptions) {
               message_id: number;
               ack_count: number;
               paths?: MessagePath[];
+              packet_id?: number | null;
             };
-            handlers.onMessageAcked?.(ackData.message_id, ackData.ack_count, ackData.paths);
+            handlers.onMessageAcked?.(
+              ackData.message_id,
+              ackData.ack_count,
+              ackData.paths,
+              ackData.packet_id
+            );
             break;
           }
           case 'error':

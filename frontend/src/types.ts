@@ -267,6 +267,7 @@ export interface Message {
   acked: number;
   sender_name: string | null;
   channel_name?: string | null;
+  packet_id?: number | null;
 }
 
 export interface MessagesAroundResponse {

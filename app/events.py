@@ -44,6 +44,7 @@ class MessageAckedPayload(TypedDict):
     message_id: int
     ack_count: int
     paths: NotRequired[list[MessagePath]]
+    packet_id: NotRequired[int | None]
 
 
 class ToastPayload(TypedDict):

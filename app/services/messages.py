@@ -62,6 +62,7 @@ def build_message_model(
     acked: int = 0,
     sender_name: str | None = None,
     channel_name: str | None = None,
+    packet_id: int | None = None,
 ) -> Message:
     """Build a Message model with the canonical backend payload shape."""
     return Message(
@@ -79,6 +80,7 @@ def build_message_model(
         acked=acked,
         sender_name=sender_name,
         channel_name=channel_name,
+        packet_id=packet_id,
     )
 
 
@@ -131,6 +133,7 @@ def broadcast_message_acked(
     message_id: int,
     ack_count: int,
     paths: list[MessagePath] | None,
+    packet_id: int | None,
     broadcast_fn: BroadcastFn,
 ) -> None:
     """Broadcast a message_acked payload."""
@@ -140,6 +143,7 @@ def broadcast_message_acked(
             "message_id": message_id,
             "ack_count": ack_count,
             "paths": [path.model_dump() for path in paths] if paths else [],
+            "packet_id": packet_id,
         },
     )
 
@@ -182,11 +186,16 @@ async def reconcile_duplicate_message(
     else:
         ack_count = existing_msg.acked
 
+    representative_packet_id = (
+        existing_msg.packet_id if existing_msg.packet_id is not None else packet_id
+    )
+
     if existing_msg.outgoing or path is not None:
         broadcast_message_acked(
             message_id=existing_msg.id,
             ack_count=ack_count,
             paths=paths,
+            packet_id=representative_packet_id,
             broadcast_fn=broadcast_fn,
         )
 
@@ -307,6 +316,7 @@ async def create_message_from_decrypted(
             sender_name=sender,
             sender_key=resolved_sender_key,
             channel_name=channel_name,
+            packet_id=packet_id,
         ),
         broadcast_fn=broadcast_fn,
         realtime=realtime,

@@ -261,6 +261,7 @@ export function ConversationPane({
           key={activeConversation.id}
           messages={messages}
           contacts={contacts}
+          channels={channels}
           loading={messagesLoading}
           loadingOlder={loadingOlder}
           hasOlderMessages={hasOlderMessages}

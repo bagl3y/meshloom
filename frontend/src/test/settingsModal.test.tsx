@@ -557,6 +557,10 @@ describe('SettingsModal', () => {
     renderModal();
     openDatabaseSection();
 
+    expect(
+      screen.getByText(/remove packet-analysis availability for those historical messages/i)
+    ).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: 'Purge Archival Raw Packets' }));
 
     await waitFor(() => {

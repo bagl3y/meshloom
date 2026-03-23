@@ -48,7 +48,12 @@ interface UseRealtimeAppStateArgs {
   setActiveConversation: (conv: Conversation | null) => void;
   renameConversationMessages: (oldId: string, newId: string) => void;
   removeConversationMessages: (conversationId: string) => void;
-  receiveMessageAck: (messageId: number, ackCount: number, paths?: MessagePath[]) => void;
+  receiveMessageAck: (
+    messageId: number,
+    ackCount: number,
+    paths?: MessagePath[],
+    packetId?: number | null
+  ) => void;
   notifyIncomingMessage?: (msg: Message) => void;
   recordRawPacketObservation?: (packet: RawPacket) => void;
   maxRawPackets?: number;
@@ -246,8 +251,13 @@ export function useRealtimeAppState({
         recordRawPacketObservation?.(packet);
         setRawPackets((prev) => appendRawPacketUnique(prev, packet, maxRawPackets));
       },
-      onMessageAcked: (messageId: number, ackCount: number, paths?: MessagePath[]) => {
-        receiveMessageAck(messageId, ackCount, paths);
+      onMessageAcked: (
+        messageId: number,
+        ackCount: number,
+        paths?: MessagePath[],
+        packetId?: number | null
+      ) => {
+        receiveMessageAck(messageId, ackCount, paths, packetId);
       },
     }),
     [

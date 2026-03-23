@@ -384,6 +384,7 @@ class TestContactMessageCLIFiltering:
             "acked",
             "sender_name",
             "channel_name",
+            "packet_id",
         }
 
         with patch("app.event_handlers.broadcast_event") as mock_broadcast:

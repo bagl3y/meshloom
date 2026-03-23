@@ -15,6 +15,7 @@ import type {
   MessagesAroundResponse,
   MigratePreferencesRequest,
   MigratePreferencesResponse,
+  RawPacket,
   RadioAdvertMode,
   RadioConfig,
   RadioConfigUpdate,
@@ -247,6 +248,7 @@ export const api = {
     ),
 
   // Packets
+  getPacket: (packetId: number) => fetchJson<RawPacket>(`/packets/${packetId}`),
   getUndecryptedPacketCount: () => fetchJson<{ count: number }>('/packets/undecrypted/count'),
   decryptHistoricalPackets: (params: {
     key_type: 'channel' | 'contact';

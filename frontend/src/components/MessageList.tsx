@@ -8,19 +8,23 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { Contact, Message, MessagePath, RadioConfig } from '../types';
+import type { Channel, Contact, Message, MessagePath, RadioConfig, RawPacket } from '../types';
 import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM } from '../types';
+import { api } from '../api';
 import { formatTime, parseSenderFromText } from '../utils/messageParser';
 import { formatHopCounts, type SenderInfo } from '../utils/pathUtils';
 import { getDirectContactRoute } from '../utils/pathUtils';
 import { ContactAvatar } from './ContactAvatar';
 import { PathModal } from './PathModal';
+import { RawPacketInspectorDialog } from './RawPacketDetailModal';
+import { toast } from './ui/sonner';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { cn } from '@/lib/utils';
 
 interface MessageListProps {
   messages: Message[];
   contacts: Contact[];
+  channels?: Channel[];
   loading: boolean;
   loadingOlder?: boolean;
   hasOlderMessages?: boolean;
@@ -153,6 +157,8 @@ function HopCountBadge({ paths, onClick, variant }: HopCountBadgeProps) {
 
 const RESEND_WINDOW_SECONDS = 30;
 const CORRUPT_SENDER_LABEL = '<No name -- corrupt packet?>';
+const ANALYZE_PACKET_NOTICE =
+  'This analyzer shows one stored full packet copy only. When multiple receives have identical payloads, the backend deduplicates them to a single stored packet and appends any additional receive paths onto the message path history instead of storing multiple full packet copies.';
 
 function hasUnexpectedControlChars(text: string): boolean {
   for (const char of text) {
@@ -173,6 +179,7 @@ function hasUnexpectedControlChars(text: string): boolean {
 export function MessageList({
   messages,
   contacts,
+  channels = [],
   loading,
   loadingOlder = false,
   hasOlderMessages = false,
@@ -199,10 +206,18 @@ export function MessageList({
     paths: MessagePath[];
     senderInfo: SenderInfo;
     messageId?: number;
+    packetId?: number | null;
     isOutgoingChan?: boolean;
   } | null>(null);
   const [resendableIds, setResendableIds] = useState<Set<number>>(new Set());
   const resendTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const packetCacheRef = useRef<Map<number, RawPacket>>(new Map());
+  const [packetInspectorSource, setPacketInspectorSource] = useState<
+    | { kind: 'packet'; packet: RawPacket }
+    | { kind: 'loading'; message: string }
+    | { kind: 'unavailable'; message: string }
+    | null
+  >(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
   const [showJumpToUnread, setShowJumpToUnread] = useState(false);
   const [jumpToUnreadDismissed, setJumpToUnreadDismissed] = useState(false);
@@ -220,6 +235,43 @@ export function MessageList({
 
   // Track conversation key to detect when entire message set changes
   const prevConvKeyRef = useRef<string | null>(null);
+
+  const handleAnalyzePacket = useCallback(async (message: Message) => {
+    if (message.packet_id == null) {
+      setPacketInspectorSource({
+        kind: 'unavailable',
+        message:
+          'No archival raw packet is available for this message, so packet analysis cannot be shown.',
+      });
+      return;
+    }
+
+    const cached = packetCacheRef.current.get(message.packet_id);
+    if (cached) {
+      setPacketInspectorSource({ kind: 'packet', packet: cached });
+      return;
+    }
+
+    setPacketInspectorSource({ kind: 'loading', message: 'Loading packet analysis...' });
+
+    try {
+      const packet = await api.getPacket(message.packet_id);
+      packetCacheRef.current.set(message.packet_id, packet);
+      setPacketInspectorSource({ kind: 'packet', packet });
+    } catch (error) {
+      const description = error instanceof Error ? error.message : 'Unknown error';
+      const isMissing = error instanceof Error && /not found/i.test(error.message);
+      if (!isMissing) {
+        toast.error('Failed to load raw packet', { description });
+      }
+      setPacketInspectorSource({
+        kind: 'unavailable',
+        message: isMissing
+          ? 'The archival raw packet for this message is no longer available. It may have been purged from Settings > Database, so only the stored message and merged route history remain.'
+          : `Could not load the archival raw packet for this message: ${description}`,
+      });
+    }
+  }, []);
 
   // Handle scroll position AFTER render
   useLayoutEffect(() => {
@@ -833,6 +885,8 @@ export function MessageList({
                             setSelectedPath({
                               paths: msg.paths!,
                               senderInfo: getSenderInfo(msg, contact, directSenderName || sender),
+                              messageId: msg.id,
+                              packetId: msg.packet_id,
                             })
                           }
                         />
@@ -859,6 +913,8 @@ export function MessageList({
                               setSelectedPath({
                                 paths: msg.paths!,
                                 senderInfo: getSenderInfo(msg, contact, directSenderName || sender),
+                                messageId: msg.id,
+                                packetId: msg.packet_id,
                               })
                             }
                           />
@@ -879,6 +935,7 @@ export function MessageList({
                                 paths: msg.paths!,
                                 senderInfo: selfSenderInfo,
                                 messageId: msg.id,
+                                packetId: msg.packet_id,
                                 isOutgoingChan: msg.type === 'CHAN' && !!onResendChannelMessage,
                               });
                             }}
@@ -900,6 +957,7 @@ export function MessageList({
                               paths: [],
                               senderInfo: selfSenderInfo,
                               messageId: msg.id,
+                              packetId: msg.packet_id,
                               isOutgoingChan: true,
                             });
                           }}
@@ -997,9 +1055,31 @@ export function MessageList({
           contacts={contacts}
           config={config ?? null}
           messageId={selectedPath.messageId}
+          packetId={selectedPath.packetId}
           isOutgoingChan={selectedPath.isOutgoingChan}
           isResendable={isSelectedMessageResendable}
           onResend={onResendChannelMessage}
+          onAnalyzePacket={
+            selectedPath.packetId != null
+              ? () => {
+                  const message = messages.find((entry) => entry.id === selectedPath.messageId);
+                  if (message) {
+                    void handleAnalyzePacket(message);
+                  }
+                }
+              : undefined
+          }
+        />
+      )}
+      {packetInspectorSource && (
+        <RawPacketInspectorDialog
+          open={packetInspectorSource !== null}
+          onOpenChange={(isOpen) => !isOpen && setPacketInspectorSource(null)}
+          channels={channels}
+          source={packetInspectorSource}
+          title="Analyze Packet"
+          description="On-demand raw packet analysis for a message-backed archival packet."
+          notice={ANALYZE_PACKET_NOTICE}
         />
       )}
     </div>

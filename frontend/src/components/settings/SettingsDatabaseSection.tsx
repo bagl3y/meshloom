@@ -173,8 +173,8 @@ export function SettingsDatabaseSection({
           Deletes archival copies of raw packet bytes for messages that are already decrypted and
           visible in your chat history.{' '}
           <em className="text-muted-foreground/80">
-            This will not affect any displayed messages or app functionality, nor impact your
-            ability to do historical decryption.
+            This will not affect any displayed messages or your ability to do historical decryption,
+            but it will remove packet-analysis availability for those historical messages.
           </em>{' '}
           The raw bytes are only useful for manual packet analysis.
         </p>

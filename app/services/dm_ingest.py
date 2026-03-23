@@ -238,6 +238,7 @@ async def _store_direct_message(
             sender_key=sender_key,
             outgoing=outgoing,
             sender_name=sender_name,
+            packet_id=packet_id,
         )
         broadcast_message(message=message, broadcast_fn=broadcast_fn, realtime=realtime)
 

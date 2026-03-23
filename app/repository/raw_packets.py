@@ -122,6 +122,18 @@ class RawPacketRepository:
         return row["message_id"]
 
     @staticmethod
+    async def get_by_id(packet_id: int) -> tuple[int, bytes, int, int | None] | None:
+        """Return a raw packet row as (id, data, timestamp, message_id)."""
+        cursor = await db.conn.execute(
+            "SELECT id, data, timestamp, message_id FROM raw_packets WHERE id = ?",
+            (packet_id,),
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        return (row["id"], bytes(row["data"]), row["timestamp"], row["message_id"])
+
+    @staticmethod
     async def prune_old_undecrypted(max_age_days: int) -> int:
         """Delete undecrypted packets older than max_age_days. Returns count deleted."""
         cutoff = int(time.time()) - (max_age_days * 86400)

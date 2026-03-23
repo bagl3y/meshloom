@@ -86,7 +86,12 @@ export class ConversationMessageCache {
     return true;
   }
 
-  updateAck(messageId: number, ackCount: number, paths?: MessagePath[]): void {
+  updateAck(
+    messageId: number,
+    ackCount: number,
+    paths?: MessagePath[],
+    packetId?: number | null
+  ): void {
     for (const entry of this.cache.values()) {
       const index = entry.messages.findIndex((message) => message.id === messageId);
       if (index < 0) continue;
@@ -96,6 +101,7 @@ export class ConversationMessageCache {
         ...current,
         acked: Math.max(current.acked, ackCount),
         ...(paths !== undefined && paths.length >= (current.paths?.length ?? 0) && { paths }),
+        ...(packetId !== undefined && { packet_id: packetId }),
       };
       entry.messages = updated;
       return;
@@ -146,12 +152,16 @@ export function reconcileConversationMessages(
   current: Message[],
   fetched: Message[]
 ): Message[] | null {
-  const currentById = new Map<number, { acked: number; pathsLen: number; text: string }>();
+  const currentById = new Map<
+    number,
+    { acked: number; pathsLen: number; text: string; packetId: number | null | undefined }
+  >();
   for (const message of current) {
     currentById.set(message.id, {
       acked: message.acked,
       pathsLen: message.paths?.length ?? 0,
       text: message.text,
+      packetId: message.packet_id,
     });
   }
 
@@ -162,7 +172,8 @@ export function reconcileConversationMessages(
       !currentMessage ||
       currentMessage.acked !== message.acked ||
       currentMessage.pathsLen !== (message.paths?.length ?? 0) ||
-      currentMessage.text !== message.text
+      currentMessage.text !== message.text ||
+      currentMessage.packetId !== message.packet_id
     ) {
       needsUpdate = true;
       break;
@@ -180,17 +191,20 @@ export const conversationMessageCache = new ConversationMessageCache();
 interface PendingAckUpdate {
   ackCount: number;
   paths?: MessagePath[];
+  packetId?: number | null;
 }
 
 export function mergePendingAck(
   existing: PendingAckUpdate | undefined,
   ackCount: number,
-  paths?: MessagePath[]
+  paths?: MessagePath[],
+  packetId?: number | null
 ): PendingAckUpdate {
   if (!existing) {
     return {
       ackCount,
       ...(paths !== undefined && { paths }),
+      ...(packetId !== undefined && { packetId }),
     };
   }
 
@@ -199,6 +213,9 @@ export function mergePendingAck(
       ackCount,
       ...(paths !== undefined && { paths }),
       ...(paths === undefined && existing.paths !== undefined && { paths: existing.paths }),
+      ...(packetId !== undefined && { packetId }),
+      ...(packetId === undefined &&
+        existing.packetId !== undefined && { packetId: existing.packetId }),
     };
   }
 
@@ -206,16 +223,31 @@ export function mergePendingAck(
     return existing;
   }
 
+  const packetIdChanged = packetId !== undefined && packetId !== existing.packetId;
+
   if (paths === undefined) {
-    return existing;
+    if (!packetIdChanged) {
+      return existing;
+    }
+    return {
+      ...existing,
+      packetId,
+    };
   }
 
   const existingPathCount = existing.paths?.length ?? -1;
   if (paths.length >= existingPathCount) {
-    return { ackCount, paths };
+    return { ackCount, paths, ...(packetId !== undefined && { packetId }) };
   }
 
-  return existing;
+  if (!packetIdChanged) {
+    return existing;
+  }
+
+  return {
+    ...existing,
+    packetId,
+  };
 }
 
 interface UseConversationMessagesResult {
@@ -230,7 +262,12 @@ interface UseConversationMessagesResult {
   jumpToBottom: () => void;
   reloadCurrentConversation: () => void;
   observeMessage: (msg: Message) => { added: boolean; activeConversation: boolean };
-  receiveMessageAck: (messageId: number, ackCount: number, paths?: MessagePath[]) => void;
+  receiveMessageAck: (
+    messageId: number,
+    ackCount: number,
+    paths?: MessagePath[],
+    packetId?: number | null
+  ) => void;
   reconcileOnReconnect: () => void;
   renameConversationMessages: (oldId: string, newId: string) => void;
   removeConversationMessages: (conversationId: string) => void;
@@ -291,9 +328,9 @@ export function useConversationMessages(
   const pendingAcksRef = useRef<Map<number, PendingAckUpdate>>(new Map());
 
   const setPendingAck = useCallback(
-    (messageId: number, ackCount: number, paths?: MessagePath[]) => {
+    (messageId: number, ackCount: number, paths?: MessagePath[], packetId?: number | null) => {
       const existing = pendingAcksRef.current.get(messageId);
-      const merged = mergePendingAck(existing, ackCount, paths);
+      const merged = mergePendingAck(existing, ackCount, paths, packetId);
 
       // Update insertion order so most recent updates remain in the buffer longest.
       pendingAcksRef.current.delete(messageId);
@@ -319,6 +356,7 @@ export function useConversationMessages(
       ...msg,
       acked: Math.max(msg.acked, pending.ackCount),
       ...(pending.paths !== undefined && { paths: pending.paths }),
+      ...(pending.packetId !== undefined && { packet_id: pending.packetId }),
     };
   }, []);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -782,10 +820,10 @@ export function useConversationMessages(
 
   // Update a message's ack count and paths
   const updateMessageAck = useCallback(
-    (messageId: number, ackCount: number, paths?: MessagePath[]) => {
+    (messageId: number, ackCount: number, paths?: MessagePath[], packetId?: number | null) => {
       const hasMessageLoaded = messagesRef.current.some((m) => m.id === messageId);
       if (!hasMessageLoaded) {
-        setPendingAck(messageId, ackCount, paths);
+        setPendingAck(messageId, ackCount, paths, packetId);
         return;
       }
 
@@ -807,10 +845,11 @@ export function useConversationMessages(
             ...current,
             acked: nextAck,
             ...(paths !== undefined && { paths: nextPaths }),
+            ...(packetId !== undefined && { packet_id: packetId }),
           };
           return updated;
         }
-        setPendingAck(messageId, ackCount, paths);
+        setPendingAck(messageId, ackCount, paths, packetId);
         return prev;
       });
     },
@@ -818,9 +857,9 @@ export function useConversationMessages(
   );
 
   const receiveMessageAck = useCallback(
-    (messageId: number, ackCount: number, paths?: MessagePath[]) => {
-      updateMessageAck(messageId, ackCount, paths);
-      conversationMessageCache.updateAck(messageId, ackCount, paths);
+    (messageId: number, ackCount: number, paths?: MessagePath[], packetId?: number | null) => {
+      updateMessageAck(messageId, ackCount, paths, packetId);
+      conversationMessageCache.updateAck(messageId, ackCount, paths, packetId);
     },
     [updateMessageAck]
   );

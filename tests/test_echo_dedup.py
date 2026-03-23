@@ -1131,7 +1131,7 @@ class TestMessageAckedBroadcastShape:
     # Frontend MessageAckedEvent keys (from useWebSocket.ts:113-117)
     # The 'paths' key is optional in the TypeScript interface
     REQUIRED_KEYS = {"message_id", "ack_count"}
-    OPTIONAL_KEYS = {"paths"}
+    OPTIONAL_KEYS = {"paths", "packet_id"}
 
     @pytest.mark.asyncio
     async def test_outgoing_echo_broadcast_shape(self, test_db, captured_broadcasts):
@@ -1177,6 +1177,7 @@ class TestMessageAckedBroadcastShape:
         assert isinstance(payload["ack_count"], int)
         assert payload["message_id"] == msg_id
         assert payload["ack_count"] == 1
+        assert payload["packet_id"] == pkt_id
 
         # paths should be a list of dicts with path and received_at keys
         assert isinstance(payload["paths"], list)
@@ -1228,6 +1229,7 @@ class TestMessageAckedBroadcastShape:
         assert payload_keys >= self.REQUIRED_KEYS
         assert payload_keys <= (self.REQUIRED_KEYS | self.OPTIONAL_KEYS)
         assert payload["ack_count"] == 0  # Not outgoing, no ack increment
+        assert payload["packet_id"] == pkt1
 
     @pytest.mark.asyncio
     async def test_dm_echo_broadcast_shape(self, test_db, captured_broadcasts):
@@ -1283,3 +1285,4 @@ class TestMessageAckedBroadcastShape:
         assert isinstance(payload["message_id"], int)
         assert isinstance(payload["ack_count"], int)
         assert payload["ack_count"] == 0  # Outgoing DM duplicates no longer count as delivery
+        assert payload["packet_id"] == pkt1
