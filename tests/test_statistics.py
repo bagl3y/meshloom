@@ -29,6 +29,9 @@ class TestStatisticsEmpty:
         assert result["repeaters_heard"]["last_hour"] == 0
         assert result["repeaters_heard"]["last_24_hours"] == 0
         assert result["repeaters_heard"]["last_week"] == 0
+        assert result["known_channels_active"]["last_hour"] == 0
+        assert result["known_channels_active"]["last_24_hours"] == 0
+        assert result["known_channels_active"]["last_week"] == 0
         assert result["path_hash_width_24h"] == {
             "total_packets": 0,
             "single_byte": 0,
@@ -255,6 +258,51 @@ class TestActivityWindows:
         assert result["repeaters_heard"]["last_hour"] == 1
         assert result["repeaters_heard"]["last_24_hours"] == 1
         assert result["repeaters_heard"]["last_week"] == 1
+
+    @pytest.mark.asyncio
+    async def test_known_channels_active_windows(self, test_db):
+        """Known channels are counted by distinct active keys in each time window."""
+        now = int(time.time())
+        conn = test_db.conn
+
+        known_1h = "AA" * 16
+        known_24h = "BB" * 16
+        known_7d = "CC" * 16
+        unknown_key = "DD" * 16
+
+        await conn.execute("INSERT INTO channels (key, name) VALUES (?, ?)", (known_1h, "chan-1h"))
+        await conn.execute(
+            "INSERT INTO channels (key, name) VALUES (?, ?)", (known_24h, "chan-24h")
+        )
+        await conn.execute("INSERT INTO channels (key, name) VALUES (?, ?)", (known_7d, "chan-7d"))
+
+        await conn.execute(
+            "INSERT INTO messages (type, conversation_key, text, received_at) VALUES (?, ?, ?, ?)",
+            ("CHAN", known_1h, "recent-1", now - 1200),
+        )
+        await conn.execute(
+            "INSERT INTO messages (type, conversation_key, text, received_at) VALUES (?, ?, ?, ?)",
+            ("CHAN", known_1h, "recent-2", now - 600),
+        )
+        await conn.execute(
+            "INSERT INTO messages (type, conversation_key, text, received_at) VALUES (?, ?, ?, ?)",
+            ("CHAN", known_24h, "day-old", now - 43200),
+        )
+        await conn.execute(
+            "INSERT INTO messages (type, conversation_key, text, received_at) VALUES (?, ?, ?, ?)",
+            ("CHAN", known_7d, "week-old", now - 259200),
+        )
+        await conn.execute(
+            "INSERT INTO messages (type, conversation_key, text, received_at) VALUES (?, ?, ?, ?)",
+            ("CHAN", unknown_key, "unknown", now - 600),
+        )
+        await conn.commit()
+
+        result = await StatisticsRepository.get_all()
+
+        assert result["known_channels_active"]["last_hour"] == 1
+        assert result["known_channels_active"]["last_24_hours"] == 2
+        assert result["known_channels_active"]["last_week"] == 3
 
 
 class TestPathHashWidthStats:

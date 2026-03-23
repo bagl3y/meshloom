@@ -271,6 +271,30 @@ class StatisticsRepository:
         }
 
     @staticmethod
+    async def _known_channels_active() -> dict[str, int]:
+        """Count distinct known channel keys with channel traffic in each time window."""
+        now = int(time.time())
+        cursor = await db.conn.execute(
+            """
+            SELECT
+                COUNT(DISTINCT CASE WHEN m.received_at >= ? THEN m.conversation_key END) AS last_hour,
+                COUNT(DISTINCT CASE WHEN m.received_at >= ? THEN m.conversation_key END) AS last_24_hours,
+                COUNT(DISTINCT CASE WHEN m.received_at >= ? THEN m.conversation_key END) AS last_week
+            FROM messages m
+            INNER JOIN channels c ON UPPER(m.conversation_key) = UPPER(c.key)
+            WHERE m.type = 'CHAN'
+            """,
+            (now - SECONDS_1H, now - SECONDS_24H, now - SECONDS_7D),
+        )
+        row = await cursor.fetchone()
+        assert row is not None
+        return {
+            "last_hour": row["last_hour"] or 0,
+            "last_24_hours": row["last_24_hours"] or 0,
+            "last_week": row["last_week"] or 0,
+        }
+
+    @staticmethod
     async def _path_hash_width_24h() -> dict[str, int | float]:
         """Count parsed raw packets from the last 24h by hop hash width."""
         now = int(time.time())
@@ -396,6 +420,7 @@ class StatisticsRepository:
         # Activity windows
         contacts_heard = await StatisticsRepository._activity_counts(contact_type=2, exclude=True)
         repeaters_heard = await StatisticsRepository._activity_counts(contact_type=2)
+        known_channels_active = await StatisticsRepository._known_channels_active()
         path_hash_width_24h = await StatisticsRepository._path_hash_width_24h()
 
         return {
@@ -411,5 +436,6 @@ class StatisticsRepository:
             "total_outgoing": total_outgoing,
             "contacts_heard": contacts_heard,
             "repeaters_heard": repeaters_heard,
+            "known_channels_active": known_channels_active,
             "path_hash_width_24h": path_hash_width_24h,
         }

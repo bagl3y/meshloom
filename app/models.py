@@ -833,4 +833,5 @@ class StatisticsResponse(BaseModel):
     total_outgoing: int
     contacts_heard: ContactActivityCounts
     repeaters_heard: ContactActivityCounts
+    known_channels_active: ContactActivityCounts
     path_hash_width_24h: PathHashWidthStats

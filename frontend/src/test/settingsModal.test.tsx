@@ -584,6 +584,7 @@ describe('SettingsModal', () => {
       total_outgoing: 30,
       contacts_heard: { last_hour: 2, last_24_hours: 7, last_week: 10 },
       repeaters_heard: { last_hour: 1, last_24_hours: 3, last_week: 3 },
+      known_channels_active: { last_hour: 1, last_24_hours: 4, last_week: 6 },
       path_hash_width_24h: {
         total_packets: 120,
         single_byte: 60,
@@ -630,6 +631,7 @@ describe('SettingsModal', () => {
     expect(screen.getByText('24 (20.0%)')).toBeInTheDocument();
     expect(screen.getByText('Contacts heard')).toBeInTheDocument();
     expect(screen.getByText('Repeaters heard')).toBeInTheDocument();
+    expect(screen.getByText('Known-channels active')).toBeInTheDocument();
 
     // Busiest channels
     expect(screen.getByText('general')).toBeInTheDocument();
@@ -650,6 +652,7 @@ describe('SettingsModal', () => {
       total_outgoing: 30,
       contacts_heard: { last_hour: 2, last_24_hours: 7, last_week: 10 },
       repeaters_heard: { last_hour: 1, last_24_hours: 3, last_week: 3 },
+      known_channels_active: { last_hour: 1, last_24_hours: 4, last_week: 6 },
       path_hash_width_24h: {
         total_packets: 120,
         single_byte: 60,

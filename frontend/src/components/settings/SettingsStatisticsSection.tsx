@@ -164,6 +164,12 @@ export function SettingsStatisticsSection({ className }: { className?: string })
                   <td className="text-right py-1">{stats.repeaters_heard.last_24_hours}</td>
                   <td className="text-right py-1">{stats.repeaters_heard.last_week}</td>
                 </tr>
+                <tr>
+                  <td className="py-1">Known-channels active</td>
+                  <td className="text-right py-1">{stats.known_channels_active.last_hour}</td>
+                  <td className="text-right py-1">{stats.known_channels_active.last_24_hours}</td>
+                  <td className="text-right py-1">{stats.known_channels_active.last_week}</td>
+                </tr>
               </tbody>
             </table>
           </div>
