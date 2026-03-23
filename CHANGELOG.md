@@ -1,3 +1,11 @@
+## [3.6.0] - 2026-03-22
+
+Feature: Add incoming-packet analytics
+Feature: BYOPacket for analysis
+Feature: Add room activity to stats view
+Bugfix: Handle Heltec v3 serial noise
+Misc: Swap repeaters and room servers for better ordering
+
 ## [3.5.0] - 2026-03-19
 
 Feature: Add room server alpha support
