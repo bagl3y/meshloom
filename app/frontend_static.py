@@ -139,6 +139,18 @@ def register_frontend_static_routes(app: FastAPI, frontend_dir: Path) -> bool:
     @app.get("/{path:path}")
     async def serve_frontend(path: str):
         """Serve frontend files, falling back to index.html for SPA routing."""
+        if path == "api" or path.startswith("api/"):
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "detail": (
+                        "API endpoint not found. If you are seeing this in response to a "
+                        "frontend request, you may be running a newer frontend with an older "
+                        "backend or vice versa. A full update is suggested."
+                    )
+                },
+            )
+
         file_path = (frontend_dir / path).resolve()
         try:
             file_path.relative_to(frontend_dir)

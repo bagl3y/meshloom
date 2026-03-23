@@ -86,6 +86,16 @@ def test_valid_dist_serves_static_and_spa_fallback(tmp_path):
         assert "index page" in missing_response.text
         assert missing_response.headers["cache-control"] == INDEX_CACHE_CONTROL
 
+        missing_api_response = client.get("/api/not-a-real-endpoint")
+        assert missing_api_response.status_code == 404
+        assert missing_api_response.json() == {
+            "detail": (
+                "API endpoint not found. If you are seeing this in response to a frontend "
+                "request, you may be running a newer frontend with an older backend or vice "
+                "versa. A full update is suggested."
+            )
+        }
+
         asset_response = client.get("/assets/app.js")
         assert asset_response.status_code == 200
         assert "console.log('ok');" in asset_response.text
