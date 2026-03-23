@@ -148,4 +148,25 @@ describe('useBrowserNotifications', () => {
     expect(focusSpy).toHaveBeenCalledTimes(1);
     expect(notificationInstance.close).toHaveBeenCalledTimes(1);
   });
+
+  it('shows the browser guidance toast when notifications are blocked', async () => {
+    Object.assign(window.Notification, {
+      permission: 'denied',
+    });
+
+    const { result } = renderHook(() => useBrowserNotifications());
+
+    await act(async () => {
+      await result.current.toggleConversationNotifications(
+        'channel',
+        incomingChannelMessage.conversation_key,
+        '#flightless'
+      );
+    });
+
+    expect(mocks.toast.error).toHaveBeenCalledWith('Browser notifications blocked', {
+      description:
+        'Allow notifications in your browser settings, then try again. Some browsers may refuse notifications on non-HTTPS or self-signed HTTPS origins. Check your browser documentation for how to trust an insecure origin and the associated risks before doing so.',
+    });
+  });
 });

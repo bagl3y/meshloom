@@ -110,6 +110,8 @@ export function useBrowserNotifications() {
 
   const toggleConversationNotifications = useCallback(
     async (type: 'channel' | 'contact', id: string, label: string) => {
+      const blockedDescription =
+        'Allow notifications in your browser settings, then try again. Some browsers may refuse notifications on non-HTTPS or self-signed HTTPS origins. Check your browser documentation for how to trust an insecure origin and the associated risks before doing so.';
       const conversationKey = getConversationNotificationKey(type, id);
       if (enabledByConversation[conversationKey]) {
         setEnabledByConversation((prev) => {
@@ -131,7 +133,7 @@ export function useBrowserNotifications() {
 
       if (permission === 'denied') {
         toast.error('Browser notifications blocked', {
-          description: 'Allow notifications in your browser settings, then try again.',
+          description: blockedDescription,
         });
         return;
       }
@@ -159,9 +161,7 @@ export function useBrowserNotifications() {
 
       toast.error('Browser notifications not enabled', {
         description:
-          nextPermission === 'denied'
-            ? 'Permission was denied by the browser.'
-            : 'Permission request was dismissed.',
+          nextPermission === 'denied' ? blockedDescription : 'Permission request was dismissed.',
       });
     },
     [enabledByConversation, permission]
