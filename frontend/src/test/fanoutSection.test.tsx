@@ -114,6 +114,15 @@ describe('SettingsFanoutSection', () => {
     });
   });
 
+  it('shows restart-scoped bots disabled messaging when disabled until restart', async () => {
+    renderSection({
+      health: { ...baseHealth, bots_disabled: true, bots_disabled_source: 'until_restart' },
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/disabled until the server restarts/i)).toBeInTheDocument();
+    });
+  });
+
   it('hides bot option from add integration menu when bots_disabled', async () => {
     renderSection({ health: { ...baseHealth, bots_disabled: true } });
     await waitFor(() => {

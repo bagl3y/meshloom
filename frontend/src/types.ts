@@ -78,6 +78,8 @@ export interface HealthStatus {
   oldest_undecrypted_timestamp: number | null;
   fanout_statuses: Record<string, FanoutStatusEntry>;
   bots_disabled: boolean;
+  bots_disabled_source?: 'env' | 'until_restart' | null;
+  basic_auth_enabled?: boolean;
 }
 
 export interface FanoutConfig {

@@ -1817,8 +1817,9 @@ export function SettingsFanoutSection({
 
       {health?.bots_disabled && (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Bot system is disabled by server configuration (MESHCORE_DISABLE_BOTS). Bot integrations
-          cannot be created or modified.
+          {health.bots_disabled_source === 'until_restart'
+            ? 'Bot system is disabled until the server restarts. Bot integrations cannot run, be created, or be modified right now.'
+            : 'Bot system is disabled by server configuration (MESHCORE_DISABLE_BOTS). Bot integrations cannot run, be created, or be modified.'}
         </div>
       )}
 

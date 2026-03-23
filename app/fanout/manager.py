@@ -82,6 +82,21 @@ class FanoutManager:
     def __init__(self) -> None:
         self._modules: dict[str, tuple[FanoutModule, dict]] = {}  # id -> (module, scope)
         self._restart_locks: dict[str, asyncio.Lock] = {}
+        self._bots_disabled_until_restart = False
+
+    def get_bots_disabled_source(self) -> str | None:
+        """Return why bot modules are unavailable, if at all."""
+        from app.config import settings as server_settings
+
+        if server_settings.disable_bots:
+            return "env"
+        if self._bots_disabled_until_restart:
+            return "until_restart"
+        return None
+
+    def bots_disabled_effective(self) -> bool:
+        """Return True when bot modules should be treated as unavailable."""
+        return self.get_bots_disabled_source() is not None
 
     async def load_from_db(self) -> None:
         """Read enabled fanout_configs and instantiate modules."""
@@ -99,13 +114,14 @@ class FanoutManager:
         config_blob = cfg["config"]
         scope = cfg["scope"]
 
-        # Skip bot modules when bots are disabled server-wide
-        if config_type == "bot":
-            from app.config import settings as server_settings
-
-            if server_settings.disable_bots:
-                logger.info("Skipping bot module %s (bots disabled by server config)", config_id)
-                return
+        # Skip bot modules when bots are disabled server-wide or until restart.
+        if config_type == "bot" and self.bots_disabled_effective():
+            logger.info(
+                "Skipping bot module %s (bots disabled: %s)",
+                config_id,
+                self.get_bots_disabled_source(),
+            )
+            return
 
         cls = _MODULE_TYPES.get(config_type)
         if cls is None:
@@ -239,6 +255,26 @@ class FanoutManager:
                 "status": module.status,
             }
         return result
+
+    async def disable_bots_until_restart(self) -> str:
+        """Stop active bot modules and prevent them from starting again until restart."""
+        source = self.get_bots_disabled_source()
+        if source == "env":
+            return source
+
+        self._bots_disabled_until_restart = True
+
+        from app.repository.fanout import _configs_cache
+
+        bot_ids = [
+            config_id
+            for config_id in list(self._modules)
+            if _configs_cache.get(config_id, {}).get("type") == "bot"
+        ]
+        for config_id in bot_ids:
+            await self.remove_config(config_id)
+
+        return "until_restart"
 
 
 # Module-level singleton
