@@ -192,7 +192,7 @@ $env:MESHCORE_SERIAL_PORT="COM8" # or your COM port
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-If you enable Basic Auth, protect the app with HTTPS. HTTP Basic credentials are not safe on plain HTTP.
+If you enable Basic Auth, protect the app with HTTPS. HTTP Basic credentials are not safe on plain HTTP. Also note that the app's permissive CORS policy is a deliberate trusted-network tradeoff, so cross-origin browser JavaScript is not a reliable way to use that Basic Auth gate.
 
 ## Where To Go Next
 

@@ -611,7 +611,8 @@ export function CrackerPanel({
         pick up messages it couldn't crack, attempting them at one longer length.
         <strong> Try word pairs</strong> will also try every combination of two dictionary words
         concatenated together (e.g. "hello" + "world" = "#helloworld") after the single-word
-        dictionary pass; this can substantially increase search time.
+        dictionary pass; this can substantially increase search time and also result in
+        false-positives.
         <strong> Decrypt historical</strong> will run an async job on any room name it finds to see
         if any historically captured packets will decrypt with that key.
         <strong> Turbo mode</strong> will push your GPU to the max (target dispatch time of 10s) and
