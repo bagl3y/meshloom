@@ -55,6 +55,12 @@ export function SecurityWarningModal({ health }: SecurityWarningModalProps) {
     }
   }, [shouldWarn]);
 
+  useEffect(() => {
+    if (health?.bots_disabled !== true) {
+      setBotsDisabledLocally(false);
+    }
+  }, [health?.bots_disabled, health?.bots_disabled_source]);
+
   if (!shouldWarn) {
     return null;
   }

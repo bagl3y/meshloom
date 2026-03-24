@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -94,5 +94,26 @@ describe('SecurityWarningModal', () => {
     expect(mocks.disableBotsUntilRestart).toHaveBeenCalledTimes(1);
     expect(mocks.toast.success).toHaveBeenCalledWith('Bots disabled until restart');
     expect(screen.queryByText('Unprotected bot execution is enabled')).not.toBeInTheDocument();
+  });
+
+  it('shows the warning again after temporary bot disable disappears on a later health update', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<SecurityWarningModal health={baseHealth} />);
+
+    await user.click(screen.getByRole('button', { name: 'Disable Bots Until Server Restart' }));
+    expect(screen.queryByText('Unprotected bot execution is enabled')).not.toBeInTheDocument();
+
+    rerender(
+      <SecurityWarningModal
+        health={{ ...baseHealth, bots_disabled: true, bots_disabled_source: 'until_restart' }}
+      />
+    );
+    expect(screen.queryByText('Unprotected bot execution is enabled')).not.toBeInTheDocument();
+
+    rerender(<SecurityWarningModal health={baseHealth} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Unprotected bot execution is enabled')).toBeInTheDocument();
+    });
   });
 });
