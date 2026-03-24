@@ -10,31 +10,12 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { NewMessageModal } from '../components/NewMessageModal';
-import type { Contact } from '../types';
 import { toast } from '../components/ui/sonner';
 
 // Mock sonner (toast)
 vi.mock('../components/ui/sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
-
-const mockContact: Contact = {
-  public_key: 'aa'.repeat(32),
-  name: 'Alice',
-  type: 1,
-  flags: 0,
-  direct_path: null,
-  direct_path_len: -1,
-  direct_path_hash_mode: 0,
-  last_advert: null,
-  lat: null,
-  lon: null,
-  last_seen: null,
-  on_radio: false,
-  last_contacted: null,
-  last_read_at: null,
-  first_seen: null,
-};
 
 const mockToast = toast as unknown as {
   success: ReturnType<typeof vi.fn>;
@@ -43,7 +24,6 @@ const mockToast = toast as unknown as {
 
 describe('NewMessageModal form reset', () => {
   const onClose = vi.fn();
-  const onSelectConversation = vi.fn();
   const onCreateContact = vi.fn().mockResolvedValue(undefined);
   const onCreateChannel = vi.fn().mockResolvedValue(undefined);
   const onCreateHashtagChannel = vi.fn().mockResolvedValue(undefined);
@@ -56,10 +36,8 @@ describe('NewMessageModal form reset', () => {
     return render(
       <NewMessageModal
         open={open}
-        contacts={[mockContact]}
         undecryptedCount={5}
         onClose={onClose}
-        onSelectConversation={onSelectConversation}
         onCreateContact={onCreateContact}
         onCreateChannel={onCreateChannel}
         onCreateHashtagChannel={onCreateHashtagChannel}
@@ -75,7 +53,7 @@ describe('NewMessageModal form reset', () => {
     it('clears name after successful Create', async () => {
       const user = userEvent.setup();
       const { unmount } = renderModal();
-      await switchToTab(user, 'Hashtag');
+      await switchToTab(user, 'Hashtag Channel');
 
       const input = screen.getByPlaceholderText('channel-name') as HTMLInputElement;
       await user.type(input, 'testchan');
@@ -91,14 +69,14 @@ describe('NewMessageModal form reset', () => {
 
       // Re-render to simulate reopening — state should be reset
       renderModal();
-      await switchToTab(user, 'Hashtag');
+      await switchToTab(user, 'Hashtag Channel');
       expect((screen.getByPlaceholderText('channel-name') as HTMLInputElement).value).toBe('');
     });
 
     it('clears name when Cancel is clicked', async () => {
       const user = userEvent.setup();
       renderModal();
-      await switchToTab(user, 'Hashtag');
+      await switchToTab(user, 'Hashtag Channel');
 
       const input = screen.getByPlaceholderText('channel-name') as HTMLInputElement;
       await user.type(input, 'mychannel');
@@ -131,7 +109,7 @@ describe('NewMessageModal form reset', () => {
     it('clears name and key after successful Create', async () => {
       const user = userEvent.setup();
       renderModal();
-      await switchToTab(user, 'Room');
+      await switchToTab(user, 'Private Channel');
 
       await user.type(screen.getByPlaceholderText('Room name'), 'MyRoom');
       await user.type(screen.getByPlaceholderText('Pre-shared key (hex)'), 'cc'.repeat(16));
@@ -148,7 +126,7 @@ describe('NewMessageModal form reset', () => {
       const user = userEvent.setup();
       onCreateChannel.mockRejectedValueOnce(new Error('Bad key'));
       renderModal();
-      await switchToTab(user, 'Room');
+      await switchToTab(user, 'Private Channel');
 
       await user.type(screen.getByPlaceholderText('Room name'), 'MyRoom');
       await user.type(screen.getByPlaceholderText('Pre-shared key (hex)'), 'cc'.repeat(16));
@@ -172,8 +150,8 @@ describe('NewMessageModal form reset', () => {
       await user.type(screen.getByPlaceholderText('Contact name'), 'Bob');
       await user.type(screen.getByPlaceholderText('64-character hex public key'), 'deadbeef');
 
-      // Switch to Room tab — fields should reset
-      await switchToTab(user, 'Room');
+      // Switch to Private Channel tab — fields should reset
+      await switchToTab(user, 'Private Channel');
 
       expect((screen.getByPlaceholderText('Room name') as HTMLInputElement).value).toBe('');
       expect((screen.getByPlaceholderText('Pre-shared key (hex)') as HTMLInputElement).value).toBe(
@@ -184,12 +162,12 @@ describe('NewMessageModal form reset', () => {
     it('clears room fields when switching to hashtag tab', async () => {
       const user = userEvent.setup();
       renderModal();
-      await switchToTab(user, 'Room');
+      await switchToTab(user, 'Private Channel');
 
       await user.type(screen.getByPlaceholderText('Room name'), 'SecretRoom');
       await user.type(screen.getByPlaceholderText('Pre-shared key (hex)'), 'ff'.repeat(16));
 
-      await switchToTab(user, 'Hashtag');
+      await switchToTab(user, 'Hashtag Channel');
 
       expect((screen.getByPlaceholderText('channel-name') as HTMLInputElement).value).toBe('');
     });
@@ -199,7 +177,7 @@ describe('NewMessageModal form reset', () => {
     it('resets tryHistorical when switching tabs', async () => {
       const user = userEvent.setup();
       renderModal();
-      await switchToTab(user, 'Hashtag');
+      await switchToTab(user, 'Hashtag Channel');
 
       // Check the "Try decrypting" checkbox
       const checkbox = screen.getByRole('checkbox', { name: /Try decrypting/ });
@@ -210,7 +188,7 @@ describe('NewMessageModal form reset', () => {
 
       // Switch tab and come back
       await switchToTab(user, 'Contact');
-      await switchToTab(user, 'Hashtag');
+      await switchToTab(user, 'Hashtag Channel');
 
       // The streaming message should be gone (tryHistorical was reset)
       expect(screen.queryByText(/Messages will stream in/)).toBeNull();

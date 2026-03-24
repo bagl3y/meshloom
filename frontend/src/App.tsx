@@ -506,9 +506,7 @@ export function App() {
     onChannelCreate: handleCreateCrackedChannel,
   };
   const newMessageModalProps = {
-    contacts,
     undecryptedCount,
-    onSelectConversation: handleSelectConversationWithTargetReset,
     onCreateContact: handleCreateContact,
     onCreateChannel: handleCreateChannel,
     onCreateHashtagChannel: handleCreateHashtagChannel,

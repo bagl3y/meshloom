@@ -1,7 +1,5 @@
 import { useState, useRef } from 'react';
 import { Dice5 } from 'lucide-react';
-import type { Contact, Conversation } from '../types';
-import { getContactDisplayName } from '../utils/pubkey';
 import {
   Dialog,
   DialogContent,
@@ -17,14 +15,12 @@ import { Checkbox } from './ui/checkbox';
 import { Button } from './ui/button';
 import { toast } from './ui/sonner';
 
-type Tab = 'existing' | 'new-contact' | 'new-room' | 'hashtag';
+type Tab = 'new-contact' | 'new-room' | 'hashtag';
 
 interface NewMessageModalProps {
   open: boolean;
-  contacts: Contact[];
   undecryptedCount: number;
   onClose: () => void;
-  onSelectConversation: (conversation: Conversation) => void;
   onCreateContact: (name: string, publicKey: string, tryHistorical: boolean) => Promise<void>;
   onCreateChannel: (name: string, key: string, tryHistorical: boolean) => Promise<void>;
   onCreateHashtagChannel: (name: string, tryHistorical: boolean) => Promise<void>;
@@ -32,15 +28,13 @@ interface NewMessageModalProps {
 
 export function NewMessageModal({
   open,
-  contacts,
   undecryptedCount,
   onClose,
-  onSelectConversation,
   onCreateContact,
   onCreateChannel,
   onCreateHashtagChannel,
 }: NewMessageModalProps) {
-  const [tab, setTab] = useState<Tab>('existing');
+  const [tab, setTab] = useState<Tab>('new-contact');
   const [name, setName] = useState('');
   const [contactKey, setContactKey] = useState('');
   const [roomKey, setRoomKey] = useState('');
@@ -136,7 +130,7 @@ export function NewMessageModal({
     }
   };
 
-  const showHistoricalOption = tab !== 'existing' && undecryptedCount > 0;
+  const showHistoricalOption = undecryptedCount > 0;
 
   return (
     <Dialog
@@ -152,7 +146,6 @@ export function NewMessageModal({
         <DialogHeader>
           <DialogTitle>New Conversation</DialogTitle>
           <DialogDescription className="sr-only">
-            {tab === 'existing' && 'Select an existing contact to start a conversation'}
             {tab === 'new-contact' && 'Add a new contact by entering their name and public key'}
             {tab === 'new-room' && 'Create a private room with a shared encryption key'}
             {tab === 'hashtag' && 'Join a public hashtag channel'}
@@ -167,52 +160,11 @@ export function NewMessageModal({
           }}
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="existing">Existing</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="new-contact">Contact</TabsTrigger>
-            <TabsTrigger value="new-room">Room</TabsTrigger>
-            <TabsTrigger value="hashtag">Hashtag</TabsTrigger>
+            <TabsTrigger value="new-room">Private Channel</TabsTrigger>
+            <TabsTrigger value="hashtag">Hashtag Channel</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="existing" className="mt-4">
-            <div className="max-h-[300px] overflow-y-auto rounded-md border">
-              {contacts.filter((contact) => contact.public_key.length === 64).length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground">No contacts available</div>
-              ) : (
-                contacts
-                  .filter((contact) => contact.public_key.length === 64)
-                  .map((contact) => (
-                    <div
-                      key={contact.public_key}
-                      className="cursor-pointer px-4 py-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          (e.currentTarget as HTMLElement).click();
-                        }
-                      }}
-                      onClick={() => {
-                        onSelectConversation({
-                          type: 'contact',
-                          id: contact.public_key,
-                          name: getContactDisplayName(
-                            contact.name,
-                            contact.public_key,
-                            contact.last_advert
-                          ),
-                        });
-                        resetForm();
-                        onClose();
-                      }}
-                    >
-                      {getContactDisplayName(contact.name, contact.public_key, contact.last_advert)}
-                    </div>
-                  ))
-              )}
-            </div>
-          </TabsContent>
 
           <TabsContent value="new-contact" className="mt-4 space-y-4">
             <div className="space-y-2">
@@ -353,11 +305,9 @@ export function NewMessageModal({
               {loading ? 'Creating...' : 'Create & Add Another'}
             </Button>
           )}
-          {tab !== 'existing' && (
-            <Button onClick={handleCreate} disabled={loading}>
-              {loading ? 'Creating...' : 'Create'}
-            </Button>
-          )}
+          <Button onClick={handleCreate} disabled={loading}>
+            {loading ? 'Creating...' : 'Create'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

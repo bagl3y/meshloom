@@ -284,10 +284,6 @@ export function AppShell({
         {...newMessageModalProps}
         open={showNewMessage}
         onClose={onCloseNewMessage}
-        onSelectConversation={(conv) => {
-          newMessageModalProps.onSelectConversation(conv);
-          onCloseNewMessage();
-        }}
       />
 
       <SecurityWarningModal health={statusProps.health} />
