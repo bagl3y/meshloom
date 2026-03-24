@@ -105,13 +105,13 @@ describe('NewMessageModal form reset', () => {
     });
   });
 
-  describe('new-room tab', () => {
+  describe('new-channel tab', () => {
     it('clears name and key after successful Create', async () => {
       const user = userEvent.setup();
       renderModal();
       await switchToTab(user, 'Private Channel');
 
-      await user.type(screen.getByPlaceholderText('Room name'), 'MyRoom');
+      await user.type(screen.getByPlaceholderText('Channel name'), 'MyRoom');
       await user.type(screen.getByPlaceholderText('Pre-shared key (hex)'), 'cc'.repeat(16));
 
       await user.click(screen.getByRole('button', { name: 'Create' }));
@@ -128,7 +128,7 @@ describe('NewMessageModal form reset', () => {
       renderModal();
       await switchToTab(user, 'Private Channel');
 
-      await user.type(screen.getByPlaceholderText('Room name'), 'MyRoom');
+      await user.type(screen.getByPlaceholderText('Channel name'), 'MyRoom');
       await user.type(screen.getByPlaceholderText('Pre-shared key (hex)'), 'cc'.repeat(16));
       await user.click(screen.getByRole('button', { name: 'Create' }));
 
@@ -142,7 +142,7 @@ describe('NewMessageModal form reset', () => {
   });
 
   describe('tab switching resets form', () => {
-    it('clears contact fields when switching to room tab', async () => {
+    it('clears contact fields when switching to channel tab', async () => {
       const user = userEvent.setup();
       renderModal();
       await switchToTab(user, 'Contact');
@@ -153,18 +153,18 @@ describe('NewMessageModal form reset', () => {
       // Switch to Private Channel tab — fields should reset
       await switchToTab(user, 'Private Channel');
 
-      expect((screen.getByPlaceholderText('Room name') as HTMLInputElement).value).toBe('');
+      expect((screen.getByPlaceholderText('Channel name') as HTMLInputElement).value).toBe('');
       expect((screen.getByPlaceholderText('Pre-shared key (hex)') as HTMLInputElement).value).toBe(
         ''
       );
     });
 
-    it('clears room fields when switching to hashtag tab', async () => {
+    it('clears channel fields when switching to hashtag tab', async () => {
       const user = userEvent.setup();
       renderModal();
       await switchToTab(user, 'Private Channel');
 
-      await user.type(screen.getByPlaceholderText('Room name'), 'SecretRoom');
+      await user.type(screen.getByPlaceholderText('Channel name'), 'SecretRoom');
       await user.type(screen.getByPlaceholderText('Pre-shared key (hex)'), 'ff'.repeat(16));
 
       await switchToTab(user, 'Hashtag Channel');

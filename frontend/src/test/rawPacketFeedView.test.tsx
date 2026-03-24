@@ -361,7 +361,7 @@ describe('RawPacketFeedView', () => {
     expect(screen.queryByText('Identity not resolvable')).not.toBeInTheDocument();
   });
 
-  it('opens a packet detail modal from the raw feed and decrypts room messages when a key is loaded', () => {
+  it('opens a packet detail modal from the raw feed and decrypts channel messages when a key is loaded', () => {
     renderView({
       packets: [
         {
@@ -392,7 +392,7 @@ describe('RawPacketFeedView', () => {
     ).toBeInTheDocument();
   });
 
-  it('does not guess a room name when multiple loaded channels collide on the group hash', () => {
+  it('does not guess a channel name when multiple loaded channels collide on the group hash', () => {
     renderView({
       packets: [
         {

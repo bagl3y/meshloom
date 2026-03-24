@@ -242,8 +242,8 @@ export function ContactInfoPane({
 
             <ActivityChartsSection analytics={analytics} />
 
-            <MostActiveRoomsSection
-              rooms={analytics?.most_active_rooms ?? []}
+            <MostActiveChannelsSection
+              channels={analytics?.most_active_rooms ?? []}
               onNavigateToChannel={onNavigateToChannel}
             />
           </div>
@@ -515,8 +515,8 @@ export function ContactInfoPane({
 
             <ActivityChartsSection analytics={analytics} />
 
-            <MostActiveRoomsSection
-              rooms={analytics?.most_active_rooms ?? []}
+            <MostActiveChannelsSection
+              channels={analytics?.most_active_rooms ?? []}
               onNavigateToChannel={onNavigateToChannel}
             />
           </div>
@@ -588,23 +588,23 @@ function MessageStatsSection({
   );
 }
 
-function MostActiveRoomsSection({
-  rooms,
+function MostActiveChannelsSection({
+  channels,
   onNavigateToChannel,
 }: {
-  rooms: ContactActiveRoom[];
+  channels: ContactActiveRoom[];
   onNavigateToChannel?: (channelKey: string) => void;
 }) {
-  if (rooms.length === 0) {
+  if (channels.length === 0) {
     return null;
   }
 
   return (
     <div className="px-5 py-3 border-b border-border">
-      <SectionLabel>Most Active Rooms</SectionLabel>
+      <SectionLabel>Most Active Channels</SectionLabel>
       <div className="space-y-1">
-        {rooms.map((room) => (
-          <div key={room.channel_key} className="flex justify-between items-center text-sm">
+        {channels.map((channel) => (
+          <div key={channel.channel_key} className="flex justify-between items-center text-sm">
             <span
               className={
                 onNavigateToChannel
@@ -614,15 +614,15 @@ function MostActiveRoomsSection({
               role={onNavigateToChannel ? 'button' : undefined}
               tabIndex={onNavigateToChannel ? 0 : undefined}
               onKeyDown={onNavigateToChannel ? handleKeyboardActivate : undefined}
-              onClick={() => onNavigateToChannel?.(room.channel_key)}
+              onClick={() => onNavigateToChannel?.(channel.channel_key)}
             >
-              {room.channel_name.startsWith('#') || isPublicChannelKey(room.channel_key)
-                ? room.channel_name
-                : `#${room.channel_name}`}
+              {channel.channel_name.startsWith('#') || isPublicChannelKey(channel.channel_key)
+                ? channel.channel_name
+                : `#${channel.channel_name}`}
             </span>
             <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
-              {room.message_count.toLocaleString()} msg
-              {room.message_count !== 1 ? 's' : ''}
+              {channel.message_count.toLocaleString()} msg
+              {channel.message_count !== 1 ? 's' : ''}
             </span>
           </div>
         ))}

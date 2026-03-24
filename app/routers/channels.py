@@ -71,7 +71,7 @@ async def create_channel(request: CreateChannelRequest) -> Channel:
     requested_name = request.name
     is_hashtag = requested_name.startswith("#")
 
-    # Reserve the canonical Public room so it cannot drift to another key,
+    # Reserve the canonical Public channel so it cannot drift to another key,
     # and the well-known Public key cannot be renamed to something else.
     if is_public_channel_name(requested_name):
         if request.key:

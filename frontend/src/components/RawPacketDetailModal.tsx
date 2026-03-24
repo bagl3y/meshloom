@@ -161,7 +161,7 @@ function buildGroupTextResolutionCandidates(channels: Channel[]): GroupTextResol
   }));
 }
 
-function resolveGroupTextRoomName(
+function resolveGroupTextChannelName(
   payload: {
     channelHash?: string;
     cipherMac?: string;
@@ -211,15 +211,15 @@ function getPacketContext(
   groupTextCandidates: GroupTextResolutionCandidate[]
 ) {
   const fallbackSender = packet.decrypted_info?.sender ?? null;
-  const fallbackRoom = packet.decrypted_info?.channel_name ?? null;
+  const fallbackChannel = packet.decrypted_info?.channel_name ?? null;
 
   if (!inspection.decoded?.payload.decoded) {
-    if (!fallbackSender && !fallbackRoom) {
+    if (!fallbackSender && !fallbackChannel) {
       return null;
     }
     return {
-      title: fallbackRoom ? 'Room' : 'Context',
-      primary: fallbackRoom ?? 'Sender metadata available',
+      title: fallbackChannel ? 'Channel' : 'Context',
+      primary: fallbackChannel ?? 'Sender metadata available',
       secondary: fallbackSender ? `Sender: ${fallbackSender}` : null,
     };
   }
@@ -231,11 +231,12 @@ function getPacketContext(
       ciphertext?: string;
       decrypted?: { sender?: string; message?: string };
     };
-    const roomName = fallbackRoom ?? resolveGroupTextRoomName(payload, groupTextCandidates);
+    const channelName =
+      fallbackChannel ?? resolveGroupTextChannelName(payload, groupTextCandidates);
     return {
-      title: roomName ? 'Room' : 'Channel',
+      title: 'Channel',
       primary:
-        roomName ?? (payload.channelHash ? `Channel hash ${payload.channelHash}` : 'GroupText'),
+        channelName ?? (payload.channelHash ? `Channel hash ${payload.channelHash}` : 'GroupText'),
       secondary: payload.decrypted?.sender
         ? `Sender: ${payload.decrypted.sender}`
         : fallbackSender

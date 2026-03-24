@@ -67,8 +67,8 @@ export function describeCiphertextStructure(
     case PayloadType.GroupText:
       return `Encrypted message content (${byteLength} bytes). Contains encrypted plaintext with this structure:
 • Timestamp (4 bytes) - send time as unix timestamp
-• Flags (1 byte) - room-message flags byte
-• Message (remaining bytes) - UTF-8 room message text`;
+• Flags (1 byte) - channel-message flags byte
+• Message (remaining bytes) - UTF-8 channel message text`;
     case PayloadType.TextMessage:
       return `Encrypted message data (${byteLength} bytes). Contains encrypted plaintext with this structure:
 • Timestamp (4 bytes) - send time as unix timestamp

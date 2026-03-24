@@ -266,7 +266,7 @@ class ContactNameHistory(BaseModel):
 
 
 class ContactActiveRoom(BaseModel):
-    """A channel/room where a contact has been active."""
+    """A channel where a contact has been active."""
 
     channel_key: str
     channel_name: str

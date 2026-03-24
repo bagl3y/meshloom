@@ -7,8 +7,8 @@ import { toast } from './ui/sonner';
 import { cn } from '@/lib/utils';
 import { extractPacketPayloadHex } from '../utils/pathUtils';
 
-interface CrackedRoom {
-  roomName: string;
+interface CrackedChannel {
+  channelName: string;
   key: string;
   packetId: number;
   message: string;
@@ -45,7 +45,7 @@ export function CrackerPanel({
   const [twoWordMode, setTwoWordMode] = useState(false);
   const [progress, setProgress] = useState<ProgressReport | null>(null);
   const [queue, setQueue] = useState<Map<number, QueueItem>>(new Map());
-  const [crackedRooms, setCrackedRooms] = useState<CrackedRoom[]>([]);
+  const [crackedChannels, setCrackedChannels] = useState<CrackedChannel[]>([]);
   const [wordlistLoaded, setWordlistLoaded] = useState(false);
   const [gpuAvailable, setGpuAvailable] = useState<boolean | null>(null);
   const [undecryptedPacketCount, setUndecryptedPacketCount] = useState<number | null>(null);
@@ -325,14 +325,14 @@ export function CrackerPanel({
           return updated;
         });
 
-        const newRoom: CrackedRoom = {
-          roomName: result.roomName,
+        const newCracked: CrackedChannel = {
+          channelName: result.roomName,
           key: result.key,
           packetId: nextId!,
           message: result.decryptedMessage || '',
           crackedAt: Date.now(),
         };
-        setCrackedRooms((prev) => [...prev, newRoom]);
+        setCrackedChannels((prev) => [...prev, newCracked]);
 
         // Auto-add channel if not already exists
         const keyUpper = result.key.toUpperCase();
@@ -580,20 +580,20 @@ export function CrackerPanel({
         </div>
       )}
 
-      {/* Cracked rooms list */}
-      {crackedRooms.length > 0 && (
+      {/* Cracked channels list */}
+      {crackedChannels.length > 0 && (
         <div>
-          <div className="text-xs text-muted-foreground mb-1">Cracked Rooms:</div>
+          <div className="text-xs text-muted-foreground mb-1">Cracked Channels:</div>
           <div className="space-y-1">
-            {crackedRooms.map((room, i) => (
+            {crackedChannels.map((channel, i) => (
               <div
                 key={i}
                 className="text-sm bg-success/10 border border-success/20 rounded px-2 py-1"
               >
-                <span className="text-success font-medium">#{room.roomName}</span>
+                <span className="text-success font-medium">#{channel.channelName}</span>
                 <span className="text-muted-foreground ml-2 text-xs">
-                  "{room.message.slice(0, 50)}
-                  {room.message.length > 50 ? '...' : ''}"
+                  "{channel.message.slice(0, 50)}
+                  {channel.message.length > 50 ? '...' : ''}"
                 </span>
               </div>
             ))}
@@ -604,8 +604,8 @@ export function CrackerPanel({
       <hr className="border-border" />
       <p className="text-sm text-muted-foreground leading-relaxed">
         For unknown-keyed GroupText packets, this will attempt to dictionary attack, then brute
-        force payloads as they arrive, testing room names up to the specified length to discover
-        active rooms on the local mesh (GroupText packets may not be hashtag messages; we have no
+        force payloads as they arrive, testing channel names up to the specified length to discover
+        active channels on the local mesh (GroupText packets may not be hashtag messages; we have no
         way of knowing but try as if they are).
         <strong> Retry failed at n+1</strong> will let the cracker return to the failed queue and
         pick up messages it couldn't crack, attempting them at one longer length.
@@ -613,8 +613,8 @@ export function CrackerPanel({
         concatenated together (e.g. "hello" + "world" = "#helloworld") after the single-word
         dictionary pass; this can substantially increase search time and also result in
         false-positives.
-        <strong> Decrypt historical</strong> will run an async job on any room name it finds to see
-        if any historically captured packets will decrypt with that key.
+        <strong> Decrypt historical</strong> will run an async job on any channel name it finds to
+        see if any historically captured packets will decrypt with that key.
         <strong> Turbo mode</strong> will push your GPU to the max (target dispatch time of 10s) and
         may allow accelerated cracking and/or system instability.
       </p>

@@ -45,8 +45,8 @@ export function ChannelFloodScopeOverrideModal({
         <DialogHeader>
           <DialogTitle>Regional Override</DialogTitle>
           <DialogDescription>
-            Room-level regional routing temporarily changes the radio flood scope before send and
-            restores it after. This can noticeably slow room sends.
+            Channel-level regional routing temporarily changes the radio flood scope before send and
+            restores it after. This can noticeably slow channel sends.
           </DialogDescription>
         </DialogHeader>
 

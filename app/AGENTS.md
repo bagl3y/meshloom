@@ -101,7 +101,7 @@ app/
 - Packet `path_len` values are hop counts, not byte counts.
 - Hop width comes from the packet or radio `path_hash_mode`: `0` = 1-byte, `1` = 2-byte, `2` = 3-byte.
 - Channel slot count comes from firmware-reported `DEVICE_INFO.max_channels`; do not hardcode `40` when scanning/offloading channel slots.
-- Channel sends use a session-local LRU slot cache after startup channel offload clears the radio. Repeated sends to the same room reuse the loaded slot; new rooms fill free slots up to the discovered channel capacity, then evict the least recently used cached room.
+- Channel sends use a session-local LRU slot cache after startup channel offload clears the radio. Repeated sends to the same channel reuse the loaded slot; new channels fill free slots up to the discovered channel capacity, then evict the least recently used cached channel.
 - TCP radios do not reuse cached slot contents. For TCP, channel sends still force `set_channel(...)` before every send because this backend does not have exclusive device access.
 - `MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE=true` disables slot reuse on all transports and forces the old always-`set_channel(...)` behavior before every channel send.
 - Contacts persist canonical direct-route fields (`direct_path`, `direct_path_len`, `direct_path_hash_mode`) so contact sync and outbound DM routing reuse the exact stored hop width instead of inferring from path bytes.

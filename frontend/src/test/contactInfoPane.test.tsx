@@ -150,7 +150,7 @@ describe('ContactInfoPane', () => {
     });
   });
 
-  it('loads name-only channel stats and most active rooms', async () => {
+  it('loads name-only channel stats and most active channels', async () => {
     getContactAnalytics.mockResolvedValue(
       createAnalytics(null, {
         lookup_type: 'name',
@@ -188,7 +188,7 @@ describe('ContactInfoPane', () => {
       expect(screen.getByText('Name First In Use')).toBeInTheDocument();
       expect(screen.getByText('Messages Per Hour')).toBeInTheDocument();
       expect(screen.getByText('Messages Per Week')).toBeInTheDocument();
-      expect(screen.getByText('Most Active Rooms')).toBeInTheDocument();
+      expect(screen.getByText('Most Active Channels')).toBeInTheDocument();
       expect(screen.getByText('#ops')).toBeInTheDocument();
       expect(
         screen.getByText(/Name-only analytics include channel messages only/i)

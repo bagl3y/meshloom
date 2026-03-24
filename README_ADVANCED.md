@@ -21,7 +21,7 @@ If the audit finds a mismatch, you'll see an error in the application UI and you
 
 ## HTTPS
 
-WebGPU room-finding requires a secure context when you are not on `localhost`.
+WebGPU channel-finding requires a secure context when you are not on `localhost`.
 
 Generate a local cert and start the backend with TLS:
 

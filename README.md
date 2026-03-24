@@ -7,7 +7,7 @@ Backend server + browser interface for MeshCore mesh radio networks. Connect you
 * Run multiple Python bots that can analyze messages and respond to DMs and channels
 * Monitor unlimited contacts and channels (radio limits don't apply -- packets are decrypted server-side)
 * Access your radio remotely over your network or VPN
-* Search for hashtag room names for channels you don't have keys for yet
+* Search for hashtag channel names for channels you don't have keys for yet
 * Forward packets to MQTT, LetsMesh, MeshRank, SQS, Apprise, etc.
 * Use the more recent 1.14 firmwares which support multibyte pathing
 * Visualize the mesh as a map or node set, view repeater stats, and more!

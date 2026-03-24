@@ -15,7 +15,7 @@ import { Checkbox } from './ui/checkbox';
 import { Button } from './ui/button';
 import { toast } from './ui/sonner';
 
-type Tab = 'new-contact' | 'new-room' | 'hashtag';
+type Tab = 'new-contact' | 'new-channel' | 'hashtag';
 
 interface NewMessageModalProps {
   open: boolean;
@@ -37,7 +37,7 @@ export function NewMessageModal({
   const [tab, setTab] = useState<Tab>('new-contact');
   const [name, setName] = useState('');
   const [contactKey, setContactKey] = useState('');
-  const [roomKey, setRoomKey] = useState('');
+  const [channelKey, setChannelKey] = useState('');
   const [tryHistorical, setTryHistorical] = useState(false);
   const [permitCapitals, setPermitCapitals] = useState(false);
   const [error, setError] = useState('');
@@ -47,7 +47,7 @@ export function NewMessageModal({
   const resetForm = () => {
     setName('');
     setContactKey('');
-    setRoomKey('');
+    setChannelKey('');
     setTryHistorical(false);
     setPermitCapitals(false);
     setError('');
@@ -65,12 +65,12 @@ export function NewMessageModal({
         }
         // handleCreateContact sets activeConversation with the backend-normalized key
         await onCreateContact(name.trim(), contactKey.trim(), tryHistorical);
-      } else if (tab === 'new-room') {
-        if (!name.trim() || !roomKey.trim()) {
-          setError('Room name and key are required');
+      } else if (tab === 'new-channel') {
+        if (!name.trim() || !channelKey.trim()) {
+          setError('Channel name and key are required');
           return;
         }
-        await onCreateChannel(name.trim(), roomKey.trim(), tryHistorical);
+        await onCreateChannel(name.trim(), channelKey.trim(), tryHistorical);
       } else if (tab === 'hashtag') {
         const channelName = name.trim();
         const validationError = validateHashtagName(channelName);
@@ -147,7 +147,7 @@ export function NewMessageModal({
           <DialogTitle>New Conversation</DialogTitle>
           <DialogDescription className="sr-only">
             {tab === 'new-contact' && 'Add a new contact by entering their name and public key'}
-            {tab === 'new-room' && 'Create a private room with a shared encryption key'}
+            {tab === 'new-channel' && 'Create a private channel with a shared encryption key'}
             {tab === 'hashtag' && 'Join a public hashtag channel'}
           </DialogDescription>
         </DialogHeader>
@@ -162,7 +162,7 @@ export function NewMessageModal({
         >
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="new-contact">Contact</TabsTrigger>
-            <TabsTrigger value="new-room">Private Channel</TabsTrigger>
+            <TabsTrigger value="new-channel">Private Channel</TabsTrigger>
             <TabsTrigger value="hashtag">Hashtag Channel</TabsTrigger>
           </TabsList>
 
@@ -187,23 +187,23 @@ export function NewMessageModal({
             </div>
           </TabsContent>
 
-          <TabsContent value="new-room" className="mt-4 space-y-4">
+          <TabsContent value="new-channel" className="mt-4 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="room-name">Room Name</Label>
+              <Label htmlFor="channel-name">Channel Name</Label>
               <Input
-                id="room-name"
+                id="channel-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Room name"
+                placeholder="Channel name"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="room-key">Room Key</Label>
+              <Label htmlFor="channel-key">Channel Key</Label>
               <div className="flex gap-2">
                 <Input
-                  id="room-key"
-                  value={roomKey}
-                  onChange={(e) => setRoomKey(e.target.value)}
+                  id="channel-key"
+                  value={channelKey}
+                  onChange={(e) => setChannelKey(e.target.value)}
                   placeholder="Pre-shared key (hex)"
                   className="flex-1"
                 />
@@ -217,7 +217,7 @@ export function NewMessageModal({
                     const hex = Array.from(bytes)
                       .map((b) => b.toString(16).padStart(2, '0'))
                       .join('');
-                    setRoomKey(hex);
+                    setChannelKey(hex);
                   }}
                   title="Generate random key"
                   aria-label="Generate random key"
@@ -251,7 +251,7 @@ export function NewMessageModal({
                   onChange={(e) => setPermitCapitals(e.target.checked)}
                   className="w-4 h-4 rounded border-input accent-primary"
                 />
-                <span className="text-sm">Permit capitals in room key derivation</span>
+                <span className="text-sm">Permit capitals in channel key derivation</span>
               </label>
               <p className="text-xs text-muted-foreground pl-7">
                 Not recommended; most companions normalize to lowercase

@@ -201,7 +201,9 @@ export function ChatHeader({
                     e.stopPropagation();
                     navigator.clipboard.writeText(conversation.id);
                     toast.success(
-                      conversation.type === 'channel' ? 'Room key copied!' : 'Contact key copied!'
+                      conversation.type === 'channel'
+                        ? 'Channel key copied!'
+                        : 'Contact key copied!'
                     );
                   }}
                   title="Click to copy"
