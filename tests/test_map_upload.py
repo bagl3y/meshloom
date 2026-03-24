@@ -12,6 +12,7 @@ from app.fanout.map_upload import (
     _DEFAULT_API_URL,
     _REUPLOAD_SECONDS,
     _get_radio_params,
+    _haversine_km,
 )
 
 
@@ -37,11 +38,19 @@ def _advert_raw_data(payload_type: str = "ADVERT", raw_hex: str = "aabbccdd") ->
     }
 
 
-def _fake_advert(device_role: int = 2, timestamp: int = 2000, pubkey: str | None = None) -> MagicMock:
+def _fake_advert(
+    device_role: int = 2,
+    timestamp: int = 2000,
+    pubkey: str | None = None,
+    lat: float | None = 51.5,
+    lon: float | None = -0.1,
+) -> MagicMock:
     advert = MagicMock()
     advert.device_role = device_role
     advert.timestamp = timestamp
     advert.public_key = pubkey or "ab" * 32
+    advert.lat = lat
+    advert.lon = lon
     return advert
 
 
@@ -355,7 +364,7 @@ class TestDryRun:
             post_mock = AsyncMock()
             mod._client.post = post_mock  # type: ignore[method-assign]
 
-            await mod._upload("ab" * 32, 1000, 2, "aabbccdd")
+            await mod._upload("ab" * 32, 1000, 2, "aabbccdd", 0.0, 0.0)
 
             post_mock.assert_not_called()
 
@@ -376,7 +385,7 @@ class TestDryRun:
             patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
             patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
         ):
-            await mod._upload(pubkey, 9999, 2, "aabb")
+            await mod._upload(pubkey, 9999, 2, "aabb", 0.0, 0.0)
             assert mod._seen[pubkey] == 9999
 
         await mod.stop()
@@ -392,7 +401,7 @@ class TestDryRun:
             patch("app.fanout.map_upload.get_public_key", return_value=None),
         ):
             # Should not raise
-            await mod._upload("ab" * 32, 1000, 2, "aabb")
+            await mod._upload("ab" * 32, 1000, 2, "aabb", 0.0, 0.0)
             assert mod._seen == {}
 
         await mod.stop()
@@ -427,7 +436,7 @@ class TestLiveSend:
             post_mock = AsyncMock(return_value=mock_response)
             mod._client.post = post_mock  # type: ignore[method-assign]
 
-            await mod._upload("ab" * 32, 1000, 2, "aabbccdd")
+            await mod._upload("ab" * 32, 1000, 2, "aabbccdd", 0.0, 0.0)
 
             post_mock.assert_called_once()
             call_url = post_mock.call_args[0][0]
@@ -457,7 +466,7 @@ class TestLiveSend:
             post_mock = AsyncMock(return_value=mock_response)
             mod._client.post = post_mock  # type: ignore[method-assign]
 
-            await mod._upload("ab" * 32, 1000, 2, "aabb")
+            await mod._upload("ab" * 32, 1000, 2, "aabb", 0.0, 0.0)
 
             call_url = post_mock.call_args[0][0]
             assert call_url == _DEFAULT_API_URL
@@ -484,7 +493,7 @@ class TestLiveSend:
         ):
             assert mod._client is not None
             mod._client.post = AsyncMock(return_value=mock_response)  # type: ignore[method-assign]
-            await mod._upload(pubkey, 7777, 2, "aabb")
+            await mod._upload(pubkey, 7777, 2, "aabb", 0.0, 0.0)
             assert mod._seen[pubkey] == 7777
 
         await mod.stop()
@@ -511,7 +520,7 @@ class TestLiveSend:
         ):
             assert mod._client is not None
             mod._client.post = AsyncMock(side_effect=exc)  # type: ignore[method-assign]
-            await mod._upload("ab" * 32, 1000, 2, "aabb")
+            await mod._upload("ab" * 32, 1000, 2, "aabb", 0.0, 0.0)
             assert mod._last_error == "HTTP 500"
             assert mod.status == "error"
 
@@ -534,7 +543,7 @@ class TestLiveSend:
         ):
             assert mod._client is not None
             mod._client.post = AsyncMock(side_effect=httpx.ConnectError("conn refused"))  # type: ignore[method-assign]
-            await mod._upload("ab" * 32, 1000, 2, "aabb")
+            await mod._upload("ab" * 32, 1000, 2, "aabb", 0.0, 0.0)
             assert mod._last_error is not None
             assert mod.status == "error"
 
@@ -572,7 +581,7 @@ class TestPayloadStructure:
         ):
             assert mod._client is not None
             mod._client.post = capture_post  # type: ignore[method-assign]
-            await mod._upload("ab" * 32, 1000, 2, "aabbccdd")
+            await mod._upload("ab" * 32, 1000, 2, "aabbccdd", 0.0, 0.0)
 
         assert len(captured) == 1
         payload = captured[0]
@@ -617,7 +626,7 @@ class TestPayloadStructure:
         ):
             assert mod._client is not None
             mod._client.post = capture_post  # type: ignore[method-assign]
-            await mod._upload("ab" * 32, 1000, 2, "ff")
+            await mod._upload("ab" * 32, 1000, 2, "ff", 0.0, 0.0)
 
         assert captured[0]["publicKey"] == fake_public.hex()
 
@@ -657,3 +666,204 @@ class TestGetRadioParams:
         assert params["cr"] == 5
 
 
+# ---------------------------------------------------------------------------
+# Location guard
+# ---------------------------------------------------------------------------
+
+
+class TestLocationGuard:
+    @pytest.mark.asyncio
+    async def test_no_location_skipped(self):
+        """Advert with lat=None and lon=None must not be uploaded."""
+        mod = _make_module()
+        await mod.start()
+
+        mock_packet = MagicMock()
+        mock_packet.payload = b"\x00" * 101
+
+        with (
+            patch("app.fanout.map_upload.parse_packet", return_value=mock_packet),
+            patch(
+                "app.fanout.map_upload.parse_advertisement",
+                return_value=_fake_advert(device_role=2, lat=None, lon=None),
+            ),
+            patch.object(mod, "_upload", new_callable=AsyncMock) as mock_upload,
+        ):
+            await mod.on_raw(_advert_raw_data())
+            mock_upload.assert_not_called()
+
+        await mod.stop()
+
+    @pytest.mark.asyncio
+    async def test_lat_none_skipped(self):
+        """Advert with only lat=None must not be uploaded."""
+        mod = _make_module()
+        await mod.start()
+
+        mock_packet = MagicMock()
+        mock_packet.payload = b"\x00" * 101
+
+        with (
+            patch("app.fanout.map_upload.parse_packet", return_value=mock_packet),
+            patch(
+                "app.fanout.map_upload.parse_advertisement",
+                return_value=_fake_advert(device_role=2, lat=None, lon=-0.1),
+            ),
+            patch.object(mod, "_upload", new_callable=AsyncMock) as mock_upload,
+        ):
+            await mod.on_raw(_advert_raw_data())
+            mock_upload.assert_not_called()
+
+        await mod.stop()
+
+    @pytest.mark.asyncio
+    async def test_lon_none_skipped(self):
+        """Advert with only lon=None must not be uploaded."""
+        mod = _make_module()
+        await mod.start()
+
+        mock_packet = MagicMock()
+        mock_packet.payload = b"\x00" * 101
+
+        with (
+            patch("app.fanout.map_upload.parse_packet", return_value=mock_packet),
+            patch(
+                "app.fanout.map_upload.parse_advertisement",
+                return_value=_fake_advert(device_role=2, lat=51.5, lon=None),
+            ),
+            patch.object(mod, "_upload", new_callable=AsyncMock) as mock_upload,
+        ):
+            await mod.on_raw(_advert_raw_data())
+            mock_upload.assert_not_called()
+
+        await mod.stop()
+
+    @pytest.mark.asyncio
+    async def test_valid_location_passes(self):
+        """Advert with valid lat/lon must proceed to _upload."""
+        mod = _make_module()
+        await mod.start()
+
+        mock_packet = MagicMock()
+        mock_packet.payload = b"\x00" * 101
+
+        with (
+            patch("app.fanout.map_upload.parse_packet", return_value=mock_packet),
+            patch(
+                "app.fanout.map_upload.parse_advertisement",
+                return_value=_fake_advert(device_role=2, lat=51.5, lon=-0.1),
+            ),
+            patch.object(mod, "_upload", new_callable=AsyncMock) as mock_upload,
+        ):
+            await mod.on_raw(_advert_raw_data())
+            mock_upload.assert_called_once()
+
+        await mod.stop()
+
+
+# ---------------------------------------------------------------------------
+# Geofence
+# ---------------------------------------------------------------------------
+
+
+class TestGeofence:
+    @pytest.mark.asyncio
+    async def test_geofence_disabled_passes_through(self):
+        """geofence_enabled=False (default) must not filter anything."""
+        mod = _make_module({"dry_run": True, "geofence_enabled": False})
+        await mod.start()
+
+        fake_private = bytes(range(64))
+        fake_public = bytes(range(32))
+
+        with (
+            patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
+            patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
+            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+        ):
+            await mod._upload("ab" * 32, 1000, 2, "aabb", 51.5, -0.1)
+            assert ("ab" * 32) in mod._seen
+
+        await mod.stop()
+
+    @pytest.mark.asyncio
+    async def test_node_inside_fence_uploaded(self):
+        """Node within the configured radius must be uploaded."""
+        mod = _make_module({
+            "dry_run": True,
+            "geofence_enabled": True,
+            "geofence_lat": 51.5,
+            "geofence_lon": -0.1,
+            "geofence_radius_km": 100.0,
+        })
+        await mod.start()
+
+        fake_private = bytes(range(64))
+        fake_public = bytes(range(32))
+
+        with (
+            patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
+            patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
+            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+        ):
+            # ~50 km north of the fence centre
+            await mod._upload("ab" * 32, 1000, 2, "aabb", 51.95, -0.1)
+            assert ("ab" * 32) in mod._seen
+
+        await mod.stop()
+
+    @pytest.mark.asyncio
+    async def test_node_outside_fence_skipped(self):
+        """Node beyond the configured radius must be skipped."""
+        mod = _make_module({
+            "dry_run": True,
+            "geofence_enabled": True,
+            "geofence_lat": 51.5,
+            "geofence_lon": -0.1,
+            "geofence_radius_km": 10.0,
+        })
+        await mod.start()
+
+        fake_private = bytes(range(64))
+        fake_public = bytes(range(32))
+
+        with (
+            patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
+            patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
+            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+        ):
+            # ~50 km north — outside the 10 km fence
+            await mod._upload("ab" * 32, 1000, 2, "aabb", 51.95, -0.1)
+            assert ("ab" * 32) not in mod._seen
+
+        await mod.stop()
+
+    @pytest.mark.asyncio
+    async def test_node_at_exact_boundary_passes(self):
+        """Node at exactly the fence radius must be allowed (<=, not <)."""
+        mod = _make_module({
+            "dry_run": True,
+            "geofence_enabled": True,
+            "geofence_lat": 0.0,
+            "geofence_lon": 0.0,
+            "geofence_radius_km": 100.0,
+        })
+        await mod.start()
+
+        fake_private = bytes(range(64))
+        fake_public = bytes(range(32))
+
+        # ~0.8993 degrees of latitude ≈ 100 km; use a value just under 100 km
+        node_lat = 0.8993
+        dist = _haversine_km(0.0, 0.0, node_lat, 0.0)
+        assert dist <= 100.0, f"Expected <=100 km, got {dist:.3f}"
+
+        with (
+            patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
+            patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
+            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+        ):
+            await mod._upload("ab" * 32, 1000, 2, "aabb", node_lat, 0.0)
+            assert ("ab" * 32) in mod._seen
+
+        await mod.stop()

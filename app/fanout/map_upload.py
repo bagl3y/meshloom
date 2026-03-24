@@ -3,6 +3,7 @@
 Mirrors the logic of the standalone map.meshcore.dev-uploader project:
 - Listens on raw RF packets via on_raw
 - Filters for ADVERT packets, skips CHAT nodes (device_role == 1)
+- Skips nodes with no valid location (lat/lon None)
 - Applies per-pubkey rate-limiting (1-hour window, matching the uploader)
 - Signs the upload request with the radio's own Ed25519 private key
 - POSTs to the map API (or logs in dry-run mode)
@@ -11,6 +12,23 @@ Dry-run mode (default: True) logs the full would-be payload at INFO level
 without making any HTTP requests. Disable it only after verifying the log
 output looks correct — in particular the radio params (freq/bw/sf/cr) and
 the raw hex link.
+
+Config keys
+-----------
+api_url : str, default ""
+    Upload endpoint. Empty string falls back to the public map.meshcore.dev API.
+dry_run : bool, default True
+    When True, log the payload at INFO level instead of sending it.
+geofence_enabled : bool, default False
+    When True, only upload nodes whose location falls within the configured
+    radius of the reference point below.
+geofence_lat : float, default 0.0
+    Latitude of the geofence centre (decimal degrees).
+geofence_lon : float, default 0.0
+    Longitude of the geofence centre (decimal degrees).
+geofence_radius_km : float, default 0.0
+    Radius of the geofence in kilometres. Nodes further than this distance
+    from (geofence_lat, geofence_lon) are skipped.
 """
 
 from __future__ import annotations
@@ -18,6 +36,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 
 import httpx
 
@@ -97,6 +116,16 @@ def _get_radio_params() -> dict:
 _ROLE_NAMES: dict[int, str] = {2: "repeater", 3: "room", 4: "sensor"}
 
 
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Return the great-circle distance in kilometres between two lat/lon points."""
+    r = 6371.0
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
 class MapUploadModule(FanoutModule):
     """Uploads heard ADVERT packets to the MeshCore community map."""
 
@@ -148,6 +177,15 @@ class MapUploadModule(FanoutModule):
         if advert.device_role in _SKIP_DEVICE_ROLES:
             return
 
+        # Skip nodes with no valid location — the decoder already nulls out
+        # impossible values, so None means either no location flag or bad coords.
+        if advert.lat is None or advert.lon is None:
+            logger.debug(
+                "MapUpload: skipping %s — no valid location",
+                advert.public_key[:12],
+            )
+            return
+
         pubkey = advert.public_key.lower()
 
         # Rate-limit: skip if this pubkey's timestamp hasn't advanced enough
@@ -169,7 +207,7 @@ class MapUploadModule(FanoutModule):
                 )
                 return
 
-        await self._upload(pubkey, advert.timestamp, advert.device_role, raw_hex)
+        await self._upload(pubkey, advert.timestamp, advert.device_role, raw_hex, advert.lat, advert.lon)
 
     async def _upload(
         self,
@@ -177,7 +215,24 @@ class MapUploadModule(FanoutModule):
         advert_timestamp: int,
         device_role: int,
         raw_hex: str,
+        lat: float,
+        lon: float,
     ) -> None:
+        # Geofence check: if enabled, skip nodes outside the configured radius
+        if self.config.get("geofence_enabled"):
+            fence_lat = float(self.config.get("geofence_lat", 0) or 0)
+            fence_lon = float(self.config.get("geofence_lon", 0) or 0)
+            fence_radius_km = float(self.config.get("geofence_radius_km", 0) or 0)
+            dist_km = _haversine_km(fence_lat, fence_lon, lat, lon)
+            if dist_km > fence_radius_km:
+                logger.debug(
+                    "MapUpload: skipping %s — outside geofence (%.2f km > %.2f km)",
+                    pubkey[:12],
+                    dist_km,
+                    fence_radius_km,
+                )
+                return
+
         private_key = get_private_key()
         public_key = get_public_key()
 
@@ -261,10 +316,5 @@ class MapUploadModule(FanoutModule):
         if self._last_error:
             return "error"
         return "connected"
-
-
-
-
-
 
 

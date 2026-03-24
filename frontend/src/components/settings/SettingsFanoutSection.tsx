@@ -1145,6 +1145,74 @@ function MapUploadConfigEditor({
           Leave blank to use the default <code>map.meshcore.dev</code> endpoint.
         </p>
       </div>
+
+      <Separator />
+
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={!!config.geofence_enabled}
+          onChange={(e) => onChange({ ...config, geofence_enabled: e.target.checked })}
+          className="h-4 w-4 rounded border-border"
+        />
+        <div>
+          <span className="text-sm font-medium">Enable Geofence</span>
+          <p className="text-xs text-muted-foreground">
+            Only upload nodes whose location falls within the configured radius of your position.
+            Helps exclude nodes with false or spoofed coordinates.
+          </p>
+        </div>
+      </label>
+
+      {!!config.geofence_enabled && (
+        <div className="space-y-3 pl-7">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="fanout-map-geofence-lat">My Latitude</Label>
+              <Input
+                id="fanout-map-geofence-lat"
+                type="number"
+                step="any"
+                placeholder="e.g. 51.5"
+                value={(config.geofence_lat as number | undefined) ?? ''}
+                onChange={(e) =>
+                  onChange({ ...config, geofence_lat: e.target.value === '' ? 0 : parseFloat(e.target.value) })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fanout-map-geofence-lon">My Longitude</Label>
+              <Input
+                id="fanout-map-geofence-lon"
+                type="number"
+                step="any"
+                placeholder="e.g. -0.1"
+                value={(config.geofence_lon as number | undefined) ?? ''}
+                onChange={(e) =>
+                  onChange({ ...config, geofence_lon: e.target.value === '' ? 0 : parseFloat(e.target.value) })
+                }
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="fanout-map-geofence-radius">Radius (km)</Label>
+            <Input
+              id="fanout-map-geofence-radius"
+              type="number"
+              min="0"
+              step="any"
+              placeholder="e.g. 100"
+              value={(config.geofence_radius_km as number | undefined) ?? ''}
+              onChange={(e) =>
+                onChange({ ...config, geofence_radius_km: e.target.value === '' ? 0 : parseFloat(e.target.value) })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Nodes further than this distance from your position will not be uploaded.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
