@@ -21,6 +21,7 @@ def _register_module_types() -> None:
         return
     from app.fanout.apprise_mod import AppriseModule
     from app.fanout.bot import BotModule
+    from app.fanout.map_upload import MapUploadModule
     from app.fanout.mqtt_community import MqttCommunityModule
     from app.fanout.mqtt_private import MqttPrivateModule
     from app.fanout.sqs import SqsModule
@@ -32,6 +33,7 @@ def _register_module_types() -> None:
     _MODULE_TYPES["webhook"] = WebhookModule
     _MODULE_TYPES["apprise"] = AppriseModule
     _MODULE_TYPES["sqs"] = SqsModule
+    _MODULE_TYPES["map_upload"] = MapUploadModule
 
 
 def _matches_filter(filter_value: Any, key: str) -> bool:

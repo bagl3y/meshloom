@@ -16,7 +16,7 @@ from app.repository.fanout import FanoutConfigRepository
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/fanout", tags=["fanout"])
 
-_VALID_TYPES = {"mqtt_private", "mqtt_community", "bot", "webhook", "apprise", "sqs"}
+_VALID_TYPES = {"mqtt_private", "mqtt_community", "bot", "webhook", "apprise", "sqs", "map_upload"}
 
 _IATA_RE = re.compile(r"^[A-Z]{3}$")
 _DEFAULT_COMMUNITY_MQTT_TOPIC_TEMPLATE = "meshcore/{IATA}/{PUBLIC_KEY}/packets"
@@ -94,6 +94,8 @@ def _validate_and_normalize_config(config_type: str, config: dict) -> dict:
         _validate_apprise_config(normalized)
     elif config_type == "sqs":
         _validate_sqs_config(normalized)
+    elif config_type == "map_upload":
+        _validate_map_upload_config(normalized)
 
     return normalized
 
@@ -295,9 +297,24 @@ def _validate_sqs_config(config: dict) -> None:
         )
 
 
+def _validate_map_upload_config(config: dict) -> None:
+    """Validate and normalize map_upload config blob."""
+    api_url = str(config.get("api_url", "")).strip()
+    if api_url and not api_url.startswith(("http://", "https://")):
+        raise HTTPException(
+            status_code=400,
+            detail="api_url must start with http:// or https://",
+        )
+    # Persist the cleaned value (empty string means use the module default)
+    config["api_url"] = api_url
+    config["dry_run"] = bool(config.get("dry_run", True))
+
+
 def _enforce_scope(config_type: str, scope: dict) -> dict:
     """Enforce type-specific scope constraints. Returns normalized scope."""
     if config_type == "mqtt_community":
+        return {"messages": "none", "raw_packets": "all"}
+    if config_type == "map_upload":
         return {"messages": "none", "raw_packets": "all"}
     if config_type == "bot":
         return {"messages": "all", "raw_packets": "none"}

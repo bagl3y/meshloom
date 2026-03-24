@@ -21,7 +21,9 @@ const TYPE_LABELS: Record<string, string> = {
   webhook: 'Webhook',
   apprise: 'Apprise',
   sqs: 'Amazon SQS',
+  map_upload: 'Map Upload',
 };
+
 
 const DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE = 'meshcore/{IATA}/{PUBLIC_KEY}/packets';
 const DEFAULT_COMMUNITY_BROKER_HOST = 'mqtt-us-v1.letsmesh.net';
@@ -34,6 +36,7 @@ const DEFAULT_MESHRANK_BROKER_PORT = 8883;
 const DEFAULT_MESHRANK_TRANSPORT = 'tcp';
 const DEFAULT_MESHRANK_AUTH_MODE = 'none';
 const DEFAULT_MESHRANK_IATA = 'XYZ';
+
 
 function createCommunityConfigDefaults(
   overrides: Partial<Record<string, unknown>> = {}
@@ -100,7 +103,8 @@ type DraftType =
   | 'webhook'
   | 'apprise'
   | 'sqs'
-  | 'bot';
+  | 'bot'
+  | 'map_upload';
 
 type CreateIntegrationDefinition = {
   value: DraftType;
@@ -282,6 +286,23 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
         code: DEFAULT_BOT_CODE,
       },
       scope: { messages: 'all', raw_packets: 'none' },
+    },
+  },
+  {
+    value: 'map_upload',
+    savedType: 'map_upload',
+    label: 'Map Upload',
+    section: 'Bulk Forwarding',
+    description:
+      'Upload node positions to map.meshcore.dev or a compatible map API endpoint.',
+    defaultName: 'Map Upload',
+    nameMode: 'counted',
+    defaults: {
+      config: {
+        api_url: '',
+        dry_run: true,
+      },
+      scope: { messages: 'none', raw_packets: 'all' },
     },
   },
 ];
@@ -566,7 +587,9 @@ function getDefaultIntegrationName(type: string, configs: FanoutConfig[]) {
 
 function getStatusLabel(status: string | undefined, type?: string) {
   if (status === 'connected')
-    return type === 'bot' || type === 'webhook' || type === 'apprise' ? 'Active' : 'Connected';
+    return type === 'bot' || type === 'webhook' || type === 'apprise' || type === 'map_upload'
+      ? 'Active'
+      : 'Connected';
   if (status === 'error') return 'Error';
   if (status === 'disconnected') return 'Disconnected';
   return 'Inactive';
@@ -1053,6 +1076,73 @@ function BotConfigEditor({
           messages, <code>sender_key</code> is <code>None</code>. Multiple enabled bots run
           concurrently. Outgoing messages are serialized with a two-second delay between sends to
           prevent repeater collision.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function MapUploadConfigEditor({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown>;
+  onChange: (config: Record<string, unknown>) => void;
+}) {
+  const isDryRun = config.dry_run !== false;
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Automatically upload heard repeater and room advertisements to{' '}
+        <a
+          href="https://map.meshcore.dev"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-foreground"
+        >
+          map.meshcore.dev
+        </a>
+        . Requires the radio&apos;s private key to be available (firmware must have{' '}
+        <code>ENABLE_PRIVATE_KEY_EXPORT=1</code>). Only raw RF packets are shared &mdash; never
+        decrypted messages.
+      </p>
+
+      <div className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning">
+        <strong>Dry Run is {isDryRun ? 'ON' : 'OFF'}.</strong>{' '}
+        {isDryRun
+          ? 'No uploads will be sent. Check the backend logs to verify the payload looks correct before enabling live sends.'
+          : 'Live uploads are enabled. Each advert is rate-limited to once per hour per node.'}
+      </div>
+
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={isDryRun}
+          onChange={(e) => onChange({ ...config, dry_run: e.target.checked })}
+          className="h-4 w-4 rounded border-border"
+        />
+        <div>
+          <span className="text-sm font-medium">Dry Run (log only, no uploads)</span>
+          <p className="text-xs text-muted-foreground">
+            When enabled, upload payloads are logged at INFO level but not sent. Disable once you
+            have confirmed the logged output looks correct.
+          </p>
+        </div>
+      </label>
+
+      <Separator />
+
+      <div className="space-y-2">
+        <Label htmlFor="fanout-map-api-url">API URL (optional)</Label>
+        <Input
+          id="fanout-map-api-url"
+          type="url"
+          placeholder="https://map.meshcore.dev/api/v1/uploader/node"
+          value={(config.api_url as string) || ''}
+          onChange={(e) => onChange({ ...config, api_url: e.target.value })}
+        />
+        <p className="text-xs text-muted-foreground">
+          Leave blank to use the default <code>map.meshcore.dev</code> endpoint.
         </p>
       </div>
     </div>
@@ -1973,6 +2063,10 @@ export function SettingsFanoutSection({
             onChange={setEditConfig}
             onScopeChange={setEditScope}
           />
+        )}
+
+        {detailType === 'map_upload' && (
+          <MapUploadConfigEditor config={editConfig} onChange={setEditConfig} />
         )}
 
         <Separator />
