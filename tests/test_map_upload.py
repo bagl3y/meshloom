@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
 
@@ -72,8 +72,10 @@ class TestMapUploadLifecycle:
     async def test_stop_clears_client(self):
         mod = _make_module()
         await mod.start()
+        mod._last_error = "HTTP 500"  # simulate a prior error
         await mod.stop()
         assert mod._client is None
+        assert mod._last_error is None
         assert mod.status == "disconnected"
 
     @pytest.mark.asyncio
@@ -176,6 +178,28 @@ class TestOnRawFiltering:
             patch(
                 "app.fanout.map_upload.parse_advertisement",
                 return_value=_fake_advert(device_role=1),
+            ),
+            patch.object(mod, "_upload", new_callable=AsyncMock) as mock_upload,
+        ):
+            await mod.on_raw(_advert_raw_data())
+            mock_upload.assert_not_called()
+
+        await mod.stop()
+
+    @pytest.mark.asyncio
+    async def test_sensor_advert_skipped(self):
+        """device_role == 4 (Sensor) must be skipped."""
+        mod = _make_module()
+        await mod.start()
+
+        mock_packet = MagicMock()
+        mock_packet.payload = b"\x00" * 101
+
+        with (
+            patch("app.fanout.map_upload.parse_packet", return_value=mock_packet),
+            patch(
+                "app.fanout.map_upload.parse_advertisement",
+                return_value=_fake_advert(device_role=4),
             ),
             patch.object(mod, "_upload", new_callable=AsyncMock) as mock_upload,
         ):
@@ -646,7 +670,9 @@ class TestGetRadioParams:
         assert params == {"freq": 0, "cr": 0, "sf": 0, "bw": 0}
 
     def test_returns_zeros_on_exception(self):
-        with patch("app.fanout.map_upload.radio_runtime", side_effect=Exception("boom")):
+        mock_rt = MagicMock()
+        type(mock_rt).meshcore = PropertyMock(side_effect=Exception("boom"))
+        with patch("app.fanout.map_upload.radio_runtime", mock_rt):
             params = _get_radio_params()
         assert params == {"freq": 0, "cr": 0, "sf": 0, "bw": 0}
 

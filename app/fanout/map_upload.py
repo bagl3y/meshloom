@@ -2,7 +2,7 @@
 
 Mirrors the logic of the standalone map.meshcore.dev-uploader project:
 - Listens on raw RF packets via on_raw
-- Filters for ADVERT packets, skips CHAT nodes (device_role == 1)
+- Filters for ADVERT packets, only processes repeaters (role 2) and rooms (role 3)
 - Skips nodes with no valid location (lat/lon None)
 - Applies per-pubkey rate-limiting (1-hour window, matching the uploader)
 - Signs the upload request with the radio's own Ed25519 private key
@@ -52,8 +52,10 @@ _DEFAULT_API_URL = "https://map.meshcore.dev/api/v1/uploader/node"
 # Re-upload guard: skip re-uploading a pubkey seen within this window (AU parity)
 _REUPLOAD_SECONDS = 3600
 
-# Device role 1 = CHAT — skip these; repeaters (2) and rooms (3) are the map targets
-_SKIP_DEVICE_ROLES = {1}
+# Only upload repeaters (2) and rooms (3). Any other role — including future
+# roles not yet defined — is rejected. An allowlist is used rather than a
+# blocklist so that new roles cannot accidentally start populating the map.
+_ALLOWED_DEVICE_ROLES = {2, 3}
 
 # Ed25519 group order (L)
 _L = 2**252 + 27742317777372353535851937790883648493
@@ -108,12 +110,12 @@ def _get_radio_params() -> dict:
             "sf": sf,
             "bw": bw / 1000.0 if bw else 0,
         }
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("MapUpload: could not read radio params: %s", exc)
     return {"freq": 0, "cr": 0, "sf": 0, "bw": 0}
 
 
-_ROLE_NAMES: dict[int, str] = {2: "repeater", 3: "room", 4: "sensor"}
+_ROLE_NAMES: dict[int, str] = {2: "repeater", 3: "room"}
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -145,6 +147,7 @@ class MapUploadModule(FanoutModule):
         if self._client:
             await self._client.aclose()
             self._client = None
+        self._last_error = None
 
     async def on_raw(self, data: dict) -> None:
         if data.get("payload_type") != "ADVERT":
@@ -173,8 +176,8 @@ class MapUploadModule(FanoutModule):
         # nacl.bindings.crypto_sign_open(sig + (pubkey_bytes || timestamp_bytes),
         # advert.public_key_bytes) succeeds before proceeding.
 
-        # Skip CHAT-type nodes (role 1) — map only shows repeaters (2) and rooms (3)
-        if advert.device_role in _SKIP_DEVICE_ROLES:
+        # Only process repeaters (2) and rooms (3) — any other role is rejected
+        if advert.device_role not in _ALLOWED_DEVICE_ROLES:
             return
 
         # Skip nodes with no valid location — the decoder already nulls out
