@@ -170,7 +170,10 @@ export function PathModal({
             ))}
 
             {/* Map modal — opens when a "Map route" button is clicked */}
-            <Dialog open={mapModalIndex !== null} onOpenChange={(open) => !open && setMapModalIndex(null)}>
+            <Dialog
+              open={mapModalIndex !== null}
+              onOpenChange={(open) => !open && setMapModalIndex(null)}
+            >
               <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>
