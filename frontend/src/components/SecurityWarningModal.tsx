@@ -73,17 +73,23 @@ export function SecurityWarningModal({ health }: SecurityWarningModalProps) {
         onEscapeKeyDown={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
       >
-        <DialogHeader className="space-y-3 text-left">
-          <div className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-destructive/30 bg-destructive/10 text-destructive">
-            <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+        <DialogHeader className="space-y-0 text-left">
+          <div className="flex items-center gap-3">
+            <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-destructive/30 bg-destructive/10 text-destructive">
+              <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <DialogTitle className="leading-tight">
+              Unprotected bot execution is enabled
+            </DialogTitle>
           </div>
-          <DialogTitle>Unprotected bot execution is enabled</DialogTitle>
+        </DialogHeader>
+
+        <hr className="border-border" />
+
+        <div className="space-y-3 break-words text-sm leading-6 text-muted-foreground">
           <DialogDescription>
             Bots are enabled, and app-wide Basic Auth is not configured.
           </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3 break-words text-sm leading-6 text-muted-foreground">
           <p>
             Without one of those protections, or another access-control layer in front of
             RemoteTerm, anyone on your local network who can reach this app can run Python code on
