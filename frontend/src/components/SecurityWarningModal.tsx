@@ -69,7 +69,7 @@ export function SecurityWarningModal({ health }: SecurityWarningModalProps) {
     <Dialog open>
       <DialogContent
         hideCloseButton
-        className="max-w-[min(92vw,42rem)] gap-5"
+        className="top-3 w-[calc(100vw-1rem)] max-w-[42rem] translate-y-0 gap-5 overflow-y-auto px-4 py-5 max-h-[calc(100vh-1.5rem)] sm:top-[50%] sm:w-full sm:max-h-[min(90vh,48rem)] sm:translate-y-[-50%] sm:px-6"
         onEscapeKeyDown={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
       >
@@ -89,7 +89,7 @@ export function SecurityWarningModal({ health }: SecurityWarningModalProps) {
             RemoteTerm, anyone on your local network who can reach this app can run Python code on
             the computer hosting this instance.
           </p>
-          <p>
+          <p className="font-semibold text-foreground">
             This is only safe on protected or isolated networks with appropriate access control. If
             your network is untrusted or later compromised, this setup may expose the host system to
             arbitrary code execution.
@@ -117,23 +117,10 @@ export function SecurityWarningModal({ health }: SecurityWarningModalProps) {
           </p>
         </div>
 
-        <label className="flex items-start gap-3 rounded-md border border-input bg-muted/20 p-4">
-          <Checkbox
-            checked={confirmedRisk}
-            onCheckedChange={(checked) => setConfirmedRisk(checked === true)}
-            aria-label="Acknowledge bot security risk"
-            className="mt-0.5"
-          />
-          <span className="text-sm leading-6 text-foreground">
-            I understand that continuing with my existing security setup may put me at risk on
-            untrusted networks or if my home network is compromised.
-          </span>
-        </label>
-
         <div className="space-y-2">
           <Button
             type="button"
-            className="w-full"
+            className="h-auto w-full whitespace-normal py-3 text-center"
             disabled={disablingBots}
             onClick={async () => {
               setDisablingBots(true);
@@ -152,9 +139,25 @@ export function SecurityWarningModal({ health }: SecurityWarningModalProps) {
           >
             {disablingBots ? 'Disabling Bots...' : 'Disable Bots Until Server Restart'}
           </Button>
+        </div>
+
+        <div className="space-y-3 rounded-md border border-input bg-muted/20 p-4">
+          <label className="flex items-start gap-3">
+            <Checkbox
+              checked={confirmedRisk}
+              onCheckedChange={(checked) => setConfirmedRisk(checked === true)}
+              aria-label="Acknowledge bot security risk"
+              className="mt-0.5"
+            />
+            <span className="text-sm leading-6 text-foreground">
+              I understand that continuing with my existing security setup may put me at risk on
+              untrusted networks or if my home network is compromised.
+            </span>
+          </label>
+
           <Button
             type="button"
-            className="w-full"
+            className="h-auto w-full whitespace-normal py-3 text-center"
             variant="outline"
             disabled={!confirmedRisk || disablingBots}
             onClick={() => {
