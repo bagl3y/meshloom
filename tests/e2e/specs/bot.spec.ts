@@ -40,7 +40,7 @@ test.describe('Bot functionality', () => {
 
     await page.locator('#fanout-edit-name').fill('E2E Test Bot');
 
-    const codeEditor = page.getByLabel('Bot code editor');
+    const codeEditor = page.locator('[aria-label="Bot code editor"] [contenteditable]');
     await codeEditor.click();
     await codeEditor.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
     await codeEditor.fill(BOT_CODE);

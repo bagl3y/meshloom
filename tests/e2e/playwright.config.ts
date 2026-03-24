@@ -25,6 +25,16 @@ export default defineConfig({
     baseURL: 'http://localhost:8001',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // Dismiss the security warning modal that blocks interaction on fresh browser contexts
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: 'http://localhost:8001',
+          localStorage: [{ name: 'meshcore_security_warning_acknowledged', value: 'true' }],
+        },
+      ],
+    },
   },
 
   projects: [
