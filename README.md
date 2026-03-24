@@ -41,8 +41,6 @@ If you plan to contribute, read [CONTRIBUTING.md](CONTRIBUTING.md).
 - [UV](https://astral.sh/uv) package manager: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - MeshCore radio connected via USB serial, TCP, or BLE
 
-If you are on a low-resource system and do not want to build the frontend locally, download the release zip named `remoteterm-prebuilt-frontend-vX.X.X-<short hash>.zip`. That bundle includes `frontend/prebuilt`, so you can run the app without doing a frontend build from source.
-
 <details>
 <summary>Finding your serial port</summary>
 
@@ -110,6 +108,8 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 The release bundle includes `frontend/prebuilt`, so it does not require a local frontend build.
+
+Alternatively, if you have already cloned the repo, you can fetch just the prebuilt frontend into your working tree without downloading the full release zip via `python3 scripts/fetch_prebuilt_frontend.py`.
 
 ## Path 2: Docker
 
