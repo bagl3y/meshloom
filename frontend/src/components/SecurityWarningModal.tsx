@@ -83,7 +83,7 @@ export function SecurityWarningModal({ health }: SecurityWarningModalProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 text-sm leading-6 text-muted-foreground">
+        <div className="space-y-3 break-words text-sm leading-6 text-muted-foreground">
           <p>
             Without one of those protections, or another access-control layer in front of
             RemoteTerm, anyone on your local network who can reach this app can run Python code on
@@ -95,16 +95,17 @@ export function SecurityWarningModal({ health }: SecurityWarningModalProps) {
             arbitrary code execution.
           </p>
           <p>
-            To reduce that risk, either disable bots with{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-foreground">
+            To reduce that risk, run the server with environment variables to either disable bots
+            with{' '}
+            <code className="break-all rounded bg-muted px-1 py-0.5 text-foreground">
               MESHCORE_DISABLE_BOTS=true
             </code>{' '}
             or enable the built-in login with{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-foreground">
+            <code className="break-all rounded bg-muted px-1 py-0.5 text-foreground">
               MESHCORE_BASIC_AUTH_USERNAME
             </code>{' '}
-            and{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-foreground">
+            /{' '}
+            <code className="break-all rounded bg-muted px-1 py-0.5 text-foreground">
               MESHCORE_BASIC_AUTH_PASSWORD
             </code>
             . Another external auth or access-control system is also acceptable.
