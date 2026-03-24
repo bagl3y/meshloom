@@ -67,6 +67,29 @@ function renderSectionWithRefresh(
   );
 }
 
+function startsWithAccessibleName(name: string) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${escaped}(?:\\s|$)`);
+}
+
+async function openCreateIntegrationDialog() {
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument();
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
+  return screen.findByRole('dialog', { name: 'Create Integration' });
+}
+
+function selectCreateIntegration(name: string) {
+  const dialog = screen.getByRole('dialog', { name: 'Create Integration' });
+  fireEvent.click(within(dialog).getByRole('button', { name: startsWithAccessibleName(name) }));
+}
+
+function confirmCreateIntegration() {
+  const dialog = screen.getByRole('dialog', { name: 'Create Integration' });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(window, 'confirm').mockReturnValue(true);
@@ -76,35 +99,64 @@ beforeEach(() => {
 });
 
 describe('SettingsFanoutSection', () => {
-  it('shows add integration menu with all integration types', async () => {
+  it('shows add integration dialog with all integration types', async () => {
     renderSection();
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument();
-    });
+    const dialog = await openCreateIntegrationDialog();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
-
-    expect(screen.getByRole('menuitem', { name: 'Private MQTT' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'MeshRank' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'LetsMesh (US)' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'LetsMesh (EU)' })).toBeInTheDocument();
+    const optionButtons = within(dialog)
+      .getAllByRole('button')
+      .filter((button) => button.hasAttribute('aria-pressed'));
+    expect(optionButtons).toHaveLength(9);
+    expect(within(dialog).getByRole('button', { name: 'Close' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Create' })).toBeInTheDocument();
     expect(
-      screen.getByRole('menuitem', { name: 'Community MQTT/meshcoretomqtt' })
+      within(dialog).getByRole('button', { name: startsWithAccessibleName('Private MQTT') })
     ).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Webhook' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Apprise' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Amazon SQS' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Bot' })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: startsWithAccessibleName('MeshRank') })
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: startsWithAccessibleName('LetsMesh (US)') })
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: startsWithAccessibleName('LetsMesh (EU)') })
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', {
+        name: startsWithAccessibleName('Community MQTT/meshcoretomqtt'),
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: startsWithAccessibleName('Webhook') })
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: startsWithAccessibleName('Apprise') })
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: startsWithAccessibleName('Amazon SQS') })
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: startsWithAccessibleName('Python Bot') })
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { level: 3 })).toBeInTheDocument();
+
+    const genericCommunityIndex = optionButtons.findIndex((button) =>
+      button.textContent?.startsWith('Community MQTT/meshcoretomqtt')
+    );
+    const meshRankIndex = optionButtons.findIndex((button) =>
+      button.textContent?.startsWith('MeshRank')
+    );
+    expect(genericCommunityIndex).toBeGreaterThan(-1);
+    expect(meshRankIndex).toBeGreaterThan(-1);
+    expect(genericCommunityIndex).toBeLessThan(meshRankIndex);
   });
 
-  it('shows bot option in add integration menu when bots are enabled', async () => {
+  it('shows bot option in add integration dialog when bots are enabled', async () => {
     renderSection();
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
-    expect(screen.getByRole('menuitem', { name: 'Bot' })).toBeInTheDocument();
+    const dialog = await openCreateIntegrationDialog();
+    expect(
+      within(dialog).getByRole('button', { name: startsWithAccessibleName('Python Bot') })
+    ).toBeInTheDocument();
   });
 
   it('shows bots disabled banner when bots_disabled', async () => {
@@ -123,14 +175,12 @@ describe('SettingsFanoutSection', () => {
     });
   });
 
-  it('hides bot option from add integration menu when bots_disabled', async () => {
+  it('hides bot option from add integration dialog when bots_disabled', async () => {
     renderSection({ health: { ...baseHealth, bots_disabled: true } });
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
-    expect(screen.queryByRole('menuitem', { name: 'Bot' })).not.toBeInTheDocument();
+    const dialog = await openCreateIntegrationDialog();
+    expect(
+      within(dialog).queryByRole('button', { name: startsWithAccessibleName('Python Bot') })
+    ).not.toBeInTheDocument();
   });
 
   it('lists existing configs after load', async () => {
@@ -305,12 +355,9 @@ describe('SettingsFanoutSection', () => {
 
   it('navigates to create view when clicking add button', async () => {
     renderSection();
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Webhook' }));
+    await openCreateIntegrationDialog();
+    selectCreateIntegration('Webhook');
+    confirmCreateIntegration();
 
     await waitFor(() => {
       expect(screen.getByText('← Back to list')).toBeInTheDocument();
@@ -324,12 +371,9 @@ describe('SettingsFanoutSection', () => {
 
   it('new SQS draft shows queue url fields and sensible defaults', async () => {
     renderSection();
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Amazon SQS' }));
+    await openCreateIntegrationDialog();
+    selectCreateIntegration('Amazon SQS');
+    confirmCreateIntegration();
 
     await waitFor(() => {
       expect(screen.getByText('← Back to list')).toBeInTheDocument();
@@ -341,12 +385,9 @@ describe('SettingsFanoutSection', () => {
 
   it('backing out of a new draft does not create an integration', async () => {
     renderSection();
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Webhook' }));
+    await openCreateIntegrationDialog();
+    selectCreateIntegration('Webhook');
+    confirmCreateIntegration();
     await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('← Back to list'));
@@ -420,12 +461,9 @@ describe('SettingsFanoutSection', () => {
     mockedApi.getFanoutConfigs.mockResolvedValueOnce([]).mockResolvedValueOnce([createdWebhook]);
 
     renderSection();
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument()
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Webhook' }));
+    await openCreateIntegrationDialog();
+    selectCreateIntegration('Webhook');
+    confirmCreateIntegration();
     await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: 'Save as Disabled' }));
@@ -453,8 +491,9 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('Test Hook')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Webhook' }));
+    await openCreateIntegrationDialog();
+    selectCreateIntegration('Webhook');
+    confirmCreateIntegration();
     await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Webhook #3'));
   });
 
@@ -656,21 +695,21 @@ describe('SettingsFanoutSection', () => {
     mockedApi.getFanoutConfigs.mockResolvedValue([communityConfig]);
     renderSection();
 
-    await waitFor(() =>
-      expect(screen.getByText('Broker: mqtt-us-v1.letsmesh.net:443')).toBeInTheDocument()
-    );
-    expect(screen.getByText('mesh2mqtt/{IATA}/node/{PUBLIC_KEY}')).toBeInTheDocument();
+    const group = await screen.findByRole('group', { name: 'Integration Community Feed' });
+    expect(
+      within(group).getByText(
+        (_, element) => element?.textContent === 'Broker: mqtt-us-v1.letsmesh.net:443'
+      )
+    ).toBeInTheDocument();
+    expect(within(group).getByText('mesh2mqtt/{IATA}/node/{PUBLIC_KEY}')).toBeInTheDocument();
     expect(screen.queryByText('Region: LAX')).not.toBeInTheDocument();
   });
 
   it('MeshRank preset pre-fills the broker settings and asks for the topic template', async () => {
     renderSection();
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument()
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'MeshRank' }));
+    await openCreateIntegrationDialog();
+    selectCreateIntegration('MeshRank');
+    confirmCreateIntegration();
 
     await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
 
@@ -707,12 +746,9 @@ describe('SettingsFanoutSection', () => {
     mockedApi.getFanoutConfigs.mockResolvedValueOnce([]).mockResolvedValueOnce([createdConfig]);
 
     renderSection();
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument()
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'MeshRank' }));
+    await openCreateIntegrationDialog();
+    selectCreateIntegration('MeshRank');
+    confirmCreateIntegration();
     await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
 
     fireEvent.change(screen.getByLabelText('Packet Topic Template'), {
@@ -774,12 +810,9 @@ describe('SettingsFanoutSection', () => {
     mockedApi.getFanoutConfigs.mockResolvedValueOnce([]).mockResolvedValueOnce([createdConfig]);
 
     renderSection();
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument()
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'LetsMesh (US)' }));
+    await openCreateIntegrationDialog();
+    selectCreateIntegration('LetsMesh (US)');
+    confirmCreateIntegration();
     await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
 
     expect(screen.getByLabelText('Name')).toHaveValue('LetsMesh (US)');
@@ -842,12 +875,9 @@ describe('SettingsFanoutSection', () => {
     mockedApi.getFanoutConfigs.mockResolvedValueOnce([]).mockResolvedValueOnce([createdConfig]);
 
     renderSection();
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument()
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'LetsMesh (EU)' }));
+    await openCreateIntegrationDialog();
+    selectCreateIntegration('LetsMesh (EU)');
+    confirmCreateIntegration();
     await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
 
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } });
@@ -880,12 +910,9 @@ describe('SettingsFanoutSection', () => {
 
   it('generic Community MQTT entry still opens the full editor', async () => {
     renderSection();
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument()
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Community MQTT/meshcoretomqtt' }));
+    await openCreateIntegrationDialog();
+    selectCreateIntegration('Community MQTT/meshcoretomqtt');
+    confirmCreateIntegration();
 
     await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
 
@@ -909,9 +936,12 @@ describe('SettingsFanoutSection', () => {
     mockedApi.getFanoutConfigs.mockResolvedValue([privateConfig]);
     renderSection();
 
-    await waitFor(() => expect(screen.getByText('Broker: broker.local:1883')).toBeInTheDocument());
+    const group = await screen.findByRole('group', { name: 'Integration Private Broker' });
     expect(
-      screen.getByText('meshcore/dm:<pubkey>, meshcore/gm:<channel>, meshcore/raw/...')
+      within(group).getByText((_, element) => element?.textContent === 'Broker: broker.local:1883')
+    ).toBeInTheDocument();
+    expect(
+      within(group).getByText('meshcore/dm:<pubkey>, meshcore/gm:<channel>, meshcore/raw/...')
     ).toBeInTheDocument();
   });
 
@@ -929,7 +959,8 @@ describe('SettingsFanoutSection', () => {
     mockedApi.getFanoutConfigs.mockResolvedValue([config]);
     renderSection();
 
-    await waitFor(() => expect(screen.getByText('https://example.com/hook')).toBeInTheDocument());
+    const group = await screen.findByRole('group', { name: 'Integration Webhook Feed' });
+    expect(within(group).getByText('https://example.com/hook')).toBeInTheDocument();
   });
 
   it('apprise list shows compact target summary', async () => {
@@ -950,9 +981,10 @@ describe('SettingsFanoutSection', () => {
     mockedApi.getFanoutConfigs.mockResolvedValue([config]);
     renderSection();
 
-    await waitFor(() =>
-      expect(screen.getByText(/discord:\/\/abc, mailto:\/\/one@example.com/)).toBeInTheDocument()
-    );
+    const group = await screen.findByRole('group', { name: 'Integration Apprise Feed' });
+    expect(
+      within(group).getByText(/discord:\/\/abc, mailto:\/\/one@example.com/)
+    ).toBeInTheDocument();
   });
 
   it('sqs list shows queue url summary', async () => {
@@ -972,11 +1004,10 @@ describe('SettingsFanoutSection', () => {
     mockedApi.getFanoutConfigs.mockResolvedValue([config]);
     renderSection();
 
-    await waitFor(() =>
-      expect(
-        screen.getByText('https://sqs.us-east-1.amazonaws.com/123456789012/mesh-events')
-      ).toBeInTheDocument()
-    );
+    const group = await screen.findByRole('group', { name: 'Integration Queue Feed' });
+    expect(
+      within(group).getByText('https://sqs.us-east-1.amazonaws.com/123456789012/mesh-events')
+    ).toBeInTheDocument();
   });
 
   it('groups integrations by type and sorts entries alphabetically within each group', async () => {

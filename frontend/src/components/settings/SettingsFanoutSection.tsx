@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { toast } from '../ui/sonner';
 import { cn } from '@/lib/utils';
 import { api } from '../../api';
@@ -15,20 +17,11 @@ const BotCodeEditor = lazy(() =>
 const TYPE_LABELS: Record<string, string> = {
   mqtt_private: 'Private MQTT',
   mqtt_community: 'Community MQTT',
-  bot: 'Bot',
+  bot: 'Python Bot',
   webhook: 'Webhook',
   apprise: 'Apprise',
   sqs: 'Amazon SQS',
 };
-
-const LIST_TYPE_OPTIONS = [
-  { value: 'mqtt_private', label: 'Private MQTT' },
-  { value: 'mqtt_community', label: 'Community MQTT' },
-  { value: 'bot', label: 'Bot' },
-  { value: 'webhook', label: 'Webhook' },
-  { value: 'apprise', label: 'Apprise' },
-  { value: 'sqs', label: 'Amazon SQS' },
-];
 
 const DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE = 'meshcore/{IATA}/{PUBLIC_KEY}/packets';
 const DEFAULT_COMMUNITY_BROKER_HOST = 'mqtt-us-v1.letsmesh.net';
@@ -41,30 +34,6 @@ const DEFAULT_MESHRANK_BROKER_PORT = 8883;
 const DEFAULT_MESHRANK_TRANSPORT = 'tcp';
 const DEFAULT_MESHRANK_AUTH_MODE = 'none';
 const DEFAULT_MESHRANK_IATA = 'XYZ';
-
-const CREATE_TYPE_OPTIONS = [
-  { value: 'mqtt_private', label: 'Private MQTT' },
-  { value: 'mqtt_community_meshrank', label: 'MeshRank' },
-  { value: 'mqtt_community_letsmesh_us', label: 'LetsMesh (US)' },
-  { value: 'mqtt_community_letsmesh_eu', label: 'LetsMesh (EU)' },
-  { value: 'mqtt_community', label: 'Community MQTT/meshcoretomqtt' },
-  { value: 'bot', label: 'Bot' },
-  { value: 'webhook', label: 'Webhook' },
-  { value: 'apprise', label: 'Apprise' },
-  { value: 'sqs', label: 'Amazon SQS' },
-] as const;
-
-type DraftType = (typeof CREATE_TYPE_OPTIONS)[number]['value'];
-
-type DraftRecipe = {
-  savedType: string;
-  detailLabel: string;
-  defaultName: string;
-  defaults: {
-    config: Record<string, unknown>;
-    scope: Record<string, unknown>;
-  };
-};
 
 function createCommunityConfigDefaults(
   overrides: Partial<Record<string, unknown>> = {}
@@ -122,11 +91,41 @@ const DEFAULT_BOT_CODE = `def bot(**kwargs) -> str | list[str] | None:
         return "[BOT] Plong!"
     return None`;
 
-const DRAFT_RECIPES: Record<DraftType, DraftRecipe> = {
-  mqtt_private: {
+type DraftType =
+  | 'mqtt_private'
+  | 'mqtt_community'
+  | 'mqtt_community_meshrank'
+  | 'mqtt_community_letsmesh_us'
+  | 'mqtt_community_letsmesh_eu'
+  | 'webhook'
+  | 'apprise'
+  | 'sqs'
+  | 'bot';
+
+type CreateIntegrationDefinition = {
+  value: DraftType;
+  savedType: string;
+  label: string;
+  section: string;
+  description: string;
+  defaultName: string;
+  nameMode: 'counted' | 'fixed';
+  defaults: {
+    config: Record<string, unknown>;
+    scope: Record<string, unknown>;
+  };
+};
+
+const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
+  {
+    value: 'mqtt_private',
     savedType: 'mqtt_private',
-    detailLabel: 'Private MQTT',
+    label: 'Private MQTT',
+    section: 'Bulk Forwarding',
+    description:
+      'Customizable-scope forwarding of all or some messages to an MQTT broker of your choosing, in raw and/or decrypted form.',
     defaultName: 'Private MQTT',
+    nameMode: 'counted',
     defaults: {
       config: {
         broker_host: '',
@@ -140,10 +139,29 @@ const DRAFT_RECIPES: Record<DraftType, DraftRecipe> = {
       scope: { messages: 'all', raw_packets: 'all' },
     },
   },
-  mqtt_community_meshrank: {
+  {
+    value: 'mqtt_community',
     savedType: 'mqtt_community',
-    detailLabel: 'MeshRank',
+    label: 'Community MQTT/meshcoretomqtt',
+    section: 'Community MQTT',
+    description:
+      'MeshcoreToMQTT-compatible raw-packet feed publishing, compatible with community aggregators (in other words, make your companion radio also serve as an observer node). Superset of other Community MQTT presets.',
+    defaultName: 'Community MQTT',
+    nameMode: 'counted',
+    defaults: {
+      config: createCommunityConfigDefaults(),
+      scope: { messages: 'none', raw_packets: 'all' },
+    },
+  },
+  {
+    value: 'mqtt_community_meshrank',
+    savedType: 'mqtt_community',
+    label: 'MeshRank',
+    section: 'Community MQTT',
+    description:
+      'A community MQTT config preconfigured for MeshRank, requiring only the provided topic from your MeshRank configuration. A subset of the primary Community MQTT/meshcoretomqtt configuration; you are free to edit all configuration after creation.',
     defaultName: 'MeshRank',
+    nameMode: 'fixed',
     defaults: {
       config: createCommunityConfigDefaults({
         broker_host: DEFAULT_MESHRANK_BROKER_HOST,
@@ -158,10 +176,15 @@ const DRAFT_RECIPES: Record<DraftType, DraftRecipe> = {
       scope: { messages: 'none', raw_packets: 'all' },
     },
   },
-  mqtt_community_letsmesh_us: {
+  {
+    value: 'mqtt_community_letsmesh_us',
     savedType: 'mqtt_community',
-    detailLabel: 'LetsMesh (US)',
+    label: 'LetsMesh (US)',
+    section: 'Community MQTT',
+    description:
+      'A community MQTT config preconfigured for the LetsMesh US-ingest endpoint, requiring only your email and IATA region code. Good to use with an additional EU configuration for redundancy. A subset of the primary Community MQTT/meshcoretomqtt configuration; you are free to edit all configuration after creation.',
     defaultName: 'LetsMesh (US)',
+    nameMode: 'fixed',
     defaults: {
       config: createCommunityConfigDefaults({
         broker_host: DEFAULT_COMMUNITY_BROKER_HOST,
@@ -170,10 +193,15 @@ const DRAFT_RECIPES: Record<DraftType, DraftRecipe> = {
       scope: { messages: 'none', raw_packets: 'all' },
     },
   },
-  mqtt_community_letsmesh_eu: {
+  {
+    value: 'mqtt_community_letsmesh_eu',
     savedType: 'mqtt_community',
-    detailLabel: 'LetsMesh (EU)',
+    label: 'LetsMesh (EU)',
+    section: 'Community MQTT',
+    description:
+      'A community MQTT config preconfigured for the LetsMesh EU-ingest endpoint, requiring only your email and IATA region code. Good to use with an additional US configuration for redundancy. A subset of the primary Community MQTT/meshcoretomqtt configuration; you are free to edit all configuration after creation.',
     defaultName: 'LetsMesh (EU)',
+    nameMode: 'fixed',
     defaults: {
       config: createCommunityConfigDefaults({
         broker_host: DEFAULT_COMMUNITY_BROKER_HOST_EU,
@@ -182,30 +210,15 @@ const DRAFT_RECIPES: Record<DraftType, DraftRecipe> = {
       scope: { messages: 'none', raw_packets: 'all' },
     },
   },
-  mqtt_community: {
-    savedType: 'mqtt_community',
-    detailLabel: 'Community MQTT/meshcoretomqtt',
-    defaultName: 'Community MQTT',
-    defaults: {
-      config: createCommunityConfigDefaults(),
-      scope: { messages: 'none', raw_packets: 'all' },
-    },
-  },
-  bot: {
-    savedType: 'bot',
-    detailLabel: 'Bot',
-    defaultName: 'Bot',
-    defaults: {
-      config: {
-        code: DEFAULT_BOT_CODE,
-      },
-      scope: { messages: 'all', raw_packets: 'none' },
-    },
-  },
-  webhook: {
+  {
+    value: 'webhook',
     savedType: 'webhook',
-    detailLabel: 'Webhook',
+    label: 'Webhook',
+    section: 'Automation',
+    description:
+      'Generic webhook for decrypted channel/DM messages with customizable verb, method, and optional HMAC signature.',
     defaultName: 'Webhook',
+    nameMode: 'counted',
     defaults: {
       config: {
         url: '',
@@ -217,10 +230,15 @@ const DRAFT_RECIPES: Record<DraftType, DraftRecipe> = {
       scope: { messages: 'all', raw_packets: 'none' },
     },
   },
-  apprise: {
+  {
+    value: 'apprise',
     savedType: 'apprise',
-    detailLabel: 'Apprise',
+    label: 'Apprise',
+    section: 'Automation',
+    description:
+      'A wide-ranging generic fanout, capable of forwarding decrypted channel/DM messages to Discord, Telegram, email, SMS, and many others.',
     defaultName: 'Apprise',
+    nameMode: 'counted',
     defaults: {
       config: {
         urls: '',
@@ -230,10 +248,14 @@ const DRAFT_RECIPES: Record<DraftType, DraftRecipe> = {
       scope: { messages: 'all', raw_packets: 'none' },
     },
   },
-  sqs: {
+  {
+    value: 'sqs',
     savedType: 'sqs',
-    detailLabel: 'Amazon SQS',
+    label: 'Amazon SQS',
+    section: 'Bulk Forwarding',
+    description: 'Send full or scope-customized raw or decrypted packets to an SQS',
     defaultName: 'Amazon SQS',
+    nameMode: 'counted',
     defaults: {
       config: {
         queue_url: '',
@@ -246,15 +268,41 @@ const DRAFT_RECIPES: Record<DraftType, DraftRecipe> = {
       scope: { messages: 'all', raw_packets: 'none' },
     },
   },
-};
+  {
+    value: 'bot',
+    savedType: 'bot',
+    label: 'Python Bot',
+    section: 'Automation',
+    description:
+      'A simple, Python-based interface for basic bots that can respond to DM and channel messages.',
+    defaultName: 'Bot',
+    nameMode: 'counted',
+    defaults: {
+      config: {
+        code: DEFAULT_BOT_CODE,
+      },
+      scope: { messages: 'all', raw_packets: 'none' },
+    },
+  },
+];
+
+const CREATE_INTEGRATION_DEFINITIONS_BY_VALUE = Object.fromEntries(
+  CREATE_INTEGRATION_DEFINITIONS.map((definition) => [definition.value, definition])
+) as Record<DraftType, CreateIntegrationDefinition>;
 
 function isDraftType(value: string): value is DraftType {
-  return value in DRAFT_RECIPES;
+  return value in CREATE_INTEGRATION_DEFINITIONS_BY_VALUE;
+}
+
+function getCreateIntegrationDefinition(draftType: DraftType) {
+  return CREATE_INTEGRATION_DEFINITIONS_BY_VALUE[draftType];
 }
 
 function normalizeDraftName(draftType: DraftType, name: string, configs: FanoutConfig[]) {
-  const recipe = DRAFT_RECIPES[draftType];
-  return name || getDefaultIntegrationName(recipe.savedType, configs);
+  const definition = getCreateIntegrationDefinition(draftType);
+  if (name) return name;
+  if (definition.nameMode === 'fixed') return definition.defaultName;
+  return getDefaultIntegrationName(definition.savedType, configs);
 }
 
 function normalizeDraftConfig(draftType: DraftType, config: Record<string, unknown>) {
@@ -305,22 +353,160 @@ function normalizeDraftConfig(draftType: DraftType, config: Record<string, unkno
 }
 
 function normalizeDraftScope(draftType: DraftType, scope: Record<string, unknown>) {
-  if (draftType.startsWith('mqtt_community_')) {
+  if (getCreateIntegrationDefinition(draftType).savedType === 'mqtt_community') {
     return { messages: 'none', raw_packets: 'all' };
   }
   return scope;
 }
 
 function cloneDraftDefaults(draftType: DraftType) {
-  const recipe = DRAFT_RECIPES[draftType];
+  const recipe = getCreateIntegrationDefinition(draftType);
   return {
     config: structuredClone(recipe.defaults.config),
     scope: structuredClone(recipe.defaults.scope),
   };
 }
 
+function CreateIntegrationDialog({
+  open,
+  options,
+  selectedType,
+  onOpenChange,
+  onSelect,
+  onCreate,
+}: {
+  open: boolean;
+  options: readonly CreateIntegrationDefinition[];
+  selectedType: DraftType | null;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (type: DraftType) => void;
+  onCreate: () => void;
+}) {
+  const selectedOption =
+    options.find((option) => option.value === selectedType) ?? options[0] ?? null;
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [showScrollHint, setShowScrollHint] = useState(false);
+
+  const updateScrollHint = useCallback(() => {
+    const container = listRef.current;
+    if (!container) {
+      setShowScrollHint(false);
+      return;
+    }
+    setShowScrollHint(container.scrollTop + container.clientHeight < container.scrollHeight - 8);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const frame = window.requestAnimationFrame(updateScrollHint);
+    window.addEventListener('resize', updateScrollHint);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', updateScrollHint);
+    };
+  }, [open, options, updateScrollHint]);
+
+  const sectionedOptions = [...new Set(options.map((o) => o.section))]
+    .map((section) => ({
+      section,
+      options: options.filter((option) => option.section === section),
+    }))
+    .filter((group) => group.options.length > 0);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        aria-describedby={undefined}
+        hideCloseButton
+        className="flex max-h-[calc(100dvh-2rem)] w-[96vw] max-w-[960px] flex-col overflow-hidden p-0 sm:rounded-xl"
+      >
+        <DialogHeader className="border-b border-border px-5 py-4">
+          <DialogTitle>Create Integration</DialogTitle>
+        </DialogHeader>
+
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[240px_minmax(0,1fr)]">
+          <div className="relative border-b border-border bg-muted/20 md:border-b-0 md:border-r">
+            <div
+              ref={listRef}
+              onScroll={updateScrollHint}
+              className="max-h-56 overflow-y-auto p-2 md:max-h-[420px]"
+            >
+              <div className="space-y-4">
+                {sectionedOptions.map((group) => (
+                  <div key={group.section} className="space-y-1.5">
+                    <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      {group.section}
+                    </div>
+                    {group.options.map((option) => {
+                      const selected = option.value === selectedOption?.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={cn(
+                            'w-full rounded-md border px-3 py-2 text-left transition-colors',
+                            selected
+                              ? 'border-primary bg-accent text-foreground'
+                              : 'border-transparent bg-transparent hover:bg-accent/70'
+                          )}
+                          aria-pressed={selected}
+                          onClick={() => onSelect(option.value)}
+                        >
+                          <div className="text-sm font-medium">{option.label}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {showScrollHint && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center bg-gradient-to-t from-background via-background/85 to-transparent px-4 pb-2 pt-8">
+                <div className="rounded-full border border-border/80 bg-background/95 px-2 py-1 text-muted-foreground shadow-sm">
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="min-h-0 space-y-4 overflow-y-auto px-5 py-5 md:min-h-[280px] md:max-h-[420px]">
+            {selectedOption ? (
+              <>
+                <div className="space-y-1.5">
+                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    {selectedOption.section}
+                  </div>
+                  <h3 className="text-lg font-semibold">{selectedOption.label}</h3>
+                </div>
+
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {selectedOption.description}
+                </p>
+              </>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                No integration types are currently available.
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 border-t border-border px-5 py-4 sm:justify-end">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+          <Button onClick={onCreate} disabled={!selectedOption}>
+            Create
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function getDetailTypeLabel(detailType: string) {
-  if (isDraftType(detailType)) return DRAFT_RECIPES[detailType].detailLabel;
+  if (isDraftType(detailType)) return getCreateIntegrationDefinition(detailType).label;
   return TYPE_LABELS[detailType] || detailType;
 }
 
@@ -1499,9 +1685,9 @@ export function SettingsFanoutSection({
   const [editName, setEditName] = useState('');
   const [inlineEditingId, setInlineEditingId] = useState<string | null>(null);
   const [inlineEditName, setInlineEditName] = useState('');
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [selectedCreateType, setSelectedCreateType] = useState<DraftType | null>(null);
   const [busy, setBusy] = useState(false);
-  const addMenuRef = useRef<HTMLDivElement | null>(null);
 
   const loadConfigs = useCallback(async () => {
     try {
@@ -1516,18 +1702,28 @@ export function SettingsFanoutSection({
     loadConfigs();
   }, [loadConfigs]);
 
+  const availableCreateOptions = useMemo(
+    () =>
+      CREATE_INTEGRATION_DEFINITIONS.filter(
+        (definition) => definition.savedType !== 'bot' || !health?.bots_disabled
+      ),
+    [health?.bots_disabled]
+  );
+
   useEffect(() => {
-    if (!addMenuOpen) return;
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!addMenuRef.current?.contains(event.target as Node)) {
-        setAddMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, [addMenuOpen]);
+    if (!createDialogOpen) return;
+    if (availableCreateOptions.length === 0) {
+      setSelectedCreateType(null);
+      return;
+    }
+    if (
+      selectedCreateType &&
+      availableCreateOptions.some((option) => option.value === selectedCreateType)
+    ) {
+      return;
+    }
+    setSelectedCreateType(availableCreateOptions[0].value);
+  }, [createDialogOpen, availableCreateOptions, selectedCreateType]);
 
   const handleToggleEnabled = async (cfg: FanoutConfig) => {
     try {
@@ -1541,7 +1737,7 @@ export function SettingsFanoutSection({
   };
 
   const handleEdit = (cfg: FanoutConfig) => {
-    setAddMenuOpen(false);
+    setCreateDialogOpen(false);
     setInlineEditingId(null);
     setInlineEditName('');
     setDraftType(null);
@@ -1552,7 +1748,7 @@ export function SettingsFanoutSection({
   };
 
   const handleStartInlineEdit = (cfg: FanoutConfig) => {
-    setAddMenuOpen(false);
+    setCreateDialogOpen(false);
     setInlineEditingId(cfg.id);
     setInlineEditName(cfg.name);
   };
@@ -1611,7 +1807,7 @@ export function SettingsFanoutSection({
     setBusy(true);
     try {
       if (currentDraftType) {
-        const recipe = DRAFT_RECIPES[currentDraftType];
+        const recipe = getCreateIntegrationDefinition(currentDraftType);
         await api.createFanoutConfig({
           type: recipe.savedType,
           name: normalizeDraftName(currentDraftType, editName.trim(), configs),
@@ -1663,18 +1859,16 @@ export function SettingsFanoutSection({
     }
   };
 
-  const handleAddCreate = async (type: string) => {
-    if (!isDraftType(type)) return;
+  const handleAddCreate = (type: DraftType) => {
+    const definition = getCreateIntegrationDefinition(type);
     const defaults = cloneDraftDefaults(type);
-    setAddMenuOpen(false);
+    setCreateDialogOpen(false);
     setEditingId(null);
     setDraftType(type);
     setEditName(
-      type === 'mqtt_community_meshrank' ||
-        type === 'mqtt_community_letsmesh_us' ||
-        type === 'mqtt_community_letsmesh_eu'
-        ? DRAFT_RECIPES[type].defaultName
-        : getDefaultIntegrationName(DRAFT_RECIPES[type].savedType, configs)
+      definition.nameMode === 'fixed'
+        ? definition.defaultName
+        : getDefaultIntegrationName(definition.savedType, configs)
     );
     setEditConfig(defaults.config);
     setEditScope(defaults.scope);
@@ -1683,13 +1877,15 @@ export function SettingsFanoutSection({
   const editingConfig = editingId ? configs.find((c) => c.id === editingId) : null;
   const detailType = draftType ?? editingConfig?.type ?? null;
   const isDraft = draftType !== null;
-  const configGroups = LIST_TYPE_OPTIONS.map((opt) => ({
-    type: opt.value,
-    label: opt.label,
-    configs: configs
-      .filter((cfg) => cfg.type === opt.value)
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
-  })).filter((group) => group.configs.length > 0);
+  const configGroups = Object.entries(TYPE_LABELS)
+    .map(([type, label]) => ({
+      type,
+      label,
+      configs: configs
+        .filter((cfg) => cfg.type === type)
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
+    }))
+    .filter((group) => group.configs.length > 0);
 
   // Detail view
   if (detailType) {
@@ -1823,37 +2019,22 @@ export function SettingsFanoutSection({
         </div>
       )}
 
-      <div className="relative inline-block" ref={addMenuRef}>
-        <Button
-          type="button"
-          size="sm"
-          aria-haspopup="menu"
-          aria-expanded={addMenuOpen}
-          onClick={() => setAddMenuOpen((open) => !open)}
-        >
-          Add Integration
-        </Button>
-        {addMenuOpen && (
-          <div
-            role="menu"
-            className="absolute left-0 top-full z-10 mt-2 min-w-72 rounded-md border border-input bg-background p-1 shadow-md"
-          >
-            {CREATE_TYPE_OPTIONS.filter((opt) => opt.value !== 'bot' || !health?.bots_disabled).map(
-              (opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="menuitem"
-                  className="flex w-full rounded-sm px-3 py-2 text-left text-sm hover:bg-muted"
-                  onClick={() => handleAddCreate(opt.value)}
-                >
-                  {opt.label}
-                </button>
-              )
-            )}
-          </div>
-        )}
-      </div>
+      <Button type="button" size="sm" onClick={() => setCreateDialogOpen(true)}>
+        Add Integration
+      </Button>
+
+      <CreateIntegrationDialog
+        open={createDialogOpen}
+        options={availableCreateOptions}
+        selectedType={selectedCreateType}
+        onOpenChange={setCreateDialogOpen}
+        onSelect={setSelectedCreateType}
+        onCreate={() => {
+          if (selectedCreateType) {
+            handleAddCreate(selectedCreateType);
+          }
+        }}
+      />
 
       {configGroups.length > 0 && (
         <div className="columns-1 gap-4 md:columns-2">

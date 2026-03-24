@@ -4,7 +4,12 @@ import {
   deleteFanoutConfig,
   getFanoutConfigs,
 } from '../helpers/api';
-import { createCaptureServer, fanoutHeader, openFanoutSettings } from '../helpers/fanout';
+import {
+  createCaptureServer,
+  fanoutHeader,
+  openFanoutSettings,
+  startIntegrationDraft,
+} from '../helpers/fanout';
 
 test.describe('Apprise integration settings', () => {
   let createdAppriseId: string | null = null;
@@ -35,9 +40,7 @@ test.describe('Apprise integration settings', () => {
     await openFanoutSettings(page);
     await expect(page.getByRole('status', { name: 'Radio OK' })).toBeVisible();
 
-    // Open add menu and pick Apprise
-    await page.getByRole('button', { name: 'Add Integration' }).click();
-    await page.getByRole('menuitem', { name: 'Apprise' }).click();
+    await startIntegrationDraft(page, 'Apprise');
 
     // Should navigate to the detail/edit view with a numbered default name
     await expect(page.locator('#fanout-edit-name')).toHaveValue(/Apprise #\d+/);
