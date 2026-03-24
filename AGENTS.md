@@ -296,9 +296,9 @@ cd frontend
 npm run test:run
 ```
 
-### Before Completing Changes
+### Before Completing Major Changes
 
-**Always run `./scripts/all_quality.sh` before finishing any changes that have modified code or tests.** It is the standard repo gate: autofix first, then type checks, tests, and the standard frontend build. This is not necessary for docs-only changes.
+**Run `./scripts/all_quality.sh` before finishing major changes that have modified code or tests.** It is the standard repo gate: autofix first, then type checks, tests, and the standard frontend build. This is not necessary for docs-only changes. For minor changes (like wording, color, spacing, etc.), wait until prompted to run the quality gate.
 
 ## API Summary
 
