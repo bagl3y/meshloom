@@ -6,6 +6,7 @@ import { ConversationPane } from './ConversationPane';
 import { NewMessageModal } from './NewMessageModal';
 import { ContactInfoPane } from './ContactInfoPane';
 import { ChannelInfoPane } from './ChannelInfoPane';
+import { SecurityWarningModal } from './SecurityWarningModal';
 import { Toaster } from './ui/sonner';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
 import {
@@ -289,6 +290,7 @@ export function AppShell({
         }}
       />
 
+      <SecurityWarningModal health={statusProps.health} />
       <ContactInfoPane {...contactInfoPaneProps} />
       <ChannelInfoPane {...channelInfoPaneProps} />
       <Toaster position="top-right" />

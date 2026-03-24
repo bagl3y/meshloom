@@ -593,7 +593,9 @@ class TestDisableBotsPatchGuard:
         )
 
         # Now try to update with bots disabled
-        with patch("app.routers.fanout.server_settings", MagicMock(disable_bots=True)):
+        with patch(
+            "app.routers.fanout.fanout_manager.get_bots_disabled_source", return_value="env"
+        ):
             with pytest.raises(HTTPException) as exc_info:
                 await update_fanout_config(
                     cfg["id"],
@@ -617,7 +619,9 @@ class TestDisableBotsPatchGuard:
             enabled=False,
         )
 
-        with patch("app.routers.fanout.server_settings", MagicMock(disable_bots=True)):
+        with patch(
+            "app.routers.fanout.fanout_manager.get_bots_disabled_source", return_value="env"
+        ):
             with patch("app.fanout.manager.fanout_manager.reload_config", new_callable=AsyncMock):
                 result = await update_fanout_config(
                     cfg["id"],

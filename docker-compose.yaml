@@ -18,14 +18,17 @@ services:
     environment:
       MESHCORE_DATABASE_PATH: data/meshcore.db
       # Radio connection -- optional if you map just a single serial device above, as the app will autodetect
-
       # Serial (USB)
       # MESHCORE_SERIAL_PORT: /dev/ttyUSB0
       # MESHCORE_SERIAL_BAUDRATE: 115200
-
       # TCP
       # MESHCORE_TCP_HOST: 192.168.1.100
       # MESHCORE_TCP_PORT: 4000
+
+      # Security
+      # MESHCORE_DISABLE_BOTS: "true"
+      # MESHCORE_BASIC_AUTH_USERNAME: changeme
+      # MESHCORE_BASIC_AUTH_PASSWORD: changeme
 
       # Logging
       # MESHCORE_LOG_LEVEL: INFO
