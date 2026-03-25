@@ -505,7 +505,7 @@ export function CrackerPanel({
             ? 'GPU Not Available'
             : !wordlistLoaded
               ? 'Loading dictionary...'
-              : 'Find Rooms'}
+              : 'Find Channels'}
       </button>
 
       {/* Status */}

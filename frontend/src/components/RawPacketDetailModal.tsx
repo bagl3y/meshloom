@@ -784,7 +784,7 @@ export function RawPacketInspectorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[92vh] max-w-[min(96vw,82rem)] flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex h-[92dvh] max-w-[min(96vw,82rem)] flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b border-border px-5 py-3">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription className="sr-only">{description}</DialogDescription>
