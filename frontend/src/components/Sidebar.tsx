@@ -844,7 +844,7 @@ export function Sidebar({
         <div className="relative min-w-0 flex-1">
           <Input
             type="text"
-            placeholder="Search rooms/contacts..."
+            placeholder="Search channels/contacts..."
             aria-label="Search conversations"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
