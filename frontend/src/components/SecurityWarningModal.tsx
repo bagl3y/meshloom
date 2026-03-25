@@ -69,7 +69,7 @@ export function SecurityWarningModal({ health }: SecurityWarningModalProps) {
     <Dialog open>
       <DialogContent
         hideCloseButton
-        className="top-3 w-[calc(100vw-1rem)] max-w-[42rem] translate-y-0 gap-5 overflow-y-auto px-4 py-5 max-h-[calc(100vh-1.5rem)] sm:top-[50%] sm:w-full sm:max-h-[min(90vh,48rem)] sm:translate-y-[-50%] sm:px-6"
+        className="w-[calc(100vw-1rem)] max-w-[42rem] gap-5 overflow-y-auto px-4 py-5 max-h-[calc(100dvh-2rem)] sm:w-full sm:max-h-[min(85vh,48rem)] sm:px-6"
         onEscapeKeyDown={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
       >
