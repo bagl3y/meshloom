@@ -1,4 +1,5 @@
 import { lazy, Suspense, useRef, type ComponentProps } from 'react';
+import { useSwipeable } from 'react-swipeable';
 
 import { StatusBar } from './StatusBar';
 import { Sidebar } from './Sidebar';
@@ -89,6 +90,17 @@ export function AppShell({
   contactInfoPaneProps,
   channelInfoPaneProps,
 }: AppShellProps) {
+  const swipeHandlers = useSwipeable({
+    onSwipedRight: ({ initial }) => {
+      if (initial[0] < 30 && !sidebarOpen && window.innerWidth < 768) {
+        onSidebarOpenChange(true);
+      }
+    },
+    trackTouch: true,
+    trackMouse: false,
+    preventScrollOnSwipe: false,
+  });
+
   const searchMounted = useRef(false);
   if (conversationPaneProps.activeConversation?.type === 'search') {
     searchMounted.current = true;
@@ -153,7 +165,7 @@ export function AppShell({
   );
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" {...swipeHandlers}>
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-2 focus:bg-primary focus:text-primary-foreground"
