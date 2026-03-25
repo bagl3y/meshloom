@@ -1803,7 +1803,7 @@ class TestMapUploadIntegration:
     @pytest.mark.asyncio
     async def test_map_upload_module_loaded_and_receives_raw(self, integration_db):
         """Enabled map_upload config is loaded by the manager and its on_raw is called."""
-        from unittest.mock import AsyncMock, MagicMock, patch
+        from unittest.mock import AsyncMock, patch
 
         cfg = await FanoutConfigRepository.create(
             config_type="map_upload",
@@ -1829,7 +1829,7 @@ class TestMapUploadIntegration:
             "observation_id": 1,
         }
 
-        with patch.object(module, "_upload", new_callable=AsyncMock) as mock_upload:
+        with patch.object(module, "_upload", new_callable=AsyncMock):
             # Provide a parseable but minimal packet so on_raw gets past hex decode;
             # parse_packet/parse_advertisement returning None is fine — on_raw silently exits
             await manager.broadcast_raw(advert_data)

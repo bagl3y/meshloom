@@ -24,7 +24,6 @@ const TYPE_LABELS: Record<string, string> = {
   map_upload: 'Map Upload',
 };
 
-
 const DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE = 'meshcore/{IATA}/{PUBLIC_KEY}/packets';
 const DEFAULT_COMMUNITY_BROKER_HOST = 'mqtt-us-v1.letsmesh.net';
 const DEFAULT_COMMUNITY_BROKER_HOST_EU = 'mqtt-eu-v1.letsmesh.net';
@@ -36,7 +35,6 @@ const DEFAULT_MESHRANK_BROKER_PORT = 8883;
 const DEFAULT_MESHRANK_TRANSPORT = 'tcp';
 const DEFAULT_MESHRANK_AUTH_MODE = 'none';
 const DEFAULT_MESHRANK_IATA = 'XYZ';
-
 
 function createCommunityConfigDefaults(
   overrides: Partial<Record<string, unknown>> = {}
@@ -1176,7 +1174,10 @@ function MapUploadConfigEditor({
                 placeholder="e.g. 51.5"
                 value={(config.geofence_lat as number | undefined) ?? ''}
                 onChange={(e) =>
-                  onChange({ ...config, geofence_lat: e.target.value === '' ? 0 : parseFloat(e.target.value) })
+                  onChange({
+                    ...config,
+                    geofence_lat: e.target.value === '' ? 0 : parseFloat(e.target.value),
+                  })
                 }
               />
             </div>
@@ -1189,7 +1190,10 @@ function MapUploadConfigEditor({
                 placeholder="e.g. -0.1"
                 value={(config.geofence_lon as number | undefined) ?? ''}
                 onChange={(e) =>
-                  onChange({ ...config, geofence_lon: e.target.value === '' ? 0 : parseFloat(e.target.value) })
+                  onChange({
+                    ...config,
+                    geofence_lon: e.target.value === '' ? 0 : parseFloat(e.target.value),
+                  })
                 }
               />
             </div>
@@ -1204,7 +1208,10 @@ function MapUploadConfigEditor({
               placeholder="e.g. 100"
               value={(config.geofence_radius_km as number | undefined) ?? ''}
               onChange={(e) =>
-                onChange({ ...config, geofence_radius_km: e.target.value === '' ? 0 : parseFloat(e.target.value) })
+                onChange({
+                  ...config,
+                  geofence_radius_km: e.target.value === '' ? 0 : parseFloat(e.target.value),
+                })
               }
             />
             <p className="text-xs text-muted-foreground">

@@ -8,13 +8,12 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 import pytest
 
 from app.fanout.map_upload import (
-    MapUploadModule,
     _DEFAULT_API_URL,
     _REUPLOAD_SECONDS,
+    MapUploadModule,
     _get_radio_params,
     _haversine_km,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -898,8 +897,6 @@ class TestGeofence:
     @pytest.mark.asyncio
     async def test_dry_run_geofence_logs_distance(self):
         """dry_run + geofence_enabled must include the calculated distance in the log line."""
-        import logging
-
         mod = _make_module({
             "dry_run": True,
             "geofence_enabled": True,
