@@ -46,6 +46,39 @@ Accept the browser warning, or use [mkcert](https://github.com/FiloSottile/mkcer
 
 ## Systemd Service
 
+Two paths are available depending on your comfort level with Linux system administration.
+
+### Simple install (recommended for most users)
+
+Run the installer script from the repo root. It runs as your current user, installs from wherever you cloned the repo, and prints a quick-reference cheatsheet when done — no separate service account or path juggling required.
+
+```bash
+bash scripts/install_service.sh
+```
+
+The script interactively asks which transport to use (serial auto-detect, serial with explicit port, TCP, or BLE), whether to enable the bot system, and whether to set up HTTP Basic Auth. It handles dependency installation (`uv sync`), fetches a prebuilt frontend, adds your user to the `dialout` group if needed, writes the systemd unit file, and enables the service. After installation, normal operations work without any `sudo -u` gymnastics:
+
+```bash
+# Update to latest and restart
+cd /path/to/repo
+git pull
+uv sync
+cd frontend && npm install && npm run build && cd ..
+sudo systemctl restart remoteterm
+
+# Refresh prebuilt frontend only (skips local build)
+python3 scripts/fetch_prebuilt_frontend.py
+sudo systemctl restart remoteterm
+
+# View live logs
+sudo journalctl -u remoteterm -f
+
+# Service control
+sudo systemctl start|stop|restart|status remoteterm
+```
+
+### Hardened install (production / multi-user systems)
+
 Assumes you are running from `/opt/remoteterm`; adjust paths if you deploy elsewhere.
 
 ```bash
