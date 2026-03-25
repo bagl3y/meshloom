@@ -68,7 +68,7 @@ export function PathModal({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-md max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-md max-h-[80dvh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
             {hasPaths
