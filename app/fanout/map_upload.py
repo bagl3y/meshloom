@@ -84,14 +84,10 @@ def _ed25519_sign_expanded(
 def _get_radio_params() -> dict:
     """Read radio frequency parameters from the connected radio's self_info.
 
-    The standalone AU divides raw freq/bw values by 1000 before sending.
-    The meshcore Python library returns radio_freq and radio_bw at the same
-    scale as the JS library, so we apply the same /1000 division.
-
-    IMPORTANT: verify the actual values in dry_run logs before enabling live
-    sends. The units reported by the Python library should be confirmed; if
-    the logged freq/bw look wrong (e.g. 0.915 instead of 915000), the
-    division factor here may need adjusting.
+    The Python meshcore library returns radio_freq in MHz (e.g. 910.525) and
+    radio_bw in kHz (e.g. 62.5). These are exactly the units the map API
+    expects, matching what the JS reference uploader produces after its own
+    /1000 division on raw integer values. No further scaling is applied here.
     """
     try:
         mc = radio_runtime.meshcore
@@ -105,10 +101,10 @@ def _get_radio_params() -> dict:
         sf = info.get("radio_sf", 0) or 0
         cr = info.get("radio_cr", 0) or 0
         return {
-            "freq": freq / 1000.0 if freq else 0,
+            "freq": freq,
             "cr": cr,
             "sf": sf,
-            "bw": bw / 1000.0 if bw else 0,
+            "bw": bw,
         }
     except Exception as exc:
         logger.debug("MapUpload: could not read radio params: %s", exc)
@@ -222,16 +218,17 @@ class MapUploadModule(FanoutModule):
         lon: float,
     ) -> None:
         # Geofence check: if enabled, skip nodes outside the configured radius
+        geofence_dist_km: float | None = None
         if self.config.get("geofence_enabled"):
             fence_lat = float(self.config.get("geofence_lat", 0) or 0)
             fence_lon = float(self.config.get("geofence_lon", 0) or 0)
             fence_radius_km = float(self.config.get("geofence_radius_km", 0) or 0)
-            dist_km = _haversine_km(fence_lat, fence_lon, lat, lon)
-            if dist_km > fence_radius_km:
+            geofence_dist_km = _haversine_km(fence_lat, fence_lon, lat, lon)
+            if geofence_dist_km > fence_radius_km:
                 logger.debug(
                     "MapUpload: skipping %s — outside geofence (%.2f km > %.2f km)",
                     pubkey[:12],
-                    dist_km,
+                    geofence_dist_km,
                     fence_radius_km,
                 )
                 return
@@ -271,10 +268,16 @@ class MapUploadModule(FanoutModule):
         }
 
         if dry_run:
+            geofence_note = (
+                f" | geofence: {geofence_dist_km:.2f} km from observer"
+                if geofence_dist_km is not None
+                else ""
+            )
             logger.info(
-                "MapUpload [DRY RUN] %s (%s) → would POST to %s\n  payload: %s",
+                "MapUpload [DRY RUN] %s (%s)%s → would POST to %s\n  payload: %s",
                 pubkey[:12],
                 role_name,
+                geofence_note,
                 api_url,
                 json.dumps(request_payload, separators=(",", ":")),
             )

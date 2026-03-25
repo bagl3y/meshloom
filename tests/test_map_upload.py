@@ -676,11 +676,12 @@ class TestGetRadioParams:
             params = _get_radio_params()
         assert params == {"freq": 0, "cr": 0, "sf": 0, "bw": 0}
 
-    def test_divides_freq_and_bw_by_1000(self):
+    def test_passes_freq_and_bw_directly(self):
+        """Python lib already returns freq in MHz and bw in kHz — no division needed."""
         mock_rt = MagicMock()
         mock_rt.meshcore.self_info = {
-            "radio_freq": 915000,
-            "radio_bw": 125000,
+            "radio_freq": 915.0,
+            "radio_bw": 125.0,
             "radio_sf": 10,
             "radio_cr": 5,
         }
@@ -893,3 +894,58 @@ class TestGeofence:
             assert ("ab" * 32) in mod._seen
 
         await mod.stop()
+
+    @pytest.mark.asyncio
+    async def test_dry_run_geofence_logs_distance(self):
+        """dry_run + geofence_enabled must include the calculated distance in the log line."""
+        import logging
+
+        mod = _make_module({
+            "dry_run": True,
+            "geofence_enabled": True,
+            "geofence_lat": 51.5,
+            "geofence_lon": -0.1,
+            "geofence_radius_km": 100.0,
+        })
+        await mod.start()
+
+        fake_private = bytes(range(64))
+        fake_public = bytes(range(32))
+
+        with (
+            patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
+            patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
+            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+        ):
+            with patch("app.fanout.map_upload.logger") as mock_logger:
+                # ~50 km north — inside the fence
+                await mod._upload("ab" * 32, 1000, 2, "aabb", 51.95, -0.1)
+                mock_logger.info.assert_called_once()
+                log_message = mock_logger.info.call_args[0][0] % mock_logger.info.call_args[0][1:]
+                assert "geofence:" in log_message
+                assert "km from observer" in log_message
+
+        await mod.stop()
+
+    @pytest.mark.asyncio
+    async def test_dry_run_no_geofence_no_distance_in_log(self):
+        """dry_run without geofence_enabled must not include a distance note in the log."""
+        mod = _make_module({"dry_run": True, "geofence_enabled": False})
+        await mod.start()
+
+        fake_private = bytes(range(64))
+        fake_public = bytes(range(32))
+
+        with (
+            patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
+            patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
+            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+        ):
+            with patch("app.fanout.map_upload.logger") as mock_logger:
+                await mod._upload("ab" * 32, 1000, 2, "aabb", 51.5, -0.1)
+                mock_logger.info.assert_called_once()
+                log_message = mock_logger.info.call_args[0][0] % mock_logger.info.call_args[0][1:]
+                assert "geofence:" not in log_message
+
+        await mod.stop()
+

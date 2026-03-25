@@ -294,7 +294,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
     label: 'Map Upload',
     section: 'Bulk Forwarding',
     description:
-      'Upload node positions to map.meshcore.dev or a compatible map API endpoint.',
+      'Upload repeaters and room servers to map.meshcore.dev or a compatible map API endpoint.',
     defaultName: 'Map Upload',
     nameMode: 'counted',
     defaults: {
@@ -1093,7 +1093,7 @@ function MapUploadConfigEditor({
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Automatically upload heard repeater and room advertisements to{' '}
+        Automatically upload heard repeater and room server advertisements to{' '}
         <a
           href="https://map.meshcore.dev"
           target="_blank"
