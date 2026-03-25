@@ -98,6 +98,13 @@ export function AppShell({
     },
     trackTouch: true,
     trackMouse: false,
+    preventScrollOnSwipe: true,
+  });
+
+  const closeSwipeHandlers = useSwipeable({
+    onSwipedLeft: () => onSidebarOpenChange(false),
+    trackTouch: true,
+    trackMouse: false,
     preventScrollOnSwipe: false,
   });
 
@@ -208,7 +215,7 @@ export function AppShell({
               <SheetTitle>Navigation</SheetTitle>
               <SheetDescription>Sidebar navigation</SheetDescription>
             </SheetHeader>
-            <div className="flex-1 overflow-hidden">{activeSidebarContent}</div>
+            <div className="flex-1 overflow-hidden" {...closeSwipeHandlers}>{activeSidebarContent}</div>
           </SheetContent>
         </Sheet>
 
