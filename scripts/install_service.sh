@@ -22,7 +22,7 @@ SERVICE_NAME="remoteterm"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CURRENT_USER="$(id -un)"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-FRONTEND_MODE="prebuilt"
+FRONTEND_MODE="build"
 
 echo -e "${BOLD}=== RemoteTerm for MeshCore — Service Installer ===${NC}"
 echo
@@ -145,8 +145,8 @@ echo
 
 echo -e "${BOLD}─── Frontend Assets ─────────────────────────────────────────────────${NC}"
 echo "How should the frontend be installed?"
-echo "  1) Download prebuilt frontend (default, fastest)"
-echo "  2) Build locally with npm (latest code, requires node/npm)"
+echo "  1) Build locally with npm (default, latest code, requires node/npm)"
+echo "  2) Download prebuilt frontend (fastest)"
 echo
 read -rp "Select frontend mode [1-2] (default: 1): " FRONTEND_CHOICE
 FRONTEND_CHOICE="${FRONTEND_CHOICE:-1}"
@@ -154,16 +154,16 @@ echo
 
 case "$FRONTEND_CHOICE" in
     1)
-        FRONTEND_MODE="prebuilt"
-        echo -e "${GREEN}Using prebuilt frontend download.${NC}"
-        ;;
-    2)
         FRONTEND_MODE="build"
         echo -e "${GREEN}Using local frontend build.${NC}"
         ;;
-    *)
+    2)
         FRONTEND_MODE="prebuilt"
-        echo -e "${YELLOW}Invalid selection — defaulting to prebuilt frontend download.${NC}"
+        echo -e "${GREEN}Using prebuilt frontend download.${NC}"
+        ;;
+    *)
+        FRONTEND_MODE="build"
+        echo -e "${YELLOW}Invalid selection — defaulting to local frontend build.${NC}"
         ;;
 esac
 echo
