@@ -102,7 +102,7 @@ class BaseMqttPublisher(ABC):
         except Exception as e:
             logger.warning(
                 "%s publish failed on %s. This is usually transient network noise; "
-                "if it self-resolves and reconnects, it is generally not a concern: %s",
+                "if it self-resolves and reconnects, it is generally not a concern. Persistent errors may indicate a problem with your network connection or MQTT broker. Original error: %s",
                 self._integration_label(),
                 topic,
                 e,
@@ -239,7 +239,7 @@ class BaseMqttPublisher(ABC):
                 logger.warning(
                     "%s connection error. This is usually transient network noise; "
                     "if it self-resolves, it is generally not a concern: %s "
-                    "(reconnecting in %ds)",
+                    "(reconnecting in %ds). If this error persists, check your network connection and MQTT broker status.",
                     self._integration_label(),
                     e,
                     backoff,
