@@ -1,12 +1,16 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useBrowserNotifications } from '../hooks/useBrowserNotifications';
+import {
+  getNotificationEnableToastInfo,
+  useBrowserNotifications,
+} from '../hooks/useBrowserNotifications';
 import type { Message } from '../types';
 
 const mocks = vi.hoisted(() => ({
   toast: {
     success: vi.fn(),
+    warning: vi.fn(),
     error: vi.fn(),
   },
 }));
@@ -57,6 +61,10 @@ describe('useBrowserNotifications', () => {
       configurable: true,
       value: NotificationMock,
     });
+    Object.defineProperty(window, 'isSecureContext', {
+      configurable: true,
+      value: true,
+    });
   });
 
   it('stores notification opt-in per conversation', async () => {
@@ -83,6 +91,10 @@ describe('useBrowserNotifications', () => {
       body: 'Notifications will look like this. These require the tab to stay open, and will not be reliable on mobile.',
       icon: '/favicon-256x256.png',
       tag: `meshcore-notification-preview-channel-${incomingChannelMessage.conversation_key}`,
+    });
+    expect(mocks.toast.warning).toHaveBeenCalledWith('Notifications enabled with warning', {
+      description:
+        'Desktop notifications are on for this conversation, but you are using HTTP instead of HTTPS. Notifications will likely not work reliably.',
     });
   });
 
@@ -164,9 +176,65 @@ describe('useBrowserNotifications', () => {
       );
     });
 
-    expect(mocks.toast.error).toHaveBeenCalledWith('Browser notifications blocked', {
+    expect(mocks.toast.error).toHaveBeenCalledWith('Notifications blocked', {
       description:
-        'Allow notifications in your browser settings, then try again. Some browsers may refuse notifications on non-HTTPS or self-signed HTTPS origins. Check your browser documentation for how to trust an insecure origin and the associated risks before doing so.',
+        'Desktop notifications are blocked by your browser. Allow notifications in browser settings, then try again. Non-HTTPS or untrusted HTTPS origins may also prevent notifications from working reliably.',
+    });
+  });
+
+  it('shows a warning toast when notifications are enabled on HTTP', async () => {
+    const { result } = renderHook(() => useBrowserNotifications());
+
+    await act(async () => {
+      await result.current.toggleConversationNotifications(
+        'channel',
+        incomingChannelMessage.conversation_key,
+        '#flightless'
+      );
+    });
+
+    expect(mocks.toast.warning).toHaveBeenCalledWith('Notifications enabled with warning', {
+      description:
+        'Desktop notifications are on for this conversation, but you are using HTTP instead of HTTPS. Notifications will likely not work reliably.',
+    });
+    expect(mocks.toast.success).not.toHaveBeenCalledWith('Notifications enabled');
+  });
+
+  it('best-effort detects insecure HTTPS for the enable-warning copy', () => {
+    expect(
+      getNotificationEnableToastInfo({
+        protocol: 'https:',
+        isSecureContext: false,
+      })
+    ).toEqual({
+      level: 'warning',
+      title: 'Notifications enabled with warning',
+      description:
+        'Desktop notifications are on for this conversation, but your HTTPS connection is untrusted, such as a self-signed certificate. Notification delivery may be inconsistent depending on your browser.',
+    });
+  });
+
+  it('shows a descriptive success toast when notifications are disabled', async () => {
+    const { result } = renderHook(() => useBrowserNotifications());
+
+    await act(async () => {
+      await result.current.toggleConversationNotifications(
+        'channel',
+        incomingChannelMessage.conversation_key,
+        '#flightless'
+      );
+    });
+
+    await act(async () => {
+      await result.current.toggleConversationNotifications(
+        'channel',
+        incomingChannelMessage.conversation_key,
+        '#flightless'
+      );
+    });
+
+    expect(mocks.toast.success).toHaveBeenCalledWith('Notifications disabled', {
+      description: 'Desktop notifications are off for #flightless.',
     });
   });
 });
