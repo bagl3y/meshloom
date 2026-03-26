@@ -22,6 +22,7 @@ SERVICE_NAME="remoteterm"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CURRENT_USER="$(id -un)"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+FRONTEND_MODE="prebuilt"
 
 echo -e "${BOLD}=== RemoteTerm for MeshCore — Service Installer ===${NC}"
 echo
@@ -57,6 +58,24 @@ echo -e "  Repo directory     : ${CYAN}${REPO_DIR}${NC}"
 echo -e "  Service name       : ${CYAN}${SERVICE_NAME}${NC}"
 echo -e "  uv                 : ${CYAN}${UV_BIN}${NC}"
 echo
+
+version_major() {
+    local version="$1"
+    version="${version#v}"
+    printf '%s' "${version%%.*}"
+}
+
+require_minimum_version() {
+    local tool_name="$1"
+    local detected_version="$2"
+    local minimum_major="$3"
+    local major
+    major="$(version_major "$detected_version")"
+    if ! [[ "$major" =~ ^[0-9]+$ ]] || [ "$major" -lt "$minimum_major" ]; then
+        echo -e "${RED}Error: ${tool_name} ${minimum_major}+ is required for a local frontend build, but found ${detected_version}.${NC}"
+        exit 1
+    fi
+}
 
 # ── transport selection ────────────────────────────────────────────────────────
 
@@ -122,6 +141,33 @@ case "$TRANSPORT_CHOICE" in
 esac
 echo
 
+# ── frontend install mode ──────────────────────────────────────────────────────
+
+echo -e "${BOLD}─── Frontend Assets ─────────────────────────────────────────────────${NC}"
+echo "How should the frontend be installed?"
+echo "  1) Download prebuilt frontend (default, fastest)"
+echo "  2) Build locally with npm (latest code, requires node/npm)"
+echo
+read -rp "Select frontend mode [1-2] (default: 1): " FRONTEND_CHOICE
+FRONTEND_CHOICE="${FRONTEND_CHOICE:-1}"
+echo
+
+case "$FRONTEND_CHOICE" in
+    1)
+        FRONTEND_MODE="prebuilt"
+        echo -e "${GREEN}Using prebuilt frontend download.${NC}"
+        ;;
+    2)
+        FRONTEND_MODE="build"
+        echo -e "${GREEN}Using local frontend build.${NC}"
+        ;;
+    *)
+        FRONTEND_MODE="prebuilt"
+        echo -e "${YELLOW}Invalid selection — defaulting to prebuilt frontend download.${NC}"
+        ;;
+esac
+echo
+
 # ── bots ──────────────────────────────────────────────────────────────────────
 
 echo -e "${BOLD}─── Bot System ──────────────────────────────────────────────────────${NC}"
@@ -179,10 +225,35 @@ uv sync
 echo -e "${GREEN}Dependencies ready.${NC}"
 echo
 
-# ── prebuilt frontend ──────────────────────────────────────────────────────────
+# ── frontend assets ────────────────────────────────────────────────────────────
 
-echo -e "${YELLOW}Fetching prebuilt frontend...${NC}"
-python3 "$REPO_DIR/scripts/fetch_prebuilt_frontend.py"
+if [ "$FRONTEND_MODE" = "build" ]; then
+    if ! command -v node &>/dev/null; then
+        echo -e "${RED}Error: node is required for a local frontend build but was not found.${NC}"
+        echo -e "${YELLOW}Tip:${NC} Re-run the installer and choose the prebuilt frontend option, or install Node.js 18+ and npm 9+."
+        exit 1
+    fi
+    if ! command -v npm &>/dev/null; then
+        echo -e "${RED}Error: npm is required for a local frontend build but was not found.${NC}"
+        echo -e "${YELLOW}Tip:${NC} Re-run the installer and choose the prebuilt frontend option, or install Node.js 18+ and npm 9+."
+        exit 1
+    fi
+
+    NODE_VERSION="$(node -v)"
+    NPM_VERSION="$(npm -v)"
+    require_minimum_version "Node.js" "$NODE_VERSION" 18
+    require_minimum_version "npm" "$NPM_VERSION" 9
+
+    echo -e "${YELLOW}Building frontend locally with Node ${NODE_VERSION} and npm ${NPM_VERSION}...${NC}"
+    (
+        cd "$REPO_DIR/frontend"
+        npm install
+        npm run build
+    )
+else
+    echo -e "${YELLOW}Fetching prebuilt frontend...${NC}"
+    python3 "$REPO_DIR/scripts/fetch_prebuilt_frontend.py"
+fi
 echo
 
 # ── data directory ─────────────────────────────────────────────────────────────
@@ -294,6 +365,11 @@ case "$TRANSPORT_CHOICE" in
     3) echo -e "  Transport : ${CYAN}TCP (${TCP_HOST}:${TCP_PORT})${NC}" ;;
     4) echo -e "  Transport : ${CYAN}BLE (${BLE_ADDRESS})${NC}" ;;
 esac
+if [ "$FRONTEND_MODE" = "build" ]; then
+    echo -e "  Frontend  : ${GREEN}Built locally${NC}"
+else
+    echo -e "  Frontend  : ${YELLOW}Prebuilt download${NC}"
+fi
 
 if [[ "$ENABLE_BOTS" =~ ^[Yy] ]]; then
     echo -e "  Bots      : ${YELLOW}Enabled${NC}"
@@ -307,12 +383,14 @@ else
 fi
 echo
 
-echo -e "${YELLOW}Note:${NC} A prebuilt frontend has been fetched and installed. It may lag"
-echo    "behind the latest code. To build the frontend from source for the most"
-echo    "up-to-date features, run:"
-echo
-echo -e "  ${CYAN}cd ${REPO_DIR}/frontend && npm install && npm run build${NC}"
-echo
+if [ "$FRONTEND_MODE" = "prebuilt" ]; then
+    echo -e "${YELLOW}Note:${NC} A prebuilt frontend has been fetched and installed. It may lag"
+    echo    "behind the latest code. To build the frontend from source for the most"
+    echo    "up-to-date features later, run:"
+    echo
+    echo -e "  ${CYAN}cd ${REPO_DIR}/frontend && npm install && npm run build${NC}"
+    echo
+fi
 
 echo -e "${BOLD}─── Quick Reference ─────────────────────────────────────────────────${NC}"
 echo
