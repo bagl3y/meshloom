@@ -791,6 +791,18 @@ class TestLocationGuard:
 # Geofence
 # ---------------------------------------------------------------------------
 
+# Shared helpers for radio_runtime patching in geofence tests
+_FAKE_PRIVATE = bytes(range(64))
+_FAKE_PUBLIC = bytes(range(32))
+_FAKE_RADIO_PARAMS = {"freq": 0, "cr": 0, "sf": 0, "bw": 0}
+
+
+def _mock_radio_runtime_with_location(lat: float, lon: float):
+    """Return a context-manager mock for radio_runtime with the given lat/lon."""
+    mock_rt = MagicMock()
+    mock_rt.meshcore.self_info = {"adv_lat": lat, "adv_lon": lon}
+    return patch("app.fanout.map_upload.radio_runtime", mock_rt)
+
 
 class TestGeofence:
     @pytest.mark.asyncio
@@ -799,13 +811,10 @@ class TestGeofence:
         mod = _make_module({"dry_run": True, "geofence_enabled": False})
         await mod.start()
 
-        fake_private = bytes(range(64))
-        fake_public = bytes(range(32))
-
         with (
-            patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
-            patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+            patch("app.fanout.map_upload.get_private_key", return_value=_FAKE_PRIVATE),
+            patch("app.fanout.map_upload.get_public_key", return_value=_FAKE_PUBLIC),
+            patch("app.fanout.map_upload._get_radio_params", return_value=_FAKE_RADIO_PARAMS),
         ):
             await mod._upload("ab" * 32, 1000, 2, "aabb", 51.5, -0.1)
             assert ("ab" * 32) in mod._seen
@@ -818,21 +827,17 @@ class TestGeofence:
         mod = _make_module({
             "dry_run": True,
             "geofence_enabled": True,
-            "geofence_lat": 51.5,
-            "geofence_lon": -0.1,
             "geofence_radius_km": 100.0,
         })
         await mod.start()
 
-        fake_private = bytes(range(64))
-        fake_public = bytes(range(32))
-
         with (
-            patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
-            patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+            _mock_radio_runtime_with_location(51.5, -0.1),
+            patch("app.fanout.map_upload.get_private_key", return_value=_FAKE_PRIVATE),
+            patch("app.fanout.map_upload.get_public_key", return_value=_FAKE_PUBLIC),
+            patch("app.fanout.map_upload._get_radio_params", return_value=_FAKE_RADIO_PARAMS),
         ):
-            # ~50 km north of the fence centre
+            # ~50 km north of the fence center
             await mod._upload("ab" * 32, 1000, 2, "aabb", 51.95, -0.1)
             assert ("ab" * 32) in mod._seen
 
@@ -844,19 +849,15 @@ class TestGeofence:
         mod = _make_module({
             "dry_run": True,
             "geofence_enabled": True,
-            "geofence_lat": 51.5,
-            "geofence_lon": -0.1,
             "geofence_radius_km": 10.0,
         })
         await mod.start()
 
-        fake_private = bytes(range(64))
-        fake_public = bytes(range(32))
-
         with (
-            patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
-            patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+            _mock_radio_runtime_with_location(51.5, -0.1),
+            patch("app.fanout.map_upload.get_private_key", return_value=_FAKE_PRIVATE),
+            patch("app.fanout.map_upload.get_public_key", return_value=_FAKE_PUBLIC),
+            patch("app.fanout.map_upload._get_radio_params", return_value=_FAKE_RADIO_PARAMS),
         ):
             # ~50 km north — outside the 10 km fence
             await mod._upload("ab" * 32, 1000, 2, "aabb", 51.95, -0.1)
@@ -870,26 +871,72 @@ class TestGeofence:
         mod = _make_module({
             "dry_run": True,
             "geofence_enabled": True,
-            "geofence_lat": 0.0,
-            "geofence_lon": 0.0,
             "geofence_radius_km": 100.0,
         })
         await mod.start()
 
-        fake_private = bytes(range(64))
-        fake_public = bytes(range(32))
-
-        # ~0.8993 degrees of latitude ≈ 100 km; use a value just under 100 km
-        node_lat = 0.8993
-        dist = _haversine_km(0.0, 0.0, node_lat, 0.0)
+        # Use a non-zero center so it's not treated as "not configured".
+        # Purely latitudinal haversine distance is origin-independent, so
+        # 0.8993° from (1.0, 0.0) gives the same ~100 km as from (0.0, 0.0).
+        fence_lat, fence_lon = 1.0, 0.0
+        node_lat = fence_lat + 0.8993
+        dist = _haversine_km(fence_lat, fence_lon, node_lat, fence_lon)
         assert dist <= 100.0, f"Expected <=100 km, got {dist:.3f}"
 
         with (
-            patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
-            patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+            _mock_radio_runtime_with_location(fence_lat, fence_lon),
+            patch("app.fanout.map_upload.get_private_key", return_value=_FAKE_PRIVATE),
+            patch("app.fanout.map_upload.get_public_key", return_value=_FAKE_PUBLIC),
+            patch("app.fanout.map_upload._get_radio_params", return_value=_FAKE_RADIO_PARAMS),
         ):
-            await mod._upload("ab" * 32, 1000, 2, "aabb", node_lat, 0.0)
+            await mod._upload("ab" * 32, 1000, 2, "aabb", node_lat, fence_lon)
+            assert ("ab" * 32) in mod._seen
+
+        await mod.stop()
+
+    @pytest.mark.asyncio
+    async def test_geofence_skipped_when_lat_lon_zero(self):
+        """geofence_enabled=True but radio (0, 0) → upload proceeds (geofence silently skipped)."""
+        mod = _make_module({
+            "dry_run": True,
+            "geofence_enabled": True,
+            "geofence_radius_km": 10.0,
+        })
+        await mod.start()
+
+        # Radio is at (0, 0) — treated as "not configured"; all nodes pass through.
+        with (
+            _mock_radio_runtime_with_location(0.0, 0.0),
+            patch("app.fanout.map_upload.get_private_key", return_value=_FAKE_PRIVATE),
+            patch("app.fanout.map_upload.get_public_key", return_value=_FAKE_PUBLIC),
+            patch("app.fanout.map_upload._get_radio_params", return_value=_FAKE_RADIO_PARAMS),
+        ):
+            # This node is many thousands of km from (0,0) — would be filtered if fence active.
+            await mod._upload("ab" * 32, 1000, 2, "aabb", 51.5, -0.1)
+            assert ("ab" * 32) in mod._seen
+
+        await mod.stop()
+
+    @pytest.mark.asyncio
+    async def test_geofence_skipped_when_radio_unavailable(self):
+        """geofence_enabled=True but radio is not connected → upload proceeds."""
+        mod = _make_module({
+            "dry_run": True,
+            "geofence_enabled": True,
+            "geofence_radius_km": 10.0,
+        })
+        await mod.start()
+
+        mock_rt = MagicMock()
+        mock_rt.meshcore = None  # radio not connected
+
+        with (
+            patch("app.fanout.map_upload.radio_runtime", mock_rt),
+            patch("app.fanout.map_upload.get_private_key", return_value=_FAKE_PRIVATE),
+            patch("app.fanout.map_upload.get_public_key", return_value=_FAKE_PUBLIC),
+            patch("app.fanout.map_upload._get_radio_params", return_value=_FAKE_RADIO_PARAMS),
+        ):
+            await mod._upload("ab" * 32, 1000, 2, "aabb", 51.5, -0.1)
             assert ("ab" * 32) in mod._seen
 
         await mod.stop()
@@ -900,19 +947,15 @@ class TestGeofence:
         mod = _make_module({
             "dry_run": True,
             "geofence_enabled": True,
-            "geofence_lat": 51.5,
-            "geofence_lon": -0.1,
             "geofence_radius_km": 100.0,
         })
         await mod.start()
 
-        fake_private = bytes(range(64))
-        fake_public = bytes(range(32))
-
         with (
-            patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
-            patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+            _mock_radio_runtime_with_location(51.5, -0.1),
+            patch("app.fanout.map_upload.get_private_key", return_value=_FAKE_PRIVATE),
+            patch("app.fanout.map_upload.get_public_key", return_value=_FAKE_PUBLIC),
+            patch("app.fanout.map_upload._get_radio_params", return_value=_FAKE_RADIO_PARAMS),
         ):
             with patch("app.fanout.map_upload.logger") as mock_logger:
                 # ~50 km north — inside the fence
@@ -930,19 +973,43 @@ class TestGeofence:
         mod = _make_module({"dry_run": True, "geofence_enabled": False})
         await mod.start()
 
-        fake_private = bytes(range(64))
-        fake_public = bytes(range(32))
-
         with (
-            patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
-            patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+            patch("app.fanout.map_upload.get_private_key", return_value=_FAKE_PRIVATE),
+            patch("app.fanout.map_upload.get_public_key", return_value=_FAKE_PUBLIC),
+            patch("app.fanout.map_upload._get_radio_params", return_value=_FAKE_RADIO_PARAMS),
         ):
             with patch("app.fanout.map_upload.logger") as mock_logger:
                 await mod._upload("ab" * 32, 1000, 2, "aabb", 51.5, -0.1)
                 mock_logger.info.assert_called_once()
                 log_message = mock_logger.info.call_args[0][0] % mock_logger.info.call_args[0][1:]
                 assert "geofence:" not in log_message
+
+        await mod.stop()
+
+    @pytest.mark.asyncio
+    async def test_dry_run_geofence_no_distance_when_lat_lon_zero(self):
+        """dry_run + geofence_enabled but radio (0, 0) → no distance note in log (skipped)."""
+        mod = _make_module({
+            "dry_run": True,
+            "geofence_enabled": True,
+            "geofence_radius_km": 100.0,
+        })
+        await mod.start()
+
+        with (
+            _mock_radio_runtime_with_location(0.0, 0.0),
+            patch("app.fanout.map_upload.get_private_key", return_value=_FAKE_PRIVATE),
+            patch("app.fanout.map_upload.get_public_key", return_value=_FAKE_PUBLIC),
+            patch("app.fanout.map_upload._get_radio_params", return_value=_FAKE_RADIO_PARAMS),
+        ):
+            with patch("app.fanout.map_upload.logger") as mock_logger:
+                await mod._upload("ab" * 32, 1000, 2, "aabb", 51.5, -0.1)
+                # Upload still happens (seen table updated), but log should not mention geofence distance
+                assert ("ab" * 32) in mod._seen
+                log_calls = mock_logger.info.call_args_list
+                for call in log_calls:
+                    msg = call[0][0] % call[0][1:] if call[0][1:] else call[0][0]
+                    assert "km from observer" not in msg
 
         await mod.stop()
 

@@ -16,7 +16,7 @@ const BotCodeEditor = lazy(() =>
 
 const TYPE_LABELS: Record<string, string> = {
   mqtt_private: 'Private MQTT',
-  mqtt_community: 'Community MQTT',
+  mqtt_community: 'Community Sharing',
   bot: 'Python Bot',
   webhook: 'Webhook',
   apprise: 'Apprise',
@@ -145,7 +145,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
     value: 'mqtt_community',
     savedType: 'mqtt_community',
     label: 'Community MQTT/meshcoretomqtt',
-    section: 'Community MQTT',
+    section: 'Community Sharing',
     description:
       'MeshcoreToMQTT-compatible raw-packet feed publishing, compatible with community aggregators (in other words, make your companion radio also serve as an observer node). Superset of other Community MQTT presets.',
     defaultName: 'Community MQTT',
@@ -159,7 +159,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
     value: 'mqtt_community_meshrank',
     savedType: 'mqtt_community',
     label: 'MeshRank',
-    section: 'Community MQTT',
+    section: 'Community Sharing',
     description:
       'A community MQTT config preconfigured for MeshRank, requiring only the provided topic from your MeshRank configuration. A subset of the primary Community MQTT/meshcoretomqtt configuration; you are free to edit all configuration after creation.',
     defaultName: 'MeshRank',
@@ -182,7 +182,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
     value: 'mqtt_community_letsmesh_us',
     savedType: 'mqtt_community',
     label: 'LetsMesh (US)',
-    section: 'Community MQTT',
+    section: 'Community Sharing',
     description:
       'A community MQTT config preconfigured for the LetsMesh US-ingest endpoint, requiring only your email and IATA region code. Good to use with an additional EU configuration for redundancy. A subset of the primary Community MQTT/meshcoretomqtt configuration; you are free to edit all configuration after creation.',
     defaultName: 'LetsMesh (US)',
@@ -199,7 +199,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
     value: 'mqtt_community_letsmesh_eu',
     savedType: 'mqtt_community',
     label: 'LetsMesh (EU)',
-    section: 'Community MQTT',
+    section: 'Community Sharing',
     description:
       'A community MQTT config preconfigured for the LetsMesh EU-ingest endpoint, requiring only your email and IATA region code. Good to use with an additional US configuration for redundancy. A subset of the primary Community MQTT/meshcoretomqtt configuration; you are free to edit all configuration after creation.',
     defaultName: 'LetsMesh (EU)',
@@ -290,7 +290,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
     value: 'map_upload',
     savedType: 'map_upload',
     label: 'Map Upload',
-    section: 'Bulk Forwarding',
+    section: 'Community Sharing',
     description:
       'Upload repeaters and room servers to map.meshcore.dev or a compatible map API endpoint.',
     defaultName: 'Map Upload',
@@ -1088,6 +1088,25 @@ function MapUploadConfigEditor({
   onChange: (config: Record<string, unknown>) => void;
 }) {
   const isDryRun = config.dry_run !== false;
+  const [radioLat, setRadioLat] = useState<number | null>(null);
+  const [radioLon, setRadioLon] = useState<number | null>(null);
+
+  useEffect(() => {
+    api
+      .getRadioConfig()
+      .then((rc) => {
+        setRadioLat(rc.lat ?? 0);
+        setRadioLon(rc.lon ?? 0);
+      })
+      .catch(() => {
+        setRadioLat(0);
+        setRadioLon(0);
+      });
+  }, []);
+
+  const radioLatLonConfigured =
+    radioLat !== null && radioLon !== null && !(radioLat === 0 && radioLon === 0);
+
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
@@ -1156,48 +1175,31 @@ function MapUploadConfigEditor({
         <div>
           <span className="text-sm font-medium">Enable Geofence</span>
           <p className="text-xs text-muted-foreground">
-            Only upload nodes whose location falls within the configured radius of your position.
-            Helps exclude nodes with false or spoofed coordinates.
+            Only upload nodes whose location falls within the configured radius of your radio&apos;s
+            own position. Helps exclude nodes with false or spoofed coordinates. Uses the
+            latitude/longitude set in Radio Settings.
           </p>
         </div>
       </label>
 
       {!!config.geofence_enabled && (
         <div className="space-y-3 pl-7">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="fanout-map-geofence-lat">My Latitude</Label>
-              <Input
-                id="fanout-map-geofence-lat"
-                type="number"
-                step="any"
-                placeholder="e.g. 51.5"
-                value={(config.geofence_lat as number | undefined) ?? ''}
-                onChange={(e) =>
-                  onChange({
-                    ...config,
-                    geofence_lat: e.target.value === '' ? 0 : parseFloat(e.target.value),
-                  })
-                }
-              />
+          {!radioLatLonConfigured && (
+            <div className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning">
+              Your radio does not currently have a latitude/longitude configured. Geofencing will be
+              silently skipped until coordinates are set in{' '}
+              <strong>Settings &rarr; Radio &rarr; Location</strong>.
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="fanout-map-geofence-lon">My Longitude</Label>
-              <Input
-                id="fanout-map-geofence-lon"
-                type="number"
-                step="any"
-                placeholder="e.g. -0.1"
-                value={(config.geofence_lon as number | undefined) ?? ''}
-                onChange={(e) =>
-                  onChange({
-                    ...config,
-                    geofence_lon: e.target.value === '' ? 0 : parseFloat(e.target.value),
-                  })
-                }
-              />
-            </div>
-          </div>
+          )}
+          {radioLatLonConfigured && (
+            <p className="text-xs text-muted-foreground">
+              Using radio position{' '}
+              <code>
+                {radioLat?.toFixed(5)}, {radioLon?.toFixed(5)}
+              </code>{' '}
+              as the geofence center. Update coordinates in Radio Settings to move the center.
+            </p>
+          )}
           <div className="space-y-2">
             <Label htmlFor="fanout-map-geofence-radius">Radius (km)</Label>
             <Input
@@ -1215,7 +1217,7 @@ function MapUploadConfigEditor({
               }
             />
             <p className="text-xs text-muted-foreground">
-              Nodes further than this distance from your position will not be uploaded.
+              Nodes further than this distance from your radio&apos;s position will not be uploaded.
             </p>
           </div>
         </div>

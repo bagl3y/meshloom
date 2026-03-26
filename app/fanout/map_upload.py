@@ -20,15 +20,14 @@ api_url : str, default ""
 dry_run : bool, default True
     When True, log the payload at INFO level instead of sending it.
 geofence_enabled : bool, default False
-    When True, only upload nodes whose location falls within the configured
-    radius of the reference point below.
-geofence_lat : float, default 0.0
-    Latitude of the geofence centre (decimal degrees).
-geofence_lon : float, default 0.0
-    Longitude of the geofence centre (decimal degrees).
+    When True, only upload nodes whose location falls within geofence_radius_km of
+    the radio's own configured latitude/longitude (read live from the radio at upload
+    time — no lat/lon is stored in this config).  When the radio's lat/lon is not set
+    (0, 0) or unavailable, the geofence check is silently skipped so uploads continue
+    normally until coordinates are configured.
 geofence_radius_km : float, default 0.0
     Radius of the geofence in kilometres. Nodes further than this distance
-    from (geofence_lat, geofence_lon) are skipped.
+    from the radio's own position are skipped.
 """
 
 from __future__ import annotations
@@ -217,21 +216,39 @@ class MapUploadModule(FanoutModule):
         lat: float,
         lon: float,
     ) -> None:
-        # Geofence check: if enabled, skip nodes outside the configured radius
+        # Geofence check: if enabled, skip nodes outside the configured radius.
+        # The reference center is the radio's own lat/lon read live from self_info —
+        # no coordinates are stored in the fanout config. If the radio lat/lon is
+        # (0, 0) or unavailable the check is skipped transparently so uploads
+        # continue normally until the operator sets coordinates in radio settings.
         geofence_dist_km: float | None = None
         if self.config.get("geofence_enabled"):
-            fence_lat = float(self.config.get("geofence_lat", 0) or 0)
-            fence_lon = float(self.config.get("geofence_lon", 0) or 0)
-            fence_radius_km = float(self.config.get("geofence_radius_km", 0) or 0)
-            geofence_dist_km = _haversine_km(fence_lat, fence_lon, lat, lon)
-            if geofence_dist_km > fence_radius_km:
+            try:
+                mc = radio_runtime.meshcore
+                sinfo = mc.self_info if mc else None
+                fence_lat = float((sinfo or {}).get("adv_lat", 0) or 0)
+                fence_lon = float((sinfo or {}).get("adv_lon", 0) or 0)
+            except Exception as exc:
+                logger.debug("MapUpload: could not read radio lat/lon for geofence: %s", exc)
+                fence_lat = 0.0
+                fence_lon = 0.0
+
+            if fence_lat == 0.0 and fence_lon == 0.0:
                 logger.debug(
-                    "MapUpload: skipping %s — outside geofence (%.2f km > %.2f km)",
+                    "MapUpload: geofence skipped for %s — radio lat/lon not configured",
                     pubkey[:12],
-                    geofence_dist_km,
-                    fence_radius_km,
                 )
-                return
+            else:
+                fence_radius_km = float(self.config.get("geofence_radius_km", 0) or 0)
+                geofence_dist_km = _haversine_km(fence_lat, fence_lon, lat, lon)
+                if geofence_dist_km > fence_radius_km:
+                    logger.debug(
+                        "MapUpload: skipping %s — outside geofence (%.2f km > %.2f km)",
+                        pubkey[:12],
+                        geofence_dist_km,
+                        fence_radius_km,
+                    )
+                    return
 
         private_key = get_private_key()
         public_key = get_public_key()

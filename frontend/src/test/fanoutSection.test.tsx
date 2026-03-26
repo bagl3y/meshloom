@@ -12,6 +12,7 @@ vi.mock('../api', () => ({
     deleteFanoutConfig: vi.fn(),
     getChannels: vi.fn(),
     getContacts: vi.fn(),
+    getRadioConfig: vi.fn(),
   },
 }));
 
@@ -96,6 +97,17 @@ beforeEach(() => {
   mockedApi.getFanoutConfigs.mockResolvedValue([]);
   mockedApi.getChannels.mockResolvedValue([]);
   mockedApi.getContacts.mockResolvedValue([]);
+  mockedApi.getRadioConfig.mockResolvedValue({
+    public_key: 'aa'.repeat(32),
+    name: 'TestNode',
+    lat: 0,
+    lon: 0,
+    tx_power: 17,
+    max_tx_power: 22,
+    radio: { freq: 910.525, bw: 62.5, sf: 7, cr: 5 },
+    path_hash_mode: 0,
+    path_hash_mode_supported: false,
+  });
 });
 
 describe('SettingsFanoutSection', () => {
@@ -106,7 +118,7 @@ describe('SettingsFanoutSection', () => {
     const optionButtons = within(dialog)
       .getAllByRole('button')
       .filter((button) => button.hasAttribute('aria-pressed'));
-    expect(optionButtons).toHaveLength(9);
+    expect(optionButtons).toHaveLength(10);
     expect(within(dialog).getByRole('button', { name: 'Close' })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Create' })).toBeInTheDocument();
     expect(
@@ -137,6 +149,9 @@ describe('SettingsFanoutSection', () => {
     ).toBeInTheDocument();
     expect(
       within(dialog).getByRole('button', { name: startsWithAccessibleName('Python Bot') })
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: startsWithAccessibleName('Map Upload') })
     ).toBeInTheDocument();
     expect(within(dialog).getByRole('heading', { level: 3 })).toBeInTheDocument();
 
@@ -916,7 +931,7 @@ describe('SettingsFanoutSection', () => {
 
     await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
 
-    expect(screen.getByLabelText('Name')).toHaveValue('Community MQTT #1');
+    expect(screen.getByLabelText('Name')).toHaveValue('Community Sharing #1');
     expect(screen.getByLabelText('Broker Host')).toBeInTheDocument();
     expect(screen.getByLabelText('Authentication')).toBeInTheDocument();
     expect(screen.getByLabelText('Packet Topic Template')).toBeInTheDocument();
