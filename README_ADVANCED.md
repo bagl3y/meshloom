@@ -58,6 +58,8 @@ bash scripts/install_service.sh
 
 The script interactively asks which transport to use (serial auto-detect, serial with explicit port, TCP, or BLE), whether to enable the bot system, and whether to set up HTTP Basic Auth. It handles dependency installation (`uv sync`), fetches a prebuilt frontend, adds your user to the `dialout` group if needed, writes the systemd unit file, and enables the service. After installation, normal operations work without any `sudo -u` gymnastics:
 
+You can also rerun the script later to change transport, bot, or auth settings. If the service is already running, the installer stops it, rewrites the unit file, reloads systemd, and starts it again with the new configuration.
+
 ```bash
 # Update to latest and restart
 cd /path/to/repo
@@ -75,63 +77,6 @@ sudo journalctl -u remoteterm -f
 
 # Service control
 sudo systemctl start|stop|restart|status remoteterm
-```
-
-### Hardened install (production / multi-user systems)
-
-Assumes you are running from `/opt/remoteterm`; adjust paths if you deploy elsewhere.
-
-```bash
-# Create service user
-sudo useradd -r -m -s /bin/false remoteterm
-
-# Install to /opt/remoteterm
-sudo mkdir -p /opt/remoteterm
-sudo cp -r . /opt/remoteterm/
-sudo chown -R remoteterm:remoteterm /opt/remoteterm
-
-# Install dependencies
-cd /opt/remoteterm
-sudo -u remoteterm uv venv
-sudo -u remoteterm uv sync
-
-# If deploying from a source checkout, build the frontend first
-sudo -u remoteterm bash -lc 'cd /opt/remoteterm/frontend && npm install && npm run build'
-
-# If deploying from the release zip artifact, frontend/prebuilt is already present
-```
-
-Create `/etc/systemd/system/remoteterm.service` with:
-
-```ini
-[Unit]
-Description=RemoteTerm for MeshCore
-After=network.target
-
-[Service]
-Type=simple
-User=remoteterm
-Group=remoteterm
-WorkingDirectory=/opt/remoteterm
-ExecStart=/opt/remoteterm/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=5
-Environment=MESHCORE_DATABASE_PATH=/opt/remoteterm/data/meshcore.db
-# Uncomment and set if auto-detection doesn't work:
-# Environment=MESHCORE_SERIAL_PORT=/dev/ttyUSB0
-SupplementaryGroups=dialout
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Then install and start it:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now remoteterm
-sudo systemctl status remoteterm
-sudo journalctl -u remoteterm -f
 ```
 
 ## Debug Logging And Bug Reports

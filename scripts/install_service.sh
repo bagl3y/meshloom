@@ -206,6 +206,12 @@ fi
 
 # ── systemd service file ───────────────────────────────────────────────────────
 
+if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
+    echo -e "${YELLOW}${SERVICE_NAME} is currently running; stopping it before applying changes...${NC}"
+    sudo systemctl stop "$SERVICE_NAME"
+    echo
+fi
+
 echo -e "${YELLOW}Writing systemd service file to ${SERVICE_FILE}...${NC}"
 
 generate_service_file() {
@@ -263,9 +269,10 @@ echo
 
 # ── enable and start ───────────────────────────────────────────────────────────
 
-echo -e "${YELLOW}Enabling and starting ${SERVICE_NAME}...${NC}"
+echo -e "${YELLOW}Reloading systemd and applying ${SERVICE_NAME}...${NC}"
 sudo systemctl daemon-reload
-sudo systemctl enable --now "$SERVICE_NAME"
+sudo systemctl enable "$SERVICE_NAME"
+sudo systemctl start "$SERVICE_NAME"
 echo
 
 # ── status check ───────────────────────────────────────────────────────────────
