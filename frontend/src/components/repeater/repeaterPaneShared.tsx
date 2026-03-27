@@ -76,11 +76,19 @@ export function formatClockDrift(
   return { text: parts.join(''), isLarge: false };
 }
 
-export function formatAdvertInterval(val: string | null): string {
+export function formatAdvertInterval(
+  val: string | null,
+  unit: 'minutes' | 'hours' = 'hours'
+): string {
   if (val == null) return '—';
   const trimmed = val.trim();
   if (trimmed === '0') return '<disabled>';
-  return `${trimmed}h`;
+  if (unit === 'hours') return `${trimmed}h`;
+  const mins = parseInt(trimmed, 10);
+  if (isNaN(mins)) return trimmed;
+  if (mins >= 60 && mins % 60 === 0) return `${mins / 60}h`;
+  if (mins >= 60) return `${Math.floor(mins / 60)}h${mins % 60}m`;
+  return `${mins}m`;
 }
 
 function formatFetchedRelative(fetchedAt: number): string {
