@@ -41,7 +41,7 @@ import httpx
 
 from app.decoder import parse_advertisement, parse_packet
 from app.fanout.base import FanoutModule
-from app.keystore import get_private_key, get_public_key
+from app.keystore import ed25519_sign_expanded, get_private_key, get_public_key
 from app.services.radio_runtime import radio_runtime
 
 logger = logging.getLogger(__name__)
@@ -55,30 +55,6 @@ _REUPLOAD_SECONDS = 3600
 # roles not yet defined — is rejected. An allowlist is used rather than a
 # blocklist so that new roles cannot accidentally start populating the map.
 _ALLOWED_DEVICE_ROLES = {2, 3}
-
-# Ed25519 group order (L)
-_L = 2**252 + 27742317777372353535851937790883648493
-
-
-def _ed25519_sign_expanded(
-    message: bytes, scalar: bytes, prefix: bytes, public_key: bytes
-) -> bytes:
-    """Sign using MeshCore's expanded Ed25519 key format.
-
-    MeshCore stores 64-byte keys as scalar(32) || prefix(32). Standard
-    Ed25519 libraries expect seed format and would re-SHA-512 the key, so
-    we perform the signing manually using the already-expanded key material.
-
-    Mirrors the implementation in app/fanout/community_mqtt.py.
-    """
-    import nacl.bindings
-
-    r = int.from_bytes(hashlib.sha512(prefix + message).digest(), "little") % _L
-    R = nacl.bindings.crypto_scalarmult_ed25519_base_noclamp(r.to_bytes(32, "little"))
-    k = int.from_bytes(hashlib.sha512(R + public_key + message).digest(), "little") % _L
-    s = (r + k * int.from_bytes(scalar, "little")) % _L
-    return R + s.to_bytes(32, "little")
-
 
 def _get_radio_params() -> dict:
     """Read radio frequency parameters from the connected radio's self_info.
@@ -278,7 +254,7 @@ class MapUploadModule(FanoutModule):
         data_hash = hashlib.sha256(json_str.encode()).digest()
         scalar = private_key[:32]
         prefix_bytes = private_key[32:]
-        signature = _ed25519_sign_expanded(data_hash, scalar, prefix_bytes, public_key)
+        signature = ed25519_sign_expanded(data_hash, scalar, prefix_bytes, public_key)
 
         request_payload = {
             "data": json_str,
