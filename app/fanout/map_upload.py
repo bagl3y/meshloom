@@ -56,6 +56,7 @@ _REUPLOAD_SECONDS = 3600
 # blocklist so that new roles cannot accidentally start populating the map.
 _ALLOWED_DEVICE_ROLES = {2, 3}
 
+
 def _get_radio_params() -> dict:
     """Read radio frequency parameters from the connected radio's self_info.
 

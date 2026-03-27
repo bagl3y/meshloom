@@ -707,6 +707,7 @@ class TestSqsValidation:
             {"queue_url": "https://sqs.us-east-1.amazonaws.com/123456789012/mesh-events"}
         )
 
+
 class TestMapUploadValidation:
     def test_rejects_bad_api_url_scheme(self):
         from fastapi import HTTPException
@@ -797,7 +798,6 @@ class TestMapUploadValidation:
 
         scope = _enforce_scope("map_upload", {"messages": "all", "raw_packets": "none"})
         assert scope == {"messages": "none", "raw_packets": "all"}
-
 
     def test_enforce_scope_sqs_preserves_raw_packets_setting(self):
         from app.routers.fanout import _enforce_scope

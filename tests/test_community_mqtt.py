@@ -23,12 +23,12 @@ from app.fanout.community_mqtt import (
     _generate_jwt_token,
     _get_client_version,
 )
-from app.keystore import ed25519_sign_expanded
 from app.fanout.mqtt_community import (
     _config_to_settings,
     _publish_community_packet,
     _render_packet_topic,
 )
+from app.keystore import ed25519_sign_expanded
 
 
 def _make_test_keys() -> tuple[bytes, bytes]:

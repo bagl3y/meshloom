@@ -1887,4 +1887,3 @@ class TestMapUploadIntegration:
             mock_msg.assert_not_called()
 
         await manager.stop_all()
-

@@ -13,7 +13,6 @@ import logging
 from typing import TYPE_CHECKING
 
 import nacl.bindings
-
 from meshcore import EventType
 
 from app.decoder import derive_public_key
@@ -38,9 +37,7 @@ _private_key: bytes | None = None
 _public_key: bytes | None = None
 
 
-def ed25519_sign_expanded(
-    message: bytes, scalar: bytes, prefix: bytes, public_key: bytes
-) -> bytes:
+def ed25519_sign_expanded(message: bytes, scalar: bytes, prefix: bytes, public_key: bytes) -> bytes:
     """Sign a message using MeshCore's expanded Ed25519 key format.
 
     MeshCore stores 64-byte keys as scalar(32) || prefix(32).  Standard
