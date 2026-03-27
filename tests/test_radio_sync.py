@@ -5,12 +5,14 @@ contact/channel sync operations, and default channel management.
 """
 
 import asyncio
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from meshcore import EventType
 from meshcore.events import Event
 
+import app.radio_sync as radio_sync
 from app.models import Favorite
 from app.radio import RadioManager, radio_manager
 from app.radio_sync import (
@@ -36,8 +38,6 @@ from app.repository import (
 @pytest.fixture(autouse=True)
 def reset_sync_state():
     """Reset polling pause state, sync timestamp, and radio_manager before/after each test."""
-    import app.radio_sync as radio_sync
-
     prev_mc = radio_manager._meshcore
     prev_lock = radio_manager._operation_lock
     prev_max_channels = radio_manager.max_channels
@@ -45,12 +45,20 @@ def reset_sync_state():
     prev_slot_by_key = radio_manager._channel_slot_by_key.copy()
     prev_key_by_slot = radio_manager._channel_key_by_slot.copy()
     prev_pending_channel_key_by_slot = radio_manager._pending_message_channel_key_by_slot.copy()
+    prev_contact_reconcile_task = radio_sync._contact_reconcile_task
 
     radio_sync._polling_pause_count = 0
     radio_sync._last_contact_sync = 0.0
     yield
+    if (
+        radio_sync._contact_reconcile_task is not None
+        and radio_sync._contact_reconcile_task is not prev_contact_reconcile_task
+        and not radio_sync._contact_reconcile_task.done()
+    ):
+        radio_sync._contact_reconcile_task.cancel()
     radio_sync._polling_pause_count = 0
     radio_sync._last_contact_sync = 0.0
+    radio_sync._contact_reconcile_task = prev_contact_reconcile_task
     radio_manager._meshcore = prev_mc
     radio_manager._operation_lock = prev_lock
     radio_manager.max_channels = prev_max_channels
@@ -433,7 +441,7 @@ class TestSyncAndOffloadAll:
     """Test session-local contact radio residency reset behavior."""
 
     @pytest.mark.asyncio
-    async def test_clears_stale_contact_on_radio_flags_before_reload(self, test_db):
+    async def test_clears_stale_contact_on_radio_flags_before_background_reconcile(self, test_db):
         await _insert_contact(KEY_A, "Alice", on_radio=True)
         await _insert_contact(KEY_B, "Bob", on_radio=True)
 
@@ -441,8 +449,8 @@ class TestSyncAndOffloadAll:
 
         with (
             patch(
-                "app.radio_sync.sync_and_offload_contacts",
-                new=AsyncMock(return_value={"synced": 0, "removed": 0}),
+                "app.radio_sync.sync_contacts_from_radio",
+                new=AsyncMock(return_value={"synced": 0, "radio_contacts": {}}),
             ),
             patch(
                 "app.radio_sync.sync_and_offload_channels",
@@ -450,8 +458,7 @@ class TestSyncAndOffloadAll:
             ),
             patch("app.radio_sync.ensure_default_channels", new=AsyncMock()),
             patch(
-                "app.radio_sync.sync_recent_contacts_to_radio",
-                new=AsyncMock(return_value={"loaded": 0, "already_on_radio": 0, "failed": 0}),
+                "app.radio_sync.start_background_contact_reconciliation",
             ),
         ):
             await sync_and_offload_all(mock_mc)
@@ -460,6 +467,28 @@ class TestSyncAndOffloadAll:
         bob = await ContactRepository.get_by_key(KEY_B)
         assert alice is not None and alice.on_radio is False
         assert bob is not None and bob.on_radio is False
+
+    @pytest.mark.asyncio
+    async def test_starts_background_contact_reconcile_with_radio_snapshot(self, test_db):
+        mock_mc = MagicMock()
+        radio_contacts = {KEY_A: {"public_key": KEY_A}}
+
+        with (
+            patch(
+                "app.radio_sync.sync_contacts_from_radio",
+                new=AsyncMock(return_value={"synced": 1, "radio_contacts": radio_contacts}),
+            ),
+            patch(
+                "app.radio_sync.sync_and_offload_channels",
+                new=AsyncMock(return_value={"synced": 0, "cleared": 0}),
+            ),
+            patch("app.radio_sync.ensure_default_channels", new=AsyncMock()),
+            patch("app.radio_sync.start_background_contact_reconciliation") as mock_start,
+        ):
+            result = await sync_and_offload_all(mock_mc)
+
+        mock_start.assert_called_once_with(initial_radio_contacts=radio_contacts, expected_mc=mock_mc)
+        assert result["contact_reconcile_started"] is True
 
     @pytest.mark.asyncio
     async def test_advert_fill_skips_repeaters(self, test_db):
@@ -1034,6 +1063,98 @@ class TestSyncAndOffloadContacts:
 
         # Contact should still be in the cache since removal failed
         assert KEY_A in mock_mc._contacts
+
+
+class TestBackgroundContactReconcile:
+    """Test the yielding background contact reconcile loop."""
+
+    @pytest.mark.asyncio
+    async def test_rechecks_desired_set_before_deleting_contact(self, test_db):
+        await _insert_contact(KEY_A, "Alice", last_contacted=2000)
+        await _insert_contact(KEY_B, "Bob", last_contacted=1000)
+        alice = await ContactRepository.get_by_key(KEY_A)
+        bob = await ContactRepository.get_by_key(KEY_B)
+        assert alice is not None
+        assert bob is not None
+
+        mock_mc = MagicMock()
+        mock_mc.is_connected = True
+        mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
+        mock_mc.commands.remove_contact = AsyncMock(return_value=MagicMock(type=EventType.OK))
+        mock_mc.commands.add_contact = AsyncMock(return_value=MagicMock(type=EventType.OK))
+        radio_manager._meshcore = mock_mc
+
+        @asynccontextmanager
+        async def _radio_operation(*args, **kwargs):
+            del args, kwargs
+            yield mock_mc
+
+        with (
+            patch.object(
+                radio_sync.radio_manager,
+                "radio_operation",
+                side_effect=lambda *args, **kwargs: _radio_operation(*args, **kwargs),
+            ),
+            patch(
+                "app.radio_sync.get_contacts_selected_for_radio_sync",
+                side_effect=[[bob], [alice, bob], [alice, bob]],
+            ),
+            patch("app.radio_sync.asyncio.sleep", new=AsyncMock()),
+        ):
+            await radio_sync._reconcile_radio_contacts_in_background(
+                initial_radio_contacts={KEY_A: {"public_key": KEY_A}},
+                expected_mc=mock_mc,
+            )
+
+        mock_mc.commands.remove_contact.assert_not_called()
+        mock_mc.commands.add_contact.assert_awaited_once()
+        payload = mock_mc.commands.add_contact.call_args.args[0]
+        assert payload["public_key"] == KEY_B
+
+    @pytest.mark.asyncio
+    async def test_yields_radio_lock_every_two_contact_operations(self, test_db):
+        await _insert_contact(KEY_A, "Alice", last_contacted=3000)
+        await _insert_contact(KEY_B, "Bob", last_contacted=2000)
+        extra_key = "cc" * 32
+        await _insert_contact(extra_key, "Carol", last_contacted=1000)
+
+        mock_mc = MagicMock()
+        mock_mc.is_connected = True
+        mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
+        mock_mc.commands.remove_contact = AsyncMock(return_value=MagicMock(type=EventType.OK))
+        mock_mc.commands.add_contact = AsyncMock()
+        radio_manager._meshcore = mock_mc
+
+        acquire_count = 0
+
+        @asynccontextmanager
+        async def _radio_operation(*args, **kwargs):
+            del args, kwargs
+            nonlocal acquire_count
+            acquire_count += 1
+            yield mock_mc
+
+        with (
+            patch.object(
+                radio_sync.radio_manager,
+                "radio_operation",
+                side_effect=lambda *args, **kwargs: _radio_operation(*args, **kwargs),
+            ),
+            patch("app.radio_sync.get_contacts_selected_for_radio_sync", return_value=[]),
+            patch("app.radio_sync.asyncio.sleep", new=AsyncMock()),
+        ):
+            await radio_sync._reconcile_radio_contacts_in_background(
+                initial_radio_contacts={
+                    KEY_A: {"public_key": KEY_A},
+                    KEY_B: {"public_key": KEY_B},
+                    extra_key: {"public_key": extra_key},
+                },
+                expected_mc=mock_mc,
+            )
+
+        assert acquire_count == 2
+        assert mock_mc.commands.remove_contact.await_count == 3
+        mock_mc.commands.add_contact.assert_not_called()
 
 
 class TestSyncAndOffloadChannels:

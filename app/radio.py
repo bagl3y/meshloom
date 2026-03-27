@@ -548,11 +548,14 @@ class RadioManager:
 
     async def disconnect(self) -> None:
         """Disconnect from the radio."""
+        from app.radio_sync import stop_background_contact_reconciliation
+
         clear_keys()
         self._reset_reconnect_error_broadcasts()
         if self._meshcore is None:
             return
 
+        await stop_background_contact_reconciliation()
         await self._acquire_operation_lock("disconnect", blocking=True)
         try:
             mc = self._meshcore

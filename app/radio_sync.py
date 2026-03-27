@@ -166,6 +166,9 @@ async def pause_polling():
 # Background task handle
 _sync_task: asyncio.Task | None = None
 
+# Startup/background contact reconciliation task handle
+_contact_reconcile_task: asyncio.Task | None = None
+
 # Periodic maintenance check interval in seconds (5 minutes)
 SYNC_INTERVAL = 300
 
@@ -266,30 +269,7 @@ async def sync_and_offload_contacts(mc: MeshCore) -> dict:
                 remove_result = await mc.commands.remove_contact(contact_data)
                 if remove_result.type == EventType.OK:
                     removed += 1
-
-                    # LIBRARY INTERNAL FIXUP: The MeshCore library's
-                    # commands.remove_contact() sends the remove command over
-                    # the wire but does NOT update the library's in-memory
-                    # contact cache (mc._contacts). This is a gap in the
-                    # library — there's no public API to clear a single
-                    # contact from the cache, and the library only refreshes
-                    # it on a full get_contacts() call.
-                    #
-                    # Why this matters: sync_recent_contacts_to_radio() uses
-                    # mc.get_contact_by_key_prefix() to check whether a
-                    # contact is already loaded on the radio. That method
-                    # searches mc._contacts. If we don't evict the removed
-                    # contact from the cache here, get_contact_by_key_prefix()
-                    # will still find it and skip the add_contact() call —
-                    # meaning contacts never get loaded back onto the radio
-                    # after offload. The result: no DM ACKs, degraded routing
-                    # for potentially minutes until the next periodic sync
-                    # refreshes the cache from the (now-empty) radio.
-                    #
-                    # We access mc._contacts directly because the library
-                    # exposes it as a read-only property (mc.contacts) with
-                    # no removal API. The dict is keyed by public_key string.
-                    mc._contacts.pop(public_key, None)
+                    _evict_removed_contact_from_library_cache(mc, public_key)
                 else:
                     logger.warning(
                         "Failed to remove contact %s: %s", public_key[:12], remove_result.payload
@@ -461,28 +441,28 @@ async def ensure_default_channels() -> None:
 
 
 async def sync_and_offload_all(mc: MeshCore) -> dict:
-    """Sync and offload both contacts and channels, then ensure defaults exist."""
+    """Run fast startup sync, then background contact reconcile."""
     logger.info("Starting full radio sync and offload")
 
     # Contact on_radio is legacy/stale metadata. Clear it during the offload/reload
     # cycle so old rows stop claiming radio residency we do not actively track.
     await ContactRepository.clear_on_radio_except([])
 
-    contacts_result = await sync_and_offload_contacts(mc)
+    contacts_result = await sync_contacts_from_radio(mc)
     channels_result = await sync_and_offload_channels(mc)
 
     # Ensure default channels exist
     await ensure_default_channels()
 
-    # Reload favorites plus a working-set fill back onto the radio immediately.
-    # Pass mc directly since the caller already holds the radio operation lock
-    # (asyncio.Lock is not reentrant).
-    reload_result = await sync_recent_contacts_to_radio(force=True, mc=mc)
+    start_background_contact_reconciliation(
+        initial_radio_contacts=contacts_result.get("radio_contacts", {}),
+        expected_mc=mc,
+    )
 
     return {
         "contacts": contacts_result,
         "channels": channels_result,
-        "reloaded": reload_result,
+        "contact_reconcile_started": True,
     }
 
 
@@ -1036,6 +1016,270 @@ async def stop_periodic_sync():
 # Throttling for contact sync to radio
 _last_contact_sync: float = 0.0
 CONTACT_SYNC_THROTTLE_SECONDS = 30  # Don't sync more than once per 30 seconds
+CONTACT_RECONCILE_BATCH_SIZE = 2
+CONTACT_RECONCILE_YIELD_SECONDS = 0.05
+
+
+def _evict_removed_contact_from_library_cache(mc: MeshCore, public_key: str) -> None:
+    """Keep the library's contact cache consistent after a successful removal."""
+    # LIBRARY INTERNAL FIXUP: The MeshCore library's remove_contact() sends the
+    # remove command over the wire but does NOT update the library's in-memory
+    # contact cache (mc._contacts). This is a gap in the library — there's no
+    # public API to clear a single contact from the cache, and the library only
+    # refreshes it on a full get_contacts() call.
+    #
+    # Why this matters: contact sync and targeted ensure/load paths use
+    # mc.get_contact_by_key_prefix() to check whether a contact is already
+    # loaded on the radio. That method searches mc._contacts. If we don't evict
+    # the removed contact from the cache here, later syncs will still find it
+    # and skip add_contact() calls, leaving the radio without the contact even
+    # though the app thinks it is resident.
+    mc._contacts.pop(public_key, None)
+
+
+def _normalize_radio_contacts_payload(contacts: dict | None) -> dict[str, dict]:
+    """Return radio contacts keyed by normalized lowercase full public key."""
+    normalized: dict[str, dict] = {}
+    for public_key, contact_data in (contacts or {}).items():
+        normalized[str(public_key).lower()] = contact_data
+    return normalized
+
+
+async def sync_contacts_from_radio(mc: MeshCore) -> dict:
+    """Pull contacts from the radio and persist them to the database without removing them."""
+    synced = 0
+
+    try:
+        result = await mc.commands.get_contacts()
+
+        if result is None or result.type == EventType.ERROR:
+            logger.error(
+                "Failed to get contacts from radio: %s. "
+                "If you see this repeatedly, the radio may be visible on the "
+                "serial/TCP/BLE port but not responding to commands. Check for "
+                "another process with the serial port open (other RemoteTerm "
+                "instances, serial monitors, etc.), verify the firmware is "
+                "up-to-date and in client mode (not repeater), or try a "
+                "power cycle.",
+                result,
+            )
+            return {"synced": 0, "radio_contacts": {}, "error": str(result)}
+
+        contacts = _normalize_radio_contacts_payload(result.payload)
+        logger.info("Found %d contacts on radio", len(contacts))
+
+        for public_key, contact_data in contacts.items():
+            await ContactRepository.upsert(
+                ContactUpsert.from_radio_dict(public_key, contact_data, on_radio=False)
+            )
+            asyncio.create_task(
+                _reconcile_contact_messages_background(
+                    public_key,
+                    contact_data.get("adv_name"),
+                )
+            )
+            synced += 1
+
+        logger.info("Synced %d contacts from radio snapshot", synced)
+        return {"synced": synced, "radio_contacts": contacts}
+    except Exception as e:
+        logger.error("Error during contact snapshot sync: %s", e)
+        return {"synced": synced, "radio_contacts": {}, "error": str(e)}
+
+
+async def _reconcile_radio_contacts_in_background(
+    *,
+    initial_radio_contacts: dict[str, dict],
+    expected_mc: MeshCore,
+) -> None:
+    """Converge radio contacts toward the desired favorites+recents working set."""
+    radio_contacts = dict(initial_radio_contacts)
+    removed = 0
+    loaded = 0
+    failed = 0
+
+    try:
+        while True:
+            if not radio_manager.is_connected or radio_manager.meshcore is not expected_mc:
+                logger.info("Stopping background contact reconcile: radio transport changed")
+                break
+
+            selected_contacts = await get_contacts_selected_for_radio_sync()
+            desired_contacts = {
+                contact.public_key.lower(): contact
+                for contact in selected_contacts
+                if len(contact.public_key) >= 64
+            }
+            removable_keys = [key for key in radio_contacts if key not in desired_contacts]
+            missing_contacts = [
+                contact for key, contact in desired_contacts.items() if key not in radio_contacts
+            ]
+
+            if not removable_keys and not missing_contacts:
+                logger.info(
+                    "Background contact reconcile complete: %d contacts on radio working set",
+                    len(radio_contacts),
+                )
+                break
+
+            progressed = False
+            try:
+                async with radio_manager.radio_operation(
+                    "background_contact_reconcile",
+                    blocking=False,
+                ) as mc:
+                    if mc is not expected_mc:
+                        logger.info(
+                            "Stopping background contact reconcile: radio transport changed"
+                        )
+                        break
+
+                    budget = CONTACT_RECONCILE_BATCH_SIZE
+                    selected_contacts = await get_contacts_selected_for_radio_sync()
+                    desired_contacts = {
+                        contact.public_key.lower(): contact
+                        for contact in selected_contacts
+                        if len(contact.public_key) >= 64
+                    }
+
+                    for public_key in list(radio_contacts):
+                        if budget <= 0:
+                            break
+                        if public_key in desired_contacts:
+                            continue
+
+                        remove_payload = (
+                            mc.get_contact_by_key_prefix(public_key[:12])
+                            or radio_contacts.get(public_key)
+                            or {"public_key": public_key}
+                        )
+                        try:
+                            remove_result = await mc.commands.remove_contact(remove_payload)
+                        except Exception as exc:
+                            failed += 1
+                            budget -= 1
+                            logger.warning(
+                                "Error removing contact %s during background reconcile: %s",
+                                public_key[:12],
+                                exc,
+                            )
+                            continue
+
+                        budget -= 1
+                        if remove_result.type == EventType.OK:
+                            radio_contacts.pop(public_key, None)
+                            _evict_removed_contact_from_library_cache(mc, public_key)
+                            removed += 1
+                            progressed = True
+                        else:
+                            failed += 1
+                            logger.warning(
+                                "Failed to remove contact %s during background reconcile: %s",
+                                public_key[:12],
+                                remove_result.payload,
+                            )
+
+                    if budget > 0:
+                        for public_key, contact in desired_contacts.items():
+                            if budget <= 0:
+                                break
+                            if public_key in radio_contacts:
+                                continue
+
+                            if mc.get_contact_by_key_prefix(public_key[:12]):
+                                radio_contacts[public_key] = {"public_key": public_key}
+                                continue
+
+                            try:
+                                add_payload = contact.to_radio_dict()
+                                add_result = await mc.commands.add_contact(add_payload)
+                            except Exception as exc:
+                                failed += 1
+                                budget -= 1
+                                logger.warning(
+                                    "Error adding contact %s during background reconcile: %s",
+                                    public_key[:12],
+                                    exc,
+                                    exc_info=True,
+                                )
+                                continue
+
+                            budget -= 1
+                            if add_result.type == EventType.OK:
+                                radio_contacts[public_key] = add_payload
+                                loaded += 1
+                                progressed = True
+                            else:
+                                failed += 1
+                                reason = add_result.payload
+                                hint = ""
+                                if reason is None:
+                                    hint = (
+                                        " (no response from radio — if this repeats, check for "
+                                        "serial port contention from another process or try a "
+                                        "power cycle)"
+                                    )
+                                logger.warning(
+                                    "Failed to add contact %s during background reconcile: %s%s",
+                                    public_key[:12],
+                                    reason,
+                                    hint,
+                                )
+            except RadioOperationBusyError:
+                logger.debug("Background contact reconcile yielding: radio busy")
+
+            await asyncio.sleep(CONTACT_RECONCILE_YIELD_SECONDS)
+            if not progressed:
+                continue
+    except asyncio.CancelledError:
+        logger.info("Background contact reconcile task cancelled")
+        raise
+    except Exception as exc:
+        logger.error("Background contact reconcile failed: %s", exc, exc_info=True)
+    finally:
+        if removed > 0 or loaded > 0 or failed > 0:
+            logger.info(
+                "Background contact reconcile summary: removed %d, loaded %d, failed %d",
+                removed,
+                loaded,
+                failed,
+            )
+
+
+def start_background_contact_reconciliation(
+    *,
+    initial_radio_contacts: dict[str, dict],
+    expected_mc: MeshCore,
+) -> None:
+    """Start or replace the background contact reconcile task for the current radio."""
+    global _contact_reconcile_task
+
+    if _contact_reconcile_task is not None and not _contact_reconcile_task.done():
+        _contact_reconcile_task.cancel()
+
+    _contact_reconcile_task = asyncio.create_task(
+        _reconcile_radio_contacts_in_background(
+            initial_radio_contacts=initial_radio_contacts,
+            expected_mc=expected_mc,
+        )
+    )
+    logger.info(
+        "Started background contact reconcile for %d radio contact(s)",
+        len(initial_radio_contacts),
+    )
+
+
+async def stop_background_contact_reconciliation() -> None:
+    """Stop the background contact reconcile task."""
+    global _contact_reconcile_task
+
+    if _contact_reconcile_task and not _contact_reconcile_task.done():
+        _contact_reconcile_task.cancel()
+        try:
+            await _contact_reconcile_task
+        except asyncio.CancelledError:
+            pass
+    _contact_reconcile_task = None
 
 
 async def get_contacts_selected_for_radio_sync() -> list[Contact]:

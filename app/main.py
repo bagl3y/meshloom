@@ -17,6 +17,7 @@ from app.frontend_static import (
 )
 from app.radio import RadioDisconnectedError
 from app.radio_sync import (
+    stop_background_contact_reconciliation,
     stop_message_polling,
     stop_periodic_advert,
     stop_periodic_sync,
@@ -95,6 +96,7 @@ async def lifespan(app: FastAPI):
             pass
     await fanout_manager.stop_all()
     await radio_manager.stop_connection_monitor()
+    await stop_background_contact_reconciliation()
     await stop_message_polling()
     await stop_periodic_advert()
     await stop_periodic_sync()
