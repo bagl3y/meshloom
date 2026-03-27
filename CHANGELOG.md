@@ -1,3 +1,16 @@
+## [3.6.1] - 2026-03-26
+
+Feature: MeshCore Map integration
+Feature: Add warning screen about bots
+Feature: Favicon reflects unread message state
+Feature: Show hop map in larger modal
+Feature: Add prebuilt frontend install script
+Feature: Add clean service installer script
+Feature: Swipe in to show menu
+Bugfix: Invalid backend API path serves error, not fallback index
+Bugfix: Fix some spacing/page height issues
+Misc: Misc. bugfixes and performance and test improvements
+
 ## [3.6.0] - 2026-03-22
 
 Feature: Add incoming-packet analytics
