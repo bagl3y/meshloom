@@ -16,11 +16,12 @@ const BotCodeEditor = lazy(() =>
 
 const TYPE_LABELS: Record<string, string> = {
   mqtt_private: 'Private MQTT',
-  mqtt_community: 'Community MQTT',
+  mqtt_community: 'Community Sharing',
   bot: 'Python Bot',
   webhook: 'Webhook',
   apprise: 'Apprise',
   sqs: 'Amazon SQS',
+  map_upload: 'Map Upload',
 };
 
 const DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE = 'meshcore/{IATA}/{PUBLIC_KEY}/packets';
@@ -100,7 +101,8 @@ type DraftType =
   | 'webhook'
   | 'apprise'
   | 'sqs'
-  | 'bot';
+  | 'bot'
+  | 'map_upload';
 
 type CreateIntegrationDefinition = {
   value: DraftType;
@@ -143,7 +145,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
     value: 'mqtt_community',
     savedType: 'mqtt_community',
     label: 'Community MQTT/meshcoretomqtt',
-    section: 'Community MQTT',
+    section: 'Community Sharing',
     description:
       'MeshcoreToMQTT-compatible raw-packet feed publishing, compatible with community aggregators (in other words, make your companion radio also serve as an observer node). Superset of other Community MQTT presets.',
     defaultName: 'Community MQTT',
@@ -157,7 +159,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
     value: 'mqtt_community_meshrank',
     savedType: 'mqtt_community',
     label: 'MeshRank',
-    section: 'Community MQTT',
+    section: 'Community Sharing',
     description:
       'A community MQTT config preconfigured for MeshRank, requiring only the provided topic from your MeshRank configuration. A subset of the primary Community MQTT/meshcoretomqtt configuration; you are free to edit all configuration after creation.',
     defaultName: 'MeshRank',
@@ -180,7 +182,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
     value: 'mqtt_community_letsmesh_us',
     savedType: 'mqtt_community',
     label: 'LetsMesh (US)',
-    section: 'Community MQTT',
+    section: 'Community Sharing',
     description:
       'A community MQTT config preconfigured for the LetsMesh US-ingest endpoint, requiring only your email and IATA region code. Good to use with an additional EU configuration for redundancy. A subset of the primary Community MQTT/meshcoretomqtt configuration; you are free to edit all configuration after creation.',
     defaultName: 'LetsMesh (US)',
@@ -197,7 +199,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
     value: 'mqtt_community_letsmesh_eu',
     savedType: 'mqtt_community',
     label: 'LetsMesh (EU)',
-    section: 'Community MQTT',
+    section: 'Community Sharing',
     description:
       'A community MQTT config preconfigured for the LetsMesh EU-ingest endpoint, requiring only your email and IATA region code. Good to use with an additional US configuration for redundancy. A subset of the primary Community MQTT/meshcoretomqtt configuration; you are free to edit all configuration after creation.',
     defaultName: 'LetsMesh (EU)',
@@ -282,6 +284,23 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
         code: DEFAULT_BOT_CODE,
       },
       scope: { messages: 'all', raw_packets: 'none' },
+    },
+  },
+  {
+    value: 'map_upload',
+    savedType: 'map_upload',
+    label: 'Map Upload',
+    section: 'Community Sharing',
+    description:
+      'Upload repeaters and room servers to map.meshcore.dev or a compatible map API endpoint.',
+    defaultName: 'Map Upload',
+    nameMode: 'counted',
+    defaults: {
+      config: {
+        api_url: '',
+        dry_run: true,
+      },
+      scope: { messages: 'none', raw_packets: 'all' },
     },
   },
 ];
@@ -566,7 +585,9 @@ function getDefaultIntegrationName(type: string, configs: FanoutConfig[]) {
 
 function getStatusLabel(status: string | undefined, type?: string) {
   if (status === 'connected')
-    return type === 'bot' || type === 'webhook' || type === 'apprise' ? 'Active' : 'Connected';
+    return type === 'bot' || type === 'webhook' || type === 'apprise' || type === 'map_upload'
+      ? 'Active'
+      : 'Connected';
   if (status === 'error') return 'Error';
   if (status === 'disconnected') return 'Disconnected';
   return 'Inactive';
@@ -1055,6 +1076,152 @@ function BotConfigEditor({
           prevent repeater collision.
         </p>
       </div>
+    </div>
+  );
+}
+
+function MapUploadConfigEditor({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown>;
+  onChange: (config: Record<string, unknown>) => void;
+}) {
+  const isDryRun = config.dry_run !== false;
+  const [radioLat, setRadioLat] = useState<number | null>(null);
+  const [radioLon, setRadioLon] = useState<number | null>(null);
+
+  useEffect(() => {
+    api
+      .getRadioConfig()
+      .then((rc) => {
+        setRadioLat(rc.lat ?? 0);
+        setRadioLon(rc.lon ?? 0);
+      })
+      .catch(() => {
+        setRadioLat(0);
+        setRadioLon(0);
+      });
+  }, []);
+
+  const radioLatLonConfigured =
+    radioLat !== null && radioLon !== null && !(radioLat === 0 && radioLon === 0);
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Automatically upload heard repeater and room server advertisements to{' '}
+        <a
+          href="https://map.meshcore.dev"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-foreground"
+        >
+          map.meshcore.dev
+        </a>
+        . Requires the radio&apos;s private key to be available (firmware must have{' '}
+        <code>ENABLE_PRIVATE_KEY_EXPORT=1</code>). Only raw RF packets are shared &mdash; never
+        decrypted messages.
+      </p>
+
+      <div className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning">
+        <strong>Dry Run is {isDryRun ? 'ON' : 'OFF'}.</strong>{' '}
+        {isDryRun
+          ? 'No uploads will be sent. Check the backend logs to verify the payload looks correct before enabling live sends.'
+          : 'Live uploads are enabled. Each advert is rate-limited to once per hour per node.'}
+      </div>
+
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={isDryRun}
+          onChange={(e) => onChange({ ...config, dry_run: e.target.checked })}
+          className="h-4 w-4 rounded border-border"
+        />
+        <div>
+          <span className="text-sm font-medium">Dry Run (log only, no uploads)</span>
+          <p className="text-xs text-muted-foreground">
+            When enabled, upload payloads are logged at INFO level but not sent. Disable once you
+            have confirmed the logged output looks correct.
+          </p>
+        </div>
+      </label>
+
+      <Separator />
+
+      <div className="space-y-2">
+        <Label htmlFor="fanout-map-api-url">API URL (optional)</Label>
+        <Input
+          id="fanout-map-api-url"
+          type="url"
+          placeholder="https://map.meshcore.dev/api/v1/uploader/node"
+          value={(config.api_url as string) || ''}
+          onChange={(e) => onChange({ ...config, api_url: e.target.value })}
+        />
+        <p className="text-xs text-muted-foreground">
+          Leave blank to use the default <code>map.meshcore.dev</code> endpoint.
+        </p>
+      </div>
+
+      <Separator />
+
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={!!config.geofence_enabled}
+          onChange={(e) => onChange({ ...config, geofence_enabled: e.target.checked })}
+          className="h-4 w-4 rounded border-border"
+        />
+        <div>
+          <span className="text-sm font-medium">Enable Geofence</span>
+          <p className="text-xs text-muted-foreground">
+            Only upload nodes whose location falls within the configured radius of your radio&apos;s
+            own position. Helps exclude nodes with false or spoofed coordinates. Uses the
+            latitude/longitude set in Radio Settings.
+          </p>
+        </div>
+      </label>
+
+      {!!config.geofence_enabled && (
+        <div className="space-y-3 pl-7">
+          {!radioLatLonConfigured && (
+            <div className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning">
+              Your radio does not currently have a latitude/longitude configured. Geofencing will be
+              silently skipped until coordinates are set in{' '}
+              <strong>Settings &rarr; Radio &rarr; Location</strong>.
+            </div>
+          )}
+          {radioLatLonConfigured && (
+            <p className="text-xs text-muted-foreground">
+              Using radio position{' '}
+              <code>
+                {radioLat?.toFixed(5)}, {radioLon?.toFixed(5)}
+              </code>{' '}
+              as the geofence center. Update coordinates in Radio Settings to move the center.
+            </p>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="fanout-map-geofence-radius">Radius (km)</Label>
+            <Input
+              id="fanout-map-geofence-radius"
+              type="number"
+              min="0"
+              step="any"
+              placeholder="e.g. 100"
+              value={(config.geofence_radius_km as number | undefined) ?? ''}
+              onChange={(e) =>
+                onChange({
+                  ...config,
+                  geofence_radius_km: e.target.value === '' ? 0 : parseFloat(e.target.value),
+                })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Nodes further than this distance from your radio&apos;s position will not be uploaded.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1973,6 +2140,10 @@ export function SettingsFanoutSection({
             onChange={setEditConfig}
             onScopeChange={setEditScope}
           />
+        )}
+
+        {detailType === 'map_upload' && (
+          <MapUploadConfigEditor config={editConfig} onChange={setEditConfig} />
         )}
 
         <Separator />

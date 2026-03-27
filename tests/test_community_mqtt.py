@@ -19,7 +19,6 @@ from app.fanout.community_mqtt import (
     _build_status_topic,
     _calculate_packet_hash,
     _decode_packet_fields,
-    _ed25519_sign_expanded,
     _format_raw_packet,
     _generate_jwt_token,
     _get_client_version,
@@ -29,6 +28,7 @@ from app.fanout.mqtt_community import (
     _publish_community_packet,
     _render_packet_topic,
 )
+from app.keystore import ed25519_sign_expanded
 
 
 def _make_test_keys() -> tuple[bytes, bytes]:
@@ -173,13 +173,13 @@ class TestEddsaSignExpanded:
     def test_produces_64_byte_signature(self):
         private_key, public_key = _make_test_keys()
         message = b"test message"
-        sig = _ed25519_sign_expanded(message, private_key[:32], private_key[32:], public_key)
+        sig = ed25519_sign_expanded(message, private_key[:32], private_key[32:], public_key)
         assert len(sig) == 64
 
     def test_signature_verifies_with_nacl(self):
         private_key, public_key = _make_test_keys()
         message = b"hello world"
-        sig = _ed25519_sign_expanded(message, private_key[:32], private_key[32:], public_key)
+        sig = ed25519_sign_expanded(message, private_key[:32], private_key[32:], public_key)
 
         signed_message = sig + message
         verified = nacl.bindings.crypto_sign_open(signed_message, public_key)
@@ -187,8 +187,8 @@ class TestEddsaSignExpanded:
 
     def test_different_messages_produce_different_signatures(self):
         private_key, public_key = _make_test_keys()
-        sig1 = _ed25519_sign_expanded(b"msg1", private_key[:32], private_key[32:], public_key)
-        sig2 = _ed25519_sign_expanded(b"msg2", private_key[:32], private_key[32:], public_key)
+        sig1 = ed25519_sign_expanded(b"msg1", private_key[:32], private_key[32:], public_key)
+        sig2 = ed25519_sign_expanded(b"msg2", private_key[:32], private_key[32:], public_key)
         assert sig1 != sig2
 
 

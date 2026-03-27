@@ -1,14 +1,18 @@
 """
-Ephemeral keystore for storing sensitive keys in memory.
+Ephemeral keystore for storing sensitive keys in memory, plus the Ed25519
+signing primitive used by fanout modules that need to sign requests with the
+radio's own key.
 
 The private key is stored in memory only and is never persisted to disk.
 It's exported from the radio on startup and reconnect, then used for
 server-side decryption of direct messages.
 """
 
+import hashlib
 import logging
 from typing import TYPE_CHECKING
 
+import nacl.bindings
 from meshcore import EventType
 
 from app.decoder import derive_public_key
@@ -25,9 +29,28 @@ NO_EVENT_RECEIVED_GUIDANCE = (
     "issue commands to the radio."
 )
 
+# Ed25519 group order (L) — used in the expanded signing primitive below
+_L = 2**252 + 27742317777372353535851937790883648493
+
 # In-memory storage for the private key and derived public key
 _private_key: bytes | None = None
 _public_key: bytes | None = None
+
+
+def ed25519_sign_expanded(message: bytes, scalar: bytes, prefix: bytes, public_key: bytes) -> bytes:
+    """Sign a message using MeshCore's expanded Ed25519 key format.
+
+    MeshCore stores 64-byte keys as scalar(32) || prefix(32).  Standard
+    Ed25519 libraries expect seed format and would re-SHA-512 the key, so we
+    perform the signing manually using the already-expanded key material.
+
+    Port of meshcore-packet-capture's ed25519_sign_with_expanded_key().
+    """
+    r = int.from_bytes(hashlib.sha512(prefix + message).digest(), "little") % _L
+    R = nacl.bindings.crypto_scalarmult_ed25519_base_noclamp(r.to_bytes(32, "little"))
+    k = int.from_bytes(hashlib.sha512(R + public_key + message).digest(), "little") % _L
+    s = (r + k * int.from_bytes(scalar, "little")) % _L
+    return R + s.to_bytes(32, "little")
 
 
 def clear_keys() -> None:

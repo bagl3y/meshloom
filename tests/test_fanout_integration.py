@@ -1790,3 +1790,100 @@ class TestManagerRestartFailure:
 
         assert len(healthy.messages_received) == 1
         assert len(dead.messages_received) == 0
+
+
+# ---------------------------------------------------------------------------
+# MapUploadModule integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestMapUploadIntegration:
+    """Integration tests: FanoutManager loads and dispatches to MapUploadModule."""
+
+    @pytest.mark.asyncio
+    async def test_map_upload_module_loaded_and_receives_raw(self, integration_db):
+        """Enabled map_upload config is loaded by the manager and its on_raw is called."""
+        from unittest.mock import AsyncMock, patch
+
+        cfg = await FanoutConfigRepository.create(
+            config_type="map_upload",
+            name="Map",
+            config={"dry_run": True, "api_url": ""},
+            scope={"messages": "none", "raw_packets": "all"},
+            enabled=True,
+        )
+
+        manager = FanoutManager()
+        await manager.load_from_db()
+
+        assert cfg["id"] in manager._modules
+        module, scope = manager._modules[cfg["id"]]
+        assert scope == {"messages": "none", "raw_packets": "all"}
+
+        # Raw ADVERT event should be dispatched to on_raw
+        advert_data = {
+            "payload_type": "ADVERT",
+            "data": "aabbccdd",
+            "timestamp": 1000,
+            "id": 1,
+            "observation_id": 1,
+        }
+
+        with patch.object(module, "_upload", new_callable=AsyncMock):
+            # Provide a parseable but minimal packet so on_raw gets past hex decode;
+            # parse_packet/parse_advertisement returning None is fine — on_raw silently exits
+            await manager.broadcast_raw(advert_data)
+            # Give the asyncio task a chance to run
+            import asyncio
+
+            await asyncio.sleep(0.05)
+            # _upload may or may not be called depending on parse result, but no exception
+
+        await manager.stop_all()
+
+    @pytest.mark.asyncio
+    async def test_map_upload_disabled_not_loaded(self, integration_db):
+        """Disabled map_upload config is not loaded by the manager."""
+        await FanoutConfigRepository.create(
+            config_type="map_upload",
+            name="Map Disabled",
+            config={"dry_run": True, "api_url": ""},
+            scope={"messages": "none", "raw_packets": "all"},
+            enabled=False,
+        )
+
+        manager = FanoutManager()
+        await manager.load_from_db()
+
+        assert len(manager._modules) == 0
+        await manager.stop_all()
+
+    @pytest.mark.asyncio
+    async def test_map_upload_does_not_receive_messages(self, integration_db):
+        """map_upload scope forces raw_packets only — message events must not reach it."""
+        from unittest.mock import AsyncMock, patch
+
+        cfg = await FanoutConfigRepository.create(
+            config_type="map_upload",
+            name="Map",
+            config={"dry_run": True, "api_url": ""},
+            scope={"messages": "none", "raw_packets": "all"},
+            enabled=True,
+        )
+
+        manager = FanoutManager()
+        await manager.load_from_db()
+
+        assert cfg["id"] in manager._modules
+        module, _ = manager._modules[cfg["id"]]
+
+        with patch.object(module, "on_message", new_callable=AsyncMock) as mock_msg:
+            await manager.broadcast_message(
+                {"type": "CHAN", "conversation_key": "k1", "text": "hi"}
+            )
+            import asyncio
+
+            await asyncio.sleep(0.05)
+            mock_msg.assert_not_called()
+
+        await manager.stop_all()

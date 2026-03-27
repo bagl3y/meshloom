@@ -89,6 +89,19 @@ Amazon SQS delivery. Config blob:
 - Publishes a JSON envelope of the form `{"event_type":"message"|"raw_packet","data":...}`
 - Supports both decoded messages and raw packets via normal scope selection
 
+### map_upload (map_upload.py)
+Uploads heard repeater and room-server advertisements to map.meshcore.dev. Config blob:
+- `api_url` (optional, default `""`) — upload endpoint; empty falls back to the public map.meshcore.dev API
+- `dry_run` (bool, default `true`) — when true, logs the payload at INFO level without sending
+- `geofence_enabled` (bool, default `false`) — when true, only uploads nodes within `geofence_radius_km` of the radio's own configured lat/lon
+- `geofence_radius_km` (float, default `0`) — filter radius in kilometres
+
+Geofence notes:
+- The reference center is always the radio's own `adv_lat`/`adv_lon` from `radio_runtime.meshcore.self_info`, read **live at upload time** — no lat/lon is stored in the fanout config itself.
+- If the radio's lat/lon is `(0, 0)` or the radio is not connected, the geofence check is silently skipped so uploads continue normally until coordinates are configured.
+- Requires the radio to have `ENABLE_PRIVATE_KEY_EXPORT=1` firmware to sign uploads.
+- Scope is always `{"messages": "none", "raw_packets": "all"}` — only raw RF packets are processed.
+
 ## Adding a New Integration Type
 
 ### Step-by-step checklist
@@ -291,6 +304,7 @@ Migrations:
 - `app/fanout/webhook.py` — Webhook fanout module
 - `app/fanout/apprise_mod.py` — Apprise fanout module
 - `app/fanout/sqs.py` — Amazon SQS fanout module
+- `app/fanout/map_upload.py` — Map Upload fanout module
 - `app/repository/fanout.py` — Database CRUD
 - `app/routers/fanout.py` — REST API
 - `app/websocket.py` — `broadcast_event()` dispatches to fanout

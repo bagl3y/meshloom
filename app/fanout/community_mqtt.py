@@ -20,9 +20,9 @@ from datetime import datetime
 from typing import Any, Protocol
 
 import aiomqtt
-import nacl.bindings
 
 from app.fanout.mqtt_base import BaseMqttPublisher
+from app.keystore import ed25519_sign_expanded
 from app.path_utils import parse_packet_envelope, split_path_hex
 from app.version_info import get_app_build_info
 
@@ -39,9 +39,6 @@ _TOKEN_RENEWAL_THRESHOLD = _TOKEN_LIFETIME - 3600  # 23 hours
 # Periodic status republish interval (matches meshcore-packet-capture reference)
 _STATS_REFRESH_INTERVAL = 300  # 5 minutes
 _STATS_MIN_CACHE_SECS = 60  # Don't re-fetch stats within 60s
-
-# Ed25519 group order
-_L = 2**252 + 27742317777372353535851937790883648493
 
 # Route type mapping: bottom 2 bits of first byte
 _ROUTE_MAP = {0: "F", 1: "F", 2: "D", 3: "T"}
@@ -67,28 +64,6 @@ class CommunityMqttSettings(Protocol):
 def _base64url_encode(data: bytes) -> str:
     """Base64url encode without padding."""
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
-
-
-def _ed25519_sign_expanded(
-    message: bytes, scalar: bytes, prefix: bytes, public_key: bytes
-) -> bytes:
-    """Sign a message using MeshCore's expanded Ed25519 key format.
-
-    MeshCore stores 64-byte "orlp" format keys: scalar(32) || prefix(32).
-    Standard Ed25519 libraries expect seed format and would re-SHA-512 the key.
-    This performs the signing manually using the already-expanded key material.
-
-    Port of meshcore-packet-capture's ed25519_sign_with_expanded_key().
-    """
-    # r = SHA-512(prefix || message) mod L
-    r = int.from_bytes(hashlib.sha512(prefix + message).digest(), "little") % _L
-    # R = r * B (base point multiplication)
-    R = nacl.bindings.crypto_scalarmult_ed25519_base_noclamp(r.to_bytes(32, "little"))
-    # k = SHA-512(R || public_key || message) mod L
-    k = int.from_bytes(hashlib.sha512(R + public_key + message).digest(), "little") % _L
-    # s = (r + k * scalar) mod L
-    s = (r + k * int.from_bytes(scalar, "little")) % _L
-    return R + s.to_bytes(32, "little")
 
 
 def _generate_jwt_token(
@@ -127,7 +102,7 @@ def _generate_jwt_token(
 
     scalar = private_key[:32]
     prefix = private_key[32:]
-    signature = _ed25519_sign_expanded(signing_input, scalar, prefix, public_key)
+    signature = ed25519_sign_expanded(signing_input, scalar, prefix, public_key)
 
     return f"{header_b64}.{payload_b64}.{signature.hex()}"
 
