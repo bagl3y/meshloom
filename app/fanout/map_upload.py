@@ -205,7 +205,9 @@ class MapUploadModule(FanoutModule):
                 )
                 return
 
-        await self._upload(pubkey, advert.timestamp, advert.device_role, raw_hex, advert.lat, advert.lon)
+        await self._upload(
+            pubkey, advert.timestamp, advert.device_role, raw_hex, advert.lat, advert.lon
+        )
 
     async def _upload(
         self,
@@ -339,5 +341,3 @@ class MapUploadModule(FanoutModule):
         if self._last_error:
             return "error"
         return "connected"
-
-

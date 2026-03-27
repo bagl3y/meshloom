@@ -381,7 +381,10 @@ class TestDryRun:
         with (
             patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
             patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 915, "cr": 5, "sf": 10, "bw": 125}),
+            patch(
+                "app.fanout.map_upload._get_radio_params",
+                return_value={"freq": 915, "cr": 5, "sf": 10, "bw": 125},
+            ),
         ):
             assert mod._client is not None
             post_mock = AsyncMock()
@@ -406,7 +409,10 @@ class TestDryRun:
         with (
             patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
             patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+            patch(
+                "app.fanout.map_upload._get_radio_params",
+                return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0},
+            ),
         ):
             await mod._upload(pubkey, 9999, 2, "aabb", 0.0, 0.0)
             assert mod._seen[pubkey] == 9999
@@ -453,7 +459,10 @@ class TestLiveSend:
         with (
             patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
             patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 915, "cr": 5, "sf": 10, "bw": 125}),
+            patch(
+                "app.fanout.map_upload._get_radio_params",
+                return_value={"freq": 915, "cr": 5, "sf": 10, "bw": 125},
+            ),
         ):
             assert mod._client is not None
             post_mock = AsyncMock(return_value=mock_response)
@@ -483,7 +492,10 @@ class TestLiveSend:
         with (
             patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
             patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+            patch(
+                "app.fanout.map_upload._get_radio_params",
+                return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0},
+            ),
         ):
             assert mod._client is not None
             post_mock = AsyncMock(return_value=mock_response)
@@ -512,7 +524,10 @@ class TestLiveSend:
         with (
             patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
             patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+            patch(
+                "app.fanout.map_upload._get_radio_params",
+                return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0},
+            ),
         ):
             assert mod._client is not None
             mod._client.post = AsyncMock(return_value=mock_response)  # type: ignore[method-assign]
@@ -539,7 +554,10 @@ class TestLiveSend:
         with (
             patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
             patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+            patch(
+                "app.fanout.map_upload._get_radio_params",
+                return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0},
+            ),
         ):
             assert mod._client is not None
             mod._client.post = AsyncMock(side_effect=exc)  # type: ignore[method-assign]
@@ -562,7 +580,10 @@ class TestLiveSend:
         with (
             patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
             patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+            patch(
+                "app.fanout.map_upload._get_radio_params",
+                return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0},
+            ),
         ):
             assert mod._client is not None
             mod._client.post = AsyncMock(side_effect=httpx.ConnectError("conn refused"))  # type: ignore[method-assign]
@@ -600,7 +621,10 @@ class TestPayloadStructure:
         with (
             patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
             patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 915, "cr": 5, "sf": 10, "bw": 125}),
+            patch(
+                "app.fanout.map_upload._get_radio_params",
+                return_value={"freq": 915, "cr": 5, "sf": 10, "bw": 125},
+            ),
         ):
             assert mod._client is not None
             mod._client.post = capture_post  # type: ignore[method-assign]
@@ -645,7 +669,10 @@ class TestPayloadStructure:
         with (
             patch("app.fanout.map_upload.get_private_key", return_value=fake_private),
             patch("app.fanout.map_upload.get_public_key", return_value=fake_public),
-            patch("app.fanout.map_upload._get_radio_params", return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0}),
+            patch(
+                "app.fanout.map_upload._get_radio_params",
+                return_value={"freq": 0, "cr": 0, "sf": 0, "bw": 0},
+            ),
         ):
             assert mod._client is not None
             mod._client.post = capture_post  # type: ignore[method-assign]
@@ -824,11 +851,13 @@ class TestGeofence:
     @pytest.mark.asyncio
     async def test_node_inside_fence_uploaded(self):
         """Node within the configured radius must be uploaded."""
-        mod = _make_module({
-            "dry_run": True,
-            "geofence_enabled": True,
-            "geofence_radius_km": 100.0,
-        })
+        mod = _make_module(
+            {
+                "dry_run": True,
+                "geofence_enabled": True,
+                "geofence_radius_km": 100.0,
+            }
+        )
         await mod.start()
 
         with (
@@ -846,11 +875,13 @@ class TestGeofence:
     @pytest.mark.asyncio
     async def test_node_outside_fence_skipped(self):
         """Node beyond the configured radius must be skipped."""
-        mod = _make_module({
-            "dry_run": True,
-            "geofence_enabled": True,
-            "geofence_radius_km": 10.0,
-        })
+        mod = _make_module(
+            {
+                "dry_run": True,
+                "geofence_enabled": True,
+                "geofence_radius_km": 10.0,
+            }
+        )
         await mod.start()
 
         with (
@@ -868,11 +899,13 @@ class TestGeofence:
     @pytest.mark.asyncio
     async def test_node_at_exact_boundary_passes(self):
         """Node at exactly the fence radius must be allowed (<=, not <)."""
-        mod = _make_module({
-            "dry_run": True,
-            "geofence_enabled": True,
-            "geofence_radius_km": 100.0,
-        })
+        mod = _make_module(
+            {
+                "dry_run": True,
+                "geofence_enabled": True,
+                "geofence_radius_km": 100.0,
+            }
+        )
         await mod.start()
 
         # Use a non-zero center so it's not treated as "not configured".
@@ -897,11 +930,13 @@ class TestGeofence:
     @pytest.mark.asyncio
     async def test_geofence_skipped_when_lat_lon_zero(self):
         """geofence_enabled=True but radio (0, 0) → upload proceeds (geofence silently skipped)."""
-        mod = _make_module({
-            "dry_run": True,
-            "geofence_enabled": True,
-            "geofence_radius_km": 10.0,
-        })
+        mod = _make_module(
+            {
+                "dry_run": True,
+                "geofence_enabled": True,
+                "geofence_radius_km": 10.0,
+            }
+        )
         await mod.start()
 
         # Radio is at (0, 0) — treated as "not configured"; all nodes pass through.
@@ -920,11 +955,13 @@ class TestGeofence:
     @pytest.mark.asyncio
     async def test_geofence_skipped_when_radio_unavailable(self):
         """geofence_enabled=True but radio is not connected → upload proceeds."""
-        mod = _make_module({
-            "dry_run": True,
-            "geofence_enabled": True,
-            "geofence_radius_km": 10.0,
-        })
+        mod = _make_module(
+            {
+                "dry_run": True,
+                "geofence_enabled": True,
+                "geofence_radius_km": 10.0,
+            }
+        )
         await mod.start()
 
         mock_rt = MagicMock()
@@ -944,11 +981,13 @@ class TestGeofence:
     @pytest.mark.asyncio
     async def test_dry_run_geofence_logs_distance(self):
         """dry_run + geofence_enabled must include the calculated distance in the log line."""
-        mod = _make_module({
-            "dry_run": True,
-            "geofence_enabled": True,
-            "geofence_radius_km": 100.0,
-        })
+        mod = _make_module(
+            {
+                "dry_run": True,
+                "geofence_enabled": True,
+                "geofence_radius_km": 100.0,
+            }
+        )
         await mod.start()
 
         with (
@@ -989,11 +1028,13 @@ class TestGeofence:
     @pytest.mark.asyncio
     async def test_dry_run_geofence_no_distance_when_lat_lon_zero(self):
         """dry_run + geofence_enabled but radio (0, 0) → no distance note in log (skipped)."""
-        mod = _make_module({
-            "dry_run": True,
-            "geofence_enabled": True,
-            "geofence_radius_km": 100.0,
-        })
+        mod = _make_module(
+            {
+                "dry_run": True,
+                "geofence_enabled": True,
+                "geofence_radius_km": 100.0,
+            }
+        )
         await mod.start()
 
         with (
@@ -1012,4 +1053,3 @@ class TestGeofence:
                     assert "km from observer" not in msg
 
         await mod.stop()
-

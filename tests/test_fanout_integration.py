@@ -1835,6 +1835,7 @@ class TestMapUploadIntegration:
             await manager.broadcast_raw(advert_data)
             # Give the asyncio task a chance to run
             import asyncio
+
             await asyncio.sleep(0.05)
             # _upload may or may not be called depending on parse result, but no exception
 
@@ -1877,8 +1878,11 @@ class TestMapUploadIntegration:
         module, _ = manager._modules[cfg["id"]]
 
         with patch.object(module, "on_message", new_callable=AsyncMock) as mock_msg:
-            await manager.broadcast_message({"type": "CHAN", "conversation_key": "k1", "text": "hi"})
+            await manager.broadcast_message(
+                {"type": "CHAN", "conversation_key": "k1", "text": "hi"}
+            )
             import asyncio
+
             await asyncio.sleep(0.05)
             mock_msg.assert_not_called()
 
@@ -1893,10 +1897,12 @@ class TestMapUploadIntegration:
             config_type="map_upload",
             name="Map",
             config={"dry_run": True, "api_url": ""},
-            scope={"messages": "all", "raw_packets": "none"},  # wrong, should be overridden by router
+            scope={
+                "messages": "all",
+                "raw_packets": "none",
+            },  # wrong, should be overridden by router
             enabled=True,
         )
         # The repository stores whatever the router passes — we test the router via HTTP
         # in test_api.py; here we just verify the module works with the correct scope.
         assert cfg["type"] == "map_upload"
-
