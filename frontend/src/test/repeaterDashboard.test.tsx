@@ -11,6 +11,7 @@ const mockHook: {
   loggedIn: false,
   loginLoading: false,
   loginError: null,
+  lastLoginAttempt: null,
   paneData: {
     status: null,
     nodeInfo: null,

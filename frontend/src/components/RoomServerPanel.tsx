@@ -16,7 +16,13 @@ import { AclPane } from './repeater/RepeaterAclPane';
 import { LppTelemetryPane } from './repeater/RepeaterLppTelemetryPane';
 import { ConsolePane } from './repeater/RepeaterConsolePane';
 import { RepeaterLogin } from './RepeaterLogin';
+import { ServerLoginStatusBanner } from './ServerLoginStatusBanner';
 import { useRememberedServerPassword } from '../hooks/useRememberedServerPassword';
+import {
+  buildServerLoginAttemptFromError,
+  buildServerLoginAttemptFromResponse,
+  type ServerLoginAttemptState,
+} from '../utils/serverLoginState';
 
 interface RoomServerPanelProps {
   contact: Contact;
@@ -61,6 +67,7 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
+  const [lastLoginAttempt, setLastLoginAttempt] = useState<ServerLoginAttemptState | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [paneData, setPaneData] = useState<RoomPaneData>({
     status: null,
@@ -75,6 +82,7 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
     setLoginLoading(false);
     setLoginError(null);
     setAuthenticated(false);
+    setLastLoginAttempt(null);
     setAdvancedOpen(false);
     setPaneData({
       status: null,
@@ -129,26 +137,32 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
   );
 
   const performLogin = useCallback(
-    async (password: string) => {
+    async (nextPassword: string, method: 'password' | 'blank') => {
       if (loginLoading) return;
 
       setLoginLoading(true);
       setLoginError(null);
       try {
-        const result = await api.roomLogin(contact.public_key, password);
+        const result = await api.roomLogin(contact.public_key, nextPassword);
+        setLastLoginAttempt(buildServerLoginAttemptFromResponse(method, result, 'room server'));
         setAuthenticated(true);
         if (result.authenticated) {
-          toast.success('Room login confirmed');
+          toast.success('Login confirmed by the room server.');
         } else {
-          toast.warning('Room login not confirmed', {
-            description: result.message ?? 'Room login was not confirmed',
+          toast.warning("Couldn't confirm room login", {
+            description:
+              result.message ??
+              'No confirmation came back from the room server. You can still open tools and try again.',
           });
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
+        setLastLoginAttempt(buildServerLoginAttemptFromError(method, message, 'room server'));
         setAuthenticated(true);
         setLoginError(message);
-        toast.error('Room login failed', { description: message });
+        toast.error('Room login request failed', {
+          description: `${message}. You can still open tools and retry the login from here.`,
+        });
       } finally {
         setLoginLoading(false);
       }
@@ -157,15 +171,15 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
   );
 
   const handleLogin = useCallback(
-    async (password: string) => {
-      await performLogin(password);
-      persistAfterLogin(password);
+    async (nextPassword: string) => {
+      await performLogin(nextPassword, 'password');
+      persistAfterLogin(nextPassword);
     },
     [performLogin, persistAfterLogin]
   );
 
   const handleLoginAsGuest = useCallback(async () => {
-    await performLogin('');
+    await performLogin('', 'blank');
     persistAfterLogin('');
   }, [performLogin, persistAfterLogin]);
 
@@ -207,6 +221,8 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
   );
 
   const panelTitle = useMemo(() => contact.name || contact.public_key.slice(0, 12), [contact]);
+  const showLoginFailureState =
+    lastLoginAttempt !== null && lastLoginAttempt.outcome !== 'confirmed';
 
   if (!authenticated) {
     return (
@@ -236,7 +252,7 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
             onLoginAsGuest={handleLoginAsGuest}
             description="Log in with the room password or use ACL/guest access to enter this room server"
             passwordPlaceholder="Room server password..."
-            guestLabel="Login with ACL / Guest"
+            guestLabel="Login with Existing Access / Guest"
           />
         </div>
       </div>
@@ -245,15 +261,52 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
 
   return (
     <section className="border-b border-border bg-muted/20 px-4 py-3">
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setAdvancedOpen((prev) => !prev)}
-        >
-          {advancedOpen ? 'Hide Tools' : 'Show Tools'}
-        </Button>
+      <div className="space-y-3">
+        {showLoginFailureState ? (
+          <ServerLoginStatusBanner
+            attempt={lastLoginAttempt}
+            loading={loginLoading}
+            canRetryPassword={password.trim().length > 0}
+            onRetryPassword={() => handleLogin(password)}
+            onRetryBlank={handleLoginAsGuest}
+            blankRetryLabel="Retry Existing-Access Login"
+            showRetryActions={false}
+          />
+        ) : null}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {showLoginFailureState ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleLogin(password)}
+                disabled={loginLoading || password.trim().length === 0}
+              >
+                Retry Password Login
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleLoginAsGuest}
+                disabled={loginLoading}
+              >
+                Retry Existing-Access Login
+              </Button>
+            </div>
+          ) : (
+            <div />
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setAdvancedOpen((prev) => !prev)}
+          >
+            {advancedOpen ? 'Hide Tools' : 'Show Tools'}
+          </Button>
+        </div>
       </div>
       <Sheet open={advancedOpen} onOpenChange={setAdvancedOpen}>
         <SheetContent side="right" className="w-full sm:max-w-4xl p-0 flex flex-col">
@@ -269,15 +322,6 @@ export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPa
                 <h2 className="truncate text-base font-semibold">Room Server Tools</h2>
                 <p className="text-sm text-muted-foreground">{panelTitle}</p>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleLoginAsGuest}
-                disabled={loginLoading}
-                className="self-start sm:self-auto"
-              >
-                Refresh ACL Login
-              </Button>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-4">

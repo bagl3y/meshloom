@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type ServerLoginKind = 'repeater' | 'room';
 
-const STORAGE_KEY_PREFIX = 'remoteterm-server-password';
-
 type StoredPassword = {
   password: string;
 };
+
+const STORAGE_KEY_PREFIX = 'remoteterm-server-password';
+const inMemoryPasswords = new Map<string, StoredPassword>();
 
 function getStorageKey(kind: ServerLoginKind, publicKey: string): string {
   return `${STORAGE_KEY_PREFIX}:${kind}:${publicKey}`;
@@ -33,37 +34,46 @@ export function useRememberedServerPassword(kind: ServerLoginKind, publicKey: st
 
   useEffect(() => {
     const stored = loadStoredPassword(kind, publicKey);
-    if (!stored) {
-      setPassword('');
+    if (stored) {
+      setPassword(stored.password);
+      setRememberPassword(true);
+      return;
+    }
+
+    const inMemoryStored = inMemoryPasswords.get(storageKey);
+    if (inMemoryStored) {
+      setPassword(inMemoryStored.password);
       setRememberPassword(false);
       return;
     }
-    setPassword(stored.password);
-    setRememberPassword(true);
-  }, [kind, publicKey]);
+
+    setPassword('');
+    setRememberPassword(false);
+  }, [kind, publicKey, storageKey]);
 
   const persistAfterLogin = useCallback(
     (submittedPassword: string) => {
+      const trimmedPassword = submittedPassword.trim();
+      if (!trimmedPassword) {
+        return;
+      }
+
+      inMemoryPasswords.set(storageKey, { password: trimmedPassword });
+
       if (!rememberPassword) {
         try {
           localStorage.removeItem(storageKey);
         } catch {
           // localStorage may be unavailable
         }
-        setPassword('');
-        return;
+      } else {
+        try {
+          localStorage.setItem(storageKey, JSON.stringify({ password: trimmedPassword }));
+        } catch {
+          // localStorage may be unavailable
+        }
       }
 
-      const trimmedPassword = submittedPassword.trim();
-      if (!trimmedPassword) {
-        return;
-      }
-
-      try {
-        localStorage.setItem(storageKey, JSON.stringify({ password: trimmedPassword }));
-      } catch {
-        // localStorage may be unavailable
-      }
       setPassword(trimmedPassword);
     },
     [rememberPassword, storageKey]

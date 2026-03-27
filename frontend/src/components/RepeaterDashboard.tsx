@@ -5,6 +5,7 @@ import { Button } from './ui/button';
 import { Bell, Route, Star, Trash2 } from 'lucide-react';
 import { DirectTraceIcon } from './DirectTraceIcon';
 import { RepeaterLogin } from './RepeaterLogin';
+import { ServerLoginStatusBanner } from './ServerLoginStatusBanner';
 import { useRememberedServerPassword } from '../hooks/useRememberedServerPassword';
 import { useRepeaterDashboard } from '../hooks/useRepeaterDashboard';
 import { isFavorite } from '../utils/favorites';
@@ -69,6 +70,7 @@ export function RepeaterDashboard({
     loggedIn,
     loginLoading,
     loginError,
+    lastLoginAttempt,
     paneData,
     paneStates,
     consoleHistory,
@@ -249,6 +251,14 @@ export function RepeaterDashboard({
           />
         ) : (
           <div className="space-y-4">
+            <ServerLoginStatusBanner
+              attempt={lastLoginAttempt}
+              loading={loginLoading}
+              canRetryPassword={password.trim().length > 0}
+              onRetryPassword={() => handleRepeaterLogin(password)}
+              onRetryBlank={handleRepeaterGuestLogin}
+              blankRetryLabel="Retry Existing-Access Login"
+            />
             {/* Top row: Telemetry + Radio Settings | Node Info + Neighbors */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-stretch">
               <div className="flex flex-col gap-4">

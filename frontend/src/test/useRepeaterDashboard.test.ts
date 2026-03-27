@@ -74,6 +74,8 @@ describe('useRepeaterDashboard', () => {
 
     expect(result.current.loggedIn).toBe(true);
     expect(result.current.loginError).toBe(null);
+    expect(result.current.lastLoginAttempt?.heardBack).toBe(true);
+    expect(result.current.lastLoginAttempt?.outcome).toBe('confirmed');
     expect(mockApi.repeaterLogin).toHaveBeenCalledWith(REPEATER_KEY, 'secret');
   });
 
@@ -92,6 +94,8 @@ describe('useRepeaterDashboard', () => {
 
     expect(result.current.loggedIn).toBe(true);
     expect(result.current.loginError).toBe('Auth failed');
+    expect(result.current.lastLoginAttempt?.heardBack).toBe(true);
+    expect(result.current.lastLoginAttempt?.outcome).toBe('not_confirmed');
     expect(mockToast.error).toHaveBeenCalledWith('Login not confirmed', {
       description: 'Auth failed',
     });
@@ -125,6 +129,8 @@ describe('useRepeaterDashboard', () => {
 
     expect(result.current.loggedIn).toBe(true);
     expect(result.current.loginError).toBe('Network error');
+    expect(result.current.lastLoginAttempt?.heardBack).toBe(false);
+    expect(result.current.lastLoginAttempt?.outcome).toBe('request_failed');
     expect(mockToast.error).toHaveBeenCalledWith('Login request failed', {
       description:
         'Network error. The dashboard is still available, but repeater operations may fail until a login succeeds.',

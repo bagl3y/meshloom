@@ -487,7 +487,9 @@ class TestSyncAndOffloadAll:
         ):
             result = await sync_and_offload_all(mock_mc)
 
-        mock_start.assert_called_once_with(initial_radio_contacts=radio_contacts, expected_mc=mock_mc)
+        mock_start.assert_called_once_with(
+            initial_radio_contacts=radio_contacts, expected_mc=mock_mc
+        )
         assert result["contact_reconcile_started"] is True
 
     @pytest.mark.asyncio

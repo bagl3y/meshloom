@@ -62,7 +62,7 @@ def _login_rejected_message(label: str) -> str:
 def _login_send_failed_message(label: str) -> str:
     return (
         f"The login request could not be sent to the {label}. "
-        f"The control panel is still available, but authenticated actions may fail until a login succeeds."
+        f"You're free to attempt interaction; try logging in again if authenticated actions fail."
     )
 
 
@@ -70,7 +70,7 @@ def _login_timeout_message(label: str) -> str:
     return (
         f"No login confirmation was heard from the {label}. "
         "That can mean the password was wrong or the reply was missed in transit. "
-        "The control panel is still available; try logging in again if authenticated actions fail."
+        "You're free to attempt interaction; try logging in again if authenticated actions fail."
     )
 
 
