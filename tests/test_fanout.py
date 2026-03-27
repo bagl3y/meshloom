@@ -791,6 +791,13 @@ class TestMapUploadValidation:
         assert config["geofence_enabled"] is False
         assert config["geofence_radius_km"] == 0.0
 
+    def test_enforce_scope_map_upload_forces_raw_only(self):
+        """map_upload scope is always fixed regardless of what the caller passes."""
+        from app.routers.fanout import _enforce_scope
+
+        scope = _enforce_scope("map_upload", {"messages": "all", "raw_packets": "none"})
+        assert scope == {"messages": "none", "raw_packets": "all"}
+
 
     def test_enforce_scope_sqs_preserves_raw_packets_setting(self):
         from app.routers.fanout import _enforce_scope

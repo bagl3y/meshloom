@@ -1888,21 +1888,3 @@ class TestMapUploadIntegration:
 
         await manager.stop_all()
 
-    @pytest.mark.asyncio
-    async def test_map_upload_scope_enforced_on_create(self, integration_db):
-        """Scope for map_upload is always fixed to raw_packets: all, messages: none."""
-        # Even if a custom scope is passed, the router enforces the correct one.
-        # Here we verify the DB record has the enforced scope.
-        cfg = await FanoutConfigRepository.create(
-            config_type="map_upload",
-            name="Map",
-            config={"dry_run": True, "api_url": ""},
-            scope={
-                "messages": "all",
-                "raw_packets": "none",
-            },  # wrong, should be overridden by router
-            enabled=True,
-        )
-        # The repository stores whatever the router passes — we test the router via HTTP
-        # in test_api.py; here we just verify the module works with the correct scope.
-        assert cfg["type"] == "map_upload"

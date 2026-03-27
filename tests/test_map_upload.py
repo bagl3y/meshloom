@@ -898,23 +898,24 @@ class TestGeofence:
 
     @pytest.mark.asyncio
     async def test_node_at_exact_boundary_passes(self):
-        """Node at exactly the fence radius must be allowed (<=, not <)."""
+        """Node at exactly the fence radius must be allowed (> not >=).
+
+        We compute the haversine distance to the node, then set the radius to
+        exactly that value.  The geofence check is ``dist > radius``, so a node
+        sitting precisely on the boundary must pass through.
+        """
+        fence_lat, fence_lon = 1.0, 0.0
+        node_lat, node_lon = 1.9, 0.0
+        exact_dist = _haversine_km(fence_lat, fence_lon, node_lat, node_lon)
+
         mod = _make_module(
             {
                 "dry_run": True,
                 "geofence_enabled": True,
-                "geofence_radius_km": 100.0,
+                "geofence_radius_km": exact_dist,  # radius == distance → must pass
             }
         )
         await mod.start()
-
-        # Use a non-zero center so it's not treated as "not configured".
-        # Purely latitudinal haversine distance is origin-independent, so
-        # 0.8993° from (1.0, 0.0) gives the same ~100 km as from (0.0, 0.0).
-        fence_lat, fence_lon = 1.0, 0.0
-        node_lat = fence_lat + 0.8993
-        dist = _haversine_km(fence_lat, fence_lon, node_lat, fence_lon)
-        assert dist <= 100.0, f"Expected <=100 km, got {dist:.3f}"
 
         with (
             _mock_radio_runtime_with_location(fence_lat, fence_lon),
@@ -922,8 +923,39 @@ class TestGeofence:
             patch("app.fanout.map_upload.get_public_key", return_value=_FAKE_PUBLIC),
             patch("app.fanout.map_upload._get_radio_params", return_value=_FAKE_RADIO_PARAMS),
         ):
-            await mod._upload("ab" * 32, 1000, 2, "aabb", node_lat, fence_lon)
+            await mod._upload("ab" * 32, 1000, 2, "aabb", node_lat, node_lon)
             assert ("ab" * 32) in mod._seen
+
+        await mod.stop()
+
+    @pytest.mark.asyncio
+    async def test_node_just_outside_boundary_skipped(self):
+        """Node one metre beyond the fence radius must be filtered.
+
+        Companion to test_node_at_exact_boundary_passes: shrink the radius by a
+        tiny epsilon so the same node is now strictly outside the fence.
+        """
+        fence_lat, fence_lon = 1.0, 0.0
+        node_lat, node_lon = 1.9, 0.0
+        exact_dist = _haversine_km(fence_lat, fence_lon, node_lat, node_lon)
+
+        mod = _make_module(
+            {
+                "dry_run": True,
+                "geofence_enabled": True,
+                "geofence_radius_km": exact_dist - 0.001,  # 1 metre short → must be filtered
+            }
+        )
+        await mod.start()
+
+        with (
+            _mock_radio_runtime_with_location(fence_lat, fence_lon),
+            patch("app.fanout.map_upload.get_private_key", return_value=_FAKE_PRIVATE),
+            patch("app.fanout.map_upload.get_public_key", return_value=_FAKE_PUBLIC),
+            patch("app.fanout.map_upload._get_radio_params", return_value=_FAKE_RADIO_PARAMS),
+        ):
+            await mod._upload("ab" * 32, 1000, 2, "aabb", node_lat, node_lon)
+            assert ("ab" * 32) not in mod._seen
 
         await mod.stop()
 
