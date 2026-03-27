@@ -95,6 +95,8 @@ Access the app at http://localhost:8000.
 
 Source checkouts expect a normal frontend build in `frontend/dist`.
 
+On Linux, if you want this installed as a persistent `systemd` service that starts on boot and restarts automatically on failure, run `bash scripts/install_service.sh` from the repo root.
+
 ## Path 1.5: Use The Prebuilt Release Zip
 
 Release zips can be found as an asset within the [releases listed here](https://github.com/jkingsman/Remote-Terminal-for-MeshCore/releases). This can be beneficial on resource constrained systems that cannot cope with the RAM-hungry frontend build process.
