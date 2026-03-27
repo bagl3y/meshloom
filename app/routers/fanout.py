@@ -308,6 +308,14 @@ def _validate_map_upload_config(config: dict) -> None:
     # Persist the cleaned value (empty string means use the module default)
     config["api_url"] = api_url
     config["dry_run"] = bool(config.get("dry_run", True))
+    config["geofence_enabled"] = bool(config.get("geofence_enabled", False))
+    try:
+        radius = float(config.get("geofence_radius_km", 0) or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="geofence_radius_km must be a number") from None
+    if radius < 0:
+        raise HTTPException(status_code=400, detail="geofence_radius_km must be >= 0")
+    config["geofence_radius_km"] = radius
 
 
 def _enforce_scope(config_type: str, scope: dict) -> dict:
