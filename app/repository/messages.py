@@ -723,6 +723,11 @@ class MessageRepository:
             state_key = f"{prefix}-{row['conversation_key']}"
             last_message_times[state_key] = row["last_message_time"]
 
+        # Only include last_read_ats for conversations that actually have messages.
+        # Without this filter, every contact heard via advertisement (even without
+        # any DMs) bloats the payload — 391KB down to ~46KB on a typical database.
+        last_read_ats = {k: v for k, v in last_read_ats.items() if k in last_message_times}
+
         return {
             "counts": counts,
             "mentions": mention_flags,
