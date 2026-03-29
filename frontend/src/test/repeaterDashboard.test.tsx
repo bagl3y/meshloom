@@ -51,6 +51,21 @@ vi.mock('../hooks/useRepeaterDashboard', () => ({
   useRepeaterDashboard: () => mockHook,
 }));
 
+// Mock api module (BatteryHistoryPane calls api.getSettings on mount)
+vi.mock('../api', () => ({
+  api: {
+    getSettings: vi.fn().mockResolvedValue({
+      telemetry_tracked_keys: [],
+      blocked_keys: [],
+      blocked_names: [],
+      favorites: [],
+    }),
+    repeaterTelemetryHistory: vi.fn().mockResolvedValue({ entries: [] }),
+    toggleTelemetryTracking: vi.fn().mockResolvedValue({ telemetry_tracked_keys: [] }),
+    setContactRoutingOverride: vi.fn().mockResolvedValue({ status: 'ok' }),
+  },
+}));
+
 // Mock sonner toast
 vi.mock('../components/ui/sonner', () => ({
   toast: {

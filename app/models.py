@@ -847,6 +847,10 @@ class AppSettings(BaseModel):
             "advertisements should not create new contacts; existing contacts are still updated"
         ),
     )
+    telemetry_tracked_keys: list[str] = Field(
+        default_factory=list,
+        description="Repeater public keys opted in to hourly telemetry tracking",
+    )
 
 
 class FanoutConfig(BaseModel):
@@ -921,3 +925,14 @@ class StatisticsResponse(BaseModel):
     known_channels_active: ContactActivityCounts
     path_hash_width_24h: PathHashWidthStats
     noise_floor_24h: NoiseFloorHistoryStats
+
+
+class TelemetryHistoryEntry(BaseModel):
+    timestamp: int
+    battery_volts: float
+    uptime_seconds: int | None = None
+    noise_floor_dbm: int | None = None
+
+
+class RepeaterTelemetryHistoryResponse(BaseModel):
+    entries: list[TelemetryHistoryEntry]

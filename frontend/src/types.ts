@@ -342,6 +342,7 @@ export interface AppSettings {
   blocked_keys: string[];
   blocked_names: string[];
   discovery_blocked_types: number[];
+  telemetry_tracked_keys: string[];
 }
 
 export interface AppSettingsUpdate {
@@ -477,6 +478,17 @@ export interface PaneState {
   attempt: number;
   error: string | null;
   fetched_at?: number | null;
+}
+
+export interface TelemetryHistoryEntry {
+  timestamp: number;
+  battery_volts: number;
+  uptime_seconds: number | null;
+  noise_floor_dbm: number | null;
+}
+
+export interface RepeaterTelemetryHistoryResponse {
+  entries: TelemetryHistoryEntry[];
 }
 
 export interface TraceResponse {
