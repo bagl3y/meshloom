@@ -12,6 +12,7 @@ cd "$SCRIPT_DIR"
 
 RELEASE_WORK_DIR=""
 RELEASE_BUNDLE_DIR_NAME="Remote-Terminal-for-MeshCore"
+RELEASE_ASSET=""
 DOCKER_IMAGE="jkingsman/remoteterm-meshcore"
 DOCKER_PLATFORMS="linux/amd64,linux/arm64"
 
@@ -21,6 +22,9 @@ cleanup_release_build_artifacts() {
     fi
     if [ -n "$RELEASE_WORK_DIR" ] && [ -d "$RELEASE_WORK_DIR" ]; then
         rm -rf "$RELEASE_WORK_DIR"
+    fi
+    if [ -n "$RELEASE_ASSET" ] && [ -f "$SCRIPT_DIR/$RELEASE_ASSET" ]; then
+        rm -f "$SCRIPT_DIR/$RELEASE_ASSET"
     fi
 }
 
