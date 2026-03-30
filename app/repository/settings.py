@@ -272,17 +272,26 @@ class StatisticsRepository:
 
     @staticmethod
     async def _known_channels_active() -> dict[str, int]:
-        """Count distinct known channel keys with channel traffic in each time window."""
+        """Count known channel keys with any traffic in each time window.
+
+        Channel keys are stored canonically as uppercase hex, so we can avoid
+        the old UPPER(...) join and aggregate per known channel directly.
+        """
         now = int(time.time())
         cursor = await db.conn.execute(
             """
+            WITH known AS (
+                SELECT conversation_key, MAX(received_at) AS last_received_at
+                FROM messages
+                WHERE type = 'CHAN'
+                  AND conversation_key IN (SELECT key FROM channels)
+                GROUP BY conversation_key
+            )
             SELECT
-                COUNT(DISTINCT CASE WHEN m.received_at >= ? THEN m.conversation_key END) AS last_hour,
-                COUNT(DISTINCT CASE WHEN m.received_at >= ? THEN m.conversation_key END) AS last_24_hours,
-                COUNT(DISTINCT CASE WHEN m.received_at >= ? THEN m.conversation_key END) AS last_week
-            FROM messages m
-            INNER JOIN channels c ON UPPER(m.conversation_key) = UPPER(c.key)
-            WHERE m.type = 'CHAN'
+                SUM(CASE WHEN last_received_at >= ? THEN 1 ELSE 0 END) AS last_hour,
+                SUM(CASE WHEN last_received_at >= ? THEN 1 ELSE 0 END) AS last_24_hours,
+                SUM(CASE WHEN last_received_at >= ? THEN 1 ELSE 0 END) AS last_week
+            FROM known
             """,
             (now - SECONDS_1H, now - SECONDS_24H, now - SECONDS_7D),
         )
