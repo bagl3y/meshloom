@@ -39,6 +39,7 @@ export function CrackerPanel({
 }: CrackerPanelProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [maxLength, setMaxLength] = useState(6);
+  const [maxLengthInput, setMaxLengthInput] = useState('6');
   const [retryFailedAtNextLength, setRetryFailedAtNextLength] = useState(false);
   const [decryptHistorical, setDecryptHistorical] = useState(true);
   const [turboMode, setTurboMode] = useState(false);
@@ -189,6 +190,10 @@ export function CrackerPanel({
 
   useEffect(() => {
     maxLengthRef.current = maxLength;
+  }, [maxLength]);
+
+  useEffect(() => {
+    setMaxLengthInput(String(maxLength));
   }, [maxLength]);
 
   useEffect(() => {
@@ -434,8 +439,25 @@ export function CrackerPanel({
             type="number"
             min={1}
             max={10}
-            value={maxLength}
-            onChange={(e) => setMaxLength(Math.min(10, Math.max(1, parseInt(e.target.value) || 6)))}
+            value={maxLengthInput}
+            onChange={(e) => {
+              const nextValue = e.target.value;
+              setMaxLengthInput(nextValue);
+              if (nextValue === '') return;
+              const parsed = Number.parseInt(nextValue, 10);
+              if (Number.isNaN(parsed)) return;
+              setMaxLength(Math.min(10, Math.max(1, parsed)));
+            }}
+            onBlur={() => {
+              const parsed = Number.parseInt(maxLengthInput, 10);
+              const nextValue = Number.isNaN(parsed)
+                ? maxLength
+                : Math.min(10, Math.max(1, parsed));
+              setMaxLengthInput(String(nextValue));
+              if (nextValue !== maxLength) {
+                setMaxLength(nextValue);
+              }
+            }}
             className="w-14 px-2 py-1 text-sm bg-muted border border-border rounded"
           />
         </div>

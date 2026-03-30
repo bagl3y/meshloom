@@ -704,6 +704,75 @@ describe('SettingsFanoutSection', () => {
     expect(audienceInput).toHaveValue('');
   });
 
+  it('existing community MQTT defaults can be cleared while editing and normalize on save', async () => {
+    const communityConfig: FanoutConfig = {
+      id: 'comm-1',
+      type: 'mqtt_community',
+      name: 'Community Feed',
+      enabled: false,
+      config: {
+        broker_host: 'mqtt-us-v1.letsmesh.net',
+        broker_port: 443,
+        transport: 'websockets',
+        use_tls: true,
+        tls_verify: true,
+        auth_mode: 'token',
+        iata: 'LAX',
+        email: '',
+        token_audience: '',
+        topic_template: 'meshcore/{IATA}/{PUBLIC_KEY}/packets',
+      },
+      scope: { messages: 'none', raw_packets: 'all' },
+      sort_order: 0,
+      created_at: 1000,
+    };
+    mockedApi.getFanoutConfigs.mockResolvedValue([communityConfig]);
+    mockedApi.updateFanoutConfig.mockResolvedValue({
+      ...communityConfig,
+      enabled: true,
+    });
+
+    renderSection();
+    await waitFor(() => expect(screen.getByText('Community Feed')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+
+    const hostInput = screen.getByLabelText('Broker Host') as HTMLInputElement;
+    const portInput = screen.getByLabelText('Broker Port') as HTMLInputElement;
+    const topicTemplateInput = screen.getByLabelText('Packet Topic Template') as HTMLInputElement;
+
+    fireEvent.change(hostInput, { target: { value: '' } });
+    fireEvent.change(portInput, { target: { value: '' } });
+    fireEvent.change(topicTemplateInput, { target: { value: '' } });
+
+    expect(hostInput.value).toBe('');
+    expect(portInput.value).toBe('');
+    expect(topicTemplateInput.value).toBe('');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save as Enabled' }));
+
+    await waitFor(() =>
+      expect(mockedApi.updateFanoutConfig).toHaveBeenCalledWith('comm-1', {
+        name: 'Community Feed',
+        config: {
+          broker_host: 'mqtt-us-v1.letsmesh.net',
+          broker_port: 443,
+          transport: 'websockets',
+          use_tls: true,
+          tls_verify: true,
+          auth_mode: 'token',
+          iata: 'LAX',
+          email: '',
+          token_audience: '',
+          topic_template: 'meshcore/{IATA}/{PUBLIC_KEY}/packets',
+        },
+        scope: { messages: 'none', raw_packets: 'all' },
+        enabled: true,
+      })
+    );
+  });
+
   it('community MQTT can be configured for no auth', async () => {
     const communityConfig: FanoutConfig = {
       id: 'comm-1',
@@ -781,6 +850,65 @@ describe('SettingsFanoutSection', () => {
     expect(screen.getByLabelText('Name')).toHaveValue('MeshRank');
     expect(screen.getByLabelText('Packet Topic Template')).toHaveValue('');
     expect(screen.queryByLabelText('Broker Host')).not.toBeInTheDocument();
+  });
+
+  it('private MQTT fields can be cleared while editing and normalize defaults on create', async () => {
+    const createdConfig: FanoutConfig = {
+      id: 'mqtt-private-1',
+      type: 'mqtt_private',
+      name: 'Private MQTT 1',
+      enabled: true,
+      config: {
+        broker_host: 'broker.local',
+        broker_port: 1883,
+        username: '',
+        password: '',
+        use_tls: false,
+        tls_insecure: false,
+        topic_prefix: 'meshcore',
+      },
+      scope: { messages: 'all', raw_packets: 'all' },
+      sort_order: 0,
+      created_at: 2000,
+    };
+    mockedApi.createFanoutConfig.mockResolvedValue(createdConfig);
+    mockedApi.getFanoutConfigs.mockResolvedValueOnce([]).mockResolvedValueOnce([createdConfig]);
+
+    renderSection();
+    await openCreateIntegrationDialog();
+    selectCreateIntegration('Private MQTT');
+    confirmCreateIntegration();
+    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Broker Host'), { target: { value: 'broker.local' } });
+
+    const portInput = screen.getByLabelText('Broker Port') as HTMLInputElement;
+    const prefixInput = screen.getByLabelText('Topic Prefix') as HTMLInputElement;
+    fireEvent.change(portInput, { target: { value: '' } });
+    fireEvent.change(prefixInput, { target: { value: '' } });
+
+    expect(portInput.value).toBe('');
+    expect(prefixInput.value).toBe('');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save as Enabled' }));
+
+    await waitFor(() =>
+      expect(mockedApi.createFanoutConfig).toHaveBeenCalledWith({
+        type: 'mqtt_private',
+        name: 'Private MQTT #1',
+        config: {
+          broker_host: 'broker.local',
+          broker_port: 1883,
+          username: '',
+          password: '',
+          use_tls: false,
+          tls_insecure: false,
+          topic_prefix: 'meshcore',
+        },
+        scope: { messages: 'all', raw_packets: 'all' },
+        enabled: true,
+      })
+    );
   });
 
   it('creates MeshRank preset as a regular mqtt_community config', async () => {
@@ -908,6 +1036,57 @@ describe('SettingsFanoutSection', () => {
         },
         scope: { messages: 'none', raw_packets: 'all' },
         enabled: false,
+      })
+    );
+  });
+
+  it('map upload geofence radius can be cleared while editing and normalizes to zero', async () => {
+    const createdConfig: FanoutConfig = {
+      id: 'map-1',
+      type: 'map_upload',
+      name: 'Map Upload 1',
+      enabled: true,
+      config: {
+        api_url: '',
+        dry_run: true,
+        geofence_enabled: true,
+        geofence_radius_km: 0,
+      },
+      scope: { messages: 'none', raw_packets: 'all' },
+      sort_order: 0,
+      created_at: 2000,
+    };
+    mockedApi.createFanoutConfig.mockResolvedValue(createdConfig);
+    mockedApi.getFanoutConfigs.mockResolvedValueOnce([]).mockResolvedValueOnce([createdConfig]);
+
+    renderSection();
+    await openCreateIntegrationDialog();
+    selectCreateIntegration('Map Upload');
+    confirmCreateIntegration();
+    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Enable Geofence'));
+    const radiusInput = screen.getByLabelText('Radius (km)') as HTMLInputElement;
+
+    fireEvent.change(radiusInput, { target: { value: '100' } });
+    fireEvent.change(radiusInput, { target: { value: '' } });
+
+    expect(radiusInput.value).toBe('');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save as Enabled' }));
+
+    await waitFor(() =>
+      expect(mockedApi.createFanoutConfig).toHaveBeenCalledWith({
+        type: 'map_upload',
+        name: 'Map Upload #1',
+        config: {
+          api_url: '',
+          dry_run: true,
+          geofence_enabled: true,
+          geofence_radius_km: 0,
+        },
+        scope: { messages: 'none', raw_packets: 'all' },
+        enabled: true,
       })
     );
   });
