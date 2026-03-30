@@ -2,7 +2,7 @@ import os
 from typing import Any, Literal
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.repository import RawPacketRepository
@@ -25,6 +25,13 @@ class AppInfoResponse(BaseModel):
     commit_hash: str | None = None
 
 
+class FanoutStatusResponse(BaseModel):
+    name: str
+    type: str
+    status: str
+    last_error: str | None = None
+
+
 class HealthResponse(BaseModel):
     status: str
     radio_connected: bool
@@ -35,7 +42,7 @@ class HealthResponse(BaseModel):
     radio_device_info: RadioDeviceInfoResponse | None = None
     database_size_mb: float
     oldest_undecrypted_timestamp: int | None
-    fanout_statuses: dict[str, dict[str, str]] = {}
+    fanout_statuses: dict[str, FanoutStatusResponse] = Field(default_factory=dict)
     bots_disabled: bool = False
     bots_disabled_source: Literal["env", "until_restart"] | None = None
     basic_auth_enabled: bool = False

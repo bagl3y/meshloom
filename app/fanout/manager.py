@@ -15,6 +15,14 @@ _DISPATCH_TIMEOUT_SECONDS = 30.0
 _MODULE_TYPES: dict[str, type] = {}
 
 
+def _format_error_detail(exc: Exception) -> str:
+    """Return a short operator-facing error string."""
+    message = str(exc).strip()
+    if message:
+        return f"{type(exc).__name__}: {message}"
+    return type(exc).__name__
+
+
 def _register_module_types() -> None:
     """Lazily populate the type registry to avoid circular imports."""
     if _MODULE_TYPES:
@@ -85,6 +93,23 @@ class FanoutManager:
         self._modules: dict[str, tuple[FanoutModule, dict]] = {}  # id -> (module, scope)
         self._restart_locks: dict[str, asyncio.Lock] = {}
         self._bots_disabled_until_restart = False
+        self._module_errors: dict[str, str] = {}
+
+    def _broadcast_health_update(self) -> None:
+        from app.services.radio_runtime import radio_runtime as radio_manager
+        from app.websocket import broadcast_health
+
+        broadcast_health(radio_manager.is_connected, radio_manager.connection_info)
+
+    def _set_module_error(self, config_id: str, error: str) -> None:
+        if self._module_errors.get(config_id) == error:
+            return
+        self._module_errors[config_id] = error
+        self._broadcast_health_update()
+
+    def _clear_module_error(self, config_id: str) -> None:
+        if self._module_errors.pop(config_id, None) is not None:
+            self._broadcast_health_update()
 
     def get_bots_disabled_source(self) -> str | None:
         """Return why bot modules are unavailable, if at all."""
@@ -134,11 +159,13 @@ class FanoutManager:
             module = cls(config_id, config_blob, name=cfg.get("name", ""))
             await module.start()
             self._modules[config_id] = (module, scope)
+            self._clear_module_error(config_id)
             logger.info(
                 "Started fanout module %s (type=%s)", cfg.get("name", config_id), config_type
             )
-        except Exception:
+        except Exception as exc:
             logger.exception("Failed to start fanout module %s", config_id)
+            self._set_module_error(config_id, _format_error_detail(exc))
 
     async def reload_config(self, config_id: str) -> None:
         """Stop old module (if any) and start updated config."""
@@ -162,6 +189,7 @@ class FanoutManager:
                 await module.stop()
             except Exception:
                 logger.exception("Error stopping fanout module %s", config_id)
+        self._clear_module_error(config_id)
 
     async def _dispatch_matching(
         self,
@@ -191,7 +219,12 @@ class FanoutManager:
         try:
             handler = getattr(module, handler_name)
             await asyncio.wait_for(handler(data), timeout=_DISPATCH_TIMEOUT_SECONDS)
+            self._clear_module_error(config_id)
         except asyncio.TimeoutError:
+            timeout_error = (
+                f"{handler_name} timed out after {_DISPATCH_TIMEOUT_SECONDS:.1f}s"
+            )
+            self._set_module_error(config_id, timeout_error)
             logger.error(
                 "Fanout %s %s timed out after %.1fs; restarting module",
                 config_id,
@@ -199,7 +232,8 @@ class FanoutManager:
                 _DISPATCH_TIMEOUT_SECONDS,
             )
             await self._restart_module(config_id, module)
-        except Exception:
+        except Exception as exc:
+            self._set_module_error(config_id, _format_error_detail(exc))
             logger.exception("Fanout %s %s error", config_id, log_label)
 
     async def _restart_module(self, config_id: str, module: FanoutModule) -> None:
@@ -215,6 +249,10 @@ class FanoutManager:
             except Exception:
                 logger.exception("Failed to restart timed-out fanout module %s", config_id)
                 self._modules.pop(config_id, None)
+                self._set_module_error(
+                    config_id,
+                    "Module restart failed after timeout",
+                )
 
     async def broadcast_message(self, data: dict) -> None:
         """Dispatch a decoded message to modules whose scope matches."""
@@ -243,18 +281,39 @@ class FanoutManager:
                 logger.exception("Error stopping fanout module %s", config_id)
         self._modules.clear()
         self._restart_locks.clear()
+        self._module_errors.clear()
 
-    def get_statuses(self) -> dict[str, dict[str, str]]:
+    def get_statuses(self) -> dict[str, dict[str, str | None]]:
         """Return status info for each active module."""
         from app.repository.fanout import _configs_cache
 
-        result: dict[str, dict[str, str]] = {}
-        for config_id, (module, _) in self._modules.items():
+        result: dict[str, dict[str, str | None]] = {}
+        all_ids = set(_configs_cache) | set(self._modules) | set(self._module_errors)
+        for config_id in all_ids:
             info = _configs_cache.get(config_id, {})
+            if info.get("enabled") is False:
+                continue
+
+            module_entry = self._modules.get(config_id)
+            module = module_entry[0] if module_entry is not None else None
+            last_error = module.last_error if module is not None else None
+            status = module.status if module is not None else "error"
+
+            manager_error = self._module_errors.get(config_id)
+            if manager_error is not None:
+                status = "error"
+                last_error = manager_error
+            elif last_error is not None and status != "error":
+                status = "error"
+
+            if module is None and last_error is None:
+                continue
+
             result[config_id] = {
                 "name": info.get("name", config_id),
                 "type": info.get("type", "unknown"),
-                "status": module.status,
+                "status": status,
+                "last_error": last_error,
             }
         return result
 

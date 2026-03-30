@@ -146,6 +146,7 @@ class TestMqttPublisher:
         # After a publish failure, connected should be cleared to stop
         # further attempts and reflect accurate status
         assert pub.connected is False
+        assert pub.last_error == "Network error"
         assert "Primary MQTT" in caplog.text
         assert "usually transient network noise" in caplog.text
 

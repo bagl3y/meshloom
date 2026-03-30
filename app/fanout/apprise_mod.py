@@ -95,7 +95,6 @@ class AppriseModule(FanoutModule):
 
     def __init__(self, config_id: str, config: dict, *, name: str = "") -> None:
         super().__init__(config_id, config, name=name)
-        self._last_error: str | None = None
 
     async def on_message(self, data: dict) -> None:
         # Skip outgoing messages — only notify on incoming
@@ -114,17 +113,17 @@ class AppriseModule(FanoutModule):
             success = await asyncio.to_thread(
                 _send_sync, urls, body, preserve_identity=preserve_identity
             )
-            self._last_error = None if success else "Apprise notify returned failure"
+            self._set_last_error(None if success else "Apprise notify returned failure")
             if not success:
                 logger.warning("Apprise notification failed for module %s", self.config_id)
         except Exception as exc:
-            self._last_error = str(exc)
+            self._set_last_error(str(exc))
             logger.exception("Apprise send error for module %s", self.config_id)
 
     @property
     def status(self) -> str:
         if not self.config.get("urls", "").strip():
             return "disconnected"
-        if self._last_error:
+        if self.last_error:
             return "error"
         return "connected"

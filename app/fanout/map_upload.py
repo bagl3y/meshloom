@@ -106,7 +106,6 @@ class MapUploadModule(FanoutModule):
     def __init__(self, config_id: str, config: dict, *, name: str = "") -> None:
         super().__init__(config_id, config, name=name)
         self._client: httpx.AsyncClient | None = None
-        self._last_error: str | None = None
         # Per-pubkey rate limiting: pubkey_hex -> last_uploaded_advert_timestamp
         self._seen: dict[str, int] = {}
 
@@ -295,7 +294,7 @@ class MapUploadModule(FanoutModule):
             )
             resp.raise_for_status()
             self._seen[pubkey] = advert_timestamp
-            self._last_error = None
+            self._set_last_error(None)
             logger.info(
                 "MapUpload: uploaded %s (%s) → HTTP %d",
                 pubkey[:12],
@@ -303,7 +302,7 @@ class MapUploadModule(FanoutModule):
                 resp.status_code,
             )
         except httpx.HTTPStatusError as exc:
-            self._last_error = f"HTTP {exc.response.status_code}"
+            self._set_last_error(f"HTTP {exc.response.status_code}")
             logger.warning(
                 "MapUpload: server returned %d for %s: %s",
                 exc.response.status_code,
@@ -311,13 +310,13 @@ class MapUploadModule(FanoutModule):
                 exc.response.text[:200],
             )
         except httpx.RequestError as exc:
-            self._last_error = str(exc)
+            self._set_last_error(str(exc))
             logger.warning("MapUpload: request error for %s: %s", pubkey[:12], exc)
 
     @property
     def status(self) -> str:
         if self._client is None:
             return "disconnected"
-        if self._last_error:
+        if self.last_error:
             return "error"
         return "connected"

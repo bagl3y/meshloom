@@ -1,10 +1,17 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Info } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
 import { toast } from '../ui/sonner';
 import { cn } from '@/lib/utils';
 import { api } from '../../api';
@@ -1854,6 +1861,10 @@ export function SettingsFanoutSection({
   const [inlineEditName, setInlineEditName] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedCreateType, setSelectedCreateType] = useState<DraftType | null>(null);
+  const [errorDialogState, setErrorDialogState] = useState<{
+    integrationName: string;
+    error: string;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const loadConfigs = useCallback(async () => {
@@ -2207,6 +2218,33 @@ export function SettingsFanoutSection({
         }}
       />
 
+      <Dialog
+        open={errorDialogState !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setErrorDialogState(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="border-b border-border px-5 py-4">
+            <DialogTitle>
+              {errorDialogState
+                ? `${errorDialogState.integrationName} Error`
+                : 'Integration Error'}
+            </DialogTitle>
+            <DialogDescription>
+              Most recent backend error retained for this integration.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-5 py-4 text-sm text-muted-foreground">
+            <p className="whitespace-pre-wrap break-words font-mono text-foreground">
+              {errorDialogState?.error}
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {configGroups.length > 0 && (
         <div className="columns-1 gap-4 md:columns-2">
           {configGroups.map((group) => (
@@ -2220,6 +2258,7 @@ export function SettingsFanoutSection({
                 {group.configs.map((cfg) => {
                   const statusEntry = health?.fanout_statuses?.[cfg.id];
                   const status = cfg.enabled ? statusEntry?.status : undefined;
+                  const lastError = cfg.enabled ? statusEntry?.last_error : null;
                   const communityConfig = cfg.config as Record<string, unknown>;
                   return (
                     <div
@@ -2285,6 +2324,25 @@ export function SettingsFanoutSection({
                         <span className="text-xs text-muted-foreground hidden sm:inline">
                           {cfg.enabled ? getStatusLabel(status, cfg.type) : 'Disabled'}
                         </span>
+
+                        {lastError && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 px-0"
+                            onClick={() =>
+                              setErrorDialogState({
+                                integrationName: cfg.name,
+                                error: lastError,
+                              })
+                            }
+                            aria-label={`View error details for ${cfg.name}`}
+                            title="View latest error"
+                          >
+                            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+                          </Button>
+                        )}
 
                         <Button
                           type="button"

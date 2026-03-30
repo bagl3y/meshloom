@@ -59,4 +59,10 @@ class MqttPrivateModule(FanoutModule):
     def status(self) -> str:
         if not self.config.get("broker_host"):
             return "disconnected"
+        if self._publisher.last_error:
+            return "error"
         return "connected" if self._publisher.connected else "disconnected"
+
+    @property
+    def last_error(self) -> str | None:
+        return self._publisher.last_error

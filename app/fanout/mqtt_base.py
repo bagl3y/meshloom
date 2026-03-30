@@ -23,6 +23,14 @@ logger = logging.getLogger(__name__)
 _BACKOFF_MIN = 5
 
 
+def _format_error_detail(exc: Exception) -> str:
+    """Return a short operator-facing error string."""
+    message = str(exc).strip()
+    if message:
+        return message
+    return type(exc).__name__
+
+
 def _broadcast_health() -> None:
     """Push updated health (including MQTT status) to all WS clients."""
     from app.services.radio_runtime import radio_runtime as radio_manager
@@ -55,6 +63,7 @@ class BaseMqttPublisher(ABC):
         self._version_event: asyncio.Event = asyncio.Event()
         self.connected: bool = False
         self.integration_name: str = ""
+        self._last_error: str | None = None
 
     def set_integration_name(self, name: str) -> None:
         """Attach the configured fanout-module name for operator-facing logs."""
@@ -66,11 +75,17 @@ class BaseMqttPublisher(ABC):
             return f"{self._log_prefix} [{self.integration_name}]"
         return self._log_prefix
 
+    @property
+    def last_error(self) -> str | None:
+        """Return the most recent retained connection/publish error."""
+        return self._last_error
+
     # ── Lifecycle ──────────────────────────────────────────────────────
 
     async def start(self, settings: object) -> None:
         """Start the background connection loop."""
         self._settings = settings
+        self._last_error = None
         self._settings_version += 1
         self._version_event.set()
         if self._task is None or self._task.done():
@@ -87,6 +102,7 @@ class BaseMqttPublisher(ABC):
         self._task = None
         self._client = None
         self.connected = False
+        self._last_error = None
 
     async def restart(self, settings: object) -> None:
         """Called when settings change — stop + start."""
@@ -109,6 +125,7 @@ class BaseMqttPublisher(ABC):
                 exc_info=True,
             )
             self.connected = False
+            self._last_error = _format_error_detail(e)
             # Wake the connection loop so it exits the wait and reconnects
             self._settings_version += 1
             self._version_event.set()
@@ -198,6 +215,7 @@ class BaseMqttPublisher(ABC):
                 async with aiomqtt.Client(**client_kwargs) as client:
                     self._client = client
                     self.connected = True
+                    self._last_error = None
                     backoff = _BACKOFF_MIN
 
                     title, detail = self._on_connected(settings)
@@ -232,6 +250,7 @@ class BaseMqttPublisher(ABC):
             except Exception as e:
                 self.connected = False
                 self._client = None
+                self._last_error = _format_error_detail(e)
 
                 title, detail = self._on_error()
                 broadcast_error(title, detail)

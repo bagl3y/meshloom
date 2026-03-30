@@ -98,8 +98,14 @@ class MqttCommunityModule(FanoutModule):
     @property
     def status(self) -> str:
         if self._publisher._is_configured():
+            if self._publisher.last_error:
+                return "error"
             return "connected" if self._publisher.connected else "disconnected"
         return "disconnected"
+
+    @property
+    def last_error(self) -> str | None:
+        return self._publisher.last_error
 
 
 async def _publish_community_packet(

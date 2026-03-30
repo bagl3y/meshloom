@@ -271,6 +271,35 @@ class TestFanoutManagerDispatch:
         assert statuses["test-id"]["name"] == "Test"
         assert statuses["test-id"]["type"] == "mqtt_private"
 
+    def test_get_statuses_includes_last_error(self):
+        manager = FanoutManager()
+        mod = StubModule()
+        mod._status = "error"
+        mod._last_error = "HTTP 500"
+        manager._modules["test-id"] = (mod, {})
+
+        with patch(
+            "app.repository.fanout._configs_cache",
+            {"test-id": {"name": "Test", "type": "webhook", "enabled": True}},
+        ):
+            statuses = manager.get_statuses()
+
+        assert statuses["test-id"]["status"] == "error"
+        assert statuses["test-id"]["last_error"] == "HTTP 500"
+
+    def test_get_statuses_includes_start_failure_error(self):
+        manager = FanoutManager()
+        manager._module_errors["test-id"] = "ConnectionError: broker down"
+
+        with patch(
+            "app.repository.fanout._configs_cache",
+            {"test-id": {"name": "Test", "type": "mqtt_private", "enabled": True}},
+        ):
+            statuses = manager.get_statuses()
+
+        assert statuses["test-id"]["status"] == "error"
+        assert statuses["test-id"]["last_error"] == "ConnectionError: broker down"
+
 
 # ---------------------------------------------------------------------------
 # Repository tests

@@ -206,6 +206,56 @@ describe('SettingsFanoutSection', () => {
     });
   });
 
+  it('shows an error info button and dialog when the integration has a retained error', async () => {
+    mockedApi.getFanoutConfigs.mockResolvedValue([webhookConfig]);
+    renderSection({
+      health: {
+        ...baseHealth,
+        fanout_statuses: {
+          'wh-1': {
+            name: 'Test Hook',
+            type: 'webhook',
+            status: 'error',
+            last_error: 'HTTP 500',
+          },
+        },
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Hook')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'View error details for Test Hook' }));
+
+    expect(screen.getByRole('dialog', { name: 'Test Hook Error' })).toBeInTheDocument();
+    expect(screen.getByText('HTTP 500')).toBeInTheDocument();
+  });
+
+  it('does not show an error info button when the integration has no retained error', async () => {
+    mockedApi.getFanoutConfigs.mockResolvedValue([webhookConfig]);
+    renderSection({
+      health: {
+        ...baseHealth,
+        fanout_statuses: {
+          'wh-1': {
+            name: 'Test Hook',
+            type: 'webhook',
+            status: 'connected',
+          },
+        },
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Hook')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole('button', { name: 'View error details for Test Hook' })
+    ).not.toBeInTheDocument();
+  });
+
   it('navigates to edit view when clicking edit', async () => {
     mockedApi.getFanoutConfigs.mockResolvedValue([webhookConfig]);
     renderSection();

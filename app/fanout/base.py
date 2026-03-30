@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 
+def _broadcast_fanout_health() -> None:
+    """Push updated fanout status to connected frontend clients."""
+    from app.services.radio_runtime import radio_runtime as radio_manager
+    from app.websocket import broadcast_health
+
+    broadcast_health(radio_manager.is_connected, radio_manager.connection_info)
+
+
 class FanoutModule:
     """Base class for all fanout integrations.
 
@@ -16,6 +24,7 @@ class FanoutModule:
         self.config_id = config_id
         self.config = config
         self.name = name
+        self._last_error: str | None = None
 
     async def start(self) -> None:
         """Start the module (e.g. connect to broker). Override for persistent connections."""
@@ -33,6 +42,18 @@ class FanoutModule:
     def status(self) -> str:
         """Return 'connected', 'disconnected', or 'error'."""
         raise NotImplementedError
+
+    @property
+    def last_error(self) -> str | None:
+        """Return the most recent retained operator-facing error, if any."""
+        return self._last_error
+
+    def _set_last_error(self, value: str | None) -> None:
+        """Update the retained error and broadcast health when it changes."""
+        if self._last_error == value:
+            return
+        self._last_error = value
+        _broadcast_fanout_health()
 
 
 def get_fanout_message_text(data: dict) -> str:

@@ -53,6 +53,7 @@ export interface FanoutStatusEntry {
   name: string;
   type: string;
   status: string;
+  last_error?: string | null;
 }
 
 export interface AppInfo {

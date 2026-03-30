@@ -28,11 +28,17 @@ class TestHealthFanoutStatus:
     async def test_fanout_statuses_reflect_manager(self, test_db):
         """fanout_statuses should return whatever the manager reports."""
         mock_statuses = {
-            "uuid-1": {"name": "Private MQTT", "type": "mqtt_private", "status": "connected"},
+            "uuid-1": {
+                "name": "Private MQTT",
+                "type": "mqtt_private",
+                "status": "connected",
+                "last_error": None,
+            },
             "uuid-2": {
                 "name": "Community MQTT",
                 "type": "mqtt_community",
-                "status": "disconnected",
+                "status": "error",
+                "last_error": "auth failed",
             },
         }
         with patch("app.fanout.manager.fanout_manager") as mock_fm:
