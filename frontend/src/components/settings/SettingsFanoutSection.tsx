@@ -2229,9 +2229,7 @@ export function SettingsFanoutSection({
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-border px-5 py-4">
             <DialogTitle>
-              {errorDialogState
-                ? `${errorDialogState.integrationName} Error`
-                : 'Integration Error'}
+              {errorDialogState ? `${errorDialogState.integrationName} Error` : 'Integration Error'}
             </DialogTitle>
             <DialogDescription>
               Most recent backend error retained for this integration.
