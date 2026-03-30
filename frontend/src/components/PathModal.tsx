@@ -81,13 +81,14 @@ export function PathModal({
             ) : hasSinglePath ? (
               <>
                 This shows <em>one route</em> that this message traveled through the mesh network.
-                Repeaters may be incorrectly identified due to prefix collisions between heard and
-                non-heard repeater advertisements.
+                Repeater identities are inferred from locally known advert and path data, so some
+                hops may be missing or misidentified when that data is incomplete.
               </>
             ) : (
               <>
                 This message was received via <strong>{paths.length} different routes</strong>.
-                Repeaters may be incorrectly identified due to prefix collisions.
+                Repeater identities are inferred from locally known advert and path data, so some
+                hops may be missing or misidentified when that data is incomplete.
               </>
             )}
           </DialogDescription>

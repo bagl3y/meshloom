@@ -483,6 +483,11 @@ class TestTraceRoute:
                 await request_trace(KEY_A)
 
         assert exc.value.status_code == 500
+        mc.commands.send_trace.assert_awaited_once_with(
+            path=KEY_A[:8],
+            tag=1234,
+            flags=2,
+        )
 
     @pytest.mark.asyncio
     async def test_wait_timeout_returns_504(self, test_db):
@@ -500,6 +505,11 @@ class TestTraceRoute:
                 await request_trace(KEY_A)
 
         assert exc.value.status_code == 504
+        mc.commands.send_trace.assert_awaited_once_with(
+            path=KEY_A[:8],
+            tag=1234,
+            flags=2,
+        )
 
     @pytest.mark.asyncio
     async def test_success_returns_remote_and_local_snr(self, test_db):
@@ -520,6 +530,11 @@ class TestTraceRoute:
         assert response.remote_snr == 5.5
         assert response.local_snr == 3.2
         assert response.path_len == 2
+        mc.commands.send_trace.assert_awaited_once_with(
+            path=KEY_A[:8],
+            tag=1234,
+            flags=2,
+        )
 
 
 # ---------------------------------------------------------------------------

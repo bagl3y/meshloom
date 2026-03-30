@@ -268,7 +268,7 @@ export function ChatHeader({
             title={
               activeContactIsPrefixOnly
                 ? 'Direct Trace unavailable until the full contact key is known'
-                : 'Direct Trace. Send a zero-hop packet to this contact and display out and back SNR'
+                : 'Direct Trace. Send a direct trace probe to this contact and display out and back SNR'
             }
             aria-label="Direct Trace"
             disabled={activeContactIsPrefixOnly}

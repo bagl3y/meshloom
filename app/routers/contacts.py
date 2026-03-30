@@ -40,6 +40,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/contacts", tags=["contacts"])
 
 
+TRACE_HASH_BYTES = 4
+TRACE_FLAGS_4BYTE = 2
+
+
 def _ambiguous_contact_detail(err: AmbiguousPublicKeyPrefixError) -> str:
     sample = ", ".join(key[:12] for key in err.matches[:2])
     return (
@@ -373,17 +377,17 @@ async def delete_contact(public_key: str) -> dict:
 async def request_trace(public_key: str) -> TraceResponse:
     """Send a single-hop trace to a contact and wait for the result.
 
-    The trace path contains the contact's 1-byte pubkey hash as the sole hop
-    (no intermediate repeaters). The radio firmware requires at least one
-    node in the path.
+    The trace path contains the contact's 4-byte pubkey hash as the sole hop
+    (no intermediate repeaters). This uses TRACE's dedicated width flags rather
+    than the radio's normal path_hash_mode setting.
     """
     require_connected()
 
     contact = await _resolve_contact_or_404(public_key)
 
     tag = random.randint(1, 0xFFFFFFFF)
-    # First 2 hex chars of pubkey = 1-byte hash used by the trace protocol
-    contact_hash = contact.public_key[:2]
+    # Use a 4-byte contact hash for low-collision direct trace targeting.
+    contact_hash = contact.public_key[: TRACE_HASH_BYTES * 2]
 
     # Trace does not need auto-fetch suspension: response arrives as TRACE_DATA
     # from the reader loop, not via get_msg().
@@ -394,7 +398,11 @@ async def request_trace(public_key: str) -> TraceResponse:
         logger.info(
             "Sending trace to %s (tag=%d, hash=%s)", contact.public_key[:12], tag, contact_hash
         )
-        result = await mc.commands.send_trace(path=contact_hash, tag=tag)
+        result = await mc.commands.send_trace(
+            path=contact_hash,
+            tag=tag,
+            flags=TRACE_FLAGS_4BYTE,
+        )
 
         if result.type == EventType.ERROR:
             raise HTTPException(status_code=500, detail=f"Failed to send trace: {result.payload}")
