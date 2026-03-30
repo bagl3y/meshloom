@@ -175,11 +175,12 @@ def _format_raw_packet(data: dict[str, Any], device_name: str, public_key_hex: s
     current_time = datetime.now()
     ts_str = current_time.isoformat()
 
-    # SNR/RSSI are always strings in reference output.
+    # Keep numeric telemetry numeric so downstream analyzers can ingest it.
+    # Preserve the existing "Unknown" fallback for missing values.
     snr_val = data.get("snr")
     rssi_val = data.get("rssi")
-    snr = str(snr_val) if snr_val is not None else "Unknown"
-    rssi = str(rssi_val) if rssi_val is not None else "Unknown"
+    snr: float | str = float(snr_val) if snr_val is not None else "Unknown"
+    rssi: int | str = int(rssi_val) if rssi_val is not None else "Unknown"
 
     packet_hash = _calculate_packet_hash(raw_bytes)
 
