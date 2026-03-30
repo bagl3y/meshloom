@@ -111,7 +111,10 @@ class MapUploadModule(FanoutModule):
         self._seen: dict[str, int] = {}
 
     async def start(self) -> None:
-        self._client = httpx.AsyncClient(timeout=httpx.Timeout(15.0))
+        self._client = httpx.AsyncClient(
+            timeout=httpx.Timeout(15.0),
+            follow_redirects=True,
+        )
         self._last_error = None
         self._seen.clear()
 

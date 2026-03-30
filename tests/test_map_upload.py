@@ -64,6 +64,7 @@ class TestMapUploadLifecycle:
         mod = _make_module()
         await mod.start()
         assert mod._client is not None
+        assert mod._client.follow_redirects is True
         assert mod.status == "connected"
         await mod.stop()
 
