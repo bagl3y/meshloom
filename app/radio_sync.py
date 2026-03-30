@@ -877,7 +877,7 @@ async def _repeater_telemetry_loop():
                         blocking=False,
                         suspend_auto_fetch=True,
                     ) as mc:
-                        contact = await ContactRepository.get_by_public_key(key)
+                        contact = await ContactRepository.get_by_key(key)
                         if contact is None:
                             logger.debug("Telemetry poll: contact %s not found, skipping", key[:12])
                             continue
