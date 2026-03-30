@@ -20,6 +20,12 @@ import {
 } from '../utils/lastViewedConversation';
 import { api } from '../api';
 import { DISTANCE_UNIT_KEY } from '../utils/distanceUnits';
+import {
+  DEFAULT_FONT_SCALE,
+  FONT_SCALE_KEY,
+  MAX_FONT_SCALE,
+  MIN_FONT_SCALE,
+} from '../utils/fontScale';
 
 const baseConfig: RadioConfig = {
   public_key: 'aa'.repeat(32),
@@ -186,6 +192,7 @@ describe('SettingsModal', () => {
     vi.restoreAllMocks();
     localStorage.clear();
     window.location.hash = '';
+    document.documentElement.style.fontSize = '';
   });
 
   it('refreshes app settings when opened', async () => {
@@ -547,6 +554,55 @@ describe('SettingsModal', () => {
     fireEvent.change(select, { target: { value: 'smoots' } });
 
     expect(localStorage.getItem(DISTANCE_UNIT_KEY)).toBe('smoots');
+  });
+
+  it('defaults relative font size to 100% and exposes the expected input bounds', () => {
+    renderModal();
+    openLocalSection();
+
+    const slider = screen.getByLabelText('Relative font size slider');
+    const input = screen.getByLabelText('Relative font size percentage');
+
+    expect(slider).toHaveValue(String(DEFAULT_FONT_SCALE));
+    expect(slider).toHaveAttribute('step', '5');
+    expect(input).toHaveValue(DEFAULT_FONT_SCALE);
+    expect(input).toHaveAttribute('min', String(MIN_FONT_SCALE));
+    expect(input).toHaveAttribute('max', String(MAX_FONT_SCALE));
+  });
+
+  it('stores and applies relative font size changes locally', async () => {
+    renderModal();
+    openLocalSection();
+
+    const slider = screen.getByLabelText('Relative font size slider');
+
+    fireEvent.change(slider, { target: { value: '135' } });
+
+    expect(localStorage.getItem(FONT_SCALE_KEY)).toBeNull();
+    expect(document.documentElement.style.fontSize).toBe('');
+
+    fireEvent.mouseUp(slider);
+
+    await waitFor(() => {
+      expect(localStorage.getItem(FONT_SCALE_KEY)).toBe('135');
+      expect(document.documentElement.style.fontSize).toBe('135%');
+    });
+
+    fireEvent.change(screen.getByLabelText('Relative font size percentage'), {
+      target: { value: '137.5' },
+    });
+
+    await waitFor(() => {
+      expect(localStorage.getItem(FONT_SCALE_KEY)).toBe('137.5');
+      expect(document.documentElement.style.fontSize).toBe('137.5%');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+
+    await waitFor(() => {
+      expect(localStorage.getItem(FONT_SCALE_KEY)).toBeNull();
+      expect(document.documentElement.style.fontSize).toBe('100%');
+    });
   });
 
   it('purges decrypted raw packets via maintenance endpoint action', async () => {

@@ -17,6 +17,14 @@ import {
   setSavedDistanceUnit,
 } from '../../utils/distanceUnits';
 import { useDistanceUnit } from '../../contexts/DistanceUnitContext';
+import {
+  DEFAULT_FONT_SCALE,
+  FONT_SCALE_SLIDER_STEP,
+  MAX_FONT_SCALE,
+  MIN_FONT_SCALE,
+  getSavedFontScale,
+  setSavedFontScale,
+} from '../../utils/fontScale';
 
 export function SettingsLocalSection({
   onLocalLabelChange,
@@ -31,6 +39,29 @@ export function SettingsLocalSection({
   );
   const [localLabelText, setLocalLabelText] = useState(() => getLocalLabel().text);
   const [localLabelColor, setLocalLabelColor] = useState(() => getLocalLabel().color);
+  const [fontScale, setFontScale] = useState(getSavedFontScale);
+  const [fontScaleSlider, setFontScaleSlider] = useState(getSavedFontScale);
+  const [fontScaleInput, setFontScaleInput] = useState(() => String(getSavedFontScale()));
+
+  const commitFontScale = (nextScale: number) => {
+    const normalized = setSavedFontScale(nextScale);
+    setFontScale(normalized);
+    setFontScaleSlider(normalized);
+    setFontScaleInput(String(normalized));
+  };
+
+  const restoreFontScaleInput = () => {
+    setFontScaleInput(String(fontScale));
+  };
+
+  const handleSliderChange = (nextScale: number) => {
+    setFontScaleSlider(nextScale);
+    setFontScaleInput(String(nextScale));
+  };
+
+  const handleSliderCommit = (nextScale: number) => {
+    commitFontScale(nextScale);
+  };
 
   const handleToggleReopenLastConversation = (enabled: boolean) => {
     setReopenLastConversation(enabled);
@@ -84,6 +115,85 @@ export function SettingsLocalSection({
         </div>
         <p className="text-xs text-muted-foreground">
           Display a colored banner at the top of the page to identify this instance.
+        </p>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <Label htmlFor="font-scale-input">Relative Font Size</Label>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <input
+            type="range"
+            min={MIN_FONT_SCALE}
+            max={MAX_FONT_SCALE}
+            step={FONT_SCALE_SLIDER_STEP}
+            value={fontScaleSlider}
+            onChange={(event) => handleSliderChange(Number(event.target.value))}
+            onMouseUp={(event) => handleSliderCommit(Number(event.currentTarget.value))}
+            onTouchEnd={(event) => handleSliderCommit(Number(event.currentTarget.value))}
+            onKeyUp={(event) => handleSliderCommit(Number(event.currentTarget.value))}
+            onBlur={(event) => handleSliderCommit(Number(event.currentTarget.value))}
+            aria-label="Relative font size slider"
+            className="w-full accent-primary sm:flex-1"
+          />
+          <div className="flex items-center gap-2 sm:w-40">
+            <Input
+              id="font-scale-input"
+              type="number"
+              inputMode="decimal"
+              min={MIN_FONT_SCALE}
+              max={MAX_FONT_SCALE}
+              step="any"
+              value={fontScaleInput}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setFontScaleInput(nextValue);
+
+                if (nextValue === '') {
+                  return;
+                }
+
+                if (event.target.validity.valid && Number.isFinite(event.target.valueAsNumber)) {
+                  commitFontScale(event.target.valueAsNumber);
+                }
+              }}
+              onBlur={() => {
+                const parsed = Number.parseFloat(fontScaleInput);
+                if (!Number.isFinite(parsed)) {
+                  restoreFontScaleInput();
+                  return;
+                }
+                commitFontScale(parsed);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') {
+                  return;
+                }
+                event.preventDefault();
+                const parsed = Number.parseFloat(fontScaleInput);
+                if (!Number.isFinite(parsed)) {
+                  restoreFontScaleInput();
+                  return;
+                }
+                commitFontScale(parsed);
+              }}
+              aria-label="Relative font size percentage"
+            />
+            <span className="text-sm text-muted-foreground">%</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => commitFontScale(DEFAULT_FONT_SCALE)}
+            className="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={fontScale === DEFAULT_FONT_SCALE}
+          >
+            Reset
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Scales the app&apos;s typography for this browser only. The slider moves in 5% steps;
+          the number field accepts any value from 25% to 400%.
         </p>
       </div>
 

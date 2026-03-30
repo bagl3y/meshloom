@@ -81,6 +81,7 @@ frontend/src/
 │   ├── contactMerge.ts            # Merge WS contact updates into list
 │   ├── localLabel.ts              # Local label (text + color) in localStorage
 │   ├── radioPresets.ts            # LoRa radio preset configurations
+│   ├── fontScale.ts               # Browser-local relative font scale persistence/application
 │   └── theme.ts                   # Theme switching helpers
 ├── components/
 │   ├── StatusBar.tsx
@@ -110,7 +111,7 @@ frontend/src/
 │   ├── settings/
 │   │   ├── settingsConstants.ts          # Settings section type, ordering, labels
 │   │   ├── SettingsRadioSection.tsx      # Name, keys, advert interval, max contacts, radio preset, freq/bw/sf/cr, txPower, lat/lon, reboot, mesh discovery
-│   │   ├── SettingsLocalSection.tsx      # Browser-local settings: theme, local label, reopen last conversation
+│   │   ├── SettingsLocalSection.tsx      # Browser-local settings: theme, relative font scale, local label, reopen last conversation
 │   │   ├── SettingsFanoutSection.tsx     # Fanout integrations: MQTT, bots, config CRUD
 │   │   ├── SettingsDatabaseSection.tsx   # DB size, cleanup, auto-decrypt, local label
 │   │   ├── SettingsStatisticsSection.tsx # Read-only mesh network stats
