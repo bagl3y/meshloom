@@ -17,10 +17,12 @@ export function BatteryHistoryPane({
   publicKey,
   isTracked,
   onToggleTracking,
+  statusFetchedAt,
 }: {
   publicKey: string;
   isTracked: boolean;
   onToggleTracking: () => void;
+  statusFetchedAt?: number | null;
 }) {
   const chartRef = useRef<HTMLDivElement>(null);
   const uplotRef = useRef<uPlot | null>(null);
@@ -47,7 +49,7 @@ export function BatteryHistoryPane({
 
   useEffect(() => {
     fetchHistory(range);
-  }, [fetchHistory, range]);
+  }, [fetchHistory, range, statusFetchedAt]);
 
   // Build / rebuild chart
   useEffect(() => {
