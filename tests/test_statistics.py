@@ -1,6 +1,7 @@
 """Tests for the statistics repository and endpoint."""
 
 import time
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -347,3 +348,29 @@ class TestPathHashWidthStats:
         assert breakdown["single_byte_pct"] == pytest.approx(100 / 3, rel=1e-3)
         assert breakdown["double_byte_pct"] == pytest.approx(100 / 3, rel=1e-3)
         assert breakdown["triple_byte_pct"] == pytest.approx(100 / 3, rel=1e-3)
+
+
+class TestStatisticsEndpoint:
+    @pytest.mark.asyncio
+    async def test_statistics_endpoint_includes_noise_floor_history(self, test_db, client):
+        noise_floor_history = {
+            "sample_interval_seconds": 300,
+            "coverage_seconds": 1800,
+            "latest_noise_floor_dbm": -119,
+            "latest_timestamp": 1_700_000_000,
+            "supported": True,
+            "samples": [
+                {"timestamp": 1_699_998_200, "noise_floor_dbm": -121},
+                {"timestamp": 1_700_000_000, "noise_floor_dbm": -119},
+            ],
+        }
+
+        with patch(
+            "app.routers.statistics.get_noise_floor_history",
+            new=AsyncMock(return_value=noise_floor_history),
+        ):
+            response = await client.get("/api/statistics")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["noise_floor_24h"] == noise_floor_history
