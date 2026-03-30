@@ -12,6 +12,8 @@ cd "$SCRIPT_DIR"
 
 RELEASE_WORK_DIR=""
 RELEASE_BUNDLE_DIR_NAME="Remote-Terminal-for-MeshCore"
+DOCKER_IMAGE="jkingsman/remoteterm-meshcore"
+DOCKER_PLATFORMS="linux/amd64,linux/arm64"
 
 cleanup_release_build_artifacts() {
     if [ -d "$SCRIPT_DIR/frontend/prebuilt" ]; then
@@ -23,6 +25,28 @@ cleanup_release_build_artifacts() {
 }
 
 trap cleanup_release_build_artifacts EXIT
+
+ensure_buildx_builder() {
+    if ! docker buildx version >/dev/null 2>&1; then
+        echo -e "${RED}Error: docker buildx is required for multi-arch Docker builds.${NC}"
+        exit 1
+    fi
+
+    local current_builder
+    current_builder="$(docker buildx inspect --format '{{ .Name }}' 2>/dev/null || true)"
+
+    if [ -n "$current_builder" ]; then
+        docker buildx inspect --bootstrap >/dev/null
+        return
+    fi
+
+    if docker buildx inspect remoteterm-multiarch >/dev/null 2>&1; then
+        docker buildx use remoteterm-multiarch >/dev/null
+    else
+        docker buildx create --name remoteterm-multiarch --use >/dev/null
+    fi
+    docker buildx inspect --bootstrap >/dev/null
+}
 
 echo -e "${YELLOW}=== RemoteTerm for MeshCore Publish Script ===${NC}"
 echo
@@ -199,21 +223,18 @@ rm -f "$SCRIPT_DIR/$RELEASE_ASSET"
 echo -e "${GREEN}Packaged release artifact created: $RELEASE_ASSET${NC}"
 echo
 
-# Build docker image
-echo -e "${YELLOW}Building Docker image...${NC}"
-docker build --build-arg COMMIT_HASH=$GIT_HASH \
-             -t jkingsman/remoteterm-meshcore:latest \
-             -t jkingsman/remoteterm-meshcore:$VERSION \
-             -t jkingsman/remoteterm-meshcore:$GIT_HASH .
-echo -e "${GREEN}Docker build complete!${NC}"
-echo
-
-# Push docker images
-echo -e "${YELLOW}Pushing Docker images...${NC}"
-docker push jkingsman/remoteterm-meshcore:latest
-docker push jkingsman/remoteterm-meshcore:$VERSION
-docker push jkingsman/remoteterm-meshcore:$GIT_HASH
-echo -e "${GREEN}Docker push complete!${NC}"
+# Build and push multi-arch docker image
+echo -e "${YELLOW}Building and pushing multi-arch Docker image...${NC}"
+ensure_buildx_builder
+docker buildx build \
+    --platform "$DOCKER_PLATFORMS" \
+    --build-arg COMMIT_HASH="$GIT_HASH" \
+    -t "$DOCKER_IMAGE:latest" \
+    -t "$DOCKER_IMAGE:$VERSION" \
+    -t "$DOCKER_IMAGE:$GIT_HASH" \
+    --push \
+    .
+echo -e "${GREEN}Multi-arch Docker build + push complete!${NC}"
 echo
 
 # Create GitHub release using the changelog notes for this version.
@@ -254,9 +275,12 @@ echo -e "${GREEN}=== Publish complete! ===${NC}"
 echo -e "Version: ${YELLOW}$VERSION${NC}"
 echo -e "Git hash: ${YELLOW}$GIT_HASH${NC}"
 echo -e "Docker tags pushed:"
-echo -e "  - jkingsman/remoteterm-meshcore:latest"
-echo -e "  - jkingsman/remoteterm-meshcore:$VERSION"
-echo -e "  - jkingsman/remoteterm-meshcore:$GIT_HASH"
+echo -e "  - $DOCKER_IMAGE:latest"
+echo -e "  - $DOCKER_IMAGE:$VERSION"
+echo -e "  - $DOCKER_IMAGE:$GIT_HASH"
+echo -e "Platforms:"
+echo -e "  - linux/amd64"
+echo -e "  - linux/arm64"
 echo -e "GitHub release:"
 echo -e "  - $VERSION"
 echo -e "Release artifact:"
