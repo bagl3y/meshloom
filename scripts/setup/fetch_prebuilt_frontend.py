@@ -21,7 +21,8 @@ API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 PREBUILT_PREFIX = "Remote-Terminal-for-MeshCore/frontend/prebuilt/"
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-PREBUILT_DIR = SCRIPT_DIR.parent / "frontend" / "prebuilt"
+REPO_ROOT = SCRIPT_DIR.parent.parent
+PREBUILT_DIR = REPO_ROOT / "frontend" / "prebuilt"
 
 
 def fetch_json(url: str) -> dict:

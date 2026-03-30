@@ -7,7 +7,7 @@
 # gymnastics.
 #
 # Run from anywhere inside the repo:
-#   bash scripts/install_service.sh
+#   bash scripts/setup/install_service.sh
 
 set -e
 
@@ -19,7 +19,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 SERVICE_NAME="remoteterm"
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 CURRENT_USER="$(id -un)"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 FRONTEND_MODE="build"
@@ -252,7 +252,7 @@ if [ "$FRONTEND_MODE" = "build" ]; then
     )
 else
     echo -e "${YELLOW}Fetching prebuilt frontend...${NC}"
-    python3 "$REPO_DIR/scripts/fetch_prebuilt_frontend.py"
+    python3 "$REPO_DIR/scripts/setup/fetch_prebuilt_frontend.py"
 fi
 echo
 
@@ -402,7 +402,7 @@ echo -e "  cd frontend && npm install && npm run build && cd .."
 echo -e "  sudo systemctl restart ${SERVICE_NAME}"
 echo
 echo -e "${YELLOW}Refresh prebuilt frontend only (skips local build):${NC}"
-echo -e "  python3 ${REPO_DIR}/scripts/fetch_prebuilt_frontend.py"
+echo -e "  python3 ${REPO_DIR}/scripts/setup/fetch_prebuilt_frontend.py"
 echo -e "  sudo systemctl restart ${SERVICE_NAME}"
 echo
 echo -e "${YELLOW}View live logs (useful for troubleshooting):${NC}"

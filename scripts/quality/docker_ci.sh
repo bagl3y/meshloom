@@ -7,7 +7,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 NODE_VERSIONS=("20" "22" "24")
 # Use explicit npm patch versions so resolver regressions are caught.
@@ -27,7 +27,7 @@ run_combo() {
     local image="node:${node_version}-slim"
 
     docker run --rm \
-        -v "$SCRIPT_DIR:/src:ro" \
+        -v "$REPO_ROOT:/src:ro" \
         -w /tmp \
         "$image" \
         bash -lc "
@@ -79,7 +79,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo -e "${YELLOW}=== Frontend Docker CI Matrix ===${NC}"
-echo -e "${BLUE}Repo:${NC} $SCRIPT_DIR"
+echo -e "${BLUE}Repo:${NC} $REPO_ROOT"
 echo
 
 for case_spec in "${TEST_CASES[@]}"; do

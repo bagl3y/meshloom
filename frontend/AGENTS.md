@@ -404,7 +404,7 @@ Do not rely on old class-only layout assumptions.
 Run all quality checks (backend + frontend) from the repo root:
 
 ```bash
-./scripts/all_quality.sh
+./scripts/quality/all_quality.sh
 ```
 
 Or run frontend checks individually:

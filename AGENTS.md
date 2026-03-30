@@ -7,7 +7,7 @@
 If instructed to "run all tests" or "get ready for a commit" or other summative, work ending directives, run:
 
 ```bash
-./scripts/all_quality.sh
+./scripts/quality/all_quality.sh
 ```
 
 This is the repo's end-to-end quality gate. It runs backend/frontend autofixers first, then type checking, tests, and the standard frontend build. All checks must pass green, and the script may leave formatting/lint edits behind.
@@ -210,10 +210,16 @@ This message-layer echo/path handling is independent of raw-packet storage dedup
 │   │       └── ...
 │   └── vite.config.ts
 ├── scripts/                # Quality / release helpers (listing below is representative, not exhaustive)
-│   ├── all_quality.sh      # Repo-standard autofix + validate gate
-│   ├── collect_licenses.sh # Gather third-party license attributions
-│   ├── e2e.sh              # End-to-end test runner
-│   └── publish.sh          # Version bump, changelog, docker build & push
+│   ├── build/
+│   │   ├── collect_licenses.sh # Gather third-party license attributions
+│   │   └── publish.sh          # Version bump, changelog, docker build & push
+│   ├── quality/
+│   │   ├── all_quality.sh      # Repo-standard autofix + validate gate
+│   │   ├── e2e.sh              # End-to-end test runner
+│   │   └── extended_quality.sh # Quality gate plus e2e and Docker matrix
+│   └── setup/
+│       ├── fetch_prebuilt_frontend.py # Download release frontend fallback
+│       └── install_service.sh         # Install/configure Linux systemd service
 ├── README_ADVANCED.md      # Advanced setup, troubleshooting, and service guidance
 ├── CONTRIBUTING.md         # Contributor workflow and testing guidance
 ├── tests/                  # Backend tests (pytest)
@@ -298,7 +304,7 @@ npm run test:run
 
 ### Before Completing Major Changes
 
-**Run `./scripts/all_quality.sh` before finishing major changes that have modified code or tests.** It is the standard repo gate: autofix first, then type checks, tests, and the standard frontend build. This is not necessary for docs-only changes. For minor changes (like wording, color, spacing, etc.), wait until prompted to run the quality gate.
+**Run `./scripts/quality/all_quality.sh` before finishing major changes that have modified code or tests.** It is the standard repo gate: autofix first, then type checks, tests, and the standard frontend build. This is not necessary for docs-only changes. For minor changes (like wording, color, spacing, etc.), wait until prompted to run the quality gate.
 
 ## API Summary
 

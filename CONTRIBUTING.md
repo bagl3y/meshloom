@@ -48,7 +48,7 @@ Run both the backend and `npm run dev` for hot-reloading frontend development.
 Run the full quality suite before proposing or handing off code changes:
 
 ```bash
-./scripts/all_quality.sh
+./scripts/quality/all_quality.sh
 ```
 
 That runs linting, formatting, type checking, tests, and builds for both backend and frontend.

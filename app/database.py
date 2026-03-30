@@ -96,8 +96,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_dedup_null_safe
     ON messages(type, conversation_key, text, COALESCE(sender_timestamp, 0))
     WHERE type = 'CHAN';
 CREATE INDEX IF NOT EXISTS idx_raw_packets_message_id ON raw_packets(message_id);
+CREATE INDEX IF NOT EXISTS idx_raw_packets_timestamp ON raw_packets(timestamp);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_packets_payload_hash ON raw_packets(payload_hash);
 CREATE INDEX IF NOT EXISTS idx_contacts_on_radio ON contacts(on_radio);
+CREATE INDEX IF NOT EXISTS idx_contacts_type_last_seen ON contacts(type, last_seen);
+CREATE INDEX IF NOT EXISTS idx_messages_type_received_conversation
+    ON messages(type, received_at, conversation_key);
 -- idx_messages_sender_key is created by migration 25 (after adding the sender_key column)
 -- idx_messages_incoming_priv_dedup is created by migration 44 after legacy rows are reconciled
 CREATE INDEX IF NOT EXISTS idx_contact_advert_paths_recent

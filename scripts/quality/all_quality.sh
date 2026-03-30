@@ -14,7 +14,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 echo -e "${YELLOW}=== RemoteTerm Quality Checks ===${NC}"
 echo
@@ -24,13 +24,13 @@ echo
 echo -e "${YELLOW}=== Phase 1: Lint & Format ===${NC}"
 
 echo -e "${BLUE}[backend lint]${NC} Running ruff check + format..."
-cd "$SCRIPT_DIR"
+cd "$REPO_ROOT"
 uv run ruff check app/ tests/ --fix
 uv run ruff format app/ tests/
 echo -e "${GREEN}[backend lint]${NC} Passed!"
 
 echo -e "${BLUE}[frontend lint]${NC} Running eslint + prettier..."
-cd "$SCRIPT_DIR/frontend"
+cd "$REPO_ROOT/frontend"
 npm run lint:fix
 npm run format
 echo -e "${GREEN}[frontend lint]${NC} Passed!"
@@ -43,17 +43,17 @@ echo
 echo -e "${YELLOW}=== Phase 2: Typecheck, Tests & Build ===${NC}"
 
 echo -e "${BLUE}[pyright]${NC} Running type check..."
-cd "$SCRIPT_DIR"
+cd "$REPO_ROOT"
 uv run pyright app/
 echo -e "${GREEN}[pyright]${NC} Passed!"
 
 echo -e "${BLUE}[pytest]${NC} Running backend tests..."
-cd "$SCRIPT_DIR"
+cd "$REPO_ROOT"
 PYTHONPATH=. uv run pytest tests/ -v
 echo -e "${GREEN}[pytest]${NC} Passed!"
 
 echo -e "${BLUE}[frontend]${NC} Running tests + build..."
-cd "$SCRIPT_DIR/frontend"
+cd "$REPO_ROOT/frontend"
 npm run test:run
 npm run build
 echo -e "${GREEN}[frontend]${NC} Passed!"

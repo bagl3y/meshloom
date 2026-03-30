@@ -7,8 +7,8 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$SCRIPT_DIR"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$REPO_ROOT"
 
 RELEASE_WORK_DIR=""
 RELEASE_BUNDLE_DIR_NAME="Remote-Terminal-for-MeshCore"
@@ -17,14 +17,14 @@ DOCKER_IMAGE="jkingsman/remoteterm-meshcore"
 DOCKER_PLATFORMS="linux/amd64,linux/arm64"
 
 cleanup_release_build_artifacts() {
-    if [ -d "$SCRIPT_DIR/frontend/prebuilt" ]; then
-        rm -rf "$SCRIPT_DIR/frontend/prebuilt"
+    if [ -d "$REPO_ROOT/frontend/prebuilt" ]; then
+        rm -rf "$REPO_ROOT/frontend/prebuilt"
     fi
     if [ -n "$RELEASE_WORK_DIR" ] && [ -d "$RELEASE_WORK_DIR" ]; then
         rm -rf "$RELEASE_WORK_DIR"
     fi
-    if [ -n "$RELEASE_ASSET" ] && [ -f "$SCRIPT_DIR/$RELEASE_ASSET" ]; then
-        rm -f "$SCRIPT_DIR/$RELEASE_ASSET"
+    if [ -n "$RELEASE_ASSET" ] && [ -f "$REPO_ROOT/$RELEASE_ASSET" ]; then
+        rm -f "$REPO_ROOT/$RELEASE_ASSET"
     fi
 }
 
@@ -78,7 +78,7 @@ echo
 
 # Run frontend linting and formatting check
 echo -e "${YELLOW}Running frontend lint (ESLint)...${NC}"
-cd "$SCRIPT_DIR/frontend"
+cd "$REPO_ROOT/frontend"
 npm run lint
 echo -e "${GREEN}Frontend lint passed!${NC}"
 echo
@@ -97,11 +97,11 @@ echo
 echo -e "${YELLOW}Building frontend...${NC}"
 npm run build
 echo -e "${GREEN}Frontend build complete!${NC}"
-cd "$SCRIPT_DIR"
+cd "$REPO_ROOT"
 echo
 
 echo -e "${YELLOW}Regenerating LICENSES.md...${NC}"
-bash scripts/collect_licenses.sh LICENSES.md
+bash scripts/build/collect_licenses.sh LICENSES.md
 echo -e "${GREEN}LICENSES.md updated!${NC}"
 echo
 
@@ -202,16 +202,16 @@ FULL_GIT_HASH=$(git rev-parse HEAD)
 RELEASE_ASSET="remoteterm-prebuilt-frontend-v${VERSION}-${GIT_HASH}.zip"
 
 echo -e "${YELLOW}Building packaged frontend artifact...${NC}"
-cd "$SCRIPT_DIR/frontend"
+cd "$REPO_ROOT/frontend"
 npm run packaged-build
-cd "$SCRIPT_DIR"
+cd "$REPO_ROOT"
 
 RELEASE_WORK_DIR=$(mktemp -d)
 RELEASE_BUNDLE_DIR="$RELEASE_WORK_DIR/$RELEASE_BUNDLE_DIR_NAME"
 mkdir -p "$RELEASE_BUNDLE_DIR"
 git archive "$FULL_GIT_HASH" | tar -x -C "$RELEASE_BUNDLE_DIR"
 mkdir -p "$RELEASE_BUNDLE_DIR/frontend"
-cp -R "$SCRIPT_DIR/frontend/prebuilt" "$RELEASE_BUNDLE_DIR/frontend/prebuilt"
+cp -R "$REPO_ROOT/frontend/prebuilt" "$RELEASE_BUNDLE_DIR/frontend/prebuilt"
 cat > "$RELEASE_BUNDLE_DIR/build_info.json" <<EOF
 {
   "version": "$VERSION",
@@ -219,10 +219,10 @@ cat > "$RELEASE_BUNDLE_DIR/build_info.json" <<EOF
   "build_source": "prebuilt-release"
 }
 EOF
-rm -f "$SCRIPT_DIR/$RELEASE_ASSET"
+rm -f "$REPO_ROOT/$RELEASE_ASSET"
 (
     cd "$RELEASE_WORK_DIR"
-    zip -qr "$SCRIPT_DIR/$RELEASE_ASSET" "$(basename "$RELEASE_BUNDLE_DIR")"
+    zip -qr "$REPO_ROOT/$RELEASE_ASSET" "$(basename "$RELEASE_BUNDLE_DIR")"
 )
 echo -e "${GREEN}Packaged release artifact created: $RELEASE_ASSET${NC}"
 echo

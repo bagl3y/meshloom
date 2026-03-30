@@ -95,7 +95,7 @@ Access the app at http://localhost:8000.
 
 Source checkouts expect a normal frontend build in `frontend/dist`.
 
-On Linux, if you want this installed as a persistent `systemd` service that starts on boot and restarts automatically on failure, run `bash scripts/install_service.sh` from the repo root.
+On Linux, if you want this installed as a persistent `systemd` service that starts on boot and restarts automatically on failure, run `bash scripts/setup/install_service.sh` from the repo root.
 
 ## Path 1.5: Use The Prebuilt Release Zip
 
@@ -111,7 +111,7 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 The release bundle includes `frontend/prebuilt`, so it does not require a local frontend build.
 
-Alternatively, if you have already cloned the repo, you can fetch just the prebuilt frontend into your working tree without downloading the full release zip via `python3 scripts/fetch_prebuilt_frontend.py`.
+Alternatively, if you have already cloned the repo, you can fetch just the prebuilt frontend into your working tree without downloading the full release zip via `python3 scripts/setup/fetch_prebuilt_frontend.py`.
 
 ## Path 2: Docker
 
