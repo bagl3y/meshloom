@@ -86,8 +86,6 @@ async def stop_noise_floor_sampling() -> None:
 
 async def get_noise_floor_history() -> dict:
     """Return the current 24-hour in-memory noise floor history snapshot."""
-    await sample_noise_floor_once(blocking=False)
-
     now = int(time.time())
     cutoff = now - NOISE_FLOOR_WINDOW_SECONDS
 

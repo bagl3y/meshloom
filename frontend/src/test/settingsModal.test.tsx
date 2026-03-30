@@ -595,6 +595,14 @@ describe('SettingsModal', () => {
         double_byte_pct: 30,
         triple_byte_pct: 20,
       },
+      noise_floor_24h: {
+        sample_interval_seconds: 300,
+        coverage_seconds: 3600,
+        latest_noise_floor_dbm: -105,
+        latest_timestamp: 1711800000,
+        supported: true,
+        samples: [],
+      },
     };
 
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -626,17 +634,11 @@ describe('SettingsModal', () => {
     expect(
       screen.getByText(/Parsed stored raw packets from the last 24 hours: 120/)
     ).toBeInTheDocument();
-    expect(screen.getByText('1-byte hops')).toBeInTheDocument();
-    expect(screen.getByText('60 (50.0%)')).toBeInTheDocument();
-    expect(screen.getByText('36 (30.0%)')).toBeInTheDocument();
-    expect(screen.getByText('24 (20.0%)')).toBeInTheDocument();
     expect(screen.getByText('Contacts heard')).toBeInTheDocument();
     expect(screen.getByText('Repeaters heard')).toBeInTheDocument();
     expect(screen.getByText('Known-channels active')).toBeInTheDocument();
-
-    // Busiest channels
-    expect(screen.getByText('general')).toBeInTheDocument();
-    expect(screen.getByText('42 msgs')).toBeInTheDocument();
+    expect(screen.getByText('Busiest Channels (24h)')).toBeInTheDocument();
+    expect(screen.getByText('Noise Floor (24h)')).toBeInTheDocument();
   });
 
   it('fetches statistics when expanded in mobile external-nav mode', async () => {
@@ -662,6 +664,14 @@ describe('SettingsModal', () => {
         single_byte_pct: 50,
         double_byte_pct: 30,
         triple_byte_pct: 20,
+      },
+      noise_floor_24h: {
+        sample_interval_seconds: 300,
+        coverage_seconds: 0,
+        latest_noise_floor_dbm: null,
+        latest_timestamp: null,
+        supported: null,
+        samples: [],
       },
     };
 

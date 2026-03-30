@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts';
 
 import { RawPacketList } from './RawPacketList';
 import { RawPacketInspectorDialog } from './RawPacketDetailModal';
@@ -24,6 +34,18 @@ interface RawPacketFeedViewProps {
   channels: Channel[];
 }
 
+const TOOLTIP_STYLE = {
+  contentStyle: {
+    backgroundColor: 'hsl(var(--popover))',
+    border: '1px solid hsl(var(--border))',
+    borderRadius: '6px',
+    fontSize: '11px',
+    color: 'hsl(var(--popover-foreground))',
+  },
+  itemStyle: { color: 'hsl(var(--popover-foreground))' },
+  labelStyle: { color: 'hsl(var(--muted-foreground))' },
+} as const;
+
 const WINDOW_LABELS: Record<RawPacketStatsWindow, string> = {
   '1m': '1 min',
   '5m': '5 min',
@@ -32,13 +54,7 @@ const WINDOW_LABELS: Record<RawPacketStatsWindow, string> = {
   session: 'Session',
 };
 
-const TIMELINE_COLORS = [
-  'bg-sky-500/80',
-  'bg-emerald-500/80',
-  'bg-amber-500/80',
-  'bg-rose-500/80',
-  'bg-violet-500/80',
-];
+const TIMELINE_FILL_COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'];
 
 function formatTimestamp(timestampMs: number): string {
   return new Date(timestampMs).toLocaleString([], {
@@ -220,7 +236,13 @@ function RankedBars({
   emptyLabel: string;
   formatter?: (item: RankedPacketStat) => string;
 }) {
-  const maxCount = Math.max(...items.map((item) => item.count), 1);
+  const data = items.map((item) => ({
+    name: item.label,
+    value: item.count,
+    detail: formatter
+      ? formatter(item)
+      : `${item.count.toLocaleString()} · ${formatPercent(item.share)}`,
+  }));
 
   return (
     <section className="mb-4 break-inside-avoid rounded-lg border border-border/70 bg-card/70 p-3">
@@ -228,25 +250,36 @@ function RankedBars({
       {items.length === 0 ? (
         <p className="mt-3 text-sm text-muted-foreground">{emptyLabel}</p>
       ) : (
-        <div className="mt-3 space-y-2">
-          {items.map((item) => (
-            <div key={item.label}>
-              <div className="mb-1 flex items-center justify-between gap-3 text-xs">
-                <span className="truncate text-foreground">{item.label}</span>
-                <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {formatter
-                    ? formatter(item)
-                    : `${item.count.toLocaleString()} · ${formatPercent(item.share)}`}
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-primary/80"
-                  style={{ width: `${(item.count / maxCount) * 100}%` }}
-                />
-              </div>
-            </div>
-          ))}
+        <div className="mt-2">
+          <ResponsiveContainer width="100%" height={items.length * 28 + 8}>
+            <BarChart
+              data={data}
+              layout="vertical"
+              margin={{ top: 0, right: 4, bottom: 0, left: 0 }}
+              barCategoryGap="20%"
+            >
+              <XAxis type="number" hide />
+              <YAxis
+                type="category"
+                dataKey="name"
+                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                tickLine={false}
+                axisLine={false}
+                width={80}
+              />
+              <RechartsTooltip
+                {...TOOLTIP_STYLE}
+                cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                formatter={(_v: any, _n: any, props: any) => [props.payload.detail, null]}
+              />
+              <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={16}>
+                {data.map((_, i) => (
+                  <Cell key={i} fill={TIMELINE_FILL_COLORS[i % TIMELINE_FILL_COLORS.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       )}
     </section>
@@ -320,53 +353,66 @@ function NeighborList({
 }
 
 function TimelineChart({ bins }: { bins: PacketTimelineBin[] }) {
-  const maxTotal = Math.max(...bins.map((bin) => bin.total), 1);
   const typeOrder = Array.from(new Set(bins.flatMap((bin) => Object.keys(bin.countsByType)))).slice(
     0,
-    TIMELINE_COLORS.length
+    TIMELINE_FILL_COLORS.length
   );
+
+  const data = bins.map((bin) => {
+    const entry: Record<string, string | number> = { label: bin.label };
+    for (const type of typeOrder) {
+      entry[type] = bin.countsByType[type] ?? 0;
+    }
+    return entry;
+  });
 
   return (
     <section className="mb-4 break-inside-avoid rounded-lg border border-border/70 bg-card/70 p-3">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-foreground">Traffic Timeline</h3>
         <div className="flex flex-wrap justify-end gap-2 text-[11px] text-muted-foreground">
-          {typeOrder.map((type, index) => (
+          {typeOrder.map((type, i) => (
             <span key={type} className="inline-flex items-center gap-1">
-              <span className={cn('h-2 w-2 rounded-full', TIMELINE_COLORS[index])} />
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: TIMELINE_FILL_COLORS[i] }}
+              />
               <span>{type}</span>
             </span>
           ))}
         </div>
       </div>
-
-      <div className="mt-3 flex items-start gap-1">
-        {bins.map((bin, index) => (
-          <div
-            key={`${bin.label}-${index}`}
-            className="flex min-w-0 flex-1 flex-col items-center gap-1"
-          >
-            <div className="flex h-24 w-full items-end overflow-hidden rounded-sm bg-muted/60">
-              <div className="flex h-full w-full flex-col justify-end">
-                {typeOrder.map((type, index) => {
-                  const count = bin.countsByType[type] ?? 0;
-                  if (count === 0) return null;
-                  return (
-                    <div
-                      key={type}
-                      className={cn('w-full', TIMELINE_COLORS[index])}
-                      style={{
-                        height: `${(count / maxTotal) * 100}%`,
-                      }}
-                      title={`${bin.label}: ${type} ${count.toLocaleString()}`}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-            <div className="text-[10px] text-muted-foreground">{bin.label}</div>
-          </div>
-        ))}
+      <div className="mt-2">
+        <ResponsiveContainer width="100%" height={110}>
+          <BarChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: -24 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+              tickLine={false}
+              axisLine={false}
+              allowDecimals={false}
+            />
+            <RechartsTooltip
+              {...TOOLTIP_STYLE}
+              cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }}
+            />
+            {typeOrder.map((type, i) => (
+              <Bar
+                key={type}
+                dataKey={type}
+                stackId="packets"
+                fill={TIMELINE_FILL_COLORS[i]}
+                radius={i === typeOrder.length - 1 ? [2, 2, 0, 0] : undefined}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </section>
   );

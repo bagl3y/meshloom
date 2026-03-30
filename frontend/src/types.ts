@@ -505,6 +505,20 @@ interface ContactActivityCounts {
   last_week: number;
 }
 
+export interface NoiseFloorSample {
+  timestamp: number;
+  noise_floor_dbm: number;
+}
+
+export interface NoiseFloorHistoryStats {
+  sample_interval_seconds: number;
+  coverage_seconds: number;
+  latest_noise_floor_dbm: number | null;
+  latest_timestamp: number | null;
+  supported: boolean | null;
+  samples: NoiseFloorSample[];
+}
+
 export interface StatisticsResponse {
   busiest_channels_24h: BusyChannel[];
   contact_count: number;
@@ -528,4 +542,5 @@ export interface StatisticsResponse {
     double_byte_pct: number;
     triple_byte_pct: number;
   };
+  noise_floor_24h: NoiseFloorHistoryStats;
 }

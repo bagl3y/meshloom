@@ -1,5 +1,15 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { Ban, Search, Star } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 import { api } from '../api';
 import { formatTime } from '../utils/messageParser';
 import {
@@ -650,20 +660,18 @@ function ActivityChartsSection({ analytics }: { analytics: ContactAnalytics | nu
       {hasHourlyActivity && (
         <div>
           <SectionLabel>Messages Per Hour</SectionLabel>
-          <ChartLegend
-            items={[
-              { label: 'Last 24h', color: '#2563eb' },
-              { label: '7-day avg', color: '#ea580c' },
-              { label: 'All-time avg', color: '#64748b' },
-            ]}
-          />
           <ActivityLineChart
             ariaLabel="Messages per hour"
             points={analytics.hourly_activity}
             series={[
-              { key: 'last_24h_count', color: '#2563eb' },
-              { key: 'last_week_average', color: '#ea580c' },
-              { key: 'all_time_average', color: '#64748b' },
+              { key: 'last_24h_count', color: '#2563eb', label: 'Last 24h' },
+              { key: 'last_week_average', color: '#ea580c', label: '7-day avg' },
+              { key: 'all_time_average', color: '#64748b', label: 'All-time avg' },
+            ]}
+            legendItems={[
+              { label: 'Last 24h', color: '#2563eb' },
+              { label: '7-day avg', color: '#ea580c' },
+              { label: 'All-time avg', color: '#64748b' },
             ]}
             valueFormatter={(value) => value.toFixed(value % 1 === 0 ? 0 : 1)}
             tickFormatter={(bucket) =>
@@ -683,7 +691,7 @@ function ActivityChartsSection({ analytics }: { analytics: ContactAnalytics | nu
           <ActivityLineChart
             ariaLabel="Messages per week"
             points={analytics.weekly_activity}
-            series={[{ key: 'message_count', color: '#16a34a' }]}
+            series={[{ key: 'message_count', color: '#16a34a', label: 'Messages' }]}
             valueFormatter={(value) => value.toFixed(0)}
             tickFormatter={(bucket) =>
               new Date(bucket.bucket_start * 1000).toLocaleDateString([], {
@@ -705,133 +713,115 @@ function ActivityChartsSection({ analytics }: { analytics: ContactAnalytics | nu
   );
 }
 
-function ChartLegend({ items }: { items: Array<{ label: string; color: string }> }) {
-  return (
-    <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 text-[11px] text-muted-foreground">
-      {items.map((item) => (
-        <span key={item.label} className="inline-flex items-center gap-1.5">
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{ backgroundColor: item.color }}
-            aria-hidden="true"
-          />
-          {item.label}
-        </span>
-      ))}
-    </div>
-  );
-}
+const TOOLTIP_STYLE = {
+  contentStyle: {
+    backgroundColor: 'hsl(var(--popover))',
+    border: '1px solid hsl(var(--border))',
+    borderRadius: '6px',
+    fontSize: '11px',
+    color: 'hsl(var(--popover-foreground))',
+  },
+  itemStyle: { color: 'hsl(var(--popover-foreground))' },
+  labelStyle: { color: 'hsl(var(--muted-foreground))' },
+} as const;
 
 function ActivityLineChart<T extends ContactAnalyticsHourlyBucket | ContactAnalyticsWeeklyBucket>({
   ariaLabel,
   points,
   series,
+  legendItems,
   tickFormatter,
   valueFormatter,
 }: {
   ariaLabel: string;
   points: T[];
-  series: Array<{ key: keyof T; color: string }>;
+  series: Array<{ key: keyof T; color: string; label?: string }>;
+  legendItems?: Array<{ label: string; color: string }>;
   tickFormatter: (point: T) => string;
   valueFormatter: (value: number) => string;
 }) {
-  const width = 320;
-  const height = 132;
-  const padding = { top: 8, right: 8, bottom: 24, left: 32 };
-  const plotWidth = width - padding.left - padding.right;
-  const plotHeight = height - padding.top - padding.bottom;
-  const allValues = points.flatMap((point) =>
-    series.map((entry) => {
-      const value = point[entry.key];
-      return typeof value === 'number' ? value : 0;
-    })
-  );
-  const maxValue = Math.max(1, ...allValues);
-  const tickIndices = Array.from(
-    new Set([
-      0,
-      Math.floor((points.length - 1) / 3),
-      Math.floor(((points.length - 1) * 2) / 3),
-      points.length - 1,
-    ])
-  );
+  const data = points.map((point, i) => {
+    const entry: Record<string, string | number> = { idx: i, tick: tickFormatter(point) };
+    for (const s of series) {
+      const raw = point[s.key];
+      entry[String(s.key)] = typeof raw === 'number' ? raw : 0;
+    }
+    return entry;
+  });
 
-  const buildPolyline = (key: keyof T) =>
-    points
-      .map((point, index) => {
-        const rawValue = point[key];
-        const value = typeof rawValue === 'number' ? rawValue : 0;
-        const x =
-          padding.left + (points.length === 1 ? 0 : (index / (points.length - 1)) * plotWidth);
-        const y = padding.top + plotHeight - (value / maxValue) * plotHeight;
-        return `${x},${y}`;
-      })
-      .join(' ');
+  const tickCount = Math.min(5, points.length);
+  const tickIndices: number[] = [];
+  if (points.length > 1) {
+    for (let i = 0; i < tickCount; i++) {
+      tickIndices.push(Math.round((i / (tickCount - 1)) * (points.length - 1)));
+    }
+  }
 
   return (
-    <div>
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="w-full h-auto"
-        role="img"
-        aria-label={ariaLabel}
-      >
-        {[0, 0.5, 1].map((ratio) => {
-          const y = padding.top + plotHeight - ratio * plotHeight;
-          const value = maxValue * ratio;
-          return (
-            <g key={ratio}>
-              <line
-                x1={padding.left}
-                x2={width - padding.right}
-                y1={y}
-                y2={y}
-                stroke="hsl(var(--border))"
-                strokeWidth="1"
-              />
-              <text
-                x={padding.left - 6}
-                y={y + 4}
-                fontSize="10"
-                textAnchor="end"
-                fill="hsl(var(--muted-foreground))"
-              >
-                {valueFormatter(value)}
-              </text>
-            </g>
-          );
-        })}
-
-        {series.map((entry) => (
-          <polyline
-            key={String(entry.key)}
-            fill="none"
-            stroke={entry.color}
-            strokeWidth="2"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            points={buildPolyline(entry.key)}
+    <div role="img" aria-label={ariaLabel}>
+      <ResponsiveContainer width="100%" height={140}>
+        <LineChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -16 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+          <XAxis
+            dataKey="idx"
+            type="number"
+            domain={[0, Math.max(1, points.length - 1)]}
+            tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+            tickLine={false}
+            axisLine={false}
+            ticks={tickIndices}
+            tickFormatter={(idx) => String(data[idx]?.tick ?? '')}
           />
-        ))}
-
-        {tickIndices.map((index) => {
-          const point = points[index];
-          const x =
-            padding.left + (points.length === 1 ? 0 : (index / (points.length - 1)) * plotWidth);
-          return (
-            <text
-              key={`${ariaLabel}-${point.bucket_start}`}
-              x={x}
-              y={height - 6}
-              fontSize="10"
-              textAnchor={index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'}
-              fill="hsl(var(--muted-foreground))"
-            >
-              {tickFormatter(point)}
-            </text>
-          );
-        })}
-      </svg>
+          <YAxis
+            tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(v) => valueFormatter(v)}
+            width={40}
+          />
+          <RechartsTooltip
+            {...TOOLTIP_STYLE}
+            cursor={{
+              stroke: 'hsl(var(--muted-foreground))',
+              strokeWidth: 1,
+              strokeDasharray: '3 3',
+            }}
+            labelFormatter={(idx) => String(data[Number(idx)]?.tick ?? '')}
+            formatter={(value, name) => {
+              const match = series.find((s) => String(s.key) === name);
+              return [valueFormatter(Number(value)), match?.label ?? String(name)];
+            }}
+          />
+          {legendItems && (
+            <Legend
+              content={() => (
+                <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-1 text-[11px] text-muted-foreground">
+                  {legendItems.map((item) => (
+                    <span key={item.label} className="inline-flex items-center gap-1.5">
+                      <span
+                        className="inline-block h-2 w-2 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      {item.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+            />
+          )}
+          {series.map((entry) => (
+            <Line
+              key={String(entry.key)}
+              type="linear"
+              dataKey={String(entry.key)}
+              stroke={entry.color}
+              strokeWidth={1.5}
+              dot={false}
+              activeDot={{ r: 4, strokeWidth: 2, stroke: 'hsl(var(--popover))' }}
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
     </div>
   );
 }

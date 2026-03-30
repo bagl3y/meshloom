@@ -1,10 +1,110 @@
 import { useState, useEffect } from 'react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  Cell,
+} from 'recharts';
 import { Separator } from '../ui/separator';
 import { api } from '../../api';
 import type { StatisticsResponse } from '../../types';
 
 function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
+}
+
+const CHANNEL_BAR_COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'];
+
+const TOOLTIP_STYLE = {
+  contentStyle: {
+    backgroundColor: 'hsl(var(--popover))',
+    border: '1px solid hsl(var(--border))',
+    borderRadius: '6px',
+    fontSize: '11px',
+    color: 'hsl(var(--popover-foreground))',
+  },
+  itemStyle: { color: 'hsl(var(--popover-foreground))' },
+  labelStyle: { color: 'hsl(var(--muted-foreground))' },
+} as const;
+
+function formatTime(ts: number): string {
+  return new Date(ts * 1000).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+}
+
+function NoiseFloorChart({
+  samples,
+}: {
+  samples: { timestamp: number; noise_floor_dbm: number }[];
+}) {
+  const data = samples.map((s, i) => ({
+    idx: i,
+    time: formatTime(s.timestamp),
+    noise_floor: s.noise_floor_dbm,
+  }));
+
+  const tickCount = Math.min(6, samples.length);
+  const tickIndices: number[] = [];
+  if (samples.length > 1) {
+    for (let i = 0; i < tickCount; i++) {
+      tickIndices.push(Math.round((i / (tickCount - 1)) * (samples.length - 1)));
+    }
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height={120}>
+      <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+        <XAxis
+          dataKey="idx"
+          type="number"
+          domain={[0, samples.length - 1]}
+          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+          tickLine={false}
+          axisLine={false}
+          ticks={tickIndices}
+          tickFormatter={(idx) => data[idx]?.time ?? ''}
+        />
+        <YAxis
+          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+          tickLine={false}
+          axisLine={false}
+          domain={['dataMin - 5', 'dataMax + 5']}
+          tickFormatter={(v) => `${v}`}
+        />
+        <RechartsTooltip
+          {...TOOLTIP_STYLE}
+          cursor={{
+            stroke: 'hsl(var(--muted-foreground))',
+            strokeWidth: 1,
+            strokeDasharray: '3 3',
+          }}
+          labelFormatter={(idx) => data[Number(idx)]?.time ?? ''}
+          formatter={(value) => [`${value} dBm`, 'Noise Floor']}
+        />
+        <Area
+          type="linear"
+          dataKey="noise_floor"
+          stroke="#8b5cf6"
+          fill="#8b5cf6"
+          fillOpacity={0.15}
+          strokeWidth={1.5}
+          dot={false}
+          activeDot={{ r: 4, fill: '#8b5cf6', strokeWidth: 2, stroke: 'hsl(var(--popover))' }}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
 }
 
 export function SettingsStatisticsSection({ className }: { className?: string }) {
@@ -85,60 +185,6 @@ export function SettingsStatisticsSection({ className }: { className?: string })
 
           <Separator />
 
-          {/* Packets */}
-          <div>
-            <h4 className="text-sm font-medium mb-2">Packets</h4>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Total stored</span>
-                <span className="font-medium">{stats.total_packets}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-success">Decrypted</span>
-                <span className="font-medium text-success">{stats.decrypted_packets}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-warning">Undecrypted</span>
-                <span className="font-medium text-warning">{stats.undecrypted_packets}</span>
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          <div>
-            <h4 className="text-sm font-medium mb-2">Path Hash Width (24h)</h4>
-            <div className="mb-2 text-xs text-muted-foreground">
-              Parsed stored raw packets from the last 24 hours:{' '}
-              {stats.path_hash_width_24h.total_packets}
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center text-sm">
-                <span>1-byte hops</span>
-                <span className="text-muted-foreground">
-                  {stats.path_hash_width_24h.single_byte} (
-                  {formatPercent(stats.path_hash_width_24h.single_byte_pct)})
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span>2-byte hops</span>
-                <span className="text-muted-foreground">
-                  {stats.path_hash_width_24h.double_byte} (
-                  {formatPercent(stats.path_hash_width_24h.double_byte_pct)})
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span>3-byte hops</span>
-                <span className="text-muted-foreground">
-                  {stats.path_hash_width_24h.triple_byte} (
-                  {formatPercent(stats.path_hash_width_24h.triple_byte_pct)})
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
           {/* Activity */}
           <div>
             <h4 className="text-sm font-medium mb-2">Activity</h4>
@@ -174,23 +220,172 @@ export function SettingsStatisticsSection({ className }: { className?: string })
             </table>
           </div>
 
+          <Separator />
+
+          {/* Packets */}
+          <div>
+            <h4 className="text-sm font-medium mb-2">Packets</h4>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Total stored</span>
+                <span className="font-medium">{stats.total_packets}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-success">Decrypted</span>
+                <span className="font-medium text-success">{stats.decrypted_packets}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-warning">Undecrypted</span>
+                <span className="font-medium text-warning">{stats.undecrypted_packets}</span>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Path Hash Width */}
+          <div>
+            <h4 className="text-sm font-medium mb-2">Path Hash Width (24h)</h4>
+            <div className="mb-2 text-xs text-muted-foreground">
+              Parsed stored raw packets from the last 24 hours:{' '}
+              {stats.path_hash_width_24h.total_packets}
+            </div>
+            {stats.path_hash_width_24h.total_packets > 0 ? (
+              <ResponsiveContainer width="100%" height={120}>
+                <BarChart
+                  data={[
+                    {
+                      name: '1-byte',
+                      count: stats.path_hash_width_24h.single_byte,
+                      pct: stats.path_hash_width_24h.single_byte_pct,
+                    },
+                    {
+                      name: '2-byte',
+                      count: stats.path_hash_width_24h.double_byte,
+                      pct: stats.path_hash_width_24h.double_byte_pct,
+                    },
+                    {
+                      name: '3-byte',
+                      count: stats.path_hash_width_24h.triple_byte,
+                      pct: stats.path_hash_width_24h.triple_byte_pct,
+                    },
+                  ]}
+                  margin={{ top: 4, right: 4, bottom: 0, left: -16 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="hsl(var(--border))"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                  />
+                  <RechartsTooltip
+                    {...TOOLTIP_STYLE}
+                    cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    formatter={(value: any, _: any, props: any) => [
+                      `${Number(value).toLocaleString()} (${formatPercent(props.payload.pct)})`,
+                      'Packets',
+                    ]}
+                  />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                    <Cell fill="#0ea5e9" />
+                    <Cell fill="#10b981" />
+                    <Cell fill="#f59e0b" />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-muted-foreground">No path data in the last 24 hours.</p>
+            )}
+          </div>
+
           {/* Busiest Channels */}
           {stats.busiest_channels_24h.length > 0 && (
             <>
               <Separator />
               <div>
                 <h4 className="text-sm font-medium mb-2">Busiest Channels (24h)</h4>
-                <div className="space-y-1">
-                  {stats.busiest_channels_24h.map((ch, i) => (
-                    <div key={ch.channel_key} className="flex justify-between items-center text-sm">
-                      <span>
-                        <span className="text-muted-foreground mr-2">{i + 1}.</span>
-                        {ch.channel_name}
-                      </span>
-                      <span className="text-muted-foreground">{ch.message_count} msgs</span>
-                    </div>
-                  ))}
-                </div>
+                <ResponsiveContainer
+                  width="100%"
+                  height={stats.busiest_channels_24h.length * 28 + 8}
+                >
+                  <BarChart
+                    data={stats.busiest_channels_24h.map((ch) => ({
+                      name: ch.channel_name,
+                      messages: ch.message_count,
+                    }))}
+                    layout="vertical"
+                    margin={{ top: 0, right: 4, bottom: 0, left: 0 }}
+                    barCategoryGap="20%"
+                  >
+                    <XAxis type="number" hide />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={100}
+                    />
+                    <RechartsTooltip
+                      {...TOOLTIP_STYLE}
+                      cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }}
+                      formatter={(value) => [`${Number(value).toLocaleString()} messages`, null]}
+                    />
+                    <Bar dataKey="messages" radius={[0, 4, 4, 0]} maxBarSize={16}>
+                      {stats.busiest_channels_24h.map((_, i) => (
+                        <Cell key={i} fill={CHANNEL_BAR_COLORS[i % CHANNEL_BAR_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
+
+          {/* Noise Floor */}
+          {stats.noise_floor_24h.supported !== false && (
+            <>
+              <Separator />
+              <div>
+                <h4 className="text-sm font-medium mb-2">Noise Floor (24h)</h4>
+                {stats.noise_floor_24h.latest_noise_floor_dbm != null && (
+                  <div className="mb-2 text-xs text-muted-foreground">
+                    Latest reading: {stats.noise_floor_24h.latest_noise_floor_dbm} dBm
+                    {stats.noise_floor_24h.latest_timestamp != null &&
+                      ` at ${new Date(
+                        stats.noise_floor_24h.latest_timestamp * 1000
+                      ).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}`}
+                  </div>
+                )}
+                {stats.noise_floor_24h.samples.length > 1 ? (
+                  <NoiseFloorChart samples={stats.noise_floor_24h.samples} />
+                ) : stats.noise_floor_24h.samples.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No noise floor samples collected yet. Samples are collected every five minutes,
+                    and retained until server restart.
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Only one sample so far ({stats.noise_floor_24h.samples[0].noise_floor_dbm} dBm).
+                    More data needed for a chart. Samples are collected every five minutes, and
+                    retained until server restart.
+                  </p>
+                )}
               </div>
             </>
           )}
