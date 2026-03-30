@@ -1,3 +1,15 @@
+## [3.6.2] - 2026-03-29
+
+Feature: Be more flexible about timing and volume of full contact offload
+Feature: Improve room server and repeater ops to be much more clearer about auth status
+Feature: Show last error status on integrations
+Feature: Push multi-platform docker builds
+Bugfix: Fix advert interval time unit display
+Bugfix: Don't cast RSSI/SNR to string for community MQTT
+Bugfix: Map uploader follows redirect
+Misc: Thin out unnecessary cruft in unreads endpoint
+Misc: Fall back gracefully if linked to an unknown contact
+
 ## [3.6.1] - 2026-03-26
 
 Feature: MeshCore Map integration
