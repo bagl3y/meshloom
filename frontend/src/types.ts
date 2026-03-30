@@ -34,6 +34,7 @@ export type RadioDiscoveryTarget = 'repeaters' | 'sensors' | 'all';
 
 export interface RadioDiscoveryResult {
   public_key: string;
+  name: string | null;
   node_type: 'repeater' | 'sensor';
   heard_count: number;
   local_snr: number | null;

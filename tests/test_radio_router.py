@@ -2,7 +2,7 @@
 
 import asyncio
 from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -375,6 +375,11 @@ class TestDiscoverMesh:
                 return_value=None,
             ),
             patch("app.routers.radio.ContactRepository.upsert", new_callable=AsyncMock),
+            patch(
+                "app.routers.radio.promote_prefix_contacts_for_contact",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
             patch("app.routers.radio.broadcast_event"),
         ):
             response = await discover_mesh(RadioDiscoveryRequest(target="repeaters"))
@@ -436,18 +441,27 @@ class TestDiscoverMesh:
             patch(
                 "app.routers.radio.ContactRepository.get_by_key",
                 new_callable=AsyncMock,
-                side_effect=[None, created_contact],
+                # 1st: _persist check (not found), 2nd: _persist re-fetch (created),
+                # 3rd: _attach_known_names lookup
+                side_effect=[None, created_contact, created_contact],
             ) as mock_get_by_key,
             patch(
                 "app.routers.radio.ContactRepository.upsert", new_callable=AsyncMock
             ) as mock_upsert,
+            patch(
+                "app.routers.radio.promote_prefix_contacts_for_contact",
+                new_callable=AsyncMock,
+                return_value=[],
+            ) as mock_promote,
             patch("app.routers.radio.broadcast_event") as mock_broadcast,
         ):
             response = await discover_mesh(RadioDiscoveryRequest(target="repeaters"))
 
         assert len(response.results) == 1
+        assert response.results[0].name is None  # created_contact has no name
         mock_get_by_key.assert_awaited()
         mock_upsert.assert_awaited_once()
+        mock_promote.assert_awaited_once_with(public_key="44" * 32, log=ANY)
         upsert_arg = mock_upsert.await_args.args[0]
         assert upsert_arg.public_key == "44" * 32
         assert upsert_arg.type == 2
@@ -542,6 +556,11 @@ class TestDiscoverMesh:
                 return_value=None,
             ),
             patch("app.routers.radio.ContactRepository.upsert", new_callable=AsyncMock),
+            patch(
+                "app.routers.radio.promote_prefix_contacts_for_contact",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
             patch("app.routers.radio.broadcast_event"),
         ):
             response = await discover_mesh(RadioDiscoveryRequest(target="all"))

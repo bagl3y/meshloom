@@ -300,6 +300,7 @@ describe('SettingsModal', () => {
         results: [
           {
             public_key: '11'.repeat(32),
+            name: null,
             node_type: 'repeater',
             heard_count: 2,
             local_snr: 7.5,

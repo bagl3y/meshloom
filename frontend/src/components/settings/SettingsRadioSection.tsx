@@ -846,11 +846,16 @@ export function SettingsRadioSection({
                     className="rounded-md border border-input bg-background px-3 py-2"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium capitalize">{result.node_type}</span>
+                      <span className="text-sm font-medium">
+                        {result.name ?? <span className="capitalize">{result.node_type}</span>}
+                      </span>
                       <span className="text-xs text-muted-foreground">
                         heard {result.heard_count} time{result.heard_count === 1 ? '' : 's'}
                       </span>
                     </div>
+                    {result.name && (
+                      <p className="text-xs capitalize text-muted-foreground">{result.node_type}</p>
+                    )}
                     <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
                       {result.public_key}
                     </p>

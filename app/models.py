@@ -681,6 +681,10 @@ class RadioDiscoveryResult(BaseModel):
     """One mesh node heard during a discovery sweep."""
 
     public_key: str = Field(description="Discovered node public key as hex")
+    name: str | None = Field(
+        default=None,
+        description="Known name for this node from contacts DB, if any",
+    )
     node_type: Literal["repeater", "sensor"] = Field(description="Discovered node class")
     heard_count: int = Field(default=1, description="How many responses were heard from this node")
     local_snr: float | None = Field(

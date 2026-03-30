@@ -18,6 +18,7 @@ from app.models import (
 from app.radio_sync import send_advertisement as do_send_advertisement
 from app.radio_sync import sync_radio_time
 from app.repository import ContactRepository
+from app.services.contact_reconciliation import promote_prefix_contacts_for_contact
 from app.services.radio_commands import (
     KeystoreRefreshError,
     PathHashModeUnsupportedError,
@@ -197,9 +198,23 @@ async def _persist_new_discovery_contacts(results: list[RadioDiscoveryResult]) -
             on_radio=False,
         )
         await ContactRepository.upsert(contact)
+        promoted_keys = await promote_prefix_contacts_for_contact(
+            public_key=result.public_key,
+            log=logger,
+        )
         created = await ContactRepository.get_by_key(result.public_key)
         if created is not None:
             broadcast_event("contact", created.model_dump())
+        for old_key in promoted_keys:
+            broadcast_event("contact_deleted", {"public_key": old_key})
+
+
+async def _attach_known_names(results: list[RadioDiscoveryResult]) -> None:
+    """Resolve known contact names for discovery results from the DB."""
+    for result in results:
+        contact = await ContactRepository.get_by_key(result.public_key)
+        if contact is not None and contact.name:
+            result.name = contact.name
 
 
 @router.get("/config", response_model=RadioConfigResponse)
@@ -365,6 +380,7 @@ async def discover_mesh(request: RadioDiscoveryRequest) -> RadioDiscoveryRespons
         ),
     )
     await _persist_new_discovery_contacts(results)
+    await _attach_known_names(results)
     return RadioDiscoveryResponse(
         target=request.target,
         duration_seconds=DISCOVERY_WINDOW_SECONDS,
