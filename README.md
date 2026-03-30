@@ -16,12 +16,6 @@ Backend server + browser interface for MeshCore mesh radio networks. Connect you
 
 ![Screenshot of the application's web interface](app_screenshot.png)
 
-## Disclaimer
-
-This is developed with very heavy agentic assistance -- there is no warranty of fitness for any purpose. It's been lovingly guided by an engineer with a passion for clean code and good tests, but it's still mostly LLM output, so you may find some bugs.
-
-If extending, have your LLM read the three `AGENTS.md` files: `./AGENTS.md`, `./frontend/AGENTS.md`, and `./app/AGENTS.md`.
-
 ## Start Here
 
 Most users should choose one of these paths:
@@ -95,29 +89,19 @@ Access the app at http://localhost:8000.
 
 Source checkouts expect a normal frontend build in `frontend/dist`.
 
-On Linux, if you want this installed as a persistent `systemd` service that starts on boot and restarts automatically on failure, run `bash scripts/setup/install_service.sh` from the repo root.
+> [!NOTE]
+> Running on lightweight hardware/ don't want to build the frontend locally? From a cloned checkout, run `python3 scripts/setup/fetch_prebuilt_frontend.py` to fetch and unpack a prebuilt frontend into `frontend/prebuilt`, then start the app normally with `uv run uvicorn app.main:app --host 0.0.0.0 --port 8000`.
 
-## Path 1.5: Use The Prebuilt Release Zip
-
-Release zips can be found as an asset within the [releases listed here](https://github.com/jkingsman/Remote-Terminal-for-MeshCore/releases). This can be beneficial on resource constrained systems that cannot cope with the RAM-hungry frontend build process.
-
-If you downloaded the release zip instead of cloning the repo, unpack it and run:
-
-```bash
-cd Remote-Terminal-for-MeshCore
-uv sync
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-The release bundle includes `frontend/prebuilt`, so it does not require a local frontend build.
-
-Alternatively, if you have already cloned the repo, you can fetch just the prebuilt frontend into your working tree without downloading the full release zip via `python3 scripts/setup/fetch_prebuilt_frontend.py`.
+> [!TIP]
+> On Linux, you can also install RemoteTerm as a persistent `systemd` service that starts on boot and restarts automatically on failure:
+>
+> ```bash
+> bash scripts/setup/install_service.sh
+> ```
+>
+> For the full service workflow and post-install operations, see [README_ADVANCED.md](README_ADVANCED.md).
 
 ## Path 2: Docker
-
-> **Warning:** Docker has had reports intermittent issues with serial event subscriptions. The native method above is more reliable.
-
-Local Docker builds are architecture-native by default. On Apple Silicon Macs and ARM64 Linux hosts such as Raspberry Pi, `docker compose build` / `docker compose up --build` will produce an ARM64 image unless you override the platform.
 
 Edit `docker-compose.yaml` to set a serial device for passthrough, or uncomment your transport (serial or TCP). Then:
 
@@ -212,3 +196,9 @@ If you enable Basic Auth, protect the app with HTTPS. HTTP Basic credentials are
 - Advanced setup, troubleshooting, HTTPS, systemd, remediation variables, and debug logging: [README_ADVANCED.md](README_ADVANCED.md)
 - Contributing, tests, linting, E2E notes, and important AGENTS files: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Live API docs after the backend is running: http://localhost:8000/docs
+
+## Disclaimer
+
+This is developed with very heavy agentic assistance -- there is no warranty of fitness for any purpose. It's been lovingly guided by an engineer with a passion for clean code and good tests, but it's still mostly LLM output, so you may find some bugs.
+
+If extending, have your LLM read the three `AGENTS.md` files: `./AGENTS.md`, `./frontend/AGENTS.md`, and `./app/AGENTS.md`.
