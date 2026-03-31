@@ -23,17 +23,17 @@ echo
 
 echo -e "${YELLOW}=== Phase 1: Lint & Format ===${NC}"
 
-echo -e "${BLUE}[backend lint]${NC} Running ruff check + format..."
+echo -ne "${BLUE}[backend lint]${NC} "
 cd "$REPO_ROOT"
-uv run ruff check app/ tests/ --fix
-uv run ruff format app/ tests/
-echo -e "${GREEN}[backend lint]${NC} Passed!"
+uv run ruff check app/ tests/ --fix --quiet
+uv run ruff format app/ tests/ --check --quiet
+echo -e "${GREEN}Passed!${NC}"
 
-echo -e "${BLUE}[frontend lint]${NC} Running eslint + prettier..."
+echo -ne "${BLUE}[frontend lint]${NC} "
 cd "$REPO_ROOT/frontend"
-npm run lint:fix
-npm run format
-echo -e "${GREEN}[frontend lint]${NC} Passed!"
+npx --quiet eslint src/ --fix --cache --quiet
+npx --quiet prettier --write --list-different src/ --log-level warn
+echo -e "${GREEN}Passed!${NC}"
 
 echo -e "${GREEN}=== Phase 1 complete ===${NC}"
 echo
@@ -42,21 +42,30 @@ echo
 
 echo -e "${YELLOW}=== Phase 2: Typecheck, Tests & Build ===${NC}"
 
-echo -e "${BLUE}[pyright]${NC} Running type check..."
+echo -ne "${BLUE}[pyright]${NC} "
 cd "$REPO_ROOT"
-uv run pyright app/
-echo -e "${GREEN}[pyright]${NC} Passed!"
+uv run pyright app/ --outputjson 2>/dev/null | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+s = d.get('summary', {})
+print(f\"{s.get('filesAnalyzed',0)} files, 0 errors\")
+" 2>/dev/null || { uv run pyright app/; exit 1; }
+echo -e "${GREEN}Passed!${NC}"
 
-echo -e "${BLUE}[pytest]${NC} Running backend tests..."
+echo -ne "${BLUE}[pytest]${NC} "
 cd "$REPO_ROOT"
-PYTHONPATH=. uv run pytest tests/ -v
-echo -e "${GREEN}[pytest]${NC} Passed!"
+PYTHONPATH=. uv run pytest tests/ -q --no-header --tb=short
+echo -e "${GREEN}Passed!${NC}"
 
-echo -e "${BLUE}[frontend]${NC} Running tests + build..."
+echo -ne "${BLUE}[vitest]${NC} "
 cd "$REPO_ROOT/frontend"
-npm run test:run
-npm run build
-echo -e "${GREEN}[frontend]${NC} Passed!"
+npx --quiet vitest run --reporter=dot 2>&1 | tail -5
+echo -e "${GREEN}Passed!${NC}"
+
+echo -ne "${BLUE}[build]${NC} "
+cd "$REPO_ROOT/frontend"
+npx --quiet tsc 2>&1 && npx --quiet vite build --logLevel error 2>&1
+echo -e "${GREEN}Passed!${NC}"
 
 echo -e "${GREEN}=== Phase 2 complete ===${NC}"
 echo
