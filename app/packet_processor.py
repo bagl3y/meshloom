@@ -264,9 +264,10 @@ async def process_raw_packet(
     This is the main entry point for all incoming RF packets.
 
     Note: Packets are deduplicated by payload hash in the database. If we receive
-    a duplicate packet (same payload, different path), we still broadcast it to
-    the frontend (for the real-time packet feed) but skip decryption processing
-    since the original packet was already processed.
+    a duplicate payload (same payload, different path), we still broadcast it to
+    the frontend for realtime packet-feed fidelity. Some payload types are also
+    intentionally reprocessed on duplicate arrival so message-level dedup/path
+    merge logic and advert/path-history tracking still see each observation.
     """
     ts = timestamp or int(time.time())
     observation_id = next(_raw_observation_counter)

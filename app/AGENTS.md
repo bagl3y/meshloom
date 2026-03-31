@@ -25,18 +25,22 @@ Keep it aligned with `app/` source files and router behavior.
 app/
 ├── main.py              # App startup/lifespan, router registration, static frontend mounting
 ├── config.py            # Env-driven runtime settings
+├── channel_constants.py # Public/default channel constants shared across sync/send logic
 ├── database.py          # SQLite connection + base schema + migration runner
 ├── migrations.py        # Schema migrations (SQLite user_version)
 ├── models.py            # Pydantic request/response models and typed write contracts (for example ContactUpsert)
+├── version_info.py      # Unified version/build metadata resolution for debug + startup surfaces
 ├── repository/          # Data access layer (contacts, channels, messages, raw_packets, settings, fanout)
 ├── services/            # Shared orchestration/domain services
 │   ├── messages.py              # Shared message creation, dedup, ACK application
 │   ├── message_send.py          # Direct send, channel send, resend workflows
 │   ├── dm_ingest.py             # Shared direct-message ingest / dedup seam for packet + fallback paths
+│   ├── dm_ack_apply.py          # Shared DM ACK application over pending/buffered ACK state
 │   ├── dm_ack_tracker.py        # Pending DM ACK state
 │   ├── contact_reconciliation.py # Prefix-claim, sender-key backfill, name-history wiring
 │   ├── radio_lifecycle.py       # Post-connect setup and reconnect/setup helpers
 │   ├── radio_commands.py        # Radio config/private-key command workflows
+│   ├── radio_noise_floor.py     # In-memory local radio noise-floor sampling/history
 │   └── radio_runtime.py         # Router/dependency seam over the global RadioManager
 ├── radio.py             # RadioManager transport/session state + lock management
 ├── radio_sync.py        # Polling, sync, periodic advertisement loop
@@ -61,6 +65,8 @@ app/
     ├── messages.py
     ├── packets.py
     ├── read_state.py
+    ├── rooms.py
+    ├── server_control.py
     ├── settings.py
     ├── fanout.py
     ├── repeaters.py
@@ -174,6 +180,7 @@ app/
 - `PUT /radio/private-key`
 - `POST /radio/advertise` — manual advert send; request body may set `mode` to `flood` or `zero_hop` (defaults to `flood`)
 - `POST /radio/discover` — short mesh discovery sweep for nearby repeaters/sensors
+- `POST /radio/trace` — send a multi-hop trace loop through known repeaters and back to the local radio
 - `POST /radio/disconnect`
 - `POST /radio/reboot`
 - `POST /radio/reconnect`
@@ -198,6 +205,10 @@ app/
 - `POST /contacts/{public_key}/repeater/radio-settings`
 - `POST /contacts/{public_key}/repeater/advert-intervals`
 - `POST /contacts/{public_key}/repeater/owner-info`
+- `POST /contacts/{public_key}/room/login`
+- `POST /contacts/{public_key}/room/status`
+- `POST /contacts/{public_key}/room/lpp-telemetry`
+- `POST /contacts/{public_key}/room/acl`
 
 ### Channels
 - `GET /channels`
@@ -216,6 +227,7 @@ app/
 
 ### Packets
 - `GET /packets/undecrypted/count`
+- `GET /packets/{packet_id}` — fetch one stored raw packet by row ID for on-demand inspection
 - `POST /packets/decrypt/historical`
 - `POST /packets/maintenance`
 
@@ -236,6 +248,7 @@ app/
 - `POST /fanout` — create new fanout config
 - `PATCH /fanout/{id}` — update fanout config (triggers module reload)
 - `DELETE /fanout/{id}` — delete fanout config (stops module)
+- `POST /fanout/bots/disable-until-restart` — stop bot modules and keep bots disabled until restart
 
 ### Statistics
 - `GET /statistics` — aggregated mesh network stats (entity counts, message/packet splits, activity windows, busiest channels)
@@ -322,9 +335,11 @@ tests/
 ├── conftest.py                 # Shared fixtures
 ├── test_ack_tracking_wiring.py # DM ACK tracking extraction and wiring
 ├── test_api.py                 # REST endpoint integration tests
+├── test_block_lists.py         # Blocked keys/names filtering across list/search surfaces
 ├── test_bot.py                 # Bot execution and sandboxing
-├── test_channels_router.py     # Channels router endpoints
 ├── test_channel_sender_backfill.py # Sender-key backfill uniqueness rules for channel messages
+├── test_channels_router.py     # Channels router endpoints
+├── test_community_mqtt.py      # Community MQTT publisher (JWT, packet format, hash, broadcast)
 ├── test_config.py              # Configuration validation
 ├── test_contact_reconciliation_service.py # Prefix/contact reconciliation service helpers
 ├── test_contacts_router.py     # Contacts router endpoints
@@ -332,40 +347,41 @@ tests/
 ├── test_disable_bots.py        # MESHCORE_DISABLE_BOTS=true feature
 ├── test_echo_dedup.py          # Echo/repeat deduplication (incl. concurrent)
 ├── test_fanout.py              # Fanout bus CRUD, scope matching, manager dispatch
-├── test_fanout_integration.py  # Fanout integration tests
 ├── test_fanout_hitlist.py      # Fanout-related hitlist regression tests
+├── test_fanout_integration.py  # Fanout integration tests
 ├── test_event_handlers.py      # ACK tracking, event registration, cleanup
 ├── test_frontend_static.py     # Frontend static file serving
 ├── test_health_mqtt_status.py  # Health endpoint MQTT status field
 ├── test_http_quality.py        # Cache-control / gzip / basic-auth HTTP quality checks
 ├── test_key_normalization.py   # Public key normalization
 ├── test_keystore.py            # Ephemeral keystore
+├── test_main_startup.py        # App startup and lifespan
+├── test_map_upload.py          # Map upload fanout module
 ├── test_message_pagination.py  # Cursor-based message pagination
 ├── test_message_prefix_claim.py # Message prefix claim logic
-├── test_migrations.py          # Schema migration system
-├── test_community_mqtt.py      # Community MQTT publisher (JWT, packet format, hash, broadcast)
 ├── test_mqtt.py                # MQTT publisher topic routing and lifecycle
+├── test_messages_search.py     # Message search, around, forward pagination
+├── test_migrations.py          # Schema migration system
 ├── test_packet_pipeline.py     # End-to-end packet processing
 ├── test_packets_router.py      # Packets router endpoints (decrypt, maintenance)
+├── test_path_utils.py          # Path hex rendering helpers
 ├── test_radio.py               # RadioManager, serial detection
 ├── test_radio_commands_service.py # Radio config/private-key service workflows
 ├── test_radio_lifecycle_service.py # Reconnect/setup orchestration helpers
-├── test_radio_runtime_service.py # radio_runtime seam behavior and helpers
-├── test_real_crypto.py         # Real cryptographic operations
 ├── test_radio_operation.py     # radio_operation() context manager
 ├── test_radio_router.py        # Radio router endpoints
+├── test_radio_runtime_service.py # radio_runtime seam behavior and helpers
 ├── test_radio_sync.py          # Polling, sync, advertisement
+├── test_real_crypto.py         # Real cryptographic operations
 ├── test_repeater_routes.py     # Repeater command/telemetry/trace + granular pane endpoints
 ├── test_repository.py          # Data access layer
+├── test_room_routes.py         # Room-server login/status/telemetry/ACL endpoints
 ├── test_rx_log_data.py         # on_rx_log_data event handler integration
-├── test_messages_search.py      # Message search, around, forward pagination
-├── test_block_lists.py          # Blocked keys/names filtering
 ├── test_security.py            # Optional Basic Auth middleware / config behavior
 ├── test_send_messages.py       # Outgoing messages, bot triggers, concurrent sends
 ├── test_settings_router.py     # Settings endpoints, advert validation
 ├── test_statistics.py          # Statistics aggregation
-├── test_main_startup.py        # App startup and lifespan
-├── test_path_utils.py          # Path hex rendering helpers
+├── test_version_info.py        # Version/build metadata resolution
 ├── test_websocket.py           # WS manager broadcast/cleanup
 └── test_websocket_route.py     # WS endpoint lifecycle
 ```

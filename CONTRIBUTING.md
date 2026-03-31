@@ -78,6 +78,7 @@ These tests are only guaranteed to run correctly in a narrow subset of environme
 
 ```bash
 cd tests/e2e
+npm install
 npx playwright test # headless
 npx playwright test --headed # you can probably guess
 ```
