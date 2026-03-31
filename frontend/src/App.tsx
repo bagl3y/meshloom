@@ -31,6 +31,12 @@ interface ChannelUnreadMarker {
   lastReadAt: number | null;
 }
 
+interface NewMessagePrefillRequest {
+  tab: 'hashtag';
+  hashtagName: string;
+  nonce: number;
+}
+
 interface UnreadBoundaryBackfillParams {
   activeConversation: Conversation | null;
   unreadMarker: ChannelUnreadMarker | null;
@@ -77,6 +83,8 @@ export function App() {
   const messageInputRef = useRef<MessageInputHandle>(null);
   const [rawPackets, setRawPackets] = useState<RawPacket[]>([]);
   const [channelUnreadMarker, setChannelUnreadMarker] = useState<ChannelUnreadMarker | null>(null);
+  const [newMessagePrefillRequest, setNewMessagePrefillRequest] =
+    useState<NewMessagePrefillRequest | null>(null);
   const [visibilityVersion, setVisibilityVersion] = useState(0);
   const lastUnreadBackfillAttemptRef = useRef<string | null>(null);
   const {
@@ -103,8 +111,8 @@ export function App() {
     setDistanceUnit,
     handleCloseSettingsView,
     handleToggleSettingsView,
-    handleOpenNewMessage,
-    handleCloseNewMessage,
+    handleOpenNewMessage: openNewMessageModal,
+    handleCloseNewMessage: closeNewMessageModal,
     handleToggleCracker,
   } = useAppShell();
 
@@ -413,6 +421,34 @@ export function App() {
     [fetchUndecryptedCount, setChannels]
   );
 
+  const handleOpenNewMessage = useCallback(() => {
+    setNewMessagePrefillRequest(null);
+    openNewMessageModal();
+  }, [openNewMessageModal]);
+
+  const handleCloseNewMessage = useCallback(() => {
+    setNewMessagePrefillRequest(null);
+    closeNewMessageModal();
+  }, [closeNewMessageModal]);
+
+  const handleChannelReferenceClick = useCallback(
+    (channelName: string) => {
+      const existingChannel = channels.find((channel) => channel.name === channelName);
+      if (existingChannel) {
+        handleNavigateToChannel(existingChannel.key);
+        return;
+      }
+
+      setNewMessagePrefillRequest((previous) => ({
+        tab: 'hashtag',
+        hashtagName: channelName.slice(1),
+        nonce: (previous?.nonce ?? 0) + 1,
+      }));
+      openNewMessageModal();
+    },
+    [channels, handleNavigateToChannel, openNewMessageModal]
+  );
+
   const statusProps = {
     health,
     config,
@@ -468,6 +504,7 @@ export function App() {
     onOpenContactInfo: handleOpenContactInfo,
     onOpenChannelInfo: handleOpenChannelInfo,
     onSenderClick: handleSenderClick,
+    onChannelReferenceClick: handleChannelReferenceClick,
     onLoadOlder: fetchOlderMessages,
     onResendChannelMessage: handleResendChannelMessage,
     onTargetReached: () => setTargetMessageId(null),
@@ -526,6 +563,7 @@ export function App() {
   };
   const newMessageModalProps = {
     undecryptedCount,
+    prefillRequest: newMessagePrefillRequest,
     onCreateContact: handleCreateContact,
     onCreateChannel: handleCreateChannel,
     onCreateHashtagChannel: handleCreateHashtagChannel,

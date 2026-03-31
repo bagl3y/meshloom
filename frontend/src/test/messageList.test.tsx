@@ -140,6 +140,59 @@ describe('MessageList channel sender rendering', () => {
     expect(screen.getByRole('button', { name: 'View info for Alice' })).toBeInTheDocument();
   });
 
+  it('renders valid channel references as clickable links and ignores invalid ones', async () => {
+    const user = userEvent.setup();
+    const onChannelReferenceClick = vi.fn();
+
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            text: 'Alice: Join #mesh-room now skip #bad--room and visit https://example.com/#also-skip',
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+        onChannelReferenceClick={onChannelReferenceClick}
+      />
+    );
+
+    const linkedChannel = screen.getByRole('button', { name: '#mesh-room' });
+    expect(linkedChannel).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '#bad--room' })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'https://example.com/#also-skip' })
+    ).toBeInTheDocument();
+
+    await user.click(linkedChannel);
+
+    expect(onChannelReferenceClick).toHaveBeenCalledWith('#mesh-room');
+  });
+
+  it('links valid channel references in direct messages too', async () => {
+    const user = userEvent.setup();
+    const onChannelReferenceClick = vi.fn();
+
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            type: 'PRIV',
+            text: 'check #ops-room',
+            conversation_key: 'ab'.repeat(32),
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+        onChannelReferenceClick={onChannelReferenceClick}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: '#ops-room' }));
+
+    expect(onChannelReferenceClick).toHaveBeenCalledWith('#ops-room');
+  });
+
   it('renders and dismisses an unread marker at the first unread message boundary', async () => {
     const user = userEvent.setup();
     const messages = [

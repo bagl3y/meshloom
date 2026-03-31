@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dice5 } from 'lucide-react';
 import {
   Dialog,
@@ -20,6 +20,11 @@ type Tab = 'new-contact' | 'new-channel' | 'hashtag';
 interface NewMessageModalProps {
   open: boolean;
   undecryptedCount: number;
+  prefillRequest?: {
+    tab: 'hashtag';
+    hashtagName: string;
+    nonce: number;
+  } | null;
   onClose: () => void;
   onCreateContact: (name: string, publicKey: string, tryHistorical: boolean) => Promise<void>;
   onCreateChannel: (name: string, key: string, tryHistorical: boolean) => Promise<void>;
@@ -29,6 +34,7 @@ interface NewMessageModalProps {
 export function NewMessageModal({
   open,
   undecryptedCount,
+  prefillRequest = null,
   onClose,
   onCreateContact,
   onCreateChannel,
@@ -52,6 +58,24 @@ export function NewMessageModal({
     setPermitCapitals(false);
     setError('');
   };
+
+  useEffect(() => {
+    if (!open || !prefillRequest) {
+      return;
+    }
+
+    setTab(prefillRequest.tab);
+    setName(prefillRequest.hashtagName);
+    setContactKey('');
+    setChannelKey('');
+    setTryHistorical(false);
+    setPermitCapitals(false);
+    setError('');
+    setLoading(false);
+    requestAnimationFrame(() => {
+      hashtagInputRef.current?.focus();
+    });
+  }, [open, prefillRequest]);
 
   const handleCreate = async () => {
     setError('');

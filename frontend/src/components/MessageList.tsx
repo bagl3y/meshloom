@@ -11,7 +11,11 @@ import {
 import type { Channel, Contact, Message, MessagePath, RadioConfig, RawPacket } from '../types';
 import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM } from '../types';
 import { api } from '../api';
-import { formatTime, parseSenderFromText } from '../utils/messageParser';
+import {
+  findLinkedChannelReferences,
+  formatTime,
+  parseSenderFromText,
+} from '../utils/messageParser';
 import { formatHopCounts, type SenderInfo } from '../utils/pathUtils';
 import { getDirectContactRoute } from '../utils/pathUtils';
 import { ContactAvatar } from './ContactAvatar';
@@ -33,6 +37,7 @@ interface MessageListProps {
   onSenderClick?: (sender: string) => void;
   onLoadOlder?: () => void;
   onResendChannelMessage?: (messageId: number, newTimestamp?: boolean) => void;
+  onChannelReferenceClick?: (channelName: string) => void;
   radioName?: string;
   config?: RadioConfig | null;
   onOpenContactInfo?: (publicKey: string, fromChannel?: boolean) => void;
@@ -48,8 +53,64 @@ interface MessageListProps {
 const URL_PATTERN =
   /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/g;
 
-// Helper to convert URLs in a plain text string into clickable links
-function linkifyText(text: string, keyPrefix: string): ReactNode[] {
+function renderChannelReferences(
+  text: string,
+  keyPrefix: string,
+  onChannelReferenceClick?: (channelName: string) => void
+): ReactNode[] {
+  const references = findLinkedChannelReferences(text);
+  if (references.length === 0) {
+    return [text];
+  }
+
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+
+  references.forEach((reference, index) => {
+    if (reference.start > lastIndex) {
+      parts.push(text.slice(lastIndex, reference.start));
+    }
+
+    const className =
+      'rounded px-0.5 font-medium text-primary underline underline-offset-2 transition-colors';
+    if (onChannelReferenceClick) {
+      parts.push(
+        <button
+          key={`${keyPrefix}-channel-${index}`}
+          type="button"
+          className={cn(
+            className,
+            'inline border-0 bg-transparent p-0 align-baseline hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          )}
+          onClick={() => onChannelReferenceClick(reference.label)}
+        >
+          {reference.label}
+        </button>
+      );
+    } else {
+      parts.push(
+        <span key={`${keyPrefix}-channel-${index}`} className={className}>
+          {reference.label}
+        </span>
+      );
+    }
+
+    lastIndex = reference.end;
+  });
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts;
+}
+
+// Helper to convert URLs and channel references in a plain text string into rich content
+function linkifyText(
+  text: string,
+  keyPrefix: string,
+  onChannelReferenceClick?: (channelName: string) => void
+): ReactNode[] {
   const parts: ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -58,7 +119,13 @@ function linkifyText(text: string, keyPrefix: string): ReactNode[] {
   URL_PATTERN.lastIndex = 0;
   while ((match = URL_PATTERN.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
+      parts.push(
+        ...renderChannelReferences(
+          text.slice(lastIndex, match.index),
+          `${keyPrefix}-text-${keyIndex}`,
+          onChannelReferenceClick
+        )
+      );
     }
     parts.push(
       <a
@@ -74,15 +141,27 @@ function linkifyText(text: string, keyPrefix: string): ReactNode[] {
     lastIndex = match.index + match[0].length;
   }
 
-  if (lastIndex === 0) return [text];
+  if (lastIndex === 0) {
+    return renderChannelReferences(text, keyPrefix, onChannelReferenceClick);
+  }
   if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
+    parts.push(
+      ...renderChannelReferences(
+        text.slice(lastIndex),
+        `${keyPrefix}-tail`,
+        onChannelReferenceClick
+      )
+    );
   }
   return parts;
 }
 
 // Helper to render text with highlighted @[Name] mentions and clickable URLs
-function renderTextWithMentions(text: string, radioName?: string): ReactNode {
+function renderTextWithMentions(
+  text: string,
+  radioName?: string,
+  onChannelReferenceClick?: (channelName: string) => void
+): ReactNode {
   const mentionPattern = /@\[([^\]]+)\]/g;
   const parts: ReactNode[] = [];
   let lastIndex = 0;
@@ -92,7 +171,13 @@ function renderTextWithMentions(text: string, radioName?: string): ReactNode {
   while ((match = mentionPattern.exec(text)) !== null) {
     // Add text before the match (with linkification)
     if (match.index > lastIndex) {
-      parts.push(...linkifyText(text.slice(lastIndex, match.index), `pre-${keyIndex}`));
+      parts.push(
+        ...linkifyText(
+          text.slice(lastIndex, match.index),
+          `pre-${keyIndex}`,
+          onChannelReferenceClick
+        )
+      );
     }
 
     const mentionedName = match[1];
@@ -115,7 +200,7 @@ function renderTextWithMentions(text: string, radioName?: string): ReactNode {
 
   // Add remaining text after last match (with linkification)
   if (lastIndex < text.length) {
-    parts.push(...linkifyText(text.slice(lastIndex), `post-${keyIndex}`));
+    parts.push(...linkifyText(text.slice(lastIndex), `post-${keyIndex}`, onChannelReferenceClick));
   }
 
   return parts.length > 0 ? parts : text;
@@ -188,6 +273,7 @@ export function MessageList({
   onSenderClick,
   onLoadOlder,
   onResendChannelMessage,
+  onChannelReferenceClick,
   radioName,
   config,
   onOpenContactInfo,
@@ -911,7 +997,7 @@ export function MessageList({
                   <div className="break-words whitespace-pre-wrap">
                     {content.split('\n').map((line, i, arr) => (
                       <span key={i}>
-                        {renderTextWithMentions(line, radioName)}
+                        {renderTextWithMentions(line, radioName, onChannelReferenceClick)}
                         {i < arr.length - 1 && <br />}
                       </span>
                     ))}

@@ -32,7 +32,10 @@ describe('NewMessageModal form reset', () => {
     vi.clearAllMocks();
   });
 
-  function renderModal(open = true) {
+  function renderModal(
+    open = true,
+    overrides: Partial<Parameters<typeof NewMessageModal>[0]> = {}
+  ) {
     return render(
       <NewMessageModal
         open={open}
@@ -41,6 +44,7 @@ describe('NewMessageModal form reset', () => {
         onCreateContact={onCreateContact}
         onCreateChannel={onCreateChannel}
         onCreateHashtagChannel={onCreateHashtagChannel}
+        {...overrides}
       />
     );
   }
@@ -50,6 +54,26 @@ describe('NewMessageModal form reset', () => {
   }
 
   describe('hashtag tab', () => {
+    it('prefills the hashtag tab from a linked channel request', async () => {
+      renderModal(true, {
+        prefillRequest: {
+          tab: 'hashtag',
+          hashtagName: 'mesh-room',
+          nonce: 1,
+        },
+      });
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: 'Hashtag Channel' })).toHaveAttribute(
+          'data-state',
+          'active'
+        );
+      });
+      expect((screen.getByPlaceholderText('channel-name') as HTMLInputElement).value).toBe(
+        'mesh-room'
+      );
+    });
+
     it('clears name after successful Create', async () => {
       const user = userEvent.setup();
       const { unmount } = renderModal();
