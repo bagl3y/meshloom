@@ -10,6 +10,12 @@ import {
 import type { Channel, Contact, Conversation, Message, UnreadCounts } from '../types';
 import { takePrefetchOrFetch } from '../prefetch';
 
+function isUnreadTrackedConversation(
+  conversation: Conversation | null
+): conversation is Extract<Conversation, { type: 'channel' | 'contact' }> {
+  return conversation?.type === 'channel' || conversation?.type === 'contact';
+}
+
 interface UseUnreadCountsResult {
   unreadCounts: Record<string, number>;
   /** Tracks which conversations have unread messages that mention the user */
@@ -48,14 +54,7 @@ export function useUnreadCounts(
   // (the user is already viewing it, so its count should stay at 0).
   const applyUnreads = useCallback((data: UnreadCounts) => {
     const ac = activeConvRef.current;
-    const activeKey =
-      ac &&
-      ac.type !== 'raw' &&
-      ac.type !== 'map' &&
-      ac.type !== 'visualizer' &&
-      ac.type !== 'search'
-        ? getStateKey(ac.type as 'channel' | 'contact', ac.id)
-        : null;
+    const activeKey = isUnreadTrackedConversation(ac) ? getStateKey(ac.type, ac.id) : null;
 
     if (activeKey) {
       const counts = { ...data.counts };
@@ -123,16 +122,8 @@ export function useUnreadCounts(
   // Mark conversation as read when user views it
   // Calls server API to persist read state across devices
   useEffect(() => {
-    if (
-      activeConversation &&
-      activeConversation.type !== 'raw' &&
-      activeConversation.type !== 'map' &&
-      activeConversation.type !== 'visualizer'
-    ) {
-      const key = getStateKey(
-        activeConversation.type as 'channel' | 'contact',
-        activeConversation.id
-      );
+    if (isUnreadTrackedConversation(activeConversation)) {
+      const key = getStateKey(activeConversation.type, activeConversation.id);
 
       // Update local state immediately for responsive UI
       setUnreadCounts((prev) => {

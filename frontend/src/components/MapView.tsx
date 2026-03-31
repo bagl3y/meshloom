@@ -131,8 +131,22 @@ export function MapView({ contacts, focusedKey }: MapViewProps) {
 
   // Store ref for a marker
   const setMarkerRef = useCallback((key: string, ref: LeafletCircleMarker | null) => {
+    if (ref === null) {
+      delete markerRefs.current[key];
+      return;
+    }
+
     markerRefs.current[key] = ref;
   }, []);
+
+  useEffect(() => {
+    const currentKeys = new Set(mappableContacts.map((contact) => contact.public_key));
+    for (const key of Object.keys(markerRefs.current)) {
+      if (!currentKeys.has(key)) {
+        delete markerRefs.current[key];
+      }
+    }
+  }, [mappableContacts]);
 
   // Open popup for focused contact after map is ready
   useEffect(() => {

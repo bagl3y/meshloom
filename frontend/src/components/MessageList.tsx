@@ -373,7 +373,22 @@ export function MessageList({
       }
     }
 
-    setResendableIds(newResendable);
+    setResendableIds((prev) => {
+      if (prev.size === newResendable.size) {
+        let changed = false;
+        for (const id of newResendable) {
+          if (!prev.has(id)) {
+            changed = true;
+            break;
+          }
+        }
+        if (!changed) {
+          return prev;
+        }
+      }
+
+      return newResendable;
+    });
 
     return () => {
       for (const timer of timers.values()) clearTimeout(timer);

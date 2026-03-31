@@ -221,6 +221,49 @@ describe('useUnreadCounts', () => {
     });
   });
 
+  it('does not treat search or trace views as readable conversations', async () => {
+    const mocks = await getMockedApi();
+    mocks.getUnreads.mockResolvedValue({
+      counts: {
+        [getStateKey('channel', CHANNEL_KEY)]: 4,
+        [getStateKey('contact', CONTACT_KEY)]: 2,
+      },
+      mentions: {
+        [getStateKey('channel', CHANNEL_KEY)]: true,
+      },
+      last_message_times: {},
+      last_read_ats: {},
+    });
+
+    const { result, rerender } = renderWith({
+      channels: [makeChannel(CHANNEL_KEY, 'Test')],
+      contacts: [makeContact(CONTACT_KEY)],
+      activeConversation: { type: 'search', id: 'search', name: 'Message Search' },
+    });
+
+    await act(async () => {
+      await vi.waitFor(() => expect(mocks.getUnreads).toHaveBeenCalled());
+    });
+
+    expect(result.current.unreadCounts[getStateKey('channel', CHANNEL_KEY)]).toBe(4);
+    expect(result.current.unreadCounts[getStateKey('contact', CONTACT_KEY)]).toBe(2);
+    expect(mocks.markChannelRead).not.toHaveBeenCalled();
+    expect(mocks.markContactRead).not.toHaveBeenCalled();
+
+    rerender({
+      channels: [makeChannel(CHANNEL_KEY, 'Test')],
+      contacts: [makeContact(CONTACT_KEY)],
+      activeConversation: { type: 'trace', id: 'trace', name: 'Trace' },
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mocks.markChannelRead).not.toHaveBeenCalled();
+    expect(mocks.markContactRead).not.toHaveBeenCalled();
+  });
+
   it('re-fetches and filters when refreshUnreads is called (simulating WS reconnect)', async () => {
     const mocks = await getMockedApi();
     const channels = [makeChannel(CHANNEL_KEY, 'Test')];
