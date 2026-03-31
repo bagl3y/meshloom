@@ -1,3 +1,14 @@
+## [3.6.3] - 2026-03-30
+
+Feature: Add multi-byte trace
+Feature: Show node name on discovered node if we know it
+Feature: Add docker installation script
+Feature: Add historical noise floor to stats
+Feature: Add trace tool
+Bugfix: 100x performance on statistics endpoint with indices and better queries
+Misc: Performance and correctness improvements for backend-of-the-frontend
+Misc: Reorganize scripts
+
 ## [3.6.2] - 2026-03-29
 
 Feature: Be more flexible about timing and volume of full contact offload
