@@ -36,18 +36,19 @@ AUTH_USERNAME=""
 AUTH_PASSWORD=""
 RUN_AS_HOST_USER="N"
 BLE_MANUAL_WARNING=false
+SERIAL_FOUND_HOST_PATHS=()
+SERIAL_FOUND_LABELS=()
+SERIAL_FOUND_DISPLAYS=()
 
 find_serial_devices() {
-    local -n out_host_paths_ref=$1
-    local -n out_labels_ref=$2
-    local -n out_display_ref=$3
     local path
     local resolved
     local label
+    local existing
 
-    out_host_paths_ref=()
-    out_labels_ref=()
-    out_display_ref=()
+    SERIAL_FOUND_HOST_PATHS=()
+    SERIAL_FOUND_LABELS=()
+    SERIAL_FOUND_DISPLAYS=()
 
     if [ -d /dev/serial/by-id ]; then
         while IFS= read -r path; do
@@ -55,9 +56,9 @@ find_serial_devices() {
             resolved="$(readlink -f "$path" 2>/dev/null || true)"
             [ -n "$resolved" ] || resolved="$path"
             label="$(basename "$path")"
-            out_host_paths_ref+=("$path")
-            out_labels_ref+=("$label")
-            out_display_ref+=("$path -> $resolved")
+            SERIAL_FOUND_HOST_PATHS+=("$path")
+            SERIAL_FOUND_LABELS+=("$label")
+            SERIAL_FOUND_DISPLAYS+=("$path -> $resolved")
         done < <(find /dev/serial/by-id -maxdepth 1 -type l | sort)
     fi
 
@@ -66,9 +67,8 @@ find_serial_devices() {
         resolved="$(readlink -f "$path" 2>/dev/null || true)"
         [ -n "$resolved" ] || resolved="$path"
 
-        if ((${#out_host_paths_ref[@]} > 0)); then
-            local existing
-            for existing in "${out_display_ref[@]}"; do
+        if ((${#SERIAL_FOUND_HOST_PATHS[@]} > 0)); then
+            for existing in "${SERIAL_FOUND_DISPLAYS[@]}"; do
                 if [[ "$existing" = *"-> $resolved" ]]; then
                     resolved=""
                     break
@@ -77,10 +77,16 @@ find_serial_devices() {
             [ -n "$resolved" ] || continue
         fi
 
-        out_host_paths_ref+=("$path")
-        out_labels_ref+=("$(basename "$path")")
-        out_display_ref+=("$path")
+        SERIAL_FOUND_HOST_PATHS+=("$path")
+        SERIAL_FOUND_LABELS+=("$(basename "$path")")
+        SERIAL_FOUND_DISPLAYS+=("$path")
     done
+}
+
+yaml_quote() {
+    local value="$1"
+    value=${value//\'/\'\'}
+    printf "'%s'" "$value"
 }
 
 echo -e "${BOLD}=== RemoteTerm for MeshCore — Docker Setup ===${NC}"
@@ -102,7 +108,7 @@ fi
 
 if [ -f "$COMPOSE_FILE" ]; then
     echo -e "${YELLOW}A local docker-compose.yml already exists.${NC}"
-    read -rp "Overwrite it? [y/N]: " OVERWRITE
+    read -r -p "Overwrite it? [y/N]: " OVERWRITE
     OVERWRITE="${OVERWRITE:-N}"
     if ! [[ "$OVERWRITE" =~ ^[Yy]$ ]]; then
         echo -e "${YELLOW}Leaving the existing compose file untouched.${NC}"
@@ -115,7 +121,7 @@ echo "How should Docker run RemoteTerm?"
 echo "  1) Use the published Docker Hub image (default)"
 echo "  2) Build locally from this checkout"
 echo
-read -rp "Select image mode [1-2] (default: 1): " IMAGE_CHOICE
+read -r -p "Select image mode [1-2] (default: 1): " IMAGE_CHOICE
 IMAGE_CHOICE="${IMAGE_CHOICE:-1}"
 echo
 
@@ -143,39 +149,36 @@ echo "  3) BLE"
 echo
 echo "BLE can be configured here, but Docker Bluetooth access still requires manual compose customization."
 echo
-read -rp "Select transport [1-3] (default: 1): " TRANSPORT_CHOICE
+read -r -p "Select transport [1-3] (default: 1): " TRANSPORT_CHOICE
 TRANSPORT_CHOICE="${TRANSPORT_CHOICE:-1}"
 echo
 
 case "$TRANSPORT_CHOICE" in
     1)
         TRANSPORT_MODE="serial"
-        SERIAL_HOST_PATHS=()
-        SERIAL_LABELS=()
-        SERIAL_DISPLAYS=()
-        find_serial_devices SERIAL_HOST_PATHS SERIAL_LABELS SERIAL_DISPLAYS
+        find_serial_devices
 
-        if ((${#SERIAL_HOST_PATHS[@]} == 0)); then
+        if ((${#SERIAL_FOUND_HOST_PATHS[@]} == 0)); then
             echo -e "${YELLOW}No serial devices were auto-detected.${NC}"
-            read -rp "Serial device path on the host (default: /dev/ttyACM0): " SERIAL_HOST_PATH
+            read -r -p "Serial device path on the host (default: /dev/ttyACM0): " SERIAL_HOST_PATH
             SERIAL_HOST_PATH="${SERIAL_HOST_PATH:-/dev/ttyACM0}"
         else
             echo "Detected serial devices:"
-            for i in "${!SERIAL_HOST_PATHS[@]}"; do
-                printf '  %d) %s (%s)\n' "$((i + 1))" "${SERIAL_LABELS[$i]}" "${SERIAL_DISPLAYS[$i]}"
+            for i in "${!SERIAL_FOUND_HOST_PATHS[@]}"; do
+                printf '  %d) %s (%s)\n' "$((i + 1))" "${SERIAL_FOUND_LABELS[$i]}" "${SERIAL_FOUND_DISPLAYS[$i]}"
             done
             echo "  m) Enter a path manually"
             echo
-            read -rp "Select serial device [1-${#SERIAL_HOST_PATHS[@]} or m] (default: 1): " SERIAL_CHOICE
+            read -r -p "Select serial device [1-${#SERIAL_FOUND_HOST_PATHS[@]} or m] (default: 1): " SERIAL_CHOICE
             SERIAL_CHOICE="${SERIAL_CHOICE:-1}"
 
             if [[ "$SERIAL_CHOICE" =~ ^[Mm]$ ]]; then
-                read -rp "Serial device path on the host (default: ${SERIAL_HOST_PATHS[0]}): " SERIAL_HOST_PATH
-                SERIAL_HOST_PATH="${SERIAL_HOST_PATH:-${SERIAL_HOST_PATHS[0]}}"
-            elif [[ "$SERIAL_CHOICE" =~ ^[0-9]+$ ]] && [ "$SERIAL_CHOICE" -ge 1 ] && [ "$SERIAL_CHOICE" -le "${#SERIAL_HOST_PATHS[@]}" ]; then
-                SERIAL_HOST_PATH="${SERIAL_HOST_PATHS[$((SERIAL_CHOICE - 1))]}"
+                read -r -p "Serial device path on the host (default: ${SERIAL_FOUND_HOST_PATHS[0]}): " SERIAL_HOST_PATH
+                SERIAL_HOST_PATH="${SERIAL_HOST_PATH:-${SERIAL_FOUND_HOST_PATHS[0]}}"
+            elif [[ "$SERIAL_CHOICE" =~ ^[0-9]+$ ]] && [ "$SERIAL_CHOICE" -ge 1 ] && [ "$SERIAL_CHOICE" -le "${#SERIAL_FOUND_HOST_PATHS[@]}" ]; then
+                SERIAL_HOST_PATH="${SERIAL_FOUND_HOST_PATHS[$((SERIAL_CHOICE - 1))]}"
             else
-                SERIAL_HOST_PATH="${SERIAL_HOST_PATHS[0]}"
+                SERIAL_HOST_PATH="${SERIAL_FOUND_HOST_PATHS[0]}"
                 echo -e "${YELLOW}Invalid selection; defaulting to ${SERIAL_HOST_PATH}.${NC}"
             fi
         fi
@@ -184,27 +187,27 @@ case "$TRANSPORT_CHOICE" in
         ;;
     2)
         TRANSPORT_MODE="tcp"
-        read -rp "TCP host (IP address or hostname): " TCP_HOST
+        read -r -p "TCP host (IP address or hostname): " TCP_HOST
         while [ -z "$TCP_HOST" ]; do
             echo -e "${RED}TCP host is required.${NC}"
-            read -rp "TCP host: " TCP_HOST
+            read -r -p "TCP host: " TCP_HOST
         done
-        read -rp "TCP port (default: 4000): " TCP_PORT
+        read -r -p "TCP port (default: 4000): " TCP_PORT
         TCP_PORT="${TCP_PORT:-4000}"
         echo -e "${GREEN}TCP: ${TCP_HOST}:${TCP_PORT}${NC}"
         ;;
     3)
         TRANSPORT_MODE="ble"
-        read -rp "BLE device address (e.g. AA:BB:CC:DD:EE:FF): " BLE_ADDRESS
+        read -r -p "BLE device address (e.g. AA:BB:CC:DD:EE:FF): " BLE_ADDRESS
         while [ -z "$BLE_ADDRESS" ]; do
             echo -e "${RED}BLE address is required.${NC}"
-            read -rp "BLE device address: " BLE_ADDRESS
+            read -r -p "BLE device address: " BLE_ADDRESS
         done
-        read -rsp "BLE PIN: " BLE_PIN
+        read -r -s -p "BLE PIN: " BLE_PIN
         echo
         while [ -z "$BLE_PIN" ]; do
             echo -e "${RED}BLE PIN is required.${NC}"
-            read -rsp "BLE PIN: " BLE_PIN
+            read -r -s -p "BLE PIN: " BLE_PIN
             echo
         done
         echo -e "${GREEN}BLE: ${BLE_ADDRESS}${NC}"
@@ -228,7 +231,7 @@ echo -e "${BOLD}─── Bot System ──────────────�
 echo -e "${YELLOW}Warning:${NC} The bot system executes arbitrary Python code on the server."
 echo "It is not recommended on untrusted networks."
 echo
-read -rp "Enable bots? [y/N]: " ENABLE_BOTS
+read -r -p "Enable bots? [y/N]: " ENABLE_BOTS
 ENABLE_BOTS="${ENABLE_BOTS:-N}"
 echo
 
@@ -239,21 +242,21 @@ if [[ "$ENABLE_BOTS" =~ ^[Yy]$ ]]; then
     echo "With bots enabled, HTTP Basic Auth is strongly recommended if this"
     echo "service will be reachable beyond your local machine."
     echo
-    read -rp "Set up HTTP Basic Auth? [Y/n]: " ENABLE_AUTH
+    read -r -p "Set up HTTP Basic Auth? [Y/n]: " ENABLE_AUTH
     ENABLE_AUTH="${ENABLE_AUTH:-Y}"
     echo
 
     if [[ "$ENABLE_AUTH" =~ ^[Yy]$ ]]; then
-        read -rp "Username: " AUTH_USERNAME
+        read -r -p "Username: " AUTH_USERNAME
         while [ -z "$AUTH_USERNAME" ]; do
             echo -e "${RED}Username cannot be empty.${NC}"
-            read -rp "Username: " AUTH_USERNAME
+            read -r -p "Username: " AUTH_USERNAME
         done
-        read -rsp "Password: " AUTH_PASSWORD
+        read -r -s -p "Password: " AUTH_PASSWORD
         echo
         while [ -z "$AUTH_PASSWORD" ]; do
             echo -e "${RED}Password cannot be empty.${NC}"
-            read -rsp "Password: " AUTH_PASSWORD
+            read -r -s -p "Password: " AUTH_PASSWORD
             echo
         done
         echo -e "${GREEN}Basic Auth configured for user '${AUTH_USERNAME}'.${NC}"
@@ -269,7 +272,7 @@ if [ "$(uname -s)" = "Linux" ]; then
     echo "You can override that and run as your host UID/GID instead to avoid"
     echo "root-owned files in ./data."
     echo
-    read -rp "Run as your current UID/GID instead of the default root user? [y/N]: " RUN_AS_HOST_USER
+    read -r -p "Run as your current UID/GID instead of the default root user? [y/N]: " RUN_AS_HOST_USER
     RUN_AS_HOST_USER="${RUN_AS_HOST_USER:-N}"
     if [[ "$RUN_AS_HOST_USER" =~ ^[Yy]$ ]] && [ "$TRANSPORT_MODE" = "serial" ]; then
         echo
@@ -306,22 +309,22 @@ mkdir -p "$REPO_DIR/data"
         echo "      - ${SERIAL_HOST_PATH}:${SERIAL_CONTAINER_PATH}"
     fi
     echo "    environment:"
-    echo "      MESHCORE_DATABASE_PATH: data/meshcore.db"
+    echo "      MESHCORE_DATABASE_PATH: $(yaml_quote "data/meshcore.db")"
     if [ "$TRANSPORT_MODE" = "serial" ]; then
-        echo "      MESHCORE_SERIAL_PORT: ${SERIAL_CONTAINER_PATH}"
+        echo "      MESHCORE_SERIAL_PORT: $(yaml_quote "$SERIAL_CONTAINER_PATH")"
     elif [ "$TRANSPORT_MODE" = "tcp" ]; then
-        echo "      MESHCORE_TCP_HOST: ${TCP_HOST}"
-        echo "      MESHCORE_TCP_PORT: ${TCP_PORT}"
+        echo "      MESHCORE_TCP_HOST: $(yaml_quote "$TCP_HOST")"
+        echo "      MESHCORE_TCP_PORT: $(yaml_quote "$TCP_PORT")"
     else
-        echo "      MESHCORE_BLE_ADDRESS: ${BLE_ADDRESS}"
-        echo "      MESHCORE_BLE_PIN: ${BLE_PIN}"
+        echo "      MESHCORE_BLE_ADDRESS: $(yaml_quote "$BLE_ADDRESS")"
+        echo "      MESHCORE_BLE_PIN: $(yaml_quote "$BLE_PIN")"
     fi
     if ! [[ "$ENABLE_BOTS" =~ ^[Yy]$ ]]; then
-        echo "      MESHCORE_DISABLE_BOTS: \"true\""
+        echo "      MESHCORE_DISABLE_BOTS: $(yaml_quote "true")"
     fi
     if [[ "$ENABLE_AUTH" =~ ^[Yy]$ ]]; then
-        echo "      MESHCORE_BASIC_AUTH_USERNAME: ${AUTH_USERNAME}"
-        echo "      MESHCORE_BASIC_AUTH_PASSWORD: ${AUTH_PASSWORD}"
+        echo "      MESHCORE_BASIC_AUTH_USERNAME: $(yaml_quote "$AUTH_USERNAME")"
+        echo "      MESHCORE_BASIC_AUTH_PASSWORD: $(yaml_quote "$AUTH_PASSWORD")"
     fi
     echo "    restart: unless-stopped"
 } >"$COMPOSE_FILE"
