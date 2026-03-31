@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { api } from '../api';
+import { api, isAbortError } from '../api';
 import { formatTime } from '../utils/messageParser';
 import {
   getContactDisplayName,
@@ -110,29 +110,29 @@ export function ContactInfoPane({
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
     setAnalytics(null);
     setLoading(true);
     const request =
       isNameOnly && nameOnlyValue
-        ? api.getContactAnalytics({ name: nameOnlyValue })
-        : api.getContactAnalytics({ publicKey: contactKey });
+        ? api.getContactAnalytics({ name: nameOnlyValue }, controller.signal)
+        : api.getContactAnalytics({ publicKey: contactKey }, controller.signal);
 
     request
       .then((data) => {
-        if (!cancelled) setAnalytics(data);
+        if (!controller.signal.aborted) setAnalytics(data);
       })
       .catch((err) => {
-        if (!cancelled) {
+        if (!isAbortError(err)) {
           console.error('Failed to fetch contact analytics:', err);
           toast.error('Failed to load contact info');
         }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       });
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [contactKey, isNameOnly, nameOnlyValue]);
 

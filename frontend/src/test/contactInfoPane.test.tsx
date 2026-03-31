@@ -181,7 +181,10 @@ describe('ContactInfoPane', () => {
 
     await screen.findByText('Mystery');
     await waitFor(() => {
-      expect(getContactAnalytics).toHaveBeenCalledWith({ name: 'Mystery' });
+      expect(getContactAnalytics).toHaveBeenCalledWith(
+        { name: 'Mystery' },
+        expect.any(AbortSignal)
+      );
       expect(screen.getByText('Messages')).toBeInTheDocument();
       expect(screen.getByText('Channel Messages')).toBeInTheDocument();
       expect(screen.getByText('4', { selector: 'p' })).toBeInTheDocument();

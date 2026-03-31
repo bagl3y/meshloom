@@ -137,11 +137,13 @@ export const api = {
     fetchJson<ContactAdvertPathSummary[]>(
       `/contacts/repeaters/advert-paths?limit_per_repeater=${limitPerRepeater}`
     ),
-  getContactAnalytics: (params: { publicKey?: string; name?: string }) => {
+  getContactAnalytics: (params: { publicKey?: string; name?: string }, signal?: AbortSignal) => {
     const searchParams = new URLSearchParams();
     if (params.publicKey) searchParams.set('public_key', params.publicKey);
     if (params.name) searchParams.set('name', params.name);
-    return fetchJson<ContactAnalytics>(`/contacts/analytics?${searchParams.toString()}`);
+    return fetchJson<ContactAnalytics>(`/contacts/analytics?${searchParams.toString()}`, {
+      signal,
+    });
   },
   deleteContact: (publicKey: string) =>
     fetchJson<{ status: string }>(`/contacts/${publicKey}`, {
