@@ -11,8 +11,6 @@ import pytest
 
 from app.event_handlers import (
     _active_subscriptions,
-    _buffered_acks,
-    _pending_acks,
     cleanup_expired_acks,
     register_event_handlers,
     track_pending_ack,
@@ -23,6 +21,7 @@ from app.repository import (
     ContactRepository,
     MessageRepository,
 )
+from app.services.dm_ack_tracker import _buffered_acks, _pending_acks
 
 
 @pytest.fixture(autouse=True)

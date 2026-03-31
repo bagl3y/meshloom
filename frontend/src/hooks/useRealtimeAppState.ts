@@ -43,6 +43,7 @@ interface UseRealtimeAppStateArgs {
     hasMention?: boolean;
   }) => void;
   renameConversationState: (oldStateKey: string, newStateKey: string) => void;
+  removeConversationState: (stateKey: string) => void;
   checkMention: (text: string) => boolean;
   pendingDeleteFallbackRef: MutableRefObject<boolean>;
   setActiveConversation: (conv: Conversation | null) => void;
@@ -96,6 +97,7 @@ export function useRealtimeAppState({
   observeMessage,
   recordMessageEvent,
   renameConversationState,
+  removeConversationState,
   checkMention,
   pendingDeleteFallbackRef,
   setActiveConversation,
@@ -232,6 +234,7 @@ export function useRealtimeAppState({
       onContactDeleted: (publicKey: string) => {
         setContacts((prev) => prev.filter((c) => c.public_key !== publicKey));
         removeConversationMessages(publicKey);
+        removeConversationState(getStateKey('contact', publicKey));
         const active = activeConversationRef.current;
         if (active?.type === 'contact' && active.id === publicKey) {
           pendingDeleteFallbackRef.current = true;
@@ -241,6 +244,7 @@ export function useRealtimeAppState({
       onChannelDeleted: (key: string) => {
         setChannels((prev) => prev.filter((c) => c.key !== key));
         removeConversationMessages(key);
+        removeConversationState(getStateKey('channel', key));
         const active = activeConversationRef.current;
         if (active?.type === 'channel' && active.id === key) {
           pendingDeleteFallbackRef.current = true;
@@ -267,6 +271,7 @@ export function useRealtimeAppState({
       checkMention,
       fetchAllContacts,
       fetchConfig,
+      removeConversationState,
       renameConversationState,
       renameConversationMessages,
       maxRawPackets,

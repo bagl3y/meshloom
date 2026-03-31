@@ -43,9 +43,6 @@ class WebSocketManager:
         3. Send to all clients concurrently with timeout
         4. Re-acquire lock to clean up disconnected clients
         """
-        if not self.active_connections:
-            return
-
         message = dump_ws_event(event_type, data)
 
         # Copy connection list under lock to avoid holding lock during I/O

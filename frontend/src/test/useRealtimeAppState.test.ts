@@ -69,6 +69,7 @@ function createRealtimeArgs(overrides: Partial<Parameters<typeof useRealtimeAppS
       observeMessage: vi.fn(() => ({ added: false, activeConversation: false })),
       recordMessageEvent: vi.fn(),
       renameConversationState: vi.fn(),
+      removeConversationState: vi.fn(),
       checkMention: vi.fn(() => false),
       pendingDeleteFallbackRef: { current: false },
       setActiveConversation: vi.fn(),

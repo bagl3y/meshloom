@@ -23,6 +23,7 @@ interface UseUnreadCountsResult {
     hasMention?: boolean;
   }) => void;
   renameConversationState: (oldStateKey: string, newStateKey: string) => void;
+  removeConversationState: (stateKey: string) => void;
   markAllRead: () => void;
   refreshUnreads: () => Promise<void>;
 }
@@ -235,6 +236,27 @@ export function useUnreadCounts(
     setLastMessageTimes(renameConversationTimeKey(oldStateKey, newStateKey));
   }, []);
 
+  const removeConversationState = useCallback((stateKey: string) => {
+    setUnreadCounts((prev) => {
+      if (!(stateKey in prev)) return prev;
+      const next = { ...prev };
+      delete next[stateKey];
+      return next;
+    });
+    setMentions((prev) => {
+      if (!(stateKey in prev)) return prev;
+      const next = { ...prev };
+      delete next[stateKey];
+      return next;
+    });
+    setUnreadLastReadAts((prev) => {
+      if (!(stateKey in prev)) return prev;
+      const next = { ...prev };
+      delete next[stateKey];
+      return next;
+    });
+  }, []);
+
   // Mark all conversations as read
   // Calls single bulk API endpoint to persist read state
   const markAllRead = useCallback(() => {
@@ -256,6 +278,7 @@ export function useUnreadCounts(
     unreadLastReadAts,
     recordMessageEvent,
     renameConversationState,
+    removeConversationState,
     markAllRead,
     refreshUnreads: fetchUnreads,
   };

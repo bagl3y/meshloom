@@ -174,7 +174,11 @@ export function SearchView({
     api
       .getMessages({ q: debouncedQuery, limit: SEARCH_PAGE_SIZE, offset }, controller.signal)
       .then((data) => {
-        setResults((prev) => [...prev, ...(data as SearchResult[])]);
+        setResults((prev) => {
+          const existingIds = new Set(prev.map((r) => r.id));
+          const unique = (data as SearchResult[]).filter((r) => !existingIds.has(r.id));
+          return [...prev, ...unique];
+        });
         setHasMore(data.length >= SEARCH_PAGE_SIZE);
         setOffset((prev) => prev + data.length);
       })

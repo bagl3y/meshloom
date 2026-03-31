@@ -30,8 +30,6 @@ logger = logging.getLogger(__name__)
 # Track active subscriptions so we can unsubscribe before re-registering
 # This prevents handler duplication after reconnects
 _active_subscriptions: list["Subscription"] = []
-_pending_acks = dm_ack_tracker._pending_acks
-_buffered_acks = dm_ack_tracker._buffered_acks
 
 
 def track_pending_ack(expected_ack: str, message_id: int, timeout_ms: int) -> bool:
