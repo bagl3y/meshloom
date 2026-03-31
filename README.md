@@ -143,7 +143,7 @@ docker compose up -d
 The example file and setup script default to the published Docker Hub image. To build locally from your checkout instead, replace:
 
 ```yaml
-image: jkingsman/remoteterm-meshcore:latest
+image: docker.io/jkingsman/remoteterm-meshcore:latest
 ```
 
 with:
