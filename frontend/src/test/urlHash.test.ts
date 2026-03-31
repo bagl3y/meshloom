@@ -52,6 +52,14 @@ describe('parseHashConversation', () => {
     expect(result).toEqual({ type: 'map', name: 'map' });
   });
 
+  it('parses #trace as trace type', () => {
+    window.location.hash = '#trace';
+
+    const result = parseHashConversation();
+
+    expect(result).toEqual({ type: 'trace', name: 'trace' });
+  });
+
   it('parses #map/focus/PUBKEY with focus key', () => {
     window.location.hash = '#map/focus/ABCD1234';
 

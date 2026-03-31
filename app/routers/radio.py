@@ -2,6 +2,7 @@ import asyncio
 import logging
 import random
 import time
+from contextlib import suppress
 from typing import Literal, TypeAlias
 
 from fastapi import APIRouter, HTTPException
@@ -10,10 +11,15 @@ from pydantic import BaseModel, Field
 
 from app.dependencies import require_connected
 from app.models import (
+    CONTACT_TYPE_REPEATER,
     ContactUpsert,
     RadioDiscoveryRequest,
     RadioDiscoveryResponse,
     RadioDiscoveryResult,
+    RadioTraceHopRequest,
+    RadioTraceNode,
+    RadioTraceRequest,
+    RadioTraceResponse,
 )
 from app.radio_sync import send_advertisement as do_send_advertisement
 from app.radio_sync import sync_radio_time
@@ -45,6 +51,12 @@ _DISCOVERY_NODE_TYPES: dict[int, DiscoveryNodeType] = {
     2: "repeater",
     4: "sensor",
 }
+TRACE_WAIT_TIMEOUT_SECONDS = 45.0
+TRACE_DEFAULT_TIMEOUT_SECONDS = 15.0
+TRACE_TIMEOUT_MIN_SECONDS = 5.0
+TRACE_TIMEOUT_MAX_SECONDS = 30.0
+TRACE_TIMEOUT_MARGIN = 1.2
+TRACE_HASH_FLAGS = {1: 0, 2: 1, 4: 2}
 
 
 async def _prepare_connected(*, broadcast_on_success: bool) -> bool:
@@ -217,6 +229,101 @@ async def _attach_known_names(results: list[RadioDiscoveryResult]) -> None:
             result.name = contact.name
 
 
+def _trace_hash_for_key(public_key: str, hop_hash_bytes: int) -> str:
+    return public_key[: hop_hash_bytes * 2].lower()
+
+
+def _trace_timeout_seconds(send_result: object) -> float:
+    payload = getattr(send_result, "payload", None) or {}
+    suggested_timeout = payload.get("suggested_timeout")
+    try:
+        if suggested_timeout is None:
+            raise TypeError
+        timeout_seconds = float(suggested_timeout) / 1000.0 * TRACE_TIMEOUT_MARGIN
+    except (TypeError, ValueError):
+        timeout_seconds = TRACE_DEFAULT_TIMEOUT_SECONDS
+    return max(TRACE_TIMEOUT_MIN_SECONDS, min(TRACE_TIMEOUT_MAX_SECONDS, timeout_seconds))
+
+
+async def _resolve_trace_hops(
+    hops: list[RadioTraceHopRequest], hop_hash_bytes: int
+) -> tuple[list[RadioTraceNode], list[str]]:
+    trace_nodes: list[RadioTraceNode] = []
+    requested_hashes: list[str] = []
+    expected_hex_len = hop_hash_bytes * 2
+
+    for hop in hops:
+        public_key = hop.public_key.strip().lower() if isinstance(hop.public_key, str) else None
+        hop_hex = hop.hop_hex.strip().lower() if isinstance(hop.hop_hex, str) else None
+        if bool(public_key) == bool(hop_hex):
+            raise HTTPException(
+                status_code=400,
+                detail="Each trace hop must provide exactly one of public_key or hop_hex",
+            )
+
+        if public_key:
+            if len(public_key) != 64:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Trace repeater keys must be full 64-character public keys",
+                )
+            try:
+                bytes.fromhex(public_key)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Trace repeater keys must be valid hex public keys",
+                ) from exc
+
+            contact = await ContactRepository.get_by_key(public_key)
+            if contact is None:
+                raise HTTPException(
+                    status_code=404, detail=f"Trace repeater not found: {public_key}"
+                )
+            if contact.type != CONTACT_TYPE_REPEATER:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Trace node is not a repeater: {public_key[:12]}",
+                )
+            requested_hashes.append(_trace_hash_for_key(contact.public_key, hop_hash_bytes))
+            trace_nodes.append(
+                RadioTraceNode(
+                    role="repeater",
+                    public_key=contact.public_key,
+                    name=contact.name,
+                    observed_hash=None,
+                    snr=None,
+                )
+            )
+            continue
+
+        assert hop_hex is not None
+        if len(hop_hex) != expected_hex_len:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Custom trace hops must be exactly {expected_hex_len} hex characters",
+            )
+        try:
+            bytes.fromhex(hop_hex)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="Custom trace hops must be valid hex",
+            ) from exc
+        requested_hashes.append(hop_hex)
+        trace_nodes.append(
+            RadioTraceNode(
+                role="custom",
+                public_key=None,
+                name=None,
+                observed_hash=hop_hex,
+                snr=None,
+            )
+        )
+
+    return trace_nodes, requested_hashes
+
+
 @router.get("/config", response_model=RadioConfigResponse)
 async def get_radio_config() -> RadioConfigResponse:
     """Get the current radio configuration."""
@@ -385,6 +492,105 @@ async def discover_mesh(request: RadioDiscoveryRequest) -> RadioDiscoveryRespons
         target=request.target,
         duration_seconds=DISCOVERY_WINDOW_SECONDS,
         results=results,
+    )
+
+
+@router.post("/trace", response_model=RadioTraceResponse)
+async def trace_path(request: RadioTraceRequest) -> RadioTraceResponse:
+    """Send a multi-hop trace loop through known repeaters and back to the local radio."""
+    require_connected()
+    trace_nodes, requested_hashes = await _resolve_trace_hops(request.hops, request.hop_hash_bytes)
+
+    tag = random.randint(1, 0xFFFFFFFF)
+    trace_flags = TRACE_HASH_FLAGS[request.hop_hash_bytes]
+
+    async with radio_manager.radio_operation("radio_trace", pause_polling=True) as mc:
+        local_public_key = str((mc.self_info or {}).get("public_key") or "").lower()
+        if len(local_public_key) != 64:
+            raise HTTPException(status_code=503, detail="Local radio public key is unavailable")
+        local_name = (mc.self_info or {}).get("name")
+
+        response_task = asyncio.create_task(
+            mc.wait_for_event(
+                EventType.TRACE_DATA,
+                attribute_filters={"tag": tag},
+                timeout=TRACE_WAIT_TIMEOUT_SECONDS,
+            )
+        )
+        try:
+            send_result = await mc.commands.send_trace(
+                path=",".join(requested_hashes),
+                tag=tag,
+                flags=trace_flags,
+            )
+            if send_result is None or send_result.type == EventType.ERROR:
+                raise HTTPException(status_code=500, detail="Failed to send trace")
+
+            timeout_seconds = _trace_timeout_seconds(send_result)
+            try:
+                event = await asyncio.wait_for(response_task, timeout=timeout_seconds)
+            except asyncio.TimeoutError as exc:
+                raise HTTPException(status_code=504, detail="No trace response heard") from exc
+        finally:
+            if not response_task.done():
+                response_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await response_task
+
+    if event is None:
+        raise HTTPException(status_code=504, detail="No trace response heard")
+
+    payload = event.payload if isinstance(event.payload, dict) else {}
+    path_len = payload.get("path_len")
+    if not isinstance(path_len, int):
+        raise HTTPException(status_code=500, detail="Trace response was malformed")
+
+    raw_path = payload.get("path")
+    path_nodes = raw_path if isinstance(raw_path, list) else []
+    final_local_node = (
+        path_nodes[-1]
+        if path_nodes
+        and isinstance(path_nodes[-1], dict)
+        and not isinstance(path_nodes[-1].get("hash"), str)
+        else None
+    )
+    hashed_nodes = path_nodes[:-1] if final_local_node is not None else path_nodes
+
+    if len(hashed_nodes) < len(trace_nodes):
+        raise HTTPException(status_code=500, detail="Trace response was incomplete")
+
+    nodes: list[RadioTraceNode] = []
+    for index, trace_node in enumerate(trace_nodes):
+        observed = hashed_nodes[index] if index < len(hashed_nodes) else {}
+        observed_hash = observed.get("hash") if isinstance(observed, dict) else None
+        observed_snr = observed.get("snr") if isinstance(observed, dict) else None
+        nodes.append(
+            RadioTraceNode(
+                role=trace_node.role,
+                public_key=trace_node.public_key,
+                name=trace_node.name,
+                observed_hash=(
+                    observed_hash if isinstance(observed_hash, str) else trace_node.observed_hash
+                ),
+                snr=float(observed_snr) if isinstance(observed_snr, (int, float)) else None,
+            )
+        )
+
+    terminal_snr_value = final_local_node.get("snr") if isinstance(final_local_node, dict) else None
+    nodes.append(
+        RadioTraceNode(
+            role="local",
+            public_key=local_public_key,
+            name=local_name if isinstance(local_name, str) and local_name else None,
+            observed_hash=None,
+            snr=float(terminal_snr_value) if isinstance(terminal_snr_value, (int, float)) else None,
+        )
+    )
+
+    return RadioTraceResponse(
+        path_len=path_len,
+        timeout_seconds=timeout_seconds,
+        nodes=nodes,
     )
 
 

@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from meshcore import EventType
 from pydantic import ValidationError
 
-from app.models import Contact
+from app.models import CONTACT_TYPE_REPEATER, Contact, RadioTraceHopRequest, RadioTraceRequest
 from app.radio import RadioManager, radio_manager
 from app.routers.radio import (
     PrivateKeyUpdate,
@@ -25,6 +25,7 @@ from app.routers.radio import (
     reconnect_radio,
     send_advertisement,
     set_private_key,
+    trace_path,
     update_radio_config,
 )
 from app.services.radio_runtime import RadioRuntime
@@ -523,6 +524,223 @@ class TestDiscoverMesh:
 
         mock_upsert.assert_not_awaited()
         mock_broadcast.assert_not_called()
+
+
+class TestTracePath:
+    @pytest.mark.asyncio
+    async def test_returns_resolved_nodes_for_multi_hop_trace(self):
+        mc = _mock_meshcore_with_info()
+        repeater_a = Contact(
+            public_key="11" * 32,
+            name="Relay Alpha",
+            type=CONTACT_TYPE_REPEATER,
+            flags=0,
+            direct_path=None,
+            direct_path_len=-1,
+            direct_path_hash_mode=-1,
+            last_advert=None,
+            lat=None,
+            lon=None,
+            last_seen=None,
+            on_radio=False,
+            last_contacted=None,
+            last_read_at=None,
+            first_seen=None,
+        )
+        repeater_b = Contact(
+            public_key="22" * 32,
+            name="Relay Beta",
+            type=CONTACT_TYPE_REPEATER,
+            flags=0,
+            direct_path=None,
+            direct_path_len=-1,
+            direct_path_hash_mode=-1,
+            last_advert=None,
+            lat=None,
+            lon=None,
+            last_seen=None,
+            on_radio=False,
+            last_contacted=None,
+            last_read_at=None,
+            first_seen=None,
+        )
+        mc.commands.send_trace = AsyncMock(
+            return_value=_radio_result(EventType.MSG_SENT, {"suggested_timeout": 4000})
+        )
+        mc.wait_for_event = AsyncMock(
+            return_value=MagicMock(
+                payload={
+                    "path_len": 2,
+                    "path": [
+                        {"hash": "11111111", "snr": 7.5},
+                        {"hash": "22222222", "snr": 3.25},
+                        {"snr": 5.0},
+                    ],
+                }
+            )
+        )
+
+        with (
+            patch("app.routers.radio.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch(
+                "app.routers.radio.ContactRepository.get_by_key", new_callable=AsyncMock
+            ) as mock_get,
+            patch("app.routers.radio.radio_manager") as mock_rm,
+        ):
+            mock_get.side_effect = [repeater_a, repeater_b]
+            mock_rm.radio_operation = _noop_radio_operation(mc)
+            response = await trace_path(
+                RadioTraceRequest(
+                    hop_hash_bytes=4,
+                    hops=[
+                        RadioTraceHopRequest(public_key=repeater_a.public_key),
+                        RadioTraceHopRequest(public_key=repeater_b.public_key),
+                    ],
+                )
+            )
+
+        mc.commands.send_trace.assert_awaited_once_with(
+            path="11111111,22222222",
+            tag=ANY,
+            flags=2,
+        )
+        mc.wait_for_event.assert_awaited_once()
+        assert response.path_len == 2
+        assert response.nodes[0].name == "Relay Alpha"
+        assert response.nodes[0].snr == 7.5
+        assert response.nodes[1].name == "Relay Beta"
+        assert response.nodes[1].observed_hash == "22222222"
+        assert response.nodes[2].role == "local"
+        assert response.nodes[2].public_key == "aa" * 32
+        assert response.nodes[2].observed_hash is None
+        assert response.nodes[2].snr == 5.0
+
+    @pytest.mark.asyncio
+    async def test_rejects_non_repeater_nodes(self):
+        mc = _mock_meshcore_with_info()
+        non_repeater = Contact(
+            public_key="33" * 32,
+            name="Client",
+            type=1,
+            flags=0,
+            direct_path=None,
+            direct_path_len=-1,
+            direct_path_hash_mode=-1,
+            last_advert=None,
+            lat=None,
+            lon=None,
+            last_seen=None,
+            on_radio=False,
+            last_contacted=None,
+            last_read_at=None,
+            first_seen=None,
+        )
+
+        with (
+            patch("app.routers.radio.require_connected", return_value=mc),
+            patch(
+                "app.routers.radio.ContactRepository.get_by_key", new_callable=AsyncMock
+            ) as mock_get,
+        ):
+            mock_get.return_value = non_repeater
+            with pytest.raises(HTTPException) as exc:
+                await trace_path(
+                    RadioTraceRequest(
+                        hop_hash_bytes=4,
+                        hops=[RadioTraceHopRequest(public_key=non_repeater.public_key)],
+                    )
+                )
+
+        assert exc.value.status_code == 400
+        assert "not a repeater" in exc.value.detail
+
+    @pytest.mark.asyncio
+    async def test_returns_504_when_no_trace_response_is_heard(self):
+        mc = _mock_meshcore_with_info()
+        repeater = Contact(
+            public_key="44" * 32,
+            name="Relay",
+            type=CONTACT_TYPE_REPEATER,
+            flags=0,
+            direct_path=None,
+            direct_path_len=-1,
+            direct_path_hash_mode=-1,
+            last_advert=None,
+            lat=None,
+            lon=None,
+            last_seen=None,
+            on_radio=False,
+            last_contacted=None,
+            last_read_at=None,
+            first_seen=None,
+        )
+        mc.commands.send_trace = AsyncMock(
+            return_value=_radio_result(EventType.MSG_SENT, {"suggested_timeout": 1000})
+        )
+        mc.wait_for_event = AsyncMock(return_value=None)
+
+        with (
+            patch("app.routers.radio.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch(
+                "app.routers.radio.ContactRepository.get_by_key", new_callable=AsyncMock
+            ) as mock_get,
+            patch("app.routers.radio.radio_manager") as mock_rm,
+        ):
+            mock_get.return_value = repeater
+            mock_rm.radio_operation = _noop_radio_operation(mc)
+            with pytest.raises(HTTPException) as exc:
+                await trace_path(
+                    RadioTraceRequest(
+                        hop_hash_bytes=4,
+                        hops=[RadioTraceHopRequest(public_key=repeater.public_key)],
+                    )
+                )
+
+        assert exc.value.status_code == 504
+        assert "No trace response heard" in exc.value.detail
+
+    @pytest.mark.asyncio
+    async def test_supports_custom_hops_with_shorter_hash_width(self):
+        mc = _mock_meshcore_with_info()
+        mc.commands.send_trace = AsyncMock(
+            return_value=_radio_result(EventType.MSG_SENT, {"suggested_timeout": 2500})
+        )
+        mc.wait_for_event = AsyncMock(
+            return_value=MagicMock(
+                payload={
+                    "path_len": 2,
+                    "path": [
+                        {"hash": "ae", "snr": 4.0},
+                        {"hash": "bf", "snr": 2.5},
+                        {"snr": 3.0},
+                    ],
+                }
+            )
+        )
+
+        with (
+            patch("app.routers.radio.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.radio.radio_manager") as mock_rm,
+        ):
+            mock_rm.radio_operation = _noop_radio_operation(mc)
+            response = await trace_path(
+                RadioTraceRequest(
+                    hop_hash_bytes=1,
+                    hops=[
+                        RadioTraceHopRequest(hop_hex="ae"),
+                        RadioTraceHopRequest(hop_hex="bf"),
+                    ],
+                )
+            )
+
+        mc.commands.send_trace.assert_awaited_once_with(path="ae,bf", tag=ANY, flags=0)
+        assert response.nodes[0].role == "custom"
+        assert response.nodes[0].observed_hash == "ae"
+        assert response.nodes[1].role == "custom"
+        assert response.nodes[1].observed_hash == "bf"
 
     @pytest.mark.asyncio
     async def test_discovers_all_supported_types(self):

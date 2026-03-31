@@ -192,8 +192,8 @@ export function SettingsLocalSection({
           </button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Scales the app&apos;s typography for this browser only. The slider moves in 5% steps;
-          the number field accepts any value from 25% to 400%.
+          Scales the app&apos;s typography for this browser only. The slider moves in 5% steps; the
+          number field accepts any value from 25% to 400%.
         </p>
       </div>
 

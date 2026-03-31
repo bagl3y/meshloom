@@ -75,13 +75,14 @@ function renderSidebar(overrides?: {
 
   const favorites = overrides?.favorites ?? [{ type: 'channel', id: flightChannel.key }];
   const channels = overrides?.channels ?? [publicChannel, flightChannel, opsChannel];
+  const onSelectConversation = vi.fn();
 
   const view = render(
     <Sidebar
       contacts={[alice, board, relay]}
       channels={channels}
       activeConversation={null}
-      onSelectConversation={vi.fn()}
+      onSelectConversation={onSelectConversation}
       onNewMessage={vi.fn()}
       lastMessageTimes={overrides?.lastMessageTimes ?? {}}
       unreadCounts={unreadCounts}
@@ -96,7 +97,7 @@ function renderSidebar(overrides?: {
     />
   );
 
-  return { ...view, flightChannel, opsChannel, aliceName, roomName };
+  return { ...view, flightChannel, opsChannel, aliceName, roomName, onSelectConversation };
 }
 
 function getSectionHeaderContainer(title: string): HTMLElement {
@@ -304,6 +305,18 @@ describe('Sidebar section summaries', () => {
     const bell = within(aliceRow).getByLabelText('Notifications enabled');
     const unread = within(aliceRow).getByText('3');
     expect(bell.compareDocumentPosition(unread) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows the trace tool row and selects it', () => {
+    const { onSelectConversation } = renderSidebar();
+
+    fireEvent.click(screen.getByText('Trace'));
+
+    expect(onSelectConversation).toHaveBeenCalledWith({
+      type: 'trace',
+      id: 'trace',
+      name: 'Trace',
+    });
   });
 
   it('sorts each section independently and persists per-section sort preferences', () => {

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bell,
+  Cable,
+  ChartNetwork,
   CheckCheck,
   ChevronDown,
   ChevronRight,
@@ -9,7 +11,6 @@ import {
   Map,
   Search as SearchIcon,
   SquarePen,
-  Waypoints,
   X,
 } from 'lucide-react';
 import {
@@ -197,7 +198,7 @@ export function Sidebar({
   };
 
   const isActive = (
-    type: 'contact' | 'channel' | 'raw' | 'map' | 'visualizer' | 'search',
+    type: 'contact' | 'channel' | 'raw' | 'map' | 'visualizer' | 'search' | 'trace',
     id: string
   ) => activeConversation?.type === type && activeConversation?.id === id;
 
@@ -721,13 +722,25 @@ export function Sidebar({
         renderSidebarActionRow({
           key: 'tool-visualizer',
           active: isActive('visualizer', 'visualizer'),
-          icon: <Waypoints className="h-4 w-4" />,
+          icon: <ChartNetwork className="h-4 w-4" />,
           label: 'Mesh Visualizer',
           onClick: () =>
             handleSelectConversation({
               type: 'visualizer',
               id: 'visualizer',
               name: 'Mesh Visualizer',
+            }),
+        }),
+        renderSidebarActionRow({
+          key: 'tool-trace',
+          active: isActive('trace', 'trace'),
+          icon: <Cable className="h-4 w-4" />,
+          label: 'Trace',
+          onClick: () =>
+            handleSelectConversation({
+              type: 'trace',
+              id: 'trace',
+              name: 'Trace',
             }),
         }),
         renderSidebarActionRow({

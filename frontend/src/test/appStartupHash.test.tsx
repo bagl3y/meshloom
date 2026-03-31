@@ -195,6 +195,53 @@ describe('App startup hash resolution', () => {
     });
   });
 
+  it('restores the trace tool from the URL hash', async () => {
+    window.location.hash = '#trace';
+
+    render(<App />);
+
+    await waitFor(() => {
+      for (const node of screen.getAllByTestId('active-conversation')) {
+        expect(node).toHaveTextContent('trace:trace:Trace');
+      }
+    });
+  });
+
+  it('restores the trace tool from the URL hash even when channels are unavailable', async () => {
+    window.location.hash = '#trace';
+    mocks.api.getChannels.mockResolvedValue([]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      for (const node of screen.getAllByTestId('active-conversation')) {
+        expect(node).toHaveTextContent('trace:trace:Trace');
+      }
+    });
+  });
+
+  it('reopens the last viewed trace tool even when channels are unavailable', async () => {
+    window.location.hash = '';
+    localStorage.setItem(REOPEN_LAST_CONVERSATION_KEY, '1');
+    localStorage.setItem(
+      LAST_VIEWED_CONVERSATION_KEY,
+      JSON.stringify({
+        type: 'trace',
+        id: 'trace',
+        name: 'Trace',
+      })
+    );
+    mocks.api.getChannels.mockResolvedValue([]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      for (const node of screen.getAllByTestId('active-conversation')) {
+        expect(node).toHaveTextContent('trace:trace:Trace');
+      }
+    });
+  });
+
   it('restores last viewed channel when hash is empty and reopen preference is enabled', async () => {
     const chatChannel = {
       key: '11111111111111111111111111111111',

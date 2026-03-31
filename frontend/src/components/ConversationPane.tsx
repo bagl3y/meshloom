@@ -5,6 +5,7 @@ import { MessageInput, type MessageInputHandle } from './MessageInput';
 import { MessageList } from './MessageList';
 import { RawPacketFeedView } from './RawPacketFeedView';
 import { RoomServerPanel } from './RoomServerPanel';
+import { TracePane } from './TracePane';
 import type {
   Channel,
   Contact,
@@ -15,6 +16,8 @@ import type {
   PathDiscoveryResponse,
   RawPacket,
   RadioConfig,
+  RadioTraceHopRequest,
+  RadioTraceResponse,
 } from '../types';
 import type { RawPacketStatsSessionState } from '../utils/rawPacketStats';
 import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM } from '../types';
@@ -50,6 +53,10 @@ interface ConversationPaneProps {
   loadingNewer: boolean;
   messageInputRef: Ref<MessageInputHandle>;
   onTrace: () => Promise<void>;
+  onRunTracePath: (
+    hopHashBytes: 1 | 2 | 4,
+    hops: RadioTraceHopRequest[]
+  ) => Promise<RadioTraceResponse>;
   onPathDiscovery: (publicKey: string) => Promise<PathDiscoveryResponse>;
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => Promise<void>;
   onDeleteContact: (publicKey: string) => Promise<void>;
@@ -115,6 +122,7 @@ export function ConversationPane({
   loadingNewer,
   messageInputRef,
   onTrace,
+  onRunTracePath,
   onPathDiscovery,
   onToggleFavorite,
   onDeleteContact,
@@ -198,6 +206,10 @@ export function ConversationPane({
 
   if (activeConversation.type === 'search') {
     return null;
+  }
+
+  if (activeConversation.type === 'trace') {
+    return <TracePane contacts={contacts} config={config} onRunTracePath={onRunTracePath} />;
   }
 
   if (activeContactIsRepeater) {

@@ -20,6 +20,8 @@ import type {
   RadioConfig,
   RadioConfigUpdate,
   RadioDiscoveryResponse,
+  RadioTraceHopRequest,
+  RadioTraceResponse,
   RadioDiscoveryTarget,
   PathDiscoveryResponse,
   ResendChannelMessageResponse,
@@ -106,6 +108,11 @@ export const api = {
     fetchJson<RadioDiscoveryResponse>('/radio/discover', {
       method: 'POST',
       body: JSON.stringify({ target }),
+    }),
+  requestRadioTrace: (hopHashBytes: 1 | 2 | 4, hops: RadioTraceHopRequest[]) =>
+    fetchJson<RadioTraceResponse>('/radio/trace', {
+      method: 'POST',
+      body: JSON.stringify({ hop_hash_bytes: hopHashBytes, hops }),
     }),
   rebootRadio: () =>
     fetchJson<{ status: string; message: string }>('/radio/reboot', {

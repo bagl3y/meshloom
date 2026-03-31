@@ -64,6 +64,10 @@ vi.mock('../components/VisualizerView', () => ({
   VisualizerView: () => <div data-testid="visualizer-view" />,
 }));
 
+vi.mock('../components/TracePane', () => ({
+  TracePane: () => <div data-testid="trace-pane" />,
+}));
+
 const config: RadioConfig = {
   public_key: 'aa'.repeat(32),
   name: 'Radio',
@@ -141,6 +145,7 @@ function createProps(overrides: Partial<React.ComponentProps<typeof Conversation
     loadingNewer: false,
     messageInputRef: { current: null },
     onTrace: vi.fn(async () => {}),
+    onRunTracePath: vi.fn(async () => ({ path_len: 0, timeout_seconds: 5, nodes: [] })),
     onPathDiscovery: vi.fn(async () => {
       throw new Error('unused');
     }),
@@ -229,6 +234,23 @@ describe('ConversationPane', () => {
       expect(screen.getByTestId('message-list')).toBeInTheDocument();
       expect(screen.getByTestId('message-input')).toBeInTheDocument();
     });
+  });
+
+  it('renders the trace tool pane for trace conversations', () => {
+    render(
+      <ConversationPane
+        {...createProps({
+          activeConversation: {
+            type: 'trace',
+            id: 'trace',
+            name: 'Trace',
+          },
+        })}
+      />
+    );
+
+    expect(screen.getByTestId('trace-pane')).toBeInTheDocument();
+    expect(screen.queryByTestId('message-list')).not.toBeInTheDocument();
   });
 
   it('gates room chat behind room login controls until authenticated', async () => {

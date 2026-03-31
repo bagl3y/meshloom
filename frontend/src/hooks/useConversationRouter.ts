@@ -62,7 +62,6 @@ export function useConversationRouter({
   // Only needs channels (fast path) - doesn't wait for contacts
   useEffect(() => {
     if (hasSetDefaultConversation.current || activeConversation) return;
-    if (channels.length === 0) return;
 
     const hashConv = parseHashSettingsSection() ? null : parseHashConversation();
 
@@ -92,6 +91,29 @@ export function useConversationRouter({
       hasSetDefaultConversation.current = true;
       return;
     }
+    if (hashConv?.type === 'trace') {
+      setActiveConversationState({ type: 'trace', id: 'trace', name: 'Trace' });
+      hasSetDefaultConversation.current = true;
+      return;
+    }
+
+    // No hash: optionally restore last-viewed non-data conversation if enabled on this device.
+    if (!hashConv && getReopenLastConversationEnabled()) {
+      const lastViewed = getLastViewedConversation();
+      if (
+        lastViewed &&
+        (lastViewed.type === 'raw' ||
+          lastViewed.type === 'map' ||
+          lastViewed.type === 'visualizer' ||
+          lastViewed.type === 'trace')
+      ) {
+        setActiveConversationState(lastViewed);
+        hasSetDefaultConversation.current = true;
+        return;
+      }
+    }
+
+    if (channels.length === 0) return;
 
     // Handle channel hash (ID-first with legacy-name fallback)
     if (hashConv?.type === 'channel') {
@@ -109,14 +131,6 @@ export function useConversationRouter({
     // No hash: optionally restore last-viewed conversation if enabled on this device.
     if (!hashConv && getReopenLastConversationEnabled()) {
       const lastViewed = getLastViewedConversation();
-      if (
-        lastViewed &&
-        (lastViewed.type === 'raw' || lastViewed.type === 'map' || lastViewed.type === 'visualizer')
-      ) {
-        setActiveConversationState(lastViewed);
-        hasSetDefaultConversation.current = true;
-        return;
-      }
       if (lastViewed?.type === 'channel') {
         const channel =
           channels.find((c) => c.key.toLowerCase() === lastViewed.id.toLowerCase()) ||
