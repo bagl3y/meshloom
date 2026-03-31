@@ -171,24 +171,17 @@ function isNeighborIdentityResolvable(item: NeighborStat, contacts: Contact[]): 
   return resolveContact(item.key, contacts) !== null;
 }
 
-function formatStrongestPacketDetail(
+function formatStrongestNeighborDetail(
   stats: ReturnType<typeof buildRawPacketStatsSnapshot>,
   contacts: Contact[]
 ): string | undefined {
-  if (!stats.strongestPacketPayloadType) {
+  const strongestNeighbor = stats.strongestNeighbors[0];
+  if (!strongestNeighbor || strongestNeighbor.bestRssi === null) {
     return undefined;
   }
 
-  const resolvedLabel =
-    resolveContactLabel(stats.strongestPacketSourceKey, contacts) ??
-    stats.strongestPacketSourceLabel;
-  if (resolvedLabel) {
-    return `${resolvedLabel} · ${stats.strongestPacketPayloadType}`;
-  }
-  if (stats.strongestPacketPayloadType === 'GroupText') {
-    return '<unknown sender> · GroupText';
-  }
-  return stats.strongestPacketPayloadType;
+  const resolvedNeighbor = resolveNeighbor(strongestNeighbor, contacts);
+  return `${formatRssi(resolvedNeighbor.bestRssi)} best heard`;
 }
 
 function getCoverageMessage(
@@ -450,8 +443,13 @@ export function RawPacketFeedView({
     [nowSec, rawPacketStatsSession, selectedWindow]
   );
   const coverageMessage = getCoverageMessage(stats, rawPacketStatsSession);
-  const strongestPacketDetail = useMemo(
-    () => formatStrongestPacketDetail(stats, contacts),
+  const strongestNeighbor = useMemo(() => {
+    const topNeighbor = stats.strongestNeighbors[0];
+    return topNeighbor ? resolveNeighbor(topNeighbor, contacts) : null;
+  }, [contacts, stats]);
+
+  const strongestNeighborDetail = useMemo(
+    () => formatStrongestNeighborDetail(stats, contacts),
     [contacts, stats]
   );
   const strongestNeighbors = useMemo(
@@ -578,9 +576,9 @@ export function RawPacketFeedView({
                   detail={`${formatPercent(stats.pathBearingRate)} path-bearing packets`}
                 />
                 <StatTile
-                  label="Best RSSI"
-                  value={formatRssi(stats.bestRssi)}
-                  detail={strongestPacketDetail ?? 'No signal sample in window'}
+                  label="Strongest Neighbor"
+                  value={strongestNeighbor?.label ?? '-'}
+                  detail={strongestNeighborDetail ?? 'No neighbor RSSI sample in window'}
                 />
                 <StatTile
                   label="Median RSSI"

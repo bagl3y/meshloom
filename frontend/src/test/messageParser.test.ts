@@ -124,7 +124,9 @@ describe('linked channel references', () => {
 
   it('ignores invalid or embedded channel-like text', () => {
     expect(
-      findLinkedChannelReferences('skip #Bad #bad--name abc#ops #ops- #opsRoom #ops_room #good-room,')
+      findLinkedChannelReferences(
+        'skip #Bad #bad--name abc#ops #ops- #opsRoom #ops_room #good-room,'
+      )
     ).toEqual([]);
   });
 });

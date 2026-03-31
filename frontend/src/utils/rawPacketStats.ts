@@ -106,9 +106,6 @@ export interface RawPacketStatsSnapshot {
   medianRssi: number | null;
   bestRssi: number | null;
   rssiBuckets: RankedPacketStat[];
-  strongestPacketSourceKey: string | null;
-  strongestPacketSourceLabel: string | null;
-  strongestPacketPayloadType: string | null;
   coverageSeconds: number;
   windowFullyCovered: boolean;
   oldestStoredTimestamp: number | null;
@@ -377,8 +374,6 @@ export function buildRawPacketStatsSnapshot(
     ['Weak (<-85 dBm)', 0],
   ]);
 
-  let strongestPacket: RawPacketStatsObservation | null = null;
-
   for (const packet of packets) {
     payloadCounts.set(packet.payloadType, (payloadCounts.get(packet.payloadType) ?? 0) + 1);
     routeCounts.set(packet.routeType, (routeCounts.get(packet.routeType) ?? 0) + 1);
@@ -435,10 +430,6 @@ export function buildRawPacketStatsSnapshot(
         );
       } else {
         rssiBucketCounts.set('Weak (<-85 dBm)', (rssiBucketCounts.get('Weak (<-85 dBm)') ?? 0) + 1);
-      }
-
-      if (!strongestPacket || strongestPacket.rssi === null || packet.rssi > strongestPacket.rssi) {
-        strongestPacket = packet;
       }
     }
   }
@@ -527,9 +518,6 @@ export function buildRawPacketStatsSnapshot(
     medianRssi,
     bestRssi,
     rssiBuckets: rankedBreakdown(rssiBucketCounts, rssiValues.length),
-    strongestPacketSourceKey: strongestPacket?.sourceKey ?? null,
-    strongestPacketSourceLabel: strongestPacket?.sourceLabel ?? null,
-    strongestPacketPayloadType: strongestPacket?.payloadType ?? null,
     coverageSeconds,
     windowFullyCovered,
     oldestStoredTimestamp,

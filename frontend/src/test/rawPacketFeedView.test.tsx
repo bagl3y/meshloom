@@ -283,6 +283,8 @@ describe('RawPacketFeedView', () => {
     fireEvent.click(screen.getByRole('button', { name: /show stats/i }));
     fireEvent.change(screen.getByLabelText('Stats window'), { target: { value: 'session' } });
     expect(screen.getAllByText('Alpha').length).toBeGreaterThan(0);
+    expect(screen.getByText('Strongest Neighbor')).toBeInTheDocument();
+    expect(screen.getByText('-70 dBm best heard')).toBeInTheDocument();
   });
 
   it('marks unresolved neighbor identities explicitly', () => {
