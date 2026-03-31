@@ -1,9 +1,6 @@
-import asyncio
 import logging
-from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException
-from meshcore import EventType
 
 from app.dependencies import require_connected
 from app.models import (
@@ -28,7 +25,6 @@ from app.models import (
 from app.repository import ContactRepository
 from app.routers.contacts import _ensure_on_radio, _resolve_contact_or_404
 from app.routers.server_control import (
-    _monotonic,
     batch_cli_fetch,
     extract_response_text,
     prepare_authenticated_contact_connection,
@@ -36,9 +32,6 @@ from app.routers.server_control import (
     send_contact_cli_command,
 )
 from app.services.radio_runtime import radio_runtime as radio_manager
-
-if TYPE_CHECKING:
-    from meshcore.events import Event
 
 logger = logging.getLogger(__name__)
 
@@ -55,58 +48,6 @@ REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS = 5.0
 
 def _extract_response_text(event) -> str:
     return extract_response_text(event)
-
-
-async def _fetch_repeater_response(
-    mc,
-    target_pubkey_prefix: str,
-    timeout: float = 20.0,
-) -> "Event | None":
-    deadline = _monotonic() + timeout
-
-    while _monotonic() < deadline:
-        try:
-            result = await mc.commands.get_msg(timeout=2.0)
-        except asyncio.TimeoutError:
-            continue
-        except Exception as exc:
-            logger.debug("get_msg() exception: %s", exc)
-            await asyncio.sleep(1.0)
-            continue
-
-        if result.type == EventType.NO_MORE_MSGS:
-            await asyncio.sleep(1.0)
-            continue
-
-        if result.type == EventType.ERROR:
-            logger.debug("get_msg() error: %s", result.payload)
-            await asyncio.sleep(1.0)
-            continue
-
-        if result.type == EventType.CONTACT_MSG_RECV:
-            msg_prefix = result.payload.get("pubkey_prefix", "")
-            txt_type = result.payload.get("txt_type", 0)
-            if msg_prefix == target_pubkey_prefix and txt_type == 1:
-                return result
-            logger.debug(
-                "Skipping non-target message (from=%s, txt_type=%d) while waiting for %s",
-                msg_prefix,
-                txt_type,
-                target_pubkey_prefix,
-            )
-            continue
-
-        if result.type == EventType.CHANNEL_MSG_RECV:
-            logger.debug(
-                "Skipping channel message (channel_idx=%s) during repeater fetch",
-                result.payload.get("channel_idx"),
-            )
-            continue
-
-        logger.debug("Unexpected event type %s during repeater fetch, skipping", result.type)
-
-    logger.warning("No CLI response from repeater %s within %.1fs", target_pubkey_prefix, timeout)
-    return None
 
 
 async def prepare_repeater_connection(mc, contact: Contact, password: str) -> RepeaterLoginResponse:

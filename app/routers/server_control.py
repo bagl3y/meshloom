@@ -13,6 +13,7 @@ from app.models import (
     Contact,
     RepeaterLoginResponse,
 )
+from app.radio_sync import _store_pending_channel_message, _store_pending_direct_message
 from app.routers.contacts import _ensure_on_radio
 from app.services.radio_runtime import radio_runtime as radio_manager
 
@@ -115,18 +116,20 @@ async def fetch_contact_cli_response(
             if msg_prefix == target_pubkey_prefix and txt_type == 1:
                 return result
             logger.debug(
-                "Skipping non-target message (from=%s, txt_type=%d) while waiting for %s",
+                "Storing non-target DM (from=%s, txt_type=%d) consumed while waiting for %s",
                 msg_prefix,
                 txt_type,
                 target_pubkey_prefix,
             )
+            await _store_pending_direct_message(result)
             continue
 
         if result.type == EventType.CHANNEL_MSG_RECV:
             logger.debug(
-                "Skipping channel message (channel_idx=%s) during CLI fetch",
+                "Storing channel message (channel_idx=%s) consumed during CLI fetch",
                 result.payload.get("channel_idx"),
             )
+            await _store_pending_channel_message(mc, result.payload)
             continue
 
         logger.debug("Unexpected event type %s during CLI fetch, skipping", result.type)
