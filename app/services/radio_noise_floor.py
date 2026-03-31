@@ -60,8 +60,17 @@ async def sample_noise_floor_once(*, blocking: bool = False) -> None:
 
 async def _noise_floor_sampling_loop() -> None:
     while True:
-        await sample_noise_floor_once()
-        await asyncio.sleep(NOISE_FLOOR_SAMPLE_INTERVAL_SECONDS)
+        try:
+            await sample_noise_floor_once()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Noise floor sampling loop crashed during sample")
+
+        try:
+            await asyncio.sleep(NOISE_FLOOR_SAMPLE_INTERVAL_SECONDS)
+        except asyncio.CancelledError:
+            raise
 
 
 async def start_noise_floor_sampling() -> None:
