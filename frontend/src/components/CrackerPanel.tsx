@@ -128,8 +128,9 @@ export function CrackerPanel({
   }, [existingChannelKeys]);
 
   // Filter packets to only undecrypted GROUP_TEXT
-  const undecryptedGroupText = packets.filter(
-    (p) => p.payload_type === 'GROUP_TEXT' && !p.decrypted
+  const undecryptedGroupText = useMemo(
+    () => packets.filter((p) => p.payload_type === 'GROUP_TEXT' && !p.decrypted),
+    [packets]
   );
 
   // Update queue when packets change (deduplicated by payload)
