@@ -318,8 +318,8 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
     : [];
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto">
-      <div className="border-b border-border px-4 py-3">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto lg:overflow-hidden">
+      <div className="shrink-0 border-b border-border px-4 py-3">
         <h2 className="text-base font-semibold">Trace</h2>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
           Build a repeater loop and trace it back to the local radio. The selectable hop list only
@@ -329,7 +329,7 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
 
       <div className="flex flex-1 flex-col gap-4 p-4 lg:min-h-0 lg:flex-row lg:overflow-hidden">
         <section className="flex w-full flex-col rounded-lg border border-border bg-card lg:min-h-0 lg:max-w-[24rem]">
-          <div className="border-b border-border p-4">
+          <div className="shrink-0 border-b border-border p-4">
             <h3 className="text-sm font-semibold">Repeater Hops</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               Search by name or key, then add repeaters in the order you want to traverse them.
@@ -446,14 +446,30 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
         </section>
 
         <section className="flex flex-1 flex-col gap-4 lg:min-h-0 lg:overflow-hidden">
-          <div className="rounded-lg border border-border bg-card">
-            <div className="border-b border-border px-4 py-3">
-              <h3 className="text-sm font-semibold">Trace Path</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                The first node is display-only. The terminal node is the local radio.
-              </p>
+          <div className="flex flex-col rounded-lg border border-border bg-card lg:min-h-0 lg:max-h-[50%]">
+            <div className="shrink-0 flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+              <div>
+                <h3 className="text-sm font-semibold">Trace Path</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  The first node is display-only. The terminal node is the local radio.
+                </p>
+              </div>
+              {draftHops.length > 0 ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="shrink-0 text-muted-foreground"
+                  onClick={() => {
+                    setDraftHops([]);
+                    clearPendingResult();
+                  }}
+                >
+                  Clear
+                </Button>
+              ) : null}
             </div>
-            <div className="max-h-[42vh] space-y-2 overflow-y-auto p-4 lg:max-h-none lg:overflow-y-visible">
+            <div className="space-y-2 p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
               <TraceNodeRow
                 title={localRadioName}
                 subtitle={getShortKey(localRadioKey)}
@@ -542,7 +558,7 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
                 compact
               />
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
+            <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
               <div className="text-xs text-muted-foreground">
                 {draftHops.length === 0
                   ? 'No hops selected'
@@ -555,12 +571,26 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
           </div>
 
           <div className="flex flex-col rounded-lg border border-border bg-card lg:min-h-0 lg:flex-1">
-            <div className="border-b border-border px-4 py-3">
+            <div className="shrink-0 flex items-center justify-between gap-3 border-b border-border px-4 py-3">
               <h3 className="text-sm font-semibold">
                 Results{result ? ` (${result.timeout_seconds.toFixed(1)}s)` : ''}
               </h3>
+              {result || error ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="shrink-0 text-muted-foreground"
+                  onClick={() => {
+                    setResult(null);
+                    setError(null);
+                  }}
+                >
+                  Clear
+                </Button>
+              ) : null}
             </div>
-            <div className="max-h-[42vh] min-h-0 flex-1 space-y-3 overflow-y-auto p-4 lg:max-h-none">
+            <div className="min-h-0 flex-1 space-y-3 p-4 lg:overflow-y-auto">
               {error ? (
                 <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {error}
