@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 SECONDS_1H = 3600
 SECONDS_24H = 86400
 SECONDS_7D = 604800
+RAW_PACKET_STATS_BATCH_SIZE = 500
 
 
 class AppSettingsRepository:
@@ -247,6 +248,26 @@ class AppSettingsRepository:
 
 class StatisticsRepository:
     @staticmethod
+    async def get_database_message_totals() -> dict[str, int]:
+        """Return message totals needed by lightweight debug surfaces."""
+        cursor = await db.conn.execute(
+            """
+            SELECT
+                SUM(CASE WHEN type = 'PRIV' THEN 1 ELSE 0 END) AS total_dms,
+                SUM(CASE WHEN type = 'CHAN' THEN 1 ELSE 0 END) AS total_channel_messages,
+                SUM(CASE WHEN outgoing = 1 THEN 1 ELSE 0 END) AS total_outgoing
+            FROM messages
+            """
+        )
+        row = await cursor.fetchone()
+        assert row is not None
+        return {
+            "total_dms": row["total_dms"] or 0,
+            "total_channel_messages": row["total_channel_messages"] or 0,
+            "total_outgoing": row["total_outgoing"] or 0,
+        }
+
+    @staticmethod
     async def _activity_counts(*, contact_type: int, exclude: bool = False) -> dict[str, int]:
         """Get time-windowed counts for contacts/repeaters heard."""
         now = int(time.time())
@@ -311,22 +332,26 @@ class StatisticsRepository:
             "SELECT data FROM raw_packets WHERE timestamp >= ?",
             (now - SECONDS_24H,),
         )
-        rows = await cursor.fetchall()
 
         single_byte = 0
         double_byte = 0
         triple_byte = 0
 
-        for row in rows:
-            envelope = parse_packet_envelope(bytes(row["data"]))
-            if envelope is None:
-                continue
-            if envelope.hash_size == 1:
-                single_byte += 1
-            elif envelope.hash_size == 2:
-                double_byte += 1
-            elif envelope.hash_size == 3:
-                triple_byte += 1
+        while True:
+            rows = await cursor.fetchmany(RAW_PACKET_STATS_BATCH_SIZE)
+            if not rows:
+                break
+
+            for row in rows:
+                envelope = parse_packet_envelope(bytes(row["data"]))
+                if envelope is None:
+                    continue
+                if envelope.hash_size == 1:
+                    single_byte += 1
+                elif envelope.hash_size == 2:
+                    double_byte += 1
+                elif envelope.hash_size == 3:
+                    triple_byte += 1
 
         total_packets = single_byte + double_byte + triple_byte
         if total_packets == 0:
@@ -409,22 +434,7 @@ class StatisticsRepository:
         decrypted_packets = pkt_row["decrypted"] or 0
         undecrypted_packets = total_packets - decrypted_packets
 
-        # Message type counts
-        cursor = await db.conn.execute("SELECT COUNT(*) AS cnt FROM messages WHERE type = 'PRIV'")
-        row = await cursor.fetchone()
-        assert row is not None
-        total_dms: int = row["cnt"]
-
-        cursor = await db.conn.execute("SELECT COUNT(*) AS cnt FROM messages WHERE type = 'CHAN'")
-        row = await cursor.fetchone()
-        assert row is not None
-        total_channel_messages: int = row["cnt"]
-
-        # Outgoing count
-        cursor = await db.conn.execute("SELECT COUNT(*) AS cnt FROM messages WHERE outgoing = 1")
-        row = await cursor.fetchone()
-        assert row is not None
-        total_outgoing: int = row["cnt"]
+        message_totals = await StatisticsRepository.get_database_message_totals()
 
         # Activity windows
         contacts_heard = await StatisticsRepository._activity_counts(contact_type=2, exclude=True)
@@ -440,9 +450,9 @@ class StatisticsRepository:
             "total_packets": total_packets,
             "decrypted_packets": decrypted_packets,
             "undecrypted_packets": undecrypted_packets,
-            "total_dms": total_dms,
-            "total_channel_messages": total_channel_messages,
-            "total_outgoing": total_outgoing,
+            "total_dms": message_totals["total_dms"],
+            "total_channel_messages": message_totals["total_channel_messages"],
+            "total_outgoing": message_totals["total_outgoing"],
             "contacts_heard": contacts_heard,
             "repeaters_heard": repeaters_heard,
             "known_channels_active": known_channels_active,

@@ -265,7 +265,7 @@ async def _probe_radio() -> DebugRadioProbe:
 async def debug_support_snapshot() -> DebugSnapshotResponse:
     """Return a support/debug snapshot with recent logs and live radio state."""
     health_data = await build_health_data(radio_runtime.is_connected, radio_runtime.connection_info)
-    statistics = await StatisticsRepository.get_all()
+    message_totals = await StatisticsRepository.get_database_message_totals()
     radio_probe = await _probe_radio()
     channels_with_incoming_messages = (
         await MessageRepository.count_channels_with_incoming_messages()
@@ -291,9 +291,9 @@ async def debug_support_snapshot() -> DebugSnapshotResponse:
             },
         ),
         database=DebugDatabaseInfo(
-            total_dms=statistics["total_dms"],
-            total_channel_messages=statistics["total_channel_messages"],
-            total_outgoing=statistics["total_outgoing"],
+            total_dms=message_totals["total_dms"],
+            total_channel_messages=message_totals["total_channel_messages"],
+            total_outgoing=message_totals["total_outgoing"],
         ),
         radio_probe=radio_probe,
         logs=[*LOG_COPY_BOUNDARY_PREFIX, *get_recent_log_lines(limit=1000)],

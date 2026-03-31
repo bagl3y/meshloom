@@ -1,12 +1,15 @@
 import logging
 import sqlite3
 import time
+from collections.abc import AsyncIterator
 from hashlib import sha256
 
 from app.database import db
 from app.decoder import PayloadType, extract_payload, get_packet_payload_type
 
 logger = logging.getLogger(__name__)
+
+UNDECRYPTED_PACKET_BATCH_SIZE = 500
 
 
 class RawPacketRepository:
@@ -101,6 +104,40 @@ class RawPacketRepository:
         return [(row["id"], bytes(row["data"]), row["timestamp"]) for row in rows]
 
     @staticmethod
+    async def stream_undecrypted_text_messages(
+        batch_size: int = UNDECRYPTED_PACKET_BATCH_SIZE,
+    ) -> AsyncIterator[tuple[int, bytes, int]]:
+        """Yield undecrypted TEXT_MESSAGE packets in bounded-size batches."""
+        cursor = await db.conn.execute(
+            "SELECT id, data, timestamp FROM raw_packets WHERE message_id IS NULL ORDER BY timestamp ASC"
+        )
+        try:
+            while True:
+                rows = await cursor.fetchmany(batch_size)
+                if not rows:
+                    break
+
+                for row in rows:
+                    data = bytes(row["data"])
+                    payload_type = get_packet_payload_type(data)
+                    if payload_type == PayloadType.TEXT_MESSAGE:
+                        yield (row["id"], data, row["timestamp"])
+        finally:
+            await cursor.close()
+
+    @staticmethod
+    async def count_undecrypted_text_messages(
+        batch_size: int = UNDECRYPTED_PACKET_BATCH_SIZE,
+    ) -> int:
+        """Count undecrypted TEXT_MESSAGE packets without materializing them all."""
+        count = 0
+        async for _packet in RawPacketRepository.stream_undecrypted_text_messages(
+            batch_size=batch_size
+        ):
+            count += 1
+        return count
+
+    @staticmethod
     async def mark_decrypted(packet_id: int, message_id: int) -> None:
         """Link a raw packet to its decrypted message."""
         await db.conn.execute(
@@ -158,17 +195,4 @@ class RawPacketRepository:
         Filters raw packets to only include those with PayloadType.TEXT_MESSAGE (0x02).
         These are direct messages that can be decrypted with contact ECDH keys.
         """
-        cursor = await db.conn.execute(
-            "SELECT id, data, timestamp FROM raw_packets WHERE message_id IS NULL ORDER BY timestamp ASC"
-        )
-        rows = await cursor.fetchall()
-
-        # Filter for TEXT_MESSAGE packets
-        result = []
-        for row in rows:
-            data = bytes(row["data"])
-            payload_type = get_packet_payload_type(data)
-            if payload_type == PayloadType.TEXT_MESSAGE:
-                result.append((row["id"], data, row["timestamp"]))
-
-        return result
+        return [packet async for packet in RawPacketRepository.stream_undecrypted_text_messages()]

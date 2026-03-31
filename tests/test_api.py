@@ -190,6 +190,29 @@ class TestDebugEndpoint:
         assert payload["database"]["total_channel_messages"] == 1
         assert payload["database"]["total_outgoing"] == 1
 
+    @pytest.mark.asyncio
+    async def test_support_snapshot_uses_lightweight_message_totals(self, test_db, client):
+        """Debug snapshot should not call the full statistics aggregation."""
+        with (
+            patch(
+                "app.routers.debug.StatisticsRepository.get_all",
+                new=AsyncMock(side_effect=AssertionError("get_all should not be called")),
+            ),
+            patch(
+                "app.routers.debug.StatisticsRepository.get_database_message_totals",
+                new=AsyncMock(
+                    return_value={
+                        "total_dms": 0,
+                        "total_channel_messages": 0,
+                        "total_outgoing": 0,
+                    }
+                ),
+            ),
+        ):
+            response = await client.get("/api/debug")
+
+        assert response.status_code == 200
+
 
 class TestRadioDisconnectedHandler:
     """Test that RadioDisconnectedError maps to 503."""

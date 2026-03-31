@@ -5,7 +5,7 @@ undecrypted count endpoint, and the maintenance endpoint.
 """
 
 import time
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -303,6 +303,43 @@ class TestDecryptHistoricalPackets:
         assert response.status_code == 400
         data = response.json()
         assert "key_type" in data["detail"].lower()
+
+
+class TestUndecryptedTextPacketStreaming:
+    @pytest.mark.asyncio
+    async def test_count_undecrypted_text_messages_uses_batched_streaming(self, test_db):
+        """Counting undecrypted DM packets should stream batches and filter by payload type."""
+
+        class FakeCursor:
+            def __init__(self):
+                self._batches = [
+                    [
+                        {"id": 1, "data": b"\x09\x00dm", "timestamp": 1000},
+                        {"id": 2, "data": b"\x15\x00chan", "timestamp": 1001},
+                    ],
+                    [{"id": 3, "data": b"\x09\x00dm2", "timestamp": 1002}],
+                    [],
+                ]
+                self.fetchall_called = False
+
+            async def fetchmany(self, size):
+                assert size > 0
+                return self._batches.pop(0)
+
+            async def close(self):
+                return None
+
+            async def fetchall(self):
+                self.fetchall_called = True
+                raise AssertionError("fetchall() should not be used")
+
+        fake_cursor = FakeCursor()
+
+        with patch.object(test_db.conn, "execute", new=AsyncMock(return_value=fake_cursor)):
+            count = await RawPacketRepository.count_undecrypted_text_messages(batch_size=2)
+
+        assert fake_cursor.fetchall_called is False
+        assert count == 2
 
 
 class TestRunHistoricalChannelDecryption:

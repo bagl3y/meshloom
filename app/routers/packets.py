@@ -210,8 +210,7 @@ async def decrypt_historical_packets(
         except ValueError:
             raise _bad_request("Invalid hex string for contact public key") from None
 
-        packets = await RawPacketRepository.get_undecrypted_text_messages()
-        count = len(packets)
+        count = await RawPacketRepository.count_undecrypted_text_messages()
         if count == 0:
             return DecryptResult(
                 started=False,
