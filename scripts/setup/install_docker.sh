@@ -21,6 +21,13 @@ NC='\033[0m'
 REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 COMPOSE_FILE="$REPO_DIR/docker-compose.yml"
 EXAMPLE_FILE="$REPO_DIR/docker-compose.example.yml"
+SNAKEOIL_CERT_DIR="$REPO_DIR/.docker-certs"
+SNAKEOIL_CERT_BASENAME="remoteterm-snakeoil.crt"
+SNAKEOIL_KEY_BASENAME="remoteterm-snakeoil.key"
+SNAKEOIL_CERT_HOST_PATH="$SNAKEOIL_CERT_DIR/$SNAKEOIL_CERT_BASENAME"
+SNAKEOIL_KEY_HOST_PATH="$SNAKEOIL_CERT_DIR/$SNAKEOIL_KEY_BASENAME"
+SNAKEOIL_CERT_CONTAINER_PATH="/app/certs/$SNAKEOIL_CERT_BASENAME"
+SNAKEOIL_KEY_CONTAINER_PATH="/app/certs/$SNAKEOIL_KEY_BASENAME"
 
 IMAGE_MODE="image"
 TRANSPORT_MODE="serial"
@@ -35,7 +42,9 @@ ENABLE_AUTH="N"
 AUTH_USERNAME=""
 AUTH_PASSWORD=""
 RUN_AS_HOST_USER="N"
+ENABLE_SNAKEOIL_TLS="Y"
 BLE_MANUAL_WARNING=false
+LOCAL_ACCESS_IP=""
 SERIAL_FOUND_HOST_PATHS=()
 SERIAL_FOUND_LABELS=()
 SERIAL_FOUND_DISPLAYS=()
@@ -87,6 +96,89 @@ yaml_quote() {
     local value="$1"
     value=${value//\'/\'\'}
     printf "'%s'" "$value"
+}
+
+detect_primary_local_ip() {
+    local ip=""
+    local iface=""
+
+    if command -v hostname &>/dev/null; then
+        ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    fi
+
+    if [ -z "$ip" ] && command -v ip &>/dev/null; then
+        ip="$(ip route get 1.1.1.1 2>/dev/null | awk '/src/ {for (i = 1; i <= NF; i++) if ($i == "src") {print $(i + 1); exit}}')"
+    fi
+
+    if [ -z "$ip" ] && command -v route &>/dev/null && command -v ipconfig &>/dev/null; then
+        iface="$(route -n get default 2>/dev/null | awk '/interface:/{print $2; exit}')"
+        if [ -n "$iface" ]; then
+            ip="$(ipconfig getifaddr "$iface" 2>/dev/null || true)"
+        fi
+    fi
+
+    if [ -z "$ip" ]; then
+        ip="127.0.0.1"
+    fi
+
+    printf '%s' "$ip"
+}
+
+ensure_snakeoil_requirements() {
+    local dep
+
+    for dep in openssl mktemp; do
+        if ! command -v "$dep" &>/dev/null; then
+            echo -e "${RED}Error: ${dep} is required to generate the snakeoil TLS certificate.${NC}"
+            exit 1
+        fi
+    done
+}
+
+generate_snakeoil_certificate() {
+    local san_ip="$1"
+    local tmp_config=""
+
+    mkdir -p "$SNAKEOIL_CERT_DIR"
+    tmp_config="$(mktemp)"
+
+    cat >"$tmp_config" <<EOF
+[req]
+default_bits = 2048
+distinguished_name = req_distinguished_name
+x509_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+CN = RemoteTerm Snakeoil
+O = RemoteTerm for MeshCore
+
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = localhost
+IP.1 = 127.0.0.1
+EOF
+
+    if [ -n "$san_ip" ] && [ "$san_ip" != "127.0.0.1" ]; then
+        printf 'IP.2 = %s\n' "$san_ip" >>"$tmp_config"
+    fi
+
+    openssl req \
+        -x509 \
+        -nodes \
+        -newkey rsa:2048 \
+        -days 3650 \
+        -keyout "$SNAKEOIL_KEY_HOST_PATH" \
+        -out "$SNAKEOIL_CERT_HOST_PATH" \
+        -config "$tmp_config" \
+        -extensions v3_req >/dev/null 2>&1
+
+    rm -f "$tmp_config"
+
+    chmod 600 "$SNAKEOIL_KEY_HOST_PATH"
+    chmod 644 "$SNAKEOIL_CERT_HOST_PATH"
 }
 
 echo -e "${BOLD}=== RemoteTerm for MeshCore — Docker Setup ===${NC}"
@@ -266,6 +358,24 @@ else
 fi
 echo
 
+echo -e "${BOLD}─── HTTPS / Snakeoil TLS ────────────────────────────────────────────${NC}"
+echo "Generating a local self-signed certificate enables HTTPS-only browser features"
+echo "such as the channel key finder and, in some browsers, notifications."
+echo "Browsers will still warn that the certificate is untrusted."
+echo
+read -r -p "Generate and enable a snakeoil TLS certificate? [Y/n]: " ENABLE_SNAKEOIL_TLS
+ENABLE_SNAKEOIL_TLS="${ENABLE_SNAKEOIL_TLS:-Y}"
+LOCAL_ACCESS_IP="$(detect_primary_local_ip)"
+if [[ "$ENABLE_SNAKEOIL_TLS" =~ ^[Yy]$ ]]; then
+    ensure_snakeoil_requirements
+    generate_snakeoil_certificate "$LOCAL_ACCESS_IP"
+    echo -e "${GREEN}Generated snakeoil TLS certificate in ${SNAKEOIL_CERT_DIR}.${NC}"
+    echo -e "${YELLOW}Browsers will show an untrusted/self-signed certificate warning.${NC}"
+else
+    echo -e "${GREEN}Skipping snakeoil TLS generation. The container will serve plain HTTP.${NC}"
+fi
+echo
+
 if [ "$(uname -s)" = "Linux" ]; then
     echo -e "${BOLD}─── Container User ──────────────────────────────────────────────────${NC}"
     echo "The container runs as root by default for maximum serial compatibility."
@@ -304,9 +414,27 @@ mkdir -p "$REPO_DIR/data"
     echo "      - \"8000:8000\""
     echo "    volumes:"
     echo "      - ./data:/app/data"
+    if [[ "$ENABLE_SNAKEOIL_TLS" =~ ^[Yy]$ ]]; then
+        echo "      - ./.docker-certs:/app/certs:ro"
+    fi
     if [ "$TRANSPORT_MODE" = "serial" ]; then
         echo "    devices:"
         echo "      - ${SERIAL_HOST_PATH}:${SERIAL_CONTAINER_PATH}"
+    fi
+    if [[ "$ENABLE_SNAKEOIL_TLS" =~ ^[Yy]$ ]]; then
+        echo "    command:"
+        echo "      - uv"
+        echo "      - run"
+        echo "      - uvicorn"
+        echo "      - app.main:app"
+        echo "      - --host"
+        echo "      - 0.0.0.0"
+        echo "      - --port"
+        echo "      - \"8000\""
+        echo "      - --ssl-keyfile"
+        echo "      - $SNAKEOIL_KEY_CONTAINER_PATH"
+        echo "      - --ssl-certfile"
+        echo "      - $SNAKEOIL_CERT_CONTAINER_PATH"
     fi
     echo "    environment:"
     echo "      MESHCORE_DATABASE_PATH: $(yaml_quote "data/meshcore.db")"
@@ -354,3 +482,13 @@ echo
 echo -e "${PURPLE}┌──────────────────────────────────────────────┐${NC}"
 echo -e "${PURPLE}│  Run ${GREEN}${BOLD}docker compose up -d${NC}${PURPLE} to get started.    │${NC}"
 echo -e "${PURPLE}└──────────────────────────────────────────────┘${NC}"
+if [[ "$ENABLE_SNAKEOIL_TLS" =~ ^[Yy]$ ]]; then
+    echo
+    echo -e "After the container starts, open ${CYAN}https://${LOCAL_ACCESS_IP}:8000${NC}."
+    echo -e "${YELLOW}Expect an untrusted/self-signed certificate warning the first time you connect.${NC}"
+else
+    echo
+    echo -e "After the container starts, open ${CYAN}http://${LOCAL_ACCESS_IP}:8000${NC}."
+fi
+echo "If the interface does not appear, follow the logs with:"
+echo "  docker compose logs -f"
