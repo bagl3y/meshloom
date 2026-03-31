@@ -10,9 +10,11 @@ import {
 import type { Channel, Contact, Conversation, Message, UnreadCounts } from '../types';
 import { takePrefetchOrFetch } from '../prefetch';
 
+type UnreadTrackedConversation = Conversation & { type: 'channel' | 'contact' };
+
 function isUnreadTrackedConversation(
   conversation: Conversation | null
-): conversation is Extract<Conversation, { type: 'channel' | 'contact' }> {
+): conversation is UnreadTrackedConversation {
   return conversation?.type === 'channel' || conversation?.type === 'contact';
 }
 
