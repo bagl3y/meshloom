@@ -25,3 +25,7 @@ references/
 
 # ancillary LLM files
 .claude/
+
+# local Docker compose files
+docker-compose.yml
+docker-compose.yaml

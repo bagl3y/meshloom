@@ -90,7 +90,7 @@ Access the app at http://localhost:8000.
 Source checkouts expect a normal frontend build in `frontend/dist`.
 
 > [!NOTE]
-> Running on lightweight hardware/ don't want to build the frontend locally? From a cloned checkout, run `python3 scripts/setup/fetch_prebuilt_frontend.py` to fetch and unpack a prebuilt frontend into `frontend/prebuilt`, then start the app normally with `uv run uvicorn app.main:app --host 0.0.0.0 --port 8000`.
+> Running on lightweight hardware, or just do not want to build the frontend locally? From a cloned checkout, run `python3 scripts/setup/fetch_prebuilt_frontend.py` to fetch and unpack a prebuilt frontend into `frontend/prebuilt`, then start the app normally with `uv run uvicorn app.main:app --host 0.0.0.0 --port 8000`.
 
 > [!TIP]
 > On Linux, you can also install RemoteTerm as a persistent `systemd` service that starts on boot and restarts automatically on failure:
@@ -103,47 +103,62 @@ Source checkouts expect a normal frontend build in `frontend/dist`.
 
 ## Path 2: Docker
 
-Edit `docker-compose.yaml` to set a serial device for passthrough, or uncomment your transport (serial or TCP). Then:
+> **Warning:** Docker has had reports intermittent issues with serial event subscriptions. The native method above is more reliable.
+
+Local Docker builds are architecture-native by default. On Apple Silicon Macs and ARM64 Linux hosts such as Raspberry Pi, `docker compose build` / `docker compose up --build` will produce an ARM64 image unless you override the platform.
+
+Create a local `docker-compose.yml` in one of two ways:
+
+1. Copy the example file and edit it by hand:
 
 ```bash
-docker compose up -d
+cp docker-compose.example.yml docker-compose.yml
 ```
 
-The database is stored in `./data/` (bind-mounted), so the container shares the same database as the native app. To rebuild after pulling updates:
+2. Or generate one interactively:
 
 ```bash
-docker compose up -d --build
+bash scripts/setup/install_docker.sh
 ```
 
-To use the prebuilt Docker Hub image instead of building locally, replace:
+Your local `docker-compose.yml` is gitignored so future pulls do not overwrite your Docker settings.
 
-```yaml
-build: .
+The guided Docker flow can collect BLE settings, but BLE access from Docker still needs manual compose customization such as Bluetooth passthrough and possibly privileged mode or host networking. If you want the simpler path for BLE, use the regular Python launch flow instead.
+
+Then customize the local compose file for your transport and launch:
+
+```bash
+docker compose up # -d for background once you validate it's working
 ```
 
-with:
+The database is stored in `./data/` (bind-mounted), so the container shares the same database as the native app.
 
-```yaml
-image: jkingsman/remoteterm-meshcore:latest
-```
-
-Then run:
+To rebuild after pulling updates:
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-Published Docker tags are intended to be multi-arch (`linux/amd64` and `linux/arm64`). If you are building and publishing manually, use Docker Buildx:
+The example file and setup script default to the published Docker Hub image. To build locally from your checkout instead, replace:
 
-```bash
-docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  -t jkingsman/remoteterm-meshcore:latest \
-  --push .
+```yaml
+image: jkingsman/remoteterm-meshcore:latest
 ```
 
-The container runs as root by default for maximum serial passthrough compatibility across host setups. On Linux, if you switch between native and Docker runs, `./data` can end up root-owned. If you do not need that serial compatibility behavior, you can enable the optional `user: "${UID:-1000}:${GID:-1000}"` line in `docker-compose.yaml` to keep ownership aligned with your host user.
+with:
+
+```yaml
+build: .
+```
+
+Then run:
+
+```bash
+docker compose up -d --build
+```
+
+The container runs as root by default for maximum serial passthrough compatibility across host setups. On Linux, if you switch between native and Docker runs, `./data` can end up root-owned. If you do not need that serial compatibility behavior, you can enable the optional `user: "${UID:-1000}:${GID:-1000}"` line in `docker-compose.yml` to keep ownership aligned with your host user.
 
 To stop:
 
