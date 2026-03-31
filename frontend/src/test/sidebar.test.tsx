@@ -122,6 +122,46 @@ describe('Sidebar section summaries', () => {
     expect(within(getSectionHeaderContainer('Repeaters')).getByText('4')).toBeInTheDocument();
   });
 
+  it('renders a full add channel/contact button above search and calls onNewMessage', () => {
+    const onNewMessage = vi.fn();
+
+    render(
+      <Sidebar
+        contacts={[]}
+        channels={[makeChannel(PUBLIC_CHANNEL_KEY, 'Public')]}
+        activeConversation={null}
+        onSelectConversation={vi.fn()}
+        onNewMessage={onNewMessage}
+        lastMessageTimes={{}}
+        unreadCounts={{}}
+        mentions={{}}
+        showCracker={false}
+        crackerRunning={false}
+        onToggleCracker={vi.fn()}
+        onMarkAllRead={vi.fn()}
+        favorites={[]}
+        legacySortOrder="recent"
+      />
+    );
+
+    const addButton = screen.getByRole('button', { name: 'Add channel or contact' });
+    const search = screen.getByLabelText('Search conversations');
+    const nav = screen.getByRole('navigation', { name: 'Conversations' });
+    const toolsButton = screen.getByRole('button', { name: 'Tools' });
+
+    expect(addButton).toHaveTextContent('Add Channel/Contact');
+    expect(
+      addButton.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(nav.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_CONTAINED_BY).toBeTruthy();
+    expect(
+      search.compareDocumentPosition(toolsButton) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+
+    fireEvent.click(addButton);
+    expect(onNewMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('turns favorites and channels rollups red when they contain a mention', () => {
     renderSidebar({
       mentions: {

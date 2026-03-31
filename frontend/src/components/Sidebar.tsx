@@ -853,41 +853,45 @@ export function Sidebar({
       aria-label="Conversations"
     >
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-        <div className="relative min-w-0 flex-1">
-          <Input
-            type="text"
-            placeholder="Search channels/contacts..."
-            aria-label="Search conversations"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className={cn('h-7 text-[13px] bg-background/50', searchQuery ? 'pr-8' : 'pr-3')}
-          />
-          {searchQuery && (
-            <button
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-              onClick={() => setSearchQuery('')}
-              title="Clear search"
-              aria-label="Clear search"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+      <div className="px-3 py-2 border-b border-border">
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={onNewMessage}
-          title="New Message"
-          aria-label="New message"
-          className="h-7 w-7 shrink-0 p-0 text-muted-foreground hover:text-foreground transition-colors"
+          title="Add channel or contact"
+          aria-label="Add channel or contact"
+          className="h-8 w-full justify-start gap-2 px-3 text-[13px]"
         >
           <SquarePen className="h-4 w-4" />
+          <span>Add Channel/Contact</span>
         </Button>
       </div>
 
       {/* List */}
       <div className="flex-1 min-h-0 overflow-y-auto [contain:layout_paint]">
+        <div className="px-3 py-2 border-b border-border/60">
+          <div className="relative min-w-0">
+            <Input
+              type="text"
+              placeholder="Search channels/contacts..."
+              aria-label="Search conversations"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={cn('h-7 text-[13px] bg-background/50', searchQuery ? 'pr-8' : 'pr-3')}
+            />
+            {searchQuery && (
+              <button
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                onClick={() => setSearchQuery('')}
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Tools */}
         {toolRows.length > 0 && (
           <>
