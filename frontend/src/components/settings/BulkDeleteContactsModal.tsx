@@ -119,8 +119,10 @@ export function BulkDeleteContactsModal({
     [contacts, selectedKeys]
   );
 
-  const contactCount = selectedContacts.filter((c) => c.type !== 2).length;
+  const contactCount = selectedContacts.filter((c) => c.type === 1 || c.type === 0).length;
   const repeaterCount = selectedContacts.filter((c) => c.type === 2).length;
+  const roomCount = selectedContacts.filter((c) => c.type === 3).length;
+  const sensorCount = selectedContacts.filter((c) => c.type === 4).length;
 
   const firstSeenDates = selectedContacts.map((c) => c.first_seen ?? 0).filter((t) => t > 0);
   const minDate =
@@ -154,7 +156,7 @@ export function BulkDeleteContactsModal({
           </DialogTitle>
           <DialogDescription>
             {step === 'select'
-              ? 'Select contacts to delete. Message history will be preserved.'
+              ? 'Select contacts to delete. Message history will be preserved and accessible if a contact is re-added, but will no longer appear in the sidebar.'
               : 'Review the contacts that will be permanently deleted.'}
           </DialogDescription>
         </DialogHeader>
@@ -169,7 +171,7 @@ export function BulkDeleteContactsModal({
                   onChange={(e) =>
                     setTypeFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))
                   }
-                  className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                  className="block h-8 rounded-md border border-input bg-background px-2 text-sm"
                 >
                   <option value="all">All</option>
                   <option value="1">Clients</option>
@@ -327,7 +329,12 @@ export function BulkDeleteContactsModal({
               >
                 {deleting
                   ? 'Deleting...'
-                  : `I confirm deletion of all listed contacts above, totalling ${contactCount} contact${contactCount === 1 ? '' : 's'} & ${repeaterCount} repeater${repeaterCount === 1 ? '' : 's'}, spanning creation dates from ${minDate} to ${maxDate}`}
+                  : `I confirm permanent, irrevocable deletion of all listed nodes above, totalling ${[
+                      contactCount > 0 && `${contactCount} contact${contactCount === 1 ? '' : 's'}`,
+                      repeaterCount > 0 && `${repeaterCount} repeater${repeaterCount === 1 ? '' : 's'}`,
+                      roomCount > 0 && `${roomCount} room${roomCount === 1 ? '' : 's'}`,
+                      sensorCount > 0 && `${sensorCount} sensor${sensorCount === 1 ? '' : 's'}`,
+                    ].filter(Boolean).join(', ')}, spanning creation dates from ${minDate} to ${maxDate}`}
               </Button>
               <Button variant="secondary" onClick={() => setStep('select')} disabled={deleting}>
                 Back
