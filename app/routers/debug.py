@@ -5,7 +5,7 @@ import platform
 import struct
 import sys
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter
 from meshcore import EventType
@@ -15,7 +15,7 @@ from app.config import get_recent_log_lines, settings
 from app.models import AppSettings
 from app.radio_sync import get_contacts_selected_for_radio_sync, get_radio_channel_limit
 from app.repository import AppSettingsRepository, MessageRepository, StatisticsRepository
-from app.routers.health import HealthResponse, build_health_data
+from app.routers.health import FanoutStatusResponse, build_health_data
 from app.services.radio_runtime import radio_runtime
 from app.version_info import get_app_build_info, git_output
 
@@ -61,8 +61,6 @@ class DebugRuntimeInfo(BaseModel):
     setup_in_progress: bool
     setup_complete: bool
     channels_with_incoming_messages: int
-    max_channels: int
-    path_hash_mode: int
     path_hash_mode_supported: bool
     channel_slot_reuse_enabled: bool
     channel_send_cache_capacity: int
@@ -89,7 +87,6 @@ class DebugChannelAudit(BaseModel):
 class DebugRadioProbe(BaseModel):
     performed: bool
     errors: list[str] = Field(default_factory=list)
-    multi_acks_enabled: bool | None = None
     self_info: dict[str, Any] | None = None
     device_info: dict[str, Any] | None = None
     stats_core: dict[str, Any] | None = None
@@ -102,6 +99,15 @@ class DebugDatabaseInfo(BaseModel):
     total_dms: int
     total_channel_messages: int
     total_outgoing: int
+
+
+class DebugHealthSummary(BaseModel):
+    radio_state: str
+    database_size_mb: float
+    oldest_undecrypted_timestamp: int | None
+    fanouts_with_errors: dict[str, FanoutStatusResponse] = Field(default_factory=dict)
+    bots_disabled_source: Literal["env", "until_restart"] | None = None
+    basic_auth_enabled: bool = False
 
 
 class DebugAppSettings(BaseModel):
@@ -117,7 +123,7 @@ class DebugSnapshotResponse(BaseModel):
     captured_at: str
     system: DebugSystemInfo
     application: DebugApplicationInfo
-    health: HealthResponse
+    health: DebugHealthSummary
     settings: DebugAppSettings
     runtime: DebugRuntimeInfo
     database: DebugDatabaseInfo
@@ -208,6 +214,57 @@ def _build_debug_app_settings(app_settings: AppSettings) -> DebugAppSettings:
     )
 
 
+def _derive_debug_radio_state(
+    *,
+    radio_connected: bool,
+    connection_desired: bool,
+    setup_in_progress: bool,
+    setup_complete: bool,
+    is_reconnecting: bool,
+) -> str:
+    if not connection_desired:
+        return "paused"
+    if radio_connected and (setup_in_progress or not setup_complete):
+        return "initializing"
+    if radio_connected:
+        return "connected"
+    if is_reconnecting:
+        return "connecting"
+    return "disconnected"
+
+
+def _build_debug_health_summary(
+    health_data: dict[str, Any], *, radio_state: str
+) -> DebugHealthSummary:
+    def _fanout_last_error(status: Any) -> str | None:
+        if isinstance(status, dict):
+            value = status.get("last_error")
+        else:
+            value = getattr(status, "last_error", None)
+        return value if isinstance(value, str) and value else None
+
+    fanouts_with_errors = {
+        config_id: status
+        for config_id, status in health_data["fanout_statuses"].items()
+        if _fanout_last_error(status)
+    }
+    return DebugHealthSummary(
+        radio_state=radio_state,
+        database_size_mb=health_data["database_size_mb"],
+        oldest_undecrypted_timestamp=health_data["oldest_undecrypted_timestamp"],
+        fanouts_with_errors=fanouts_with_errors,
+        bots_disabled_source=health_data["bots_disabled_source"],
+        basic_auth_enabled=health_data["basic_auth_enabled"],
+    )
+
+
+def _sanitize_radio_probe_self_info(self_info: dict[str, Any] | None) -> dict[str, Any]:
+    sanitized = dict(self_info or {})
+    sanitized.pop("adv_lat", None)
+    sanitized.pop("adv_lon", None)
+    return sanitized
+
+
 async def _build_contact_audit(
     observed_contacts_payload: dict[str, dict[str, Any]],
 ) -> DebugContactAudit:
@@ -292,10 +349,7 @@ async def _probe_radio() -> DebugRadioProbe:
             return DebugRadioProbe(
                 performed=True,
                 errors=errors,
-                multi_acks_enabled=bool(mc.self_info.get("multi_acks", 0))
-                if mc.self_info is not None
-                else None,
-                self_info=dict(mc.self_info or {}),
+                self_info=_sanitize_radio_probe_self_info(mc.self_info),
                 device_info=device_info,
                 stats_core=stats_core,
                 stats_radio=stats_radio,
@@ -314,27 +368,39 @@ async def _probe_radio() -> DebugRadioProbe:
 @router.get("/debug", response_model=DebugSnapshotResponse)
 async def debug_support_snapshot() -> DebugSnapshotResponse:
     """Return a support/debug snapshot with recent logs and live radio state."""
-    health_data = await build_health_data(radio_runtime.is_connected, radio_runtime.connection_info)
+    connection_info = radio_runtime.connection_info
+    connection_desired = radio_runtime.connection_desired
+    setup_in_progress = radio_runtime.is_setup_in_progress
+    setup_complete = radio_runtime.is_setup_complete
+    radio_connected = radio_runtime.is_connected
+    is_reconnecting = getattr(radio_runtime, "is_reconnecting", False)
+
+    health_data = await build_health_data(radio_connected, connection_info)
     app_settings = await AppSettingsRepository.get()
     message_totals = await StatisticsRepository.get_database_message_totals()
     radio_probe = await _probe_radio()
     channels_with_incoming_messages = (
         await MessageRepository.count_channels_with_incoming_messages()
     )
+    radio_state = _derive_debug_radio_state(
+        radio_connected=radio_connected,
+        connection_desired=connection_desired,
+        setup_in_progress=setup_in_progress,
+        setup_complete=setup_complete,
+        is_reconnecting=is_reconnecting,
+    )
     return DebugSnapshotResponse(
         captured_at=datetime.now(timezone.utc).isoformat(),
         system=_build_system_info(),
         application=_build_application_info(),
-        health=HealthResponse(**health_data),
+        health=_build_debug_health_summary(health_data, radio_state=radio_state),
         settings=_build_debug_app_settings(app_settings),
         runtime=DebugRuntimeInfo(
-            connection_info=radio_runtime.connection_info,
-            connection_desired=radio_runtime.connection_desired,
-            setup_in_progress=radio_runtime.is_setup_in_progress,
-            setup_complete=radio_runtime.is_setup_complete,
+            connection_info=connection_info,
+            connection_desired=connection_desired,
+            setup_in_progress=setup_in_progress,
+            setup_complete=setup_complete,
             channels_with_incoming_messages=channels_with_incoming_messages,
-            max_channels=radio_runtime.max_channels,
-            path_hash_mode=radio_runtime.path_hash_mode,
             path_hash_mode_supported=radio_runtime.path_hash_mode_supported,
             channel_slot_reuse_enabled=radio_runtime.channel_slot_reuse_enabled(),
             channel_send_cache_capacity=radio_runtime.get_channel_send_cache_capacity(),
