@@ -36,7 +36,7 @@ interface BulkDeleteContactsModalProps {
   open: boolean;
   onClose: () => void;
   contacts: Contact[];
-  onDeleted: () => void;
+  onDeleted: (deletedKeys: string[]) => void;
 }
 
 export function BulkDeleteContactsModal({
@@ -133,9 +133,10 @@ export function BulkDeleteContactsModal({
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const result = await api.bulkDeleteContacts([...selectedKeys]);
+      const keysToDelete = [...selectedKeys];
+      const result = await api.bulkDeleteContacts(keysToDelete);
       toast.success(`Deleted ${result.deleted} contact${result.deleted === 1 ? '' : 's'}`);
-      onDeleted();
+      onDeleted(keysToDelete);
       resetAndClose();
     } catch (err) {
       console.error('Bulk delete failed:', err);

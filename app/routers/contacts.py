@@ -357,24 +357,27 @@ async def bulk_delete_contacts(request: BulkDeleteRequest) -> dict:
     """Delete multiple contacts from the database (and radio if present)."""
     from app.websocket import broadcast_event
 
-    deleted = 0
+    # Resolve all contacts first
+    contacts_to_delete: list[Contact] = []
     for key in request.public_keys:
-        normalized = key.lower()
-        contact = await ContactRepository.get_by_key(normalized)
-        if not contact:
-            continue
+        contact = await ContactRepository.get_by_key(key.lower())
+        if contact:
+            contacts_to_delete.append(contact)
 
-        if radio_manager.is_connected:
-            try:
-                async with radio_manager.radio_operation(
-                    "bulk_delete_contact_from_radio", blocking=False
-                ) as mc:
+    # Remove from radio in a single locked operation (blocks until radio is free)
+    if radio_manager.is_connected and contacts_to_delete:
+        try:
+            async with radio_manager.radio_operation("bulk_delete_contacts_from_radio") as mc:
+                for contact in contacts_to_delete:
                     radio_contact = mc.get_contact_by_key_prefix(contact.public_key[:12])
                     if radio_contact:
                         await mc.commands.remove_contact(radio_contact)
-            except Exception:
-                pass  # Best-effort radio removal during bulk delete
+        except Exception as e:
+            logger.warning("Radio removal during bulk delete failed: %s", e)
 
+    # Delete from database and broadcast events
+    deleted = 0
+    for contact in contacts_to_delete:
         await ContactRepository.delete(contact.public_key)
         broadcast_event("contact_deleted", {"public_key": contact.public_key})
         deleted += 1

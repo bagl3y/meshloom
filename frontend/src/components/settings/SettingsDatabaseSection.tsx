@@ -19,6 +19,7 @@ export function SettingsDatabaseSection({
   onToggleBlockedKey,
   onToggleBlockedName,
   contacts = [],
+  onBulkDeleteContacts,
   className,
 }: {
   appSettings: AppSettings;
@@ -30,6 +31,7 @@ export function SettingsDatabaseSection({
   onToggleBlockedKey?: (key: string) => void;
   onToggleBlockedName?: (name: string) => void;
   contacts?: Contact[];
+  onBulkDeleteContacts?: (deletedKeys: string[]) => void;
   className?: string;
 }) {
   const [retentionDays, setRetentionDays] = useState('14');
@@ -297,7 +299,7 @@ export function SettingsDatabaseSection({
           open={bulkDeleteOpen}
           onClose={() => setBulkDeleteOpen(false)}
           contacts={contacts}
-          onDeleted={() => {}}
+          onDeleted={(keys) => onBulkDeleteContacts?.(keys)}
         />
       </div>
 
