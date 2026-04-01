@@ -419,7 +419,8 @@ mkdir -p "$REPO_DIR/data"
     fi
     if [ "$TRANSPORT_MODE" = "serial" ]; then
         echo "    devices:"
-        echo "      - ${SERIAL_HOST_PATH}:${SERIAL_CONTAINER_PATH}"
+        echo "      - source: $(yaml_quote "$SERIAL_HOST_PATH")"
+        echo "        target: $(yaml_quote "$SERIAL_CONTAINER_PATH")"
     fi
     if [[ "$ENABLE_SNAKEOIL_TLS" =~ ^[Yy]$ ]]; then
         echo "    command:"

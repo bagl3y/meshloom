@@ -16,7 +16,8 @@ services:
     # Map your radio by stable device ID if available. #
     ################################################
     devices:
-      - /dev/serial/by-id/your-meshcore-radio:/dev/meshcore-radio
+      - source: /dev/serial/by-id/your-meshcore-radio
+        target: /dev/meshcore-radio
 
     environment:
       MESHCORE_DATABASE_PATH: data/meshcore.db
