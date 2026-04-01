@@ -6,7 +6,8 @@ import { Separator } from '../ui/separator';
 import { toast } from '../ui/sonner';
 import { api } from '../../api';
 import { formatTime } from '../../utils/messageParser';
-import type { AppSettings, AppSettingsUpdate, HealthStatus } from '../../types';
+import { BulkDeleteContactsModal } from './BulkDeleteContactsModal';
+import type { AppSettings, AppSettingsUpdate, Contact, HealthStatus } from '../../types';
 
 export function SettingsDatabaseSection({
   appSettings,
@@ -17,6 +18,7 @@ export function SettingsDatabaseSection({
   blockedNames = [],
   onToggleBlockedKey,
   onToggleBlockedName,
+  contacts = [],
   className,
 }: {
   appSettings: AppSettings;
@@ -27,6 +29,7 @@ export function SettingsDatabaseSection({
   blockedNames?: string[];
   onToggleBlockedKey?: (key: string) => void;
   onToggleBlockedName?: (name: string) => void;
+  contacts?: Contact[];
   className?: string;
 }) {
   const [retentionDays, setRetentionDays] = useState('14');
@@ -34,6 +37,7 @@ export function SettingsDatabaseSection({
   const [purgingDecryptedRaw, setPurgingDecryptedRaw] = useState(false);
   const [autoDecryptOnAdvert, setAutoDecryptOnAdvert] = useState(false);
   const [discoveryBlockedTypes, setDiscoveryBlockedTypes] = useState<number[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -276,6 +280,25 @@ export function SettingsDatabaseSection({
             )}
           </div>
         )}
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <Label>Bulk Delete Contacts</Label>
+        <p className="text-xs text-muted-foreground">
+          Remove multiple contacts or repeaters at once. Useful for cleaning up spam or unwanted
+          nodes. Message history will be preserved.
+        </p>
+        <Button variant="outline" className="w-full" onClick={() => setBulkDeleteOpen(true)}>
+          Open Bulk Delete
+        </Button>
+        <BulkDeleteContactsModal
+          open={bulkDeleteOpen}
+          onClose={() => setBulkDeleteOpen(false)}
+          contacts={contacts}
+          onDeleted={() => {}}
+        />
       </div>
 
       <Separator />

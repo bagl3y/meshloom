@@ -557,6 +557,7 @@ export function App() {
     blockedNames: appSettings?.blocked_names,
     onToggleBlockedKey: handleBlockKey,
     onToggleBlockedName: handleBlockName,
+    contacts,
   };
   const crackerProps = {
     packets: rawPackets,

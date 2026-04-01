@@ -5,6 +5,7 @@ from contextlib import suppress
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from meshcore import EventType
+from pydantic import BaseModel, Field
 
 from app.dependencies import require_connected
 from app.models import (
@@ -345,6 +346,41 @@ async def mark_contact_read(public_key: str) -> dict:
         raise HTTPException(status_code=500, detail="Failed to update read state")
 
     return {"status": "ok", "public_key": contact.public_key}
+
+
+class BulkDeleteRequest(BaseModel):
+    public_keys: list[str] = Field(description="Public keys to delete")
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_contacts(request: BulkDeleteRequest) -> dict:
+    """Delete multiple contacts from the database (and radio if present)."""
+    from app.websocket import broadcast_event
+
+    deleted = 0
+    for key in request.public_keys:
+        normalized = key.lower()
+        contact = await ContactRepository.get_by_key(normalized)
+        if not contact:
+            continue
+
+        if radio_manager.is_connected:
+            try:
+                async with radio_manager.radio_operation(
+                    "bulk_delete_contact_from_radio", blocking=False
+                ) as mc:
+                    radio_contact = mc.get_contact_by_key_prefix(contact.public_key[:12])
+                    if radio_contact:
+                        await mc.commands.remove_contact(radio_contact)
+            except Exception:
+                pass  # Best-effort radio removal during bulk delete
+
+        await ContactRepository.delete(contact.public_key)
+        broadcast_event("contact_deleted", {"public_key": contact.public_key})
+        deleted += 1
+
+    logger.info("Bulk deleted %d/%d contacts", deleted, len(request.public_keys))
+    return {"deleted": deleted}
 
 
 @router.delete("/{public_key}")

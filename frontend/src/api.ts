@@ -149,6 +149,12 @@ export const api = {
     fetchJson<{ status: string }>(`/contacts/${publicKey}`, {
       method: 'DELETE',
     }),
+  bulkDeleteContacts: (publicKeys: string[]) =>
+    fetchJson<{ deleted: number }>('/contacts/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ public_keys: publicKeys }),
+    }),
   createContact: (publicKey: string, name?: string, tryHistorical?: boolean) =>
     fetchJson<Contact>('/contacts', {
       method: 'POST',

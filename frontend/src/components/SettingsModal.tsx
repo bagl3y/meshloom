@@ -2,6 +2,7 @@ import { useState, useEffect, type ReactNode } from 'react';
 import type {
   AppSettings,
   AppSettingsUpdate,
+  Contact,
   HealthStatus,
   RadioAdvertMode,
   RadioConfig,
@@ -47,6 +48,7 @@ interface SettingsModalBaseProps {
   blockedNames?: string[];
   onToggleBlockedKey?: (key: string) => void;
   onToggleBlockedName?: (name: string) => void;
+  contacts?: Contact[];
 }
 
 export type SettingsModalProps = SettingsModalBaseProps &
@@ -80,6 +82,7 @@ export function SettingsModal(props: SettingsModalProps) {
     blockedNames,
     onToggleBlockedKey,
     onToggleBlockedName,
+    contacts,
   } = props;
   const externalSidebarNav = props.externalSidebarNav === true;
   const desktopSection = props.externalSidebarNav ? props.desktopSection : undefined;
@@ -239,6 +242,7 @@ export function SettingsModal(props: SettingsModalProps) {
                 blockedNames={blockedNames}
                 onToggleBlockedKey={onToggleBlockedKey}
                 onToggleBlockedName={onToggleBlockedName}
+                contacts={contacts}
                 className={sectionContentClass}
               />
             ) : (
