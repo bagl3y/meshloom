@@ -1,3 +1,4 @@
+import json
 import logging
 
 from app.database import db
@@ -10,18 +11,16 @@ class RepeaterTelemetryRepository:
     async def record(
         public_key: str,
         timestamp: int,
-        battery_volts: float,
-        uptime_seconds: int | None = None,
-        noise_floor_dbm: int | None = None,
+        data: dict,
     ) -> None:
-        """Insert a telemetry history row."""
+        """Insert a telemetry history row with the full status snapshot as JSON."""
         await db.conn.execute(
             """
             INSERT INTO repeater_telemetry_history
-                (public_key, timestamp, battery_volts, uptime_seconds, noise_floor_dbm)
-            VALUES (?, ?, ?, ?, ?)
+                (public_key, timestamp, data)
+            VALUES (?, ?, ?)
             """,
-            (public_key, timestamp, battery_volts, uptime_seconds, noise_floor_dbm),
+            (public_key, timestamp, json.dumps(data)),
         )
         await db.conn.commit()
 
@@ -30,7 +29,7 @@ class RepeaterTelemetryRepository:
         """Return telemetry rows for a repeater since a given timestamp, ordered ASC."""
         cursor = await db.conn.execute(
             """
-            SELECT timestamp, battery_volts, uptime_seconds, noise_floor_dbm
+            SELECT timestamp, data
             FROM repeater_telemetry_history
             WHERE public_key = ? AND timestamp >= ?
             ORDER BY timestamp ASC
@@ -41,22 +40,7 @@ class RepeaterTelemetryRepository:
         return [
             {
                 "timestamp": row["timestamp"],
-                "battery_volts": row["battery_volts"],
-                "uptime_seconds": row["uptime_seconds"],
-                "noise_floor_dbm": row["noise_floor_dbm"],
+                "data": json.loads(row["data"]),
             }
             for row in rows
         ]
-
-    @staticmethod
-    async def prune_old(max_age_seconds: int) -> int:
-        """Delete rows older than max_age_seconds. Returns count of deleted rows."""
-        import time
-
-        cutoff = int(time.time()) - max_age_seconds
-        cursor = await db.conn.execute(
-            "DELETE FROM repeater_telemetry_history WHERE timestamp < ?",
-            (cutoff,),
-        )
-        await db.conn.commit()
-        return cursor.rowcount

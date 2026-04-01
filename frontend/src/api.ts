@@ -35,7 +35,6 @@ import type {
   RepeaterOwnerInfoResponse,
   RepeaterRadioSettingsResponse,
   RepeaterStatusResponse,
-  RepeaterTelemetryHistoryResponse,
   StatisticsResponse,
   TraceResponse,
   UnreadCounts,
@@ -320,11 +319,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ name }),
     }),
-  toggleTelemetryTracking: (key: string) =>
-    fetchJson<AppSettings>('/settings/telemetry-tracked-keys/toggle', {
-      method: 'POST',
-      body: JSON.stringify({ key }),
-    }),
 
   // Favorites
   toggleFavorite: (type: Favorite['type'], id: string) =>
@@ -392,10 +386,6 @@ export const api = {
     fetchJson<RepeaterStatusResponse>(`/contacts/${publicKey}/repeater/status`, {
       method: 'POST',
     }),
-  repeaterTelemetryHistory: (publicKey: string, hours: number = 168) =>
-    fetchJson<RepeaterTelemetryHistoryResponse>(
-      `/contacts/${publicKey}/repeater/telemetry-history?hours=${hours}`
-    ),
   repeaterNeighbors: (publicKey: string) =>
     fetchJson<RepeaterNeighborsResponse>(`/contacts/${publicKey}/repeater/neighbors`, {
       method: 'POST',

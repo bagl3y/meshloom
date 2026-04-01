@@ -70,7 +70,6 @@ const baseSettings: AppSettings = {
   blocked_keys: [],
   blocked_names: [],
   discovery_blocked_types: [],
-  telemetry_tracked_keys: [],
 };
 
 function renderModal(overrides?: {
@@ -617,10 +616,10 @@ describe('SettingsModal', () => {
     openDatabaseSection();
 
     expect(
-      screen.getByText(/removes packet-analysis availability for those messages/i)
+      screen.getByText(/remove packet-analysis availability for those historical messages/i)
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Purge Archival Packets' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Purge Archival Raw Packets' }));
 
     await waitFor(() => {
       expect(runMaintenanceSpy).toHaveBeenCalledWith({ purgeLinkedRawPackets: true });

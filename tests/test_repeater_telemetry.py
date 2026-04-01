@@ -1,18 +1,38 @@
-"""Tests for repeater telemetry history: repository CRUD, pruning, and API endpoints."""
+"""Tests for repeater telemetry history: repository CRUD and embedded status response."""
 
+import json
 import time
 
 import pytest
 
 from app.models import CONTACT_TYPE_REPEATER
 from app.repository import (
-    AppSettingsRepository,
     ContactRepository,
     RepeaterTelemetryRepository,
 )
 
 KEY_A = "aa" * 32
 KEY_B = "bb" * 32
+
+SAMPLE_STATUS = {
+    "battery_volts": 4.15,
+    "tx_queue_len": 0,
+    "noise_floor_dbm": -100,
+    "last_rssi_dbm": -80,
+    "last_snr_db": 5.0,
+    "packets_received": 100,
+    "packets_sent": 50,
+    "airtime_seconds": 300,
+    "rx_airtime_seconds": 200,
+    "uptime_seconds": 1000,
+    "sent_flood": 10,
+    "sent_direct": 40,
+    "recv_flood": 60,
+    "recv_direct": 40,
+    "flood_dups": 5,
+    "direct_dups": 2,
+    "full_events": 0,
+}
 
 
 async def _insert_repeater(public_key: str, name: str = "Repeater"):
@@ -51,7 +71,7 @@ async def _db(test_db):
 
 
 class TestRepeaterTelemetryRepository:
-    """Tests for RepeaterTelemetryRepository CRUD operations."""
+    """Tests for RepeaterTelemetryRepository CRUD operations with JSON blob storage."""
 
     @pytest.mark.asyncio
     async def test_record_and_get_history(self, _db):
@@ -61,22 +81,18 @@ class TestRepeaterTelemetryRepository:
         await RepeaterTelemetryRepository.record(
             public_key=KEY_A,
             timestamp=now - 3600,
-            battery_volts=4.15,
-            uptime_seconds=1000,
-            noise_floor_dbm=-100,
+            data={**SAMPLE_STATUS, "battery_volts": 4.15},
         )
         await RepeaterTelemetryRepository.record(
             public_key=KEY_A,
             timestamp=now,
-            battery_volts=4.10,
-            uptime_seconds=2000,
-            noise_floor_dbm=-95,
+            data={**SAMPLE_STATUS, "battery_volts": 4.10},
         )
 
         history = await RepeaterTelemetryRepository.get_history(KEY_A, now - 7200)
         assert len(history) == 2
-        assert history[0]["battery_volts"] == 4.15
-        assert history[1]["battery_volts"] == 4.10
+        assert history[0]["data"]["battery_volts"] == 4.15
+        assert history[1]["data"]["battery_volts"] == 4.10
         assert history[0]["timestamp"] < history[1]["timestamp"]
 
     @pytest.mark.asyncio
@@ -84,9 +100,9 @@ class TestRepeaterTelemetryRepository:
         await _insert_repeater(KEY_A)
         now = int(time.time())
 
-        await RepeaterTelemetryRepository.record(KEY_A, now - 7200, 4.0)
-        await RepeaterTelemetryRepository.record(KEY_A, now - 3600, 4.1)
-        await RepeaterTelemetryRepository.record(KEY_A, now, 4.2)
+        await RepeaterTelemetryRepository.record(KEY_A, now - 7200, SAMPLE_STATUS)
+        await RepeaterTelemetryRepository.record(KEY_A, now - 3600, SAMPLE_STATUS)
+        await RepeaterTelemetryRepository.record(KEY_A, now, SAMPLE_STATUS)
 
         history = await RepeaterTelemetryRepository.get_history(KEY_A, now - 3601)
         assert len(history) == 2
@@ -97,87 +113,40 @@ class TestRepeaterTelemetryRepository:
         await _insert_repeater(KEY_B)
         now = int(time.time())
 
-        await RepeaterTelemetryRepository.record(KEY_A, now, 4.1)
-        await RepeaterTelemetryRepository.record(KEY_B, now, 3.9)
+        await RepeaterTelemetryRepository.record(
+            KEY_A, now, {**SAMPLE_STATUS, "battery_volts": 4.1}
+        )
+        await RepeaterTelemetryRepository.record(
+            KEY_B, now, {**SAMPLE_STATUS, "battery_volts": 3.9}
+        )
 
         history_a = await RepeaterTelemetryRepository.get_history(KEY_A, 0)
         history_b = await RepeaterTelemetryRepository.get_history(KEY_B, 0)
         assert len(history_a) == 1
         assert len(history_b) == 1
-        assert history_a[0]["battery_volts"] == 4.1
+        assert history_a[0]["data"]["battery_volts"] == 4.1
 
     @pytest.mark.asyncio
-    async def test_prune_old(self, _db):
+    async def test_data_stored_as_json(self, _db):
+        """Verify the data column stores valid JSON that round-trips correctly."""
         await _insert_repeater(KEY_A)
         now = int(time.time())
 
-        # Insert one old and one recent
-        await RepeaterTelemetryRepository.record(KEY_A, now - 100000, 3.5)
-        await RepeaterTelemetryRepository.record(KEY_A, now, 4.0)
-
-        pruned = await RepeaterTelemetryRepository.prune_old(50000)
-        assert pruned == 1
-
-        remaining = await RepeaterTelemetryRepository.get_history(KEY_A, 0)
-        assert len(remaining) == 1
-        assert remaining[0]["battery_volts"] == 4.0
-
-    @pytest.mark.asyncio
-    async def test_record_nullable_fields(self, _db):
-        await _insert_repeater(KEY_A)
-        now = int(time.time())
-
-        await RepeaterTelemetryRepository.record(KEY_A, now, 4.0)
+        await RepeaterTelemetryRepository.record(KEY_A, now, SAMPLE_STATUS)
         history = await RepeaterTelemetryRepository.get_history(KEY_A, 0)
         assert len(history) == 1
-        assert history[0]["uptime_seconds"] is None
-        assert history[0]["noise_floor_dbm"] is None
+        assert history[0]["data"] == SAMPLE_STATUS
 
 
-class TestTelemetryTrackingToggle:
-    """Tests for telemetry tracking toggle in app settings."""
-
-    @pytest.mark.asyncio
-    async def test_toggle_adds_and_removes_key(self, _db):
-        settings = await AppSettingsRepository.get()
-        assert settings.telemetry_tracked_keys == []
-
-        settings = await AppSettingsRepository.toggle_telemetry_tracked_key(KEY_A)
-        assert KEY_A.lower() in settings.telemetry_tracked_keys
-
-        settings = await AppSettingsRepository.toggle_telemetry_tracked_key(KEY_A)
-        assert KEY_A.lower() not in settings.telemetry_tracked_keys
+class TestTelemetryHistoryInStatusResponse:
+    """Tests that history is embedded in the status response (no separate endpoint)."""
 
     @pytest.mark.asyncio
-    async def test_toggle_normalizes_to_lowercase(self, _db):
-        upper_key = "AA" * 32
-        settings = await AppSettingsRepository.toggle_telemetry_tracked_key(upper_key)
-        assert KEY_A in settings.telemetry_tracked_keys
-
-    @pytest.mark.asyncio
-    async def test_toggle_persists_across_reads(self, _db):
-        await AppSettingsRepository.toggle_telemetry_tracked_key(KEY_A)
-        settings = await AppSettingsRepository.get()
-        assert KEY_A in settings.telemetry_tracked_keys
-
-
-class TestTelemetryHistoryEndpoint:
-    """Tests for the telemetry history API endpoint."""
-
-    @pytest.mark.asyncio
-    async def test_history_endpoint(self, _db, client):
+    async def test_history_not_available_as_separate_endpoint(self, _db, client):
+        """The old GET telemetry-history endpoint should be gone."""
         await _insert_repeater(KEY_A)
-        now = int(time.time())
-
-        await RepeaterTelemetryRepository.record(KEY_A, now, 4.1, 1000, -90)
-
-        resp = await client.get(f"/api/contacts/{KEY_A}/repeater/telemetry-history?hours=24")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert len(data["entries"]) == 1
-        assert data["entries"][0]["battery_volts"] == 4.1
-        assert data["entries"][0]["uptime_seconds"] == 1000
-        assert data["entries"][0]["noise_floor_dbm"] == -90
+        resp = await client.get(f"/api/contacts/{KEY_A}/repeater/telemetry-history")
+        assert resp.status_code in (404, 405)
 
     @pytest.mark.asyncio
     async def test_history_endpoint_non_repeater_rejected(self, _db, client):
@@ -200,38 +169,5 @@ class TestTelemetryHistoryEndpoint:
             }
         )
         resp = await client.get(f"/api/contacts/{KEY_A}/repeater/telemetry-history")
-        assert resp.status_code == 400
-
-    @pytest.mark.asyncio
-    async def test_history_endpoint_404_unknown_key(self, _db, client):
-        resp = await client.get(f"/api/contacts/{KEY_A}/repeater/telemetry-history")
-        assert resp.status_code == 404
-
-    @pytest.mark.asyncio
-    async def test_history_endpoint_default_hours(self, _db, client):
-        await _insert_repeater(KEY_A)
-        resp = await client.get(f"/api/contacts/{KEY_A}/repeater/telemetry-history")
-        assert resp.status_code == 200
-
-
-class TestToggleEndpoint:
-    """Tests for the telemetry tracking toggle API endpoint."""
-
-    @pytest.mark.asyncio
-    async def test_toggle_endpoint(self, _db, client):
-        resp = await client.post(
-            "/api/settings/telemetry-tracked-keys/toggle",
-            json={"key": KEY_A},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert KEY_A in data["telemetry_tracked_keys"]
-
-        # Toggle off
-        resp = await client.post(
-            "/api/settings/telemetry-tracked-keys/toggle",
-            json={"key": KEY_A},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert KEY_A not in data["telemetry_tracked_keys"]
+        # Either 404 (method not found) or 400 (not a repeater) — endpoint is gone
+        assert resp.status_code in (400, 404, 405)

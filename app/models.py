@@ -530,6 +530,9 @@ class RepeaterStatusResponse(BaseModel):
     flood_dups: int = Field(description="Duplicate flood packets")
     direct_dups: int = Field(description="Duplicate direct packets")
     full_events: int = Field(description="Full event queue count")
+    telemetry_history: list["TelemetryHistoryEntry"] = Field(
+        default_factory=list, description="Recent telemetry history snapshots"
+    )
 
 
 class RepeaterNodeInfoResponse(BaseModel):
@@ -805,7 +808,7 @@ class AppSettings(BaseModel):
         default_factory=list, description="List of favorited conversations"
     )
     auto_decrypt_dm_on_advert: bool = Field(
-        default=True,
+        default=False,
         description="Whether to attempt historical DM decryption on new contact advertisement",
     )
     sidebar_sort_order: Literal["recent", "alpha"] = Field(
@@ -846,10 +849,6 @@ class AppSettings(BaseModel):
             "Contact type codes (1=Client, 2=Repeater, 3=Room, 4=Sensor) whose "
             "advertisements should not create new contacts; existing contacts are still updated"
         ),
-    )
-    telemetry_tracked_keys: list[str] = Field(
-        default_factory=list,
-        description="Repeater public keys opted in to hourly telemetry tracking",
     )
 
 
@@ -929,10 +928,4 @@ class StatisticsResponse(BaseModel):
 
 class TelemetryHistoryEntry(BaseModel):
     timestamp: int
-    battery_volts: float
-    uptime_seconds: int | None = None
-    noise_floor_dbm: int | None = None
-
-
-class RepeaterTelemetryHistoryResponse(BaseModel):
-    entries: list[TelemetryHistoryEntry]
+    data: dict

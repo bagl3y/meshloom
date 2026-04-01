@@ -1,6 +1,5 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState } from 'react';
 
-import { api } from '../api';
 import { toast } from './ui/sonner';
 import { Button } from './ui/button';
 import { Bell, Info, Route, Star, Trash2 } from 'lucide-react';
@@ -24,7 +23,7 @@ import { LppTelemetryPane } from './repeater/RepeaterLppTelemetryPane';
 import { OwnerInfoPane } from './repeater/RepeaterOwnerInfoPane';
 import { ActionsPane } from './repeater/RepeaterActionsPane';
 import { ConsolePane } from './repeater/RepeaterConsolePane';
-import { BatteryHistoryPane } from './repeater/RepeaterBatteryHistoryPane';
+import { TelemetryHistoryPane } from './repeater/RepeaterTelemetryHistoryPane';
 import { ContactPathDiscoveryModal } from './ContactPathDiscoveryModal';
 
 // Re-export for backwards compatibility (used by repeaterFormatters.test.ts)
@@ -93,26 +92,6 @@ export function RepeaterDashboard({
     useRememberedServerPassword('repeater', conversation.id);
 
   const isFav = isFavorite(favorites, 'contact', conversation.id);
-
-  // Telemetry tracking state
-  const [telemetryTracked, setTelemetryTracked] = useState(false);
-  useEffect(() => {
-    api.getSettings().then((s) => {
-      setTelemetryTracked(s.telemetry_tracked_keys.includes(conversation.id.toLowerCase()));
-    }).catch(() => {});
-  }, [conversation.id]);
-
-  const handleToggleTelemetryTracking = useCallback(async () => {
-    const wasTracked = telemetryTracked;
-    setTelemetryTracked(!wasTracked);
-    try {
-      const updated = await api.toggleTelemetryTracking(conversation.id);
-      setTelemetryTracked(updated.telemetry_tracked_keys.includes(conversation.id.toLowerCase()));
-    } catch {
-      setTelemetryTracked(wasTracked);
-      toast.error('Failed to toggle telemetry tracking');
-    }
-  }, [conversation.id, telemetryTracked]);
 
   const handleRepeaterLogin = async (nextPassword: string) => {
     await login(nextPassword);
@@ -314,12 +293,6 @@ export function RepeaterDashboard({
                   onRefresh={() => refreshPane('status')}
                   disabled={anyLoading}
                 />
-                <BatteryHistoryPane
-                  publicKey={conversation.id}
-                  isTracked={telemetryTracked}
-                  onToggleTracking={handleToggleTelemetryTracking}
-                  statusFetchedAt={paneStates.status.fetched_at}
-                />
                 <RadioSettingsPane
                   data={paneData.radioSettings}
                   state={paneStates.radioSettings}
@@ -381,6 +354,12 @@ export function RepeaterDashboard({
               history={consoleHistory}
               loading={consoleLoading}
               onSend={sendConsoleCommand}
+            />
+
+            {/* Telemetry history chart — full width, below console */}
+            <TelemetryHistoryPane
+              entries={paneData.status?.telemetry_history ?? []}
+              statusFetchedAt={paneStates.status.fetched_at}
             />
           </div>
         )}

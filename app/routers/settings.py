@@ -65,10 +65,6 @@ class BlockNameRequest(BaseModel):
     name: str = Field(description="Display name to toggle block status")
 
 
-class TelemetryTrackKeyRequest(BaseModel):
-    key: str = Field(description="Public key to toggle telemetry tracking")
-
-
 class FavoriteRequest(BaseModel):
     type: Literal["channel", "contact"] = Field(description="'channel' or 'contact'")
     id: str = Field(description="Channel key or contact public key")
@@ -201,13 +197,6 @@ async def toggle_blocked_name(request: BlockNameRequest) -> AppSettings:
     """Toggle a display name's blocked status."""
     logger.info("Toggling blocked name: %s", request.name)
     return await AppSettingsRepository.toggle_blocked_name(request.name)
-
-
-@router.post("/telemetry-tracked-keys/toggle", response_model=AppSettings)
-async def toggle_telemetry_tracked_key(request: TelemetryTrackKeyRequest) -> AppSettings:
-    """Toggle a repeater's telemetry tracking status."""
-    logger.info("Toggling telemetry tracking: %s", request.key[:12])
-    return await AppSettingsRepository.toggle_telemetry_tracked_key(request.key)
 
 
 @router.post("/migrate", response_model=MigratePreferencesResponse)

@@ -146,15 +146,6 @@ MESSAGE_POLL_AUDIT_INTERVAL = 3600
 # Periodic advertisement task handle
 _advert_task: asyncio.Task | None = None
 
-# Repeater telemetry polling task handle
-_telemetry_task: asyncio.Task | None = None
-
-# Telemetry polling interval (1 hour)
-TELEMETRY_POLL_INTERVAL = 3600
-
-# Max age for telemetry history (30 days)
-TELEMETRY_MAX_AGE_SECONDS = 30 * 86400
-
 # Default check interval when periodic advertising is disabled (seconds)
 # We still need to periodically check if it's been enabled
 ADVERT_CHECK_INTERVAL = 60
@@ -842,97 +833,6 @@ async def stop_periodic_advert():
         _advert_task = None
         logger.info("Stopped periodic advertisement")
 
-
-async def _repeater_telemetry_loop():
-    """Background task that periodically polls telemetry from opted-in repeaters."""
-    from app.repository import RepeaterTelemetryRepository
-
-    while True:
-        try:
-            await asyncio.sleep(TELEMETRY_POLL_INTERVAL)
-
-            if not radio_manager.is_connected or is_polling_paused():
-                continue
-
-            app_settings = await AppSettingsRepository.get()
-            tracked_keys = app_settings.telemetry_tracked_keys
-            if not tracked_keys:
-                continue
-
-            # Prune old entries
-            try:
-                pruned = await RepeaterTelemetryRepository.prune_old(TELEMETRY_MAX_AGE_SECONDS)
-                if pruned > 0:
-                    logger.info("Pruned %d old telemetry history rows", pruned)
-            except Exception as e:
-                logger.warning("Failed to prune telemetry history: %s", e)
-
-            for key in tracked_keys:
-                if not radio_manager.is_connected:
-                    break
-
-                try:
-                    async with radio_manager.radio_operation(
-                        "telemetry_poll",
-                        blocking=False,
-                        suspend_auto_fetch=True,
-                    ) as mc:
-                        contact = await ContactRepository.get_by_key(key)
-                        if contact is None:
-                            logger.debug("Telemetry poll: contact %s not found, skipping", key[:12])
-                            continue
-
-                        await mc.commands.add_contact(contact.to_radio_dict())
-                        status = await mc.commands.req_status_sync(key, timeout=10, min_timeout=5)
-
-                    if status is not None:
-                        await RepeaterTelemetryRepository.record(
-                            public_key=key,
-                            timestamp=int(time.time()),
-                            battery_volts=status.get("bat", 0) / 1000.0,
-                            uptime_seconds=status.get("uptime"),
-                            noise_floor_dbm=status.get("noise_floor"),
-                        )
-                        logger.debug("Recorded telemetry for %s", key[:12])
-                    else:
-                        logger.debug("No telemetry response from %s", key[:12])
-
-                except RadioOperationBusyError:
-                    logger.debug("Skipping telemetry poll for %s: radio busy", key[:12])
-                except Exception as e:
-                    logger.warning("Error polling telemetry for %s: %s", key[:12], e)
-
-                await asyncio.sleep(2)
-
-        except asyncio.CancelledError:
-            logger.info("Repeater telemetry polling task cancelled")
-            break
-        except Exception as e:
-            logger.warning("Error in repeater telemetry loop: %s", e, exc_info=True)
-
-
-def start_repeater_telemetry_polling():
-    """Start the periodic repeater telemetry polling background task."""
-    global _telemetry_task
-    if _telemetry_task is None or _telemetry_task.done():
-        _telemetry_task = asyncio.create_task(_repeater_telemetry_loop())
-        logger.info(
-            "Started repeater telemetry polling task (interval: %ds)",
-            TELEMETRY_POLL_INTERVAL,
-        )
-
-
-async def stop_repeater_telemetry_polling():
-    """Stop the periodic repeater telemetry polling background task."""
-    global _telemetry_task
-    if _telemetry_task and not _telemetry_task.done():
-        _telemetry_task.cancel()
-        try:
-            await _telemetry_task
-        except asyncio.CancelledError:
-            pass
-        _telemetry_task = None
-        logger.info("Stopped repeater telemetry polling")
 
 
 # Prevents reboot-loop: once we've rebooted to fix clock skew this session,

@@ -198,7 +198,6 @@ const baseSettings = {
   flood_scope: '',
   blocked_keys: [],
   blocked_names: [],
-  telemetry_tracked_keys: [],
 };
 
 const publicChannel = {

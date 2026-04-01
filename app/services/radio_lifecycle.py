@@ -33,7 +33,6 @@ async def run_post_connect_setup(radio_manager) -> None:
         start_message_polling,
         start_periodic_advert,
         start_periodic_sync,
-        start_repeater_telemetry_polling,
         sync_and_offload_all,
         sync_radio_time,
     )
@@ -234,7 +233,6 @@ async def run_post_connect_setup(radio_manager) -> None:
             start_periodic_sync()
             start_periodic_advert()
             start_message_polling()
-            start_repeater_telemetry_polling()
 
             radio_manager._setup_complete = True
         finally:

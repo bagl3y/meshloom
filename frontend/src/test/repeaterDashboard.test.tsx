@@ -51,17 +51,9 @@ vi.mock('../hooks/useRepeaterDashboard', () => ({
   useRepeaterDashboard: () => mockHook,
 }));
 
-// Mock api module (BatteryHistoryPane calls api.getSettings on mount)
+// Mock api module
 vi.mock('../api', () => ({
   api: {
-    getSettings: vi.fn().mockResolvedValue({
-      telemetry_tracked_keys: [],
-      blocked_keys: [],
-      blocked_names: [],
-      favorites: [],
-    }),
-    repeaterTelemetryHistory: vi.fn().mockResolvedValue({ entries: [] }),
-    toggleTelemetryTracking: vi.fn().mockResolvedValue({ telemetry_tracked_keys: [] }),
     setContactRoutingOverride: vi.fn().mockResolvedValue({ status: 'ok' }),
   },
 }));
@@ -433,6 +425,7 @@ describe('RepeaterDashboard', () => {
       flood_dups: 1,
       direct_dups: 0,
       full_events: 0,
+      telemetry_history: [],
     };
 
     render(<RepeaterDashboard {...defaultProps} />);

@@ -2,7 +2,7 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from meshcore import EventType
 
 from app.dependencies import require_connected
@@ -24,7 +24,6 @@ from app.models import (
     RepeaterOwnerInfoResponse,
     RepeaterRadioSettingsResponse,
     RepeaterStatusResponse,
-    RepeaterTelemetryHistoryResponse,
     TelemetryHistoryEntry,
 )
 from app.repository import ContactRepository, RepeaterTelemetryRepository
@@ -133,37 +132,27 @@ async def repeater_status(public_key: str) -> RepeaterStatusResponse:
         full_events=status.get("full_evts", 0),
     )
 
-    # Record to telemetry history for charting (best-effort)
+    # Record to telemetry history as a JSON blob (best-effort)
+    now = int(time.time())
+    status_dict = response.model_dump(exclude={"telemetry_history"})
     try:
         await RepeaterTelemetryRepository.record(
             public_key=contact.public_key,
-            timestamp=int(time.time()),
-            battery_volts=response.battery_volts,
-            uptime_seconds=response.uptime_seconds,
-            noise_floor_dbm=response.noise_floor_dbm,
+            timestamp=now,
+            data=status_dict,
         )
     except Exception as e:
         logger.warning("Failed to record telemetry history: %s", e)
 
+    # Fetch recent history and embed in response
+    try:
+        since = now - 30 * 86400  # last 30 days
+        rows = await RepeaterTelemetryRepository.get_history(contact.public_key, since)
+        response.telemetry_history = [TelemetryHistoryEntry(**row) for row in rows]
+    except Exception as e:
+        logger.warning("Failed to fetch telemetry history: %s", e)
+
     return response
-
-
-@router.get(
-    "/{public_key}/repeater/telemetry-history",
-    response_model=RepeaterTelemetryHistoryResponse,
-)
-async def repeater_telemetry_history(
-    public_key: str,
-    hours: int = Query(default=168, ge=1, le=720),
-) -> RepeaterTelemetryHistoryResponse:
-    """Get historical telemetry data for a repeater."""
-    contact = await _resolve_contact_or_404(public_key)
-    _require_repeater(contact)
-
-    since = int(time.time()) - hours * 3600
-    rows = await RepeaterTelemetryRepository.get_history(contact.public_key, since)
-    entries = [TelemetryHistoryEntry(**row) for row in rows]
-    return RepeaterTelemetryHistoryResponse(entries=entries)
 
 
 @router.post("/{public_key}/repeater/lpp-telemetry", response_model=RepeaterLppTelemetryResponse)

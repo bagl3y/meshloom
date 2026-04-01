@@ -243,15 +243,6 @@ export interface ChannelDetail {
   top_senders_24h: ChannelTopSender[];
 }
 
-export interface BulkCreateHashtagChannelsResult {
-  created_channels: Channel[];
-  existing_count: number;
-  invalid_names: string[];
-  decrypt_started: boolean;
-  decrypt_total_packets: number;
-  message: string;
-}
-
 /** A single path that a message took to reach us */
 export interface MessagePath {
   /** Hex-encoded routing path */
@@ -342,7 +333,6 @@ export interface AppSettings {
   blocked_keys: string[];
   blocked_names: string[];
   discovery_blocked_types: number[];
-  telemetry_tracked_keys: string[];
 }
 
 export interface AppSettingsUpdate {
@@ -417,6 +407,7 @@ export interface RepeaterStatusResponse {
   flood_dups: number;
   direct_dups: number;
   full_events: number;
+  telemetry_history: TelemetryHistoryEntry[];
 }
 
 export interface RepeaterNeighborsResponse {
@@ -482,13 +473,7 @@ export interface PaneState {
 
 export interface TelemetryHistoryEntry {
   timestamp: number;
-  battery_volts: number;
-  uptime_seconds: number | null;
-  noise_floor_dbm: number | null;
-}
-
-export interface RepeaterTelemetryHistoryResponse {
-  entries: TelemetryHistoryEntry[];
+  data: RepeaterStatusResponse;
 }
 
 export interface TraceResponse {
