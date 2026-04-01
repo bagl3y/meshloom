@@ -143,6 +143,13 @@ echo
 
 CHANGELOG_ENTRY=$(cat)
 
+format_changelog_entry() {
+    local entry="$1"
+    printf '%s\n' "$entry" | sed '/^[[:space:]]*$/d; s/^[[:space:]]*//; s/^/* /'
+}
+
+FORMATTED_CHANGELOG_ENTRY=$(format_changelog_entry "$CHANGELOG_ENTRY")
+
 # Create changelog entry with date
 DATE=$(date +%Y-%m-%d)
 CHANGELOG_HEADER="## [$VERSION] - $DATE"
@@ -157,7 +164,7 @@ if [ -f CHANGELOG.md ]; then
             echo
             echo "$CHANGELOG_HEADER"
             echo
-            echo "$CHANGELOG_ENTRY"
+            echo "$FORMATTED_CHANGELOG_ENTRY"
             echo
             tail -n +2 CHANGELOG.md
         } > CHANGELOG.md.tmp
@@ -167,7 +174,7 @@ if [ -f CHANGELOG.md ]; then
         {
             echo "$CHANGELOG_HEADER"
             echo
-            echo "$CHANGELOG_ENTRY"
+            echo "$FORMATTED_CHANGELOG_ENTRY"
             echo
             cat CHANGELOG.md
         } > CHANGELOG.md.tmp
@@ -180,7 +187,7 @@ else
         echo
         echo "$CHANGELOG_HEADER"
         echo
-        echo "$CHANGELOG_ENTRY"
+        echo "$FORMATTED_CHANGELOG_ENTRY"
     } > CHANGELOG.md
 fi
 
@@ -247,7 +254,7 @@ RELEASE_NOTES_FILE=$(mktemp)
 {
     echo "$CHANGELOG_HEADER"
     echo
-    echo "$CHANGELOG_ENTRY"
+    echo "$FORMATTED_CHANGELOG_ENTRY"
 } > "$RELEASE_NOTES_FILE"
 
 # Create and push the release tag first so GitHub release creation does not
