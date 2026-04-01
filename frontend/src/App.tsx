@@ -471,6 +471,8 @@ export function App() {
     favorites,
     legacySortOrder: appSettings?.sidebar_sort_order,
     isConversationNotificationsEnabled,
+    blockedKeys: appSettings?.blocked_keys ?? [],
+    blockedNames: appSettings?.blocked_names ?? [],
   };
   const conversationPaneProps = {
     activeConversation,

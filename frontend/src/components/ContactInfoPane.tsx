@@ -398,8 +398,8 @@ export function ContactInfoPane({
               </button>
             </div>
 
-            {/* Block toggles (not applicable to repeaters) */}
-            {!isRepeater && (onToggleBlockedKey || onToggleBlockedName) && (
+            {/* Block toggles */}
+            {(onToggleBlockedKey || onToggleBlockedName) && (
               <div className="px-5 py-3 border-b border-border space-y-2">
                 {onToggleBlockedKey && (
                   <button

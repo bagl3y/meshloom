@@ -110,6 +110,8 @@ interface SidebarProps {
   /** Legacy global sort order, used only to seed per-section local preferences. */
   legacySortOrder?: SortOrder;
   isConversationNotificationsEnabled?: (type: 'channel' | 'contact', id: string) => boolean;
+  blockedKeys?: string[];
+  blockedNames?: string[];
 }
 
 type InitialSectionSortState = {
@@ -153,7 +155,16 @@ export function Sidebar({
   favorites,
   legacySortOrder,
   isConversationNotificationsEnabled,
+  blockedKeys = [],
+  blockedNames = [],
 }: SidebarProps) {
+  const isContactBlocked = useCallback(
+    (c: Contact) =>
+      blockedKeys.includes(c.public_key.toLowerCase()) ||
+      (c.name != null && blockedNames.includes(c.name)),
+    [blockedKeys, blockedNames]
+  );
+
   const [searchQuery, setSearchQuery] = useState('');
   const initialSectionSortState = useMemo(loadInitialSectionSortOrders, []);
   const [sectionSortOrders, setSectionSortOrders] = useState(initialSectionSortState.orders);
@@ -399,36 +410,42 @@ export function Sidebar({
   );
 
   const filteredNonRepeaterContacts = useMemo(
-    () =>
-      query
-        ? sortedNonRepeaterContacts.filter(
+    () => {
+      const visible = sortedNonRepeaterContacts.filter((c) => !isContactBlocked(c));
+      return query
+        ? visible.filter(
             (c) =>
               c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().includes(query)
           )
-        : sortedNonRepeaterContacts,
-    [sortedNonRepeaterContacts, query]
+        : visible;
+    },
+    [sortedNonRepeaterContacts, query, isContactBlocked]
   );
 
   const filteredRooms = useMemo(
-    () =>
-      query
-        ? sortedRooms.filter(
+    () => {
+      const visible = sortedRooms.filter((c) => !isContactBlocked(c));
+      return query
+        ? visible.filter(
             (c) =>
               c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().includes(query)
           )
-        : sortedRooms,
-    [sortedRooms, query]
+        : visible;
+    },
+    [sortedRooms, query, isContactBlocked]
   );
 
   const filteredRepeaters = useMemo(
-    () =>
-      query
-        ? sortedRepeaters.filter(
+    () => {
+      const visible = sortedRepeaters.filter((c) => !isContactBlocked(c));
+      return query
+        ? visible.filter(
             (c) =>
               c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().includes(query)
           )
-        : sortedRepeaters,
-    [sortedRepeaters, query]
+        : visible;
+    },
+    [sortedRepeaters, query, isContactBlocked]
   );
 
   // Expand sections while searching; restore prior collapse state when search ends.
