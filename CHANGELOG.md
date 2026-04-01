@@ -1,3 +1,10 @@
+## [3.6.4] - 2026-03-31
+
+Feature: Clarify New Channel/Contact button
+Bugfix: Rename "Best RSSI" to "Strongest Neighbor"
+Bugfix: Improve layout of Trace pane
+Misc: Docker setup improvements
+
 ## [3.6.3] - 2026-03-30
 
 Feature: Add multi-byte trace
