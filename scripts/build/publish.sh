@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -10,73 +10,63 @@ NC='\033[0m' # No Color
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-RELEASE_WORK_DIR=""
-RELEASE_BUNDLE_DIR_NAME="Remote-Terminal-for-MeshCore"
-RELEASE_ASSET=""
-DOCKER_IMAGE="jkingsman/remoteterm-meshcore"
-DOCKER_PLATFORMS="linux/amd64,linux/arm64"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=scripts/build/release_common.sh
+source "$SCRIPT_DIR/release_common.sh"
 
-cleanup_release_build_artifacts() {
-    if [ -d "$REPO_ROOT/frontend/prebuilt" ]; then
-        rm -rf "$REPO_ROOT/frontend/prebuilt"
-    fi
-    if [ -n "$RELEASE_WORK_DIR" ] && [ -d "$RELEASE_WORK_DIR" ]; then
-        rm -rf "$RELEASE_WORK_DIR"
-    fi
-    if [ -n "$RELEASE_ASSET" ] && [ -f "$REPO_ROOT/$RELEASE_ASSET" ]; then
-        rm -f "$REPO_ROOT/$RELEASE_ASSET"
-    fi
+DOCKER_IMAGE="docker.io/jkingsman/remoteterm-meshcore"
+DOCKER_PLATFORMS="linux/amd64,linux/arm64,linux/arm/v7"
+VERSION=""
+NOTES_FILE=""
+SKIP_QUALITY=0
+RELEASE_ASSET_PATH=""
+
+usage() {
+    cat <<'EOF'
+Usage: scripts/build/publish.sh [options]
+
+Options:
+  --version VERSION         Release version; prompts if omitted
+  --notes-file PATH         File containing changelog entry lines; prompts if omitted
+  --skip-quality            Skip ./scripts/quality/all_quality.sh
+  --help                    Show this message
+EOF
 }
 
-trap cleanup_release_build_artifacts EXIT
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --version)
+            VERSION="${2:-}"
+            shift 2
+            ;;
+        --notes-file)
+            NOTES_FILE="${2:-}"
+            shift 2
+            ;;
+        --skip-quality)
+            SKIP_QUALITY=1
+            shift
+            ;;
+        --help)
+            usage
+            exit 0
+            ;;
+        *)
+            usage >&2
+            release_die "Unknown argument: $1"
+            ;;
+    esac
+done
 
 echo -e "${YELLOW}=== RemoteTerm for MeshCore Publish Script ===${NC}"
 echo
 
-# Run backend linting and type checking
-echo -e "${YELLOW}Running backend lint (Ruff)...${NC}"
-uv run ruff check app/ tests/ --fix
-uv run ruff format app/ tests/
-# validate
-uv run ruff check app/ tests/
-uv run ruff format --check app/ tests/
-echo -e "${GREEN}Backend lint passed!${NC}"
-echo
-
-echo -e "${YELLOW}Running backend type check (Pyright)...${NC}"
-uv run pyright app/
-echo -e "${GREEN}Backend type check passed!${NC}"
-echo
-
-# Run backend tests
-echo -e "${YELLOW}Running backend tests...${NC}"
-PYTHONPATH=. uv run pytest tests/ -v
-echo -e "${GREEN}Backend tests passed!${NC}"
-echo
-
-# Run frontend linting and formatting check
-echo -e "${YELLOW}Running frontend lint (ESLint)...${NC}"
-cd "$REPO_ROOT/frontend"
-npm run lint
-echo -e "${GREEN}Frontend lint passed!${NC}"
-echo
-
-echo -e "${YELLOW}Checking frontend formatting (Prettier)...${NC}"
-npm run format:check
-echo -e "${GREEN}Frontend formatting OK!${NC}"
-echo
-
-# Run frontend tests and build
-echo -e "${YELLOW}Running frontend tests...${NC}"
-npm run test:run
-echo -e "${GREEN}Frontend tests passed!${NC}"
-echo
-
-echo -e "${YELLOW}Building frontend...${NC}"
-npm run build
-echo -e "${GREEN}Frontend build complete!${NC}"
-cd "$REPO_ROOT"
-echo
+if [ "$SKIP_QUALITY" -eq 0 ]; then
+    echo -e "${YELLOW}Running repo quality gate...${NC}"
+    ./scripts/quality/all_quality.sh
+    echo -e "${GREEN}Quality gate passed!${NC}"
+    echo
+fi
 
 echo -e "${YELLOW}Regenerating LICENSES.md...${NC}"
 bash scripts/build/collect_licenses.sh LICENSES.md
@@ -91,13 +81,11 @@ echo -n "  package.json:   "
 grep '"version"' frontend/package.json | head -1 | sed 's/.*"version": "\(.*\)".*/\1/'
 echo
 
-read -r -p "Enter new version (e.g., 1.2.3): " VERSION
-VERSION="$(printf '%s' "$VERSION" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
-
-if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo -e "${RED}Error: Version must be in format X.Y.Z${NC}"
-    exit 1
+if [ -z "$VERSION" ]; then
+    read -r -p "Enter new version (e.g., 1.2.3): " VERSION
 fi
+VERSION="$(release_trim "$VERSION")"
+release_validate_version "$VERSION"
 
 # Update pyproject.toml
 echo -e "${YELLOW}Updating pyproject.toml...${NC}"
@@ -115,18 +103,28 @@ echo -e "${GREEN}Version updated to $VERSION${NC}"
 echo
 
 # Prompt for changelog entry
-echo -e "${YELLOW}Enter changelog entry for version $VERSION${NC}"
-echo -e "${YELLOW}(Enter your changes, then press Ctrl+D when done):${NC}"
-echo
-
-CHANGELOG_ENTRY=$(cat)
-
-format_changelog_entry() {
-    local entry="$1"
-    printf '%s\n' "$entry" | sed '/^[[:space:]]*$/d; s/^[[:space:]]*//; s/^/* /'
+RAW_CHANGELOG_INPUT_FILE="$(mktemp)"
+FORMATTED_CHANGELOG_INPUT_FILE="$(mktemp)"
+cleanup() {
+    rm -f "$RAW_CHANGELOG_INPUT_FILE" "$FORMATTED_CHANGELOG_INPUT_FILE"
+    rm -rf "${REPO_ROOT:?}/frontend/prebuilt"
+    if [ -n "$RELEASE_ASSET_PATH" ] && [ -f "$RELEASE_ASSET_PATH" ]; then
+        rm -f "$RELEASE_ASSET_PATH"
+    fi
 }
+trap cleanup EXIT
 
-FORMATTED_CHANGELOG_ENTRY=$(format_changelog_entry "$CHANGELOG_ENTRY")
+if [ -n "$NOTES_FILE" ]; then
+    cp "$NOTES_FILE" "$RAW_CHANGELOG_INPUT_FILE"
+else
+    echo -e "${YELLOW}Enter changelog entry for version $VERSION${NC}"
+    echo -e "${YELLOW}(Enter your changes, then press Ctrl+D when done):${NC}"
+    echo
+    cat > "$RAW_CHANGELOG_INPUT_FILE"
+fi
+
+release_format_markdown_list "$RAW_CHANGELOG_INPUT_FILE" "$FORMATTED_CHANGELOG_INPUT_FILE"
+[ -s "$FORMATTED_CHANGELOG_INPUT_FILE" ] || release_die "Changelog entry cannot be empty"
 
 # Create changelog entry with date
 DATE=$(date +%Y-%m-%d)
@@ -142,7 +140,7 @@ if [ -f CHANGELOG.md ]; then
             echo
             echo "$CHANGELOG_HEADER"
             echo
-            echo "$FORMATTED_CHANGELOG_ENTRY"
+            cat "$FORMATTED_CHANGELOG_INPUT_FILE"
             echo
             tail -n +2 CHANGELOG.md
         } > CHANGELOG.md.tmp
@@ -152,7 +150,7 @@ if [ -f CHANGELOG.md ]; then
         {
             echo "$CHANGELOG_HEADER"
             echo
-            echo "$FORMATTED_CHANGELOG_ENTRY"
+            cat "$FORMATTED_CHANGELOG_INPUT_FILE"
             echo
             cat CHANGELOG.md
         } > CHANGELOG.md.tmp
@@ -165,7 +163,7 @@ else
         echo
         echo "$CHANGELOG_HEADER"
         echo
-        echo "$FORMATTED_CHANGELOG_ENTRY"
+        cat "$FORMATTED_CHANGELOG_INPUT_FILE"
     } > CHANGELOG.md
 fi
 
@@ -185,93 +183,33 @@ echo
 GIT_HASH=$(git rev-parse --short HEAD)
 FULL_GIT_HASH=$(git rev-parse HEAD)
 RELEASE_ASSET="remoteterm-prebuilt-frontend-v${VERSION}-${GIT_HASH}.zip"
+RELEASE_ASSET_PATH="$REPO_ROOT/$RELEASE_ASSET"
 
 echo -e "${YELLOW}Building packaged frontend artifact...${NC}"
-cd "$REPO_ROOT/frontend"
-npm run packaged-build
-cd "$REPO_ROOT"
-
-RELEASE_WORK_DIR=$(mktemp -d)
-RELEASE_BUNDLE_DIR="$RELEASE_WORK_DIR/$RELEASE_BUNDLE_DIR_NAME"
-mkdir -p "$RELEASE_BUNDLE_DIR"
-git archive "$FULL_GIT_HASH" | tar -x -C "$RELEASE_BUNDLE_DIR"
-mkdir -p "$RELEASE_BUNDLE_DIR/frontend"
-cp -R "$REPO_ROOT/frontend/prebuilt" "$RELEASE_BUNDLE_DIR/frontend/prebuilt"
-cat > "$RELEASE_BUNDLE_DIR/build_info.json" <<EOF
-{
-  "version": "$VERSION",
-  "commit_hash": "$GIT_HASH",
-  "build_source": "prebuilt-release"
-}
-EOF
-rm -f "$REPO_ROOT/$RELEASE_ASSET"
-(
-    cd "$RELEASE_WORK_DIR"
-    zip -qr "$REPO_ROOT/$RELEASE_ASSET" "$(basename "$RELEASE_BUNDLE_DIR")"
-)
+scripts/build/package_release_artifact.sh \
+    --version "$VERSION" \
+    --git-hash "$GIT_HASH" \
+    --full-git-hash "$FULL_GIT_HASH" \
+    --output "$RELEASE_ASSET_PATH"
 echo -e "${GREEN}Packaged release artifact created: $RELEASE_ASSET${NC}"
 echo
 
 # Build and push multi-arch docker image
 echo -e "${YELLOW}Building and pushing multi-arch Docker image...${NC}"
-if ! docker buildx version >/dev/null 2>&1; then
-    echo -e "${RED}Error: docker buildx is required for multi-arch Docker builds.${NC}"
-    exit 1
-fi
-
-CURRENT_BUILDER="$(docker buildx inspect --format '{{ .Name }}' 2>/dev/null || true)"
-if [ -n "$CURRENT_BUILDER" ]; then
-    docker buildx inspect --bootstrap >/dev/null
-elif docker buildx inspect remoteterm-multiarch >/dev/null 2>&1; then
-    docker buildx use remoteterm-multiarch >/dev/null
-    docker buildx inspect --bootstrap >/dev/null
-else
-    docker buildx create --name remoteterm-multiarch --use >/dev/null
-    docker buildx inspect --bootstrap >/dev/null
-fi
-
-docker buildx build \
-    --platform "$DOCKER_PLATFORMS" \
-    --build-arg COMMIT_HASH="$GIT_HASH" \
-    -t "$DOCKER_IMAGE:latest" \
-    -t "$DOCKER_IMAGE:$VERSION" \
-    -t "$DOCKER_IMAGE:$GIT_HASH" \
-    --push \
-    .
+scripts/build/push_docker_multiarch.sh \
+    --version "$VERSION" \
+    --git-hash "$GIT_HASH" \
+    --image "$DOCKER_IMAGE" \
+    --platforms "$DOCKER_PLATFORMS"
 echo -e "${GREEN}Multi-arch Docker build + push complete!${NC}"
 echo
 
 # Create GitHub release using the changelog notes for this version.
 echo -e "${YELLOW}Creating GitHub release...${NC}"
-RELEASE_NOTES_FILE=$(mktemp)
-{
-    echo "$CHANGELOG_HEADER"
-    echo
-    echo "$FORMATTED_CHANGELOG_ENTRY"
-} > "$RELEASE_NOTES_FILE"
-
-# Create and push the release tag first so GitHub release creation does not
-# depend on resolving a symbolic ref like HEAD on the remote side. Use the same
-# changelog-derived notes for the annotated tag message.
-if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
-    echo -e "${YELLOW}Tag $VERSION already exists locally; reusing it.${NC}"
-else
-    git tag -a "$VERSION" "$FULL_GIT_HASH" -F "$RELEASE_NOTES_FILE"
-fi
-
-if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
-    echo -e "${YELLOW}Tag $VERSION already exists on origin; not pushing it again.${NC}"
-else
-    git push origin "$VERSION"
-fi
-
-gh release create "$VERSION" \
-    "$RELEASE_ASSET" \
-    --title "$VERSION" \
-    --notes-file "$RELEASE_NOTES_FILE" \
-    --verify-tag
-
-rm -f "$RELEASE_NOTES_FILE"
+scripts/build/create_github_release.sh \
+    --version "$VERSION" \
+    --full-git-hash "$FULL_GIT_HASH" \
+    --asset "$RELEASE_ASSET_PATH"
 echo -e "${GREEN}GitHub release created!${NC}"
 echo
 
@@ -285,6 +223,7 @@ echo -e "  - $DOCKER_IMAGE:$GIT_HASH"
 echo -e "Platforms:"
 echo -e "  - linux/amd64"
 echo -e "  - linux/arm64"
+echo -e "  - linux/arm/v7"
 echo -e "GitHub release:"
 echo -e "  - $VERSION"
 echo -e "Release artifact:"

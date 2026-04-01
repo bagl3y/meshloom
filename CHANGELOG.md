@@ -1,3 +1,7 @@
+## [3.6.6] - 2026-03-31
+
+* Misc: Please I'm begging for the build scripts to be working now
+
 ## [3.6.5] - 2026-03-31
 
 * Bugfix: Maybe fix problem with publish script
