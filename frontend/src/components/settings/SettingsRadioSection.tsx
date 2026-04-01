@@ -390,9 +390,9 @@ export function SettingsRadioSection({
 
   return (
     <div className={className}>
-      {/* Connection display */}
+      {/* ── Connection ── */}
       <div className="space-y-3">
-        <Label>Connection</Label>
+        <Label className="text-base">Connection</Label>
         <div className="flex items-center gap-2">
           <div
             className={`w-2 h-2 rounded-full ${
@@ -428,15 +428,58 @@ export function SettingsRadioSection({
         </p>
       </div>
 
-      {/* Radio Name */}
+      <Separator />
+
+      {/* ── Identity ── */}
+      <div className="space-y-2">
+        <Label className="text-base">Identity</Label>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="name">Radio Name</Label>
         <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="public-key">Public Key</Label>
+        <Input id="public-key" value={config.public_key} disabled className="font-mono text-xs" />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="private-key">Set Private Key (write-only)</Label>
+        <Input
+          id="private-key"
+          type="password"
+          autoComplete="off"
+          value={privateKey}
+          onChange={(e) => setPrivateKey(e.target.value)}
+          placeholder="64-character hex private key"
+        />
+        <Button
+          onClick={handleSetPrivateKey}
+          disabled={identityBusy || identityRebooting || !privateKey.trim()}
+          className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
+          variant="outline"
+        >
+          {identityBusy || identityRebooting
+            ? 'Setting & Rebooting...'
+            : 'Set Private Key & Reboot'}
+        </Button>
+      </div>
+
+      {identityError && (
+        <div className="text-sm text-destructive" role="alert">
+          {identityError}
+        </div>
+      )}
+
       <Separator />
 
-      {/* Radio Config */}
+      {/* ── Radio Parameters ── */}
+      <div className="space-y-2">
+        <Label className="text-base">Radio Parameters</Label>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="preset">Preset</Label>
         <select
@@ -518,11 +561,36 @@ export function SettingsRadioSection({
         </div>
       </div>
 
+      {config.path_hash_mode_supported && (
+        <div className="space-y-2">
+          <Label htmlFor="path-hash-mode">Path Hash Mode</Label>
+          <select
+            id="path-hash-mode"
+            value={pathHashMode}
+            onChange={(e) => setPathHashMode(e.target.value)}
+            className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          >
+            <option value="0">1 byte (default)</option>
+            <option value="1">2 bytes</option>
+            <option value="2">3 bytes</option>
+          </select>
+          <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-xs text-warning">
+            <p className="font-semibold mb-1">Compatibility Warning</p>
+            <p>
+              ALL nodes along a message&apos;s route &mdash; your radio, every repeater, and the
+              recipient &mdash; must be running firmware that supports the selected mode. Messages
+              sent with 2-byte or 3-byte hops will be dropped by any node on older firmware.
+            </p>
+          </div>
+        </div>
+      )}
+
       <Separator />
 
+      {/* ── Location ── */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label>Location</Label>
+          <Label className="text-base">Location</Label>
           <Button
             type="button"
             variant="outline"
@@ -585,52 +653,7 @@ export function SettingsRadioSection({
             library.
           </p>
         </div>
-        <div className="space-y-2">
-          <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
-            <Checkbox
-              id="multi-acks-enabled"
-              checked={multiAcksEnabled}
-              onCheckedChange={(checked) => setMultiAcksEnabled(checked === true)}
-              className="mt-0.5"
-            />
-            <div className="space-y-1">
-              <Label htmlFor="multi-acks-enabled">Extra Direct ACK Transmission</Label>
-              <p className="text-xs text-muted-foreground">
-                When enabled, the radio sends one extra direct ACK transmission before the normal
-                ACK for received direct messages. This is a firmware-level receive behavior, not a
-                RemoteTerm retry setting.
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
-
-      {config.path_hash_mode_supported && (
-        <>
-          <Separator />
-          <div className="space-y-2">
-            <Label htmlFor="path-hash-mode">Path Hash Mode</Label>
-            <select
-              id="path-hash-mode"
-              value={pathHashMode}
-              onChange={(e) => setPathHashMode(e.target.value)}
-              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            >
-              <option value="0">1 byte (default)</option>
-              <option value="1">2 bytes</option>
-              <option value="2">3 bytes</option>
-            </select>
-            <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-xs text-warning">
-              <p className="font-semibold mb-1">Compatibility Warning</p>
-              <p>
-                ALL nodes along a message&apos;s route &mdash; your radio, every repeater, and the
-                recipient &mdash; must be running firmware that supports the selected mode. Messages
-                sent with 2-byte or 3-byte hops will be dropped by any node on older firmware.
-              </p>
-            </div>
-          </div>
-        </>
-      )}
 
       {error && (
         <div className="text-sm text-destructive" role="alert">
@@ -657,64 +680,28 @@ export function SettingsRadioSection({
 
       <Separator />
 
-      {/* Keys */}
+      {/* ── Messaging ── */}
       <div className="space-y-2">
-        <Label htmlFor="public-key">Public Key</Label>
-        <Input id="public-key" value={config.public_key} disabled className="font-mono text-xs" />
+        <Label className="text-base">Messaging</Label>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="private-key">Set Private Key (write-only)</Label>
-        <Input
-          id="private-key"
-          type="password"
-          autoComplete="off"
-          value={privateKey}
-          onChange={(e) => setPrivateKey(e.target.value)}
-          placeholder="64-character hex private key"
-        />
-        <Button
-          onClick={handleSetPrivateKey}
-          disabled={identityBusy || identityRebooting || !privateKey.trim()}
-          className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
-          variant="outline"
-        >
-          {identityBusy || identityRebooting
-            ? 'Setting & Rebooting...'
-            : 'Set Private Key & Reboot'}
-        </Button>
-      </div>
-
-      {identityError && (
-        <div className="text-sm text-destructive" role="alert">
-          {identityError}
-        </div>
-      )}
-
-      <Separator />
-
-      {/* Flood & Advert Control */}
-      <div className="space-y-2">
-        <Label className="text-base">Flood & Advert Control</Label>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="advert-interval">Periodic Advertising Interval</Label>
-        <div className="flex items-center gap-2">
-          <Input
-            id="advert-interval"
-            type="number"
-            min="0"
-            value={advertIntervalHours}
-            onChange={(e) => setAdvertIntervalHours(e.target.value)}
-            className="w-28"
+        <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+          <Checkbox
+            id="multi-acks-enabled"
+            checked={multiAcksEnabled}
+            onCheckedChange={(checked) => setMultiAcksEnabled(checked === true)}
+            className="mt-0.5"
           />
-          <span className="text-sm text-muted-foreground">hours (0 = off)</span>
+          <div className="space-y-1">
+            <Label htmlFor="multi-acks-enabled">Extra Direct ACK Transmission</Label>
+            <p className="text-xs text-muted-foreground">
+              When enabled, the radio sends one extra direct ACK transmission before the normal ACK
+              for received direct messages. This is a firmware-level receive behavior, not a
+              RemoteTerm retry setting.
+            </p>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground">
-          How often to automatically advertise presence. Set to 0 to disable. Minimum: 1 hour.
-          Recommended: 24 hours or higher.
-        </p>
       </div>
 
       <div className="space-y-2">
@@ -767,8 +754,28 @@ export function SettingsRadioSection({
 
       <Separator />
 
+      {/* ── Advertising & Discovery ── */}
       <div className="space-y-2">
-        <Label className="text-base">Hear &amp; Be Heard</Label>
+        <Label className="text-base">Advertising &amp; Discovery</Label>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="advert-interval">Periodic Advertising Interval</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            id="advert-interval"
+            type="number"
+            min="0"
+            value={advertIntervalHours}
+            onChange={(e) => setAdvertIntervalHours(e.target.value)}
+            className="w-28"
+          />
+          <span className="text-sm text-muted-foreground">hours (0 = off)</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          How often to automatically advertise presence. Set to 0 to disable. Minimum: 1 hour.
+          Recommended: 24 hours or higher.
+        </p>
       </div>
 
       <div className="space-y-2">

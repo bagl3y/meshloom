@@ -331,10 +331,13 @@ export function BulkDeleteContactsModal({
                   ? 'Deleting...'
                   : `I confirm permanent, irrevocable deletion of all listed nodes above, totalling ${[
                       contactCount > 0 && `${contactCount} contact${contactCount === 1 ? '' : 's'}`,
-                      repeaterCount > 0 && `${repeaterCount} repeater${repeaterCount === 1 ? '' : 's'}`,
+                      repeaterCount > 0 &&
+                        `${repeaterCount} repeater${repeaterCount === 1 ? '' : 's'}`,
                       roomCount > 0 && `${roomCount} room${roomCount === 1 ? '' : 's'}`,
                       sensorCount > 0 && `${sensorCount} sensor${sensorCount === 1 ? '' : 's'}`,
-                    ].filter(Boolean).join(', ')}, spanning creation dates from ${minDate} to ${maxDate}`}
+                    ]
+                      .filter(Boolean)
+                      .join(', ')}, spanning creation dates from ${minDate} to ${maxDate}`}
               </Button>
               <Button variant="secondary" onClick={() => setStep('select')} disabled={deleting}>
                 Back
