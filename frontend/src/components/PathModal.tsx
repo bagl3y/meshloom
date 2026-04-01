@@ -406,9 +406,12 @@ interface HopNodeProps {
   distanceUnit: DistanceUnit;
 }
 
+const AMBIGUOUS_MATCH_PREVIEW_LIMIT = 3;
+
 function HopNode({ hop, hopNumber, prevLocation, distanceUnit }: HopNodeProps) {
   const isAmbiguous = hop.matches.length > 1;
   const isUnknown = hop.matches.length === 0;
+  const [expanded, setExpanded] = useState(false);
 
   // Calculate distance from previous location for a contact
   // Returns null if prev location unknown/ambiguous or contact has no valid location
@@ -447,27 +450,38 @@ function HopNode({ hop, hopNumber, prevLocation, distanceUnit }: HopNodeProps) {
           <div className="font-medium text-muted-foreground">&lt;UNKNOWN&gt;</div>
         ) : isAmbiguous ? (
           <div>
-            {hop.matches.map((contact) => {
-              const dist = getDistanceForContact(contact);
-              const hasLocation = isValidLocation(contact.lat, contact.lon);
-              return (
-                <div key={contact.public_key} className="font-medium truncate">
-                  {contact.name || contact.public_key.slice(0, 12)}
-                  {dist !== null && (
-                    <span className="text-xs text-muted-foreground ml-1">
-                      - {formatDistance(dist, distanceUnit)}
-                    </span>
-                  )}
-                  {hasLocation && (
-                    <CoordinateLink
-                      lat={contact.lat!}
-                      lon={contact.lon!}
-                      publicKey={contact.public_key}
-                    />
-                  )}
-                </div>
-              );
-            })}
+            {(expanded ? hop.matches : hop.matches.slice(0, AMBIGUOUS_MATCH_PREVIEW_LIMIT)).map(
+              (contact) => {
+                const dist = getDistanceForContact(contact);
+                const hasLocation = isValidLocation(contact.lat, contact.lon);
+                return (
+                  <div key={contact.public_key} className="font-medium truncate">
+                    {contact.name || contact.public_key.slice(0, 12)}
+                    {dist !== null && (
+                      <span className="text-xs text-muted-foreground ml-1">
+                        - {formatDistance(dist, distanceUnit)}
+                      </span>
+                    )}
+                    {hasLocation && (
+                      <CoordinateLink
+                        lat={contact.lat!}
+                        lon={contact.lon!}
+                        publicKey={contact.public_key}
+                      />
+                    )}
+                  </div>
+                );
+              }
+            )}
+            {!expanded && hop.matches.length > AMBIGUOUS_MATCH_PREVIEW_LIMIT && (
+              <button
+                type="button"
+                className="text-xs text-primary hover:underline cursor-pointer"
+                onClick={() => setExpanded(true)}
+              >
+                (and {hop.matches.length - AMBIGUOUS_MATCH_PREVIEW_LIMIT} more)
+              </button>
+            )}
           </div>
         ) : (
           <div className="font-medium truncate">
