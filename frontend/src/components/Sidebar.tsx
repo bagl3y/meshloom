@@ -860,7 +860,7 @@ export function Sidebar({
           onClick={onNewMessage}
           title="Add channel or contact"
           aria-label="Add channel or contact"
-          className="h-8 w-full justify-start gap-2 px-3 text-[13px]"
+          className="h-8 w-full justify-start gap-2 border-primary/20 bg-primary/5 px-3 text-[13px] text-primary hover:bg-primary/10 hover:text-primary"
         >
           <SquarePen className="h-4 w-4" />
           <span>Add Channel/Contact</span>
