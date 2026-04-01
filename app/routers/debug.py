@@ -1,5 +1,8 @@
 import hashlib
 import logging
+import os
+import platform
+import struct
 import sys
 from datetime import datetime, timezone
 from typing import Any
@@ -32,6 +35,13 @@ LOG_COPY_BOUNDARY_PREFIX = [
     LOG_COPY_BOUNDARY_LINE,
     LOG_COPY_BOUNDARY_LINE,
 ]
+
+
+class DebugSystemInfo(BaseModel):
+    os: str
+    arch: str
+    arch_bits: int
+    total_ram_mb: int
 
 
 class DebugApplicationInfo(BaseModel):
@@ -95,12 +105,30 @@ class DebugDatabaseInfo(BaseModel):
 
 class DebugSnapshotResponse(BaseModel):
     captured_at: str
+    system: DebugSystemInfo
     application: DebugApplicationInfo
     health: HealthResponse
     runtime: DebugRuntimeInfo
     database: DebugDatabaseInfo
     radio_probe: DebugRadioProbe
     logs: list[str]
+
+
+def _build_system_info() -> DebugSystemInfo:
+    try:
+        # os.sysconf is available on Linux/macOS
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        page_count = os.sysconf("SC_PHYS_PAGES")
+        total_ram_mb = (page_size * page_count) // (1024 * 1024)
+    except (AttributeError, ValueError, OSError):
+        total_ram_mb = 0
+
+    return DebugSystemInfo(
+        os=f"{platform.system()} {platform.release()}",
+        arch=platform.machine(),
+        arch_bits=struct.calcsize("P") * 8,
+        total_ram_mb=total_ram_mb,
+    )
 
 
 def _build_application_info() -> DebugApplicationInfo:
@@ -272,6 +300,7 @@ async def debug_support_snapshot() -> DebugSnapshotResponse:
     )
     return DebugSnapshotResponse(
         captured_at=datetime.now(timezone.utc).isoformat(),
+        system=_build_system_info(),
         application=_build_application_info(),
         health=HealthResponse(**health_data),
         runtime=DebugRuntimeInfo(
