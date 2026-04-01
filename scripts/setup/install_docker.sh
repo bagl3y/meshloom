@@ -518,11 +518,11 @@ echo -e "${PURPLE}│ Run ${GREEN}${BOLD}sudo docker compose up -d${NC}${PURPLE}
 echo -e "${PURPLE}└───────────────────────────────────────────────┘${NC}"
 if [[ "$ENABLE_SNAKEOIL_TLS" =~ ^[Yy]$ ]]; then
     echo
-    echo -e "After the container starts, open ${CYAN}https://${LOCAL_ACCESS_IP}:8000${NC}."
+    echo -e "After the container starts, open ${CYAN}https://${LOCAL_ACCESS_IP}:8000${NC}. Note that this address may change if you use DHCP/have not configured a static IP for your host via your router."
     echo -e "${YELLOW}Expect an untrusted/self-signed certificate warning the first time you connect.${NC}"
 else
     echo
-    echo -e "After the container starts, open ${CYAN}http://${LOCAL_ACCESS_IP}:8000${NC}."
+    echo -e "After the container starts, open ${CYAN}http://${LOCAL_ACCESS_IP}:8000${NC}. Note that this address may change if you use DHCP/have not configured a static IP for your host via your router."
 fi
-echo "If the interface does not appear, follow the logs with:"
+echo "If the interface does not appear, follow the logs to view errors with:"
 echo "  sudo docker compose logs -f"
