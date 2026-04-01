@@ -30,28 +30,6 @@ cleanup_release_build_artifacts() {
 
 trap cleanup_release_build_artifacts EXIT
 
-ensure_buildx_builder() {
-    if ! docker buildx version >/dev/null 2>&1; then
-        echo -e "${RED}Error: docker buildx is required for multi-arch Docker builds.${NC}"
-        exit 1
-    fi
-
-    local current_builder
-    current_builder="$(docker buildx inspect --format '{{ .Name }}' 2>/dev/null || true)"
-
-    if [ -n "$current_builder" ]; then
-        docker buildx inspect --bootstrap >/dev/null
-        return
-    fi
-
-    if docker buildx inspect remoteterm-multiarch >/dev/null 2>&1; then
-        docker buildx use remoteterm-multiarch >/dev/null
-    else
-        docker buildx create --name remoteterm-multiarch --use >/dev/null
-    fi
-    docker buildx inspect --bootstrap >/dev/null
-}
-
 echo -e "${YELLOW}=== RemoteTerm for MeshCore Publish Script ===${NC}"
 echo
 
@@ -236,7 +214,22 @@ echo
 
 # Build and push multi-arch docker image
 echo -e "${YELLOW}Building and pushing multi-arch Docker image...${NC}"
-ensure_buildx_builder
+if ! docker buildx version >/dev/null 2>&1; then
+    echo -e "${RED}Error: docker buildx is required for multi-arch Docker builds.${NC}"
+    exit 1
+fi
+
+CURRENT_BUILDER="$(docker buildx inspect --format '{{ .Name }}' 2>/dev/null || true)"
+if [ -n "$CURRENT_BUILDER" ]; then
+    docker buildx inspect --bootstrap >/dev/null
+elif docker buildx inspect remoteterm-multiarch >/dev/null 2>&1; then
+    docker buildx use remoteterm-multiarch >/dev/null
+    docker buildx inspect --bootstrap >/dev/null
+else
+    docker buildx create --name remoteterm-multiarch --use >/dev/null
+    docker buildx inspect --bootstrap >/dev/null
+fi
+
 docker buildx build \
     --platform "$DOCKER_PLATFORMS" \
     --build-arg COMMIT_HASH="$GIT_HASH" \

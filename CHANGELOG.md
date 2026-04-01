@@ -1,3 +1,7 @@
+## [3.6.5] - 2026-03-31
+
+* Bugfix: Maybe fix problem with publish script
+
 ## [3.6.4] - 2026-03-31
 
 * Feature: Clarify New Channel/Contact button
