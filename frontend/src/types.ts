@@ -332,6 +332,7 @@ export interface AppSettings {
   flood_scope: string;
   blocked_keys: string[];
   blocked_names: string[];
+  discovery_blocked_types: number[];
 }
 
 export interface AppSettingsUpdate {
@@ -342,6 +343,7 @@ export interface AppSettingsUpdate {
   flood_scope?: string;
   blocked_keys?: string[];
   blocked_names?: string[];
+  discovery_blocked_types?: number[];
 }
 
 export interface MigratePreferencesRequest {

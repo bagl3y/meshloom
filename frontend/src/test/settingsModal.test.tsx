@@ -69,6 +69,7 @@ const baseSettings: AppSettings = {
   flood_scope: '',
   blocked_keys: [],
   blocked_names: [],
+  discovery_blocked_types: [],
 };
 
 function renderModal(overrides?: {

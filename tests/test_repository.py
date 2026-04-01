@@ -630,6 +630,7 @@ class TestAppSettingsRepository:
                 "flood_scope": "",
                 "blocked_keys": "[]",
                 "blocked_names": "[]",
+                "discovery_blocked_types": "[]",
             }
         )
         mock_conn.execute = AsyncMock(return_value=mock_cursor)

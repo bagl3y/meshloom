@@ -462,6 +462,20 @@ async def _process_advertisement(
         advert.device_role if advert.device_role > 0 else (existing.type if existing else 0)
     )
 
+    # Check discovery_blocked_types: skip new contacts whose type is blocked.
+    # Existing contacts are always updated (location, name, last_seen, etc.).
+    if existing is None and contact_type > 0:
+        from app.repository import AppSettingsRepository
+
+        settings = await AppSettingsRepository.get()
+        if contact_type in settings.discovery_blocked_types:
+            logger.debug(
+                "Skipping new contact %s: type %d is in discovery_blocked_types",
+                advert.public_key[:12],
+                contact_type,
+            )
+            return
+
     # Keep recent unique advert paths for all contacts.
     await ContactAdvertPathRepository.record_observation(
         public_key=advert.public_key.lower(),

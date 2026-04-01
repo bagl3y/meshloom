@@ -29,7 +29,7 @@ class AppSettingsRepository:
             SELECT max_radio_contacts, favorites, auto_decrypt_dm_on_advert,
                    sidebar_sort_order, last_message_times, preferences_migrated,
                    advert_interval, last_advert_time, flood_scope,
-                   blocked_keys, blocked_names
+                   blocked_keys, blocked_names, discovery_blocked_types
             FROM app_settings WHERE id = 1
             """
         )
@@ -81,6 +81,14 @@ class AppSettingsRepository:
             except (json.JSONDecodeError, TypeError):
                 blocked_names = []
 
+        # Parse discovery_blocked_types JSON
+        discovery_blocked_types: list[int] = []
+        if row["discovery_blocked_types"]:
+            try:
+                discovery_blocked_types = json.loads(row["discovery_blocked_types"])
+            except (json.JSONDecodeError, TypeError):
+                discovery_blocked_types = []
+
         # Validate sidebar_sort_order (fallback to "recent" if invalid)
         sort_order = row["sidebar_sort_order"]
         if sort_order not in ("recent", "alpha"):
@@ -98,6 +106,7 @@ class AppSettingsRepository:
             flood_scope=row["flood_scope"] or "",
             blocked_keys=blocked_keys,
             blocked_names=blocked_names,
+            discovery_blocked_types=discovery_blocked_types,
         )
 
     @staticmethod
@@ -113,6 +122,7 @@ class AppSettingsRepository:
         flood_scope: str | None = None,
         blocked_keys: list[str] | None = None,
         blocked_names: list[str] | None = None,
+        discovery_blocked_types: list[int] | None = None,
     ) -> AppSettings:
         """Update app settings. Only provided fields are updated."""
         updates = []
@@ -162,6 +172,10 @@ class AppSettingsRepository:
         if blocked_names is not None:
             updates.append("blocked_names = ?")
             params.append(json.dumps(blocked_names))
+
+        if discovery_blocked_types is not None:
+            updates.append("discovery_blocked_types = ?")
+            params.append(json.dumps(discovery_blocked_types))
 
         if updates:
             query = f"UPDATE app_settings SET {', '.join(updates)} WHERE id = 1"

@@ -48,6 +48,13 @@ class AppSettingsUpdate(BaseModel):
         default=None,
         description="Display names whose messages are hidden from the UI",
     )
+    discovery_blocked_types: list[int] | None = Field(
+        default=None,
+        description=(
+            "Contact type codes (1=Client, 2=Repeater, 3=Room, 4=Sensor) whose "
+            "advertisements should not create new contacts"
+        ),
+    )
 
 
 class BlockKeyRequest(BaseModel):
@@ -121,6 +128,12 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
         kwargs["blocked_keys"] = [k.lower() for k in update.blocked_keys]
     if update.blocked_names is not None:
         kwargs["blocked_names"] = update.blocked_names
+
+    # Discovery blocked types
+    if update.discovery_blocked_types is not None:
+        # Only allow valid contact type codes (1-4)
+        valid = [t for t in update.discovery_blocked_types if t in (1, 2, 3, 4)]
+        kwargs["discovery_blocked_types"] = sorted(set(valid))
 
     # Flood scope
     flood_scope_changed = False

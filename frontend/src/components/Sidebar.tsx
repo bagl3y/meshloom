@@ -409,44 +409,32 @@ export function Sidebar({
     [sortedChannels, query]
   );
 
-  const filteredNonRepeaterContacts = useMemo(
-    () => {
-      const visible = sortedNonRepeaterContacts.filter((c) => !isContactBlocked(c));
-      return query
-        ? visible.filter(
-            (c) =>
-              c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().includes(query)
-          )
-        : visible;
-    },
-    [sortedNonRepeaterContacts, query, isContactBlocked]
-  );
+  const filteredNonRepeaterContacts = useMemo(() => {
+    const visible = sortedNonRepeaterContacts.filter((c) => !isContactBlocked(c));
+    return query
+      ? visible.filter(
+          (c) => c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().includes(query)
+        )
+      : visible;
+  }, [sortedNonRepeaterContacts, query, isContactBlocked]);
 
-  const filteredRooms = useMemo(
-    () => {
-      const visible = sortedRooms.filter((c) => !isContactBlocked(c));
-      return query
-        ? visible.filter(
-            (c) =>
-              c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().includes(query)
-          )
-        : visible;
-    },
-    [sortedRooms, query, isContactBlocked]
-  );
+  const filteredRooms = useMemo(() => {
+    const visible = sortedRooms.filter((c) => !isContactBlocked(c));
+    return query
+      ? visible.filter(
+          (c) => c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().includes(query)
+        )
+      : visible;
+  }, [sortedRooms, query, isContactBlocked]);
 
-  const filteredRepeaters = useMemo(
-    () => {
-      const visible = sortedRepeaters.filter((c) => !isContactBlocked(c));
-      return query
-        ? visible.filter(
-            (c) =>
-              c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().includes(query)
-          )
-        : visible;
-    },
-    [sortedRepeaters, query, isContactBlocked]
-  );
+  const filteredRepeaters = useMemo(() => {
+    const visible = sortedRepeaters.filter((c) => !isContactBlocked(c));
+    return query
+      ? visible.filter(
+          (c) => c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().includes(query)
+        )
+      : visible;
+  }, [sortedRepeaters, query, isContactBlocked]);
 
   // Expand sections while searching; restore prior collapse state when search ends.
   useEffect(() => {

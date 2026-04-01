@@ -840,6 +840,13 @@ class AppSettings(BaseModel):
         default_factory=list,
         description="Display names whose messages are hidden from the UI",
     )
+    discovery_blocked_types: list[int] = Field(
+        default_factory=list,
+        description=(
+            "Contact type codes (1=Client, 2=Repeater, 3=Room, 4=Sensor) whose "
+            "advertisements should not create new contacts; existing contacts are still updated"
+        ),
+    )
 
 
 class FanoutConfig(BaseModel):

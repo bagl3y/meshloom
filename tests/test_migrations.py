@@ -1247,8 +1247,8 @@ class TestMigration039:
 
             applied = await run_migrations(conn)
 
-            assert applied == 9
-            assert await get_version(conn) == 47
+            assert applied == 10
+            assert await get_version(conn) == 48
 
             cursor = await conn.execute(
                 """
@@ -1319,8 +1319,8 @@ class TestMigration039:
 
             applied = await run_migrations(conn)
 
-            assert applied == 9
-            assert await get_version(conn) == 47
+            assert applied == 10
+            assert await get_version(conn) == 48
 
             cursor = await conn.execute(
                 """
@@ -1386,8 +1386,8 @@ class TestMigration039:
 
             applied = await run_migrations(conn)
 
-            assert applied == 3
-            assert await get_version(conn) == 47
+            assert applied == 4
+            assert await get_version(conn) == 48
 
             cursor = await conn.execute(
                 """
@@ -1439,8 +1439,8 @@ class TestMigration040:
 
             applied = await run_migrations(conn)
 
-            assert applied == 8
-            assert await get_version(conn) == 47
+            assert applied == 9
+            assert await get_version(conn) == 48
 
             await conn.execute(
                 """
@@ -1501,8 +1501,8 @@ class TestMigration041:
 
             applied = await run_migrations(conn)
 
-            assert applied == 7
-            assert await get_version(conn) == 47
+            assert applied == 8
+            assert await get_version(conn) == 48
 
             await conn.execute(
                 """
@@ -1554,8 +1554,8 @@ class TestMigration042:
 
             applied = await run_migrations(conn)
 
-            assert applied == 6
-            assert await get_version(conn) == 47
+            assert applied == 7
+            assert await get_version(conn) == 48
 
             await conn.execute(
                 """
@@ -1694,8 +1694,8 @@ class TestMigration046:
 
             applied = await run_migrations(conn)
 
-            assert applied == 2
-            assert await get_version(conn) == 47
+            assert applied == 3
+            assert await get_version(conn) == 48
 
             cursor = await conn.execute(
                 """
@@ -1788,8 +1788,8 @@ class TestMigration047:
 
             applied = await run_migrations(conn)
 
-            assert applied == 1
-            assert await get_version(conn) == 47
+            assert applied == 2
+            assert await get_version(conn) == 48
 
             cursor = await conn.execute(
                 """

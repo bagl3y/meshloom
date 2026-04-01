@@ -367,6 +367,13 @@ async def run_migrations(conn: aiosqlite.Connection) -> int:
         await set_version(conn, 47)
         applied += 1
 
+    # Migration 48: Add discovery_blocked_types column to app_settings
+    if version < 48:
+        logger.info("Applying migration 48: add discovery_blocked_types to app_settings")
+        await _migrate_048_discovery_blocked_types(conn)
+        await set_version(conn, 48)
+        applied += 1
+
     if applied > 0:
         logger.info(
             "Applied %d migration(s), schema now at version %d", applied, await get_version(conn)
@@ -2908,4 +2915,26 @@ async def _migrate_047_add_statistics_indexes(conn: aiosqlite.Connection) -> Non
                 ON messages(type, received_at, conversation_key)
                 """
             )
+    await conn.commit()
+
+
+async def _migrate_048_discovery_blocked_types(conn: aiosqlite.Connection) -> None:
+    """Add discovery_blocked_types column to app_settings.
+
+    Stores a JSON array of integer contact type codes (1=Client, 2=Repeater,
+    3=Room, 4=Sensor) whose advertisements should not create new contacts.
+    Empty list means all types are accepted.
+    """
+    try:
+        await conn.execute(
+            "ALTER TABLE app_settings ADD COLUMN discovery_blocked_types TEXT DEFAULT '[]'"
+        )
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "duplicate column" in error_msg:
+            logger.debug("discovery_blocked_types column already exists, skipping")
+        elif "no such table" in error_msg:
+            logger.debug("app_settings table not ready, skipping discovery_blocked_types migration")
+        else:
+            raise
     await conn.commit()

@@ -33,12 +33,14 @@ export function SettingsDatabaseSection({
   const [cleaning, setCleaning] = useState(false);
   const [purgingDecryptedRaw, setPurgingDecryptedRaw] = useState(false);
   const [autoDecryptOnAdvert, setAutoDecryptOnAdvert] = useState(false);
+  const [discoveryBlockedTypes, setDiscoveryBlockedTypes] = useState<number[]>([]);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setAutoDecryptOnAdvert(appSettings.auto_decrypt_dm_on_advert);
+    setDiscoveryBlockedTypes(appSettings.discovery_blocked_types ?? []);
   }, [appSettings]);
 
   const handleCleanup = async () => {
@@ -92,7 +94,15 @@ export function SettingsDatabaseSection({
     setError(null);
 
     try {
-      await onSaveAppSettings({ auto_decrypt_dm_on_advert: autoDecryptOnAdvert });
+      const update: AppSettingsUpdate = { auto_decrypt_dm_on_advert: autoDecryptOnAdvert };
+      const currentBlocked = appSettings.discovery_blocked_types ?? [];
+      if (
+        discoveryBlockedTypes.length !== currentBlocked.length ||
+        discoveryBlockedTypes.some((t) => !currentBlocked.includes(t))
+      ) {
+        update.discovery_blocked_types = discoveryBlockedTypes;
+      }
+      await onSaveAppSettings(update);
       toast.success('Database settings saved');
     } catch (err) {
       console.error('Failed to save database settings:', err);
@@ -265,6 +275,54 @@ export function SettingsDatabaseSection({
               </div>
             )}
           </div>
+        )}
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <Label>Block Discovery of New Node Types</Label>
+        <p className="text-xs text-muted-foreground">
+          Checked types will be ignored when heard via advertisement. Existing contacts of these
+          types are still updated. This does not affect contacts added manually or via DM.
+        </p>
+        <div className="space-y-1.5">
+          {(
+            [
+              [1, 'Block clients'],
+              [2, 'Block repeaters'],
+              [3, 'Block room servers'],
+              [4, 'Block sensors'],
+            ] as const
+          ).map(([typeCode, label]) => {
+            const checked = discoveryBlockedTypes.includes(typeCode);
+            return (
+              <label key={typeCode} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() =>
+                    setDiscoveryBlockedTypes((prev) =>
+                      checked ? prev.filter((t) => t !== typeCode) : [...prev, typeCode]
+                    )
+                  }
+                  className="rounded border-input"
+                />
+                {label}
+              </label>
+            );
+          })}
+        </div>
+        {discoveryBlockedTypes.length > 0 && (
+          <p className="text-xs text-warning">
+            New{' '}
+            {discoveryBlockedTypes
+              .map((t) =>
+                t === 1 ? 'clients' : t === 2 ? 'repeaters' : t === 3 ? 'room servers' : 'sensors'
+              )
+              .join(', ')}{' '}
+            heard via advertisement will not be added to your contact list.
+          </p>
         )}
       </div>
 
