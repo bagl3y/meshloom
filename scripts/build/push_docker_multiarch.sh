@@ -13,7 +13,7 @@ Options:
   --version VERSION         Release version (required)
   --git-hash HASH           Short git hash to tag alongside the version
   --image IMAGE             Docker image name (default: docker.io/jkingsman/remoteterm-meshcore)
-  --platforms CSV           Buildx platforms CSV (default: linux/amd64,linux/arm64,linux/arm/v7)
+  --platforms CSV           Buildx platforms CSV (default: linux/amd64,linux/arm64)
   --help                    Show this message
 EOF
 }
@@ -21,7 +21,7 @@ EOF
 VERSION=""
 GIT_HASH=""
 IMAGE="docker.io/jkingsman/remoteterm-meshcore"
-PLATFORMS="linux/amd64,linux/arm64,linux/arm/v7"
+PLATFORMS="linux/amd64,linux/arm64"
 
 while [ $# -gt 0 ]; do
     case "$1" in
