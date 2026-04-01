@@ -213,6 +213,47 @@ class TestDebugEndpoint:
 
         assert response.status_code == 200
 
+    @pytest.mark.asyncio
+    async def test_support_snapshot_includes_persisted_app_settings(self, test_db, client):
+        """Debug snapshot should expose the stored app settings row."""
+        pub_key = "ab" * 32
+        await _insert_contact(pub_key, "Alice")
+
+        response = await client.patch(
+            "/api/settings",
+            json={
+                "max_radio_contacts": 321,
+                "auto_decrypt_dm_on_advert": True,
+                "sidebar_sort_order": "alpha",
+                "advert_interval": 7200,
+                "flood_scope": "US-CA",
+                "blocked_keys": [pub_key],
+                "blocked_names": ["Mallory"],
+            },
+        )
+        assert response.status_code == 200
+
+        response = await client.post(
+            "/api/settings/favorites/toggle",
+            json={"type": "contact", "id": pub_key},
+        )
+        assert response.status_code == 200
+
+        response = await client.get("/api/debug")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["settings"]["max_radio_contacts"] == 321
+        assert payload["settings"]["auto_decrypt_dm_on_advert"] is True
+        assert payload["settings"]["advert_interval"] == 7200
+        assert payload["settings"]["flood_scope"] == "#US-CA"
+        assert payload["settings"]["blocked_keys_count"] == 1
+        assert payload["settings"]["blocked_names_count"] == 1
+        assert "favorites" not in payload["settings"]
+        assert "blocked_keys" not in payload["settings"]
+        assert "blocked_names" not in payload["settings"]
+        assert "sidebar_sort_order" not in payload["settings"]
+
 
 class TestRadioDisconnectedHandler:
     """Test that RadioDisconnectedError maps to 503."""
