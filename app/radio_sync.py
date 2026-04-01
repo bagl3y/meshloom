@@ -183,16 +183,15 @@ def _effective_radio_capacity(configured: int) -> int:
     """Return the effective radio contact capacity.
 
     Uses the lower of the user-configured ``max_radio_contacts`` and the
-    hardware limit reported by the radio at connect time.  The firmware
-    reports its full ``MAX_CONTACTS`` (already doubled back from the
-    half-value wire encoding), so we halve the hardware limit here to
-    leave room for the radio to organically add contacts it hears via
-    adverts.
+    hardware limit reported by the radio at connect time.  The existing
+    80% refill ratio already reserves headroom for the radio to
+    organically add contacts it hears via adverts, so no additional
+    reduction is applied here.
     """
     capacity = max(1, configured)
     hw_limit = radio_manager.max_contacts
     if hw_limit is not None:
-        capacity = min(capacity, hw_limit // 2)
+        capacity = min(capacity, hw_limit)
     return max(1, capacity)
 
 
