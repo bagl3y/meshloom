@@ -123,9 +123,7 @@ export function TelemetryHistoryPane({
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(v) =>
-                  metric === 'uptime_seconds' ? formatUptime(v) : `${v}`
-                }
+                tickFormatter={(v) => (metric === 'uptime_seconds' ? formatUptime(v) : `${v}`)}
               />
               <RechartsTooltip
                 {...TOOLTIP_STYLE}
@@ -139,7 +137,8 @@ export function TelemetryHistoryPane({
                 formatter={(value: any, name: any) => {
                   const numVal = typeof value === 'number' ? value : Number(value);
                   const display = metric === 'uptime_seconds' ? formatUptime(numVal) : `${value}`;
-                  const suffix = metric === 'uptime_seconds' ? '' : config.unit ? ` ${config.unit}` : '';
+                  const suffix =
+                    metric === 'uptime_seconds' ? '' : config.unit ? ` ${config.unit}` : '';
                   const label =
                     metric === 'packets'
                       ? name === 'packets_received'

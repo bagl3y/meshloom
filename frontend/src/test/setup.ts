@@ -8,7 +8,7 @@ class ResizeObserver {
 
 globalThis.ResizeObserver = ResizeObserver;
 
-// uPlot calls matchMedia at import time for DPI detection
+// Several components call matchMedia at import time for responsive detection
 if (typeof globalThis.matchMedia === 'undefined') {
   Object.defineProperty(globalThis, 'matchMedia', {
     value: (query: string) => ({

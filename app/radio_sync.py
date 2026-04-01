@@ -834,7 +834,6 @@ async def stop_periodic_advert():
         logger.info("Stopped periodic advertisement")
 
 
-
 # Prevents reboot-loop: once we've rebooted to fix clock skew this session,
 # don't do it again (the hardware RTC case can't be fixed by reboot).
 _clock_reboot_attempted: bool = False

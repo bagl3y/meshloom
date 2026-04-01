@@ -1,9 +1,16 @@
 import json
 import logging
+import time
 
 from app.database import db
 
 logger = logging.getLogger(__name__)
+
+# Maximum age for telemetry history entries (30 days)
+_MAX_AGE_SECONDS = 30 * 86400
+
+# Maximum entries to keep per repeater (sanity cap)
+_MAX_ENTRIES_PER_REPEATER = 1000
 
 
 class RepeaterTelemetryRepository:
@@ -13,7 +20,7 @@ class RepeaterTelemetryRepository:
         timestamp: int,
         data: dict,
     ) -> None:
-        """Insert a telemetry history row with the full status snapshot as JSON."""
+        """Insert a telemetry history row and prune stale entries."""
         await db.conn.execute(
             """
             INSERT INTO repeater_telemetry_history
@@ -22,6 +29,28 @@ class RepeaterTelemetryRepository:
             """,
             (public_key, timestamp, json.dumps(data)),
         )
+
+        # Prune entries older than 30 days
+        cutoff = int(time.time()) - _MAX_AGE_SECONDS
+        await db.conn.execute(
+            "DELETE FROM repeater_telemetry_history WHERE public_key = ? AND timestamp < ?",
+            (public_key, cutoff),
+        )
+
+        # Cap at _MAX_ENTRIES_PER_REPEATER (keep newest)
+        await db.conn.execute(
+            """
+            DELETE FROM repeater_telemetry_history
+            WHERE public_key = ? AND id NOT IN (
+                SELECT id FROM repeater_telemetry_history
+                WHERE public_key = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            )
+            """,
+            (public_key, public_key, _MAX_ENTRIES_PER_REPEATER),
+        )
+
         await db.conn.commit()
 
     @staticmethod

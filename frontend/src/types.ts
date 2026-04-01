@@ -473,7 +473,7 @@ export interface PaneState {
 
 export interface TelemetryHistoryEntry {
   timestamp: number;
-  data: RepeaterStatusResponse;
+  data: Record<string, number>;
 }
 
 export interface TraceResponse {

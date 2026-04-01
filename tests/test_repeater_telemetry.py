@@ -1,6 +1,5 @@
 """Tests for repeater telemetry history: repository CRUD and embedded status response."""
 
-import json
 import time
 
 import pytest

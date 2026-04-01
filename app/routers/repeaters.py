@@ -1,9 +1,7 @@
 import logging
 import time
-from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException
-from meshcore import EventType
 
 from app.dependencies import require_connected
 from app.models import (
