@@ -12,12 +12,14 @@ services:
     volumes:
       - ./data:/app/data
 
-    ################################################
-    # Map your radio by stable device ID if available. #
-    ################################################
+    #####################################################################
+    # Map your radio by stable device ID if available.                  #
+    # If your by-id path contains ':' characters, Docker Compose cannot #
+    # represent it here directly; use a colon-free host alias instead.  #
+    # (e.g. /dev/ttyUSB0)                                               #
+    #####################################################################
     devices:
-      - source: /dev/serial/by-id/your-meshcore-radio
-        target: /dev/meshcore-radio
+      - /dev/serial/by-id/your-meshcore-radio:/dev/meshcore-radio
 
     environment:
       MESHCORE_DATABASE_PATH: data/meshcore.db

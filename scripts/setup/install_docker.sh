@@ -32,6 +32,7 @@ SNAKEOIL_KEY_CONTAINER_PATH="/app/certs/$SNAKEOIL_KEY_BASENAME"
 IMAGE_MODE="image"
 TRANSPORT_MODE="serial"
 SERIAL_HOST_PATH="/dev/ttyACM0"
+SERIAL_COMPOSE_HOST_PATH="/dev/ttyACM0"
 SERIAL_CONTAINER_PATH="/dev/meshcore-radio"
 TCP_HOST=""
 TCP_PORT="4000"
@@ -96,6 +97,35 @@ yaml_quote() {
     local value="$1"
     value=${value//\'/\'\'}
     printf "'%s'" "$value"
+}
+
+normalize_serial_host_path_for_compose() {
+    local selected_path="$1"
+    local resolved_path=""
+
+    if [[ "$selected_path" != *:* ]]; then
+        SERIAL_COMPOSE_HOST_PATH="$selected_path"
+        return 0
+    fi
+
+    resolved_path="$(readlink -f "$selected_path" 2>/dev/null || true)"
+    if [ -z "$resolved_path" ]; then
+        echo -e "${RED}Error:${NC} the selected serial path contains ':' and could not be resolved to a raw /dev/tty-style device path."
+        echo "Selected path: $selected_path"
+        echo "Please enter the raw serial device path instead (for example /dev/ttyACM0)."
+        exit 1
+    fi
+
+    if [[ "$resolved_path" == *:* ]]; then
+        echo -e "${RED}Error:${NC} the selected serial path still resolves to a path containing ':', which Docker Compose cannot use here."
+        echo "Selected path: $selected_path"
+        echo "Resolved path: $resolved_path"
+        echo "Please enter the raw serial device path instead (for example /dev/ttyACM0)."
+        exit 1
+    fi
+
+    echo -e "${YELLOW}Note:${NC} the selected serial path contains ':', so Docker Compose will use the resolved raw device path instead: ${resolved_path}"
+    SERIAL_COMPOSE_HOST_PATH="$resolved_path"
 }
 
 detect_primary_local_ip() {
@@ -275,7 +305,8 @@ case "$TRANSPORT_CHOICE" in
             fi
         fi
 
-        echo -e "${GREEN}Serial passthrough: ${SERIAL_HOST_PATH} -> ${SERIAL_CONTAINER_PATH}${NC}"
+        normalize_serial_host_path_for_compose "$SERIAL_HOST_PATH"
+        echo -e "${GREEN}Serial passthrough: ${SERIAL_COMPOSE_HOST_PATH} -> ${SERIAL_CONTAINER_PATH}${NC}"
         ;;
     2)
         TRANSPORT_MODE="tcp"
@@ -419,8 +450,7 @@ mkdir -p "$REPO_DIR/data"
     fi
     if [ "$TRANSPORT_MODE" = "serial" ]; then
         echo "    devices:"
-        echo "      - source: $(yaml_quote "$SERIAL_HOST_PATH")"
-        echo "        target: $(yaml_quote "$SERIAL_CONTAINER_PATH")"
+        echo "      - ${SERIAL_COMPOSE_HOST_PATH}:${SERIAL_CONTAINER_PATH}"
     fi
     if [[ "$ENABLE_SNAKEOIL_TLS" =~ ^[Yy]$ ]]; then
         echo "    command:"
@@ -462,15 +492,18 @@ echo -e "${GREEN}Generated ${COMPOSE_FILE}.${NC}"
 echo
 echo -e "${BOLD}Docker commands${NC}"
 if [ "$IMAGE_MODE" = "build" ]; then
-    echo "  docker compose up -d --build    # build the local image and start RemoteTerm in the background"
+    echo "  sudo docker compose up -d --build    # build the local image and start RemoteTerm in the background"
 else
-    echo "  docker compose up -d            # start RemoteTerm in the background"
+    echo "  sudo docker compose up -d            # start RemoteTerm in the background"
 fi
-echo "  docker compose logs -f          # follow the container logs live"
+echo "  sudo docker compose logs -f          # follow the container logs live"
 echo
-echo "  docker compose down             # stop and remove the running container"
-echo "  docker compose restart          # restart the container without changing the image"
-echo "  docker compose pull && docker compose up -d   # upgrade to the latest published image and restart"
+echo "  sudo docker compose down             # stop and remove the running container"
+echo "  sudo docker compose restart          # restart the container without changing the image"
+echo "  sudo docker compose pull && sudo docker compose up -d   # upgrade to the latest published image and restart"
+echo
+echo -e "${YELLOW}Note:${NC} serial passthrough generally needs ${BOLD}rootful Docker${NC}."
+echo "If Docker is running rootless on this host, serial-device mappings may fail even with a valid compose file."
 if [ "$TRANSPORT_MODE" = "ble" ] || [ "$BLE_MANUAL_WARNING" = true ]; then
     echo
     echo -e "${RED}BLE requires more than the generated env vars.${NC}"
@@ -480,9 +513,9 @@ echo
 echo -e "${GREEN}Your new docker file is ready at ${COMPOSE_FILE}.${NC}"
 echo -e "${GREEN}Feel free to edit it by hand as desired, or:${NC}"
 echo
-echo -e "${PURPLE}┌──────────────────────────────────────────────┐${NC}"
-echo -e "${PURPLE}│  Run ${GREEN}${BOLD}docker compose up -d${NC}${PURPLE} to get started.    │${NC}"
-echo -e "${PURPLE}└──────────────────────────────────────────────┘${NC}"
+echo -e "${PURPLE}┌───────────────────────────────────────────────┐${NC}"
+echo -e "${PURPLE}│ Run ${GREEN}${BOLD}sudo docker compose up -d${NC}${PURPLE} to get started. │${NC}"
+echo -e "${PURPLE}└───────────────────────────────────────────────┘${NC}"
 if [[ "$ENABLE_SNAKEOIL_TLS" =~ ^[Yy]$ ]]; then
     echo
     echo -e "After the container starts, open ${CYAN}https://${LOCAL_ACCESS_IP}:8000${NC}."
@@ -492,4 +525,4 @@ else
     echo -e "After the container starts, open ${CYAN}http://${LOCAL_ACCESS_IP}:8000${NC}."
 fi
 echo "If the interface does not appear, follow the logs with:"
-echo "  docker compose logs -f"
+echo "  sudo docker compose logs -f"

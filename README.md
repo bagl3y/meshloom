@@ -107,6 +107,8 @@ Source checkouts expect a normal frontend build in `frontend/dist`.
 
 Local Docker builds are architecture-native by default. On Apple Silicon Macs and ARM64 Linux hosts such as Raspberry Pi, `docker compose build` / `docker compose up --build` will produce an ARM64 image unless you override the platform.
 
+For serial-device passthrough, use rootful Docker. In practice that usually means starting the stack with `sudo docker compose ...` unless your Docker daemon is already configured for rootful access via your user/group. Rootless Docker has been observed to fail on serial-device mappings even when the compose file itself is correct.
+
 Create a local `docker-compose.yml` in one of two ways:
 
 1. Copy the example file and edit it by hand:
@@ -128,7 +130,7 @@ The guided Docker flow can collect BLE settings, but BLE access from Docker stil
 Then customize the local compose file for your transport and launch:
 
 ```bash
-docker compose up # -d for background once you validate it's working
+sudo docker compose up # add -d for background once you validate it's working
 ```
 
 The database is stored in `./data/` (bind-mounted), so the container shares the same database as the native app.
@@ -136,8 +138,8 @@ The database is stored in `./data/` (bind-mounted), so the container shares the 
 To rebuild after pulling updates:
 
 ```bash
-docker compose pull
-docker compose up -d
+sudo docker compose pull
+sudo docker compose up -d
 ```
 
 The example file and setup script default to the published Docker Hub image. To build locally from your checkout instead, replace:
@@ -155,7 +157,7 @@ build: .
 Then run:
 
 ```bash
-docker compose up -d --build
+sudo docker compose up -d --build
 ```
 
 The container runs as root by default for maximum serial passthrough compatibility across host setups. On Linux, if you switch between native and Docker runs, `./data` can end up root-owned. If you do not need that serial compatibility behavior, you can enable the optional `user: "${UID:-1000}:${GID:-1000}"` line in `docker-compose.yml` to keep ownership aligned with your host user.
@@ -163,7 +165,7 @@ The container runs as root by default for maximum serial passthrough compatibili
 To stop:
 
 ```bash
-docker compose down
+sudo docker compose down
 ```
 
 ## Standard Environment Variables
