@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { toast } from './ui/sonner';
 import { Button } from './ui/button';
-import { Bell, Route, Star, Trash2 } from 'lucide-react';
+import { Bell, Info, Route, Star, Trash2 } from 'lucide-react';
 import { DirectTraceIcon } from './DirectTraceIcon';
 import { RepeaterLogin } from './RepeaterLogin';
 import { ServerLoginStatusBanner } from './ServerLoginStatusBanner';
@@ -45,6 +45,7 @@ interface RepeaterDashboardProps {
   onToggleNotifications: () => void;
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
   onDeleteContact: (publicKey: string) => void;
+  onOpenContactInfo?: (publicKey: string) => void;
 }
 
 export function RepeaterDashboard({
@@ -62,6 +63,7 @@ export function RepeaterDashboard({
   onToggleNotifications,
   onToggleFavorite,
   onDeleteContact,
+  onOpenContactInfo,
 }: RepeaterDashboardProps) {
   const [pathDiscoveryOpen, setPathDiscoveryOpen] = useState(false);
   const contact = contacts.find((c) => c.public_key === conversation.id) ?? null;
@@ -115,9 +117,24 @@ export function RepeaterDashboard({
         <span className="flex min-w-0 flex-col">
           <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="flex min-w-0 flex-1 items-baseline gap-2">
-              <span className="min-w-0 flex-shrink truncate font-semibold text-base">
-                {conversation.name}
-              </span>
+              <h2 className="min-w-0 flex-shrink font-semibold text-base">
+                {onOpenContactInfo ? (
+                  <button
+                    type="button"
+                    className="flex max-w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-sm text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`View info for ${conversation.name}`}
+                    onClick={() => onOpenContactInfo(conversation.id)}
+                  >
+                    <span className="truncate">{conversation.name}</span>
+                    <Info
+                      className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/80"
+                      aria-hidden="true"
+                    />
+                  </button>
+                ) : (
+                  <span className="truncate">{conversation.name}</span>
+                )}
+              </h2>
               <span
                 className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground transition-colors hover:text-primary"
                 role="button"

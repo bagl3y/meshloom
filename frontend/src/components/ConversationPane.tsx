@@ -233,6 +233,7 @@ export function ConversationPane({
           onToggleNotifications={onToggleNotifications}
           onToggleFavorite={onToggleFavorite}
           onDeleteContact={onDeleteContact}
+          onOpenContactInfo={onOpenContactInfo}
         />
       </Suspense>
     );

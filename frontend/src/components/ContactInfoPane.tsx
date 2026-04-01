@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Ban, Search, Star } from 'lucide-react';
 import {
   LineChart,
@@ -35,6 +35,7 @@ import { ContactAvatar } from './ContactAvatar';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
 import { toast } from './ui/sonner';
 import { useDistanceUnit } from '../contexts/DistanceUnitContext';
+import { CONTACT_TYPE_REPEATER } from '../types';
 import type {
   Contact,
   ContactActiveRoom,
@@ -158,6 +159,7 @@ export function ContactInfoPane({
     contact !== null &&
     !isPrefixOnlyResolvedContact &&
     isUnknownFullKeyContact(contact.public_key, contact.last_advert);
+  const isRepeater = contact?.type === CONTACT_TYPE_REPEATER;
 
   return (
     <Sheet open={contactKey !== null} onOpenChange={(open) => !open && onClose()}>
@@ -396,8 +398,8 @@ export function ContactInfoPane({
               </button>
             </div>
 
-            {/* Block toggles */}
-            {(onToggleBlockedKey || onToggleBlockedName) && (
+            {/* Block toggles (not applicable to repeaters) */}
+            {!isRepeater && (onToggleBlockedKey || onToggleBlockedName) && (
               <div className="px-5 py-3 border-b border-border space-y-2">
                 {onToggleBlockedKey && (
                   <button
@@ -440,7 +442,7 @@ export function ContactInfoPane({
               </div>
             )}
 
-            {onSearchMessagesByKey && (
+            {!isRepeater && onSearchMessagesByKey && (
               <div className="px-5 py-3 border-b border-border">
                 <button
                   type="button"
@@ -453,40 +455,60 @@ export function ContactInfoPane({
               </div>
             )}
 
-            {/* Nearest Repeaters */}
-            {analytics && analytics.nearest_repeaters.length > 0 && (
-              <div className="px-5 py-3 border-b border-border">
-                <SectionLabel>Nearest Repeaters</SectionLabel>
-                <div className="space-y-1">
-                  {analytics.nearest_repeaters.map((r) => (
-                    <div key={r.public_key} className="flex justify-between items-center text-sm">
-                      <span className="truncate">{r.name || r.public_key.slice(0, 12)}</span>
-                      <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
-                        {r.path_len === 0
-                          ? 'direct'
-                          : `${r.path_len} hop${r.path_len > 1 ? 's' : ''}`}{' '}
-                        · {r.heard_count}x
-                      </span>
+            {/* Nearest Repeaters (Hops) — last 7 days only */}
+            {analytics &&
+              (() => {
+                const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 86400;
+                const recent = analytics.nearest_repeaters.filter(
+                  (r) => r.last_seen >= sevenDaysAgo
+                );
+                if (recent.length === 0) return null;
+                return (
+                  <div className="px-5 py-3 border-b border-border">
+                    <SectionLabel>Nearest Repeaters — Hops (last 7 days)</SectionLabel>
+                    <div className="space-y-1">
+                      {recent.map((r) => (
+                        <div
+                          key={r.public_key}
+                          className="flex justify-between items-center text-sm"
+                        >
+                          <span className="truncate">{r.name || r.public_key.slice(0, 12)}</span>
+                          <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+                            {r.path_len === 0
+                              ? 'direct'
+                              : `${r.path_len} hop${r.path_len > 1 ? 's' : ''}`}{' '}
+                            · {r.heard_count}x
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                );
+              })()}
+
+            {/* Geographically nearest repeaters (repeaters only) */}
+            {isRepeater && contact && isValidLocation(contact.lat, contact.lon) && (
+              <NearbyRepeatersSection
+                contact={contact}
+                contacts={contacts}
+                distanceUnit={distanceUnit}
+              />
             )}
 
             {/* Advert Paths */}
             {analytics && analytics.advert_paths.length > 0 && (
               <div className="px-5 py-3 border-b border-border">
                 <SectionLabel>Recent Advert Paths</SectionLabel>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {analytics.advert_paths.map((p) => (
                     <div
                       key={p.path + p.first_seen}
-                      className="flex justify-between items-center text-sm"
+                      className="flex justify-between items-start gap-2 text-sm"
                     >
-                      <span className="font-mono text-xs truncate">
+                      <span className="font-mono text-xs break-all">
                         {p.path ? parsePathHops(p.path, p.path_len).join(' → ') : '(direct)'}
                       </span>
-                      <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+                      <span className="text-xs text-muted-foreground flex-shrink-0">
                         {p.heard_count}x · {formatTime(p.last_seen)}
                       </span>
                     </div>
@@ -518,17 +540,21 @@ export function ContactInfoPane({
               </div>
             )}
 
-            <MessageStatsSection
-              dmMessageCount={analytics?.dm_message_count ?? 0}
-              channelMessageCount={analytics?.channel_message_count ?? 0}
-            />
+            {!isRepeater && (
+              <>
+                <MessageStatsSection
+                  dmMessageCount={analytics?.dm_message_count ?? 0}
+                  channelMessageCount={analytics?.channel_message_count ?? 0}
+                />
 
-            <ActivityChartsSection analytics={analytics} />
+                <ActivityChartsSection analytics={analytics} />
 
-            <MostActiveChannelsSection
-              channels={analytics?.most_active_rooms ?? []}
-              onNavigateToChannel={onNavigateToChannel}
-            />
+                <MostActiveChannelsSection
+                  channels={analytics?.most_active_rooms ?? []}
+                  onNavigateToChannel={onNavigateToChannel}
+                />
+              </>
+            )}
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -822,6 +848,60 @@ function ActivityLineChart<T extends ContactAnalyticsHourlyBucket | ContactAnaly
           ))}
         </LineChart>
       </ResponsiveContainer>
+    </div>
+  );
+}
+
+function NearbyRepeatersSection({
+  contact,
+  contacts,
+  distanceUnit,
+}: {
+  contact: Contact;
+  contacts: Contact[];
+  distanceUnit: import('../utils/distanceUnits').DistanceUnit;
+}) {
+  const nearby = useMemo(() => {
+    const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 86400;
+    const results: Array<{ name: string; publicKey: string; distance: number }> = [];
+    for (const other of contacts) {
+      const heardAt = Math.max(other.last_seen ?? 0, other.last_advert ?? 0);
+      if (
+        other.public_key === contact.public_key ||
+        other.type !== CONTACT_TYPE_REPEATER ||
+        !isValidLocation(other.lat, other.lon) ||
+        heardAt < sevenDaysAgo
+      ) {
+        continue;
+      }
+      const dist = calculateDistance(contact.lat, contact.lon, other.lat, other.lon);
+      if (dist !== null) {
+        results.push({
+          name: getContactDisplayName(other.name, other.public_key, other.last_advert),
+          publicKey: other.public_key,
+          distance: dist,
+        });
+      }
+    }
+    results.sort((a, b) => a.distance - b.distance);
+    return results.slice(0, 5);
+  }, [contact.public_key, contact.lat, contact.lon, contacts]);
+
+  if (nearby.length === 0) return null;
+
+  return (
+    <div className="px-5 py-3 border-b border-border">
+      <SectionLabel>Nearest Repeaters — Geo (last 7 days)</SectionLabel>
+      <div className="space-y-1">
+        {nearby.map((r) => (
+          <div key={r.publicKey} className="flex justify-between items-center text-sm">
+            <span className="truncate">{r.name}</span>
+            <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+              {formatDistance(r.distance, distanceUnit)}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

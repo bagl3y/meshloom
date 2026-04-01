@@ -749,8 +749,8 @@ export function SettingsRadioSection({
         {health?.radio_device_info?.max_contacts != null &&
           Number(maxRadioContacts) > health.radio_device_info.max_contacts && (
             <p className="text-xs text-warning">
-              Your radio reports a hardware limit of {health.radio_device_info.max_contacts} contacts.
-              The effective cap will be limited to what the radio supports.
+              Your radio reports a hardware limit of {health.radio_device_info.max_contacts}{' '}
+              contacts. The effective cap will be limited to what the radio supports.
             </p>
           )}
       </div>
