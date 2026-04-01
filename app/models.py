@@ -805,7 +805,7 @@ class AppSettings(BaseModel):
         default_factory=list, description="List of favorited conversations"
     )
     auto_decrypt_dm_on_advert: bool = Field(
-        default=False,
+        default=True,
         description="Whether to attempt historical DM decryption on new contact advertisement",
     )
     sidebar_sort_order: Literal["recent", "alpha"] = Field(

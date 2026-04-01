@@ -836,7 +836,7 @@ async def _migrate_009_create_app_settings_table(conn: aiosqlite.Connection) -> 
             id INTEGER PRIMARY KEY CHECK (id = 1),
             max_radio_contacts INTEGER DEFAULT 200,
             favorites TEXT DEFAULT '[]',
-            auto_decrypt_dm_on_advert INTEGER DEFAULT 0,
+            auto_decrypt_dm_on_advert INTEGER DEFAULT 1,
             sidebar_sort_order TEXT DEFAULT 'recent',
             last_message_times TEXT DEFAULT '{}',
             preferences_migrated INTEGER DEFAULT 0
@@ -848,7 +848,7 @@ async def _migrate_009_create_app_settings_table(conn: aiosqlite.Connection) -> 
     await conn.execute(
         """
         INSERT OR IGNORE INTO app_settings (id, max_radio_contacts, favorites, auto_decrypt_dm_on_advert, sidebar_sort_order, last_message_times, preferences_migrated)
-        VALUES (1, 200, '[]', 0, 'recent', '{}', 0)
+        VALUES (1, 200, '[]', 1, 'recent', '{}', 0)
         """
     )
 
