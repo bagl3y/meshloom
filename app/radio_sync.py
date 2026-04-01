@@ -179,6 +179,23 @@ RADIO_CONTACT_REFILL_RATIO = 0.80
 RADIO_CONTACT_FULL_SYNC_RATIO = 0.95
 
 
+def _effective_radio_capacity(configured: int) -> int:
+    """Return the effective radio contact capacity.
+
+    Uses the lower of the user-configured ``max_radio_contacts`` and the
+    hardware limit reported by the radio at connect time.  The firmware
+    reports its full ``MAX_CONTACTS`` (already doubled back from the
+    half-value wire encoding), so we halve the hardware limit here to
+    leave room for the radio to organically add contacts it hears via
+    adverts.
+    """
+    capacity = max(1, configured)
+    hw_limit = radio_manager.max_contacts
+    if hw_limit is not None:
+        capacity = min(capacity, hw_limit // 2)
+    return max(1, capacity)
+
+
 def _compute_radio_contact_limits(max_contacts: int) -> tuple[int, int]:
     """Return (refill_target, full_sync_trigger) for the configured capacity."""
     capacity = max(1, max_contacts)
@@ -193,7 +210,7 @@ def _compute_radio_contact_limits(max_contacts: int) -> tuple[int, int]:
 async def should_run_full_periodic_sync(mc: MeshCore) -> bool:
     """Check current radio occupancy and decide whether to offload/reload."""
     app_settings = await AppSettingsRepository.get()
-    capacity = app_settings.max_radio_contacts
+    capacity = _effective_radio_capacity(app_settings.max_radio_contacts)
     refill_target, full_sync_trigger = _compute_radio_contact_limits(capacity)
 
     result = await mc.commands.get_contacts()
@@ -1301,7 +1318,7 @@ async def stop_background_contact_reconciliation() -> None:
 async def get_contacts_selected_for_radio_sync() -> list[Contact]:
     """Return the contacts that would be loaded onto the radio right now."""
     app_settings = await AppSettingsRepository.get()
-    max_contacts = app_settings.max_radio_contacts
+    max_contacts = _effective_radio_capacity(app_settings.max_radio_contacts)
     refill_target, _full_sync_trigger = _compute_radio_contact_limits(max_contacts)
     selected_contacts: list[Contact] = []
     selected_keys: set[str] = set()

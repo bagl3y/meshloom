@@ -746,6 +746,13 @@ export function SettingsRadioSection({
           Configured radio contact capacity. Favorites reload first, then background maintenance
           refills to about 80% of this value and offloads once occupancy reaches about 95%.
         </p>
+        {health?.radio_device_info?.max_contacts != null &&
+          Number(maxRadioContacts) > health.radio_device_info.max_contacts && (
+            <p className="text-xs text-warning">
+              Your radio reports a hardware limit of {health.radio_device_info.max_contacts} contacts.
+              The effective cap will be limited to what the radio supports.
+            </p>
+          )}
       </div>
 
       {floodError && (
