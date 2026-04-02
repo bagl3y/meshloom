@@ -2964,7 +2964,10 @@ async def _migrate_049_foreign_key_cascade(conn: aiosqlite.Connection) -> None:
     db_path = db_row[2] if db_row else ""
     if db_path and db_path != ":memory:" and Path(db_path).exists():
         backup_path = db_path + ".pre-fk-migration.bak"
-        shutil.copy2(db_path, backup_path)
+        for suffix in ("", "-wal", "-shm"):
+            src = Path(db_path + suffix)
+            if src.exists():
+                shutil.copy2(str(src), backup_path + suffix)
         logger.info("Database backed up to %s before FK migration", backup_path)
 
     # --- Phase 1: clean orphans (guard each table's existence) ---
