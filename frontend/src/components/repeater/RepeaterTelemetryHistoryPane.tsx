@@ -47,16 +47,8 @@ function formatUptime(seconds: number): string {
   return `${(seconds / 86400).toFixed(1)}d`;
 }
 
-export function TelemetryHistoryPane({
-  entries,
-  statusFetchedAt,
-}: {
-  entries: TelemetryHistoryEntry[];
-  statusFetchedAt?: number | null;
-}) {
+export function TelemetryHistoryPane({ entries }: { entries: TelemetryHistoryEntry[] }) {
   const [metric, setMetric] = useState<Metric>('battery_volts');
-  // statusFetchedAt is used to indicate freshness; suppress unused lint
-  void statusFetchedAt;
 
   const config = METRIC_CONFIG[metric];
 

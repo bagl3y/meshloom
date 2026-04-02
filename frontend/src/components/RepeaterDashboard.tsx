@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
+import { api } from '../api';
 import { toast } from './ui/sonner';
 import { Button } from './ui/button';
 import { Bell, Info, Route, Star, Trash2 } from 'lucide-react';
@@ -12,7 +13,13 @@ import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { isValidLocation } from '../utils/pathUtils';
 import { ContactStatusInfo } from './ContactStatusInfo';
-import type { Contact, Conversation, Favorite, PathDiscoveryResponse } from '../types';
+import type {
+  Contact,
+  Conversation,
+  Favorite,
+  PathDiscoveryResponse,
+  TelemetryHistoryEntry,
+} from '../types';
 import { cn } from '../lib/utils';
 import { TelemetryPane } from './repeater/RepeaterTelemetryPane';
 import { NeighborsPane } from './repeater/RepeaterNeighborsPane';
@@ -90,6 +97,24 @@ export function RepeaterDashboard({
   } = useRepeaterDashboard(conversation, { hasAdvertLocation });
   const { password, setPassword, rememberPassword, setRememberPassword, persistAfterLogin } =
     useRememberedServerPassword('repeater', conversation.id);
+
+  // Telemetry history: preload from stored data, refresh from live status
+  const [telemetryHistory, setTelemetryHistory] = useState<TelemetryHistoryEntry[]>([]);
+  useEffect(() => {
+    if (!loggedIn) return;
+    api
+      .repeaterTelemetryHistory(conversation.id)
+      .then(setTelemetryHistory)
+      .catch(() => {});
+  }, [loggedIn, conversation.id]);
+
+  // When a live status fetch returns embedded telemetry_history, replace local state
+  useEffect(() => {
+    const liveHistory = paneData.status?.telemetry_history;
+    if (liveHistory && liveHistory.length > 0) {
+      setTelemetryHistory(liveHistory);
+    }
+  }, [paneData.status?.telemetry_history]);
 
   const isFav = isFavorite(favorites, 'contact', conversation.id);
 
@@ -357,10 +382,7 @@ export function RepeaterDashboard({
             />
 
             {/* Telemetry history chart — full width, below console */}
-            <TelemetryHistoryPane
-              entries={paneData.status?.telemetry_history ?? []}
-              statusFetchedAt={paneStates.status.fetched_at}
-            />
+            <TelemetryHistoryPane entries={telemetryHistory} />
           </div>
         )}
       </div>

@@ -137,18 +137,31 @@ class TestRepeaterTelemetryRepository:
         assert history[0]["data"] == SAMPLE_STATUS
 
 
-class TestTelemetryHistoryInStatusResponse:
-    """Tests that history is embedded in the status response (no separate endpoint)."""
+class TestTelemetryHistoryEndpoint:
+    """Tests for the read-only GET telemetry-history endpoint."""
 
     @pytest.mark.asyncio
-    async def test_history_not_available_as_separate_endpoint(self, _db, client):
-        """The old GET telemetry-history endpoint should be gone."""
+    async def test_returns_history_for_repeater(self, _db, client):
         await _insert_repeater(KEY_A)
+        now = int(time.time())
+        await RepeaterTelemetryRepository.record(KEY_A, now, SAMPLE_STATUS)
+
         resp = await client.get(f"/api/contacts/{KEY_A}/repeater/telemetry-history")
-        assert resp.status_code in (404, 405)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["data"]["battery_volts"] == 4.15
 
     @pytest.mark.asyncio
-    async def test_history_endpoint_non_repeater_rejected(self, _db, client):
+    async def test_returns_empty_list_when_no_history(self, _db, client):
+        await _insert_repeater(KEY_A)
+
+        resp = await client.get(f"/api/contacts/{KEY_A}/repeater/telemetry-history")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    @pytest.mark.asyncio
+    async def test_rejects_non_repeater(self, _db, client):
         await ContactRepository.upsert(
             {
                 "public_key": KEY_A,
@@ -168,5 +181,9 @@ class TestTelemetryHistoryInStatusResponse:
             }
         )
         resp = await client.get(f"/api/contacts/{KEY_A}/repeater/telemetry-history")
-        # Either 404 (method not found) or 400 (not a repeater) — endpoint is gone
-        assert resp.status_code in (400, 404, 405)
+        assert resp.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_returns_404_for_unknown_contact(self, _db, client):
+        resp = await client.get(f"/api/contacts/{KEY_A}/repeater/telemetry-history")
+        assert resp.status_code == 404

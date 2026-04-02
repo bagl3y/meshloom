@@ -35,6 +35,7 @@ import type {
   RepeaterOwnerInfoResponse,
   RepeaterRadioSettingsResponse,
   RepeaterStatusResponse,
+  TelemetryHistoryEntry,
   StatisticsResponse,
   TraceResponse,
   UnreadCounts,
@@ -414,6 +415,8 @@ export const api = {
     fetchJson<RepeaterLppTelemetryResponse>(`/contacts/${publicKey}/repeater/lpp-telemetry`, {
       method: 'POST',
     }),
+  repeaterTelemetryHistory: (publicKey: string) =>
+    fetchJson<TelemetryHistoryEntry[]>(`/contacts/${publicKey}/repeater/telemetry-history`),
   roomLogin: (publicKey: string, password: string) =>
     fetchJson<RepeaterLoginResponse>(`/contacts/${publicKey}/room/login`, {
       method: 'POST',

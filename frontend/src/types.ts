@@ -235,6 +235,15 @@ export interface ChannelTopSender {
   message_count: number;
 }
 
+export interface BulkCreateHashtagChannelsResult {
+  created_channels: Channel[];
+  existing_count: number;
+  invalid_names: string[];
+  decrypt_started: boolean;
+  decrypt_total_packets: number;
+  message: string;
+}
+
 export interface ChannelDetail {
   channel: Channel;
   message_counts: ChannelMessageCounts;

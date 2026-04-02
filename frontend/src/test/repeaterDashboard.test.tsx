@@ -51,9 +51,10 @@ vi.mock('../hooks/useRepeaterDashboard', () => ({
   useRepeaterDashboard: () => mockHook,
 }));
 
-// Mock api module
+// Mock api module (TelemetryHistoryPane fetches on mount)
 vi.mock('../api', () => ({
   api: {
+    repeaterTelemetryHistory: vi.fn().mockResolvedValue([]),
     setContactRoutingOverride: vi.fn().mockResolvedValue({ status: 'ok' }),
   },
 }));
@@ -640,6 +641,63 @@ describe('RepeaterDashboard', () => {
       expect(overrideSpy).not.toHaveBeenCalled();
 
       overrideSpy.mockRestore();
+    });
+  });
+
+  describe('telemetry history', () => {
+    it('loads telemetry history on mount when logged in', async () => {
+      const { api } = await import('../api');
+      mockHook.loggedIn = true;
+
+      render(<RepeaterDashboard {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(api.repeaterTelemetryHistory).toHaveBeenCalledWith(REPEATER_KEY);
+      });
+    });
+
+    it('shows telemetry history pane in logged-in view even before status fetch', () => {
+      mockHook.loggedIn = true;
+
+      render(<RepeaterDashboard {...defaultProps} />);
+
+      expect(screen.getByText('Telemetry History')).toBeInTheDocument();
+      expect(screen.getByText('0 samples')).toBeInTheDocument();
+    });
+
+    it('updates history from live status fetch', async () => {
+      const { api } = await import('../api');
+      const historySpy = vi.mocked(api.repeaterTelemetryHistory);
+      const liveEntry = { timestamp: 1700000000, data: { battery_volts: 4.2 } };
+      historySpy.mockResolvedValue([]);
+
+      mockHook.loggedIn = true;
+      mockHook.paneData.status = {
+        battery_volts: 4.2,
+        tx_queue_len: 0,
+        noise_floor_dbm: -120,
+        last_rssi_dbm: -85,
+        last_snr_db: 7.5,
+        packets_received: 100,
+        packets_sent: 50,
+        airtime_seconds: 600,
+        rx_airtime_seconds: 1200,
+        uptime_seconds: 86400,
+        sent_flood: 10,
+        sent_direct: 40,
+        recv_flood: 30,
+        recv_direct: 70,
+        flood_dups: 1,
+        direct_dups: 0,
+        full_events: 0,
+        telemetry_history: [liveEntry],
+      };
+
+      render(<RepeaterDashboard {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('1 samples')).toBeInTheDocument();
+      });
     });
   });
 });

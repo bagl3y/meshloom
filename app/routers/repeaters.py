@@ -153,6 +153,20 @@ async def repeater_status(public_key: str) -> RepeaterStatusResponse:
     return response
 
 
+@router.get(
+    "/{public_key}/repeater/telemetry-history",
+    response_model=list[TelemetryHistoryEntry],
+)
+async def repeater_telemetry_history(public_key: str) -> list[TelemetryHistoryEntry]:
+    """Return stored telemetry history for a repeater (read-only, no radio access)."""
+    contact = await _resolve_contact_or_404(public_key)
+    _require_repeater(contact)
+
+    since = int(time.time()) - 30 * 86400
+    rows = await RepeaterTelemetryRepository.get_history(contact.public_key, since)
+    return [TelemetryHistoryEntry(**row) for row in rows]
+
+
 @router.post("/{public_key}/repeater/lpp-telemetry", response_model=RepeaterLppTelemetryResponse)
 async def repeater_lpp_telemetry(public_key: str) -> RepeaterLppTelemetryResponse:
     """Fetch CayenneLPP sensor telemetry from a repeater (single attempt, 10s timeout)."""
