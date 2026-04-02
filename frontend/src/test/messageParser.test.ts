@@ -122,11 +122,21 @@ describe('linked channel references', () => {
     ]);
   });
 
-  it('ignores invalid or embedded channel-like text', () => {
+  it('finds linked channel references terminated by clause punctuation', () => {
     expect(
-      findLinkedChannelReferences(
-        'skip #Bad #bad--name abc#ops #ops- #opsRoom #ops_room #good-room,'
-      )
-    ).toEqual([]);
+      findLinkedChannelReferences('Join #mesh-room, then #ops2; finally #alpha-room.')
+    ).toEqual([
+      { label: '#mesh-room', start: 5, end: 15 },
+      { label: '#ops2', start: 22, end: 27 },
+      { label: '#alpha-room', start: 37, end: 48 },
+    ]);
+  });
+
+  it('ignores invalid or embedded channel-like text', () => {
+    const references = findLinkedChannelReferences(
+      'skip #Bad #bad--name abc#ops #ops- #opsRoom #ops_room #good-room,'
+    );
+
+    expect(references.map((reference) => reference.label)).toEqual(['#good-room']);
   });
 });

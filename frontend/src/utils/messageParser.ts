@@ -3,7 +3,7 @@
  * Channel messages have format "sender: message".
  */
 const HASHTAG_CHANNEL_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const HASHTAG_CHANNEL_REFERENCE_PATTERN = /(^|\s)(#[a-z0-9]+(?:-[a-z0-9]+)*)(?=$|\s)/g;
+const HASHTAG_CHANNEL_REFERENCE_PATTERN = /(^|\s)(#[a-z0-9]+(?:-[a-z0-9]+)*)(?=$|[\s.,;:])/g;
 
 export function parseSenderFromText(text: string): { sender: string | null; content: string } {
   const colonIndex = text.indexOf(': ');

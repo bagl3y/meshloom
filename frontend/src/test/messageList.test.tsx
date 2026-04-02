@@ -169,6 +169,32 @@ describe('MessageList channel sender rendering', () => {
     expect(onChannelReferenceClick).toHaveBeenCalledWith('#mesh-room');
   });
 
+  it('links valid channel references when followed by clause punctuation', async () => {
+    const user = userEvent.setup();
+    const onChannelReferenceClick = vi.fn();
+
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            text: 'Alice: Check #mesh-room, then #ops-room; then #alpha-room.',
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+        onChannelReferenceClick={onChannelReferenceClick}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: '#mesh-room' }));
+    await user.click(screen.getByRole('button', { name: '#ops-room' }));
+    await user.click(screen.getByRole('button', { name: '#alpha-room' }));
+
+    expect(onChannelReferenceClick).toHaveBeenNthCalledWith(1, '#mesh-room');
+    expect(onChannelReferenceClick).toHaveBeenNthCalledWith(2, '#ops-room');
+    expect(onChannelReferenceClick).toHaveBeenNthCalledWith(3, '#alpha-room');
+  });
+
   it('links valid channel references in direct messages too', async () => {
     const user = userEvent.setup();
     const onChannelReferenceClick = vi.fn();
