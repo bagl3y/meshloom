@@ -659,8 +659,9 @@ export function Sidebar({
   }) => (
     <div
       key={key}
+      data-active={active ? 'true' : undefined}
       className={cn(
-        'px-3 py-2 cursor-pointer flex items-center gap-2 border-l-2 border-transparent hover:bg-accent transition-colors text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'sidebar-action-row px-3 py-2 cursor-pointer flex items-center gap-2 border-l-2 border-transparent hover:bg-accent transition-colors text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         active && 'bg-accent border-l-primary'
       )}
       role="button"
@@ -669,10 +670,10 @@ export function Sidebar({
       onKeyDown={handleKeyboardActivate}
       onClick={onClick}
     >
-      <span className="sidebar-tool-icon text-muted-foreground" aria-hidden="true">
+      <span className="sidebar-tool-icon" aria-hidden="true">
         {icon}
       </span>
-      <span className="sidebar-tool-label flex-1 truncate text-muted-foreground">{label}</span>
+      <span className="sidebar-tool-label flex-1 truncate">{label}</span>
     </div>
   );
 

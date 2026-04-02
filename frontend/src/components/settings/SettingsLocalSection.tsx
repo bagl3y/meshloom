@@ -347,17 +347,20 @@ function PreviewSidebarRow({
 }) {
   return (
     <div
-      className={`flex items-center gap-2 rounded-md border-l-2 px-3 py-2 text-[13px] ${
+      data-active={active ? 'true' : undefined}
+      className={`sidebar-action-row flex items-center gap-2 rounded-md border-l-2 px-3 py-2 text-[13px] ${
         active ? 'border-l-primary bg-accent text-foreground' : 'border-l-transparent'
       }`}
     >
-      {leading}
-      <span className={`min-w-0 flex-1 truncate ${active ? 'font-medium' : 'text-foreground'}`}>
+      <span className="sidebar-tool-icon" aria-hidden="true">
+        {leading}
+      </span>
+      <span className={`sidebar-tool-label min-w-0 flex-1 truncate ${active ? 'font-medium' : ''}`}>
         {label}
       </span>
       {badge}
       {!badge && (
-        <span className="text-muted-foreground" aria-hidden="true">
+        <span className="sidebar-tool-icon" aria-hidden="true">
           <MessageSquare className="h-3.5 w-3.5" />
         </span>
       )}
