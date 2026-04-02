@@ -177,7 +177,7 @@ Only one transport may be active at a time. If multiple are set, the server will
 | `MESHCORE_SERIAL_PORT` | (auto-detect) | Serial port path |
 | `MESHCORE_SERIAL_BAUDRATE` | 115200 | Serial baud rate |
 | `MESHCORE_TCP_HOST` | | TCP host (mutually exclusive with serial/BLE) |
-| `MESHCORE_TCP_PORT` | 4000 | TCP port |
+| `MESHCORE_TCP_PORT` | 5000 | TCP port |
 | `MESHCORE_BLE_ADDRESS` | | BLE device address (mutually exclusive with serial/TCP) |
 | `MESHCORE_BLE_PIN` | | BLE PIN (required when BLE address is set) |
 | `MESHCORE_LOG_LEVEL` | INFO | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
@@ -193,7 +193,7 @@ Common launch patterns:
 MESHCORE_SERIAL_PORT=/dev/ttyUSB0 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 # TCP
-MESHCORE_TCP_HOST=192.168.1.100 MESHCORE_TCP_PORT=4000 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+MESHCORE_TCP_HOST=192.168.1.100 MESHCORE_TCP_PORT=5000 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 # BLE
 MESHCORE_BLE_ADDRESS=AA:BB:CC:DD:EE:FF MESHCORE_BLE_PIN=123456 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000

@@ -33,7 +33,7 @@ class TestTransportExclusivity:
 
     def test_tcp_default_port(self):
         s = Settings(tcp_host="192.168.1.1")
-        assert s.tcp_port == 4000
+        assert s.tcp_port == 5000
 
     def test_ble_only(self):
         s = Settings(ble_address="AA:BB:CC:DD:EE:FF", ble_pin="123456")

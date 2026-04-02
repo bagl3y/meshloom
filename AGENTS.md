@@ -463,7 +463,7 @@ mc.subscribe(EventType.ACK, handler)
 |----------|---------|-------------|
 | `MESHCORE_SERIAL_PORT` | auto-detect | Serial port for radio |
 | `MESHCORE_TCP_HOST` | *(none)* | TCP host for radio (mutually exclusive with serial/BLE) |
-| `MESHCORE_TCP_PORT` | `4000` | TCP port (used with `MESHCORE_TCP_HOST`) |
+| `MESHCORE_TCP_PORT` | `5000` | TCP port (used with `MESHCORE_TCP_HOST`) |
 | `MESHCORE_BLE_ADDRESS` | *(none)* | BLE device address (mutually exclusive with serial/TCP) |
 | `MESHCORE_BLE_PIN` | *(required with BLE)* | BLE PIN code |
 | `MESHCORE_SERIAL_BAUDRATE` | `115200` | Serial baud rate |

@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     serial_port: str = ""  # Empty string triggers auto-detection
     serial_baudrate: int = 115200
     tcp_host: str = ""
-    tcp_port: int = 4000
+    tcp_port: int = 5000
     ble_address: str = ""
     ble_pin: str = ""
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
