@@ -126,6 +126,16 @@ const defaultProps = {
   onDeleteContact: vi.fn(),
 };
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('RepeaterDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -645,6 +655,11 @@ describe('RepeaterDashboard', () => {
   });
 
   describe('telemetry history', () => {
+    beforeEach(async () => {
+      const { api } = await import('../api');
+      vi.mocked(api.repeaterTelemetryHistory).mockResolvedValue([]);
+    });
+
     it('loads telemetry history on mount when logged in', async () => {
       const { api } = await import('../api');
       mockHook.loggedIn = true;
@@ -698,6 +713,46 @@ describe('RepeaterDashboard', () => {
       await waitFor(() => {
         expect(screen.getByText('1 samples')).toBeInTheDocument();
       });
+    });
+
+    it('does not let an older preload overwrite newer live status history', async () => {
+      const { api } = await import('../api');
+      const historySpy = vi.mocked(api.repeaterTelemetryHistory);
+      const deferred = createDeferred<{ timestamp: number; data: { battery_volts: number } }[]>();
+      historySpy.mockReturnValue(deferred.promise);
+
+      mockHook.loggedIn = true;
+      mockHook.paneData.status = {
+        battery_volts: 4.2,
+        tx_queue_len: 0,
+        noise_floor_dbm: -120,
+        last_rssi_dbm: -85,
+        last_snr_db: 7.5,
+        packets_received: 100,
+        packets_sent: 50,
+        airtime_seconds: 600,
+        rx_airtime_seconds: 1200,
+        uptime_seconds: 86400,
+        sent_flood: 10,
+        sent_direct: 40,
+        recv_flood: 30,
+        recv_direct: 70,
+        flood_dups: 1,
+        direct_dups: 0,
+        full_events: 0,
+        telemetry_history: [{ timestamp: 1700000000, data: { battery_volts: 4.2 } }],
+      };
+
+      render(<RepeaterDashboard {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('1 samples')).toBeInTheDocument();
+      });
+
+      deferred.resolve([{ timestamp: 1690000000, data: { battery_volts: 3.9 } }]);
+      await deferred.promise;
+
+      expect(screen.getByText('1 samples')).toBeInTheDocument();
     });
   });
 });

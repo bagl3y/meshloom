@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../api';
 import { toast } from './ui/sonner';
@@ -100,20 +100,34 @@ export function RepeaterDashboard({
 
   // Telemetry history: preload from stored data, refresh from live status
   const [telemetryHistory, setTelemetryHistory] = useState<TelemetryHistoryEntry[]>([]);
+  const telemetryHistorySourceRef = useRef<'none' | 'preload' | 'live'>('none');
+  const telemetryHistoryRequestRef = useRef(0);
+
   useEffect(() => {
+    telemetryHistoryRequestRef.current += 1;
+    telemetryHistorySourceRef.current = 'none';
+    setTelemetryHistory([]);
+
     if (!loggedIn) return;
+
+    const requestId = telemetryHistoryRequestRef.current;
     api
       .repeaterTelemetryHistory(conversation.id)
-      .then(setTelemetryHistory)
+      .then((history) => {
+        if (telemetryHistoryRequestRef.current !== requestId) return;
+        if (telemetryHistorySourceRef.current === 'live') return;
+        telemetryHistorySourceRef.current = 'preload';
+        setTelemetryHistory(history);
+      })
       .catch(() => {});
   }, [loggedIn, conversation.id]);
 
   // When a live status fetch returns embedded telemetry_history, replace local state
   useEffect(() => {
     const liveHistory = paneData.status?.telemetry_history;
-    if (liveHistory && liveHistory.length > 0) {
-      setTelemetryHistory(liveHistory);
-    }
+    if (!liveHistory) return;
+    telemetryHistorySourceRef.current = 'live';
+    setTelemetryHistory(liveHistory);
   }, [paneData.status?.telemetry_history]);
 
   const isFav = isFavorite(favorites, 'contact', conversation.id);
