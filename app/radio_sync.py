@@ -29,7 +29,10 @@ from app.repository import (
     ChannelRepository,
     ContactRepository,
 )
-from app.services.contact_reconciliation import reconcile_contact_messages
+from app.services.contact_reconciliation import (
+    promote_prefix_contacts_for_contact,
+    reconcile_contact_messages,
+)
 from app.services.messages import create_fallback_channel_message
 from app.services.radio_runtime import radio_runtime as radio_manager
 from app.websocket import broadcast_error, broadcast_event
@@ -63,13 +66,25 @@ async def _reconcile_contact_messages_background(
     public_key: str,
     contact_name: str | None,
 ) -> None:
-    """Run contact/message reconciliation outside the radio critical path."""
+    """Run prefix promotion and contact/message reconciliation outside the radio critical path."""
     try:
+        promoted_keys = await promote_prefix_contacts_for_contact(
+            public_key=public_key,
+            log=logger,
+        )
         await reconcile_contact_messages(
             public_key=public_key,
             contact_name=contact_name,
             log=logger,
         )
+        if promoted_keys:
+            contact = await ContactRepository.get_by_key(public_key.lower())
+            if contact is not None:
+                for old_key in promoted_keys:
+                    broadcast_event(
+                        "contact_resolved",
+                        {"previous_public_key": old_key, "contact": contact.model_dump()},
+                    )
     except Exception as exc:
         logger.warning(
             "Background contact reconciliation failed for %s: %s",

@@ -884,6 +884,11 @@ class TestSyncAndOffloadContacts:
             return task
 
         with (
+            patch(
+                "app.radio_sync.promote_prefix_contacts_for_contact",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
             patch("app.radio_sync.reconcile_contact_messages", side_effect=_slow_reconcile),
             patch("app.radio_sync.asyncio.create_task", side_effect=_capture_task),
         ):

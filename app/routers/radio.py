@@ -24,7 +24,10 @@ from app.models import (
 from app.radio_sync import send_advertisement as do_send_advertisement
 from app.radio_sync import sync_radio_time
 from app.repository import ContactRepository
-from app.services.contact_reconciliation import promote_prefix_contacts_for_contact
+from app.services.contact_reconciliation import (
+    promote_prefix_contacts_for_contact,
+    reconcile_contact_messages,
+)
 from app.services.radio_commands import (
     KeystoreRefreshError,
     PathHashModeUnsupportedError,
@@ -214,11 +217,19 @@ async def _persist_new_discovery_contacts(results: list[RadioDiscoveryResult]) -
             public_key=result.public_key,
             log=logger,
         )
+        await reconcile_contact_messages(
+            public_key=result.public_key,
+            contact_name=result.name,
+            log=logger,
+        )
         created = await ContactRepository.get_by_key(result.public_key)
         if created is not None:
             broadcast_event("contact", created.model_dump())
-        for old_key in promoted_keys:
-            broadcast_event("contact_deleted", {"public_key": old_key})
+            for old_key in promoted_keys:
+                broadcast_event(
+                    "contact_resolved",
+                    {"previous_public_key": old_key, "contact": created.model_dump()},
+                )
 
 
 async def _attach_known_names(results: list[RadioDiscoveryResult]) -> None:

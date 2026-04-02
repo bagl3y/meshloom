@@ -381,6 +381,11 @@ class TestDiscoverMesh:
                 new_callable=AsyncMock,
                 return_value=[],
             ),
+            patch(
+                "app.routers.radio.reconcile_contact_messages",
+                new_callable=AsyncMock,
+                return_value=(0, 0),
+            ),
             patch("app.routers.radio.broadcast_event"),
         ):
             response = await discover_mesh(RadioDiscoveryRequest(target="repeaters"))
@@ -454,6 +459,11 @@ class TestDiscoverMesh:
                 new_callable=AsyncMock,
                 return_value=[],
             ) as mock_promote,
+            patch(
+                "app.routers.radio.reconcile_contact_messages",
+                new_callable=AsyncMock,
+                return_value=(0, 0),
+            ),
             patch("app.routers.radio.broadcast_event") as mock_broadcast,
         ):
             response = await discover_mesh(RadioDiscoveryRequest(target="repeaters"))
@@ -778,6 +788,11 @@ class TestTracePath:
                 "app.routers.radio.promote_prefix_contacts_for_contact",
                 new_callable=AsyncMock,
                 return_value=[],
+            ),
+            patch(
+                "app.routers.radio.reconcile_contact_messages",
+                new_callable=AsyncMock,
+                return_value=(0, 0),
             ),
             patch("app.routers.radio.broadcast_event"),
         ):
