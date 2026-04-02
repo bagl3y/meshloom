@@ -530,6 +530,9 @@ class RepeaterStatusResponse(BaseModel):
     flood_dups: int = Field(description="Duplicate flood packets")
     direct_dups: int = Field(description="Duplicate direct packets")
     full_events: int = Field(description="Full event queue count")
+    telemetry_history: list["TelemetryHistoryEntry"] = Field(
+        default_factory=list, description="Recent telemetry history snapshots"
+    )
 
 
 class RepeaterNodeInfoResponse(BaseModel):
@@ -921,3 +924,8 @@ class StatisticsResponse(BaseModel):
     known_channels_active: ContactActivityCounts
     path_hash_width_24h: PathHashWidthStats
     noise_floor_24h: NoiseFloorHistoryStats
+
+
+class TelemetryHistoryEntry(BaseModel):
+    timestamp: int
+    data: dict

@@ -235,14 +235,6 @@ export interface ChannelTopSender {
   message_count: number;
 }
 
-export interface ChannelDetail {
-  channel: Channel;
-  message_counts: ChannelMessageCounts;
-  first_message_at: number | null;
-  unique_sender_count: number;
-  top_senders_24h: ChannelTopSender[];
-}
-
 export interface BulkCreateHashtagChannelsResult {
   created_channels: Channel[];
   existing_count: number;
@@ -250,6 +242,14 @@ export interface BulkCreateHashtagChannelsResult {
   decrypt_started: boolean;
   decrypt_total_packets: number;
   message: string;
+}
+
+export interface ChannelDetail {
+  channel: Channel;
+  message_counts: ChannelMessageCounts;
+  first_message_at: number | null;
+  unique_sender_count: number;
+  top_senders_24h: ChannelTopSender[];
 }
 
 /** A single path that a message took to reach us */
@@ -416,6 +416,7 @@ export interface RepeaterStatusResponse {
   flood_dups: number;
   direct_dups: number;
   full_events: number;
+  telemetry_history: TelemetryHistoryEntry[];
 }
 
 export interface RepeaterNeighborsResponse {
@@ -477,6 +478,11 @@ export interface PaneState {
   attempt: number;
   error: string | null;
   fetched_at?: number | null;
+}
+
+export interface TelemetryHistoryEntry {
+  timestamp: number;
+  data: Record<string, number>;
 }
 
 export interface TraceResponse {

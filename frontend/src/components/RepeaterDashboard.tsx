@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { api } from '../api';
 import { toast } from './ui/sonner';
 import { Button } from './ui/button';
 import { Bell, Info, Route, Star, Trash2 } from 'lucide-react';
@@ -12,7 +13,13 @@ import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { isValidLocation } from '../utils/pathUtils';
 import { ContactStatusInfo } from './ContactStatusInfo';
-import type { Contact, Conversation, Favorite, PathDiscoveryResponse } from '../types';
+import type {
+  Contact,
+  Conversation,
+  Favorite,
+  PathDiscoveryResponse,
+  TelemetryHistoryEntry,
+} from '../types';
 import { cn } from '../lib/utils';
 import { TelemetryPane } from './repeater/RepeaterTelemetryPane';
 import { NeighborsPane } from './repeater/RepeaterNeighborsPane';
@@ -23,6 +30,7 @@ import { LppTelemetryPane } from './repeater/RepeaterLppTelemetryPane';
 import { OwnerInfoPane } from './repeater/RepeaterOwnerInfoPane';
 import { ActionsPane } from './repeater/RepeaterActionsPane';
 import { ConsolePane } from './repeater/RepeaterConsolePane';
+import { TelemetryHistoryPane } from './repeater/RepeaterTelemetryHistoryPane';
 import { ContactPathDiscoveryModal } from './ContactPathDiscoveryModal';
 
 // Re-export for backwards compatibility (used by repeaterFormatters.test.ts)
@@ -90,7 +98,40 @@ export function RepeaterDashboard({
   const { password, setPassword, rememberPassword, setRememberPassword, persistAfterLogin } =
     useRememberedServerPassword('repeater', conversation.id);
 
+  // Telemetry history: preload from stored data, refresh from live status
+  const [telemetryHistory, setTelemetryHistory] = useState<TelemetryHistoryEntry[]>([]);
+  const telemetryHistorySourceRef = useRef<'none' | 'preload' | 'live'>('none');
+  const telemetryHistoryRequestRef = useRef(0);
+
+  useEffect(() => {
+    telemetryHistoryRequestRef.current += 1;
+    telemetryHistorySourceRef.current = 'none';
+    setTelemetryHistory([]);
+
+    if (!loggedIn) return;
+
+    const requestId = telemetryHistoryRequestRef.current;
+    api
+      .repeaterTelemetryHistory(conversation.id)
+      .then((history) => {
+        if (telemetryHistoryRequestRef.current !== requestId) return;
+        if (telemetryHistorySourceRef.current === 'live') return;
+        telemetryHistorySourceRef.current = 'preload';
+        setTelemetryHistory(history);
+      })
+      .catch(() => {});
+  }, [loggedIn, conversation.id]);
+
+  // When a live status fetch returns embedded telemetry_history, replace local state
+  useEffect(() => {
+    const liveHistory = paneData.status?.telemetry_history;
+    if (!liveHistory) return;
+    telemetryHistorySourceRef.current = 'live';
+    setTelemetryHistory(liveHistory);
+  }, [paneData.status?.telemetry_history]);
+
   const isFav = isFavorite(favorites, 'contact', conversation.id);
+
   const handleRepeaterLogin = async (nextPassword: string) => {
     await login(nextPassword);
     persistAfterLogin(nextPassword);
@@ -353,6 +394,9 @@ export function RepeaterDashboard({
               loading={consoleLoading}
               onSend={sendConsoleCommand}
             />
+
+            {/* Telemetry history chart — full width, below console */}
+            <TelemetryHistoryPane entries={telemetryHistory} />
           </div>
         )}
       </div>

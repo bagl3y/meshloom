@@ -382,6 +382,13 @@ async def run_migrations(conn: aiosqlite.Connection) -> int:
         await set_version(conn, 49)
         applied += 1
 
+    # Migration 50: Repeater telemetry history table + tracking opt-in column
+    if version < 50:
+        logger.info("Applying migration 50: repeater telemetry history")
+        await _migrate_050_repeater_telemetry_history(conn)
+        await set_version(conn, 50)
+        applied += 1
+
     if applied > 0:
         logger.info(
             "Applied %d migration(s), schema now at version %d", applied, await get_version(conn)
@@ -3099,3 +3106,25 @@ async def _migrate_049_foreign_key_cascade(conn: aiosqlite.Connection) -> None:
         )
         await conn.commit()
         logger.debug("Rebuilt contact_name_history with ON DELETE CASCADE")
+
+
+async def _migrate_050_repeater_telemetry_history(conn: aiosqlite.Connection) -> None:
+    """Create repeater_telemetry_history table for JSON-blob telemetry snapshots."""
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS repeater_telemetry_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            public_key TEXT NOT NULL,
+            timestamp INTEGER NOT NULL,
+            data TEXT NOT NULL,
+            FOREIGN KEY (public_key) REFERENCES contacts(public_key) ON DELETE CASCADE
+        )
+        """
+    )
+    await conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_repeater_telemetry_pk_ts
+            ON repeater_telemetry_history (public_key, timestamp)
+        """
+    )
+    await conn.commit()
