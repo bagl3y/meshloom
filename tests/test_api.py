@@ -1199,12 +1199,18 @@ class TestRawPacketRepository:
         """Purge linked raw packets removes only rows with a message_id."""
         ts = int(time.time())
         msg_id_1 = await MessageRepository.create(
-            msg_type="PRIV", conversation_key="k1", text="t1",
-            sender_timestamp=ts, received_at=ts,
+            msg_type="PRIV",
+            conversation_key="k1",
+            text="t1",
+            sender_timestamp=ts,
+            received_at=ts,
         )
         msg_id_2 = await MessageRepository.create(
-            msg_type="PRIV", conversation_key="k2", text="t2",
-            sender_timestamp=ts, received_at=ts,
+            msg_type="PRIV",
+            conversation_key="k2",
+            text="t2",
+            sender_timestamp=ts,
+            received_at=ts,
         )
         linked_1, _ = await RawPacketRepository.create(b"\x01\x02\x03", ts)
         linked_2, _ = await RawPacketRepository.create(b"\x04\x05\x06", ts)
@@ -1248,12 +1254,18 @@ class TestMaintenanceEndpoint:
 
         ts = int(time.time())
         msg_id_1 = await MessageRepository.create(
-            msg_type="PRIV", conversation_key="k1", text="t1",
-            sender_timestamp=ts, received_at=ts,
+            msg_type="PRIV",
+            conversation_key="k1",
+            text="t1",
+            sender_timestamp=ts,
+            received_at=ts,
         )
         msg_id_2 = await MessageRepository.create(
-            msg_type="PRIV", conversation_key="k2", text="t2",
-            sender_timestamp=ts, received_at=ts,
+            msg_type="PRIV",
+            conversation_key="k2",
+            text="t2",
+            sender_timestamp=ts,
+            received_at=ts,
         )
         linked_1, _ = await RawPacketRepository.create(b"\x0a\x0b\x0c", ts)
         linked_2, _ = await RawPacketRepository.create(b"\x0d\x0e\x0f", ts)

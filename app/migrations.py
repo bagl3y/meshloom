@@ -2971,9 +2971,7 @@ async def _migrate_049_foreign_key_cascade(conn: aiosqlite.Connection) -> None:
         logger.info("Database backed up to %s before FK migration", backup_path)
 
     # --- Phase 1: clean orphans (guard each table's existence) ---
-    tables_cursor = await conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table'"
-    )
+    tables_cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
     existing_tables = {row[0] for row in await tables_cursor.fetchall()}
 
     if "contact_advert_paths" in existing_tables and "contacts" in existing_tables:
@@ -3021,9 +3019,7 @@ async def _migrate_049_foreign_key_cascade(conn: aiosqlite.Connection) -> None:
         if "payload_hash" in old_cols:
             new_col_defs.append("payload_hash BLOB")
             copy_cols.append("payload_hash")
-        new_col_defs.append(
-            "FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE SET NULL"
-        )
+        new_col_defs.append("FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE SET NULL")
 
         cols_sql = ", ".join(new_col_defs)
         copy_sql = ", ".join(copy_cols)
@@ -3103,5 +3099,3 @@ async def _migrate_049_foreign_key_cascade(conn: aiosqlite.Connection) -> None:
         )
         await conn.commit()
         logger.debug("Rebuilt contact_name_history with ON DELETE CASCADE")
-
-
