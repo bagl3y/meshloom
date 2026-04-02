@@ -158,7 +158,11 @@ class MessageRepository:
         """
         lower_key = full_key.lower()
         cursor = await db.conn.execute(
-            """UPDATE messages SET conversation_key = ?
+            """UPDATE messages SET conversation_key = ?,
+                   sender_key = CASE
+                       WHEN sender_key IS NOT NULL AND length(sender_key) < 64
+                            AND ? LIKE sender_key || '%'
+                       THEN ? ELSE sender_key END
                WHERE type = 'PRIV' AND length(conversation_key) < 64
                AND ? LIKE conversation_key || '%'
                AND (
@@ -166,7 +170,7 @@ class MessageRepository:
                    WHERE length(public_key) = 64
                      AND public_key LIKE messages.conversation_key || '%'
                ) = 1""",
-            (lower_key, lower_key),
+            (lower_key, lower_key, lower_key, lower_key),
         )
         await db.conn.commit()
         return cursor.rowcount
@@ -572,6 +576,9 @@ class MessageRepository:
     @staticmethod
     async def delete_by_id(message_id: int) -> None:
         """Delete a message row by ID."""
+        await db.conn.execute(
+            "UPDATE raw_packets SET message_id = NULL WHERE message_id = ?", (message_id,)
+        )
         await db.conn.execute("DELETE FROM messages WHERE id = ?", (message_id,))
         await db.conn.commit()
 

@@ -476,15 +476,6 @@ async def _process_advertisement(
             )
             return
 
-    # Keep recent unique advert paths for all contacts.
-    await ContactAdvertPathRepository.record_observation(
-        public_key=advert.public_key.lower(),
-        path_hex=new_path_hex,
-        timestamp=timestamp,
-        max_paths=10,
-        hop_count=new_path_len,
-    )
-
     contact_upsert = ContactUpsert(
         public_key=advert.public_key.lower(),
         name=advert.name,
@@ -496,7 +487,18 @@ async def _process_advertisement(
         first_seen=timestamp,  # COALESCE in upsert preserves existing value
     )
 
+    # Upsert the contact BEFORE recording advert paths so the parent row
+    # exists when foreign key enforcement is enabled.
     await ContactRepository.upsert(contact_upsert)
+
+    # Keep recent unique advert paths for all contacts.
+    await ContactAdvertPathRepository.record_observation(
+        public_key=advert.public_key.lower(),
+        path_hex=new_path_hex,
+        timestamp=timestamp,
+        max_paths=10,
+        hop_count=new_path_len,
+    )
     promoted_keys = await promote_prefix_contacts_for_contact(
         public_key=advert.public_key,
         log=logger,

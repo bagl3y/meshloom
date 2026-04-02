@@ -1167,7 +1167,14 @@ class TestRawPacketRepository:
         await RawPacketRepository.create(b"\x04\x05\x06", recent_timestamp)
         # Insert old but decrypted packet (should NOT be deleted)
         old_id, _ = await RawPacketRepository.create(b"\x07\x08\x09", old_timestamp)
-        await RawPacketRepository.mark_decrypted(old_id, 1)
+        msg_id = await MessageRepository.create(
+            msg_type="PRIV",
+            conversation_key="test_key",
+            text="test",
+            sender_timestamp=old_timestamp,
+            received_at=old_timestamp,
+        )
+        await RawPacketRepository.mark_decrypted(old_id, msg_id)
 
         # Prune packets older than 10 days
         deleted = await RawPacketRepository.prune_old_undecrypted(10)
@@ -1191,10 +1198,24 @@ class TestRawPacketRepository:
     async def test_purge_linked_to_messages_deletes_only_linked_packets(self, test_db):
         """Purge linked raw packets removes only rows with a message_id."""
         ts = int(time.time())
+        msg_id_1 = await MessageRepository.create(
+            msg_type="PRIV",
+            conversation_key="k1",
+            text="t1",
+            sender_timestamp=ts,
+            received_at=ts,
+        )
+        msg_id_2 = await MessageRepository.create(
+            msg_type="PRIV",
+            conversation_key="k2",
+            text="t2",
+            sender_timestamp=ts,
+            received_at=ts,
+        )
         linked_1, _ = await RawPacketRepository.create(b"\x01\x02\x03", ts)
         linked_2, _ = await RawPacketRepository.create(b"\x04\x05\x06", ts)
-        await RawPacketRepository.mark_decrypted(linked_1, 101)
-        await RawPacketRepository.mark_decrypted(linked_2, 102)
+        await RawPacketRepository.mark_decrypted(linked_1, msg_id_1)
+        await RawPacketRepository.mark_decrypted(linked_2, msg_id_2)
 
         await RawPacketRepository.create(b"\x07\x08\x09", ts)  # undecrypted, should remain
 
@@ -1232,10 +1253,24 @@ class TestMaintenanceEndpoint:
         from app.routers.packets import MaintenanceRequest, run_maintenance
 
         ts = int(time.time())
+        msg_id_1 = await MessageRepository.create(
+            msg_type="PRIV",
+            conversation_key="k1",
+            text="t1",
+            sender_timestamp=ts,
+            received_at=ts,
+        )
+        msg_id_2 = await MessageRepository.create(
+            msg_type="PRIV",
+            conversation_key="k2",
+            text="t2",
+            sender_timestamp=ts,
+            received_at=ts,
+        )
         linked_1, _ = await RawPacketRepository.create(b"\x0a\x0b\x0c", ts)
         linked_2, _ = await RawPacketRepository.create(b"\x0d\x0e\x0f", ts)
-        await RawPacketRepository.mark_decrypted(linked_1, 201)
-        await RawPacketRepository.mark_decrypted(linked_2, 202)
+        await RawPacketRepository.mark_decrypted(linked_1, msg_id_1)
+        await RawPacketRepository.mark_decrypted(linked_2, msg_id_2)
 
         request = MaintenanceRequest(purge_linked_raw_packets=True)
         result = await run_maintenance(request)

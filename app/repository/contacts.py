@@ -1,3 +1,4 @@
+import logging
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -11,6 +12,8 @@ from app.models import (
     ContactUpsert,
 )
 from app.path_utils import first_hop_hex, normalize_contact_route, normalize_route_override
+
+logger = logging.getLogger(__name__)
 
 
 class AmbiguousPublicKeyPrefixError(ValueError):
@@ -484,7 +487,6 @@ class ContactRepository:
             return []
 
         promoted_keys: list[str] = []
-        full_exists = await ContactRepository.get_by_key(normalized_full_key) is not None
 
         for row in rows:
             old_key = row["public_key"]
@@ -501,60 +503,70 @@ class ContactRepository:
                 (old_key,),
             )
             match_row = await match_cursor.fetchone()
-            if (match_row["match_count"] if match_row is not None else 0) != 1:
+            match_count = match_row["match_count"] if match_row is not None else 0
+            if match_count != 1:
+                logger.warning(
+                    "Skipping prefix promotion for %s: %d full-key contacts match (expected 1)",
+                    old_key,
+                    match_count,
+                )
                 continue
 
             await migrate_child_rows(old_key, normalized_full_key)
 
-            if full_exists:
-                await db.conn.execute(
-                    """
-                    UPDATE contacts
-                    SET last_seen = CASE
-                            WHEN contacts.last_seen IS NULL THEN ?
-                            WHEN ? IS NULL THEN contacts.last_seen
-                            WHEN ? > contacts.last_seen THEN ?
-                            ELSE contacts.last_seen
-                        END,
-                        last_contacted = CASE
-                            WHEN contacts.last_contacted IS NULL THEN ?
-                            WHEN ? IS NULL THEN contacts.last_contacted
-                            WHEN ? > contacts.last_contacted THEN ?
-                            ELSE contacts.last_contacted
-                        END,
-                        first_seen = CASE
-                            WHEN contacts.first_seen IS NULL THEN ?
-                            WHEN ? IS NULL THEN contacts.first_seen
-                            WHEN ? < contacts.first_seen THEN ?
-                            ELSE contacts.first_seen
-                        END,
-                        last_read_at = COALESCE(contacts.last_read_at, ?)
-                    WHERE public_key = ?
-                    """,
-                    (
-                        row["last_seen"],
-                        row["last_seen"],
-                        row["last_seen"],
-                        row["last_seen"],
-                        row["last_contacted"],
-                        row["last_contacted"],
-                        row["last_contacted"],
-                        row["last_contacted"],
-                        row["first_seen"],
-                        row["first_seen"],
-                        row["first_seen"],
-                        row["first_seen"],
-                        row["last_read_at"],
-                        normalized_full_key,
-                    ),
-                )
-                await db.conn.execute("DELETE FROM contacts WHERE public_key = ?", (old_key,))
-            else:
-                await db.conn.execute(
-                    "UPDATE contacts SET public_key = ? WHERE public_key = ?",
-                    (normalized_full_key, old_key),
-                )
-                full_exists = True
+            # Merge timestamp metadata from the old prefix contact into the
+            # full-key contact (which all callers guarantee already exists),
+            # then delete the prefix placeholder.
+            await db.conn.execute(
+                """
+                UPDATE contacts
+                SET last_seen = CASE
+                        WHEN contacts.last_seen IS NULL THEN ?
+                        WHEN ? IS NULL THEN contacts.last_seen
+                        WHEN ? > contacts.last_seen THEN ?
+                        ELSE contacts.last_seen
+                    END,
+                    last_contacted = CASE
+                        WHEN contacts.last_contacted IS NULL THEN ?
+                        WHEN ? IS NULL THEN contacts.last_contacted
+                        WHEN ? > contacts.last_contacted THEN ?
+                        ELSE contacts.last_contacted
+                    END,
+                    first_seen = CASE
+                        WHEN contacts.first_seen IS NULL THEN ?
+                        WHEN ? IS NULL THEN contacts.first_seen
+                        WHEN ? < contacts.first_seen THEN ?
+                        ELSE contacts.first_seen
+                    END,
+                    last_read_at = CASE
+                        WHEN contacts.last_read_at IS NULL THEN ?
+                        WHEN ? IS NULL THEN contacts.last_read_at
+                        WHEN ? > contacts.last_read_at THEN ?
+                        ELSE contacts.last_read_at
+                    END
+                WHERE public_key = ?
+                """,
+                (
+                    row["last_seen"],
+                    row["last_seen"],
+                    row["last_seen"],
+                    row["last_seen"],
+                    row["last_contacted"],
+                    row["last_contacted"],
+                    row["last_contacted"],
+                    row["last_contacted"],
+                    row["first_seen"],
+                    row["first_seen"],
+                    row["first_seen"],
+                    row["first_seen"],
+                    row["last_read_at"],
+                    row["last_read_at"],
+                    row["last_read_at"],
+                    row["last_read_at"],
+                    normalized_full_key,
+                ),
+            )
+            await db.conn.execute("DELETE FROM contacts WHERE public_key = ?", (old_key,))
 
             promoted_keys.append(old_key)
 

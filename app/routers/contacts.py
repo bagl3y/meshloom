@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import time
 from contextlib import suppress
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
@@ -32,7 +33,7 @@ from app.repository import (
 )
 from app.services.contact_reconciliation import (
     promote_prefix_contacts_for_contact,
-    reconcile_contact_messages,
+    record_contact_name_and_reconcile,
 )
 from app.services.radio_runtime import radio_runtime as radio_manager
 
@@ -278,12 +279,18 @@ async def create_contact(
     # Check if contact already exists
     existing = await ContactRepository.get_by_key(request.public_key)
     if existing:
-        # Update name if provided
+        # Update name if provided and record name history
         if request.name:
             await ContactRepository.upsert(existing.to_upsert(name=request.name))
             refreshed = await ContactRepository.get_by_key(request.public_key)
             if refreshed is not None:
                 existing = refreshed
+            await record_contact_name_and_reconcile(
+                public_key=request.public_key,
+                contact_name=request.name,
+                timestamp=int(time.time()),
+                log=logger,
+            )
 
         promoted_keys = await promote_prefix_contacts_for_contact(
             public_key=request.public_key,
@@ -318,9 +325,10 @@ async def create_contact(
         log=logger,
     )
 
-    await reconcile_contact_messages(
+    await record_contact_name_and_reconcile(
         public_key=lower_key,
         contact_name=request.name,
+        timestamp=int(time.time()),
         log=logger,
     )
 
