@@ -4,7 +4,7 @@ import { takePrefetchOrFetch } from '../prefetch';
 import { toast } from '../components/ui/sonner';
 import { getContactDisplayName } from '../utils/pubkey';
 import { findPublicChannel, PUBLIC_CHANNEL_KEY, PUBLIC_CHANNEL_NAME } from '../utils/publicChannel';
-import type { Channel, Contact, Conversation } from '../types';
+import type { BulkCreateHashtagChannelsResult, Channel, Contact, Conversation } from '../types';
 
 interface UseContactsAndChannelsArgs {
   setActiveConversation: (conv: Conversation | null) => void;
@@ -112,6 +112,24 @@ export function useContactsAndChannels({
     [fetchUndecryptedCountInternal, setActiveConversation]
   );
 
+  const handleBulkCreateHashtagChannels = useCallback(
+    async (
+      channelNames: string[],
+      tryHistorical: boolean
+    ): Promise<BulkCreateHashtagChannelsResult> => {
+      const result = await api.bulkCreateHashtagChannels(channelNames, tryHistorical);
+      const data = await api.getChannels();
+      setChannels(data);
+
+      if (tryHistorical && result.decrypt_started) {
+        fetchUndecryptedCountInternal();
+      }
+
+      return result;
+    },
+    [fetchUndecryptedCountInternal]
+  );
+
   const handleDeleteChannel = useCallback(
     async (key: string) => {
       if (!confirm('Delete this channel? Message history will be preserved.')) return;
@@ -190,6 +208,7 @@ export function useContactsAndChannels({
     handleCreateContact,
     handleCreateChannel,
     handleCreateHashtagChannel,
+    handleBulkCreateHashtagChannels,
     handleDeleteChannel,
     handleDeleteContact,
   };

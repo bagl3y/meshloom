@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState, useMemo } from 'react';
+import { useEffect, useCallback, useRef, useState, useMemo, type MouseEvent } from 'react';
 import { api } from './api';
 import { takePrefetchOrFetch } from './prefetch';
 import { useWebSocket } from './useWebSocket';
@@ -23,7 +23,7 @@ import type { MessageInputHandle } from './components/MessageInput';
 import { DistanceUnitProvider } from './contexts/DistanceUnitContext';
 import { messageContainsMention } from './utils/messageParser';
 import { getStateKey } from './utils/conversationState';
-import type { Conversation, Message, RawPacket } from './types';
+import type { BulkCreateHashtagChannelsResult, Conversation, Message, RawPacket } from './types';
 import { CONTACT_TYPE_ROOM } from './types';
 
 interface ChannelUnreadMarker {
@@ -85,6 +85,8 @@ export function App() {
   const [channelUnreadMarker, setChannelUnreadMarker] = useState<ChannelUnreadMarker | null>(null);
   const [newMessagePrefillRequest, setNewMessagePrefillRequest] =
     useState<NewMessagePrefillRequest | null>(null);
+  const [showBulkAddChannelTab, setShowBulkAddChannelTab] = useState(false);
+  const [bulkAddResult, setBulkAddResult] = useState<BulkCreateHashtagChannelsResult | null>(null);
   const [visibilityVersion, setVisibilityVersion] = useState(0);
   const lastUnreadBackfillAttemptRef = useRef<string | null>(null);
   const {
@@ -190,6 +192,7 @@ export function App() {
     handleCreateContact,
     handleCreateChannel,
     handleCreateHashtagChannel,
+    handleBulkCreateHashtagChannels,
     handleDeleteChannel,
     handleDeleteContact,
   } = useContactsAndChannels({
@@ -421,15 +424,24 @@ export function App() {
     [fetchUndecryptedCount, setChannels]
   );
 
-  const handleOpenNewMessage = useCallback(() => {
-    setNewMessagePrefillRequest(null);
-    openNewMessageModal();
-  }, [openNewMessageModal]);
+  const handleOpenNewMessage = useCallback(
+    (event?: MouseEvent<HTMLButtonElement>) => {
+      setNewMessagePrefillRequest(null);
+      setShowBulkAddChannelTab(event?.altKey === true);
+      openNewMessageModal();
+    },
+    [openNewMessageModal]
+  );
 
   const handleCloseNewMessage = useCallback(() => {
     setNewMessagePrefillRequest(null);
+    setShowBulkAddChannelTab(false);
     closeNewMessageModal();
   }, [closeNewMessageModal]);
+
+  const handleCloseBulkAddResults = useCallback(() => {
+    setBulkAddResult(null);
+  }, []);
 
   const handleChannelReferenceClick = useCallback(
     (channelName: string) => {
@@ -444,9 +456,18 @@ export function App() {
         hashtagName: channelName.slice(1),
         nonce: (previous?.nonce ?? 0) + 1,
       }));
+      setShowBulkAddChannelTab(false);
       openNewMessageModal();
     },
     [channels, handleNavigateToChannel, openNewMessageModal]
+  );
+
+  const handleBulkAddChannels = useCallback(
+    async (channelNames: string[], tryHistorical: boolean) => {
+      const result = await handleBulkCreateHashtagChannels(channelNames, tryHistorical);
+      setBulkAddResult(result);
+    },
+    [handleBulkCreateHashtagChannels]
   );
 
   const statusProps = {
@@ -473,6 +494,9 @@ export function App() {
     isConversationNotificationsEnabled,
     blockedKeys: appSettings?.blocked_keys ?? [],
     blockedNames: appSettings?.blocked_names ?? [],
+  };
+  const bulkAddChannelResultModalProps = {
+    result: bulkAddResult,
   };
   const conversationPaneProps = {
     activeConversation,
@@ -570,10 +594,12 @@ export function App() {
   };
   const newMessageModalProps = {
     undecryptedCount,
+    showBulkAddChannelTab,
     prefillRequest: newMessagePrefillRequest,
     onCreateContact: handleCreateContact,
     onCreateChannel: handleCreateChannel,
     onCreateHashtagChannel: handleCreateHashtagChannel,
+    onBulkAddHashtagChannels: handleBulkAddChannels,
   };
   const contactInfoPaneProps = {
     contactKey: infoPaneContactKey,
@@ -637,6 +663,7 @@ export function App() {
       <AppShell
         localLabel={localLabel}
         showNewMessage={showNewMessage}
+        showBulkAddResults={bulkAddResult !== null}
         showSettings={showSettings}
         settingsSection={settingsSection}
         sidebarOpen={sidebarOpen}
@@ -647,6 +674,7 @@ export function App() {
         onToggleSettingsView={handleToggleSettingsView}
         onCloseSettingsView={handleCloseSettingsView}
         onCloseNewMessage={handleCloseNewMessage}
+        onCloseBulkAddResults={handleCloseBulkAddResults}
         onLocalLabelChange={setLocalLabel}
         statusProps={statusProps}
         sidebarProps={sidebarProps}
@@ -655,6 +683,7 @@ export function App() {
         settingsProps={settingsProps}
         crackerProps={crackerProps}
         newMessageModalProps={newMessageModalProps}
+        bulkAddChannelResultModalProps={bulkAddChannelResultModalProps}
         contactInfoPaneProps={contactInfoPaneProps}
         channelInfoPaneProps={channelInfoPaneProps}
       />

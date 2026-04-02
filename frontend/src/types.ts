@@ -243,6 +243,15 @@ export interface ChannelDetail {
   top_senders_24h: ChannelTopSender[];
 }
 
+export interface BulkCreateHashtagChannelsResult {
+  created_channels: Channel[];
+  existing_count: number;
+  invalid_names: string[];
+  decrypt_started: boolean;
+  decrypt_total_packets: number;
+  message: string;
+}
+
 /** A single path that a message took to reach us */
 export interface MessagePath {
   /** Hex-encoded routing path */

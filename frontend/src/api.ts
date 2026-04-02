@@ -1,6 +1,7 @@
 import type {
   AppSettings,
   AppSettingsUpdate,
+  BulkCreateHashtagChannelsResult,
   Channel,
   ChannelDetail,
   CommandResponse,
@@ -189,6 +190,11 @@ export const api = {
     fetchJson<Channel>('/channels', {
       method: 'POST',
       body: JSON.stringify({ name, key }),
+    }),
+  bulkCreateHashtagChannels: (channelNames: string[], tryHistorical?: boolean) =>
+    fetchJson<BulkCreateHashtagChannelsResult>('/channels/bulk-hashtag', {
+      method: 'POST',
+      body: JSON.stringify({ channel_names: channelNames, try_historical: tryHistorical }),
     }),
   deleteChannel: (key: string) =>
     fetchJson<{ status: string }>(`/channels/${key}`, { method: 'DELETE' }),

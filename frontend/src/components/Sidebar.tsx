@@ -97,7 +97,7 @@ interface SidebarProps {
   channels: Channel[];
   activeConversation: Conversation | null;
   onSelectConversation: (conversation: Conversation) => void;
-  onNewMessage: () => void;
+  onNewMessage: (event?: React.MouseEvent<HTMLButtonElement>) => void;
   lastMessageTimes: ConversationTimes;
   unreadCounts: Record<string, number>;
   /** Tracks which conversations have unread messages that mention the user */

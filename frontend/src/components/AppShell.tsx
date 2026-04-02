@@ -5,6 +5,7 @@ import { StatusBar } from './StatusBar';
 import { Sidebar } from './Sidebar';
 import { ConversationPane } from './ConversationPane';
 import { NewMessageModal } from './NewMessageModal';
+import { BulkAddChannelResultModal } from './BulkAddChannelResultModal';
 import { ContactInfoPane } from './ContactInfoPane';
 import { ChannelInfoPane } from './ChannelInfoPane';
 import { SecurityWarningModal } from './SecurityWarningModal';
@@ -33,12 +34,17 @@ const SearchView = lazy(() => import('./SearchView').then((m) => ({ default: m.S
 type SidebarProps = ComponentProps<typeof Sidebar>;
 type ConversationPaneProps = ComponentProps<typeof ConversationPane>;
 type NewMessageModalProps = Omit<ComponentProps<typeof NewMessageModal>, 'open' | 'onClose'>;
+type BulkAddChannelResultModalProps = Omit<
+  ComponentProps<typeof BulkAddChannelResultModal>,
+  'open' | 'onClose'
+>;
 type ContactInfoPaneProps = ComponentProps<typeof ContactInfoPane>;
 type ChannelInfoPaneProps = ComponentProps<typeof ChannelInfoPane>;
 
 interface AppShellProps {
   localLabel: LocalLabel;
   showNewMessage: boolean;
+  showBulkAddResults: boolean;
   showSettings: boolean;
   settingsSection: SettingsSection;
   sidebarOpen: boolean;
@@ -50,6 +56,7 @@ interface AppShellProps {
   onToggleSettingsView: () => void;
   onCloseSettingsView: () => void;
   onCloseNewMessage: () => void;
+  onCloseBulkAddResults: () => void;
   onLocalLabelChange: (label: LocalLabel) => void;
   statusProps: Pick<ComponentProps<typeof StatusBar>, 'health' | 'config'>;
   sidebarProps: SidebarProps;
@@ -61,6 +68,7 @@ interface AppShellProps {
   >;
   crackerProps: Omit<CrackerPanelProps, 'visible' | 'onRunningChange'>;
   newMessageModalProps: NewMessageModalProps;
+  bulkAddChannelResultModalProps: BulkAddChannelResultModalProps;
   contactInfoPaneProps: ContactInfoPaneProps;
   channelInfoPaneProps: ChannelInfoPaneProps;
 }
@@ -68,6 +76,7 @@ interface AppShellProps {
 export function AppShell({
   localLabel,
   showNewMessage,
+  showBulkAddResults,
   showSettings,
   settingsSection,
   sidebarOpen,
@@ -79,6 +88,7 @@ export function AppShell({
   onToggleSettingsView,
   onCloseSettingsView,
   onCloseNewMessage,
+  onCloseBulkAddResults,
   onLocalLabelChange,
   statusProps,
   sidebarProps,
@@ -87,6 +97,7 @@ export function AppShell({
   settingsProps,
   crackerProps,
   newMessageModalProps,
+  bulkAddChannelResultModalProps,
   contactInfoPaneProps,
   channelInfoPaneProps,
 }: AppShellProps) {
@@ -305,6 +316,11 @@ export function AppShell({
         {...newMessageModalProps}
         open={showNewMessage}
         onClose={onCloseNewMessage}
+      />
+      <BulkAddChannelResultModal
+        {...bulkAddChannelResultModalProps}
+        open={showBulkAddResults}
+        onClose={onCloseBulkAddResults}
       />
 
       <SecurityWarningModal health={statusProps.health} />

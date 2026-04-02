@@ -27,6 +27,7 @@ describe('NewMessageModal form reset', () => {
   const onCreateContact = vi.fn().mockResolvedValue(undefined);
   const onCreateChannel = vi.fn().mockResolvedValue(undefined);
   const onCreateHashtagChannel = vi.fn().mockResolvedValue(undefined);
+  const onBulkAddHashtagChannels = vi.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -44,6 +45,7 @@ describe('NewMessageModal form reset', () => {
         onCreateContact={onCreateContact}
         onCreateChannel={onCreateChannel}
         onCreateHashtagChannel={onCreateHashtagChannel}
+        onBulkAddHashtagChannels={onBulkAddHashtagChannels}
         {...overrides}
       />
     );
@@ -108,6 +110,53 @@ describe('NewMessageModal form reset', () => {
 
       await user.click(screen.getByRole('button', { name: 'Cancel' }));
       expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  describe('bulk hashtag tab', () => {
+    it('is only visible when enabled', () => {
+      renderModal();
+      expect(screen.queryByRole('tab', { name: 'Bulk Add Channel' })).toBeNull();
+    });
+
+    it('opens on the bulk tab when enabled and submits normalized room names', async () => {
+      const user = userEvent.setup();
+      renderModal(true, { showBulkAddChannelTab: true });
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: 'Bulk Add Channel' })).toHaveAttribute(
+          'data-state',
+          'active'
+        );
+      });
+
+      await user.type(
+        screen.getByRole('textbox', { name: 'Bulk channel names' }),
+        '#Ops{enter}mesh-room another-room #Ops'
+      );
+      await user.click(screen.getByRole('button', { name: 'Add Channels' }));
+
+      await waitFor(() => {
+        expect(onBulkAddHashtagChannels).toHaveBeenCalledWith(
+          ['#ops', '#mesh-room', '#another-room'],
+          false
+        );
+      });
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it('shows invalid bulk room names before submitting', async () => {
+      const user = userEvent.setup();
+      renderModal(true, { showBulkAddChannelTab: true });
+
+      await user.type(
+        screen.getByRole('textbox', { name: 'Bulk channel names' }),
+        'good-room bad_room'
+      );
+      await user.click(screen.getByRole('button', { name: 'Add Channels' }));
+
+      expect(onBulkAddHashtagChannels).not.toHaveBeenCalled();
+      expect(screen.getByText('Invalid room names: bad_room')).toBeTruthy();
     });
   });
 

@@ -9,7 +9,7 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { useContactsAndChannels } from '../hooks/useContactsAndChannels';
-import type { Contact } from '../types';
+import type { BulkCreateHashtagChannelsResult, Contact } from '../types';
 
 // Mock api module
 vi.mock('../api', () => ({
@@ -18,6 +18,7 @@ vi.mock('../api', () => ({
     getChannels: vi.fn(),
     createContact: vi.fn(),
     createChannel: vi.fn(),
+    bulkCreateHashtagChannels: vi.fn(),
     deleteContact: vi.fn(),
     deleteChannel: vi.fn(),
     decryptHistoricalPackets: vi.fn(),
@@ -169,6 +170,43 @@ describe('useContactsAndChannels', () => {
 
       expect(fetched).toHaveLength(1000);
       expect(api.getContacts).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('bulk hashtag creation', () => {
+    it('refreshes channels and returns the backend result', async () => {
+      const { api } = await import('../api');
+      const resultPayload: BulkCreateHashtagChannelsResult = {
+        created_channels: [
+          {
+            key: 'AA'.repeat(16),
+            name: '#ops',
+            is_hashtag: true,
+            on_radio: false,
+            last_read_at: null,
+          },
+        ],
+        existing_count: 1,
+        invalid_names: [],
+        decrypt_started: true,
+        decrypt_total_packets: 12,
+        message: 'Created 1 room',
+      };
+      vi.mocked(api.bulkCreateHashtagChannels).mockResolvedValueOnce(resultPayload);
+      vi.mocked(api.getChannels).mockResolvedValueOnce(resultPayload.created_channels);
+      vi.mocked(api.getUndecryptedPacketCount).mockResolvedValueOnce({ count: 9 });
+
+      const { result } = renderUseContactsAndChannels();
+
+      let response: BulkCreateHashtagChannelsResult | null = null;
+      await act(async () => {
+        response = await result.current.handleBulkCreateHashtagChannels(['#ops'], true);
+      });
+
+      expect(api.bulkCreateHashtagChannels).toHaveBeenCalledWith(['#ops'], true);
+      expect(api.getChannels).toHaveBeenCalled();
+      expect(api.getUndecryptedPacketCount).toHaveBeenCalled();
+      expect(response).toEqual(resultPayload);
     });
   });
 });
