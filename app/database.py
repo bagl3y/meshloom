@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS raw_packets (
     data BLOB NOT NULL,
     message_id INTEGER,
     payload_hash BLOB,
-    FOREIGN KEY (message_id) REFERENCES messages(id)
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS contact_advert_paths (
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS contact_advert_paths (
     last_seen INTEGER NOT NULL,
     heard_count INTEGER NOT NULL DEFAULT 1,
     UNIQUE(public_key, path_hex, path_len),
-    FOREIGN KEY (public_key) REFERENCES contacts(public_key)
+    FOREIGN KEY (public_key) REFERENCES contacts(public_key) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS contact_name_history (
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS contact_name_history (
     first_seen INTEGER NOT NULL,
     last_seen INTEGER NOT NULL,
     UNIQUE(public_key, name),
-    FOREIGN KEY (public_key) REFERENCES contacts(public_key)
+    FOREIGN KEY (public_key) REFERENCES contacts(public_key) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_received ON messages(received_at);
@@ -132,6 +132,12 @@ class Database:
         # migration 20 handles the one-time VACUUM to restructure the file.
         await self._connection.execute("PRAGMA auto_vacuum = INCREMENTAL")
 
+        # Foreign key enforcement: must be set per-connection (not persisted).
+        # Disabled during schema init and migrations to avoid issues with
+        # historical table-rebuild migrations that may temporarily violate
+        # constraints, then re-enabled for all subsequent application queries.
+        await self._connection.execute("PRAGMA foreign_keys = OFF")
+
         await self._connection.executescript(SCHEMA)
         await self._connection.commit()
         logger.debug("Database schema initialized")
@@ -140,6 +146,10 @@ class Database:
         from app.migrations import run_migrations
 
         await run_migrations(self._connection)
+
+        # Enable FK enforcement for all application queries from this point on.
+        await self._connection.execute("PRAGMA foreign_keys = ON")
+        logger.debug("Foreign key enforcement enabled")
 
     async def disconnect(self) -> None:
         if self._connection:

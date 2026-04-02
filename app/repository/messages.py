@@ -572,6 +572,9 @@ class MessageRepository:
     @staticmethod
     async def delete_by_id(message_id: int) -> None:
         """Delete a message row by ID."""
+        await db.conn.execute(
+            "UPDATE raw_packets SET message_id = NULL WHERE message_id = ?", (message_id,)
+        )
         await db.conn.execute("DELETE FROM messages WHERE id = ?", (message_id,))
         await db.conn.commit()
 

@@ -513,7 +513,9 @@ class TestMigration018:
             from hashlib import sha256
 
             assert bytes(rows[0]["payload_hash"]) == sha256(b"hash_a").digest()
-            assert rows[1]["message_id"] == 42
+            # message_id=42 was orphaned (no matching messages row), so
+            # migration 49's orphan cleanup NULLs it out.
+            assert rows[1]["message_id"] is None
 
             # Verify payload_hash unique index still works
             cursor = await conn.execute(
@@ -1247,8 +1249,8 @@ class TestMigration039:
 
             applied = await run_migrations(conn)
 
-            assert applied == 10
-            assert await get_version(conn) == 48
+            assert applied == 11
+            assert await get_version(conn) == 49
 
             cursor = await conn.execute(
                 """
@@ -1319,8 +1321,8 @@ class TestMigration039:
 
             applied = await run_migrations(conn)
 
-            assert applied == 10
-            assert await get_version(conn) == 48
+            assert applied == 11
+            assert await get_version(conn) == 49
 
             cursor = await conn.execute(
                 """
@@ -1386,8 +1388,8 @@ class TestMigration039:
 
             applied = await run_migrations(conn)
 
-            assert applied == 4
-            assert await get_version(conn) == 48
+            assert applied == 5
+            assert await get_version(conn) == 49
 
             cursor = await conn.execute(
                 """
@@ -1439,8 +1441,8 @@ class TestMigration040:
 
             applied = await run_migrations(conn)
 
-            assert applied == 9
-            assert await get_version(conn) == 48
+            assert applied == 10
+            assert await get_version(conn) == 49
 
             await conn.execute(
                 """
@@ -1501,8 +1503,8 @@ class TestMigration041:
 
             applied = await run_migrations(conn)
 
-            assert applied == 8
-            assert await get_version(conn) == 48
+            assert applied == 9
+            assert await get_version(conn) == 49
 
             await conn.execute(
                 """
@@ -1554,8 +1556,8 @@ class TestMigration042:
 
             applied = await run_migrations(conn)
 
-            assert applied == 7
-            assert await get_version(conn) == 48
+            assert applied == 8
+            assert await get_version(conn) == 49
 
             await conn.execute(
                 """
@@ -1694,8 +1696,8 @@ class TestMigration046:
 
             applied = await run_migrations(conn)
 
-            assert applied == 3
-            assert await get_version(conn) == 48
+            assert applied == 4
+            assert await get_version(conn) == 49
 
             cursor = await conn.execute(
                 """
@@ -1788,8 +1790,8 @@ class TestMigration047:
 
             applied = await run_migrations(conn)
 
-            assert applied == 2
-            assert await get_version(conn) == 48
+            assert applied == 3
+            assert await get_version(conn) == 49
 
             cursor = await conn.execute(
                 """
