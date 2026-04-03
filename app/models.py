@@ -870,16 +870,6 @@ class ContactActivityCounts(BaseModel):
     last_week: int
 
 
-class PathHashWidthStats(BaseModel):
-    total_packets: int
-    single_byte: int
-    double_byte: int
-    triple_byte: int
-    single_byte_pct: float
-    double_byte_pct: float
-    triple_byte_pct: float
-
-
 class NoiseFloorSample(BaseModel):
     timestamp: int = Field(description="Unix timestamp of the sampled reading")
     noise_floor_dbm: int = Field(description="Noise floor in dBm")

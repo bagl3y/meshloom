@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 # developer perogative ;D
 if command -v enablenvm >/dev/null 2>&1; then
@@ -44,12 +44,21 @@ echo -e "${YELLOW}=== Phase 2: Typecheck, Tests & Build ===${NC}"
 
 echo -ne "${BLUE}[pyright]${NC} "
 cd "$REPO_ROOT"
-uv run pyright app/ --outputjson 2>/dev/null | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
+pyright_json="$(mktemp)"
+if uv run pyright app/ --outputjson >"$pyright_json"; then
+    python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    d = json.load(f)
 s = d.get('summary', {})
-print(f\"{s.get('filesAnalyzed',0)} files, 0 errors\")
-" 2>/dev/null || { uv run pyright app/; exit 1; }
+print(f\"{s.get('filesAnalyzed', 0)} files, {s.get('errorCount', 0)} errors\")
+" "$pyright_json"
+else
+    uv run pyright app/
+    rm -f "$pyright_json"
+    exit 1
+fi
+rm -f "$pyright_json"
 echo -e "${GREEN}Passed!${NC}"
 
 echo -ne "${BLUE}[pytest]${NC} "
@@ -59,7 +68,15 @@ echo -e "${GREEN}Passed!${NC}"
 
 echo -ne "${BLUE}[vitest]${NC} "
 cd "$REPO_ROOT/frontend"
-npx --quiet vitest run --reporter=dot 2>&1 | tail -5
+vitest_log="$(mktemp)"
+if npx --quiet vitest run --reporter=dot >"$vitest_log" 2>&1; then
+    tail -5 "$vitest_log"
+else
+    cat "$vitest_log"
+    rm -f "$vitest_log"
+    exit 1
+fi
+rm -f "$vitest_log"
 echo -e "${GREEN}Passed!${NC}"
 
 echo -ne "${BLUE}[build]${NC} "
