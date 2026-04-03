@@ -364,10 +364,10 @@ class TestDeleteContactCascade:
         assert len(await ContactAdvertPathRepository.get_recent_for_contact(KEY_A)) == 0
 
     @pytest.mark.asyncio
-    async def test_delete_preserves_direct_messages(self, test_db, client):
+    async def test_delete_preserves_dms_and_readd_resurfaces_them(self, test_db, client):
         await _insert_contact(KEY_A, "Alice")
 
-        # Create a DM for this contact
+        # Create an incoming DM for this contact
         await MessageRepository.create(
             msg_type="PRIV",
             conversation_key=KEY_A,
@@ -376,18 +376,34 @@ class TestDeleteContactCascade:
             received_at=1000,
         )
 
+        # Unread count should include the DM
+        unreads = await MessageRepository.get_unread_counts()
+        assert unreads["counts"].get(f"contact-{KEY_A.lower()}", 0) == 1
+
         with patch("app.routers.contacts.radio_manager") as mock_rm:
             mock_rm.is_connected = False
             mock_rm.meshcore = None
             mock_rm.radio_operation = _noop_radio_operation()
 
             response = await client.delete(f"/api/contacts/{KEY_A}")
-
         assert response.status_code == 200
 
-        # DMs are preserved so they re-surface if the contact is re-added
+        # DMs are preserved in the database
         msgs = await MessageRepository.get_all(msg_type="PRIV", conversation_key=KEY_A)
         assert len(msgs) == 1
+
+        # Orphaned DMs still appear in unread counts (LEFT JOIN)
+        unreads = await MessageRepository.get_unread_counts()
+        assert unreads["counts"].get(f"contact-{KEY_A.lower()}", 0) == 1
+
+        # Re-add the contact
+        await _insert_contact(KEY_A, "Alice Returns")
+
+        # Messages re-surface with the re-added contact
+        msgs = await MessageRepository.get_all(msg_type="PRIV", conversation_key=KEY_A)
+        assert len(msgs) == 1
+        unreads = await MessageRepository.get_unread_counts()
+        assert unreads["counts"].get(f"contact-{KEY_A.lower()}", 0) == 1
 
 
 class TestMarkRead:
