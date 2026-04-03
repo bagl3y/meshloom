@@ -356,7 +356,7 @@ LocalStorage migration helpers for favorites; canonical favorites are server-sid
 - `advert_interval`
 - `last_advert_time`
 - `flood_scope`
-- `blocked_keys`, `blocked_names`
+- `blocked_keys`, `blocked_names`, `discovery_blocked_types`
 
 The backend still carries `sidebar_sort_order` for compatibility and old preference migration, but the current sidebar UI stores sort order per section (`Channels`, `Contacts`, `Repeaters`) in frontend localStorage rather than treating it as one global server-backed setting.
 

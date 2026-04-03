@@ -166,23 +166,6 @@ export interface NearestRepeater {
   heard_count: number;
 }
 
-export interface ContactDetail {
-  contact: Contact;
-  name_history: ContactNameHistory[];
-  dm_message_count: number;
-  channel_message_count: number;
-  most_active_rooms: ContactActiveRoom[];
-  advert_paths: ContactAdvertPath[];
-  advert_frequency: number | null;
-  nearest_repeaters: NearestRepeater[];
-}
-
-export interface NameOnlyContactDetail {
-  name: string;
-  channel_message_count: number;
-  most_active_rooms: ContactActiveRoom[];
-}
-
 export interface ContactAnalyticsHourlyBucket {
   bucket_start: number;
   last_24h_count: number;

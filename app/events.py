@@ -80,14 +80,6 @@ _PAYLOAD_ADAPTERS: dict[WsEventType, TypeAdapter[Any]] = {
 }
 
 
-def validate_ws_event_payload(event_type: str, data: Any) -> WsEventPayload | Any:
-    """Validate known WebSocket payloads; pass unknown events through unchanged."""
-    adapter = _PAYLOAD_ADAPTERS.get(event_type)  # type: ignore[arg-type]
-    if adapter is None:
-        return data
-    return adapter.validate_python(data)
-
-
 def dump_ws_event(event_type: str, data: Any) -> str:
     """Serialize a WebSocket event envelope with validation for known event types."""
     adapter = _PAYLOAD_ADAPTERS.get(event_type)  # type: ignore[arg-type]
@@ -104,13 +96,3 @@ def dump_ws_event(event_type: str, data: Any) -> str:
             event_type,
         )
         return json.dumps({"type": event_type, "data": data})
-
-
-def dump_ws_event_payload(event_type: str, data: Any) -> Any:
-    """Return the JSON-serializable payload for a WebSocket event."""
-    adapter = _PAYLOAD_ADAPTERS.get(event_type)  # type: ignore[arg-type]
-    if adapter is None:
-        return data
-
-    validated = adapter.validate_python(data)
-    return adapter.dump_python(validated, mode="json")

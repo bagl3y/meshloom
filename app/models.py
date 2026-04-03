@@ -283,30 +283,6 @@ class NearestRepeater(BaseModel):
     heard_count: int
 
 
-class ContactDetail(BaseModel):
-    """Comprehensive contact profile data."""
-
-    contact: Contact
-    name_history: list[ContactNameHistory] = Field(default_factory=list)
-    dm_message_count: int = 0
-    channel_message_count: int = 0
-    most_active_rooms: list[ContactActiveRoom] = Field(default_factory=list)
-    advert_paths: list[ContactAdvertPath] = Field(default_factory=list)
-    advert_frequency: float | None = Field(
-        default=None,
-        description="Advert observations per hour (includes multi-path arrivals of same advert)",
-    )
-    nearest_repeaters: list[NearestRepeater] = Field(default_factory=list)
-
-
-class NameOnlyContactDetail(BaseModel):
-    """Channel activity summary for a sender name that is not tied to a known key."""
-
-    name: str
-    channel_message_count: int = 0
-    most_active_rooms: list[ContactActiveRoom] = Field(default_factory=list)
-
-
 class ContactAnalyticsHourlyBucket(BaseModel):
     """A single hourly activity bucket for contact analytics."""
 
