@@ -207,7 +207,9 @@ async def run_post_connect_setup(radio_manager) -> None:
                 from app.config import settings as app_settings_config
 
                 if app_settings_config.skip_post_connect_sync:
-                    logger.info("Skipping sync/offload/advert/drain (MESHCORE_SKIP_POST_CONNECT_SYNC)")
+                    logger.info(
+                        "Skipping sync/offload/advert/drain (MESHCORE_SKIP_POST_CONNECT_SYNC)"
+                    )
                 else:
                     # Sync contacts/channels from radio to DB and clear radio
                     logger.info("Syncing and offloading radio data...")
