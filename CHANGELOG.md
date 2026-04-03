@@ -1,3 +1,19 @@
+## [3.7.0] - 2026-04-02
+
+* Feature: Repeater battery tracking
+* Feature: Repeater info pane just like contacts
+* Feature: Make repeaters blockable
+* Feature: Add new-node advert blocking
+* Feature: Add bulk deletion interface
+* Feature: Bulk room add on alt+click of new channel button
+* Feature: More info in debug endpoint
+* Bugfix: Be more conservative around radio load limits and don't exceed radio-reported capacity
+* Misc: Default auto-DM decrypt to true
+* Misc: Reorganize some settings panes
+* Misc: Enable FK pragma
+* Misc: Various performance and correctness fixes
+* Misc: Correct TCP default port
+
 ## [3.6.7] - 2026-03-31
 
 * Misc: Remove armv7 (for now)

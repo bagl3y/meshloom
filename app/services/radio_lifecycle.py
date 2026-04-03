@@ -204,35 +204,41 @@ async def run_post_connect_setup(radio_manager) -> None:
                 finally:
                     reader.handle_rx = _original_handle_rx
 
-                # Sync contacts/channels from radio to DB and clear radio
-                logger.info("Syncing and offloading radio data...")
-                result = await sync_and_offload_all(mc)
-                logger.info("Sync complete: %s", result)
+                from app.config import settings as app_settings_config
 
-                # Send advertisement to announce our presence (if enabled and not throttled)
-                if await send_advertisement(mc):
-                    logger.info("Advertisement sent")
+                if app_settings_config.skip_post_connect_sync:
+                    logger.info("Skipping sync/offload/advert/drain (MESHCORE_SKIP_POST_CONNECT_SYNC)")
                 else:
-                    logger.debug("Advertisement skipped (disabled or throttled)")
+                    # Sync contacts/channels from radio to DB and clear radio
+                    logger.info("Syncing and offloading radio data...")
+                    result = await sync_and_offload_all(mc)
+                    logger.info("Sync complete: %s", result)
 
-                # Drain any messages that were queued before we connected.
-                # This must happen BEFORE starting auto-fetch, otherwise both
-                # compete on get_msg() with interleaved radio I/O.
-                drained = await drain_pending_messages(mc)
-                if drained > 0:
-                    logger.info("Drained %d pending message(s)", drained)
-                radio_manager.clear_pending_message_channel_slots()
+                    # Send advertisement to announce our presence (if enabled and not throttled)
+                    if await send_advertisement(mc):
+                        logger.info("Advertisement sent")
+                    else:
+                        logger.debug("Advertisement skipped (disabled or throttled)")
+
+                    # Drain any messages that were queued before we connected.
+                    # This must happen BEFORE starting auto-fetch, otherwise both
+                    # compete on get_msg() with interleaved radio I/O.
+                    drained = await drain_pending_messages(mc)
+                    if drained > 0:
+                        logger.info("Drained %d pending message(s)", drained)
+                    radio_manager.clear_pending_message_channel_slots()
 
                 await mc.start_auto_message_fetching()
                 logger.info("Auto message fetching started")
             finally:
                 radio_manager._release_operation_lock("post_connect_setup")
 
-            # Start background tasks AFTER releasing the operation lock.
-            # These tasks acquire their own locks when they need radio access.
-            start_periodic_sync()
-            start_periodic_advert()
-            start_message_polling()
+            if not app_settings_config.skip_post_connect_sync:
+                # Start background tasks AFTER releasing the operation lock.
+                # These tasks acquire their own locks when they need radio access.
+                start_periodic_sync()
+                start_periodic_advert()
+                start_message_polling()
 
             radio_manager._setup_complete = True
         finally:
