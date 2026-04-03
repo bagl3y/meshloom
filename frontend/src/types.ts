@@ -325,6 +325,7 @@ export interface AppSettings {
   blocked_keys: string[];
   blocked_names: string[];
   discovery_blocked_types: number[];
+  tracked_telemetry_repeaters: string[];
 }
 
 export interface AppSettingsUpdate {
@@ -335,6 +336,11 @@ export interface AppSettingsUpdate {
   blocked_keys?: string[];
   blocked_names?: string[];
   discovery_blocked_types?: number[];
+}
+
+export interface TrackedTelemetryResponse {
+  tracked_telemetry_repeaters: string[];
+  names: Record<string, string>;
 }
 
 export interface MigratePreferencesRequest {

@@ -826,6 +826,10 @@ class AppSettings(BaseModel):
             "advertisements should not create new contacts; existing contacts are still updated"
         ),
     )
+    tracked_telemetry_repeaters: list[str] = Field(
+        default_factory=list,
+        description="Public keys of repeaters opted into periodic telemetry collection (max 8)",
+    )
 
 
 class FanoutConfig(BaseModel):

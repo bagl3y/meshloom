@@ -20,6 +20,8 @@ export function SettingsDatabaseSection({
   onToggleBlockedName,
   contacts = [],
   onBulkDeleteContacts,
+  trackedTelemetryRepeaters = [],
+  onToggleTrackedTelemetry,
   className,
 }: {
   appSettings: AppSettings;
@@ -32,6 +34,8 @@ export function SettingsDatabaseSection({
   onToggleBlockedName?: (name: string) => void;
   contacts?: Contact[];
   onBulkDeleteContacts?: (deletedKeys: string[]) => void;
+  trackedTelemetryRepeaters?: string[];
+  onToggleTrackedTelemetry?: (publicKey: string) => Promise<void>;
   className?: string;
 }) {
   const [retentionDays, setRetentionDays] = useState('14');
@@ -221,6 +225,50 @@ export function SettingsDatabaseSection({
           When enabled, the server will automatically try to decrypt stored DM packets when a new
           contact sends an advertisement. This may cause brief delays on large packet backlogs.
         </p>
+      </div>
+
+      <Separator />
+
+      {/* ── Tracked Repeater Telemetry ── */}
+      <div className="space-y-3">
+        <Label className="text-base">Tracked Repeater Telemetry</Label>
+        <p className="text-xs text-muted-foreground">
+          Repeaters opted into automatic telemetry collection are polled every 8 hours. Up to 8
+          repeaters may be tracked at a time ({trackedTelemetryRepeaters.length} / 8 slots used).
+        </p>
+
+        {trackedTelemetryRepeaters.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic">
+            No repeaters are being tracked. Enable tracking from a repeater's dashboard.
+          </p>
+        ) : (
+          <div className="space-y-1">
+            {trackedTelemetryRepeaters.map((key) => {
+              const contact = contacts.find((c) => c.public_key === key);
+              const displayName = contact?.name ?? key.slice(0, 12);
+              return (
+                <div key={key} className="flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm truncate block">{displayName}</span>
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      {key.slice(0, 12)}
+                    </span>
+                  </div>
+                  {onToggleTrackedTelemetry && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onToggleTrackedTelemetry(key)}
+                      className="h-7 text-xs flex-shrink-0 text-destructive hover:text-destructive"
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {error && (

@@ -54,6 +54,8 @@ interface RepeaterDashboardProps {
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
   onDeleteContact: (publicKey: string) => void;
   onOpenContactInfo?: (publicKey: string) => void;
+  trackedTelemetryRepeaters: string[];
+  onToggleTrackedTelemetry: (publicKey: string) => Promise<void>;
 }
 
 export function RepeaterDashboard({
@@ -72,6 +74,8 @@ export function RepeaterDashboard({
   onToggleFavorite,
   onDeleteContact,
   onOpenContactInfo,
+  trackedTelemetryRepeaters,
+  onToggleTrackedTelemetry,
 }: RepeaterDashboardProps) {
   const [pathDiscoveryOpen, setPathDiscoveryOpen] = useState(false);
   const contact = contacts.find((c) => c.public_key === conversation.id) ?? null;
@@ -396,7 +400,13 @@ export function RepeaterDashboard({
             />
 
             {/* Telemetry history chart — full width, below console */}
-            <TelemetryHistoryPane entries={telemetryHistory} />
+            <TelemetryHistoryPane
+              entries={telemetryHistory}
+              publicKey={conversation.id}
+              contacts={contacts}
+              trackedTelemetryRepeaters={trackedTelemetryRepeaters}
+              onToggleTrackedTelemetry={onToggleTrackedTelemetry}
+            />
           </div>
         )}
       </div>

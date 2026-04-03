@@ -29,7 +29,8 @@ class AppSettingsRepository:
             SELECT max_radio_contacts, favorites, auto_decrypt_dm_on_advert,
                    last_message_times, preferences_migrated,
                    advert_interval, last_advert_time, flood_scope,
-                   blocked_keys, blocked_names, discovery_blocked_types
+                   blocked_keys, blocked_names, discovery_blocked_types,
+                   tracked_telemetry_repeaters
             FROM app_settings WHERE id = 1
             """
         )
@@ -89,6 +90,15 @@ class AppSettingsRepository:
             except (json.JSONDecodeError, TypeError):
                 discovery_blocked_types = []
 
+        # Parse tracked_telemetry_repeaters JSON
+        tracked_telemetry_repeaters: list[str] = []
+        try:
+            raw_tracked = row["tracked_telemetry_repeaters"]
+            if raw_tracked:
+                tracked_telemetry_repeaters = json.loads(raw_tracked)
+        except (json.JSONDecodeError, TypeError, KeyError):
+            tracked_telemetry_repeaters = []
+
         return AppSettings(
             max_radio_contacts=row["max_radio_contacts"],
             favorites=favorites,
@@ -101,6 +111,7 @@ class AppSettingsRepository:
             blocked_keys=blocked_keys,
             blocked_names=blocked_names,
             discovery_blocked_types=discovery_blocked_types,
+            tracked_telemetry_repeaters=tracked_telemetry_repeaters,
         )
 
     @staticmethod
@@ -116,6 +127,7 @@ class AppSettingsRepository:
         blocked_keys: list[str] | None = None,
         blocked_names: list[str] | None = None,
         discovery_blocked_types: list[int] | None = None,
+        tracked_telemetry_repeaters: list[str] | None = None,
     ) -> AppSettings:
         """Update app settings. Only provided fields are updated."""
         updates = []
@@ -165,6 +177,10 @@ class AppSettingsRepository:
         if discovery_blocked_types is not None:
             updates.append("discovery_blocked_types = ?")
             params.append(json.dumps(discovery_blocked_types))
+
+        if tracked_telemetry_repeaters is not None:
+            updates.append("tracked_telemetry_repeaters = ?")
+            params.append(json.dumps(tracked_telemetry_repeaters))
 
         if updates:
             query = f"UPDATE app_settings SET {', '.join(updates)} WHERE id = 1"

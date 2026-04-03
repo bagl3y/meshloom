@@ -156,6 +156,7 @@ export function App() {
     handleToggleFavorite,
     handleToggleBlockedKey,
     handleToggleBlockedName,
+    handleToggleTrackedTelemetry,
   } = useAppSettings();
 
   // Keep user's name in ref for mention detection in WebSocket callback
@@ -555,6 +556,8 @@ export function App() {
         );
       }
     },
+    trackedTelemetryRepeaters: appSettings?.tracked_telemetry_repeaters ?? [],
+    onToggleTrackedTelemetry: handleToggleTrackedTelemetry,
   };
   const searchProps = {
     contacts,
@@ -588,6 +591,8 @@ export function App() {
       const keySet = new Set(deletedKeys.map((k) => k.toLowerCase()));
       setContacts((prev) => prev.filter((c) => !keySet.has(c.public_key.toLowerCase())));
     },
+    trackedTelemetryRepeaters: appSettings?.tracked_telemetry_repeaters ?? [],
+    onToggleTrackedTelemetry: handleToggleTrackedTelemetry,
   };
   const crackerProps = {
     packets: rawPackets,

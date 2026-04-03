@@ -36,6 +36,7 @@ import type {
   RepeaterRadioSettingsResponse,
   RepeaterStatusResponse,
   TelemetryHistoryEntry,
+  TrackedTelemetryResponse,
   StatisticsResponse,
   TraceResponse,
   UnreadCounts,
@@ -325,6 +326,13 @@ export const api = {
     fetchJson<AppSettings>('/settings/blocked-names/toggle', {
       method: 'POST',
       body: JSON.stringify({ name }),
+    }),
+
+  // Tracked telemetry
+  toggleTrackedTelemetry: (publicKey: string) =>
+    fetchJson<TrackedTelemetryResponse>('/settings/tracked-telemetry/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ public_key: publicKey }),
     }),
 
   // Favorites

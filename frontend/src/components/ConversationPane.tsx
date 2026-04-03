@@ -79,6 +79,8 @@ interface ConversationPaneProps {
   onDismissUnreadMarker: () => void;
   onSendMessage: (text: string) => Promise<void>;
   onToggleNotifications: () => void;
+  trackedTelemetryRepeaters: string[];
+  onToggleTrackedTelemetry: (publicKey: string) => Promise<void>;
 }
 
 function LoadingPane({ label }: { label: string }) {
@@ -148,6 +150,8 @@ export function ConversationPane({
   onDismissUnreadMarker,
   onSendMessage,
   onToggleNotifications,
+  trackedTelemetryRepeaters,
+  onToggleTrackedTelemetry,
 }: ConversationPaneProps) {
   const [roomAuthenticated, setRoomAuthenticated] = useState(false);
   const activeContactIsRepeater = useMemo(() => {
@@ -241,6 +245,8 @@ export function ConversationPane({
           onToggleFavorite={onToggleFavorite}
           onDeleteContact={onDeleteContact}
           onOpenContactInfo={onOpenContactInfo}
+          trackedTelemetryRepeaters={trackedTelemetryRepeaters}
+          onToggleTrackedTelemetry={onToggleTrackedTelemetry}
         />
       </Suspense>
     );

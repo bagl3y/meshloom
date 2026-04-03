@@ -124,6 +124,8 @@ const defaultProps = {
   onToggleNotifications: vi.fn(),
   onToggleFavorite: vi.fn(),
   onDeleteContact: vi.fn(),
+  trackedTelemetryRepeaters: [] as string[],
+  onToggleTrackedTelemetry: vi.fn(async () => {}),
 };
 
 function createDeferred<T>() {
@@ -677,7 +679,7 @@ describe('RepeaterDashboard', () => {
       render(<RepeaterDashboard {...defaultProps} />);
 
       expect(screen.getByText('Telemetry History')).toBeInTheDocument();
-      expect(screen.getByText('0 samples')).toBeInTheDocument();
+      expect(screen.getByText(/No history yet/)).toBeInTheDocument();
     });
 
     it('updates history from live status fetch', async () => {

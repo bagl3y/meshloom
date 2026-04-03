@@ -28,6 +28,7 @@ from app.repository import (
     AppSettingsRepository,
     ChannelRepository,
     ContactRepository,
+    RepeaterTelemetryRepository,
 )
 from app.services.contact_reconciliation import (
     promote_prefix_contacts_for_contact,
@@ -154,6 +155,15 @@ ADVERT_CHECK_INTERVAL = 60
 # Even if the database has a shorter value, we silently refuse to advertise
 # more frequently than this.
 MIN_ADVERT_INTERVAL = 3600
+
+# Periodic telemetry collection task handle
+_telemetry_collect_task: asyncio.Task | None = None
+
+# Telemetry collection interval (8 hours)
+TELEMETRY_COLLECT_INTERVAL = 8 * 3600
+
+# Initial delay before the first telemetry collection cycle (let radio settle)
+TELEMETRY_COLLECT_INITIAL_DELAY = 60
 
 # Counter to pause polling during repeater operations (supports nested pauses)
 _polling_pause_count: int = 0
@@ -1524,3 +1534,158 @@ async def sync_recent_contacts_to_radio(force: bool = False, mc: MeshCore | None
     except Exception as e:
         logger.error("Error syncing contacts to radio: %s", e, exc_info=True)
         return {"loaded": 0, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Periodic repeater telemetry collection
+# ---------------------------------------------------------------------------
+
+
+async def _collect_repeater_telemetry(mc: MeshCore, contact: Contact) -> bool:
+    """Fetch status telemetry from a single repeater and record it.
+
+    Returns True on success, False on failure (logged, not raised).
+    """
+    try:
+        await mc.commands.add_contact(contact.to_radio_dict())
+        status = await mc.commands.req_status_sync(contact.public_key, timeout=10, min_timeout=5)
+    except Exception as e:
+        logger.debug(
+            "Telemetry collect: radio command failed for %s: %s",
+            contact.public_key[:12],
+            e,
+        )
+        return False
+
+    if status is None:
+        logger.debug("Telemetry collect: no response from %s", contact.public_key[:12])
+        return False
+
+    # Map to the same field names as the manual repeater status endpoint
+    data = {
+        "battery_volts": status.get("bat", 0) / 1000.0,
+        "tx_queue_len": status.get("tx_queue_len", 0),
+        "noise_floor_dbm": status.get("noise_floor", 0),
+        "last_rssi_dbm": status.get("last_rssi", 0),
+        "last_snr_db": status.get("last_snr", 0.0),
+        "packets_received": status.get("nb_recv", 0),
+        "packets_sent": status.get("nb_sent", 0),
+        "airtime_seconds": status.get("airtime", 0),
+        "rx_airtime_seconds": status.get("rx_airtime", 0),
+        "uptime_seconds": status.get("uptime", 0),
+        "sent_flood": status.get("sent_flood", 0),
+        "sent_direct": status.get("sent_direct", 0),
+        "recv_flood": status.get("recv_flood", 0),
+        "recv_direct": status.get("recv_direct", 0),
+        "flood_dups": status.get("flood_dups", 0),
+        "direct_dups": status.get("direct_dups", 0),
+        "full_events": status.get("full_evts", 0),
+    }
+
+    try:
+        await RepeaterTelemetryRepository.record(
+            public_key=contact.public_key,
+            timestamp=int(time.time()),
+            data=data,
+        )
+        logger.info(
+            "Telemetry collect: recorded snapshot for %s (%s)",
+            contact.name or contact.public_key[:12],
+            contact.public_key[:12],
+        )
+        return True
+    except Exception as e:
+        logger.warning(
+            "Telemetry collect: failed to record for %s: %s",
+            contact.public_key[:12],
+            e,
+        )
+        return False
+
+
+async def _telemetry_collect_loop() -> None:
+    """Background task that collects telemetry from tracked repeaters every 8 hours.
+
+    Runs a first cycle after a short initial delay (so newly tracked repeaters
+    get a sample promptly), then sleeps the full interval between subsequent cycles.
+
+    Acquires the radio lock per-repeater (non-blocking) so manual operations can
+    interleave. Failures are logged and skipped.
+    """
+    first_run = True
+    while True:
+        try:
+            delay = TELEMETRY_COLLECT_INITIAL_DELAY if first_run else TELEMETRY_COLLECT_INTERVAL
+            await asyncio.sleep(delay)
+            first_run = False
+
+            if not radio_manager.is_connected:
+                logger.debug("Telemetry collect: radio not connected, skipping cycle")
+                continue
+
+            app_settings = await AppSettingsRepository.get()
+            tracked = app_settings.tracked_telemetry_repeaters
+            if not tracked:
+                continue
+
+            logger.info("Telemetry collect: starting cycle for %d repeater(s)", len(tracked))
+            collected = 0
+
+            for pub_key in tracked:
+                contact = await ContactRepository.get_by_key(pub_key)
+                if not contact or contact.type != 2:
+                    logger.debug(
+                        "Telemetry collect: skipping %s (not found or not repeater)",
+                        pub_key[:12],
+                    )
+                    continue
+
+                try:
+                    async with radio_manager.radio_operation(
+                        "telemetry_collect",
+                        blocking=False,
+                        suspend_auto_fetch=True,
+                    ) as mc:
+                        if await _collect_repeater_telemetry(mc, contact):
+                            collected += 1
+                except RadioOperationBusyError:
+                    logger.debug(
+                        "Telemetry collect: radio busy, skipping %s",
+                        pub_key[:12],
+                    )
+
+            logger.info(
+                "Telemetry collect: cycle complete, %d/%d successful",
+                collected,
+                len(tracked),
+            )
+
+        except asyncio.CancelledError:
+            logger.info("Telemetry collect task cancelled")
+            break
+        except Exception as e:
+            logger.error("Error in telemetry collect loop: %s", e, exc_info=True)
+
+
+def start_telemetry_collect() -> None:
+    """Start the periodic telemetry collection background task."""
+    global _telemetry_collect_task
+    if _telemetry_collect_task is None or _telemetry_collect_task.done():
+        _telemetry_collect_task = asyncio.create_task(_telemetry_collect_loop())
+        logger.info(
+            "Started periodic telemetry collection (interval: %ds)",
+            TELEMETRY_COLLECT_INTERVAL,
+        )
+
+
+async def stop_telemetry_collect() -> None:
+    """Stop the periodic telemetry collection background task."""
+    global _telemetry_collect_task
+    if _telemetry_collect_task and not _telemetry_collect_task.done():
+        _telemetry_collect_task.cancel()
+        try:
+            await _telemetry_collect_task
+        except asyncio.CancelledError:
+            pass
+        _telemetry_collect_task = None
+        logger.info("Stopped periodic telemetry collection")

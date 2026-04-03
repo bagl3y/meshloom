@@ -9,7 +9,11 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { cn } from '@/lib/utils';
-import type { TelemetryHistoryEntry } from '../../types';
+import { Button } from '../ui/button';
+import { Separator } from '../ui/separator';
+import type { TelemetryHistoryEntry, Contact } from '../../types';
+
+const MAX_TRACKED = 8;
 
 type Metric = 'battery_volts' | 'noise_floor_dbm' | 'packets' | 'uptime_seconds';
 
@@ -47,8 +51,26 @@ function formatUptime(seconds: number): string {
   return `${(seconds / 86400).toFixed(1)}d`;
 }
 
-export function TelemetryHistoryPane({ entries }: { entries: TelemetryHistoryEntry[] }) {
+interface TelemetryHistoryPaneProps {
+  entries: TelemetryHistoryEntry[];
+  publicKey: string;
+  contacts: Contact[];
+  trackedTelemetryRepeaters: string[];
+  onToggleTrackedTelemetry: (publicKey: string) => Promise<void>;
+}
+
+export function TelemetryHistoryPane({
+  entries,
+  publicKey,
+  contacts,
+  trackedTelemetryRepeaters,
+  onToggleTrackedTelemetry,
+}: TelemetryHistoryPaneProps) {
   const [metric, setMetric] = useState<Metric>('battery_volts');
+  const [toggling, setToggling] = useState(false);
+
+  const isTracked = trackedTelemetryRepeaters.includes(publicKey);
+  const slotsFull = trackedTelemetryRepeaters.length >= MAX_TRACKED && !isTracked;
 
   const config = METRIC_CONFIG[metric];
 
@@ -68,13 +90,87 @@ export function TelemetryHistoryPane({ entries }: { entries: TelemetryHistoryEnt
 
   const dataKeys = metric === 'packets' ? ['packets_received', 'packets_sent'] : [metric];
 
+  const handleToggle = async () => {
+    setToggling(true);
+    try {
+      await onToggleTrackedTelemetry(publicKey);
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  const trackedNames = useMemo(() => {
+    if (!slotsFull) return [];
+    return trackedTelemetryRepeaters.map((key) => {
+      const contact = contacts.find((c) => c.public_key === key);
+      return { key, name: contact?.name ?? key.slice(0, 12) };
+    });
+  }, [slotsFull, trackedTelemetryRepeaters, contacts]);
+
   return (
     <div className="border border-border rounded-lg overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b border-border">
-        <h3 className="text-sm font-medium">Telemetry History</h3>
-        <span className="text-[10px] text-muted-foreground">{entries.length} samples</span>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium">Telemetry History</h3>
+          {entries.length > 0 && (
+            <span className="text-[10px] text-muted-foreground">{entries.length} samples</span>
+          )}
+        </div>
       </div>
       <div className="p-3">
+        {/* Explanation + tracking toggle */}
+        <div className="mb-3 space-y-3">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Any time repeater telemetry is fetched, the metrics are stored for 30 days (or 1,000
+            samples, whichever comes first). This telemetry is stored on normal interactive fetches
+            via the repeater pane, API calls to the endpoint (
+            <code className="text-[11px]">POST /api/contacts/&lt;key&gt;/repeater/status</code>), or
+            when the repeater is opted into interval telemetry polling, in which case the repeater
+            will be polled for metrics every 8 hours. You can see which repeaters are opted into
+            this flow in the{' '}
+            <a
+              href="#settings/database"
+              className="underline text-primary hover:text-primary/80 transition-colors"
+            >
+              Database &amp; Messaging
+            </a>{' '}
+            settings pane. A maximum of {MAX_TRACKED} repeaters may be opted into this for the sake
+            of keeping mesh congestion reasonable.
+          </p>
+
+          {isTracked ? (
+            <Button
+              variant="outline"
+              onClick={handleToggle}
+              disabled={toggling}
+              className="border-destructive/50 text-destructive hover:bg-destructive/10"
+            >
+              {toggling ? 'Updating...' : 'Remove Repeater from Interval Metrics Tracking'}
+            </Button>
+          ) : slotsFull ? (
+            <div className="space-y-2">
+              <Button variant="outline" disabled>
+                Tracking Full ({trackedTelemetryRepeaters.length}/{MAX_TRACKED} slots used)
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Disable tracking on another repeater to free a slot:{' '}
+                {trackedNames.map((t) => t.name).join(', ')}
+              </p>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={handleToggle}
+              disabled={toggling}
+              className="border-green-600/50 text-green-600 hover:bg-green-600/10"
+            >
+              {toggling ? 'Updating...' : 'Opt Repeater into 8hr Interval Metrics Tracking'}
+            </Button>
+          )}
+        </div>
+
+        <Separator className="mb-3" />
+
         {/* Metric selector */}
         <div className="flex gap-1 mb-2">
           {(Object.keys(METRIC_CONFIG) as Metric[]).map((m) => (
@@ -149,9 +245,14 @@ export function TelemetryHistoryPane({ entries }: { entries: TelemetryHistoryEnt
                   fill={metric === 'packets' ? (i === 0 ? '#0ea5e9' : '#f43f5e') : config.color}
                   fillOpacity={0.15}
                   strokeWidth={1.5}
-                  dot={false}
-                  activeDot={{
+                  dot={{
                     r: 4,
+                    fill: metric === 'packets' ? (i === 0 ? '#0ea5e9' : '#f43f5e') : config.color,
+                    strokeWidth: 1.5,
+                    stroke: 'hsl(var(--popover))',
+                  }}
+                  activeDot={{
+                    r: 6,
                     fill: metric === 'packets' ? (i === 0 ? '#0ea5e9' : '#f43f5e') : config.color,
                     strokeWidth: 2,
                     stroke: 'hsl(var(--popover))',

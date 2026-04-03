@@ -2,15 +2,17 @@ import asyncio
 import logging
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.models import AppSettings
+from app.models import CONTACT_TYPE_REPEATER, AppSettings
 from app.region_scope import normalize_region_scope
-from app.repository import AppSettingsRepository
+from app.repository import AppSettingsRepository, ContactRepository
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])
+
+MAX_TRACKED_TELEMETRY_REPEATERS = 8
 
 
 class AppSettingsUpdate(BaseModel):
@@ -64,6 +66,19 @@ class BlockNameRequest(BaseModel):
 class FavoriteRequest(BaseModel):
     type: Literal["channel", "contact"] = Field(description="'channel' or 'contact'")
     id: str = Field(description="Channel key or contact public key")
+
+
+class TrackedTelemetryRequest(BaseModel):
+    public_key: str = Field(description="Public key of the repeater to toggle tracking")
+
+
+class TrackedTelemetryResponse(BaseModel):
+    tracked_telemetry_repeaters: list[str] = Field(
+        description="Current list of tracked repeater public keys"
+    )
+    names: dict[str, str] = Field(
+        description="Map of public key to display name for tracked repeaters"
+    )
 
 
 class MigratePreferencesRequest(BaseModel):
@@ -189,6 +204,61 @@ async def toggle_blocked_name(request: BlockNameRequest) -> AppSettings:
     """Toggle a display name's blocked status."""
     logger.info("Toggling blocked name: %s", request.name)
     return await AppSettingsRepository.toggle_blocked_name(request.name)
+
+
+@router.post("/tracked-telemetry/toggle", response_model=TrackedTelemetryResponse)
+async def toggle_tracked_telemetry(request: TrackedTelemetryRequest) -> TrackedTelemetryResponse:
+    """Toggle periodic telemetry collection for a repeater.
+
+    Max 8 repeaters may be tracked. Returns 409 if the limit is reached and
+    the requested repeater is not already tracked.
+    """
+    key = request.public_key.lower()
+    settings = await AppSettingsRepository.get()
+    current = settings.tracked_telemetry_repeaters
+
+    async def _resolve_names(keys: list[str]) -> dict[str, str]:
+        names: dict[str, str] = {}
+        for k in keys:
+            contact = await ContactRepository.get_by_key(k)
+            names[k] = contact.name if contact and contact.name else k[:12]
+        return names
+
+    if key in current:
+        # Remove
+        new_list = [k for k in current if k != key]
+        logger.info("Removing repeater %s from tracked telemetry", key[:12])
+        await AppSettingsRepository.update(tracked_telemetry_repeaters=new_list)
+        return TrackedTelemetryResponse(
+            tracked_telemetry_repeaters=new_list,
+            names=await _resolve_names(new_list),
+        )
+
+    # Validate it's a repeater
+    contact = await ContactRepository.get_by_key(key)
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    if contact.type != CONTACT_TYPE_REPEATER:
+        raise HTTPException(status_code=400, detail="Contact is not a repeater")
+
+    if len(current) >= MAX_TRACKED_TELEMETRY_REPEATERS:
+        names = await _resolve_names(current)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": f"Limit of {MAX_TRACKED_TELEMETRY_REPEATERS} tracked repeaters reached",
+                "tracked_telemetry_repeaters": current,
+                "names": names,
+            },
+        )
+
+    new_list = current + [key]
+    logger.info("Adding repeater %s to tracked telemetry", key[:12])
+    await AppSettingsRepository.update(tracked_telemetry_repeaters=new_list)
+    return TrackedTelemetryResponse(
+        tracked_telemetry_repeaters=new_list,
+        names=await _resolve_names(new_list),
+    )
 
 
 @router.post("/migrate", response_model=MigratePreferencesResponse)

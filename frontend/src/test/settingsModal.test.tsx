@@ -69,6 +69,7 @@ const baseSettings: AppSettings = {
   blocked_keys: [],
   blocked_names: [],
   discovery_blocked_types: [],
+  tracked_telemetry_repeaters: [],
 };
 
 function renderModal(overrides?: {

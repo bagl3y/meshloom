@@ -21,6 +21,7 @@ from app.radio_sync import (
     stop_message_polling,
     stop_periodic_advert,
     stop_periodic_sync,
+    stop_telemetry_collect,
 )
 from app.routers import (
     channels,
@@ -103,6 +104,7 @@ async def lifespan(app: FastAPI):
     await stop_noise_floor_sampling()
     await stop_periodic_advert()
     await stop_periodic_sync()
+    await stop_telemetry_collect()
     if radio_manager.meshcore:
         await radio_manager.meshcore.stop_auto_message_fetching()
     await radio_manager.disconnect()

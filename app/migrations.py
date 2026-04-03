@@ -401,6 +401,12 @@ async def run_migrations(conn: aiosqlite.Connection) -> int:
         await set_version(conn, 52)
         applied += 1
 
+    if version < 53:
+        logger.info("Applying migration 53: add tracked_telemetry_repeaters to app_settings")
+        await _migrate_053_tracked_telemetry_repeaters(conn)
+        await set_version(conn, 53)
+        applied += 1
+
     if applied > 0:
         logger.info(
             "Applied %d migration(s), schema now at version %d", applied, await get_version(conn)
@@ -3171,3 +3177,18 @@ async def _migrate_052_add_channel_path_hash_mode_override(conn: aiosqlite.Conne
             await conn.commit()
         else:
             raise
+
+
+async def _migrate_053_tracked_telemetry_repeaters(conn: aiosqlite.Connection) -> None:
+    """Add tracked_telemetry_repeaters JSON list column to app_settings."""
+    tables_cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    if "app_settings" not in {row[0] for row in await tables_cursor.fetchall()}:
+        await conn.commit()
+        return
+    col_cursor = await conn.execute("PRAGMA table_info(app_settings)")
+    columns = {row[1] for row in await col_cursor.fetchall()}
+    if "tracked_telemetry_repeaters" not in columns:
+        await conn.execute(
+            "ALTER TABLE app_settings ADD COLUMN tracked_telemetry_repeaters TEXT DEFAULT '[]'"
+        )
+        await conn.commit()

@@ -120,6 +120,39 @@ export function useAppSettings() {
     }
   }, []);
 
+  const handleToggleTrackedTelemetry = useCallback(async (publicKey: string) => {
+    const key = publicKey.toLowerCase();
+    setAppSettings((prev) => {
+      if (!prev) return prev;
+      const current = prev.tracked_telemetry_repeaters ?? [];
+      const wasTracked = current.includes(key);
+      const optimistic = wasTracked ? current.filter((k) => k !== key) : [...current, key];
+      return { ...prev, tracked_telemetry_repeaters: optimistic };
+    });
+
+    try {
+      const result = await api.toggleTrackedTelemetry(publicKey);
+      setAppSettings((prev) =>
+        prev ? { ...prev, tracked_telemetry_repeaters: result.tracked_telemetry_repeaters } : prev
+      );
+    } catch (err) {
+      console.error('Failed to toggle tracked telemetry:', err);
+      try {
+        const settings = await api.getSettings();
+        setAppSettings(settings);
+      } catch {
+        // If refetch also fails, leave optimistic state
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const detail = (err as any)?.body?.detail;
+      if (typeof detail === 'object' && detail?.message) {
+        toast.error(detail.message);
+      } else {
+        toast.error('Failed to update tracked telemetry');
+      }
+    }
+  }, []);
+
   // One-time migration of localStorage preferences to server
   useEffect(() => {
     if (!appSettings || hasMigratedRef.current) return;
@@ -182,5 +215,6 @@ export function useAppSettings() {
     handleToggleFavorite,
     handleToggleBlockedKey,
     handleToggleBlockedName,
+    handleToggleTrackedTelemetry,
   };
 }

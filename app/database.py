@@ -104,7 +104,8 @@ CREATE TABLE IF NOT EXISTS app_settings (
     flood_scope TEXT DEFAULT '',
     blocked_keys TEXT DEFAULT '[]',
     blocked_names TEXT DEFAULT '[]',
-    discovery_blocked_types TEXT DEFAULT '[]'
+    discovery_blocked_types TEXT DEFAULT '[]',
+    tracked_telemetry_repeaters TEXT DEFAULT '[]'
 );
 INSERT OR IGNORE INTO app_settings (id) VALUES (1);
 

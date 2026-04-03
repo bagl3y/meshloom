@@ -3,15 +3,18 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 
-from app.models import AppSettings
-from app.repository import AppSettingsRepository
+from app.models import CONTACT_TYPE_REPEATER, AppSettings, ContactUpsert
+from app.repository import AppSettingsRepository, ContactRepository
 from app.routers.settings import (
     AppSettingsUpdate,
     FavoriteRequest,
     MigratePreferencesRequest,
+    TrackedTelemetryRequest,
     migrate_preferences,
     toggle_favorite,
+    toggle_tracked_telemetry,
     update_settings,
 )
 
@@ -202,3 +205,83 @@ class TestMigratePreferences:
 
         assert response.migrated is False
         assert response.settings.preferences_migrated is True
+
+
+class TestToggleTrackedTelemetry:
+    """Tests for POST /settings/tracked-telemetry/toggle."""
+
+    async def _create_repeater(self, key: str, name: str = "TestRepeater") -> None:
+        await ContactRepository.upsert(
+            ContactUpsert(public_key=key, name=name, type=CONTACT_TYPE_REPEATER)
+        )
+
+    @pytest.mark.asyncio
+    async def test_add_repeater_to_tracking(self, test_db):
+        key = "aa" * 32
+        await self._create_repeater(key)
+
+        result = await toggle_tracked_telemetry(TrackedTelemetryRequest(public_key=key))
+
+        assert key in result.tracked_telemetry_repeaters
+        assert result.names[key] == "TestRepeater"
+
+        # Verify persisted
+        settings = await AppSettingsRepository.get()
+        assert key in settings.tracked_telemetry_repeaters
+
+    @pytest.mark.asyncio
+    async def test_remove_repeater_from_tracking(self, test_db):
+        key = "bb" * 32
+        await self._create_repeater(key)
+        await AppSettingsRepository.update(tracked_telemetry_repeaters=[key])
+
+        result = await toggle_tracked_telemetry(TrackedTelemetryRequest(public_key=key))
+
+        assert key not in result.tracked_telemetry_repeaters
+
+    @pytest.mark.asyncio
+    async def test_rejects_non_repeater_contact(self, test_db):
+        key = "cc" * 32
+        await ContactRepository.upsert(ContactUpsert(public_key=key, name="Client", type=1))
+
+        with pytest.raises(HTTPException) as exc_info:
+            await toggle_tracked_telemetry(TrackedTelemetryRequest(public_key=key))
+        assert exc_info.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_rejects_unknown_contact(self, test_db):
+        with pytest.raises(HTTPException) as exc_info:
+            await toggle_tracked_telemetry(TrackedTelemetryRequest(public_key="dd" * 32))
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_rejects_when_limit_reached(self, test_db):
+        existing_keys = []
+        for i in range(8):
+            key = f"{i:02x}" * 32
+            await self._create_repeater(key, name=f"Repeater{i}")
+            existing_keys.append(key)
+        await AppSettingsRepository.update(tracked_telemetry_repeaters=existing_keys)
+
+        new_key = "ff" * 32
+        await self._create_repeater(new_key, name="NewRepeater")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await toggle_tracked_telemetry(TrackedTelemetryRequest(public_key=new_key))
+        assert exc_info.value.status_code == 409
+        detail = exc_info.value.detail
+        assert len(detail["tracked_telemetry_repeaters"]) == 8
+
+    @pytest.mark.asyncio
+    async def test_remove_still_works_when_limit_reached(self, test_db):
+        """Toggling OFF an already-tracked repeater should work even at max capacity."""
+        keys = []
+        for i in range(8):
+            key = f"{i:02x}" * 32
+            await self._create_repeater(key)
+            keys.append(key)
+        await AppSettingsRepository.update(tracked_telemetry_repeaters=keys)
+
+        result = await toggle_tracked_telemetry(TrackedTelemetryRequest(public_key=keys[0]))
+        assert keys[0] not in result.tracked_telemetry_repeaters
+        assert len(result.tracked_telemetry_repeaters) == 7

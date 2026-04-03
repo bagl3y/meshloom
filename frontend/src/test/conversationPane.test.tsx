@@ -164,6 +164,8 @@ function createProps(overrides: Partial<React.ComponentProps<typeof Conversation
     onDismissUnreadMarker: vi.fn(),
     onSendMessage: vi.fn(async () => {}),
     onToggleNotifications: vi.fn(),
+    trackedTelemetryRepeaters: [],
+    onToggleTrackedTelemetry: vi.fn(async () => {}),
     ...overrides,
   };
 }
