@@ -29,8 +29,7 @@ class MessageRepository:
     def _contact_activity_filter(public_key: str) -> tuple[str, list[Any]]:
         lower_key = public_key.lower()
         return (
-            "((type = 'PRIV' AND LOWER(conversation_key) = ?)"
-            " OR (type = 'CHAN' AND LOWER(sender_key) = ?))",
+            "((type = 'PRIV' AND conversation_key = ?) OR (type = 'CHAN' AND sender_key = ?))",
             [lower_key, lower_key],
         )
 
@@ -81,6 +80,9 @@ class MessageRepository:
                 entry["path_len"] = path_len
             paths_json = json.dumps([entry])
 
+        # Normalize sender_key to lowercase so queries can match without LOWER().
+        normalized_sender_key = sender_key.lower() if sender_key else sender_key
+
         cursor = await db.conn.execute(
             """
             INSERT OR IGNORE INTO messages (type, conversation_key, text, sender_timestamp,
@@ -99,7 +101,7 @@ class MessageRepository:
                 signature,
                 outgoing,
                 sender_name,
-                sender_key,
+                normalized_sender_key,
             ),
         )
         await db.conn.commit()
@@ -259,10 +261,10 @@ class MessageRepository:
 
         if MessageRepository._looks_like_hex_prefix(value):
             if len(value) == 32:
-                clause += " OR UPPER(messages.conversation_key) = ?"
+                clause += " OR messages.conversation_key = ?"
                 params.append(value.upper())
             else:
-                clause += " OR UPPER(messages.conversation_key) LIKE ? ESCAPE '\\'"
+                clause += " OR messages.conversation_key LIKE ? ESCAPE '\\'"
                 params.append(f"{MessageRepository._escape_like(value.upper())}%")
 
         clause += "))"
@@ -281,13 +283,13 @@ class MessageRepository:
             priv_key_clause: str
             chan_key_clause: str
             if len(value) == 64:
-                priv_key_clause = "LOWER(messages.conversation_key) = ?"
-                chan_key_clause = "LOWER(sender_key) = ?"
+                priv_key_clause = "messages.conversation_key = ?"
+                chan_key_clause = "sender_key = ?"
                 params.extend([lower_value, lower_value])
             else:
                 escaped_prefix = f"{MessageRepository._escape_like(lower_value)}%"
-                priv_key_clause = "LOWER(messages.conversation_key) LIKE ? ESCAPE '\\'"
-                chan_key_clause = "LOWER(sender_key) LIKE ? ESCAPE '\\'"
+                priv_key_clause = "messages.conversation_key LIKE ? ESCAPE '\\'"
+                chan_key_clause = "sender_key LIKE ? ESCAPE '\\'"
                 params.extend([escaped_prefix, escaped_prefix])
 
             clause += (
@@ -311,12 +313,12 @@ class MessageRepository:
         if blocked_keys:
             placeholders = ",".join("?" for _ in blocked_keys)
             blocked_matchers.append(
-                f"({prefix}type = 'PRIV' AND LOWER({prefix}conversation_key) IN ({placeholders}))"
+                f"({prefix}type = 'PRIV' AND {prefix}conversation_key IN ({placeholders}))"
             )
             params.extend(blocked_keys)
             blocked_matchers.append(
                 f"({prefix}type = 'CHAN' AND {prefix}sender_key IS NOT NULL"
-                f" AND LOWER({prefix}sender_key) IN ({placeholders}))"
+                f" AND {prefix}sender_key IN ({placeholders}))"
             )
             params.extend(blocked_keys)
 
@@ -383,9 +385,9 @@ class MessageRepository:
         query = (
             f"SELECT {MessageRepository._message_select('messages')} FROM messages "
             "LEFT JOIN contacts ON messages.type = 'PRIV' "
-            "AND LOWER(messages.conversation_key) = LOWER(contacts.public_key) "
+            "AND messages.conversation_key = contacts.public_key "
             "LEFT JOIN channels ON messages.type = 'CHAN' "
-            "AND UPPER(messages.conversation_key) = UPPER(channels.key) "
+            "AND messages.conversation_key = channels.key "
             "WHERE 1=1"
         )
         params: list[Any] = []
