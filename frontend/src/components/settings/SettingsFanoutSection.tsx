@@ -643,16 +643,20 @@ function formatPrivateTopicSummary(config: Record<string, unknown>) {
   return `${prefix}/dm:<pubkey>, ${prefix}/gm:<channel>, ${prefix}/raw/...`;
 }
 
-function formatAppriseTargets(urls: string | undefined, maxLength = 80) {
+function censorAppriseUrl(url: string): string {
+  const protoMatch = url.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//);
+  if (protoMatch) return `${protoMatch[0]}********`;
+  return '********';
+}
+
+function formatAppriseTargets(urls: string | undefined) {
   const targets = (urls || '')
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
   if (targets.length === 0) return 'No targets configured';
 
-  const joined = targets.join(', ');
-  if (joined.length <= maxLength) return joined;
-  return `${joined.slice(0, maxLength - 3)}...`;
+  return targets.map(censorAppriseUrl).join(', ');
 }
 
 function formatSqsQueueSummary(config: Record<string, unknown>) {
