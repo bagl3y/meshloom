@@ -347,7 +347,6 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | POST | `/api/contacts/{public_key}/room/status` | Fetch room-server status telemetry |
 | POST | `/api/contacts/{public_key}/room/lpp-telemetry` | Fetch room-server CayenneLPP sensor data |
 | POST | `/api/contacts/{public_key}/room/acl` | Fetch room-server ACL entries |
-
 | GET | `/api/channels` | List channels |
 | GET | `/api/channels/{key}/detail` | Comprehensive channel profile (message stats, top senders) |
 | POST | `/api/channels` | Create channel |
