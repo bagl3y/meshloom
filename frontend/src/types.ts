@@ -337,12 +337,14 @@ export interface AppSettings {
   blocked_names: string[];
   discovery_blocked_types: number[];
   tracked_telemetry_repeaters: string[];
+  auto_resend_channel: boolean;
 }
 
 export interface AppSettingsUpdate {
   max_radio_contacts?: number;
   auto_decrypt_dm_on_advert?: boolean;
   advert_interval?: number;
+  auto_resend_channel?: boolean;
   flood_scope?: string;
   blocked_keys?: string[];
   blocked_names?: string[];

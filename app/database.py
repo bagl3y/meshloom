@@ -105,7 +105,8 @@ CREATE TABLE IF NOT EXISTS app_settings (
     blocked_keys TEXT DEFAULT '[]',
     blocked_names TEXT DEFAULT '[]',
     discovery_blocked_types TEXT DEFAULT '[]',
-    tracked_telemetry_repeaters TEXT DEFAULT '[]'
+    tracked_telemetry_repeaters TEXT DEFAULT '[]',
+    auto_resend_channel INTEGER DEFAULT 0
 );
 INSERT OR IGNORE INTO app_settings (id) VALUES (1);
 

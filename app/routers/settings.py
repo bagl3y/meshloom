@@ -53,6 +53,10 @@ class AppSettingsUpdate(BaseModel):
             "advertisements should not create new contacts"
         ),
     )
+    auto_resend_channel: bool | None = Field(
+        default=None,
+        description="Auto-resend channel messages once if no echo heard within 2 seconds",
+    )
 
 
 class BlockKeyRequest(BaseModel):
@@ -141,6 +145,10 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
         # Only allow valid contact type codes (1-4)
         valid = [t for t in update.discovery_blocked_types if t in (1, 2, 3, 4)]
         kwargs["discovery_blocked_types"] = sorted(set(valid))
+
+    # Auto-resend channel
+    if update.auto_resend_channel is not None:
+        kwargs["auto_resend_channel"] = update.auto_resend_channel
 
     # Flood scope
     flood_scope_changed = False

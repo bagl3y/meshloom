@@ -30,7 +30,7 @@ class AppSettingsRepository:
                    last_message_times, preferences_migrated,
                    advert_interval, last_advert_time, flood_scope,
                    blocked_keys, blocked_names, discovery_blocked_types,
-                   tracked_telemetry_repeaters
+                   tracked_telemetry_repeaters, auto_resend_channel
             FROM app_settings WHERE id = 1
             """
         )
@@ -99,6 +99,12 @@ class AppSettingsRepository:
         except (json.JSONDecodeError, TypeError, KeyError):
             tracked_telemetry_repeaters = []
 
+        # Parse auto_resend_channel boolean
+        try:
+            auto_resend_channel = bool(row["auto_resend_channel"])
+        except (KeyError, TypeError):
+            auto_resend_channel = False
+
         return AppSettings(
             max_radio_contacts=row["max_radio_contacts"],
             favorites=favorites,
@@ -112,6 +118,7 @@ class AppSettingsRepository:
             blocked_names=blocked_names,
             discovery_blocked_types=discovery_blocked_types,
             tracked_telemetry_repeaters=tracked_telemetry_repeaters,
+            auto_resend_channel=auto_resend_channel,
         )
 
     @staticmethod
@@ -128,6 +135,7 @@ class AppSettingsRepository:
         blocked_names: list[str] | None = None,
         discovery_blocked_types: list[int] | None = None,
         tracked_telemetry_repeaters: list[str] | None = None,
+        auto_resend_channel: bool | None = None,
     ) -> AppSettings:
         """Update app settings. Only provided fields are updated."""
         updates = []
@@ -181,6 +189,10 @@ class AppSettingsRepository:
         if tracked_telemetry_repeaters is not None:
             updates.append("tracked_telemetry_repeaters = ?")
             params.append(json.dumps(tracked_telemetry_repeaters))
+
+        if auto_resend_channel is not None:
+            updates.append("auto_resend_channel = ?")
+            params.append(1 if auto_resend_channel else 0)
 
         if updates:
             query = f"UPDATE app_settings SET {', '.join(updates)} WHERE id = 1"

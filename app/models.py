@@ -843,6 +843,13 @@ class AppSettings(BaseModel):
         default_factory=list,
         description="Public keys of repeaters opted into periodic telemetry collection (max 8)",
     )
+    auto_resend_channel: bool = Field(
+        default=False,
+        description=(
+            "When enabled, outgoing channel messages that receive no echo within 2 seconds "
+            "are automatically byte-perfect resent once (within the 30-second dedup window)"
+        ),
+    )
 
 
 class FanoutConfig(BaseModel):

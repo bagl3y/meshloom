@@ -702,6 +702,26 @@ export function SettingsRadioSection({
             </p>
           </div>
         </div>
+
+        <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+          <Checkbox
+            id="auto-resend-channel"
+            checked={appSettings.auto_resend_channel}
+            onCheckedChange={(checked) =>
+              onSaveAppSettings({ auto_resend_channel: checked === true })
+            }
+            className="mt-0.5"
+          />
+          <div className="space-y-1">
+            <Label htmlFor="auto-resend-channel">Auto-Resend Unheard Channel Messages</Label>
+            <p className="text-xs text-muted-foreground">
+              When enabled, outgoing channel messages that receive no echo within 2 seconds are
+              automatically resent once (byte-perfect, within the 30-second dedup window). Repeaters
+              that already heard the original will ignore the duplicate. This functionality will NOT
+              create double-sent/duplicate messages.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-2">

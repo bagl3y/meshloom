@@ -407,6 +407,12 @@ async def run_migrations(conn: aiosqlite.Connection) -> int:
         await set_version(conn, 53)
         applied += 1
 
+    if version < 54:
+        logger.info("Applying migration 54: add auto_resend_channel to app_settings")
+        await _migrate_054_auto_resend_channel(conn)
+        await set_version(conn, 54)
+        applied += 1
+
     if applied > 0:
         logger.info(
             "Applied %d migration(s), schema now at version %d", applied, await get_version(conn)
@@ -3190,5 +3196,20 @@ async def _migrate_053_tracked_telemetry_repeaters(conn: aiosqlite.Connection) -
     if "tracked_telemetry_repeaters" not in columns:
         await conn.execute(
             "ALTER TABLE app_settings ADD COLUMN tracked_telemetry_repeaters TEXT DEFAULT '[]'"
+        )
+        await conn.commit()
+
+
+async def _migrate_054_auto_resend_channel(conn: aiosqlite.Connection) -> None:
+    """Add auto_resend_channel boolean column to app_settings."""
+    tables_cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    if "app_settings" not in {row[0] for row in await tables_cursor.fetchall()}:
+        await conn.commit()
+        return
+    col_cursor = await conn.execute("PRAGMA table_info(app_settings)")
+    columns = {row[1] for row in await col_cursor.fetchall()}
+    if "auto_resend_channel" not in columns:
+        await conn.execute(
+            "ALTER TABLE app_settings ADD COLUMN auto_resend_channel INTEGER DEFAULT 0"
         )
         await conn.commit()

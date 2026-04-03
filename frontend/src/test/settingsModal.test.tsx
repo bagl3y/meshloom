@@ -70,6 +70,7 @@ const baseSettings: AppSettings = {
   blocked_names: [],
   discovery_blocked_types: [],
   tracked_telemetry_repeaters: [],
+  auto_resend_channel: false,
 };
 
 function renderModal(overrides?: {
