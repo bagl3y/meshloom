@@ -1,3 +1,7 @@
+## [3.7.1] - 2026-04-02
+
+* Feature: Redact Apprise URLs to prevent sensitive information disclosure
+
 ## [3.7.0] - 2026-04-02
 
 * Feature: Repeater battery tracking
