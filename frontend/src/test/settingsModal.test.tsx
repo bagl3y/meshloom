@@ -61,7 +61,6 @@ const baseSettings: AppSettings = {
   max_radio_contacts: 200,
   favorites: [],
   auto_decrypt_dm_on_advert: false,
-  sidebar_sort_order: 'recent',
   last_message_times: {},
   preferences_migrated: false,
   advert_interval: 0,

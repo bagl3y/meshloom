@@ -177,7 +177,6 @@ class TestMigratePreferences:
 
         assert response.migrated is True
         assert response.settings.preferences_migrated is True
-        assert response.settings.sidebar_sort_order == "alpha"
         assert len(response.settings.favorites) == 1
         assert response.settings.favorites[0].type == "contact"
         assert response.settings.favorites[0].id == "aa" * 32

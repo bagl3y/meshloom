@@ -364,7 +364,7 @@ class TestDeleteContactCascade:
         assert len(await ContactAdvertPathRepository.get_recent_for_contact(KEY_A)) == 0
 
     @pytest.mark.asyncio
-    async def test_delete_removes_direct_messages(self, test_db, client):
+    async def test_delete_preserves_direct_messages(self, test_db, client):
         await _insert_contact(KEY_A, "Alice")
 
         # Create a DM for this contact
@@ -375,8 +375,6 @@ class TestDeleteContactCascade:
             sender_timestamp=1000,
             received_at=1000,
         )
-        msgs = await MessageRepository.get_all(msg_type="PRIV", conversation_key=KEY_A)
-        assert len(msgs) == 1
 
         with patch("app.routers.contacts.radio_manager") as mock_rm:
             mock_rm.is_connected = False
@@ -387,9 +385,9 @@ class TestDeleteContactCascade:
 
         assert response.status_code == 200
 
-        # DMs for the deleted contact should be gone
+        # DMs are preserved so they re-surface if the contact is re-added
         msgs = await MessageRepository.get_all(msg_type="PRIV", conversation_key=KEY_A)
-        assert len(msgs) == 0
+        assert len(msgs) == 1
 
 
 class TestMarkRead:

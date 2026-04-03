@@ -107,36 +107,19 @@ interface SidebarProps {
   onToggleCracker: () => void;
   onMarkAllRead: () => void;
   favorites: Favorite[];
-  /** Legacy global sort order, used only to seed per-section local preferences. */
-  legacySortOrder?: SortOrder;
   isConversationNotificationsEnabled?: (type: 'channel' | 'contact', id: string) => boolean;
   blockedKeys?: string[];
   blockedNames?: string[];
 }
 
-type InitialSectionSortState = {
-  orders: SidebarSectionSortOrders;
-  source: 'section' | 'legacy' | 'none';
-};
-
-function loadInitialSectionSortOrders(): InitialSectionSortState {
+function loadInitialSectionSortOrders(): SidebarSectionSortOrders {
   const storedOrders = loadLocalStorageSidebarSectionSortOrders();
-  if (storedOrders) {
-    return { orders: storedOrders, source: 'section' };
-  }
+  if (storedOrders) return storedOrders;
 
   const legacyOrder = loadLegacyLocalStorageSortOrder();
-  if (legacyOrder) {
-    return {
-      orders: buildSidebarSectionSortOrders(legacyOrder),
-      source: 'legacy',
-    };
-  }
-
-  return {
-    orders: buildSidebarSectionSortOrders(),
-    source: 'none',
-  };
+  const orders = buildSidebarSectionSortOrders(legacyOrder ?? undefined);
+  saveLocalStorageSidebarSectionSortOrders(orders);
+  return orders;
 }
 
 export function Sidebar({
@@ -153,7 +136,6 @@ export function Sidebar({
   onToggleCracker,
   onMarkAllRead,
   favorites,
-  legacySortOrder,
   isConversationNotificationsEnabled,
   blockedKeys = [],
   blockedNames = [],
@@ -166,8 +148,8 @@ export function Sidebar({
   );
 
   const [searchQuery, setSearchQuery] = useState('');
-  const initialSectionSortState = useMemo(loadInitialSectionSortOrders, []);
-  const [sectionSortOrders, setSectionSortOrders] = useState(initialSectionSortState.orders);
+  const initialSectionSortOrders = useMemo(loadInitialSectionSortOrders, []);
+  const [sectionSortOrders, setSectionSortOrders] = useState(initialSectionSortOrders);
   const initialCollapsedState = useMemo(loadCollapsedState, []);
   const [toolsCollapsed, setToolsCollapsed] = useState(initialCollapsedState.tools);
   const [favoritesCollapsed, setFavoritesCollapsed] = useState(initialCollapsedState.favorites);
@@ -176,29 +158,12 @@ export function Sidebar({
   const [roomsCollapsed, setRoomsCollapsed] = useState(initialCollapsedState.rooms);
   const [repeatersCollapsed, setRepeatersCollapsed] = useState(initialCollapsedState.repeaters);
   const collapseSnapshotRef = useRef<CollapseState | null>(null);
-  const sectionSortSourceRef = useRef(initialSectionSortState.source);
-
-  useEffect(() => {
-    if (sectionSortSourceRef.current === 'legacy') {
-      saveLocalStorageSidebarSectionSortOrders(sectionSortOrders);
-      sectionSortSourceRef.current = 'section';
-      return;
-    }
-
-    if (sectionSortSourceRef.current !== 'none' || legacySortOrder === undefined) return;
-
-    const seededOrders = buildSidebarSectionSortOrders(legacySortOrder);
-    setSectionSortOrders(seededOrders);
-    saveLocalStorageSidebarSectionSortOrders(seededOrders);
-    sectionSortSourceRef.current = 'section';
-  }, [legacySortOrder, sectionSortOrders]);
 
   const handleSortToggle = (section: SidebarSortableSection) => {
     setSectionSortOrders((prev) => {
       const nextOrder = prev[section] === 'alpha' ? 'recent' : 'alpha';
       const updated = { ...prev, [section]: nextOrder };
       saveLocalStorageSidebarSectionSortOrders(updated);
-      sectionSortSourceRef.current = 'section';
       return updated;
     });
   };

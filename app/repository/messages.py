@@ -675,7 +675,7 @@ class MessageRepository:
                            ELSE 0
                        END) > 0 as has_mention
             FROM messages m
-            JOIN contacts ct ON m.conversation_key = ct.public_key
+            LEFT JOIN contacts ct ON m.conversation_key = ct.public_key
             WHERE m.type = 'PRIV' AND m.outgoing = 0
               AND m.received_at > COALESCE(ct.last_read_at, 0)
               {blocked_sql}

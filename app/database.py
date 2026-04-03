@@ -96,7 +96,6 @@ CREATE TABLE IF NOT EXISTS app_settings (
     max_radio_contacts INTEGER DEFAULT 200,
     favorites TEXT DEFAULT '[]',
     auto_decrypt_dm_on_advert INTEGER DEFAULT 1,
-    sidebar_sort_order TEXT DEFAULT 'recent',
     last_message_times TEXT DEFAULT '{}',
     preferences_migrated INTEGER DEFAULT 0,
     advert_interval INTEGER DEFAULT 0,

@@ -490,7 +490,6 @@ export function App() {
       void markAllRead();
     },
     favorites,
-    legacySortOrder: appSettings?.sidebar_sort_order,
     isConversationNotificationsEnabled,
     blockedKeys: appSettings?.blocked_keys ?? [],
     blockedNames: appSettings?.blocked_names ?? [],

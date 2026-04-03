@@ -250,6 +250,7 @@ async def batch_cli_fetch(
             # Re-ensure contact is loaded each iteration; another operation
             # may have evicted it while we didn't hold the lock.
             await _ensure_on_radio(mc, contact)
+            await asyncio.sleep(1.0)  # settle after add_contact
 
             send_result = await mc.commands.send_cmd(contact.public_key, cmd)
             if send_result.type == EventType.ERROR:

@@ -622,7 +622,6 @@ class TestAppSettingsRepository:
                 "max_radio_contacts": 250,
                 "favorites": "{not-json",
                 "auto_decrypt_dm_on_advert": 1,
-                "sidebar_sort_order": "invalid",
                 "last_message_times": "{also-not-json",
                 "preferences_migrated": 0,
                 "advert_interval": None,
@@ -645,7 +644,6 @@ class TestAppSettingsRepository:
         assert settings.max_radio_contacts == 250
         assert settings.favorites == []
         assert settings.last_message_times == {}
-        assert settings.sidebar_sort_order == "recent"
         assert settings.advert_interval == 0
         assert settings.last_advert_time == 0
 
@@ -680,7 +678,7 @@ class TestAppSettingsRepository:
         from app.models import AppSettings
 
         current = AppSettings(preferences_migrated=False)
-        migrated = AppSettings(preferences_migrated=True, sidebar_sort_order="recent")
+        migrated = AppSettings(preferences_migrated=True)
 
         with (
             patch(
@@ -704,7 +702,7 @@ class TestAppSettingsRepository:
 
         assert did_migrate is True
         assert result.preferences_migrated is True
-        assert mock_update.call_args.kwargs["sidebar_sort_order"] == "recent"
+        assert "sidebar_sort_order" not in mock_update.call_args.kwargs
         assert mock_update.call_args.kwargs["preferences_migrated"] is True
 
 

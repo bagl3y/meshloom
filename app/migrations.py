@@ -389,6 +389,12 @@ async def run_migrations(conn: aiosqlite.Connection) -> int:
         await set_version(conn, 50)
         applied += 1
 
+    if version < 51:
+        logger.info("Applying migration 51: drop sidebar_sort_order from app_settings")
+        await _migrate_051_drop_sidebar_sort_order(conn)
+        await set_version(conn, 51)
+        applied += 1
+
     if applied > 0:
         logger.info(
             "Applied %d migration(s), schema now at version %d", applied, await get_version(conn)
@@ -859,13 +865,9 @@ async def _migrate_009_create_app_settings_table(conn: aiosqlite.Connection) -> 
         """
     )
 
-    # Initialize with default row
-    await conn.execute(
-        """
-        INSERT OR IGNORE INTO app_settings (id, max_radio_contacts, favorites, auto_decrypt_dm_on_advert, sidebar_sort_order, last_message_times, preferences_migrated)
-        VALUES (1, 200, '[]', 1, 'recent', '{}', 0)
-        """
-    )
+    # Initialize with default row (use only the id column so this works
+    # regardless of which columns exist — defaults fill the rest).
+    await conn.execute("INSERT OR IGNORE INTO app_settings (id) VALUES (1)")
 
     await conn.commit()
     logger.debug("Created app_settings table with default values")
@@ -3128,3 +3130,22 @@ async def _migrate_050_repeater_telemetry_history(conn: aiosqlite.Connection) ->
         """
     )
     await conn.commit()
+
+
+async def _migrate_051_drop_sidebar_sort_order(conn: aiosqlite.Connection) -> None:
+    """Remove vestigial sidebar_sort_order column from app_settings."""
+    col_cursor = await conn.execute("PRAGMA table_info(app_settings)")
+    columns = {row[1] for row in await col_cursor.fetchall()}
+    if "sidebar_sort_order" in columns:
+        try:
+            await conn.execute("ALTER TABLE app_settings DROP COLUMN sidebar_sort_order")
+            await conn.commit()
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "syntax error" in error_msg or "drop column" in error_msg:
+                logger.debug(
+                    "SQLite doesn't support DROP COLUMN, sidebar_sort_order column will remain"
+                )
+                await conn.commit()
+            else:
+                raise

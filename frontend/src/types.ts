@@ -316,7 +316,6 @@ export interface AppSettings {
   max_radio_contacts: number;
   favorites: Favorite[];
   auto_decrypt_dm_on_advert: boolean;
-  sidebar_sort_order: 'recent' | 'alpha';
   last_message_times: Record<string, number>;
   preferences_migrated: boolean;
   advert_interval: number;
@@ -330,7 +329,6 @@ export interface AppSettings {
 export interface AppSettingsUpdate {
   max_radio_contacts?: number;
   auto_decrypt_dm_on_advert?: boolean;
-  sidebar_sort_order?: 'recent' | 'alpha';
   advert_interval?: number;
   flood_scope?: string;
   blocked_keys?: string[];

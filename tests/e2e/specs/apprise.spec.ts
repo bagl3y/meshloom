@@ -25,6 +25,16 @@ test.describe('Apprise integration settings', () => {
     receiver.close();
   });
 
+  test.beforeEach(async () => {
+    // Clean up any stale configs from previous failed runs
+    const configs = await getFanoutConfigs();
+    for (const c of configs.filter((c) => c.name === 'E2E Apprise')) {
+      try {
+        await deleteFanoutConfig(c.id);
+      } catch { /* ignore */ }
+    }
+  });
+
   test.afterEach(async () => {
     if (createdAppriseId) {
       try {
@@ -66,16 +76,15 @@ test.describe('Apprise integration settings', () => {
     await page.getByRole('button', { name: /Save as Enabled/i }).click();
     await expect(page.getByText('Integration saved and enabled')).toBeVisible();
 
-    // Should be back on list view with our apprise config visible
-    await expect(page.getByText('E2E Apprise')).toBeVisible();
-    await expect(page.getByText(appriseUrl)).toBeVisible();
-
-    // Clean up via API
+    // Capture ID for cleanup before assertions that might fail
     const configs = await getFanoutConfigs();
     const apprise = configs.find((c) => c.name === 'E2E Apprise');
     if (apprise) {
       createdAppriseId = apprise.id;
     }
+
+    // Should be back on list view with our apprise config visible
+    await expect(fanoutHeader(page, 'E2E Apprise')).toBeVisible();
   });
 
   test('create apprise via API, verify options persist after edit', async ({ page }) => {

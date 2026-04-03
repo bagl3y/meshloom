@@ -27,7 +27,7 @@ class AppSettingsRepository:
         cursor = await db.conn.execute(
             """
             SELECT max_radio_contacts, favorites, auto_decrypt_dm_on_advert,
-                   sidebar_sort_order, last_message_times, preferences_migrated,
+                   last_message_times, preferences_migrated,
                    advert_interval, last_advert_time, flood_scope,
                    blocked_keys, blocked_names, discovery_blocked_types
             FROM app_settings WHERE id = 1
@@ -89,16 +89,10 @@ class AppSettingsRepository:
             except (json.JSONDecodeError, TypeError):
                 discovery_blocked_types = []
 
-        # Validate sidebar_sort_order (fallback to "recent" if invalid)
-        sort_order = row["sidebar_sort_order"]
-        if sort_order not in ("recent", "alpha"):
-            sort_order = "recent"
-
         return AppSettings(
             max_radio_contacts=row["max_radio_contacts"],
             favorites=favorites,
             auto_decrypt_dm_on_advert=bool(row["auto_decrypt_dm_on_advert"]),
-            sidebar_sort_order=sort_order,
             last_message_times=last_message_times,
             preferences_migrated=bool(row["preferences_migrated"]),
             advert_interval=row["advert_interval"] or 0,
@@ -114,7 +108,6 @@ class AppSettingsRepository:
         max_radio_contacts: int | None = None,
         favorites: list[Favorite] | None = None,
         auto_decrypt_dm_on_advert: bool | None = None,
-        sidebar_sort_order: str | None = None,
         last_message_times: dict[str, int] | None = None,
         preferences_migrated: bool | None = None,
         advert_interval: int | None = None,
@@ -140,10 +133,6 @@ class AppSettingsRepository:
         if auto_decrypt_dm_on_advert is not None:
             updates.append("auto_decrypt_dm_on_advert = ?")
             params.append(1 if auto_decrypt_dm_on_advert else 0)
-
-        if sidebar_sort_order is not None:
-            updates.append("sidebar_sort_order = ?")
-            params.append(sidebar_sort_order)
 
         if last_message_times is not None:
             updates.append("last_message_times = ?")
@@ -252,7 +241,6 @@ class AppSettingsRepository:
         # Update with migrated preferences and mark as migrated
         settings = await AppSettingsRepository.update(
             favorites=new_favorites,
-            sidebar_sort_order=sort_order if sort_order in ("recent", "alpha") else "recent",
             last_message_times=last_message_times,
             preferences_migrated=True,
         )

@@ -787,10 +787,6 @@ class AppSettings(BaseModel):
         default=True,
         description="Whether to attempt historical DM decryption on new contact advertisement",
     )
-    sidebar_sort_order: Literal["recent", "alpha"] = Field(
-        default="recent",
-        description="Sidebar sort order: 'recent' or 'alpha'",
-    )
     last_message_times: dict[str, int] = Field(
         default_factory=dict,
         description="Map of conversation state keys to last message timestamps",

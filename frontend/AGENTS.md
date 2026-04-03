@@ -350,7 +350,6 @@ LocalStorage migration helpers for favorites; canonical favorites are server-sid
 - `max_radio_contacts`
 - `favorites`
 - `auto_decrypt_dm_on_advert`
-- `sidebar_sort_order`
 - `last_message_times`
 - `preferences_migrated`
 - `advert_interval`
@@ -358,7 +357,6 @@ LocalStorage migration helpers for favorites; canonical favorites are server-sid
 - `flood_scope`
 - `blocked_keys`, `blocked_names`, `discovery_blocked_types`
 
-The backend still carries `sidebar_sort_order` for compatibility and old preference migration, but the current sidebar UI stores sort order per section (`Channels`, `Contacts`, `Repeaters`) in frontend localStorage rather than treating it as one global server-backed setting.
 
 Note: MQTT, bot, and community MQTT settings were migrated to the `fanout_configs` table (managed via `/api/fanout`). They are no longer part of `AppSettings`.
 
