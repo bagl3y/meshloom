@@ -285,39 +285,42 @@ async def send_channel_message_with_effective_scope(
                 )
 
         if apply_phm:
-            try:
-                restore_phm = await mc.commands.set_path_hash_mode(baseline_phm)
-                if restore_phm is not None and restore_phm.type == EventType.ERROR:
-                    logger.error(
-                        "Failed to restore baseline path_hash_mode after sending to %s: %s",
+            restored = False
+            for attempt in range(3):
+                try:
+                    restore_phm = await mc.commands.set_path_hash_mode(baseline_phm)
+                    if restore_phm is not None and restore_phm.type == EventType.ERROR:
+                        logger.warning(
+                            "Attempt %d/3: failed to restore path_hash_mode after sending to %s: %s",
+                            attempt + 1,
+                            channel.name,
+                            restore_phm.payload,
+                        )
+                    else:
+                        radio_manager.path_hash_mode = baseline_phm
+                        logger.debug(
+                            "Restored baseline path_hash_mode after channel send: %d",
+                            baseline_phm,
+                        )
+                        restored = True
+                        break
+                except Exception:
+                    logger.exception(
+                        "Attempt %d/3: exception restoring path_hash_mode after sending to %s",
+                        attempt + 1,
                         channel.name,
-                        restore_phm.payload,
                     )
-                    error_broadcast_fn(
-                        "Path hash mode restore failed",
-                        (
-                            f"Sent to {channel.name}, but restoring path hash mode failed. "
-                            "The radio may be using a non-default hop width. "
-                            "Consider rebooting the radio."
-                        ),
-                    )
-                else:
-                    radio_manager.path_hash_mode = baseline_phm
-                    logger.debug(
-                        "Restored baseline path_hash_mode after channel send: %d",
-                        baseline_phm,
-                    )
-            except Exception:
-                logger.exception(
-                    "Failed to restore baseline path_hash_mode after sending to %s",
+            if not restored:
+                logger.error(
+                    "All 3 attempts to restore path_hash_mode failed for %s",
                     channel.name,
                 )
                 error_broadcast_fn(
                     "Path hash mode restore failed",
                     (
-                        f"Sent to {channel.name}, but restoring path hash mode failed. "
-                        "The radio may be using a non-default hop width. "
-                        "Consider rebooting the radio."
+                        f"Sent to {channel.name}, but restoring path hash mode failed "
+                        f"after 3 attempts. The radio is still using a non-default hop "
+                        f"width. Set it back manually in Radio settings."
                     ),
                 )
 
