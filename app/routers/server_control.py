@@ -230,20 +230,26 @@ async def batch_cli_fetch(
     operation_name: str,
     commands: list[tuple[str, str]],
 ) -> dict[str, str | None]:
-    """Send a batch of CLI commands to a server-capable contact and collect responses."""
+    """Send a batch of CLI commands to a server-capable contact and collect responses.
+
+    Each command acquires and releases the radio lock independently so that
+    other operations (sends, syncs) can slip in between commands.
+    """
     results: dict[str, str | None] = {field: None for _, field in commands}
 
-    async with radio_manager.radio_operation(
-        operation_name,
-        pause_polling=True,
-        suspend_auto_fetch=True,
-    ) as mc:
-        await _ensure_on_radio(mc, contact)
-        await asyncio.sleep(1.0)
+    for index, (cmd, field) in enumerate(commands):
+        if index > 0:
+            # Yield briefly so queued operations can acquire the lock.
+            await asyncio.sleep(0.25)
 
-        for index, (cmd, field) in enumerate(commands):
-            if index > 0:
-                await asyncio.sleep(1.0)
+        async with radio_manager.radio_operation(
+            operation_name,
+            pause_polling=True,
+            suspend_auto_fetch=True,
+        ) as mc:
+            # Re-ensure contact is loaded each iteration; another operation
+            # may have evicted it while we didn't hold the lock.
+            await _ensure_on_radio(mc, contact)
 
             send_result = await mc.commands.send_cmd(contact.public_key, cmd)
             if send_result.type == EventType.ERROR:
