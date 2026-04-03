@@ -101,7 +101,7 @@ export function RawPacketList({ packets, channels, onPacketClick }: RawPacketLis
             <div className="flex items-center gap-2">
               {/* Route type badge */}
               <span
-                className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${getRouteTypeColor(decoded.routeType)}`}
+                className={`text-[0.625rem] font-mono px-1.5 py-0.5 rounded ${getRouteTypeColor(decoded.routeType)}`}
                 title={decoded.routeType}
               >
                 {getRouteTypeLabel(decoded.routeType)}
@@ -117,26 +117,29 @@ export function RawPacketList({ packets, channels, onPacketClick }: RawPacketLis
 
               {/* Summary */}
               <span
-                className={cn('text-[13px]', packet.decrypted ? 'text-primary' : 'text-foreground')}
+                className={cn(
+                  'text-[0.8125rem]',
+                  packet.decrypted ? 'text-primary' : 'text-foreground'
+                )}
               >
                 {decoded.summary}
               </span>
 
               {/* Time */}
-              <span className="text-muted-foreground ml-auto text-[12px] tabular-nums">
+              <span className="text-muted-foreground ml-auto text-xs tabular-nums">
                 {formatTime(packet.timestamp)}
               </span>
             </div>
 
             {/* Signal info */}
             {(packet.snr !== null || packet.rssi !== null) && (
-              <div className="text-[11px] text-muted-foreground mt-0.5 tabular-nums">
+              <div className="text-[0.6875rem] text-muted-foreground mt-0.5 tabular-nums">
                 {formatSignalInfo(packet)}
               </div>
             )}
 
             {/* Raw hex data (always visible) */}
-            <div className="font-mono text-[10px] break-all text-muted-foreground mt-1.5 p-1.5 bg-background/60 rounded">
+            <div className="font-mono text-[0.625rem] break-all text-muted-foreground mt-1.5 p-1.5 bg-background/60 rounded">
               {packet.data.toUpperCase()}
             </div>
           </>

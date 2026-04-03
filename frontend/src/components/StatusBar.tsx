@@ -123,7 +123,7 @@ export function StatusBar({
         <div className="hidden lg:flex items-center gap-2 text-muted-foreground">
           <span className="text-foreground font-medium">{config.name || 'Unnamed'}</span>
           <span
-            className="font-mono text-[11px] text-muted-foreground cursor-pointer hover:text-primary transition-colors"
+            className="font-mono text-[0.6875rem] text-muted-foreground cursor-pointer hover:text-primary transition-colors"
             role="button"
             tabIndex={0}
             onKeyDown={handleKeyboardActivate}

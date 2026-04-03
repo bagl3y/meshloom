@@ -118,7 +118,7 @@ function TraceNodeRow({
     >
       <div
         className={cn(
-          'flex h-9 w-9 items-center justify-center rounded-full border text-[11px] font-semibold uppercase tracking-wide',
+          'flex h-9 w-9 items-center justify-center rounded-full border text-[0.6875rem] font-semibold uppercase tracking-wide',
           fixed
             ? 'border-primary/30 bg-primary/10 text-primary'
             : 'border-border bg-muted text-muted-foreground'
@@ -129,12 +129,12 @@ function TraceNodeRow({
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">{title}</div>
         <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
-        {meta ? <div className="mt-1 text-[11px] text-muted-foreground">{meta}</div> : null}
-        {note ? <div className="mt-1 text-[11px] text-muted-foreground">{note}</div> : null}
+        {meta ? <div className="mt-1 text-[0.6875rem] text-muted-foreground">{meta}</div> : null}
+        {note ? <div className="mt-1 text-[0.6875rem] text-muted-foreground">{note}</div> : null}
       </div>
       {snr ? (
         <div className="shrink-0 text-right">
-          <div className="text-[11px] text-muted-foreground">SNR</div>
+          <div className="text-[0.6875rem] text-muted-foreground">SNR</div>
           <div className="font-mono text-sm">{snr}</div>
         </div>
       ) : null}
@@ -370,7 +370,7 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
               ))}
             </div>
             {sortMode === 'distance' && !canSortByDistance ? (
-              <p className="mt-2 text-[11px] text-muted-foreground">
+              <p className="mt-2 text-[0.6875rem] text-muted-foreground">
                 Distance sorting is using known repeater coordinates, but the local radio does not
                 currently have a valid location.
               </p>
@@ -421,12 +421,12 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
                           {getShortKey(contact.public_key)}
                         </div>
                         {sortMode === 'distance' && distanceKm !== null ? (
-                          <div className="mt-1 text-[11px] text-muted-foreground">
+                          <div className="mt-1 text-[0.6875rem] text-muted-foreground">
                             {distanceKm.toFixed(1)} km away
                           </div>
                         ) : null}
                         {selectedCount > 0 ? (
-                          <div className="mt-1 text-[11px] text-muted-foreground">
+                          <div className="mt-1 text-[0.6875rem] text-muted-foreground">
                             Added {selectedCount} time{selectedCount === 1 ? '' : 's'}
                           </div>
                         ) : null}

@@ -107,11 +107,11 @@ export function ChannelInfoPane({
                 </span>
               )}
               <div className="flex items-center gap-2 mt-1.5">
-                <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                <span className="text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                   {channel.is_hashtag ? 'Hashtag' : 'Private Key'}
                 </span>
                 {channel.on_radio && (
-                  <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                  <span className="text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
                     On Radio
                   </span>
                 )}
@@ -221,7 +221,7 @@ export function ChannelInfoPane({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5">
+    <h3 className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium mb-1.5">
       {children}
     </h3>
   );
@@ -301,11 +301,13 @@ function HopWidthChart({ stats }: { stats: PathHashWidthStats }) {
               className="w-2 h-2 rounded-full flex-shrink-0"
               style={{ backgroundColor: d.color }}
             />
-            <span className="text-[11px] text-muted-foreground flex-1">{d.name}</span>
-            <span className="text-[11px] font-medium tabular-nums">{d.value.toLocaleString()}</span>
+            <span className="text-[0.6875rem] text-muted-foreground flex-1">{d.name}</span>
+            <span className="text-[0.6875rem] font-medium tabular-nums">
+              {d.value.toLocaleString()}
+            </span>
           </div>
         ))}
-        <p className="text-[10px] text-muted-foreground pt-0.5">
+        <p className="text-[0.625rem] text-muted-foreground pt-0.5">
           {stats.total_packets.toLocaleString()} total
         </p>
       </div>

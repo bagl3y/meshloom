@@ -584,7 +584,7 @@ export function Sidebar({
             contactType={row.contact.type}
           />
         )}
-        <span className="name flex-1 truncate text-[13px]">{row.name}</span>
+        <span className="name flex-1 truncate text-[0.8125rem]">{row.name}</span>
         <span className="ml-auto flex items-center gap-1">
           {row.notificationsEnabled && (
             <span aria-label="Notifications enabled" title="Notifications enabled">
@@ -594,7 +594,7 @@ export function Sidebar({
           {row.unreadCount > 0 && (
             <span
               className={cn(
-                'text-[10px] font-semibold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
+                'text-[0.625rem] font-semibold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
                 highlightUnread
                   ? 'bg-badge-mention text-badge-mention-foreground'
                   : 'bg-badge-unread/90 text-badge-unread-foreground'
@@ -626,7 +626,7 @@ export function Sidebar({
       key={key}
       data-active={active ? 'true' : undefined}
       className={cn(
-        'sidebar-action-row px-3 py-2 cursor-pointer flex items-center gap-2 border-l-2 border-transparent hover:bg-accent transition-colors text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'sidebar-action-row px-3 py-2 cursor-pointer flex items-center gap-2 border-l-2 border-transparent hover:bg-accent transition-colors text-[0.8125rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         active && 'bg-accent border-l-primary'
       )}
       role="button"
@@ -735,7 +735,7 @@ export function Sidebar({
               {showCracker ? 'Hide' : 'Show'} Channel Finder
               <span
                 className={cn(
-                  'ml-1 text-[11px]',
+                  'ml-1 text-[0.6875rem]',
                   crackerRunning ? 'text-primary' : 'text-muted-foreground'
                 )}
               >
@@ -763,7 +763,7 @@ export function Sidebar({
       <div className="flex justify-between items-center px-3 py-2 pt-3.5">
         <button
           className={cn(
-            'flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded',
+            'flex items-center gap-1.5 text-[0.625rem] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded',
             isSearching && 'cursor-default'
           )}
           aria-expanded={!effectiveCollapsed}
@@ -783,7 +783,7 @@ export function Sidebar({
           <div className="ml-auto flex items-center gap-1.5">
             {sortSection && sectionSortOrder && (
               <button
-                className="bg-transparent text-muted-foreground/60 px-1 py-0.5 text-[10px] rounded hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="bg-transparent text-muted-foreground/60 px-1 py-0.5 text-[0.625rem] rounded hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => handleSortToggle(sortSection)}
                 aria-label={
                   sectionSortOrder === 'alpha'
@@ -802,7 +802,7 @@ export function Sidebar({
             {unreadCount > 0 && (
               <span
                 className={cn(
-                  'text-[10px] font-medium px-1.5 py-0.5 rounded-full',
+                  'text-[0.625rem] font-medium px-1.5 py-0.5 rounded-full',
                   highlightUnread
                     ? 'bg-badge-mention text-badge-mention-foreground'
                     : 'bg-secondary text-muted-foreground'
@@ -831,7 +831,7 @@ export function Sidebar({
           onClick={onNewMessage}
           title="Add channel or contact"
           aria-label="Add channel or contact"
-          className="h-8 w-full justify-start gap-2 border-primary/20 bg-primary/5 px-3 text-[13px] text-primary hover:bg-primary/10 hover:text-primary"
+          className="h-8 w-full justify-start gap-2 border-primary/20 bg-primary/5 px-3 text-[0.8125rem] text-primary hover:bg-primary/10 hover:text-primary"
         >
           <SquarePen className="h-4 w-4" />
           <span>Add Channel/Contact</span>
@@ -848,7 +848,7 @@ export function Sidebar({
               aria-label="Search conversations"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={cn('h-7 text-[13px] bg-background/50', searchQuery ? 'pr-8' : 'pr-3')}
+              className={cn('h-7 text-[0.8125rem] bg-background/50', searchQuery ? 'pr-8' : 'pr-3')}
             />
             {searchQuery && (
               <button
@@ -874,7 +874,7 @@ export function Sidebar({
         {/* Mark All Read */}
         {!query && Object.values(unreadCounts).some((c) => c > 0) && (
           <div
-            className="px-3 py-2 cursor-pointer flex items-center gap-2 border-l-2 border-transparent hover:bg-accent transition-colors text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="px-3 py-2 cursor-pointer flex items-center gap-2 border-l-2 border-transparent hover:bg-accent transition-colors text-[0.8125rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             role="button"
             tabIndex={0}
             onKeyDown={handleKeyboardActivate}

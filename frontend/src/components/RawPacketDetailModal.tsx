@@ -312,7 +312,7 @@ function CompactMetaCard({
 }) {
   return (
     <div className="rounded-lg border border-border/70 bg-card/70 p-2.5">
-      <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
+      <div className="text-[0.625rem] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="mt-1 text-sm font-medium leading-tight text-foreground">{primary}</div>
       {secondary ? (
         <div className="mt-1 text-xs leading-tight text-muted-foreground">{secondary}</div>
@@ -340,7 +340,7 @@ function FullPacketHex({
   const byteRuns = useMemo(() => buildByteRuns(bytes, byteOwners), [byteOwners, bytes]);
 
   return (
-    <div className="font-mono text-[15px] leading-7 text-foreground">
+    <div className="font-mono text-[0.9375rem] leading-7 text-foreground">
       {byteRuns.map((run, index) => {
         const fieldId = run.fieldId;
         const palette = fieldId ? colorMap.get(fieldId) : null;
@@ -446,7 +446,9 @@ function FieldBox({
       <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between">
         <div className="min-w-0">
           <div className="text-base font-semibold leading-tight text-foreground">{field.name}</div>
-          <div className="mt-0.5 text-[11px] text-muted-foreground">{formatByteRange(field)}</div>
+          <div className="mt-0.5 text-[0.6875rem] text-muted-foreground">
+            {formatByteRange(field)}
+          </div>
         </div>
         <div
           className={cn(
@@ -464,7 +466,7 @@ function FieldBox({
 
       {field.decryptedMessage ? (
         <div className="mt-2 rounded border border-border/50 bg-background/40 p-2">
-          <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+          <div className="text-[0.625rem] uppercase tracking-wider text-muted-foreground">
             {field.name === 'Ciphertext' ? 'Plaintext' : 'Decoded value'}
           </div>
           <PlaintextContent text={field.decryptedMessage} />
@@ -486,11 +488,13 @@ function FieldBox({
                   <div className="text-sm font-medium leading-tight text-foreground">
                     {part.field}
                   </div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">Bits {part.bits}</div>
+                  <div className="mt-0.5 text-[0.6875rem] text-muted-foreground">
+                    Bits {part.bits}
+                  </div>
                 </div>
                 <div className="text-right">
                   <div className="font-mono text-sm text-foreground">{part.binary}</div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">{part.value}</div>
+                  <div className="mt-0.5 text-[0.6875rem] text-muted-foreground">{part.value}</div>
                 </div>
               </div>
             </div>
@@ -598,7 +602,7 @@ export function RawPacketInspectionPanel({ packet, channels }: RawPacketInspecti
         <section className="rounded-lg border border-border/70 bg-card/70 p-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              <div className="text-[0.625rem] uppercase tracking-wider text-muted-foreground">
                 Summary
               </div>
               <div className="mt-1 text-base font-semibold leading-tight text-foreground">
@@ -611,7 +615,7 @@ export function RawPacketInspectionPanel({ packet, channels }: RawPacketInspecti
           </div>
           {packetContext ? (
             <div className="mt-2 rounded-md border border-border/60 bg-background/35 px-2.5 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              <div className="text-[0.625rem] uppercase tracking-wider text-muted-foreground">
                 {packetContext.title}
               </div>
               <div className="mt-1 text-sm font-medium leading-tight text-foreground">

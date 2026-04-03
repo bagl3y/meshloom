@@ -250,7 +250,7 @@ export function SettingsDatabaseSection({
                 <div key={key} className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <span className="text-sm truncate block">{displayName}</span>
-                    <span className="text-[10px] text-muted-foreground font-mono">
+                    <span className="text-[0.625rem] text-muted-foreground font-mono">
                       {key.slice(0, 12)}
                     </span>
                   </div>

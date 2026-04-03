@@ -181,7 +181,7 @@ export function RepeaterDashboard({
                 )}
               </h2>
               <span
-                className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground transition-colors hover:text-primary"
+                className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] text-muted-foreground transition-colors hover:text-primary"
                 role="button"
                 tabIndex={0}
                 onKeyDown={handleKeyboardActivate}
@@ -197,7 +197,7 @@ export function RepeaterDashboard({
           </span>
         </span>
         {contact && (
-          <div className="col-span-2 row-start-2 min-w-0 text-[11px] text-muted-foreground min-[1100px]:col-span-1 min-[1100px]:col-start-2 min-[1100px]:row-start-1">
+          <div className="col-span-2 row-start-2 min-w-0 text-[0.6875rem] text-muted-foreground min-[1100px]:col-span-1 min-[1100px]:col-start-2 min-[1100px]:row-start-1">
             <ContactStatusInfo contact={contact} ourLat={radioLat} ourLon={radioLon} />
           </div>
         )}
@@ -208,7 +208,7 @@ export function RepeaterDashboard({
               size="sm"
               onClick={loadAll}
               disabled={anyLoading}
-              className="h-7 px-2 text-[11px] leading-none border-success text-success hover:bg-success/10 hover:text-success sm:h-8 sm:px-3 sm:text-xs"
+              className="h-7 px-2 text-[0.6875rem] leading-none border-success text-success hover:bg-success/10 hover:text-success sm:h-8 sm:px-3 sm:text-xs"
             >
               {anyLoading ? 'Loading...' : 'Load All'}
             </Button>
@@ -254,7 +254,7 @@ export function RepeaterDashboard({
                 aria-hidden="true"
               />
               {notificationsEnabled && (
-                <span className="hidden md:inline text-[11px] font-medium text-status-connected">
+                <span className="hidden md:inline text-[0.6875rem] font-medium text-status-connected">
                   Notifications On
                 </span>
               )}

@@ -95,7 +95,7 @@ export function VisualizerControls({
               {PACKET_LEGEND_ITEMS.map((item) => (
                 <div key={item.label} className="flex items-center gap-2">
                   <div
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-[0.5rem] font-bold text-white"
                     style={{ backgroundColor: item.color }}
                   >
                     {item.label}

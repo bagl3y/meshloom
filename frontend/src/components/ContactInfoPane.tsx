@@ -292,7 +292,7 @@ export function ContactInfoPane({
                     {contact.public_key}
                   </span>
                   <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                    <span className="text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                       {CONTACT_TYPE_LABELS[contact.type] ?? 'Unknown'}
                     </span>
                   </div>
@@ -568,7 +568,7 @@ export function ContactInfoPane({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5">
+    <h3 className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium mb-1.5">
       {children}
     </h3>
   );
@@ -729,7 +729,7 @@ function ActivityChartsSection({ analytics }: { analytics: ContactAnalytics | nu
         </div>
       )}
 
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-[0.6875rem] text-muted-foreground">
         Hourly lines compare the last 24 hours against 7-day and all-time averages for the same hour
         slots.
         {!analytics.includes_direct_messages &&
@@ -821,7 +821,7 @@ function ActivityLineChart<T extends ContactAnalyticsHourlyBucket | ContactAnaly
           {legendItems && (
             <Legend
               content={() => (
-                <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-1 text-[11px] text-muted-foreground">
+                <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-1 text-[0.6875rem] text-muted-foreground">
                   {legendItems.map((item) => (
                     <span key={item.label} className="inline-flex items-center gap-1.5">
                       <span

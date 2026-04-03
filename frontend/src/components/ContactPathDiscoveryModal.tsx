@@ -74,12 +74,12 @@ function RouteCard({
     <div className="rounded-md border border-border bg-muted/20 p-3">
       <div className="flex items-center justify-between gap-3">
         <h4 className="text-sm font-semibold">{label}</h4>
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-[0.6875rem] text-muted-foreground">
           {formatRouteLabel(route.path_len, true)}
         </span>
       </div>
       <p className="mt-2 text-sm">{chain}</p>
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[0.6875rem] text-muted-foreground">
         <span>Raw: {rawPath}</span>
         <span>{formatPathHashMode(route.path_hash_mode)}</span>
       </div>

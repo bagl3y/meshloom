@@ -221,7 +221,7 @@ export function PathModal({
                 >
                   <span className="flex flex-col items-center leading-tight">
                     <span>↻ Resend</span>
-                    <span className="text-[10px] font-normal opacity-80">
+                    <span className="text-[0.625rem] font-normal opacity-80">
                       Only repeated by new repeaters
                     </span>
                   </span>
@@ -237,7 +237,7 @@ export function PathModal({
               >
                 <span className="flex flex-col items-center leading-tight">
                   <span>↻ Resend as new</span>
-                  <span className="text-[10px] font-normal opacity-80">
+                  <span className="text-[0.625rem] font-normal opacity-80">
                     Will appear as duplicate to receivers
                   </span>
                 </span>

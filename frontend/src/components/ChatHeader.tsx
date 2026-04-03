@@ -198,7 +198,7 @@ export function ChatHeader({
               </h2>
               {isPrivateChannel && !showKey ? (
                 <button
-                  className="min-w-0 flex-shrink text-[11px] font-mono text-muted-foreground transition-colors hover:text-primary"
+                  className="min-w-0 flex-shrink text-[0.6875rem] font-mono text-muted-foreground transition-colors hover:text-primary"
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowKey(true);
@@ -209,7 +209,7 @@ export function ChatHeader({
                 </button>
               ) : (
                 <span
-                  className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground transition-colors hover:text-primary"
+                  className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] text-muted-foreground transition-colors hover:text-primary"
                   role="button"
                   tabIndex={0}
                   onKeyDown={handleKeyboardActivate}
@@ -244,7 +244,7 @@ export function ChatHeader({
                   className="h-3.5 w-3.5 flex-shrink-0 text-[hsl(var(--region-override))]"
                   aria-hidden="true"
                 />
-                <span className="min-w-0 truncate text-[11px] font-medium text-[hsl(var(--region-override))]">
+                <span className="min-w-0 truncate text-[0.6875rem] font-medium text-[hsl(var(--region-override))]">
                   {activeFloodScopeDisplay}
                 </span>
               </button>
@@ -253,7 +253,7 @@ export function ChatHeader({
         </span>
       </span>
       {conversation.type === 'contact' && activeContact && (
-        <div className="col-span-2 row-start-2 min-w-0 text-[11px] text-muted-foreground min-[1100px]:col-span-1 min-[1100px]:col-start-2 min-[1100px]:row-start-1">
+        <div className="col-span-2 row-start-2 min-w-0 text-[0.6875rem] text-muted-foreground min-[1100px]:col-span-1 min-[1100px]:col-start-2 min-[1100px]:row-start-1">
           <ContactStatusInfo
             contact={activeContact}
             ourLat={config?.lat ?? null}
@@ -315,7 +315,7 @@ export function ChatHeader({
               aria-hidden="true"
             />
             {notificationsEnabled && (
-              <span className="hidden md:inline text-[11px] font-medium text-status-connected">
+              <span className="hidden md:inline text-[0.6875rem] font-medium text-status-connected">
                 Notifications On
               </span>
             )}
@@ -333,7 +333,7 @@ export function ChatHeader({
               aria-hidden="true"
             />
             {activeFloodScopeDisplay && (
-              <span className="hidden text-[11px] font-medium text-[hsl(var(--region-override))] sm:inline">
+              <span className="hidden text-[0.6875rem] font-medium text-[hsl(var(--region-override))] sm:inline">
                 {activeFloodScopeDisplay}
               </span>
             )}

@@ -211,7 +211,9 @@ function getCoverageMessage(
 function StatTile({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
     <div className="break-inside-avoid rounded-lg border border-border/70 bg-card/80 p-3">
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-[0.625rem] uppercase tracking-wider font-medium text-muted-foreground">
+        {label}
+      </div>
       <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">{value}</div>
       {detail ? <div className="mt-1 text-xs text-muted-foreground">{detail}</div> : null}
     </div>
@@ -329,7 +331,7 @@ function NeighborList({
                       : `Last seen ${new Date(item.lastSeen * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
                 </div>
                 {!isNeighborIdentityResolvable(item, contacts) ? (
-                  <div className="text-[11px] text-warning">Identity not resolvable</div>
+                  <div className="text-[0.6875rem] text-warning">Identity not resolvable</div>
                 ) : null}
               </div>
               {mode !== 'signal' ? (
@@ -363,7 +365,7 @@ function TimelineChart({ bins }: { bins: PacketTimelineBin[] }) {
     <section className="mb-4 break-inside-avoid rounded-lg border border-border/70 bg-card/70 p-3">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-foreground">Traffic Timeline</h3>
-        <div className="flex flex-wrap justify-end gap-2 text-[11px] text-muted-foreground">
+        <div className="flex flex-wrap justify-end gap-2 text-[0.6875rem] text-muted-foreground">
           {typeOrder.map((type, i) => (
             <span key={type} className="inline-flex items-center gap-1">
               <span
@@ -513,7 +515,7 @@ export function RawPacketFeedView({
               <div className="break-inside-avoid rounded-lg border border-border/70 bg-card/70 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <div className="text-[0.625rem] uppercase tracking-wider font-medium text-muted-foreground">
                       Coverage
                     </div>
                     <div

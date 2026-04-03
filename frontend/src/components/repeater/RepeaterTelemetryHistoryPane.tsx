@@ -113,7 +113,7 @@ export function TelemetryHistoryPane({
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-medium">Telemetry History</h3>
           {entries.length > 0 && (
-            <span className="text-[10px] text-muted-foreground">{entries.length} samples</span>
+            <span className="text-[0.625rem] text-muted-foreground">{entries.length} samples</span>
           )}
         </div>
       </div>
@@ -124,10 +124,10 @@ export function TelemetryHistoryPane({
             Any time repeater telemetry is fetched, the metrics are stored for 30 days (or 1,000
             samples, whichever comes first). This telemetry is stored on normal interactive fetches
             via the repeater pane, API calls to the endpoint (
-            <code className="text-[11px]">POST /api/contacts/&lt;key&gt;/repeater/status</code>), or
-            when the repeater is opted into interval telemetry polling, in which case the repeater
-            will be polled for metrics every 8 hours. You can see which repeaters are opted into
-            this flow in the{' '}
+            <code className="text-[0.6875rem]">POST /api/contacts/&lt;key&gt;/repeater/status</code>
+            ), or when the repeater is opted into interval telemetry polling, in which case the
+            repeater will be polled for metrics every 8 hours. You can see which repeaters are opted
+            into this flow in the{' '}
             <a
               href="#settings/database"
               className="underline text-primary hover:text-primary/80 transition-colors"
@@ -179,7 +179,7 @@ export function TelemetryHistoryPane({
               type="button"
               onClick={() => setMetric(m)}
               className={cn(
-                'text-[11px] px-2 py-0.5 rounded transition-colors',
+                'text-[0.6875rem] px-2 py-0.5 rounded transition-colors',
                 metric === m
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-accent'

@@ -434,6 +434,18 @@ The `SearchView` component (`components/SearchView.tsx`) provides full-text sear
 UI styling is mostly utility-class driven (Tailwind-style classes in JSX) plus shared globals in `index.css` and `styles.css`.
 Do not rely on old class-only layout assumptions.
 
+### Canonical style reference
+
+`SettingsLocalSection.tsx` contains a **ThemePreview** component with a collapsible "Canonical style reference" section. This is the authoritative catalog of text sizes, button variants, badge patterns, and interactive elements used throughout the app. **When adding or modifying UI, match the patterns shown there rather than inventing new ones.**
+
+Key conventions documented in the reference:
+
+- **Text sizes** use `rem`-based Tailwind values so they scale with the user's font-size slider. Do not use hard-locked `px` values (e.g., `text-[10px]`). The canonical sizes are `text-[0.625rem]` (10px), `text-[0.6875rem]` (11px), `text-[0.8125rem]` (13px), plus standard Tailwind `text-xs`/`text-sm`/`text-base`/`text-lg`/`text-xl`.
+- **Section labels** use `text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium`.
+- **Buttons** use the shadcn `<Button>` component. Semantic color overrides (danger, warning, success) use `variant="outline"` with `className="border-{color}/50 text-{color} hover:bg-{color}/10"`.
+- **Badges/tags** use `text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded` with `bg-muted` (neutral) or `bg-primary/10` (active).
+- **Clickable text** (copy-to-clipboard, navigational links) uses `role="button" tabIndex={0}` with `cursor-pointer hover:text-primary transition-colors`.
+
 ## Security Posture (intentional)
 
 - No authentication UI.

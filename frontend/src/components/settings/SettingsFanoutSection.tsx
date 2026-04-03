@@ -537,7 +537,7 @@ function CreateIntegrationDialog({
               <div className="space-y-4">
                 {sectionedOptions.map((group) => (
                   <div key={group.section} className="space-y-1.5">
-                    <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    <div className="px-2 text-[0.6875rem] font-semibold uppercase tracking-wider text-muted-foreground">
                       {group.section}
                     </div>
                     {group.options.map((option) => {
@@ -577,7 +577,7 @@ function CreateIntegrationDialog({
             {selectedOption ? (
               <>
                 <div className="space-y-1.5">
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     {selectedOption.section}
                   </div>
                   <h3 className="text-lg font-semibold">{selectedOption.label}</h3>

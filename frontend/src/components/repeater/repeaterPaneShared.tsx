@@ -141,10 +141,10 @@ export function RepeaterPane({
       <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b border-border">
         <div className="min-w-0">
           <h3 className="text-sm font-medium">{title}</h3>
-          {headerNote && <p className="text-[11px] text-muted-foreground">{headerNote}</p>}
+          {headerNote && <p className="text-[0.6875rem] text-muted-foreground">{headerNote}</p>}
           {fetchedAt && (
             <p
-              className="text-[11px] text-muted-foreground"
+              className="text-[0.6875rem] text-muted-foreground"
               title={new Date(fetchedAt).toLocaleString()}
             >
               Fetched {formatFetchedTime(fetchedAt)} ({formatFetchedRelative(fetchedAt)})

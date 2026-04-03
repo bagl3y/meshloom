@@ -290,7 +290,7 @@ export function SearchView({
               <div className="flex items-center gap-2 mb-1">
                 <span
                   className={cn(
-                    'text-[10px] font-medium px-1.5 py-0.5 rounded',
+                    'text-[0.625rem] font-medium px-1.5 py-0.5 rounded',
                     result.type === 'CHAN'
                       ? 'bg-primary/20 text-primary'
                       : 'bg-secondary text-secondary-foreground'
@@ -298,12 +298,12 @@ export function SearchView({
                 >
                   {typeBadge}
                 </span>
-                <span className="text-[12px] font-medium text-foreground truncate">{convName}</span>
-                <span className="text-[11px] text-muted-foreground ml-auto flex-shrink-0">
+                <span className="text-xs font-medium text-foreground truncate">{convName}</span>
+                <span className="text-[0.6875rem] text-muted-foreground ml-auto flex-shrink-0">
                   {formatTime(result.received_at)}
                 </span>
               </div>
-              <div className="text-[13px] text-foreground/80 line-clamp-2 break-words">
+              <div className="text-[0.8125rem] text-foreground/80 line-clamp-2 break-words">
                 {result.sender_name && !result.outgoing && (
                   <span className="text-muted-foreground">{result.sender_name}: </span>
                 )}

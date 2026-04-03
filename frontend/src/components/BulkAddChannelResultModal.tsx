@@ -49,11 +49,13 @@ export function BulkAddChannelResultModal({
           {result && (
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-md border border-border/70 bg-muted/30 px-3 py-2">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Created</div>
+                <div className="text-[0.625rem] uppercase tracking-wider font-medium text-muted-foreground">
+                  Created
+                </div>
                 <div className="mt-1 font-medium">{createdChannels.length}</div>
               </div>
               <div className="rounded-md border border-border/70 bg-muted/30 px-3 py-2">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                <div className="text-[0.625rem] uppercase tracking-wider font-medium text-muted-foreground">
                   Already Present
                 </div>
                 <div className="mt-1 font-medium">{result.existing_count}</div>

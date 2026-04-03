@@ -135,7 +135,7 @@ export function AppShell({
       aria-label="Settings"
     >
       <div className="flex justify-between items-center px-3 py-2.5 border-b border-border">
-        <h2 className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+        <h2 className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
           Settings
         </h2>
         <button
@@ -158,7 +158,7 @@ export function AppShell({
               type="button"
               disabled={disabled}
               className={cn(
-                'w-full px-3 py-2 text-left text-[13px] border-l-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-50',
+                'w-full px-3 py-2 text-left text-[0.8125rem] border-l-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-50',
                 !disabled && 'hover:bg-accent',
                 settingsSection === section && !disabled && 'bg-accent border-l-primary'
               )}
