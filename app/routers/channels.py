@@ -122,8 +122,7 @@ def _normalize_bulk_hashtag_name(name: str) -> str | None:
 async def _run_historical_channel_decryption_for_channels(
     channels: list[tuple[bytes, str, str]],
 ) -> None:
-    packets = await RawPacketRepository.get_all_undecrypted()
-    total = len(packets)
+    total = await RawPacketRepository.get_undecrypted_count()
     decrypted_count = 0
     matched_channel_names: set[str] = set()
 
@@ -137,7 +136,11 @@ async def _run_historical_channel_decryption_for_channels(
         len(channels),
     )
 
-    for packet_id, packet_data, packet_timestamp in packets:
+    async for (
+        packet_id,
+        packet_data,
+        packet_timestamp,
+    ) in RawPacketRepository.stream_all_undecrypted():
         packet_info = parse_packet(packet_data)
         path_hex = packet_info.path.hex() if packet_info else None
         path_len = packet_info.path_length if packet_info else None

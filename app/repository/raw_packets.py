@@ -95,13 +95,22 @@ class RawPacketRepository:
         return row["oldest"] if row and row["oldest"] is not None else None
 
     @staticmethod
-    async def get_all_undecrypted() -> list[tuple[int, bytes, int]]:
-        """Get all undecrypted packets as (id, data, timestamp) tuples."""
+    async def stream_all_undecrypted(
+        batch_size: int = UNDECRYPTED_PACKET_BATCH_SIZE,
+    ) -> AsyncIterator[tuple[int, bytes, int]]:
+        """Yield all undecrypted packets as (id, data, timestamp) in bounded batches."""
         cursor = await db.conn.execute(
             "SELECT id, data, timestamp FROM raw_packets WHERE message_id IS NULL ORDER BY timestamp ASC"
         )
-        rows = await cursor.fetchall()
-        return [(row["id"], bytes(row["data"]), row["timestamp"]) for row in rows]
+        try:
+            while True:
+                rows = await cursor.fetchmany(batch_size)
+                if not rows:
+                    break
+                for row in rows:
+                    yield (row["id"], bytes(row["data"]), row["timestamp"])
+        finally:
+            await cursor.close()
 
     @staticmethod
     async def stream_undecrypted_text_messages(

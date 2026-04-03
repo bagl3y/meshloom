@@ -180,7 +180,7 @@ class TestChannelMessagePipeline:
         assert result is not None
 
         # Raw packet should be stored
-        raw_packets = await RawPacketRepository.get_all_undecrypted()
+        raw_packets = [p async for p in RawPacketRepository.stream_all_undecrypted()]
         assert len(raw_packets) >= 1
 
         # No message broadcast (only raw_packet broadcast)
@@ -900,7 +900,7 @@ class TestCreateMessageFromDecrypted:
             )
 
         # Verify packet is marked decrypted (has message_id set)
-        undecrypted = await RawPacketRepository.get_all_undecrypted()
+        undecrypted = [p async for p in RawPacketRepository.stream_all_undecrypted()]
         packet_ids = [p[0] for p in undecrypted]
         assert packet_id not in packet_ids  # Should be marked as decrypted
 
@@ -1206,7 +1206,7 @@ class TestCreateDMMessageFromDecrypted:
             )
 
         # Verify packet is marked decrypted
-        undecrypted = await RawPacketRepository.get_all_undecrypted()
+        undecrypted = [p async for p in RawPacketRepository.stream_all_undecrypted()]
         packet_ids = [p[0] for p in undecrypted]
         assert packet_id not in packet_ids
 
@@ -1314,7 +1314,7 @@ class TestDMDecryptionFunction:
         assert messages[0].outgoing is False
 
         # Verify raw packet is linked
-        undecrypted = await RawPacketRepository.get_all_undecrypted()
+        undecrypted = [p async for p in RawPacketRepository.stream_all_undecrypted()]
         assert packet_id not in [p[0] for p in undecrypted]
 
 
@@ -2080,7 +2080,7 @@ class TestProcessRawPacketIntegration:
                 result = await process_raw_packet(raw, timestamp=7000)
 
         # Verify packet is in undecrypted list
-        undecrypted = await RawPacketRepository.get_all_undecrypted()
+        undecrypted = [p async for p in RawPacketRepository.stream_all_undecrypted()]
         packet_ids = [p[0] for p in undecrypted]
         assert result["packet_id"] in packet_ids
 
@@ -2590,7 +2590,7 @@ class TestHistoricalChannelDecryptIntegration:
         assert len(message_broadcasts) == 0
 
         # Raw packet is in the undecrypted pool
-        undecrypted = await RawPacketRepository.get_all_undecrypted()
+        undecrypted = [p async for p in RawPacketRepository.stream_all_undecrypted()]
         assert len(undecrypted) == 1
         packet_id = undecrypted[0][0]
 
@@ -2615,7 +2615,7 @@ class TestHistoricalChannelDecryptIntegration:
         assert msg.conversation_key == channel_key_hex
 
         # --- Verify: raw packet is now marked as decrypted ---
-        undecrypted_after = await RawPacketRepository.get_all_undecrypted()
+        undecrypted_after = [p async for p in RawPacketRepository.stream_all_undecrypted()]
         remaining_ids = [p[0] for p in undecrypted_after]
         assert packet_id not in remaining_ids
 
@@ -2639,7 +2639,7 @@ class TestHistoricalChannelDecryptIntegration:
             await process_raw_packet(raw_packet, timestamp=1700000000)
 
         # Packet stored undecrypted
-        assert len(await RawPacketRepository.get_all_undecrypted()) == 1
+        assert len([p async for p in RawPacketRepository.stream_all_undecrypted()]) == 1
 
         # Run historical decrypt with the wrong key
         with patch("app.websocket.ws_manager") as mock_ws:
@@ -2653,7 +2653,7 @@ class TestHistoricalChannelDecryptIntegration:
         assert len(messages) == 0
 
         # Packet still undecrypted
-        assert len(await RawPacketRepository.get_all_undecrypted()) == 1
+        assert len([p async for p in RawPacketRepository.stream_all_undecrypted()]) == 1
 
     @pytest.mark.asyncio
     async def test_historical_decrypt_multiple_packets(self, test_db, captured_broadcasts):
@@ -2680,7 +2680,7 @@ class TestHistoricalChannelDecryptIntegration:
             for pkt in packets:
                 await process_raw_packet(pkt, timestamp=1700000000)
 
-        assert len(await RawPacketRepository.get_all_undecrypted()) == 3
+        assert len([p async for p in RawPacketRepository.stream_all_undecrypted()]) == 3
 
         # Add channel, run historical decrypt
         await ChannelRepository.upsert(key=channel_key_hex, name=channel_name, is_hashtag=True)
@@ -2697,4 +2697,4 @@ class TestHistoricalChannelDecryptIntegration:
         assert texts == ["Alice: First message", "Bob: Second message", "Carol: Third message"]
 
         # All packets now decrypted
-        assert len(await RawPacketRepository.get_all_undecrypted()) == 0
+        assert len([p async for p in RawPacketRepository.stream_all_undecrypted()]) == 0

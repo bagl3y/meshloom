@@ -49,8 +49,7 @@ async def _run_historical_channel_decryption(
     channel_key_bytes: bytes, channel_key_hex: str, display_name: str | None = None
 ) -> None:
     """Background task to decrypt historical packets with a channel key."""
-    packets = await RawPacketRepository.get_all_undecrypted()
-    total = len(packets)
+    total = await RawPacketRepository.get_undecrypted_count()
     decrypted_count = 0
 
     if total == 0:
@@ -59,7 +58,11 @@ async def _run_historical_channel_decryption(
 
     logger.info("Starting historical channel decryption of %d packets", total)
 
-    for packet_id, packet_data, packet_timestamp in packets:
+    async for (
+        packet_id,
+        packet_data,
+        packet_timestamp,
+    ) in RawPacketRepository.stream_all_undecrypted():
         result = try_decrypt_packet_with_channel_key(packet_data, channel_key_bytes)
 
         if result is not None:
