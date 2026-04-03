@@ -300,6 +300,9 @@ export function MessageList({
   const [resendableIds, setResendableIds] = useState<Set<number>>(new Set());
   const resendTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const packetCacheRef = useRef<Map<number, RawPacket>>(new Map());
+  const packetSignalOverrideRef = useRef<{ rssi: number | null; snr: number | null } | undefined>(
+    undefined
+  );
   const [packetInspectorSource, setPacketInspectorSource] = useState<
     | { kind: 'packet'; packet: RawPacket }
     | { kind: 'loading'; message: string }
@@ -325,6 +328,13 @@ export function MessageList({
   const prevConvKeyRef = useRef<string | null>(null);
 
   const handleAnalyzePacket = useCallback(async (message: Message) => {
+    // Extract signal from the first path if available
+    const firstPath = message.paths?.[0];
+    packetSignalOverrideRef.current =
+      firstPath && (firstPath.rssi != null || firstPath.snr != null)
+        ? { rssi: firstPath.rssi ?? null, snr: firstPath.snr ?? null }
+        : undefined;
+
     if (message.packet_id == null) {
       setPacketInspectorSource({
         kind: 'unavailable',
@@ -1180,12 +1190,18 @@ export function MessageList({
       {packetInspectorSource && (
         <RawPacketInspectorDialog
           open={packetInspectorSource !== null}
-          onOpenChange={(isOpen) => !isOpen && setPacketInspectorSource(null)}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) {
+              setPacketInspectorSource(null);
+              packetSignalOverrideRef.current = undefined;
+            }
+          }}
           channels={channels}
           source={packetInspectorSource}
           title="Analyze Packet"
           description="On-demand raw packet analysis for a message-backed archival packet."
           notice={ANALYZE_PACKET_NOTICE}
+          signalOverride={packetSignalOverrideRef.current}
         />
       )}
     </div>

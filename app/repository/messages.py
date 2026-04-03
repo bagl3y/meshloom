@@ -57,6 +57,8 @@ class MessageRepository:
         sender_timestamp: int | None = None,
         path: str | None = None,
         path_len: int | None = None,
+        rssi: int | None = None,
+        snr: float | None = None,
         txt_type: int = 0,
         signature: str | None = None,
         outgoing: bool = False,
@@ -78,6 +80,10 @@ class MessageRepository:
             entry: dict = {"path": path, "received_at": received_at}
             if path_len is not None:
                 entry["path_len"] = path_len
+            if rssi is not None:
+                entry["rssi"] = rssi
+            if snr is not None:
+                entry["snr"] = snr
             paths_json = json.dumps([entry])
 
         # Normalize sender_key to lowercase so queries can match without LOWER().
@@ -116,6 +122,8 @@ class MessageRepository:
         path: str,
         received_at: int | None = None,
         path_len: int | None = None,
+        rssi: int | None = None,
+        snr: float | None = None,
     ) -> list[MessagePath]:
         """Add a new path to an existing message.
 
@@ -129,6 +137,10 @@ class MessageRepository:
         entry: dict = {"path": path, "received_at": ts}
         if path_len is not None:
             entry["path_len"] = path_len
+        if rssi is not None:
+            entry["rssi"] = rssi
+        if snr is not None:
+            entry["snr"] = snr
         new_entry = json.dumps(entry)
         await db.conn.execute(
             """UPDATE messages SET paths = json_insert(

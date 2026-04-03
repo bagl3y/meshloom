@@ -103,14 +103,25 @@ export function PathModal({
             ) : null}
 
             {/* Raw path summary */}
-            <div className="text-sm">
+            <div className="text-sm space-y-1">
               {paths.map((p, index) => {
                 const hops = parsePathHops(p.path, p.path_len);
                 const rawPath = hops.length > 0 ? hops.join('->') : 'direct';
+                const hasSignal = p.rssi != null || p.snr != null;
                 return (
                   <div key={index}>
-                    <span className="text-foreground/70 font-semibold">Path {index + 1}:</span>{' '}
-                    <span className="font-mono text-muted-foreground">{rawPath}</span>
+                    <div>
+                      <span className="text-foreground/70 font-semibold">Path {index + 1}:</span>{' '}
+                      <span className="font-mono text-muted-foreground">{rawPath}</span>
+                    </div>
+                    {hasSignal && (
+                      <div className="text-[0.6875rem] text-muted-foreground ml-4">
+                        Last hop (as heard by you):{' '}
+                        {p.rssi != null && <span>{p.rssi} dBm RSSI</span>}
+                        {p.rssi != null && p.snr != null && <span> · </span>}
+                        {p.snr != null && <span>{p.snr.toFixed(1)} dB SNR</span>}
+                      </div>
+                    )}
                   </div>
                 );
               })}

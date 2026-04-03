@@ -144,6 +144,8 @@ async def _store_direct_message(
     received_at: int,
     path: str | None,
     path_len: int | None,
+    rssi: int | None = None,
+    snr: float | None = None,
     outgoing: bool,
     txt_type: int,
     signature: str | None,
@@ -170,6 +172,8 @@ async def _store_direct_message(
                         path=path,
                         received_at=received_at,
                         path_len=path_len,
+                        rssi=rssi,
+                        snr=snr,
                         broadcast_fn=broadcast_fn,
                     )
                     return None
@@ -189,6 +193,8 @@ async def _store_direct_message(
                     path=path,
                     received_at=received_at,
                     path_len=path_len,
+                    rssi=rssi,
+                    snr=snr,
                     broadcast_fn=broadcast_fn,
                 )
                 return None
@@ -201,6 +207,8 @@ async def _store_direct_message(
             received_at=received_at,
             path=path,
             path_len=path_len,
+            rssi=rssi,
+            snr=snr,
             txt_type=txt_type,
             signature=signature,
             outgoing=outgoing,
@@ -218,6 +226,8 @@ async def _store_direct_message(
                 path=path,
                 received_at=received_at,
                 path_len=path_len,
+                rssi=rssi,
+                snr=snr,
                 broadcast_fn=broadcast_fn,
             )
             return None
@@ -232,7 +242,7 @@ async def _store_direct_message(
             text=text,
             sender_timestamp=sender_timestamp,
             received_at=received_at,
-            paths=build_message_paths(path, received_at, path_len),
+            paths=build_message_paths(path, received_at, path_len, rssi=rssi, snr=snr),
             txt_type=txt_type,
             signature=signature,
             sender_key=sender_key,
@@ -261,6 +271,8 @@ async def ingest_decrypted_direct_message(
     received_at: int | None = None,
     path: str | None = None,
     path_len: int | None = None,
+    rssi: int | None = None,
+    snr: float | None = None,
     outgoing: bool = False,
     realtime: bool = True,
     broadcast_fn: BroadcastFn,
@@ -311,6 +323,8 @@ async def ingest_decrypted_direct_message(
         received_at=received,
         path=path,
         path_len=path_len,
+        rssi=rssi,
+        snr=snr,
         outgoing=outgoing,
         txt_type=decrypted.txt_type,
         signature=signature,

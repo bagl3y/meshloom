@@ -35,6 +35,11 @@ type RawPacketInspectorDialogSource =
       message: string;
     };
 
+interface SignalOverride {
+  rssi: number | null;
+  snr: number | null;
+}
+
 interface RawPacketInspectorDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,10 +48,12 @@ interface RawPacketInspectorDialogProps {
   title: string;
   description: string;
   notice?: ReactNode;
+  signalOverride?: SignalOverride;
 }
 
 interface RawPacketInspectionPanelProps {
   packet: RawPacket;
+  signalOverride?: SignalOverride;
   channels: Channel[];
 }
 
@@ -125,15 +132,21 @@ function formatTimestamp(timestamp: number): string {
   });
 }
 
-function formatSignal(packet: RawPacket): string {
-  const parts: string[] = [];
-  if (packet.rssi !== null) {
-    parts.push(`${packet.rssi} dBm RSSI`);
-  }
-  if (packet.snr !== null) {
-    parts.push(`${packet.snr.toFixed(1)} dB SNR`);
-  }
-  return parts.length > 0 ? parts.join(' · ') : 'No signal sample';
+function formatSignal(
+  packet: RawPacket,
+  signalOverride?: SignalOverride
+): { lines: string[]; label: string } {
+  const rssi = signalOverride?.rssi ?? packet.rssi;
+  const snr = signalOverride?.snr ?? packet.snr;
+  const lines: string[] = [];
+  if (rssi !== null) lines.push(`${rssi} dBm RSSI`);
+  if (snr !== null) lines.push(`${snr.toFixed(1)} dB SNR`);
+  const isOverride =
+    signalOverride != null && (signalOverride.rssi != null || signalOverride.snr != null);
+  return {
+    lines: lines.length > 0 ? lines : ['No signal sample'],
+    label: isOverride ? 'Last Hop Signal' : 'Signal',
+  };
 }
 
 function formatByteRange(field: PacketByteField): string {
@@ -569,7 +582,11 @@ function FieldSection({
   );
 }
 
-export function RawPacketInspectionPanel({ packet, channels }: RawPacketInspectionPanelProps) {
+export function RawPacketInspectionPanel({
+  packet,
+  channels,
+  signalOverride,
+}: RawPacketInspectionPanelProps) {
   const decoderOptions = useMemo(() => createDecoderOptions(channels), [channels]);
   const groupTextCandidates = useMemo(
     () => buildGroupTextResolutionCandidates(channels),
@@ -641,11 +658,24 @@ export function RawPacketInspectionPanel({ packet, channels }: RawPacketInspecti
             primary={`${inspection.routeTypeName} · ${inspection.payloadTypeName}`}
             secondary={`${inspection.payloadVersionName} · ${formatPathMode(inspection.decoded?.pathHashSize, inspection.pathTokens.length)}`}
           />
-          <CompactMetaCard
-            label="Signal"
-            primary={formatSignal(packet)}
-            secondary={packetContext ? null : undefined}
-          />
+          {(() => {
+            const sig = formatSignal(packet, signalOverride);
+            return (
+              <div className="rounded-lg border border-border/70 bg-card/70 p-2.5">
+                <div className="text-[0.625rem] uppercase tracking-wider text-muted-foreground">
+                  {sig.label}
+                </div>
+                {sig.lines.map((line, i) => (
+                  <div
+                    key={i}
+                    className={`${i === 0 ? 'mt-1' : 'mt-0.5'} text-sm font-medium leading-tight text-foreground`}
+                  >
+                    {line}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </section>
       </div>
 
@@ -715,6 +745,7 @@ export function RawPacketInspectorDialog({
   title,
   description,
   notice,
+  signalOverride,
 }: RawPacketInspectorDialogProps) {
   const [packetInput, setPacketInput] = useState('');
 
@@ -739,7 +770,13 @@ export function RawPacketInspectorDialog({
 
   let body: ReactNode;
   if (source.kind === 'packet') {
-    body = <RawPacketInspectionPanel packet={source.packet} channels={channels} />;
+    body = (
+      <RawPacketInspectionPanel
+        packet={source.packet}
+        channels={channels}
+        signalOverride={signalOverride}
+      />
+    );
   } else if (source.kind === 'paste') {
     body = (
       <>

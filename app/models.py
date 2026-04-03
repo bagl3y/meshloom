@@ -387,6 +387,8 @@ class MessagePath(BaseModel):
         default=None,
         description="Hop count. None = legacy (infer as len(path)//2, i.e. 1-byte hops)",
     )
+    rssi: int | None = Field(default=None, description="Last-hop RSSI in dBm")
+    snr: float | None = Field(default=None, description="Last-hop SNR in dB")
 
 
 class Message(BaseModel):

@@ -255,6 +255,10 @@ export interface MessagePath {
   received_at: number;
   /** Hop count (number of intermediate nodes). Null for legacy data (infer as len(path)/2). */
   path_len?: number | null;
+  /** Last-hop RSSI in dBm (null if not available, e.g. older data) */
+  rssi?: number | null;
+  /** Last-hop SNR in dB (null if not available, e.g. older data) */
+  snr?: number | null;
 }
 
 export interface Message {

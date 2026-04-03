@@ -883,7 +883,7 @@ class TestDirectMessageDirectionDetection:
         message_broadcasts = [b for b in broadcasts if b["type"] == "message"]
         assert len(message_broadcasts) == 1
         assert message_broadcasts[0]["data"]["paths"] == [
-            {"path": "", "received_at": SENDER_TIMESTAMP, "path_len": 0}
+            {"path": "", "received_at": SENDER_TIMESTAMP, "path_len": 0, "rssi": None, "snr": None}
         ]
 
     @pytest.mark.asyncio

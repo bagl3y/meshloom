@@ -37,10 +37,16 @@ def build_message_paths(
     path: str | None,
     received_at: int,
     path_len: int | None = None,
+    rssi: int | None = None,
+    snr: float | None = None,
 ) -> list[MessagePath] | None:
     """Build the single-path list used by message payloads."""
     return (
-        [MessagePath(path=path or "", received_at=received_at, path_len=path_len)]
+        [
+            MessagePath(
+                path=path or "", received_at=received_at, path_len=path_len, rssi=rssi, snr=snr
+            )
+        ]
         if path is not None
         else None
     )
@@ -166,6 +172,8 @@ async def reconcile_duplicate_message(
     path: str | None,
     received_at: int,
     path_len: int | None,
+    rssi: int | None = None,
+    snr: float | None = None,
     broadcast_fn: BroadcastFn,
 ) -> None:
     logger.debug(
@@ -177,7 +185,9 @@ async def reconcile_duplicate_message(
     )
 
     if path is not None:
-        paths = await MessageRepository.add_path(existing_msg.id, path, received_at, path_len)
+        paths = await MessageRepository.add_path(
+            existing_msg.id, path, received_at, path_len, rssi=rssi, snr=snr
+        )
     else:
         paths = existing_msg.paths or []
 
@@ -214,6 +224,8 @@ async def handle_duplicate_message(
     path: str | None,
     received_at: int,
     path_len: int | None = None,
+    rssi: int | None = None,
+    snr: float | None = None,
     broadcast_fn: BroadcastFn,
 ) -> None:
     """Handle a duplicate message by updating paths/acks on the existing record."""
@@ -239,6 +251,8 @@ async def handle_duplicate_message(
         path=path,
         received_at=received_at,
         path_len=path_len,
+        rssi=rssi,
+        snr=snr,
         broadcast_fn=broadcast_fn,
     )
 
@@ -253,6 +267,8 @@ async def create_message_from_decrypted(
     received_at: int | None = None,
     path: str | None = None,
     path_len: int | None = None,
+    rssi: int | None = None,
+    snr: float | None = None,
     channel_name: str | None = None,
     realtime: bool = True,
     broadcast_fn: BroadcastFn,
@@ -276,6 +292,8 @@ async def create_message_from_decrypted(
         received_at=received,
         path=path,
         path_len=path_len,
+        rssi=rssi,
+        snr=snr,
         sender_name=sender,
         sender_key=resolved_sender_key,
     )
@@ -291,6 +309,8 @@ async def create_message_from_decrypted(
             path=path,
             received_at=received,
             path_len=path_len,
+            rssi=rssi,
+            snr=snr,
             broadcast_fn=broadcast_fn,
         )
         return None
@@ -312,7 +332,7 @@ async def create_message_from_decrypted(
             text=text,
             sender_timestamp=timestamp,
             received_at=received,
-            paths=build_message_paths(path, received, path_len),
+            paths=build_message_paths(path, received, path_len, rssi=rssi, snr=snr),
             sender_name=sender,
             sender_key=resolved_sender_key,
             channel_name=channel_name,
@@ -334,6 +354,8 @@ async def create_dm_message_from_decrypted(
     received_at: int | None = None,
     path: str | None = None,
     path_len: int | None = None,
+    rssi: int | None = None,
+    snr: float | None = None,
     outgoing: bool = False,
     realtime: bool = True,
     broadcast_fn: BroadcastFn,
@@ -348,6 +370,8 @@ async def create_dm_message_from_decrypted(
         received_at=received_at,
         path=path,
         path_len=path_len,
+        rssi=rssi,
+        snr=snr,
         outgoing=outgoing,
         realtime=realtime,
         broadcast_fn=broadcast_fn,
