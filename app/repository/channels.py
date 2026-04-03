@@ -26,7 +26,7 @@ class ChannelRepository:
         """Get a channel by its key (32-char hex string)."""
         cursor = await db.conn.execute(
             """
-            SELECT key, name, is_hashtag, on_radio, flood_scope_override, last_read_at
+            SELECT key, name, is_hashtag, on_radio, flood_scope_override, path_hash_mode_override, last_read_at
             FROM channels
             WHERE key = ?
             """,
@@ -40,6 +40,7 @@ class ChannelRepository:
                 is_hashtag=bool(row["is_hashtag"]),
                 on_radio=bool(row["on_radio"]),
                 flood_scope_override=row["flood_scope_override"],
+                path_hash_mode_override=row["path_hash_mode_override"],
                 last_read_at=row["last_read_at"],
             )
         return None
@@ -48,7 +49,7 @@ class ChannelRepository:
     async def get_all() -> list[Channel]:
         cursor = await db.conn.execute(
             """
-            SELECT key, name, is_hashtag, on_radio, flood_scope_override, last_read_at
+            SELECT key, name, is_hashtag, on_radio, flood_scope_override, path_hash_mode_override, last_read_at
             FROM channels
             ORDER BY name
             """
@@ -61,6 +62,7 @@ class ChannelRepository:
                 is_hashtag=bool(row["is_hashtag"]),
                 on_radio=bool(row["on_radio"]),
                 flood_scope_override=row["flood_scope_override"],
+                path_hash_mode_override=row["path_hash_mode_override"],
                 last_read_at=row["last_read_at"],
             )
             for row in rows
@@ -71,7 +73,7 @@ class ChannelRepository:
         """Return channels currently marked as resident on the radio in the database."""
         cursor = await db.conn.execute(
             """
-            SELECT key, name, is_hashtag, on_radio, flood_scope_override, last_read_at
+            SELECT key, name, is_hashtag, on_radio, flood_scope_override, path_hash_mode_override, last_read_at
             FROM channels
             WHERE on_radio = 1
             ORDER BY name
@@ -85,6 +87,7 @@ class ChannelRepository:
                 is_hashtag=bool(row["is_hashtag"]),
                 on_radio=bool(row["on_radio"]),
                 flood_scope_override=row["flood_scope_override"],
+                path_hash_mode_override=row["path_hash_mode_override"],
                 last_read_at=row["last_read_at"],
             )
             for row in rows
@@ -119,6 +122,16 @@ class ChannelRepository:
         cursor = await db.conn.execute(
             "UPDATE channels SET flood_scope_override = ? WHERE key = ?",
             (flood_scope_override, key.upper()),
+        )
+        await db.conn.commit()
+        return cursor.rowcount > 0
+
+    @staticmethod
+    async def update_path_hash_mode_override(key: str, path_hash_mode_override: int | None) -> bool:
+        """Set or clear a channel's path hash mode override."""
+        cursor = await db.conn.execute(
+            "UPDATE channels SET path_hash_mode_override = ? WHERE key = ?",
+            (path_hash_mode_override, key.upper()),
         )
         await db.conn.commit()
         return cursor.rowcount > 0

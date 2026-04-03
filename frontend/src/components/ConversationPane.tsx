@@ -63,6 +63,10 @@ interface ConversationPaneProps {
   onDeleteContact: (publicKey: string) => Promise<void>;
   onDeleteChannel: (key: string) => Promise<void>;
   onSetChannelFloodScopeOverride: (channelKey: string, floodScopeOverride: string) => Promise<void>;
+  onSetChannelPathHashModeOverride?: (
+    channelKey: string,
+    pathHashModeOverride: number | null
+  ) => Promise<void>;
   onOpenContactInfo: (publicKey: string, fromChannel?: boolean) => void;
   onOpenChannelInfo: (channelKey: string) => void;
   onSenderClick: (sender: string) => void;
@@ -131,6 +135,7 @@ export function ConversationPane({
   onDeleteContact,
   onDeleteChannel,
   onSetChannelFloodScopeOverride,
+  onSetChannelPathHashModeOverride,
   onOpenContactInfo,
   onOpenChannelInfo,
   onSenderClick,
@@ -259,6 +264,7 @@ export function ConversationPane({
         onToggleNotifications={onToggleNotifications}
         onToggleFavorite={onToggleFavorite}
         onSetChannelFloodScopeOverride={onSetChannelFloodScopeOverride}
+        onSetChannelPathHashModeOverride={onSetChannelPathHashModeOverride}
         onDeleteChannel={onDeleteChannel}
         onDeleteContact={onDeleteContact}
         onOpenContactInfo={onOpenContactInfo}

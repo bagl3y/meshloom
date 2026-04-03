@@ -210,6 +210,12 @@ export const api = {
       body: JSON.stringify({ flood_scope_override: floodScopeOverride }),
     }),
 
+  setChannelPathHashModeOverride: (key: string, pathHashModeOverride: number | null) =>
+    fetchJson<Channel>(`/channels/${key}/path-hash-mode-override`, {
+      method: 'POST',
+      body: JSON.stringify({ path_hash_mode_override: pathHashModeOverride }),
+    }),
+
   // Messages
   getMessages: (
     params?: {

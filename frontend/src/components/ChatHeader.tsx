@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Bell, Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
+import { Bell, ChevronsLeftRight, Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
 import { toast } from './ui/sonner';
 import { DirectTraceIcon } from './DirectTraceIcon';
 import { ContactPathDiscoveryModal } from './ContactPathDiscoveryModal';
 import { ChannelFloodScopeOverrideModal } from './ChannelFloodScopeOverrideModal';
+import { ChannelPathHashModeOverrideModal } from './ChannelPathHashModeOverrideModal';
 import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { isPublicChannelKey } from '../utils/publicChannel';
@@ -36,6 +37,7 @@ interface ChatHeaderProps {
   onToggleNotifications: () => void;
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
   onSetChannelFloodScopeOverride?: (key: string, floodScopeOverride: string) => void;
+  onSetChannelPathHashModeOverride?: (key: string, pathHashModeOverride: number | null) => void;
   onDeleteChannel: (key: string) => void;
   onDeleteContact: (publicKey: string) => void;
   onOpenContactInfo?: (publicKey: string) => void;
@@ -56,6 +58,7 @@ export function ChatHeader({
   onToggleNotifications,
   onToggleFavorite,
   onSetChannelFloodScopeOverride,
+  onSetChannelPathHashModeOverride,
   onDeleteChannel,
   onDeleteContact,
   onOpenContactInfo,
@@ -64,11 +67,13 @@ export function ChatHeader({
   const [showKey, setShowKey] = useState(false);
   const [pathDiscoveryOpen, setPathDiscoveryOpen] = useState(false);
   const [channelOverrideOpen, setChannelOverrideOpen] = useState(false);
+  const [pathHashModeOverrideOpen, setPathHashModeOverrideOpen] = useState(false);
 
   useEffect(() => {
     setShowKey(false);
     setPathDiscoveryOpen(false);
     setChannelOverrideOpen(false);
+    setPathHashModeOverrideOpen(false);
   }, [conversation.id]);
 
   const activeChannel =
@@ -81,6 +86,12 @@ export function ChatHeader({
     ? stripRegionScopePrefix(activeFloodScopeOverride)
     : null;
   const activeFloodScopeDisplay = activeFloodScopeOverride ? activeFloodScopeOverride : null;
+  const activePathHashModeOverride =
+    conversation.type === 'channel' ? (activeChannel?.path_hash_mode_override ?? null) : null;
+  const showPathHashModeOverride =
+    conversation.type === 'channel' &&
+    onSetChannelPathHashModeOverride &&
+    config?.path_hash_mode_supported;
   const isPrivateChannel = conversation.type === 'channel' && !activeChannel?.is_hashtag;
   const activeContact =
     conversation.type === 'contact'
@@ -106,6 +117,11 @@ export function ChatHeader({
   const handleEditFloodScopeOverride = () => {
     if (conversation.type !== 'channel' || !onSetChannelFloodScopeOverride) return;
     setChannelOverrideOpen(true);
+  };
+
+  const handleEditPathHashModeOverride = () => {
+    if (conversation.type !== 'channel' || !onSetChannelPathHashModeOverride) return;
+    setPathHashModeOverrideOpen(true);
   };
 
   const handleOpenConversationInfo = () => {
@@ -323,6 +339,19 @@ export function ChatHeader({
             )}
           </button>
         )}
+        {showPathHashModeOverride && (
+          <button
+            className="flex shrink-0 items-center gap-1 rounded px-1 py-1 text-lg leading-none transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={handleEditPathHashModeOverride}
+            title="Set path hop width override"
+            aria-label="Set path hop width override"
+          >
+            <ChevronsLeftRight
+              className={`h-4 w-4 ${activePathHashModeOverride != null ? 'text-status-connected' : 'text-muted-foreground'}`}
+              aria-hidden="true"
+            />
+          </button>
+        )}
         {(conversation.type === 'channel' || conversation.type === 'contact') && (
           <button
             className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -377,6 +406,16 @@ export function ChatHeader({
           roomName={conversation.name}
           currentOverride={activeFloodScopeDisplay}
           onSetOverride={(value) => onSetChannelFloodScopeOverride(conversation.id, value)}
+        />
+      )}
+      {showPathHashModeOverride && (
+        <ChannelPathHashModeOverrideModal
+          open={pathHashModeOverrideOpen}
+          onClose={() => setPathHashModeOverrideOpen(false)}
+          channelName={conversation.name}
+          currentOverride={activePathHashModeOverride}
+          radioDefault={config?.path_hash_mode ?? 0}
+          onSetOverride={(value) => onSetChannelPathHashModeOverride(conversation.id, value)}
         />
       )}
     </header>

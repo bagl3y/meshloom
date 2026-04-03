@@ -218,6 +218,7 @@ app/
 - `POST /channels/bulk-hashtag`
 - `DELETE /channels/{key}`
 - `POST /channels/{key}/flood-scope-override`
+- `POST /channels/{key}/path-hash-mode-override`
 - `POST /channels/{key}/mark-read`
 
 ### Messages
@@ -280,7 +281,7 @@ Client sends `"ping"` text; server replies `{"type":"pong"}`.
 Main tables:
 - `contacts` (includes `first_seen` for contact age tracking and `direct_path_hash_mode` / `route_override_*` for DM routing)
 - `channels`
-  Includes optional `flood_scope_override` for channel-specific regional sends.
+  Includes optional `flood_scope_override` for channel-specific regional sends and optional `path_hash_mode_override` for per-channel path hop width.
 - `messages` (includes `sender_name`, `sender_key` for per-contact channel message attribution)
 - `raw_packets`
 - `contact_advert_paths` (recent unique advertisement paths per contact, keyed by contact + path bytes + hop count)

@@ -21,6 +21,10 @@ interface UseConversationActionsResult {
     channelKey: string,
     floodScopeOverride: string
   ) => Promise<void>;
+  handleSetChannelPathHashModeOverride: (
+    channelKey: string,
+    pathHashModeOverride: number | null
+  ) => Promise<void>;
   handleSenderClick: (sender: string) => void;
   handleTrace: () => Promise<void>;
   handlePathDiscovery: (publicKey: string) => Promise<PathDiscoveryResponse>;
@@ -106,6 +110,25 @@ export function useConversationActions({
     [mergeChannelIntoList]
   );
 
+  const handleSetChannelPathHashModeOverride = useCallback(
+    async (channelKey: string, pathHashModeOverride: number | null) => {
+      try {
+        const updated = await api.setChannelPathHashModeOverride(channelKey, pathHashModeOverride);
+        mergeChannelIntoList(updated);
+        toast.success(
+          updated.path_hash_mode_override != null
+            ? 'Path hop width override saved'
+            : 'Path hop width override cleared'
+        );
+      } catch (err) {
+        toast.error('Failed to update path hop width override', {
+          description: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    },
+    [mergeChannelIntoList]
+  );
+
   const handleSenderClick = useCallback(
     (sender: string) => {
       messageInputRef.current?.appendText(`@[${sender}] `);
@@ -143,6 +166,7 @@ export function useConversationActions({
     handleSendMessage,
     handleResendChannelMessage,
     handleSetChannelFloodScopeOverride,
+    handleSetChannelPathHashModeOverride,
     handleSenderClick,
     handleTrace,
     handlePathDiscovery,

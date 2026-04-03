@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS channels (
     is_hashtag INTEGER DEFAULT 0,
     on_radio INTEGER DEFAULT 0,
     flood_scope_override TEXT,
+    path_hash_mode_override INTEGER,
     last_read_at INTEGER
 );
 

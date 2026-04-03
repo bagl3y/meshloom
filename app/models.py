@@ -330,6 +330,10 @@ class Channel(BaseModel):
         default=None,
         description="Per-channel outbound flood scope override (null = use global app setting)",
     )
+    path_hash_mode_override: int | None = Field(
+        default=None,
+        description="Per-channel path hash mode override (0=1-byte, 1=2-byte, 2=3-byte, null = use radio default)",
+    )
     last_read_at: int | None = None  # Server-side read state tracking
 
 

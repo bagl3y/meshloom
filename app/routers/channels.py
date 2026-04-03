@@ -60,6 +60,15 @@ class ChannelFloodScopeOverrideRequest(BaseModel):
     )
 
 
+class ChannelPathHashModeOverrideRequest(BaseModel):
+    path_hash_mode_override: int | None = Field(
+        default=None,
+        ge=0,
+        le=2,
+        description="Path hash mode override (0=1-byte, 1=2-byte, 2=3-byte, null = use radio default)",
+    )
+
+
 def _derive_channel_identity(
     requested_name: str,
     request_key: str | None = None,
@@ -339,6 +348,29 @@ async def set_channel_flood_scope_override(
     updated = await ChannelRepository.update_flood_scope_override(channel.key, override)
     if not updated:
         raise HTTPException(status_code=500, detail="Failed to update flood-scope override")
+
+    refreshed = await ChannelRepository.get_by_key(channel.key)
+    if refreshed is None:
+        raise HTTPException(status_code=500, detail="Channel disappeared after update")
+
+    broadcast_event("channel", refreshed.model_dump())
+    return refreshed
+
+
+@router.post("/{key}/path-hash-mode-override", response_model=Channel)
+async def set_channel_path_hash_mode_override(
+    key: str, request: ChannelPathHashModeOverrideRequest
+) -> Channel:
+    """Set or clear a per-channel path hash mode override."""
+    channel = await ChannelRepository.get_by_key(key)
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    updated = await ChannelRepository.update_path_hash_mode_override(
+        channel.key, request.path_hash_mode_override
+    )
+    if not updated:
+        raise HTTPException(status_code=500, detail="Failed to update path-hash-mode override")
 
     refreshed = await ChannelRepository.get_by_key(channel.key)
     if refreshed is None:

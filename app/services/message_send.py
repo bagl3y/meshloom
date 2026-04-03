@@ -122,7 +122,7 @@ async def send_channel_message_with_effective_scope(
     error_broadcast_fn: BroadcastFn,
     app_settings_repository=AppSettingsRepository,
 ) -> Any:
-    """Send a channel message, temporarily overriding flood scope when configured."""
+    """Send a channel message, temporarily overriding flood scope and/or path hash mode."""
     override_scope = normalize_region_scope(channel.flood_scope_override)
     baseline_scope = ""
 
@@ -148,6 +148,36 @@ async def send_channel_message_with_effective_scope(
                 detail=(
                     f"Failed to apply regional override {override_scope!r} before {action_label}: "
                     f"{override_result.payload}"
+                ),
+            )
+
+    # Path hash mode per-channel override
+    override_phm = channel.path_hash_mode_override
+    baseline_phm = radio_manager.path_hash_mode
+    apply_phm = (
+        override_phm is not None
+        and radio_manager.path_hash_mode_supported
+        and override_phm != baseline_phm
+    )
+
+    if apply_phm:
+        logger.info(
+            "Temporarily applying channel path_hash_mode override for %s: %d",
+            channel.name,
+            override_phm,
+        )
+        phm_result = await mc.commands.set_path_hash_mode(override_phm)
+        if phm_result is not None and phm_result.type == EventType.ERROR:
+            logger.warning(
+                "Failed to apply channel path_hash_mode override for %s: %s",
+                channel.name,
+                phm_result.payload,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Failed to apply path hash mode override before {action_label}: "
+                    f"{phm_result.payload}"
                 ),
             )
 
@@ -251,6 +281,43 @@ async def send_channel_message_with_effective_scope(
                     (
                         f"Sent to {channel.name}, but restoring flood scope failed. "
                         "The radio may still be region-scoped. Consider rebooting the radio."
+                    ),
+                )
+
+        if apply_phm:
+            try:
+                restore_phm = await mc.commands.set_path_hash_mode(baseline_phm)
+                if restore_phm is not None and restore_phm.type == EventType.ERROR:
+                    logger.error(
+                        "Failed to restore baseline path_hash_mode after sending to %s: %s",
+                        channel.name,
+                        restore_phm.payload,
+                    )
+                    error_broadcast_fn(
+                        "Path hash mode restore failed",
+                        (
+                            f"Sent to {channel.name}, but restoring path hash mode failed. "
+                            "The radio may be using a non-default hop width. "
+                            "Consider rebooting the radio."
+                        ),
+                    )
+                else:
+                    radio_manager.path_hash_mode = baseline_phm
+                    logger.debug(
+                        "Restored baseline path_hash_mode after channel send: %d",
+                        baseline_phm,
+                    )
+            except Exception:
+                logger.exception(
+                    "Failed to restore baseline path_hash_mode after sending to %s",
+                    channel.name,
+                )
+                error_broadcast_fn(
+                    "Path hash mode restore failed",
+                    (
+                        f"Sent to {channel.name}, but restoring path hash mode failed. "
+                        "The radio may be using a non-default hop width. "
+                        "Consider rebooting the radio."
                     ),
                 )
 

@@ -353,6 +353,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | POST | `/api/channels/bulk-hashtag` | Create multiple hashtag channels |
 | DELETE | `/api/channels/{key}` | Delete channel |
 | POST | `/api/channels/{key}/flood-scope-override` | Set or clear a per-channel regional flood-scope override |
+| POST | `/api/channels/{key}/path-hash-mode-override` | Set or clear a per-channel path hash mode override |
 | POST | `/api/channels/{key}/mark-read` | Mark channel as read |
 | GET | `/api/messages` | List with filters (`q`, `after`/`after_id` for forward pagination) |
 | GET | `/api/messages/around/{id}` | Get messages around a specific message (for jump-to-message) |
@@ -401,6 +402,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 - Hashtag channels: `SHA256("#name")[:16]` converted to hex
 - Custom channels: User-provided or generated
 - Channels may also persist `flood_scope_override`; when set, channel sends temporarily switch the radio flood scope to that value for the duration of the send, then restore the global app setting.
+- Channels may persist `path_hash_mode_override` (0/1/2); when set, channel sends temporarily switch the radio path hash mode for the duration of the send, then restore the radio default.
 
 ### Message Types
 

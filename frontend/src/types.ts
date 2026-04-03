@@ -201,6 +201,7 @@ export interface Channel {
   is_hashtag: boolean;
   on_radio: boolean;
   flood_scope_override?: string | null;
+  path_hash_mode_override?: number | null;
   last_read_at: number | null;
 }
 

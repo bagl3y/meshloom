@@ -395,6 +395,12 @@ async def run_migrations(conn: aiosqlite.Connection) -> int:
         await set_version(conn, 51)
         applied += 1
 
+    if version < 52:
+        logger.info("Applying migration 52: add path_hash_mode_override to channels")
+        await _migrate_052_add_channel_path_hash_mode_override(conn)
+        await set_version(conn, 52)
+        applied += 1
+
     if applied > 0:
         logger.info(
             "Applied %d migration(s), schema now at version %d", applied, await get_version(conn)
@@ -3149,3 +3155,19 @@ async def _migrate_051_drop_sidebar_sort_order(conn: aiosqlite.Connection) -> No
                 await conn.commit()
             else:
                 raise
+
+
+async def _migrate_052_add_channel_path_hash_mode_override(conn: aiosqlite.Connection) -> None:
+    """Add nullable per-channel path hash mode override column."""
+    tables_cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    if "channels" not in {row[0] for row in await tables_cursor.fetchall()}:
+        await conn.commit()
+        return
+    try:
+        await conn.execute("ALTER TABLE channels ADD COLUMN path_hash_mode_override INTEGER")
+        await conn.commit()
+    except Exception as e:
+        if "duplicate column" in str(e).lower():
+            await conn.commit()
+        else:
+            raise
