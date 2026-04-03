@@ -144,11 +144,8 @@ class MapUploadModule(FanoutModule):
         if advert is None:
             return
 
-        # TODO: advert Ed25519 signature verification is skipped here.
-        # The radio has already validated the packet before passing it to RT,
-        # so re-verification is redundant in practice. If added, verify that
-        # nacl.bindings.crypto_sign_open(sig + (pubkey_bytes || timestamp_bytes),
-        # advert.public_key_bytes) succeeds before proceeding.
+        # Advert Ed25519 signature verification is intentionally skipped.
+        # The radio validates packets before passing them to RT.
 
         # Only process repeaters (2) and rooms (3) — any other role is rejected
         if advert.device_role not in _ALLOWED_DEVICE_ROLES:

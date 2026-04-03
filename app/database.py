@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS messages (
     text TEXT NOT NULL,
     sender_timestamp INTEGER,
     received_at INTEGER NOT NULL,
-    path TEXT,
+    paths TEXT,
     txt_type INTEGER DEFAULT 0,
     signature TEXT,
     outgoing INTEGER DEFAULT 0,
@@ -91,23 +91,65 @@ CREATE TABLE IF NOT EXISTS contact_name_history (
     FOREIGN KEY (public_key) REFERENCES contacts(public_key) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS app_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    max_radio_contacts INTEGER DEFAULT 200,
+    favorites TEXT DEFAULT '[]',
+    auto_decrypt_dm_on_advert INTEGER DEFAULT 1,
+    last_message_times TEXT DEFAULT '{}',
+    preferences_migrated INTEGER DEFAULT 0,
+    advert_interval INTEGER DEFAULT 0,
+    last_advert_time INTEGER DEFAULT 0,
+    flood_scope TEXT DEFAULT '',
+    blocked_keys TEXT DEFAULT '[]',
+    blocked_names TEXT DEFAULT '[]',
+    discovery_blocked_types TEXT DEFAULT '[]'
+);
+INSERT OR IGNORE INTO app_settings (id) VALUES (1);
+
+CREATE TABLE IF NOT EXISTS fanout_configs (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    enabled INTEGER DEFAULT 0,
+    config TEXT NOT NULL DEFAULT '{}',
+    scope TEXT NOT NULL DEFAULT '{}',
+    sort_order INTEGER DEFAULT 0,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS repeater_telemetry_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    public_key TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    data TEXT NOT NULL,
+    FOREIGN KEY (public_key) REFERENCES contacts(public_key) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_messages_received ON messages(received_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_dedup_null_safe
     ON messages(type, conversation_key, text, COALESCE(sender_timestamp, 0))
     WHERE type = 'CHAN';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_incoming_priv_dedup
+    ON messages(type, conversation_key, text, COALESCE(sender_timestamp, 0))
+    WHERE type = 'PRIV' AND outgoing = 0;
+CREATE INDEX IF NOT EXISTS idx_messages_sender_key ON messages(sender_key);
+CREATE INDEX IF NOT EXISTS idx_messages_pagination
+    ON messages(type, conversation_key, received_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_unread_covering
+    ON messages(type, conversation_key, outgoing, received_at);
 CREATE INDEX IF NOT EXISTS idx_raw_packets_message_id ON raw_packets(message_id);
 CREATE INDEX IF NOT EXISTS idx_raw_packets_timestamp ON raw_packets(timestamp);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_packets_payload_hash ON raw_packets(payload_hash);
-CREATE INDEX IF NOT EXISTS idx_contacts_on_radio ON contacts(on_radio);
 CREATE INDEX IF NOT EXISTS idx_contacts_type_last_seen ON contacts(type, last_seen);
 CREATE INDEX IF NOT EXISTS idx_messages_type_received_conversation
     ON messages(type, received_at, conversation_key);
--- idx_messages_sender_key is created by migration 25 (after adding the sender_key column)
--- idx_messages_incoming_priv_dedup is created by migration 44 after legacy rows are reconciled
 CREATE INDEX IF NOT EXISTS idx_contact_advert_paths_recent
     ON contact_advert_paths(public_key, last_seen DESC);
 CREATE INDEX IF NOT EXISTS idx_contact_name_history_key
     ON contact_name_history(public_key, last_seen DESC);
+CREATE INDEX IF NOT EXISTS idx_repeater_telemetry_pk_ts
+    ON repeater_telemetry_history(public_key, timestamp);
 """
 
 

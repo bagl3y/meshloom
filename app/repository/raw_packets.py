@@ -1,5 +1,4 @@
 import logging
-import sqlite3
 import time
 from collections.abc import AsyncIterator
 from hashlib import sha256
@@ -35,46 +34,23 @@ class RawPacketRepository:
             # For malformed packets, hash the full data
             payload_hash = sha256(data).digest()
 
-        # Check if this payload already exists
+        cursor = await db.conn.execute(
+            "INSERT OR IGNORE INTO raw_packets (timestamp, data, payload_hash) VALUES (?, ?, ?)",
+            (ts, data, payload_hash),
+        )
+        await db.conn.commit()
+
+        if cursor.rowcount > 0:
+            assert cursor.lastrowid is not None
+            return (cursor.lastrowid, True)
+
+        # Duplicate payload — look up the existing row.
         cursor = await db.conn.execute(
             "SELECT id FROM raw_packets WHERE payload_hash = ?", (payload_hash,)
         )
         existing = await cursor.fetchone()
-
-        if existing:
-            # Duplicate - return existing packet ID
-            logger.debug(
-                "Duplicate payload detected (hash=%s..., existing_id=%d)",
-                payload_hash.hex()[:12],
-                existing["id"],
-            )
-            return (existing["id"], False)
-
-        # New packet - insert with hash
-        try:
-            cursor = await db.conn.execute(
-                "INSERT INTO raw_packets (timestamp, data, payload_hash) VALUES (?, ?, ?)",
-                (ts, data, payload_hash),
-            )
-            await db.conn.commit()
-            assert cursor.lastrowid is not None  # INSERT always returns a row ID
-            return (cursor.lastrowid, True)
-        except sqlite3.IntegrityError:
-            # Race condition: another insert with same payload_hash happened between
-            # our SELECT and INSERT. This is expected for duplicate packets arriving
-            # close together. Query again to get the existing ID.
-            logger.debug(
-                "Duplicate packet detected via race condition (payload_hash=%s), dropping",
-                payload_hash.hex()[:16],
-            )
-            cursor = await db.conn.execute(
-                "SELECT id FROM raw_packets WHERE payload_hash = ?", (payload_hash,)
-            )
-            existing = await cursor.fetchone()
-            if existing:
-                return (existing["id"], False)
-            # This shouldn't happen, but if it does, re-raise
-            raise
+        assert existing is not None
+        return (existing["id"], False)
 
     @staticmethod
     async def get_undecrypted_count() -> int:
@@ -95,13 +71,22 @@ class RawPacketRepository:
         return row["oldest"] if row and row["oldest"] is not None else None
 
     @staticmethod
-    async def get_all_undecrypted() -> list[tuple[int, bytes, int]]:
-        """Get all undecrypted packets as (id, data, timestamp) tuples."""
+    async def stream_all_undecrypted(
+        batch_size: int = UNDECRYPTED_PACKET_BATCH_SIZE,
+    ) -> AsyncIterator[tuple[int, bytes, int]]:
+        """Yield all undecrypted packets as (id, data, timestamp) in bounded batches."""
         cursor = await db.conn.execute(
             "SELECT id, data, timestamp FROM raw_packets WHERE message_id IS NULL ORDER BY timestamp ASC"
         )
-        rows = await cursor.fetchall()
-        return [(row["id"], bytes(row["data"]), row["timestamp"]) for row in rows]
+        try:
+            while True:
+                rows = await cursor.fetchmany(batch_size)
+                if not rows:
+                    break
+                for row in rows:
+                    yield (row["id"], bytes(row["data"]), row["timestamp"])
+        finally:
+            await cursor.close()
 
     @staticmethod
     async def stream_undecrypted_text_messages(

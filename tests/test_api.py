@@ -293,7 +293,6 @@ class TestDebugEndpoint:
             json={
                 "max_radio_contacts": 321,
                 "auto_decrypt_dm_on_advert": True,
-                "sidebar_sort_order": "alpha",
                 "advert_interval": 7200,
                 "flood_scope": "US-CA",
                 "blocked_keys": [pub_key],

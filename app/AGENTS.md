@@ -190,6 +190,7 @@ app/
 - `GET /contacts/analytics` — unified keyed-or-name analytics payload
 - `GET /contacts/repeaters/advert-paths` — recent advert paths for all contacts
 - `POST /contacts`
+- `POST /contacts/bulk-delete`
 - `DELETE /contacts/{public_key}`
 - `POST /contacts/{public_key}/mark-read`
 - `POST /contacts/{public_key}/command`
@@ -214,6 +215,7 @@ app/
 - `GET /channels`
 - `GET /channels/{key}/detail`
 - `POST /channels`
+- `POST /channels/bulk-hashtag`
 - `DELETE /channels/{key}`
 - `POST /channels/{key}/flood-scope-override`
 - `POST /channels/{key}/mark-read`
@@ -300,15 +302,12 @@ Repository writes should prefer typed models such as `ContactUpsert` over ad hoc
 - `max_radio_contacts`
 - `favorites`
 - `auto_decrypt_dm_on_advert`
-- `sidebar_sort_order`
 - `last_message_times`
 - `preferences_migrated`
 - `advert_interval`
 - `last_advert_time`
 - `flood_scope`
-- `blocked_keys`, `blocked_names`
-
-Note: `sidebar_sort_order` remains in the backend model for compatibility and migration, but the current frontend sidebar uses per-section localStorage sort preferences instead of a single shared server-backed sort mode.
+- `blocked_keys`, `blocked_names`, `discovery_blocked_types`
 
 Note: MQTT, community MQTT, and bot configs were migrated to the `fanout_configs` table (migrations 36-38).
 

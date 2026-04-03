@@ -202,7 +202,6 @@ async def on_path_update(event: "Event") -> None:
         # Legacy firmware/library payloads only support 1-byte hop hashes.
         normalized_path_hash_mode = -1 if normalized_path_len == -1 else 0
     else:
-        normalized_path_hash_mode = None
         try:
             normalized_path_hash_mode = int(path_hash_mode)
         except (TypeError, ValueError):

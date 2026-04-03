@@ -27,10 +27,6 @@ class AppSettingsUpdate(BaseModel):
         default=None,
         description="Whether to attempt historical DM decryption on new contact advertisement",
     )
-    sidebar_sort_order: Literal["recent", "alpha"] | None = Field(
-        default=None,
-        description="Sidebar sort order: 'recent' or 'alpha'",
-    )
     advert_interval: int | None = Field(
         default=None,
         ge=0,
@@ -110,10 +106,6 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
     if update.auto_decrypt_dm_on_advert is not None:
         logger.info("Updating auto_decrypt_dm_on_advert to %s", update.auto_decrypt_dm_on_advert)
         kwargs["auto_decrypt_dm_on_advert"] = update.auto_decrypt_dm_on_advert
-
-    if update.sidebar_sort_order is not None:
-        logger.info("Updating sidebar_sort_order to %s", update.sidebar_sort_order)
-        kwargs["sidebar_sort_order"] = update.sidebar_sort_order
 
     if update.advert_interval is not None:
         # Enforce minimum 1-hour interval; 0 means disabled

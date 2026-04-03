@@ -222,7 +222,6 @@ export interface AppSettings {
   max_radio_contacts: number;
   favorites: Favorite[];
   auto_decrypt_dm_on_advert: boolean;
-  sidebar_sort_order: string;
   last_message_times: Record<string, number>;
   preferences_migrated: boolean;
   advert_interval: number;

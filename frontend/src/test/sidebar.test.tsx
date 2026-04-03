@@ -92,7 +92,6 @@ function renderSidebar(overrides?: {
       onToggleCracker={vi.fn()}
       onMarkAllRead={vi.fn()}
       favorites={favorites}
-      legacySortOrder="recent"
       isConversationNotificationsEnabled={overrides?.isConversationNotificationsEnabled}
     />
   );
@@ -140,7 +139,6 @@ describe('Sidebar section summaries', () => {
         onToggleCracker={vi.fn()}
         onMarkAllRead={vi.fn()}
         favorites={[]}
-        legacySortOrder="recent"
       />
     );
 
@@ -300,7 +298,6 @@ describe('Sidebar section summaries', () => {
         onToggleCracker={vi.fn()}
         onMarkAllRead={vi.fn()}
         favorites={[]}
-        legacySortOrder="recent"
       />
     );
 
@@ -397,7 +394,6 @@ describe('Sidebar section summaries', () => {
       onToggleCracker: vi.fn(),
       onMarkAllRead: vi.fn(),
       favorites: [],
-      legacySortOrder: 'recent' as const,
     };
 
     const getChannelsOrder = () => screen.getAllByText(/^#/).map((node) => node.textContent);
@@ -469,7 +465,6 @@ describe('Sidebar section summaries', () => {
         onToggleCracker={vi.fn()}
         onMarkAllRead={vi.fn()}
         favorites={[]}
-        legacySortOrder="recent"
       />
     );
 
@@ -504,7 +499,6 @@ describe('Sidebar section summaries', () => {
         onToggleCracker={vi.fn()}
         onMarkAllRead={vi.fn()}
         favorites={[]}
-        legacySortOrder="recent"
       />
     );
 
@@ -553,7 +547,6 @@ describe('Sidebar section summaries', () => {
         onToggleCracker={vi.fn()}
         onMarkAllRead={vi.fn()}
         favorites={[]}
-        legacySortOrder="recent"
       />
     );
 
@@ -586,7 +579,6 @@ describe('Sidebar section summaries', () => {
         onToggleCracker={vi.fn()}
         onMarkAllRead={vi.fn()}
         favorites={[]}
-        legacySortOrder="alpha"
       />
     );
 
@@ -623,7 +615,6 @@ describe('Sidebar section summaries', () => {
         { type: 'contact', id: zed.public_key },
         { type: 'contact', id: amy.public_key },
       ] satisfies Favorite[],
-      legacySortOrder: 'recent' as const,
     };
 
     const getFavoritesOrder = () =>

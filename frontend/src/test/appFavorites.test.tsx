@@ -190,7 +190,6 @@ const baseSettings = {
   max_radio_contacts: 200,
   favorites: [] as Array<{ type: 'channel' | 'contact'; id: string }>,
   auto_decrypt_dm_on_advert: false,
-  sidebar_sort_order: 'recent' as const,
   last_message_times: {},
   preferences_migrated: false,
   advert_interval: 0,

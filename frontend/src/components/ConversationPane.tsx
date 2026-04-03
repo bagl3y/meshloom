@@ -44,6 +44,7 @@ interface ConversationPaneProps {
   notificationsPermission: NotificationPermission | 'unsupported';
   favorites: Favorite[];
   messages: Message[];
+  preSorted?: boolean;
   messagesLoading: boolean;
   loadingOlder: boolean;
   hasOlderMessages: boolean;
@@ -114,6 +115,7 @@ export function ConversationPane({
   notificationsPermission,
   favorites,
   messages,
+  preSorted,
   messagesLoading,
   loadingOlder,
   hasOlderMessages,
@@ -275,6 +277,7 @@ export function ConversationPane({
         <MessageList
           key={activeConversation.id}
           messages={messages}
+          preSorted={preSorted}
           contacts={contacts}
           channels={channels}
           loading={messagesLoading}
