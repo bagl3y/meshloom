@@ -1227,7 +1227,7 @@ describe('SettingsFanoutSection', () => {
 
     const group = await screen.findByRole('group', { name: 'Integration Apprise Feed' });
     expect(
-      within(group).getByText(/discord:\/\/abc, mailto:\/\/one@example.com/)
+      within(group).getByText(/discord:\/\/\*{8}, mailto:\/\/\*{8}, mailto:\/\/\*{8}/)
     ).toBeInTheDocument();
   });
 
