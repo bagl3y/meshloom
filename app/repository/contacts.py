@@ -395,11 +395,11 @@ class ContactRepository:
     @staticmethod
     async def delete(public_key: str) -> None:
         normalized = public_key.lower()
+        # contact_name_history and contact_advert_paths cascade via FK, but
+        # messages has no FK to contacts — clean up DMs explicitly.
         await db.conn.execute(
-            "DELETE FROM contact_name_history WHERE public_key = ?", (normalized,)
-        )
-        await db.conn.execute(
-            "DELETE FROM contact_advert_paths WHERE public_key = ?", (normalized,)
+            "DELETE FROM messages WHERE type = 'PRIV' AND conversation_key = ?",
+            (normalized,),
         )
         await db.conn.execute("DELETE FROM contacts WHERE public_key = ?", (normalized,))
         await db.conn.commit()

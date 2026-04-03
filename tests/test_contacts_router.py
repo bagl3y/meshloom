@@ -363,6 +363,34 @@ class TestDeleteContactCascade:
         assert len(await ContactNameHistoryRepository.get_history(KEY_A)) == 0
         assert len(await ContactAdvertPathRepository.get_recent_for_contact(KEY_A)) == 0
 
+    @pytest.mark.asyncio
+    async def test_delete_removes_direct_messages(self, test_db, client):
+        await _insert_contact(KEY_A, "Alice")
+
+        # Create a DM for this contact
+        await MessageRepository.create(
+            msg_type="PRIV",
+            conversation_key=KEY_A,
+            text="hello",
+            sender_timestamp=1000,
+            received_at=1000,
+        )
+        msgs = await MessageRepository.get_all(msg_type="PRIV", conversation_key=KEY_A)
+        assert len(msgs) == 1
+
+        with patch("app.routers.contacts.radio_manager") as mock_rm:
+            mock_rm.is_connected = False
+            mock_rm.meshcore = None
+            mock_rm.radio_operation = _noop_radio_operation()
+
+            response = await client.delete(f"/api/contacts/{KEY_A}")
+
+        assert response.status_code == 200
+
+        # DMs for the deleted contact should be gone
+        msgs = await MessageRepository.get_all(msg_type="PRIV", conversation_key=KEY_A)
+        assert len(msgs) == 0
+
 
 class TestMarkRead:
     """Test POST /api/contacts/{public_key}/mark-read."""
