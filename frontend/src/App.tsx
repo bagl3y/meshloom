@@ -508,6 +508,7 @@ export function App() {
     health,
     favorites,
     messages: sortedMessages,
+    preSorted: activeContactIsRoom,
     messagesLoading,
     loadingOlder,
     hasOlderMessages,

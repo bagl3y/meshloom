@@ -47,6 +47,7 @@ interface MessageListProps {
   loadingNewer?: boolean;
   onLoadNewer?: () => void;
   onJumpToBottom?: () => void;
+  preSorted?: boolean;
 }
 
 // URL regex for linkifying plain text
@@ -283,6 +284,7 @@ export function MessageList({
   loadingNewer = false,
   onLoadNewer,
   onJumpToBottom,
+  preSorted = false,
 }: MessageListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef<number>(0);
@@ -486,8 +488,11 @@ export function MessageList({
   // Note: Deduplication is handled by useConversationMessages.observeMessage()
   // and the database UNIQUE constraint on (type, conversation_key, text, sender_timestamp)
   const sortedMessages = useMemo(
-    () => [...messages].sort((a, b) => a.received_at - b.received_at || a.id - b.id),
-    [messages]
+    () =>
+      preSorted
+        ? messages
+        : [...messages].sort((a, b) => a.received_at - b.received_at || a.id - b.id),
+    [messages, preSorted]
   );
   const unreadMarkerIndex = useMemo(() => {
     if (unreadMarkerLastReadAt === undefined) {
