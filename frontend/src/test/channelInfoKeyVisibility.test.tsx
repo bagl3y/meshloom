@@ -25,6 +25,15 @@ function makeDetail(channel: Channel): ChannelDetail {
     first_message_at: null,
     unique_sender_count: 0,
     top_senders_24h: [],
+    path_hash_width_24h: {
+      total_packets: 0,
+      single_byte: 0,
+      double_byte: 0,
+      triple_byte: 0,
+      single_byte_pct: 0,
+      double_byte_pct: 0,
+      triple_byte_pct: 0,
+    },
   };
 }
 

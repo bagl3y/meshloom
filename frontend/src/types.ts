@@ -228,12 +228,23 @@ export interface BulkCreateHashtagChannelsResult {
   message: string;
 }
 
+export interface PathHashWidthStats {
+  total_packets: number;
+  single_byte: number;
+  double_byte: number;
+  triple_byte: number;
+  single_byte_pct: number;
+  double_byte_pct: number;
+  triple_byte_pct: number;
+}
+
 export interface ChannelDetail {
   channel: Channel;
   message_counts: ChannelMessageCounts;
   first_message_at: number | null;
   unique_sender_count: number;
   top_senders_24h: ChannelTopSender[];
+  path_hash_width_24h: PathHashWidthStats;
 }
 
 /** A single path that a message took to reach us */

@@ -355,6 +355,18 @@ class ChannelTopSender(BaseModel):
     message_count: int
 
 
+class PathHashWidthStats(BaseModel):
+    """Hop byte width distribution for parsed raw packets."""
+
+    total_packets: int = 0
+    single_byte: int = 0
+    double_byte: int = 0
+    triple_byte: int = 0
+    single_byte_pct: float = 0.0
+    double_byte_pct: float = 0.0
+    triple_byte_pct: float = 0.0
+
+
 class ChannelDetail(BaseModel):
     """Comprehensive channel profile data."""
 
@@ -363,6 +375,7 @@ class ChannelDetail(BaseModel):
     first_message_at: int | None = None
     unique_sender_count: int = 0
     top_senders_24h: list[ChannelTopSender] = Field(default_factory=list)
+    path_hash_width_24h: PathHashWidthStats = Field(default_factory=PathHashWidthStats)
 
 
 class MessagePath(BaseModel):

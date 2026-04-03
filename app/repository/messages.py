@@ -786,11 +786,13 @@ class MessageRepository:
 
     @staticmethod
     async def get_channel_stats(conversation_key: str) -> dict:
-        """Get channel message statistics: time-windowed counts, first message, unique senders, top senders.
+        """Get channel message statistics: time-windowed counts, first message, unique senders, top senders, path hash widths.
 
-        Returns a dict with message_counts, first_message_at, unique_sender_count, top_senders_24h.
+        Returns a dict with message_counts, first_message_at, unique_sender_count, top_senders_24h, path_hash_width_24h.
         """
         import time as _time
+
+        from app.path_utils import parse_packet_envelope
 
         now = int(_time.time())
         t_1h = now - 3600
@@ -843,11 +845,51 @@ class MessageRepository:
             for r in top_rows
         ]
 
+        # Path hash width distribution for last 24h (in-Python parse of raw packet envelopes)
+        single_byte = 0
+        double_byte = 0
+        triple_byte = 0
+        cursor3 = await db.conn.execute(
+            """
+            SELECT rp.data FROM raw_packets rp
+            JOIN messages m ON rp.message_id = m.id
+            WHERE m.type = 'CHAN' AND m.conversation_key = ?
+              AND rp.timestamp >= ?
+            """,
+            (conversation_key, t_24h),
+        )
+        while True:
+            batch = await cursor3.fetchmany(500)
+            if not batch:
+                break
+            for pkt_row in batch:
+                envelope = parse_packet_envelope(bytes(pkt_row["data"]))
+                if envelope is None:
+                    continue
+                if envelope.hash_size == 1:
+                    single_byte += 1
+                elif envelope.hash_size == 2:
+                    double_byte += 1
+                elif envelope.hash_size == 3:
+                    triple_byte += 1
+
+        hash_total = single_byte + double_byte + triple_byte
+        path_hash_width_24h = {
+            "total_packets": hash_total,
+            "single_byte": single_byte,
+            "double_byte": double_byte,
+            "triple_byte": triple_byte,
+            "single_byte_pct": (single_byte / hash_total * 100) if hash_total else 0.0,
+            "double_byte_pct": (double_byte / hash_total * 100) if hash_total else 0.0,
+            "triple_byte_pct": (triple_byte / hash_total * 100) if hash_total else 0.0,
+        }
+
         return {
             "message_counts": message_counts,
             "first_message_at": row["first_message_at"],
             "unique_sender_count": row["unique_sender_count"] or 0,
             "top_senders_24h": top_senders,
+            "path_hash_width_24h": path_hash_width_24h,
         }
 
     @staticmethod

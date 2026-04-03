@@ -215,6 +215,7 @@ async def get_channel_detail(key: str) -> ChannelDetail:
         first_message_at=stats["first_message_at"],
         unique_sender_count=stats["unique_sender_count"],
         top_senders_24h=[ChannelTopSender(**s) for s in stats["top_senders_24h"]],
+        path_hash_width_24h=stats["path_hash_width_24h"],
     )
 
 
