@@ -3,7 +3,7 @@ name = "remoteterm-meshcore"
 version = "3.7.1"
 description = "RemoteTerm - Web interface for MeshCore radio mesh networks"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
@@ -57,7 +57,7 @@ ignore = [
 known-first-party = ["app"]
 
 [tool.pyright]
-pythonVersion = "3.10"
+pythonVersion = "3.11"
 typeCheckingMode = "basic"
 include = ["app"]
 exclude = ["references", ".venv", "tests"]
