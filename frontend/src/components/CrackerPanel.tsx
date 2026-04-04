@@ -409,7 +409,10 @@ export function CrackerPanel({
   const handleStart = () => {
     if (!gpuAvailable) {
       toast.error('WebGPU not available', {
-        description: 'Cracking requires Chrome 113+ or Edge 113+ with WebGPU support.',
+        description:
+          typeof window !== 'undefined' && !window.isSecureContext
+            ? 'WebGPU requires HTTPS when not on localhost. Set up a certificate or configure your browser to treat this origin as secure.'
+            : 'Cracking requires Chrome 113+ or Edge 113+ with WebGPU support.',
       });
       return;
     }
@@ -593,8 +596,26 @@ export function CrackerPanel({
 
       {/* GPU status */}
       {gpuAvailable === false && (
-        <div className="text-sm text-destructive" role="alert">
-          WebGPU not available. Cracking requires Chrome 113+ or Edge 113+.
+        <div className="text-sm text-destructive space-y-1.5" role="alert">
+          <p>WebGPU not available.</p>
+          {typeof window !== 'undefined' && !window.isSecureContext ? (
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2.5 text-xs text-destructive/90">
+              <p className="font-medium mb-1">WebGPU requires HTTPS when not on localhost.</p>
+              <p>To enable it:</p>
+              <ul className="list-disc ml-4 mt-1 space-y-0.5">
+                <li>
+                  Set up a TLS certificate (see the HTTPS section of README_ADVANCED.md, or re-run
+                  the Docker setup script which can generate one automatically)
+                </li>
+                <li>
+                  Or configure your browser to treat this origin as secure (sometimes called
+                  &ldquo;insecure origins treated as secure&rdquo; in browser flags)
+                </li>
+              </ul>
+            </div>
+          ) : (
+            <p>Cracking requires Chrome 113+ or Edge 113+ with WebGPU support.</p>
+          )}
         </div>
       )}
       {!wordlistLoaded && gpuAvailable !== false && (
