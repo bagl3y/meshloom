@@ -2,7 +2,7 @@
  * Parse sender from channel message text.
  * Channel messages have format "sender: message".
  */
-const HASHTAG_CHANNEL_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+export const HASHTAG_CHANNEL_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const HASHTAG_CHANNEL_REFERENCE_PATTERN = /(^|\s)(#[a-z0-9]+(?:-[a-z0-9]+)*)(?=$|[\s.,;:])/g;
 
 export function parseSenderFromText(text: string): { sender: string | null; content: string } {
@@ -26,9 +26,6 @@ export interface HashtagChannelReference {
   end: number;
 }
 
-export function isValidLinkedChannelName(name: string): boolean {
-  return HASHTAG_CHANNEL_NAME_PATTERN.test(name);
-}
 
 export function findLinkedChannelReferences(text: string): HashtagChannelReference[] {
   const references: HashtagChannelReference[] = [];
