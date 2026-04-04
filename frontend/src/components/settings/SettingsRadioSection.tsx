@@ -570,9 +570,9 @@ export function SettingsRadioSection({
             onChange={(e) => setPathHashMode(e.target.value)}
             className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
-            <option value="0">1 byte (default)</option>
-            <option value="1">2 bytes</option>
-            <option value="2">3 bytes</option>
+            <option value="0">1 byte — up to 63 hops (default)</option>
+            <option value="1">2 bytes — up to 32 hops</option>
+            <option value="2">3 bytes — up to 21 hops</option>
           </select>
           <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-xs text-warning">
             <p className="font-semibold mb-1">Compatibility Warning</p>

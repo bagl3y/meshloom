@@ -53,17 +53,17 @@ export function ChannelPathHashModeOverrideModal({
     {
       value: 0,
       label: '1-byte hop identifiers',
-      description: 'Shortest paths, least repeater disambiguation',
+      description: 'Least repeater disambiguation, up to 63 hops',
     },
     {
       value: 1,
       label: '2-byte hop identifiers',
-      description: 'Better repeater disambiguation',
+      description: 'Better repeater disambiguation, up to 32 hops',
     },
     {
       value: 2,
       label: '3-byte hop identifiers',
-      description: 'Best repeater disambiguation, longest paths',
+      description: 'Best repeater disambiguation, up to 21 hops',
     },
   ];
 
