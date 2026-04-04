@@ -215,7 +215,14 @@ async def run_post_connect_setup(radio_manager) -> None:
                     # Sync contacts/channels from radio to DB and clear radio
                     logger.info("Syncing and offloading radio data...")
                     result = await sync_and_offload_all(mc)
-                    logger.info("Sync complete: %s", result)
+                    c = result.get("contacts", {})
+                    ch = result.get("channels", {})
+                    logger.info(
+                        "Sync complete: %d contacts synced, %d channels synced, %d channels cleared",
+                        c.get("synced", 0),
+                        ch.get("synced", 0),
+                        ch.get("cleared", 0),
+                    )
 
                     # Send advertisement to announce our presence (if enabled and not throttled)
                     if await send_advertisement(mc):

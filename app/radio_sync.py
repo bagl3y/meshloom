@@ -307,7 +307,7 @@ async def sync_and_offload_channels(mc: MeshCore, max_channels: int | None = Non
             except Exception as e:
                 logger.warning("Error clearing channel %d: %s", idx, e)
 
-        logger.info("Synced %d channels, cleared %d from radio", synced, cleared)
+        logger.debug("Synced %d channels, cleared %d from radio", synced, cleared)
 
     except Exception as e:
         logger.error("Error during channel sync: %s", e)
@@ -428,7 +428,6 @@ async def ensure_default_channels() -> None:
 
 async def sync_and_offload_all(mc: MeshCore) -> dict:
     """Run fast startup sync, then background contact reconcile."""
-    logger.info("Starting full radio sync and offload")
 
     # Contact on_radio is legacy/stale metadata. Clear it during the offload/reload
     # cycle so old rows stop claiming radio residency we do not actively track.
@@ -1057,7 +1056,7 @@ async def sync_contacts_from_radio(mc: MeshCore) -> dict:
             return {"synced": 0, "radio_contacts": {}, "error": str(result)}
 
         contacts = _normalize_radio_contacts_payload(result.payload)
-        logger.info("Found %d contacts on radio", len(contacts))
+        logger.debug("Found %d contacts on radio", len(contacts))
 
         for public_key, contact_data in contacts.items():
             await ContactRepository.upsert(
@@ -1071,7 +1070,7 @@ async def sync_contacts_from_radio(mc: MeshCore) -> dict:
             )
             synced += 1
 
-        logger.info("Synced %d contacts from radio snapshot", synced)
+        logger.debug("Synced %d contacts from radio snapshot", synced)
         return {"synced": synced, "radio_contacts": contacts}
     except Exception as e:
         logger.error("Error during contact snapshot sync: %s", e)
