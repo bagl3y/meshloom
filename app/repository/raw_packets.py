@@ -172,12 +172,3 @@ class RawPacketRepository:
         cursor = await db.conn.execute("DELETE FROM raw_packets WHERE message_id IS NOT NULL")
         await db.conn.commit()
         return cursor.rowcount
-
-    @staticmethod
-    async def get_undecrypted_text_messages() -> list[tuple[int, bytes, int]]:
-        """Get all undecrypted TEXT_MESSAGE packets as (id, data, timestamp) tuples.
-
-        Filters raw packets to only include those with PayloadType.TEXT_MESSAGE (0x02).
-        These are direct messages that can be decrypted with contact ECDH keys.
-        """
-        return [packet async for packet in RawPacketRepository.stream_undecrypted_text_messages()]

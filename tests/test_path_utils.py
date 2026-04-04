@@ -295,12 +295,12 @@ class TestContactToRadioDictHashMode:
 
 
 class TestContactFromRadioDictHashMode:
-    """Test that Contact.from_radio_dict() preserves explicit path hash mode."""
+    """Test that ContactUpsert.from_radio_dict() preserves explicit path hash mode."""
 
     def test_preserves_mode_from_radio_payload(self):
-        from app.models import Contact
+        from app.models import ContactUpsert
 
-        d = Contact.from_radio_dict(
+        upsert = ContactUpsert.from_radio_dict(
             "aa" * 32,
             {
                 "adv_name": "Alice",
@@ -309,14 +309,14 @@ class TestContactFromRadioDictHashMode:
                 "out_path_hash_mode": 1,
             },
         )
-        assert d["direct_path"] == "aa00bb00"
-        assert d["direct_path_len"] == 2
-        assert d["direct_path_hash_mode"] == 1
+        assert upsert.direct_path == "aa00bb00"
+        assert upsert.direct_path_len == 2
+        assert upsert.direct_path_hash_mode == 1
 
     def test_flood_falls_back_to_minus_one(self):
-        from app.models import Contact
+        from app.models import ContactUpsert
 
-        d = Contact.from_radio_dict(
+        upsert = ContactUpsert.from_radio_dict(
             "bb" * 32,
             {
                 "adv_name": "Bob",
@@ -324,6 +324,6 @@ class TestContactFromRadioDictHashMode:
                 "out_path_len": -1,
             },
         )
-        assert d["direct_path"] == ""
-        assert d["direct_path_len"] == -1
-        assert d["direct_path_hash_mode"] == -1
+        assert upsert.direct_path == ""
+        assert upsert.direct_path_len == -1
+        assert upsert.direct_path_hash_mode == -1

@@ -52,19 +52,6 @@ class ToastPayload(TypedDict):
     details: NotRequired[str]
 
 
-WsEventPayload = (
-    HealthResponse
-    | Message
-    | Contact
-    | ContactResolvedPayload
-    | Channel
-    | ContactDeletedPayload
-    | ChannelDeletedPayload
-    | RawPacketBroadcast
-    | MessageAckedPayload
-    | ToastPayload
-)
-
 _PAYLOAD_ADAPTERS: dict[WsEventType, TypeAdapter[Any]] = {
     "health": TypeAdapter(HealthResponse),
     "message": TypeAdapter(Message),

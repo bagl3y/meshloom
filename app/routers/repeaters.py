@@ -28,7 +28,6 @@ from app.repository import ContactRepository, RepeaterTelemetryRepository
 from app.routers.contacts import _ensure_on_radio, _resolve_contact_or_404
 from app.routers.server_control import (
     batch_cli_fetch,
-    extract_response_text,
     prepare_authenticated_contact_connection,
     require_server_capable_contact,
     send_contact_cli_command,
@@ -46,10 +45,6 @@ ACL_PERMISSION_NAMES = {
 }
 router = APIRouter(prefix="/contacts", tags=["repeaters"])
 REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS = 5.0
-
-
-def _extract_response_text(event) -> str:
-    return extract_response_text(event)
 
 
 async def prepare_repeater_connection(mc, contact: Contact, password: str) -> RepeaterLoginResponse:
