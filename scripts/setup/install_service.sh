@@ -285,6 +285,18 @@ fi
 
 echo -e "${YELLOW}Writing systemd service file to ${SERVICE_FILE}...${NC}"
 
+# Escape a value for use in a systemd Environment= directive.
+# Must handle: % (specifier expansion), " and \ (systemd.syntax unquoting),
+# and trailing backslash (line continuation). Wraps in double quotes so
+# spaces are preserved.
+systemd_escape_env_value() {
+    local v="$1"
+    v="${v//\\/\\\\}"   # \ → \\  (must be first)
+    v="${v//\"/\\\"}"   # " → \"
+    v="${v//%/%%}"      # % → %%
+    printf '"%s"' "$v"
+}
+
 generate_service_file() {
     echo "[Unit]"
     echo "Description=RemoteTerm for MeshCore"
@@ -301,14 +313,14 @@ generate_service_file() {
 
     # Transport
     case "$TRANSPORT_CHOICE" in
-        2) echo "Environment=MESHCORE_SERIAL_PORT=${SERIAL_PORT}" ;;
+        2) echo "Environment=MESHCORE_SERIAL_PORT=$(systemd_escape_env_value "$SERIAL_PORT")" ;;
         3)
-            echo "Environment=MESHCORE_TCP_HOST=${TCP_HOST}"
-            echo "Environment=MESHCORE_TCP_PORT=${TCP_PORT}"
+            echo "Environment=MESHCORE_TCP_HOST=$(systemd_escape_env_value "$TCP_HOST")"
+            echo "Environment=MESHCORE_TCP_PORT=$(systemd_escape_env_value "$TCP_PORT")"
             ;;
         4)
-            echo "Environment=MESHCORE_BLE_ADDRESS=${BLE_ADDRESS}"
-            echo "Environment=MESHCORE_BLE_PIN=${BLE_PIN}"
+            echo "Environment=MESHCORE_BLE_ADDRESS=$(systemd_escape_env_value "$BLE_ADDRESS")"
+            echo "Environment=MESHCORE_BLE_PIN=$(systemd_escape_env_value "$BLE_PIN")"
             ;;
     esac
 
@@ -319,8 +331,8 @@ generate_service_file() {
 
     # Basic auth
     if [[ "$ENABLE_BOTS" =~ ^[Yy] ]] && [[ "$ENABLE_AUTH" =~ ^[Yy] ]]; then
-        echo "Environment=MESHCORE_BASIC_AUTH_USERNAME=${AUTH_USERNAME}"
-        echo "Environment=MESHCORE_BASIC_AUTH_PASSWORD=${AUTH_PASSWORD}"
+        echo "Environment=MESHCORE_BASIC_AUTH_USERNAME=$(systemd_escape_env_value "$AUTH_USERNAME")"
+        echo "Environment=MESHCORE_BASIC_AUTH_PASSWORD=$(systemd_escape_env_value "$AUTH_PASSWORD")"
     fi
 
     # Serial group access
