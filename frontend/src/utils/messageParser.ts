@@ -26,7 +26,6 @@ export interface HashtagChannelReference {
   end: number;
 }
 
-
 export function findLinkedChannelReferences(text: string): HashtagChannelReference[] {
   const references: HashtagChannelReference[] = [];
   let match: RegExpExecArray | null;

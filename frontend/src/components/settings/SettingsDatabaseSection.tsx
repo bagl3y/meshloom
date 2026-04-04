@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
@@ -7,7 +7,13 @@ import { toast } from '../ui/sonner';
 import { api } from '../../api';
 import { formatTime } from '../../utils/messageParser';
 import { BulkDeleteContactsModal } from './BulkDeleteContactsModal';
-import type { AppSettings, AppSettingsUpdate, Contact, HealthStatus } from '../../types';
+import type {
+  AppSettings,
+  AppSettingsUpdate,
+  Contact,
+  HealthStatus,
+  TelemetryHistoryEntry,
+} from '../../types';
 
 export function SettingsDatabaseSection({
   appSettings,
@@ -48,10 +54,34 @@ export function SettingsDatabaseSection({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [latestTelemetry, setLatestTelemetry] = useState<
+    Record<string, TelemetryHistoryEntry | null>
+  >({});
+  const telemetryFetchedRef = useRef(false);
+
   useEffect(() => {
     setAutoDecryptOnAdvert(appSettings.auto_decrypt_dm_on_advert);
     setDiscoveryBlockedTypes(appSettings.discovery_blocked_types ?? []);
   }, [appSettings]);
+
+  useEffect(() => {
+    if (trackedTelemetryRepeaters.length === 0 || telemetryFetchedRef.current) return;
+    telemetryFetchedRef.current = true;
+    let cancelled = false;
+    const fetches = trackedTelemetryRepeaters.map((key) =>
+      api.repeaterTelemetryHistory(key).then(
+        (history) => [key, history.length > 0 ? history[history.length - 1] : null] as const,
+        () => [key, null] as const
+      )
+    );
+    Promise.all(fetches).then((entries) => {
+      if (cancelled) return;
+      setLatestTelemetry(Object.fromEntries(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [trackedTelemetryRepeaters]);
 
   const handleCleanup = async () => {
     const days = parseInt(retentionDays, 10);
@@ -242,28 +272,49 @@ export function SettingsDatabaseSection({
             No repeaters are being tracked. Enable tracking from a repeater's dashboard.
           </p>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-2">
             {trackedTelemetryRepeaters.map((key) => {
               const contact = contacts.find((c) => c.public_key === key);
               const displayName = contact?.name ?? key.slice(0, 12);
+              const snap = latestTelemetry[key];
+              const d = snap?.data;
               return (
-                <div key={key} className="flex items-center justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm truncate block">{displayName}</span>
-                    <span className="text-[0.625rem] text-muted-foreground font-mono">
-                      {key.slice(0, 12)}
-                    </span>
+                <div key={key} className="rounded-md border border-border px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm truncate block">{displayName}</span>
+                      <span className="text-[0.625rem] text-muted-foreground font-mono">
+                        {key.slice(0, 12)}
+                      </span>
+                    </div>
+                    {onToggleTrackedTelemetry && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onToggleTrackedTelemetry(key)}
+                        className="h-7 text-xs flex-shrink-0 text-destructive hover:text-destructive"
+                      >
+                        Remove
+                      </Button>
+                    )}
                   </div>
-                  {onToggleTrackedTelemetry && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onToggleTrackedTelemetry(key)}
-                      className="h-7 text-xs flex-shrink-0 text-destructive hover:text-destructive"
-                    >
-                      Remove
-                    </Button>
-                  )}
+                  {d ? (
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[0.625rem] text-muted-foreground">
+                      <span>{d.battery_volts?.toFixed(2)}V</span>
+                      <span>noise {d.noise_floor_dbm} dBm</span>
+                      <span>
+                        rx {d.packets_received != null ? d.packets_received.toLocaleString() : '?'}
+                      </span>
+                      <span>
+                        tx {d.packets_sent != null ? d.packets_sent.toLocaleString() : '?'}
+                      </span>
+                      <span className="ml-auto">checked {formatTime(snap.timestamp)}</span>
+                    </div>
+                  ) : snap === null ? (
+                    <div className="mt-1 text-[0.625rem] text-muted-foreground italic">
+                      No telemetry recorded yet
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
