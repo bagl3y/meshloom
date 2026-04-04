@@ -88,7 +88,7 @@ class TestRoomLogin:
         mc.commands.send_login = AsyncMock(side_effect=_send_login)
 
         with (
-            patch("app.routers.rooms.require_connected", return_value=mc),
+            patch("app.routers.rooms.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
         ):
             response = await room_login(ROOM_KEY, RepeaterLoginRequest(password="hello"))
@@ -102,7 +102,7 @@ class TestRoomLogin:
         await _insert_contact(ROOM_KEY, name="Client", contact_type=1)
 
         with (
-            patch("app.routers.rooms.require_connected", return_value=mc),
+            patch("app.routers.rooms.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
         ):
             with pytest.raises(HTTPException) as exc:
@@ -139,7 +139,7 @@ class TestRoomStatus:
         )
 
         with (
-            patch("app.routers.rooms.require_connected", return_value=mc),
+            patch("app.routers.rooms.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
         ):
             response = await room_status(ROOM_KEY)
@@ -156,7 +156,7 @@ class TestRoomStatus:
         mc.commands.req_acl_sync = AsyncMock(return_value=[{"key": AUTHOR_KEY[:12], "perm": 3}])
 
         with (
-            patch("app.routers.rooms.require_connected", return_value=mc),
+            patch("app.routers.rooms.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
         ):
             response = await room_acl(ROOM_KEY)
@@ -179,7 +179,7 @@ class TestRoomCommandReuse:
         )
 
         with (
-            patch("app.routers.repeaters.require_connected", return_value=mc),
+            patch("app.routers.repeaters.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
         ):
             response = await send_repeater_command(ROOM_KEY, CommandRequest(command="ver"))

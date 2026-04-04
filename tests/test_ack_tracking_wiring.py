@@ -83,7 +83,7 @@ class TestDMAckTrackingWiring:
         await _insert_contact(pub_key)
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.track_pending_ack") as mock_track,
             patch("app.routers.messages.broadcast_event"),
@@ -115,7 +115,7 @@ class TestDMAckTrackingWiring:
         await _insert_contact(pub_key)
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.track_pending_ack") as mock_track,
             patch("app.routers.messages.broadcast_event"),
@@ -144,7 +144,7 @@ class TestDMAckTrackingWiring:
         await _insert_contact(pub_key)
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.track_pending_ack") as mock_track,
             patch("app.routers.messages.broadcast_event"),
@@ -172,7 +172,7 @@ class TestDMAckTrackingWiring:
         await _insert_contact(pub_key)
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.track_pending_ack") as mock_track,
             patch("app.routers.messages.broadcast_event"),

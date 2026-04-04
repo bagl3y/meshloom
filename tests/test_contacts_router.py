@@ -286,7 +286,7 @@ class TestPathDiscovery:
         )
 
         with (
-            patch("app.routers.contacts.require_connected", return_value=mc),
+            patch("app.routers.contacts.radio_manager.require_connected", return_value=mc),
             patch("app.routers.contacts.radio_manager") as mock_rm,
             patch("app.websocket.broadcast_event") as mock_broadcast,
         ):
@@ -324,7 +324,7 @@ class TestPathDiscovery:
         mc.wait_for_event = AsyncMock(return_value=None)
 
         with (
-            patch("app.routers.contacts.require_connected", return_value=mc),
+            patch("app.routers.contacts.radio_manager.require_connected", return_value=mc),
             patch("app.routers.contacts.radio_manager") as mock_rm,
         ):
             mock_rm.radio_operation = _noop_radio_operation(mc)

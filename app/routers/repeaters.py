@@ -3,7 +3,6 @@ import time
 
 from fastapi import APIRouter, HTTPException
 
-from app.dependencies import require_connected
 from app.models import (
     CONTACT_TYPE_REPEATER,
     AclEntry,
@@ -75,7 +74,7 @@ def _require_repeater(contact: Contact) -> None:
 @router.post("/{public_key}/repeater/login", response_model=RepeaterLoginResponse)
 async def repeater_login(public_key: str, request: RepeaterLoginRequest) -> RepeaterLoginResponse:
     """Attempt repeater login and report whether auth was confirmed."""
-    require_connected()
+    radio_manager.require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
@@ -90,7 +89,7 @@ async def repeater_login(public_key: str, request: RepeaterLoginRequest) -> Repe
 @router.post("/{public_key}/repeater/status", response_model=RepeaterStatusResponse)
 async def repeater_status(public_key: str) -> RepeaterStatusResponse:
     """Fetch status telemetry from a repeater (single attempt, 10s timeout)."""
-    require_connected()
+    radio_manager.require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
@@ -165,7 +164,7 @@ async def repeater_telemetry_history(public_key: str) -> list[TelemetryHistoryEn
 @router.post("/{public_key}/repeater/lpp-telemetry", response_model=RepeaterLppTelemetryResponse)
 async def repeater_lpp_telemetry(public_key: str) -> RepeaterLppTelemetryResponse:
     """Fetch CayenneLPP sensor telemetry from a repeater (single attempt, 10s timeout)."""
-    require_connected()
+    radio_manager.require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
@@ -194,7 +193,7 @@ async def repeater_lpp_telemetry(public_key: str) -> RepeaterLppTelemetryRespons
 @router.post("/{public_key}/repeater/neighbors", response_model=RepeaterNeighborsResponse)
 async def repeater_neighbors(public_key: str) -> RepeaterNeighborsResponse:
     """Fetch neighbors from a repeater (single attempt, 10s timeout)."""
-    require_connected()
+    radio_manager.require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
@@ -228,7 +227,7 @@ async def repeater_neighbors(public_key: str) -> RepeaterNeighborsResponse:
 @router.post("/{public_key}/repeater/acl", response_model=RepeaterAclResponse)
 async def repeater_acl(public_key: str) -> RepeaterAclResponse:
     """Fetch ACL from a repeater (single attempt, 10s timeout)."""
-    require_connected()
+    radio_manager.require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
@@ -269,7 +268,7 @@ async def _batch_cli_fetch(
 @router.post("/{public_key}/repeater/node-info", response_model=RepeaterNodeInfoResponse)
 async def repeater_node_info(public_key: str) -> RepeaterNodeInfoResponse:
     """Fetch repeater identity/location info via a small CLI batch."""
-    require_connected()
+    radio_manager.require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
@@ -289,7 +288,7 @@ async def repeater_node_info(public_key: str) -> RepeaterNodeInfoResponse:
 @router.post("/{public_key}/repeater/radio-settings", response_model=RepeaterRadioSettingsResponse)
 async def repeater_radio_settings(public_key: str) -> RepeaterRadioSettingsResponse:
     """Fetch radio settings from a repeater via radio/config CLI commands."""
-    require_connected()
+    radio_manager.require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
@@ -313,7 +312,7 @@ async def repeater_radio_settings(public_key: str) -> RepeaterRadioSettingsRespo
 )
 async def repeater_advert_intervals(public_key: str) -> RepeaterAdvertIntervalsResponse:
     """Fetch advertisement intervals from a repeater via CLI commands."""
-    require_connected()
+    radio_manager.require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
@@ -331,7 +330,7 @@ async def repeater_advert_intervals(public_key: str) -> RepeaterAdvertIntervalsR
 @router.post("/{public_key}/repeater/owner-info", response_model=RepeaterOwnerInfoResponse)
 async def repeater_owner_info(public_key: str) -> RepeaterOwnerInfoResponse:
     """Fetch owner info and guest password from a repeater via CLI commands."""
-    require_connected()
+    radio_manager.require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
@@ -349,7 +348,7 @@ async def repeater_owner_info(public_key: str) -> RepeaterOwnerInfoResponse:
 @router.post("/{public_key}/command", response_model=CommandResponse)
 async def send_repeater_command(public_key: str, request: CommandRequest) -> CommandResponse:
     """Send a CLI command to a repeater or room server."""
-    require_connected()
+    radio_manager.require_connected()
 
     contact = await _resolve_contact_or_404(public_key)
     require_server_capable_contact(contact)

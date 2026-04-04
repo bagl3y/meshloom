@@ -7,11 +7,6 @@ import pytest
 
 from app.radio import RadioDisconnectedError, RadioOperationBusyError, radio_manager
 from app.radio_sync import is_polling_paused
-from app.services.radio_runtime import RadioRuntime
-
-
-def _runtime(manager):
-    return RadioRuntime(lambda: manager)
 
 
 @pytest.fixture(autouse=True)
@@ -183,15 +178,15 @@ class TestRequireConnected:
         """HTTPException 503 is raised when radio is connected but setup is still in progress."""
         from fastapi import HTTPException
 
-        from app.dependencies import require_connected
+        from app.services.radio_runtime import radio_runtime
 
         manager = MagicMock()
         manager.is_connected = True
         manager.meshcore = MagicMock()
         manager.is_setup_in_progress = True
-        with patch("app.dependencies.radio_manager", _runtime(manager)):
+        with patch.object(radio_runtime, "_manager_getter", return_value=manager):
             with pytest.raises(HTTPException) as exc_info:
-                require_connected()
+                radio_runtime.require_connected()
 
             assert exc_info.value.status_code == 503
             assert "initializing" in exc_info.value.detail.lower()
@@ -200,28 +195,28 @@ class TestRequireConnected:
         """HTTPException 503 is raised when radio is not connected."""
         from fastapi import HTTPException
 
-        from app.dependencies import require_connected
+        from app.services.radio_runtime import radio_runtime
 
         manager = MagicMock()
         manager.is_setup_in_progress = False
         manager.is_connected = False
         manager.meshcore = None
-        with patch("app.dependencies.radio_manager", _runtime(manager)):
+        with patch.object(radio_runtime, "_manager_getter", return_value=manager):
             with pytest.raises(HTTPException) as exc_info:
-                require_connected()
+                radio_runtime.require_connected()
 
             assert exc_info.value.status_code == 503
 
     def test_returns_meshcore_when_connected_and_setup_complete(self):
         """Returns meshcore instance when radio is connected and setup is complete."""
-        from app.dependencies import require_connected
+        from app.services.radio_runtime import radio_runtime
 
         mock_mc = MagicMock()
         manager = MagicMock()
         manager.is_setup_in_progress = False
         manager.is_connected = True
         manager.meshcore = mock_mc
-        with patch("app.dependencies.radio_manager", _runtime(manager)):
-            result = require_connected()
+        with patch.object(radio_runtime, "_manager_getter", return_value=manager):
+            result = radio_runtime.require_connected()
 
         assert result is mock_mc

@@ -3,7 +3,6 @@ import time
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.dependencies import require_connected
 from app.event_handlers import track_pending_ack
 from app.models import (
     Message,
@@ -89,7 +88,7 @@ async def list_messages(
 @router.post("/direct", response_model=Message)
 async def send_direct_message(request: SendDirectMessageRequest) -> Message:
     """Send a direct message to a contact."""
-    require_connected()
+    radio_manager.require_connected()
 
     # First check our database for the contact
     from app.repository import ContactRepository
@@ -136,7 +135,7 @@ TEMP_RADIO_SLOT = 0
 @router.post("/channel", response_model=Message)
 async def send_channel_message(request: SendChannelMessageRequest) -> Message:
     """Send a message to a channel."""
-    require_connected()
+    radio_manager.require_connected()
 
     # Get channel info from our database
     from app.repository import ChannelRepository
@@ -189,7 +188,7 @@ async def resend_channel_message(
     When new_timestamp=True: resend with a fresh timestamp so repeaters treat it as a
     new packet. Creates a new message row in the database. No time window restriction.
     """
-    require_connected()
+    radio_manager.require_connected()
 
     from app.repository import ChannelRepository
 

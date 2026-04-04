@@ -119,7 +119,7 @@ class TestOutgoingDMBroadcast:
             broadcasts.append({"type": event_type, "data": data})
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event", side_effect=capture_broadcast),
         ):
@@ -143,7 +143,7 @@ class TestOutgoingDMBroadcast:
         await _insert_contact("abc123" + "00" * 29, "ContactA")
         await _insert_contact("abc123" + "ff" * 29, "ContactB")
 
-        with patch("app.routers.messages.require_connected", return_value=mc):
+        with patch("app.routers.messages.radio_manager.require_connected", return_value=mc):
             with pytest.raises(HTTPException) as exc_info:
                 await send_direct_message(
                     SendDirectMessageRequest(destination="abc123", text="Hello")
@@ -166,7 +166,7 @@ class TestOutgoingDMBroadcast:
         )
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
         ):
@@ -195,7 +195,7 @@ class TestOutgoingDMBroadcast:
         )
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
         ):
@@ -225,7 +225,7 @@ class TestOutgoingDMBroadcast:
         assert original_id is not None
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
             patch("app.routers.messages.time") as mock_time,
@@ -267,7 +267,7 @@ class TestOutgoingDMBroadcast:
 
         with (
             patch("app.event_handlers.broadcast_event", side_effect=capture_broadcast),
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event", side_effect=capture_broadcast),
         ):
@@ -290,7 +290,7 @@ class TestOutgoingDMBroadcast:
         mc.commands.send_msg = AsyncMock(return_value=_make_radio_result({}))
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
             patch("app.services.message_send.asyncio.create_task") as mock_create_task,
@@ -338,7 +338,7 @@ class TestOutgoingDMBroadcast:
         with (
             patch.object(message_send_service, "DM_SEND_MAX_ATTEMPTS", 3),
             patch("app.routers.messages.track_pending_ack", return_value=False),
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
             patch("app.services.message_send.asyncio.create_task", side_effect=schedule_retry),
@@ -386,7 +386,7 @@ class TestOutgoingDMBroadcast:
         with (
             patch.object(message_send_service, "DM_SEND_MAX_ATTEMPTS", 3),
             patch("app.event_handlers.broadcast_event"),
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
             patch("app.services.message_send.asyncio.create_task", side_effect=schedule_retry),
@@ -443,7 +443,7 @@ class TestOutgoingDMBroadcast:
         with (
             patch.object(message_send_service, "DM_SEND_MAX_ATTEMPTS", 3),
             patch("app.event_handlers.broadcast_event"),
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
             patch("app.services.message_send.asyncio.create_task", side_effect=schedule_retry),
@@ -477,7 +477,7 @@ class TestOutgoingChannelBroadcast:
             broadcasts.append({"type": event_type, "data": data})
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event", side_effect=capture_broadcast),
         ):
@@ -511,7 +511,7 @@ class TestOutgoingChannelBroadcast:
         assert original_id is not None
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
             patch("app.routers.messages.time") as mock_time,
@@ -537,7 +537,7 @@ class TestOutgoingChannelBroadcast:
         await ChannelRepository.upsert(key=chan_key, name="#acked")
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
         ):
@@ -564,7 +564,7 @@ class TestOutgoingChannelBroadcast:
             broadcasts.append({"type": event_type, "data": data})
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event", side_effect=capture_broadcast),
         ):
@@ -594,7 +594,7 @@ class TestOutgoingChannelBroadcast:
         await AppSettingsRepository.update(flood_scope="Baseline")
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
         ):
@@ -617,7 +617,7 @@ class TestOutgoingChannelBroadcast:
         await AppSettingsRepository.update(flood_scope="Esperance")
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
         ):
@@ -638,7 +638,7 @@ class TestOutgoingChannelBroadcast:
         )
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
             pytest.raises(HTTPException) as exc_info,
@@ -660,7 +660,7 @@ class TestOutgoingChannelBroadcast:
         radio_manager._connection_info = "Serial: /dev/ttyUSB0"
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
         ):
@@ -688,7 +688,7 @@ class TestOutgoingChannelBroadcast:
         radio_manager._connection_info = "Serial: /dev/ttyUSB0"
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
         ):
@@ -729,7 +729,7 @@ class TestOutgoingChannelBroadcast:
         radio_manager._connection_info = "TCP: 127.0.0.1:4000"
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
         ):
@@ -753,7 +753,7 @@ class TestOutgoingChannelBroadcast:
         radio_manager._connection_info = "Serial: /dev/ttyUSB0"
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
             patch("app.radio.settings.force_channel_slot_reconfigure", True),
@@ -781,7 +781,7 @@ class TestOutgoingChannelBroadcast:
         )
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
             pytest.raises(HTTPException) as exc_info,
@@ -816,7 +816,7 @@ class TestResendChannelMessage:
         assert msg_id is not None
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
         ):
             result = await resend_channel_message(msg_id, new_timestamp=False)
@@ -849,7 +849,7 @@ class TestResendChannelMessage:
         assert msg_id is not None
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             pytest.raises(HTTPException) as exc_info,
         ):
             await resend_channel_message(msg_id, new_timestamp=False)
@@ -877,7 +877,7 @@ class TestResendChannelMessage:
         assert msg_id is not None
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
         ):
             await resend_channel_message(msg_id, new_timestamp=False)
@@ -914,7 +914,7 @@ class TestResendChannelMessage:
         )
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_error") as mock_broadcast_error,
         ):
@@ -943,7 +943,7 @@ class TestResendChannelMessage:
         assert msg_id is not None
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
             patch("app.routers.messages.time") as mock_time,
@@ -989,7 +989,7 @@ class TestResendChannelMessage:
         mc.commands.send_chan_msg = AsyncMock(return_value=None)
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             pytest.raises(HTTPException) as exc_info,
         ):
@@ -1022,7 +1022,7 @@ class TestResendChannelMessage:
         assert msg_id is not None
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             pytest.raises(HTTPException) as exc_info,
         ):
             await resend_channel_message(msg_id, new_timestamp=False)
@@ -1048,7 +1048,7 @@ class TestResendChannelMessage:
         assert msg_id is not None
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             pytest.raises(HTTPException) as exc_info,
         ):
             await resend_channel_message(msg_id, new_timestamp=False)
@@ -1062,7 +1062,7 @@ class TestResendChannelMessage:
         mc = _make_mc(name="MyNode")
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             pytest.raises(HTTPException) as exc_info,
         ):
             await resend_channel_message(999999, new_timestamp=False)
@@ -1088,7 +1088,7 @@ class TestResendChannelMessage:
         assert msg_id is not None
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
         ):
             await resend_channel_message(msg_id, new_timestamp=False)
@@ -1115,7 +1115,7 @@ class TestResendChannelMessage:
         assert msg_id is not None
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
         ):
@@ -1144,7 +1144,7 @@ class TestResendChannelMessage:
         assert msg_id is not None
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
         ):
@@ -1179,7 +1179,7 @@ class TestResendChannelMessage:
         assert msg_id is not None
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event") as mock_broadcast,
         ):
@@ -1211,7 +1211,7 @@ class TestResendChannelMessage:
         assert msg_id is not None
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             pytest.raises(HTTPException) as exc_info,
         ):
             await resend_channel_message(msg_id, new_timestamp=False)
@@ -1234,7 +1234,7 @@ class TestRadioExceptionMidSend:
         mc.commands.send_msg = AsyncMock(side_effect=ConnectionError("Serial port disconnected"))
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
         ):
             with pytest.raises(ConnectionError):
@@ -1258,7 +1258,7 @@ class TestRadioExceptionMidSend:
         mc.commands.send_msg = AsyncMock(return_value=None)
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             pytest.raises(HTTPException) as exc_info,
         ):
@@ -1286,7 +1286,7 @@ class TestRadioExceptionMidSend:
         mc.commands.send_chan_msg = AsyncMock(return_value=None)
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             pytest.raises(HTTPException) as exc_info,
         ):
@@ -1316,7 +1316,7 @@ class TestRadioExceptionMidSend:
         )
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
         ):
             with pytest.raises(ConnectionError):
@@ -1341,7 +1341,7 @@ class TestRadioExceptionMidSend:
         mc.commands.set_channel = AsyncMock(side_effect=TimeoutError("Radio not responding"))
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
         ):
             with pytest.raises(TimeoutError):
@@ -1377,7 +1377,7 @@ class TestRadioExceptionMidSend:
         mc.commands.set_channel = AsyncMock(side_effect=TimeoutError("Radio not responding"))
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
         ):
             with pytest.raises(TimeoutError):
@@ -1407,7 +1407,7 @@ class TestRadioExceptionMidSend:
         )
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             pytest.raises(HTTPException) as exc_info,
         ):
@@ -1440,7 +1440,7 @@ class TestConcurrentChannelSends:
         await ChannelRepository.upsert(key=chan_key_b, name="#bravo")
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
         ):
@@ -1494,7 +1494,7 @@ class TestConcurrentChannelSends:
             return original_time() + call_count
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
             patch("app.routers.messages.time") as mock_time,
@@ -1537,7 +1537,7 @@ class TestChannelSendLockScope:
             return await original_create(*args, **kwargs)
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event"),
             patch(
@@ -1587,7 +1587,7 @@ class TestChannelSendLockScope:
         mc.commands.send_chan_msg = AsyncMock(side_effect=send_with_self_observation)
 
         with (
-            patch("app.routers.messages.require_connected", return_value=mc),
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch("app.routers.messages.broadcast_event", side_effect=capture_broadcast),
         ):

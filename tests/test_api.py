@@ -49,10 +49,10 @@ def _disable_background_dm_retries(monkeypatch):
 def _patch_require_connected(mc=None, *, detail="Radio not connected"):
     if mc is None:
         return patch(
-            "app.dependencies.radio_manager.require_connected",
+            "app.services.radio_runtime.radio_runtime.require_connected",
             side_effect=HTTPException(status_code=503, detail=detail),
         )
-    return patch("app.dependencies.radio_manager.require_connected", return_value=mc)
+    return patch("app.services.radio_runtime.radio_runtime.require_connected", return_value=mc)
 
 
 async def _insert_contact(public_key, name="Alice", **overrides):

@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException
 
-from app.dependencies import require_connected
 from app.models import (
     CONTACT_TYPE_ROOM,
     AclEntry,
@@ -28,7 +27,7 @@ def _require_room(contact) -> None:
 @router.post("/{public_key}/room/login", response_model=RepeaterLoginResponse)
 async def room_login(public_key: str, request: RepeaterLoginRequest) -> RepeaterLoginResponse:
     """Attempt room-server login and report whether auth was confirmed."""
-    require_connected()
+    radio_manager.require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_room(contact)
 
@@ -48,7 +47,7 @@ async def room_login(public_key: str, request: RepeaterLoginRequest) -> Repeater
 @router.post("/{public_key}/room/status", response_model=RepeaterStatusResponse)
 async def room_status(public_key: str) -> RepeaterStatusResponse:
     """Fetch status telemetry from a room server."""
-    require_connected()
+    radio_manager.require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_room(contact)
 
@@ -85,7 +84,7 @@ async def room_status(public_key: str) -> RepeaterStatusResponse:
 @router.post("/{public_key}/room/lpp-telemetry", response_model=RepeaterLppTelemetryResponse)
 async def room_lpp_telemetry(public_key: str) -> RepeaterLppTelemetryResponse:
     """Fetch CayenneLPP telemetry from a room server."""
-    require_connected()
+    radio_manager.require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_room(contact)
 
@@ -114,7 +113,7 @@ async def room_lpp_telemetry(public_key: str) -> RepeaterLppTelemetryResponse:
 @router.post("/{public_key}/room/acl", response_model=RepeaterAclResponse)
 async def room_acl(public_key: str) -> RepeaterAclResponse:
     """Fetch ACL entries from a room server."""
-    require_connected()
+    radio_manager.require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_room(contact)
 
