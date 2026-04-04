@@ -991,7 +991,7 @@ export function MessageList({
                         displaySender
                       )}
                       <span className="font-normal text-muted-foreground ml-2 text-[0.6875rem]">
-                        {formatTime(msg.sender_timestamp || msg.received_at)}
+                        {formatTime(msg.received_at)}
                       </span>
                       {!msg.outgoing && msg.paths && msg.paths.length > 0 && (
                         <HopCountBadge
@@ -1019,7 +1019,7 @@ export function MessageList({
                     {!showAvatar && (
                       <>
                         <span className="text-[0.625rem] text-muted-foreground ml-2">
-                          {formatTime(msg.sender_timestamp || msg.received_at)}
+                          {formatTime(msg.received_at)}
                         </span>
                         {!msg.outgoing && msg.paths && msg.paths.length > 0 && (
                           <HopCountBadge
