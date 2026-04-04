@@ -1,12 +1,7 @@
 """Shared direct-message ACK application logic."""
 
-from collections.abc import Callable
-from typing import Any
-
 from app.services import dm_ack_tracker
-from app.services.messages import increment_ack_and_broadcast
-
-BroadcastFn = Callable[..., Any]
+from app.services.messages import BroadcastFn, increment_ack_and_broadcast
 
 
 async def apply_dm_ack_code(ack_code: str, *, broadcast_fn: BroadcastFn) -> bool:

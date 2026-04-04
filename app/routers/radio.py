@@ -23,6 +23,7 @@ from app.models import (
 from app.radio_sync import send_advertisement as do_send_advertisement
 from app.radio_sync import sync_radio_time
 from app.repository import ContactRepository
+from app.routers.server_control import _monotonic
 from app.services.contact_reconciliation import (
     promote_prefix_contacts_for_contact,
     reconcile_contact_messages,
@@ -133,10 +134,6 @@ class RadioAdvertiseRequest(BaseModel):
         default="flood",
         description="Advertisement mode: flood through repeaters or zero-hop local only",
     )
-
-
-def _monotonic() -> float:
-    return time.monotonic()
 
 
 def _better_signal(first: float | None, second: float | None) -> float | None:

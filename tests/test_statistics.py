@@ -386,7 +386,7 @@ class TestPathHashWidthStats:
 
         with (
             patch.object(test_db.conn, "execute", new=AsyncMock(return_value=fake_cursor)),
-            patch("app.repository.settings.parse_packet_envelope", side_effect=fake_parse),
+            patch("app.path_utils.parse_packet_envelope", side_effect=fake_parse),
         ):
             breakdown = await StatisticsRepository._path_hash_width_24h()
 

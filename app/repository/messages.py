@@ -804,7 +804,7 @@ class MessageRepository:
         """
         import time as _time
 
-        from app.path_utils import parse_packet_envelope
+        from app.path_utils import bucket_path_hash_widths
 
         now = int(_time.time())
         t_1h = now - 3600
@@ -858,9 +858,6 @@ class MessageRepository:
         ]
 
         # Path hash width distribution for last 24h (in-Python parse of raw packet envelopes)
-        single_byte = 0
-        double_byte = 0
-        triple_byte = 0
         cursor3 = await db.conn.execute(
             """
             SELECT rp.data FROM raw_packets rp
@@ -870,31 +867,7 @@ class MessageRepository:
             """,
             (conversation_key, t_24h),
         )
-        while True:
-            batch = await cursor3.fetchmany(500)
-            if not batch:
-                break
-            for pkt_row in batch:
-                envelope = parse_packet_envelope(bytes(pkt_row["data"]))
-                if envelope is None:
-                    continue
-                if envelope.hash_size == 1:
-                    single_byte += 1
-                elif envelope.hash_size == 2:
-                    double_byte += 1
-                elif envelope.hash_size == 3:
-                    triple_byte += 1
-
-        hash_total = single_byte + double_byte + triple_byte
-        path_hash_width_24h = {
-            "total_packets": hash_total,
-            "single_byte": single_byte,
-            "double_byte": double_byte,
-            "triple_byte": triple_byte,
-            "single_byte_pct": (single_byte / hash_total * 100) if hash_total else 0.0,
-            "double_byte_pct": (double_byte / hash_total * 100) if hash_total else 0.0,
-            "triple_byte_pct": (triple_byte / hash_total * 100) if hash_total else 0.0,
-        }
+        path_hash_width_24h = await bucket_path_hash_widths(cursor3)
 
         return {
             "message_counts": message_counts,

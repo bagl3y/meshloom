@@ -20,6 +20,7 @@ from app.repository import (
 )
 from app.services import dm_ack_tracker
 from app.services.messages import (
+    BroadcastFn,
     broadcast_message,
     build_stored_outgoing_channel_message,
     create_outgoing_channel_message,
@@ -33,8 +34,6 @@ NO_RADIO_RESPONSE_AFTER_SEND_DETAIL = (
     "Send command was issued to the radio, but no response was heard back. "
     "The message may or may not have sent successfully."
 )
-
-BroadcastFn = Callable[..., Any]
 TrackAckFn = Callable[[str, int, int], bool]
 NowFn = Callable[[], float]
 OutgoingReservationKey = tuple[str, str, str]

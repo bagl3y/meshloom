@@ -244,3 +244,51 @@ def parse_explicit_hop_route(route_text: str) -> tuple[str, int, int]:
         raise ValueError(f"Explicit path exceeds MAX_PATH_SIZE={MAX_PATH_SIZE} bytes")
 
     return "".join(hops), len(hops), hash_size - 1
+
+
+async def bucket_path_hash_widths(cursor, *, batch_size: int = 500) -> dict[str, int | float]:
+    """Bucket raw packet rows by hop hash width and return counts + percentages.
+
+    *cursor* must be an already-executed async cursor whose rows have a ``data``
+    column containing raw packet bytes.
+    """
+    single_byte = 0
+    double_byte = 0
+    triple_byte = 0
+
+    while True:
+        rows = await cursor.fetchmany(batch_size)
+        if not rows:
+            break
+        for row in rows:
+            envelope = parse_packet_envelope(bytes(row["data"]))
+            if envelope is None:
+                continue
+            if envelope.hash_size == 1:
+                single_byte += 1
+            elif envelope.hash_size == 2:
+                double_byte += 1
+            elif envelope.hash_size == 3:
+                triple_byte += 1
+
+    total = single_byte + double_byte + triple_byte
+    if total == 0:
+        return {
+            "total_packets": 0,
+            "single_byte": 0,
+            "double_byte": 0,
+            "triple_byte": 0,
+            "single_byte_pct": 0.0,
+            "double_byte_pct": 0.0,
+            "triple_byte_pct": 0.0,
+        }
+
+    return {
+        "total_packets": total,
+        "single_byte": single_byte,
+        "double_byte": double_byte,
+        "triple_byte": triple_byte,
+        "single_byte_pct": (single_byte / total) * 100,
+        "double_byte_pct": (double_byte / total) * 100,
+        "triple_byte_pct": (triple_byte / total) * 100,
+    }

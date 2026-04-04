@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from app.database import db
 from app.models import AppSettings, Favorite
-from app.path_utils import parse_packet_envelope
+from app.path_utils import bucket_path_hash_widths
 
 logger = logging.getLogger(__name__)
 
@@ -324,48 +324,7 @@ class StatisticsRepository:
             "SELECT data FROM raw_packets WHERE timestamp >= ?",
             (now - SECONDS_24H,),
         )
-
-        single_byte = 0
-        double_byte = 0
-        triple_byte = 0
-
-        while True:
-            rows = await cursor.fetchmany(RAW_PACKET_STATS_BATCH_SIZE)
-            if not rows:
-                break
-
-            for row in rows:
-                envelope = parse_packet_envelope(bytes(row["data"]))
-                if envelope is None:
-                    continue
-                if envelope.hash_size == 1:
-                    single_byte += 1
-                elif envelope.hash_size == 2:
-                    double_byte += 1
-                elif envelope.hash_size == 3:
-                    triple_byte += 1
-
-        total_packets = single_byte + double_byte + triple_byte
-        if total_packets == 0:
-            return {
-                "total_packets": 0,
-                "single_byte": 0,
-                "double_byte": 0,
-                "triple_byte": 0,
-                "single_byte_pct": 0.0,
-                "double_byte_pct": 0.0,
-                "triple_byte_pct": 0.0,
-            }
-
-        return {
-            "total_packets": total_packets,
-            "single_byte": single_byte,
-            "double_byte": double_byte,
-            "triple_byte": triple_byte,
-            "single_byte_pct": (single_byte / total_packets) * 100,
-            "double_byte_pct": (double_byte / total_packets) * 100,
-            "triple_byte_pct": (triple_byte / total_packets) * 100,
-        }
+        return await bucket_path_hash_widths(cursor, batch_size=RAW_PACKET_STATS_BATCH_SIZE)
 
     @staticmethod
     async def get_all() -> dict:

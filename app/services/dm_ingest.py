@@ -1,9 +1,8 @@
 import asyncio
 import logging
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from app.models import CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM, Contact, ContactUpsert, Message
 from app.repository import (
@@ -14,6 +13,7 @@ from app.repository import (
 )
 from app.services.contact_reconciliation import claim_prefix_messages_for_contact
 from app.services.messages import (
+    BroadcastFn,
     broadcast_message,
     build_message_model,
     build_message_paths,
@@ -27,8 +27,6 @@ if TYPE_CHECKING:
     from app.decoder import DecryptedDirectMessage
 
 logger = logging.getLogger(__name__)
-
-BroadcastFn = Callable[..., Any]
 _decrypted_dm_store_lock = asyncio.Lock()
 
 
