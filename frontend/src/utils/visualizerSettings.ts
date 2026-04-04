@@ -17,7 +17,7 @@ export interface VisualizerSettings {
   hidePacketFeed: boolean;
 }
 
-export const VISUALIZER_DEFAULTS: VisualizerSettings = {
+const VISUALIZER_DEFAULTS: VisualizerSettings = {
   showAmbiguousPaths: true,
   showAmbiguousNodes: false,
   useAdvertPathHints: true,

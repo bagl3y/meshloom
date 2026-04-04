@@ -28,7 +28,7 @@ export type ServerLoginAttemptState =
       at: number;
     };
 
-export function getServerLoginMethodLabel(
+function getServerLoginMethodLabel(
   method: ServerLoginMethod,
   blankLabel = 'existing-access'
 ): string {

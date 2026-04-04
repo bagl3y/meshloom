@@ -6,10 +6,7 @@ import { getRawPacketObservationKey } from './rawPacketIdentity';
 export const RAW_PACKET_STATS_WINDOWS = ['1m', '5m', '10m', '30m', 'session'] as const;
 export type RawPacketStatsWindow = (typeof RAW_PACKET_STATS_WINDOWS)[number];
 
-export const RAW_PACKET_STATS_WINDOW_SECONDS: Record<
-  Exclude<RawPacketStatsWindow, 'session'>,
-  number
-> = {
+const RAW_PACKET_STATS_WINDOW_SECONDS: Record<Exclude<RawPacketStatsWindow, 'session'>, number> = {
   '1m': 60,
   '5m': 5 * 60,
   '10m': 10 * 60,
