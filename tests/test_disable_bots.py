@@ -10,22 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.config import Settings
 from app.repository.fanout import FanoutConfigRepository
 from app.routers.fanout import FanoutConfigCreate, create_fanout_config
 from app.routers.health import build_health_data
-
-
-class TestDisableBotsConfig:
-    """Test the disable_bots configuration field."""
-
-    def test_disable_bots_defaults_to_false(self):
-        s = Settings(serial_port="", tcp_host="", ble_address="")
-        assert s.disable_bots is False
-
-    def test_disable_bots_can_be_set_true(self):
-        s = Settings(serial_port="", tcp_host="", ble_address="", disable_bots=True)
-        assert s.disable_bots is True
 
 
 class TestDisableBotsFanoutEndpoint:

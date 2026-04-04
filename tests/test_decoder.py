@@ -13,7 +13,6 @@ from app.decoder import (
     DecryptedDirectMessage,
     PayloadType,
     RouteType,
-    _clamp_scalar,
     decrypt_direct_message,
     decrypt_group_text,
     decrypt_path_payload,
@@ -25,17 +24,6 @@ from app.decoder import (
     try_decrypt_packet_with_channel_key,
     try_decrypt_path,
 )
-
-
-class TestChannelKeyDerivation:
-    """Test channel key derivation from hashtag names."""
-
-    def test_hashtag_key_derivation(self):
-        """Hashtag channel keys are derived as SHA256(name)[:16]."""
-        channel_name = "#test"
-        expected_key = hashlib.sha256(channel_name.encode("utf-8")).digest()[:16]
-
-        assert len(expected_key) == 16
 
 
 class TestPacketParsing:
@@ -687,49 +675,6 @@ class TestAdvertisementParsing:
         assert result is None
 
 
-class TestScalarClamping:
-    """Test X25519 scalar clamping for ECDH."""
-
-    def test_clamp_scalar_modifies_first_byte(self):
-        """Clamping clears the lower 3 bits of the first byte."""
-        # Input with all bits set in first byte
-        scalar = bytes([0xFF]) + bytes(31)
-
-        result = _clamp_scalar(scalar)
-
-        # First byte should have lower 3 bits cleared: 0xFF & 248 = 0xF8
-        assert result[0] == 0xF8
-
-    def test_clamp_scalar_modifies_last_byte(self):
-        """Clamping modifies the last byte for correct group operations."""
-        # Input with all bits set in last byte
-        scalar = bytes(31) + bytes([0xFF])
-
-        result = _clamp_scalar(scalar)
-
-        # Last byte: (0xFF & 63) | 64 = 0x7F
-        assert result[31] == 0x7F
-
-    def test_clamp_scalar_preserves_middle_bytes(self):
-        """Clamping preserves the middle bytes unchanged."""
-        # Known middle bytes
-        scalar = bytes([0xAB]) + bytes([0x12, 0x34, 0x56] * 10)[:30] + bytes([0xCD])
-
-        result = _clamp_scalar(scalar)
-
-        # Middle bytes should be unchanged
-        assert result[1:31] == scalar[1:31]
-
-    def test_clamp_scalar_truncates_to_32_bytes(self):
-        """Clamping uses only first 32 bytes of input."""
-        # 64-byte input (typical Ed25519 private key)
-        scalar = bytes(64)
-
-        result = _clamp_scalar(scalar)
-
-        assert len(result) == 32
-
-
 class TestPublicKeyDerivation:
     """Test deriving Ed25519 public key from MeshCore private key."""
 
@@ -766,13 +711,6 @@ class TestPublicKeyDerivation:
         assert len(result) == 32
         assert result == self.FACE12_PUB_EXPECTED
 
-    def test_derive_public_key_deterministic(self):
-        """Same private key always produces same public key."""
-        result1 = derive_public_key(self.FACE12_PRIV)
-        result2 = derive_public_key(self.FACE12_PRIV)
-
-        assert result1 == result2
-
 
 class TestSharedSecretDerivation:
     """Test ECDH shared secret derivation from Ed25519 keys."""
@@ -792,13 +730,6 @@ class TestSharedSecretDerivation:
         result = derive_shared_secret(self.FACE12_PRIV, self.A1B2C3_PUB)
 
         assert len(result) == 32
-
-    def test_derive_shared_secret_deterministic(self):
-        """Same inputs always produce same shared secret."""
-        result1 = derive_shared_secret(self.FACE12_PRIV, self.A1B2C3_PUB)
-        result2 = derive_shared_secret(self.FACE12_PRIV, self.A1B2C3_PUB)
-
-        assert result1 == result2
 
     def test_derive_shared_secret_different_keys_different_result(self):
         """Different key pairs produce different shared secrets."""

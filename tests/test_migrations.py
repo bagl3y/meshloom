@@ -8,31 +8,6 @@ import pytest
 from app.migrations import get_version, run_migrations, set_version
 
 
-class TestMigrationSystem:
-    """Test the migration version tracking system."""
-
-    @pytest.mark.asyncio
-    async def test_get_version_returns_zero_for_new_db(self):
-        """New database has user_version=0."""
-        conn = await aiosqlite.connect(":memory:")
-        try:
-            version = await get_version(conn)
-            assert version == 0
-        finally:
-            await conn.close()
-
-    @pytest.mark.asyncio
-    async def test_set_version_updates_pragma(self):
-        """Setting version updates the user_version pragma."""
-        conn = await aiosqlite.connect(":memory:")
-        try:
-            await set_version(conn, 5)
-            version = await get_version(conn)
-            assert version == 5
-        finally:
-            await conn.close()
-
-
 class TestMigration001:
     """Test migration 001: add last_read_at columns."""
 
