@@ -191,7 +191,12 @@ export function ConversationPane({
         </h2>
         <div className="flex-1 overflow-hidden">
           <Suspense fallback={<LoadingPane label="Loading map..." />}>
-            <MapView contacts={contacts} focusedKey={activeConversation.mapFocusKey} />
+            <MapView
+              contacts={contacts}
+              focusedKey={activeConversation.mapFocusKey}
+              rawPackets={rawPackets}
+              config={config}
+            />
           </Suspense>
         </div>
       </>
