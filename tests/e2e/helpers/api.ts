@@ -223,7 +223,6 @@ export interface AppSettings {
   favorites: Favorite[];
   auto_decrypt_dm_on_advert: boolean;
   last_message_times: Record<string, number>;
-  preferences_migrated: boolean;
   advert_interval: number;
 }
 

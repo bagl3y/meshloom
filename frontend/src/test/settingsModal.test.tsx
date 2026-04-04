@@ -62,7 +62,7 @@ const baseSettings: AppSettings = {
   favorites: [],
   auto_decrypt_dm_on_advert: false,
   last_message_times: {},
-  preferences_migrated: false,
+
   advert_interval: 0,
   last_advert_time: 0,
   flood_scope: '',

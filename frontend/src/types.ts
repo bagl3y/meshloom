@@ -333,7 +333,6 @@ export interface AppSettings {
   favorites: Favorite[];
   auto_decrypt_dm_on_advert: boolean;
   last_message_times: Record<string, number>;
-  preferences_migrated: boolean;
   advert_interval: number;
   last_advert_time: number;
   flood_scope: string;
@@ -358,17 +357,6 @@ export interface AppSettingsUpdate {
 export interface TrackedTelemetryResponse {
   tracked_telemetry_repeaters: string[];
   names: Record<string, string>;
-}
-
-export interface MigratePreferencesRequest {
-  favorites: Favorite[];
-  sort_order: string;
-  last_message_times: Record<string, number>;
-}
-
-export interface MigratePreferencesResponse {
-  migrated: boolean;
-  settings: AppSettings;
 }
 
 /** Contact type constants */

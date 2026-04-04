@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
     getUndecryptedPacketCount: vi.fn(),
     getChannels: vi.fn(),
     getContacts: vi.fn(),
-    migratePreferences: vi.fn(),
   },
 }));
 
@@ -170,7 +169,7 @@ describe('App startup hash resolution', () => {
       favorites: [],
       auto_decrypt_dm_on_advert: false,
       last_message_times: {},
-      preferences_migrated: true,
+
       advert_interval: 0,
       last_advert_time: 0,
     });

@@ -623,7 +623,6 @@ class TestAppSettingsRepository:
                 "favorites": "{not-json",
                 "auto_decrypt_dm_on_advert": 1,
                 "last_message_times": "{also-not-json",
-                "preferences_migrated": 0,
                 "advert_interval": None,
                 "last_advert_time": None,
                 "flood_scope": "",
@@ -671,39 +670,6 @@ class TestAppSettingsRepository:
 
         assert result == existing
         mock_update.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_migrate_preferences_uses_recent_for_invalid_sort_order(self):
-        """Migration normalizes invalid sort order to 'recent'."""
-        from app.models import AppSettings
-
-        current = AppSettings(preferences_migrated=False)
-        migrated = AppSettings(preferences_migrated=True)
-
-        with (
-            patch(
-                "app.repository.AppSettingsRepository.get",
-                new_callable=AsyncMock,
-                return_value=current,
-            ),
-            patch(
-                "app.repository.AppSettingsRepository.update",
-                new_callable=AsyncMock,
-                return_value=migrated,
-            ) as mock_update,
-        ):
-            from app.repository import AppSettingsRepository
-
-            result, did_migrate = await AppSettingsRepository.migrate_preferences_from_frontend(
-                favorites=[{"type": "contact", "id": "bb" * 32}],
-                sort_order="weird-order",
-                last_message_times={"contact-bbbbbbbbbbbb": 123},
-            )
-
-        assert did_migrate is True
-        assert result.preferences_migrated is True
-        assert "sidebar_sort_order" not in mock_update.call_args.kwargs
-        assert mock_update.call_args.kwargs["preferences_migrated"] is True
 
 
 class TestMessageRepositoryGetById:

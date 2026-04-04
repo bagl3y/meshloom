@@ -9,7 +9,6 @@
  * across devices - see useUnreadCounts hook.
  */
 
-const LAST_MESSAGE_KEY = 'remoteterm-lastMessageTime';
 const SORT_ORDER_KEY = 'remoteterm-sortOrder';
 const SIDEBAR_SECTION_SORT_ORDERS_KEY = 'remoteterm-sidebar-section-sort-orders';
 
@@ -73,30 +72,6 @@ export function getStateKey(type: 'channel' | 'contact', id: string): string {
 }
 
 /**
- * Load last message times from localStorage (for migration only)
- */
-export function loadLocalStorageLastMessageTimes(): ConversationTimes {
-  try {
-    const stored = localStorage.getItem(LAST_MESSAGE_KEY);
-    return stored ? JSON.parse(stored) : {};
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Load sort order from localStorage (for migration only)
- */
-export function loadLocalStorageSortOrder(): SortOrder {
-  try {
-    const stored = localStorage.getItem(SORT_ORDER_KEY);
-    return stored === 'alpha' ? 'alpha' : 'recent';
-  } catch {
-    return 'recent';
-  }
-}
-
-/**
  * Load the legacy single sidebar sort order from localStorage, if present.
  */
 export function loadLegacyLocalStorageSortOrder(): SortOrder | null {
@@ -145,18 +120,6 @@ export function loadLocalStorageSidebarSectionSortOrders(): SidebarSectionSortOr
 export function saveLocalStorageSidebarSectionSortOrders(orders: SidebarSectionSortOrders): void {
   try {
     localStorage.setItem(SIDEBAR_SECTION_SORT_ORDERS_KEY, JSON.stringify(orders));
-  } catch {
-    // localStorage might be disabled
-  }
-}
-
-/**
- * Clear conversation state from localStorage (after migration)
- */
-export function clearLocalStorageConversationState(): void {
-  try {
-    localStorage.removeItem(LAST_MESSAGE_KEY);
-    localStorage.removeItem(SORT_ORDER_KEY);
   } catch {
     // localStorage might be disabled
   }

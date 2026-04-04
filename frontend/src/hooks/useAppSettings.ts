@@ -2,17 +2,8 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { api } from '../api';
 import { takePrefetchOrFetch } from '../prefetch';
 import { toast } from '../components/ui/sonner';
-import {
-  initLastMessageTimes,
-  loadLocalStorageLastMessageTimes,
-  loadLocalStorageSortOrder,
-  clearLocalStorageConversationState,
-} from '../utils/conversationState';
-import {
-  isFavorite,
-  loadLocalStorageFavorites,
-  clearLocalStorageFavorites,
-} from '../utils/favorites';
+import { initLastMessageTimes } from '../utils/conversationState';
+import { isFavorite } from '../utils/favorites';
 import type { AppSettings, AppSettingsUpdate, Favorite } from '../types';
 
 export function useAppSettings() {
@@ -153,59 +144,35 @@ export function useAppSettings() {
     }
   }, []);
 
-  // One-time migration of localStorage preferences to server
+  // Legacy favorites migration: if pre-server-side favorites exist in
+  // localStorage, toggle each one via the existing API and clear the key.
   useEffect(() => {
     if (!appSettings || hasMigratedRef.current) return;
-
-    if (appSettings.preferences_migrated) {
-      clearLocalStorageFavorites();
-      clearLocalStorageConversationState();
-      hasMigratedRef.current = true;
-      return;
-    }
-
-    const localFavorites = loadLocalStorageFavorites();
-    const localSortOrder = loadLocalStorageSortOrder();
-    const localLastMessageTimes = loadLocalStorageLastMessageTimes();
-
-    const hasLocalData =
-      localFavorites.length > 0 ||
-      localSortOrder !== 'recent' ||
-      Object.keys(localLastMessageTimes).length > 0;
-
-    if (!hasLocalData) {
-      hasMigratedRef.current = true;
-      return;
-    }
-
     hasMigratedRef.current = true;
 
-    const migratePreferences = async () => {
+    const FAVORITES_KEY = 'remoteterm-favorites';
+    let localFavorites: Favorite[] = [];
+    try {
+      const stored = localStorage.getItem(FAVORITES_KEY);
+      if (stored) localFavorites = JSON.parse(stored);
+    } catch {
+      // corrupt or unavailable
+    }
+    if (localFavorites.length === 0) return;
+
+    const migrate = async () => {
       try {
-        const result = await api.migratePreferences({
-          favorites: localFavorites,
-          sort_order: localSortOrder,
-          last_message_times: localLastMessageTimes,
-        });
-
-        if (result.migrated) {
-          toast.success('Preferences migrated', {
-            description: `Migrated ${localFavorites.length} favorites to server`,
-          });
+        for (const f of localFavorites) {
+          await api.toggleFavorite(f.type, f.id);
         }
-
-        setAppSettings(result.settings);
-        initLastMessageTimes(result.settings.last_message_times ?? {});
-
-        clearLocalStorageFavorites();
-        clearLocalStorageConversationState();
+        localStorage.removeItem(FAVORITES_KEY);
+        await fetchAppSettings();
       } catch (err) {
-        console.error('Failed to migrate preferences:', err);
+        console.error('Failed to migrate legacy favorites:', err);
       }
     };
-
-    migratePreferences();
-  }, [appSettings]);
+    migrate();
+  }, [appSettings, fetchAppSettings]);
 
   return {
     appSettings,

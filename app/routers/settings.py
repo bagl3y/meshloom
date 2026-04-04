@@ -85,26 +85,6 @@ class TrackedTelemetryResponse(BaseModel):
     )
 
 
-class MigratePreferencesRequest(BaseModel):
-    favorites: list[FavoriteRequest] = Field(
-        default_factory=list,
-        description="List of favorites from localStorage",
-    )
-    sort_order: str = Field(
-        default="recent",
-        description="Sort order preference from localStorage",
-    )
-    last_message_times: dict[str, int] = Field(
-        default_factory=dict,
-        description="Map of conversation state keys to timestamps from localStorage",
-    )
-
-
-class MigratePreferencesResponse(BaseModel):
-    migrated: bool = Field(description="Whether migration occurred (false if already migrated)")
-    settings: AppSettings = Field(description="Current settings after migration attempt")
-
-
 @router.get("", response_model=AppSettings)
 async def get_settings() -> AppSettings:
     """Get current application settings."""
@@ -266,44 +246,4 @@ async def toggle_tracked_telemetry(request: TrackedTelemetryRequest) -> TrackedT
     return TrackedTelemetryResponse(
         tracked_telemetry_repeaters=new_list,
         names=await _resolve_names(new_list),
-    )
-
-
-@router.post("/migrate", response_model=MigratePreferencesResponse)
-async def migrate_preferences(request: MigratePreferencesRequest) -> MigratePreferencesResponse:
-    """Migrate all preferences from frontend localStorage to database.
-
-    This is a one-time migration. If preferences have already been migrated,
-    this endpoint will not overwrite them and will return migrated=false.
-
-    Call this on frontend startup to ensure preferences are moved to the database.
-    After successful migration, the frontend should clear localStorage preferences.
-
-    Migrates:
-    - favorites (remoteterm-favorites)
-    - sort_order (remoteterm-sortOrder)
-    - last_message_times (remoteterm-lastMessageTime)
-    """
-    # Convert to dict format for the repository method
-    frontend_favorites = [{"type": f.type, "id": f.id} for f in request.favorites]
-
-    settings, did_migrate = await AppSettingsRepository.migrate_preferences_from_frontend(
-        favorites=frontend_favorites,
-        sort_order=request.sort_order,
-        last_message_times=request.last_message_times,
-    )
-
-    if did_migrate:
-        logger.info(
-            "Migrated preferences from frontend: %d favorites, sort_order=%s, %d message times",
-            len(frontend_favorites),
-            request.sort_order,
-            len(request.last_message_times),
-        )
-    else:
-        logger.debug("Preferences already migrated, skipping")
-
-    return MigratePreferencesResponse(
-        migrated=did_migrate,
-        settings=settings,
     )

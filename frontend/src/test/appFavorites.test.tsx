@@ -24,7 +24,6 @@ const mocks = vi.hoisted(() => ({
     requestTrace: vi.fn(),
     updateRadioConfig: vi.fn(),
     setPrivateKey: vi.fn(),
-    migratePreferences: vi.fn(),
   },
   toast: {
     success: vi.fn(),
@@ -191,7 +190,7 @@ const baseSettings = {
   favorites: [] as Array<{ type: 'channel' | 'contact'; id: string }>,
   auto_decrypt_dm_on_advert: false,
   last_message_times: {},
-  preferences_migrated: false,
+
   advert_interval: 0,
   last_advert_time: 0,
   flood_scope: '',

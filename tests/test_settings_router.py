@@ -10,9 +10,7 @@ from app.repository import AppSettingsRepository, ContactRepository
 from app.routers.settings import (
     AppSettingsUpdate,
     FavoriteRequest,
-    MigratePreferencesRequest,
     TrackedTelemetryRequest,
-    migrate_preferences,
     toggle_favorite,
     toggle_tracked_telemetry,
     update_settings,
@@ -165,46 +163,6 @@ class TestToggleFavorite:
         assert result.favorites == []
         mock_sync.assert_not_called()
         mock_create_task.assert_not_called()
-
-
-class TestMigratePreferences:
-    @pytest.mark.asyncio
-    async def test_maps_frontend_payload_and_returns_migrated_true(self, test_db):
-        request = MigratePreferencesRequest(
-            favorites=[FavoriteRequest(type="contact", id="aa" * 32)],
-            sort_order="alpha",
-            last_message_times={"contact-aaaaaaaaaaaa": 123},
-        )
-
-        response = await migrate_preferences(request)
-
-        assert response.migrated is True
-        assert response.settings.preferences_migrated is True
-        assert len(response.settings.favorites) == 1
-        assert response.settings.favorites[0].type == "contact"
-        assert response.settings.favorites[0].id == "aa" * 32
-        assert response.settings.last_message_times == {"contact-aaaaaaaaaaaa": 123}
-
-    @pytest.mark.asyncio
-    async def test_returns_migrated_false_when_already_done(self, test_db):
-        # First migration
-        first_request = MigratePreferencesRequest(
-            favorites=[FavoriteRequest(type="contact", id="bb" * 32)],
-            sort_order="recent",
-            last_message_times={},
-        )
-        await migrate_preferences(first_request)
-
-        # Second attempt should be no-op
-        second_request = MigratePreferencesRequest(
-            favorites=[],
-            sort_order="recent",
-            last_message_times={},
-        )
-        response = await migrate_preferences(second_request)
-
-        assert response.migrated is False
-        assert response.settings.preferences_migrated is True
 
 
 class TestToggleTrackedTelemetry:
