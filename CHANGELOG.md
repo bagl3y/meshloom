@@ -1,3 +1,18 @@
+## [3.8.0] - 2026-04-03
+
+* Feature: Per-channel hop width override
+* Feature: Intervalized repeater telemetry collection
+* Feature: Auto-resend option for byte-perfect resends on no repeater echo
+* Feature: Attach RSSI/SNR to received packets
+* Feature: Add motion packet display to map
+* Feature: Map dark mode
+* Bugfix: Make DB indices more useful around capitalization
+* Misc: Bump required Python to 3.11
+* Misc: Performance, documentation, and test improvements
+* Misc: More yields during long radio operations
+* Misc: Dead code & crufty test removal
+* Misc: Remove all but stub frontend favorites migration for very very old versions
+
 ## [3.7.1] - 2026-04-02
 
 * Feature: Redact Apprise URLs to prevent sensitive information disclosure
