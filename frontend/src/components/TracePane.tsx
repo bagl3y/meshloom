@@ -28,6 +28,48 @@ import { cn } from '@/lib/utils';
 type TraceSortMode = 'alpha' | 'recent' | 'distance';
 type CustomHopBytes = 1 | 2 | 4;
 
+const RECENT_TRACES_KEY = 'remoteterm-recent-traces';
+const MAX_RECENT_TRACES = 5;
+
+interface SavedTraceHop {
+  kind: 'repeater' | 'custom';
+  publicKey?: string;
+  hopHex?: string;
+  hopBytes?: CustomHopBytes;
+  displayName: string;
+}
+
+interface SavedTrace {
+  hops: SavedTraceHop[];
+  ranAt: number;
+}
+
+function loadRecentTraces(): SavedTrace[] {
+  try {
+    const raw = localStorage.getItem(RECENT_TRACES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.slice(0, MAX_RECENT_TRACES) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentTrace(trace: SavedTrace): void {
+  try {
+    const existing = loadRecentTraces();
+    // Dedupe by hop signature
+    const sig = trace.hops.map((h) => h.publicKey ?? h.hopHex ?? '').join(',');
+    const deduped = existing.filter(
+      (t) => t.hops.map((h) => h.publicKey ?? h.hopHex ?? '').join(',') !== sig
+    );
+    const updated = [trace, ...deduped].slice(0, MAX_RECENT_TRACES);
+    localStorage.setItem(RECENT_TRACES_KEY, JSON.stringify(updated));
+  } catch {
+    // localStorage may be disabled
+  }
+}
+
 type TraceDraftHop =
   | { id: string; kind: 'repeater'; publicKey: string }
   | { id: string; kind: 'custom'; hopHex: string; hopBytes: CustomHopBytes };
@@ -154,6 +196,7 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
   const [customHopBytesDraft, setCustomHopBytesDraft] = useState<CustomHopBytes>(1);
   const [customHopHexDraft, setCustomHopHexDraft] = useState('');
   const [customHopError, setCustomHopError] = useState<string | null>(null);
+  const [recentTraces, setRecentTraces] = useState<SavedTrace[]>(loadRecentTraces);
   const activeRunTokenRef = useRef(0);
 
   const repeaters = useMemo(() => {
@@ -272,6 +315,56 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
     clearPendingResult();
   };
 
+  const handleLoadRecentTrace = async (trace: SavedTrace) => {
+    const hops: TraceDraftHop[] = trace.hops.map((h, i) => {
+      if (h.kind === 'repeater' && h.publicKey) {
+        return {
+          id: nextDraftHopId('repeater', i),
+          kind: 'repeater' as const,
+          publicKey: h.publicKey,
+        };
+      }
+      return {
+        id: nextDraftHopId('custom', i),
+        kind: 'custom' as const,
+        hopHex: h.hopHex ?? '',
+        hopBytes: h.hopBytes ?? (1 as CustomHopBytes),
+      };
+    });
+    setDraftHops(hops);
+
+    // Determine hop hash bytes from the loaded hops
+    const customHop = hops.find((h) => h.kind === 'custom');
+    const hopHashBytes: CustomHopBytes = customHop?.hopBytes ?? 4;
+
+    // Run the trace immediately
+    const runToken = activeRunTokenRef.current + 1;
+    activeRunTokenRef.current = runToken;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const traceResult = await onRunTracePath(
+        hopHashBytes,
+        hops.map((hop) =>
+          hop.kind === 'repeater' ? { public_key: hop.publicKey } : { hop_hex: hop.hopHex }
+        )
+      );
+      if (activeRunTokenRef.current !== runToken) return;
+      setResult(traceResult);
+
+      // Re-save to bump this trace to the top of recents
+      const savedTrace: SavedTrace = { hops: trace.hops, ranAt: Date.now() };
+      saveRecentTrace(savedTrace);
+      setRecentTraces(loadRecentTraces());
+    } catch (err) {
+      if (activeRunTokenRef.current !== runToken) return;
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      if (activeRunTokenRef.current === runToken) setLoading(false);
+    }
+  };
+
   const handleRunTrace = async () => {
     if (draftHops.length === 0) {
       return;
@@ -292,6 +385,27 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
         return;
       }
       setResult(traceResult);
+
+      // Persist to recent traces
+      const savedHops: SavedTraceHop[] = draftHops.map((hop) => {
+        if (hop.kind === 'repeater') {
+          const c = repeatersByKey.get(hop.publicKey);
+          return {
+            kind: 'repeater',
+            publicKey: hop.publicKey,
+            displayName: getContactDisplayName(c?.name, hop.publicKey, c?.last_advert ?? null),
+          };
+        }
+        return {
+          kind: 'custom',
+          hopHex: hop.hopHex,
+          hopBytes: hop.hopBytes,
+          displayName: `${hop.hopHex.toUpperCase()} (${hop.hopBytes}B)`,
+        };
+      });
+      const trace: SavedTrace = { hops: savedHops, ranAt: Date.now() };
+      saveRecentTrace(trace);
+      setRecentTraces(loadRecentTraces());
     } catch (err) {
       if (activeRunTokenRef.current !== runToken) {
         return;
@@ -453,6 +567,39 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
                 <p className="mt-1 text-xs text-muted-foreground">
                   The first node is display-only. The terminal node is the local radio.
                 </p>
+                {recentTraces.length > 0 && (
+                  <div className="mt-2">
+                    <div className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium mb-1">
+                      Rerun a recent trace:
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {recentTraces.map((trace, i) => {
+                        const label = trace.hops
+                          .map((h) => {
+                            if (h.kind === 'repeater' && h.publicKey) {
+                              const shortKey = h.publicKey.slice(0, 12);
+                              return h.displayName !== shortKey
+                                ? `${h.displayName} (${shortKey})`
+                                : shortKey;
+                            }
+                            return h.displayName;
+                          })
+                          .join(' → ');
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            className="rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-accent transition-colors truncate max-w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={loading}
+                            onClick={() => handleLoadRecentTrace(trace)}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
               {draftHops.length > 0 ? (
                 <Button
