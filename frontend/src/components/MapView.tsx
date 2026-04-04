@@ -23,6 +23,27 @@ interface MapViewProps {
   config?: RadioConfig | null;
 }
 
+// --- Tile layer presets ---
+const TILE_LIGHT = {
+  url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  background: '#1a1a2e',
+};
+const TILE_DARK = {
+  url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  attribution:
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+  background: '#0d0d0d',
+};
+
+function getSavedDarkMap(): boolean {
+  try {
+    return localStorage.getItem('remoteterm-dark-map') === 'true';
+  } catch {
+    return false;
+  }
+}
+
 const MAP_RECENCY_COLORS = {
   recent: '#06b6d4',
   today: '#2563eb',
@@ -63,17 +84,25 @@ function resolveHopToGps(hopToken: string, prefixIndex: Map<string, Contact[]>):
   return isValidLocation(c.lat, c.lon) ? c : null;
 }
 
+/** Resolve a contact by display name (for GroupText senders). */
+function resolveNameToGps(name: string, nameIndex: Map<string, Contact>): Contact | null {
+  const c = nameIndex.get(name);
+  if (!c) return null;
+  return isValidLocation(c.lat, c.lon) ? c : null;
+}
+
 /** Collect public keys of all unambiguously resolved GPS-bearing contacts from a parsed packet. */
 function resolvePacketContacts(
   parsed: ReturnType<typeof parsePacket>,
   prefixIndex: Map<string, Contact[]>,
+  nameIndex: Map<string, Contact>,
   myLatLon: [number, number] | null,
   config?: RadioConfig | null
 ): Set<string> {
   const keys = new Set<string>();
   if (!parsed) return keys;
 
-  // Source
+  // Source by pubkey prefix
   const sourcePrefixes = parsed.advertPubkey
     ? [parsed.advertPubkey.slice(0, 12).toLowerCase()]
     : parsed.srcHash
@@ -84,6 +113,12 @@ function resolvePacketContacts(
     if (matches?.length === 1 && isValidLocation(matches[0].lat, matches[0].lon)) {
       keys.add(matches[0].public_key);
     }
+  }
+
+  // Source by name (GroupText sender)
+  if (parsed.groupTextSender) {
+    const c = resolveNameToGps(parsed.groupTextSender, nameIndex);
+    if (c) keys.add(c.public_key);
   }
 
   // Intermediate hops
@@ -346,6 +381,18 @@ function ParticleOverlay({ particles }: { particles: MapParticle[] }) {
 
 export function MapView({ contacts, focusedKey, rawPackets, config }: MapViewProps) {
   const [sevenDaysAgo] = useState(() => Date.now() / 1000 - 7 * 24 * 60 * 60);
+  const [darkMap, setDarkMap] = useState(getSavedDarkMap);
+  const tile = darkMap ? TILE_DARK : TILE_LIGHT;
+
+  // Sync with settings changes from other components
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'remoteterm-dark-map') setDarkMap(e.newValue === 'true');
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   const [showPackets, setShowPackets] = useState(false);
   const [discoveryMode, setDiscoveryMode] = useState(false);
   const [discoveredKeys, setDiscoveredKeys] = useState<Set<string>>(new Set());
@@ -353,20 +400,21 @@ export function MapView({ contacts, focusedKey, rawPackets, config }: MapViewPro
   const particleIdRef = useRef(0);
   const seenObservationsRef = useRef(new Set<string>());
 
-  // Build prefix index for hop resolution
-  const prefixIndex = useMemo(() => {
-    const index = new Map<string, Contact[]>();
+  // Build prefix index and name index for hop resolution
+  const { prefixIndex, nameIndex } = useMemo(() => {
+    const prefix = new Map<string, Contact[]>();
+    const name = new Map<string, Contact>();
     for (const c of contacts) {
       const pubkey = c.public_key.toLowerCase();
-      // Index at every prefix length from 1 to 12 characters (matching visualizer logic)
       for (let len = 1; len <= 12 && len <= pubkey.length; len++) {
-        const prefix = pubkey.slice(0, len);
-        const arr = index.get(prefix);
+        const p = pubkey.slice(0, len);
+        const arr = prefix.get(p);
         if (arr) arr.push(c);
-        else index.set(prefix, [c]);
+        else prefix.set(p, [c]);
       }
+      if (c.name && !name.has(c.name)) name.set(c.name, c);
     }
-    return index;
+    return { prefixIndex: prefix, nameIndex: name };
   }, [contacts]);
 
   // Self GPS
@@ -426,6 +474,8 @@ export function MapView({ contacts, focusedKey, rawPackets, config }: MapViewPro
         }
       } else if (parsed.srcHash) {
         sourceContact = resolveHopToGps(parsed.srcHash, prefixIndex);
+      } else if (parsed.groupTextSender) {
+        sourceContact = resolveNameToGps(parsed.groupTextSender, nameIndex);
       }
 
       if (sourceContact) {
@@ -461,7 +511,7 @@ export function MapView({ contacts, focusedKey, rawPackets, config }: MapViewPro
         return [lat, lon] as [number, number];
       });
     },
-    [prefixIndex, myLatLon]
+    [prefixIndex, nameIndex, myLatLon]
   );
 
   // Process new packets into particles and track discovered contacts
@@ -479,24 +529,35 @@ export function MapView({ contacts, focusedKey, rawPackets, config }: MapViewPro
       // Deduplicate by observation
       const obsKey = getRawPacketObservationKey(pkt);
       if (seenObservationsRef.current.has(obsKey)) continue;
-      seenObservationsRef.current.add(obsKey);
 
       const parsed = parsePacket(pkt.data);
       if (!parsed) continue;
 
+      // Discover contacts from this packet regardless of whether a full path resolves
+      const resolvedContacts = resolvePacketContacts(
+        parsed,
+        prefixIndex,
+        nameIndex,
+        myLatLon,
+        config
+      );
       const path = resolvePacketPath(parsed);
-      if (!path) continue;
 
-      // Collect all unambiguously resolved contacts from this packet for discovery mode
-      const resolvedContacts = resolvePacketContacts(parsed, prefixIndex, myLatLon, config);
+      // Only mark as seen if we got something useful; otherwise a later run
+      // with updated contacts/config can retry this observation.
+      if (resolvedContacts.size === 0 && !path) continue;
+      seenObservationsRef.current.add(obsKey);
+
       for (const key of resolvedContacts) newDiscovered.add(key);
 
-      newParticles.push({
-        id: particleIdRef.current++,
-        path,
-        color: PARTICLE_COLOR_MAP[getPacketLabel(parsed.payloadType)],
-        startedAt: now,
-      });
+      if (path) {
+        newParticles.push({
+          id: particleIdRef.current++,
+          path,
+          color: PARTICLE_COLOR_MAP[getPacketLabel(parsed.payloadType)],
+          startedAt: now,
+        });
+      }
     }
 
     if (newDiscovered.size > 0) {
@@ -515,7 +576,16 @@ export function MapView({ contacts, focusedKey, rawPackets, config }: MapViewPro
       const alive = combined.filter((p) => now - p.startedAt < PARTICLE_LIFETIME_MS);
       return alive.slice(-MAX_MAP_PARTICLES);
     });
-  }, [rawPackets, showPackets, resolvePacketPath, threeDaysAgoSec, prefixIndex, myLatLon, config]);
+  }, [
+    rawPackets,
+    showPackets,
+    resolvePacketPath,
+    threeDaysAgoSec,
+    prefixIndex,
+    nameIndex,
+    myLatLon,
+    config,
+  ]);
 
   // Prune expired particles periodically
   useEffect(() => {
@@ -722,12 +792,9 @@ export function MapView({ contacts, focusedKey, rawPackets, config }: MapViewPro
           center={[20, 0]}
           zoom={2}
           className="h-full w-full"
-          style={{ background: '#1a1a2e' }}
+          style={{ background: tile.background }}
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <TileLayer key={tile.url} attribution={tile.attribution} url={tile.url} />
           <MapBoundsHandler contacts={mappableContacts} focusedContact={focusedContact} />
 
           {/* Faint route lines for active packet paths */}

@@ -39,6 +39,13 @@ export function SettingsLocalSection({
   const [reopenLastConversation, setReopenLastConversation] = useState(
     getReopenLastConversationEnabled
   );
+  const [darkMap, setDarkMap] = useState(() => {
+    try {
+      return localStorage.getItem('remoteterm-dark-map') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [localLabelText, setLocalLabelText] = useState(() => getLocalLabel().text);
   const [localLabelColor, setLocalLabelColor] = useState(() => getLocalLabel().color);
   const [fontScale, setFontScale] = useState(getSavedFontScale);
@@ -234,6 +241,24 @@ export function SettingsLocalSection({
           className="w-4 h-4 rounded border-input accent-primary"
         />
         <span className="text-sm">Reopen to last viewed channel/conversation</span>
+      </label>
+
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={darkMap}
+          onChange={(e) => {
+            const v = e.target.checked;
+            setDarkMap(v);
+            try {
+              localStorage.setItem('remoteterm-dark-map', String(v));
+            } catch {
+              // localStorage may be disabled
+            }
+          }}
+          className="w-4 h-4 rounded border-input accent-primary"
+        />
+        <span className="text-sm">Dark mode map tiles</span>
       </label>
     </div>
   );
