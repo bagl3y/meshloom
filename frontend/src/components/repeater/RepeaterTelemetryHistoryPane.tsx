@@ -90,6 +90,15 @@ export function TelemetryHistoryPane({
 
   const dataKeys = metric === 'packets' ? ['packets_received', 'packets_sent'] : [metric];
 
+  const yDomain = useMemo<[number, number] | undefined>(() => {
+    if (metric !== 'battery_volts' || chartData.length === 0) return undefined;
+    const values = chartData.map((d) => d.battery_volts).filter((v) => v != null) as number[];
+    if (values.length === 0) return [3, 5];
+    const lo = Math.min(...values);
+    const hi = Math.max(...values);
+    return [Math.min(3, Math.floor(lo) - 1), Math.max(5, Math.ceil(hi) + 1)];
+  }, [metric, chartData]);
+
   const handleToggle = async () => {
     setToggling(true);
     try {
@@ -208,6 +217,7 @@ export function TelemetryHistoryPane({
                 tickFormatter={formatTime}
               />
               <YAxis
+                domain={yDomain}
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                 tickLine={false}
                 axisLine={false}
