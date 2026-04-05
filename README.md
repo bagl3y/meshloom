@@ -28,6 +28,9 @@ For advanced setup, troubleshooting, HTTPS, systemd service setup, and remediati
 
 If you plan to contribute, read [CONTRIBUTING.md](CONTRIBUTING.md).
 
+> [!WARNING]
+> RemoteTerm does *full* management of the radio, meaning that once a radio is connected to RemoteTerm, all contacts/channels will be imported and offloaded to RemoteTerm and the contacts actually synced to the device will be governed by RemoteTerm. This means that RemoteTerm can be a poor fit for users who are looking to swap radios in and out, maintaining radio state (favorites, channels, etc.) irrespective of app usage.
+
 ## Requirements
 
 - Python 3.10+
