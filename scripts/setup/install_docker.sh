@@ -211,22 +211,18 @@ EOF
     chmod 644 "$SNAKEOIL_CERT_HOST_PATH"
 }
 
+if ! command -v docker &>/dev/null; then
+    echo -e "${RED}Warning: docker was not found in PATH. A compose file will still be generated, but you will need Docker installed to run it.${NC}"
+elif ! docker compose version &>/dev/null; then
+    echo -e "${RED}Warning: docker compose is not available. A compose file will still be generated, but you will need the Docker Compose plugin to run it.${NC}"
+fi
+
 echo -e "${BOLD}=== RemoteTerm for MeshCore — Docker Setup ===${NC}"
 echo
 echo -e "  Repo directory     : ${CYAN}${REPO_DIR}${NC}"
 echo -e "  Example compose    : ${CYAN}${EXAMPLE_FILE}${NC}"
 echo -e "  Output compose     : ${CYAN}${COMPOSE_FILE}${NC}"
 echo
-
-if ! command -v docker &>/dev/null; then
-    echo -e "${RED}Error: docker was not found in PATH.${NC}"
-    exit 1
-fi
-
-if ! docker compose version &>/dev/null; then
-    echo -e "${RED}Error: docker compose is required but was not available.${NC}"
-    exit 1
-fi
 
 if [ -f "$COMPOSE_FILE" ]; then
     echo -e "${YELLOW}A local docker-compose.yml already exists.${NC}"
@@ -360,32 +356,37 @@ echo
 
 if [[ "$ENABLE_BOTS" =~ ^[Yy]$ ]]; then
     echo -e "${GREEN}Bots enabled.${NC}"
-    echo
-    echo -e "${BOLD}─── HTTP Basic Auth ─────────────────────────────────────────────────${NC}"
-    echo "With bots enabled, HTTP Basic Auth is strongly recommended if this"
-    echo "service will be reachable beyond your local machine."
-    echo
-    read -r -p "Set up HTTP Basic Auth? [Y/n]: " ENABLE_AUTH
-    ENABLE_AUTH="${ENABLE_AUTH:-Y}"
-    echo
-
-    if [[ "$ENABLE_AUTH" =~ ^[Yy]$ ]]; then
-        read -r -p "Username: " AUTH_USERNAME
-        while [ -z "$AUTH_USERNAME" ]; do
-            echo -e "${RED}Username cannot be empty.${NC}"
-            read -r -p "Username: " AUTH_USERNAME
-        done
-        read -r -s -p "Password: " AUTH_PASSWORD
-        echo
-        while [ -z "$AUTH_PASSWORD" ]; do
-            echo -e "${RED}Password cannot be empty.${NC}"
-            read -r -s -p "Password: " AUTH_PASSWORD
-            echo
-        done
-        echo -e "${GREEN}Basic Auth configured for user '${AUTH_USERNAME}'.${NC}"
-    fi
 else
     echo -e "${GREEN}Bots disabled.${NC}"
+fi
+echo
+
+echo -e "${BOLD}─── HTTP Basic Auth ─────────────────────────────────────────────────${NC}"
+if [[ "$ENABLE_BOTS" =~ ^[Yy]$ ]]; then
+    echo "With bots enabled, HTTP Basic Auth is strongly recommended if this"
+    echo "service will be reachable beyond your local machine."
+else
+    echo "HTTP Basic Auth adds a coarse access gate to the service."
+fi
+echo
+read -r -p "Set up HTTP Basic Auth? [y/N]: " ENABLE_AUTH
+ENABLE_AUTH="${ENABLE_AUTH:-N}"
+echo
+
+if [[ "$ENABLE_AUTH" =~ ^[Yy]$ ]]; then
+    read -r -p "Username: " AUTH_USERNAME
+    while [ -z "$AUTH_USERNAME" ]; do
+        echo -e "${RED}Username cannot be empty.${NC}"
+        read -r -p "Username: " AUTH_USERNAME
+    done
+    read -r -s -p "Password: " AUTH_PASSWORD
+    echo
+    while [ -z "$AUTH_PASSWORD" ]; do
+        echo -e "${RED}Password cannot be empty.${NC}"
+        read -r -s -p "Password: " AUTH_PASSWORD
+        echo
+    done
+    echo -e "${GREEN}Basic Auth configured for user '${AUTH_USERNAME}'.${NC}"
 fi
 echo
 
