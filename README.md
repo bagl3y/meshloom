@@ -12,21 +12,11 @@ Backend server + browser interface for MeshCore mesh radio networks. Connect you
 * Use the more recent 1.14 firmwares which support multibyte pathing
 * Visualize the mesh as a map or node set, view repeater stats, and more!
 
+For advanced setup and troubleshooting see [README_ADVANCED.md](README_ADVANCED.md). If you plan to contribute, read [CONTRIBUTING.md](CONTRIBUTING.md).
+
 **Warning:** This app is for trusted environments only. _Do not put this on an untrusted network, or open it to the public._ You can optionally set `MESHCORE_BASIC_AUTH_USERNAME` and `MESHCORE_BASIC_AUTH_PASSWORD` for app-wide HTTP Basic auth, but that is only a coarse gate and must be paired with HTTPS. The bots can execute arbitrary Python code which means anyone who gets access to the app can, too. To completely disable the bot system, start the server with `MESHCORE_DISABLE_BOTS=true` — this prevents all bot execution and blocks bot configuration changes via the API. If you need stronger access control, consider using a reverse proxy like Nginx, or extending FastAPI; full access control and user management are outside the scope of this app.
 
 ![Screenshot of the application's web interface](app_screenshot.png)
-
-## Start Here
-
-Most users should choose one of these paths:
-
-1. Clone and build from source.
-2. Download the prebuilt release zip if you are on a resource-constrained system and do not want to build the frontend locally.
-3. Use Docker if that better matches how you deploy.
-
-For advanced setup, troubleshooting, HTTPS, systemd service setup, and remediation environment variables, see [README_ADVANCED.md](README_ADVANCED.md).
-
-If you plan to contribute, read [CONTRIBUTING.md](CONTRIBUTING.md).
 
 > [!WARNING]
 > RemoteTerm does *full* management of the radio, meaning that once a radio is connected to RemoteTerm, all contacts/channels will be imported and offloaded to RemoteTerm and the contacts actually synced to the device will be governed by RemoteTerm. This means that RemoteTerm can be a poor fit for users who are looking to swap radios in and out, maintaining radio state (favorites, channels, etc.) irrespective of app usage.
@@ -74,7 +64,7 @@ usbipd attach --wsl --busid 3-8
 ```
 </details>
 
-## Path 1: Clone And Build
+## Install Path 1: Clone And Build
 
 **This approach is recommended over Docker due to intermittent serial communications issues I've seen on \*nix systems.**
 
@@ -92,10 +82,10 @@ Access the app at http://localhost:8000.
 
 Source checkouts expect a normal frontend build in `frontend/dist`.
 
-> [!NOTE]
+> [!TIP]
 > Running on lightweight hardware, or just do not want to build the frontend locally? From a cloned checkout, run `python3 scripts/setup/fetch_prebuilt_frontend.py` to fetch and unpack a prebuilt frontend into `frontend/prebuilt`, then start the app normally with `uv run uvicorn app.main:app --host 0.0.0.0 --port 8000`.
 
-> [!TIP]
+> [!NOTE]
 > On Linux, you can also install RemoteTerm as a persistent `systemd` service that starts on boot and restarts automatically on failure:
 >
 > ```bash
@@ -104,7 +94,7 @@ Source checkouts expect a normal frontend build in `frontend/dist`.
 >
 > For the full service workflow and post-install operations, see [README_ADVANCED.md](README_ADVANCED.md).
 
-## Path 2: Docker
+## Install Path 2: Docker
 
 > **Warning:** Docker has had reports intermittent issues with serial event subscriptions. The native method above is more reliable.
 
