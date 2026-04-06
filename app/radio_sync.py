@@ -21,7 +21,7 @@ from meshcore import EventType, MeshCore
 from app.channel_constants import PUBLIC_CHANNEL_KEY, PUBLIC_CHANNEL_NAME
 from app.config import settings
 from app.event_handlers import cleanup_expired_acks, on_contact_message
-from app.models import Contact, ContactUpsert
+from app.models import Contact, ContactUpsert, Favorite
 from app.radio import RadioOperationBusyError
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
@@ -1069,6 +1069,23 @@ async def sync_contacts_from_radio(mc: MeshCore) -> dict:
             synced += 1
 
         logger.debug("Synced %d contacts from radio snapshot", synced)
+
+        # Import radio-favorited contacts into app favorites
+        radio_fav_keys = {pk for pk, data in contacts.items() if data.get("flags", 0) & 0x01}
+        if radio_fav_keys:
+            try:
+                settings_obj = await AppSettingsRepository.get()
+                existing_fav_ids = {f.id for f in settings_obj.favorites}
+                new_favs = radio_fav_keys - existing_fav_ids
+                if new_favs:
+                    merged = settings_obj.favorites + [
+                        Favorite(type="contact", id=pk) for pk in sorted(new_favs)
+                    ]
+                    await AppSettingsRepository.update(favorites=merged)
+                    logger.info("Imported %d radio favorite(s) into app favorites", len(new_favs))
+            except Exception as e:
+                logger.warning("Failed to import radio favorites: %s", e)
+
         return {"synced": synced, "radio_contacts": contacts}
     except Exception as e:
         logger.error("Error during contact snapshot sync: %s", e)
