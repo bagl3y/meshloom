@@ -105,7 +105,7 @@ describe('fetchJson (via api methods)', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const [url] = mockFetch.mock.calls[0];
-      expect(url).toBe('/api/contacts?limit=100&offset=0');
+      expect(url).toBe('./api/contacts?limit=100&offset=0');
     });
 
     it('builds repeater advert path endpoint query', async () => {
@@ -118,7 +118,7 @@ describe('fetchJson (via api methods)', () => {
       await api.getRepeaterAdvertPaths(12);
 
       const [url] = mockFetch.mock.calls[0];
-      expect(url).toBe('/api/contacts/repeaters/advert-paths?limit_per_repeater=12');
+      expect(url).toBe('./api/contacts/repeaters/advert-paths?limit_per_repeater=12');
     });
   });
 
@@ -238,7 +238,7 @@ describe('fetchJson (via api methods)', () => {
       await api.sendDirectMessage('abc123', 'hello');
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toBe('/api/messages/direct');
+      expect(url).toBe('./api/messages/direct');
       expect(options.method).toBe('POST');
       expect(JSON.parse(options.body)).toEqual({
         destination: 'abc123',
@@ -256,7 +256,7 @@ describe('fetchJson (via api methods)', () => {
       await api.updateRadioConfig({ name: 'NewName' });
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toBe('/api/radio/config');
+      expect(url).toBe('./api/radio/config');
       expect(options.method).toBe('PATCH');
       expect(JSON.parse(options.body)).toEqual({ name: 'NewName' });
     });
@@ -271,7 +271,7 @@ describe('fetchJson (via api methods)', () => {
       await api.setPrivateKey('my-secret-key');
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toBe('/api/radio/private-key');
+      expect(url).toBe('./api/radio/private-key');
       expect(options.method).toBe('PUT');
       expect(JSON.parse(options.body)).toEqual({ private_key: 'my-secret-key' });
     });
@@ -286,7 +286,7 @@ describe('fetchJson (via api methods)', () => {
       await api.discoverMesh('repeaters');
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toBe('/api/radio/discover');
+      expect(url).toBe('./api/radio/discover');
       expect(options.method).toBe('POST');
       expect(JSON.parse(options.body)).toEqual({ target: 'repeaters' });
     });
@@ -301,7 +301,7 @@ describe('fetchJson (via api methods)', () => {
       await api.deleteContact('pubkey123');
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toBe('/api/contacts/pubkey123');
+      expect(url).toBe('./api/contacts/pubkey123');
       expect(options.method).toBe('DELETE');
     });
 
@@ -315,7 +315,7 @@ describe('fetchJson (via api methods)', () => {
       await api.sendAdvertisement();
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toBe('/api/radio/advertise');
+      expect(url).toBe('./api/radio/advertise');
       expect(options.method).toBe('POST');
       expect(options.body).toBe(JSON.stringify({ mode: 'flood' }));
     });
@@ -330,7 +330,7 @@ describe('fetchJson (via api methods)', () => {
       await api.sendAdvertisement('zero_hop');
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toBe('/api/radio/advertise');
+      expect(url).toBe('./api/radio/advertise');
       expect(options.method).toBe('POST');
       expect(options.body).toBe(JSON.stringify({ mode: 'zero_hop' }));
     });
@@ -383,7 +383,7 @@ describe('fetchJson (via api methods)', () => {
       });
 
       const [url] = mockFetch.mock.calls[0];
-      expect(url).toContain('/api/messages?');
+      expect(url).toContain('./api/messages?');
       expect(url).toContain('limit=50');
       expect(url).toContain('offset=10');
       expect(url).toContain('type=PRIV');
@@ -402,7 +402,7 @@ describe('fetchJson (via api methods)', () => {
       await api.getMessages();
 
       const [url] = mockFetch.mock.calls[0];
-      expect(url).toBe('/api/messages');
+      expect(url).toBe('./api/messages');
     });
   });
 });

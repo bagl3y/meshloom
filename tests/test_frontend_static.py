@@ -127,6 +127,34 @@ def test_webmanifest_uses_forwarded_origin_headers(tmp_path):
         assert data["id"] == "https://mesh.example.com:8443/"
 
 
+def test_webmanifest_includes_forwarded_prefix(tmp_path):
+    app = FastAPI()
+    dist_dir = tmp_path / "frontend" / "dist"
+    dist_dir.mkdir(parents=True)
+    (dist_dir / "index.html").write_text("<html><body>index page</body></html>")
+
+    registered = register_frontend_static_routes(app, dist_dir)
+    assert registered is True
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/site.webmanifest",
+            headers={
+                "x-forwarded-proto": "https",
+                "x-forwarded-host": "homeassistant.local:8123",
+                "x-forwarded-prefix": "/api/hassio_ingress/abc123",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        expected_base = "https://homeassistant.local:8123/api/hassio_ingress/abc123/"
+        assert data["start_url"] == expected_base
+        assert data["scope"] == expected_base
+        assert data["id"] == expected_base
+        assert data["icons"][0]["src"] == f"{expected_base}web-app-manifest-192x192.png"
+
+
 def test_first_available_prefers_dist_over_prebuilt(tmp_path):
     app = FastAPI()
     frontend_dir = tmp_path / "frontend"

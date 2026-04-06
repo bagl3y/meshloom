@@ -19,6 +19,15 @@ If the audit finds a mismatch, you'll see an error in the application UI and you
 
 `__CLOWNTOWN_DO_CLOCK_WRAPAROUND=true` is a last-resort clock remediation for nodes whose RTC is stuck in the future and where rescue-mode time setting or GPS-based time is not available. It intentionally relies on the clock rolling past the 32-bit epoch boundary, which is board-specific behavior and may not be safe or effective on all MeshCore targets. Treat it as highly experimental.
 
+## Sub-Path Reverse Proxy
+
+RemoteTerm works behind a reverse proxy that serves it under a sub-path (e.g. `/meshcore/` or Home Assistant ingress). All frontend asset and API paths are relative, so they resolve correctly under any prefix.
+
+**Requirements:**
+
+- The proxy must ensure the sub-path URL has a **trailing slash**. If a user visits `/meshcore` (no slash), relative paths break. Most proxies handle this automatically; for Nginx, a `location /meshcore/ { ... }` block (note the trailing slash) does the right thing.
+- For correct PWA install behavior, the proxy should forward `X-Forwarded-Prefix` (set to the sub-path, e.g. `/meshcore`) so the web manifest generates correct `start_url` and `scope` values. `X-Forwarded-Proto` and `X-Forwarded-Host` are also respected for origin resolution.
+
 ## HTTPS
 
 WebGPU channel-finding requires a secure context when you are not on `localhost`.

@@ -172,8 +172,8 @@ describe('useFaviconBadge', () => {
     );
 
     await waitFor(() => {
-      expect(getIconHref('icon')).toBe('/favicon.svg');
-      expect(getIconHref('shortcut icon')).toBe('/favicon.svg');
+      expect(getIconHref('icon')).toBe('./favicon.svg');
+      expect(getIconHref('shortcut icon')).toBe('./favicon.svg');
     });
 
     rerender({
@@ -209,8 +209,8 @@ describe('useFaviconBadge', () => {
     });
 
     await waitFor(() => {
-      expect(getIconHref('icon')).toBe('/favicon.svg');
-      expect(getIconHref('shortcut icon')).toBe('/favicon.svg');
+      expect(getIconHref('icon')).toBe('./favicon.svg');
+      expect(getIconHref('shortcut icon')).toBe('./favicon.svg');
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);

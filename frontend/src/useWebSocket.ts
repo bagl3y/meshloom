@@ -54,7 +54,9 @@ export function useWebSocket(options: UseWebSocketOptions) {
   const connect = useCallback(() => {
     // Determine WebSocket URL based on current location
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+    // Resolve relative to the page so sub-path reverse proxies work
+    const base = new URL('./api/ws', window.location.href);
+    const wsUrl = `${protocol}//${base.host}${base.pathname}`;
 
     const ws = new WebSocket(wsUrl);
 

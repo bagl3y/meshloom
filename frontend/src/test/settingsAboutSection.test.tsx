@@ -25,7 +25,7 @@ describe('SettingsAboutSection', () => {
     );
 
     const link = screen.getByRole('link', { name: /Open debug support snapshot/i });
-    expect(link).toHaveAttribute('href', '/api/debug');
+    expect(link).toHaveAttribute('href', './api/debug');
     expect(link).toHaveAttribute('target', '_blank');
   });
 });

@@ -131,7 +131,7 @@ export function SettingsAboutSection({
 
         <div className="text-center">
           <a
-            href="/api/debug"
+            href="./api/debug"
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-muted-foreground hover:text-primary hover:underline"

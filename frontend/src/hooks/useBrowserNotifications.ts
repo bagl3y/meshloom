@@ -4,7 +4,7 @@ import type { Message } from '../types';
 import { getStateKey } from '../utils/conversationState';
 
 const STORAGE_KEY = 'meshcore_browser_notifications_enabled_by_conversation';
-const NOTIFICATION_ICON_PATH = '/favicon-256x256.png';
+const NOTIFICATION_ICON_PATH = './favicon-256x256.png';
 
 type NotificationPermissionState = NotificationPermission | 'unsupported';
 type ConversationNotificationMap = Record<string, boolean>;

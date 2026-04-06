@@ -38,8 +38,17 @@ def _is_index_file(path: Path, index_file: Path) -> bool:
     return path == index_file
 
 
-def _resolve_request_origin(request: Request) -> str:
-    """Resolve the external origin, honoring common reverse-proxy headers."""
+def _resolve_request_base(request: Request) -> str:
+    """Resolve the external base URL, honoring common reverse-proxy headers.
+
+    Returns a URL like ``https://host:8000/meshcore/`` (always trailing-slash)
+    so callers can append paths directly.
+
+    Recognized headers:
+    - ``X-Forwarded-Proto`` + ``X-Forwarded-Host``: override scheme and host.
+    - ``X-Forwarded-Prefix`` (or ``X-Forwarded-Path``): sub-path prefix added
+      by the proxy (e.g. ``/meshcore``).
+    """
     forwarded_proto = request.headers.get("x-forwarded-proto")
     forwarded_host = request.headers.get("x-forwarded-host")
 
@@ -47,9 +56,20 @@ def _resolve_request_origin(request: Request) -> str:
         proto = forwarded_proto.split(",")[0].strip()
         host = forwarded_host.split(",")[0].strip()
         if proto and host:
-            return f"{proto}://{host}"
+            origin = f"{proto}://{host}"
+        else:
+            origin = str(request.base_url).rstrip("/")
+    else:
+        origin = str(request.base_url).rstrip("/")
 
-    return str(request.base_url).rstrip("/")
+    # Sub-path prefix (e.g. /meshcore) communicated by the reverse proxy
+    prefix = (
+        (request.headers.get("x-forwarded-prefix") or request.headers.get("x-forwarded-path") or "")
+        .strip()
+        .rstrip("/")
+    )
+
+    return f"{origin}{prefix}/"
 
 
 def _validate_frontend_dir(frontend_dir: Path, *, log_failures: bool = True) -> tuple[bool, Path]:
@@ -103,27 +123,27 @@ def register_frontend_static_routes(app: FastAPI, frontend_dir: Path) -> bool:
 
     @app.get("/site.webmanifest")
     async def serve_webmanifest(request: Request):
-        """Serve a dynamic web manifest using the active request origin."""
-        origin = _resolve_request_origin(request)
+        """Serve a dynamic web manifest using the active request base URL."""
+        base = _resolve_request_base(request)
         manifest = {
             "name": "RemoteTerm for MeshCore",
             "short_name": "RemoteTerm",
-            "id": f"{origin}/",
-            "start_url": f"{origin}/",
-            "scope": f"{origin}/",
+            "id": base,
+            "start_url": base,
+            "scope": base,
             "display": "standalone",
             "display_override": ["window-controls-overlay", "standalone", "fullscreen"],
             "theme_color": "#111419",
             "background_color": "#111419",
             "icons": [
                 {
-                    "src": f"{origin}/web-app-manifest-192x192.png",
+                    "src": f"{base}web-app-manifest-192x192.png",
                     "sizes": "192x192",
                     "type": "image/png",
                     "purpose": "maskable",
                 },
                 {
-                    "src": f"{origin}/web-app-manifest-512x512.png",
+                    "src": f"{base}web-app-manifest-512x512.png",
                     "sizes": "512x512",
                     "type": "image/png",
                     "purpose": "maskable",

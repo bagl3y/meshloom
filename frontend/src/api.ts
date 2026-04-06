@@ -40,7 +40,7 @@ import type {
   UnreadCounts,
 } from './types';
 
-const API_BASE = '/api';
+const API_BASE = './api';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const hasBody = options?.body !== undefined;
