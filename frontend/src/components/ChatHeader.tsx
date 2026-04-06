@@ -5,7 +5,6 @@ import { DirectTraceIcon } from './DirectTraceIcon';
 import { ContactPathDiscoveryModal } from './ContactPathDiscoveryModal';
 import { ChannelFloodScopeOverrideModal } from './ChannelFloodScopeOverrideModal';
 import { ChannelPathHashModeOverrideModal } from './ChannelPathHashModeOverrideModal';
-import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { isPublicChannelKey } from '../utils/publicChannel';
 import { stripRegionScopePrefix } from '../utils/regionScope';
@@ -13,14 +12,7 @@ import { isPrefixOnlyContact } from '../utils/pubkey';
 import { cn } from '../lib/utils';
 import { ContactAvatar } from './ContactAvatar';
 import { ContactStatusInfo } from './ContactStatusInfo';
-import type {
-  Channel,
-  Contact,
-  Conversation,
-  Favorite,
-  PathDiscoveryResponse,
-  RadioConfig,
-} from '../types';
+import type { Channel, Contact, Conversation, PathDiscoveryResponse, RadioConfig } from '../types';
 import { CONTACT_TYPE_ROOM } from '../types';
 
 interface ChatHeaderProps {
@@ -28,7 +20,6 @@ interface ChatHeaderProps {
   contacts: Contact[];
   channels: Channel[];
   config: RadioConfig | null;
-  favorites: Favorite[];
   notificationsSupported: boolean;
   notificationsEnabled: boolean;
   notificationsPermission: NotificationPermission | 'unsupported';
@@ -49,7 +40,6 @@ export function ChatHeader({
   contacts,
   channels,
   config,
-  favorites,
   notificationsSupported,
   notificationsEnabled,
   notificationsPermission,
@@ -105,12 +95,18 @@ export function ChatHeader({
   const titleClickable =
     (conversation.type === 'contact' && onOpenContactInfo) ||
     (conversation.type === 'channel' && onOpenChannelInfo);
+  const isFav =
+    conversation.type === 'contact'
+      ? (activeContact?.favorite ?? false)
+      : conversation.type === 'channel'
+        ? (activeChannel?.favorite ?? false)
+        : false;
   const favoriteTitle =
     conversation.type === 'contact'
-      ? isFavorite(favorites, 'contact', conversation.id)
+      ? isFav
         ? 'Remove from favorites. Favorite contacts stay loaded on the radio for ACK support.'
         : 'Add to favorites. Favorite contacts stay loaded on the radio for ACK support.'
-      : isFavorite(favorites, conversation.type as 'channel' | 'contact', conversation.id)
+      : isFav
         ? 'Remove from favorites'
         : 'Add to favorites';
 
@@ -359,13 +355,9 @@ export function ChatHeader({
               onToggleFavorite(conversation.type as 'channel' | 'contact', conversation.id)
             }
             title={favoriteTitle}
-            aria-label={
-              isFavorite(favorites, conversation.type as 'channel' | 'contact', conversation.id)
-                ? 'Remove from favorites'
-                : 'Add to favorites'
-            }
+            aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
           >
-            {isFavorite(favorites, conversation.type as 'channel' | 'contact', conversation.id) ? (
+            {isFav ? (
               <Star className="h-4 w-4 fill-current text-favorite" aria-hidden="true" />
             ) : (
               <Star className="h-4 w-4 text-muted-foreground" aria-hidden="true" />

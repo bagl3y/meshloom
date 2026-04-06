@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 
-import type { Favorite } from '../types';
+import type { Channel, Contact } from '../types';
 import { getStateKey } from '../utils/conversationState';
 
 const APP_TITLE = 'RemoteTerm for MeshCore';
@@ -25,12 +25,11 @@ function getUnreadDirectMessageCount(unreadCounts: Record<string, number>): numb
 
 function getUnreadFavoriteChannelCount(
   unreadCounts: Record<string, number>,
-  favorites: Favorite[]
+  channels: Channel[]
 ): number {
-  return favorites.reduce(
-    (sum, favorite) =>
-      sum +
-      (favorite.type === 'channel' ? unreadCounts[getStateKey('channel', favorite.id)] || 0 : 0),
+  return channels.reduce(
+    (sum, channel) =>
+      sum + (channel.favorite ? unreadCounts[getStateKey('channel', channel.key)] || 0 : 0),
     0
   );
 }
@@ -41,19 +40,29 @@ export function getTotalUnreadCount(unreadCounts: Record<string, number>): numbe
 
 export function getFavoriteUnreadCount(
   unreadCounts: Record<string, number>,
-  favorites: Favorite[]
+  contacts: Contact[],
+  channels: Channel[]
 ): number {
-  return favorites.reduce((sum, favorite) => {
-    const stateKey = getStateKey(favorite.type, favorite.id);
-    return sum + (unreadCounts[stateKey] || 0);
-  }, 0);
+  let sum = 0;
+  for (const contact of contacts) {
+    if (contact.favorite) {
+      sum += unreadCounts[getStateKey('contact', contact.public_key)] || 0;
+    }
+  }
+  for (const channel of channels) {
+    if (channel.favorite) {
+      sum += unreadCounts[getStateKey('channel', channel.key)] || 0;
+    }
+  }
+  return sum;
 }
 
 export function getUnreadTitle(
   unreadCounts: Record<string, number>,
-  favorites: Favorite[]
+  contacts: Contact[],
+  channels: Channel[]
 ): string {
-  const unreadCount = getFavoriteUnreadCount(unreadCounts, favorites);
+  const unreadCount = getFavoriteUnreadCount(unreadCounts, contacts, channels);
   if (unreadCount <= 0) {
     return APP_TITLE;
   }
@@ -65,13 +74,13 @@ export function getUnreadTitle(
 export function deriveFaviconBadgeState(
   unreadCounts: Record<string, number>,
   mentions: Record<string, boolean>,
-  favorites: Favorite[]
+  channels: Channel[]
 ): FaviconBadgeState {
   if (Object.values(mentions).some(Boolean) || getUnreadDirectMessageCount(unreadCounts) > 0) {
     return 'red';
   }
 
-  if (getUnreadFavoriteChannelCount(unreadCounts, favorites) > 0) {
+  if (getUnreadFavoriteChannelCount(unreadCounts, channels) > 0) {
     return 'green';
   }
 
@@ -128,8 +137,15 @@ function applyFaviconHref(href: string): void {
   upsertFaviconLinks('shortcut icon', href);
 }
 
-export function useUnreadTitle(unreadCounts: Record<string, number>, favorites: Favorite[]): void {
-  const title = useMemo(() => getUnreadTitle(unreadCounts, favorites), [favorites, unreadCounts]);
+export function useUnreadTitle(
+  unreadCounts: Record<string, number>,
+  contacts: Contact[],
+  channels: Channel[]
+): void {
+  const title = useMemo(
+    () => getUnreadTitle(unreadCounts, contacts, channels),
+    [contacts, channels, unreadCounts]
+  );
 
   useEffect(() => {
     document.title = title;
@@ -143,12 +159,12 @@ export function useUnreadTitle(unreadCounts: Record<string, number>, favorites: 
 export function useFaviconBadge(
   unreadCounts: Record<string, number>,
   mentions: Record<string, boolean>,
-  favorites: Favorite[]
+  channels: Channel[]
 ): void {
   const objectUrlRef = useRef<string | null>(null);
   const badgeState = useMemo(
-    () => deriveFaviconBadgeState(unreadCounts, mentions, favorites),
-    [favorites, mentions, unreadCounts]
+    () => deriveFaviconBadgeState(unreadCounts, mentions, channels),
+    [channels, mentions, unreadCounts]
   );
 
   useEffect(() => {

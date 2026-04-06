@@ -620,7 +620,6 @@ class TestAppSettingsRepository:
         mock_cursor.fetchone = AsyncMock(
             return_value={
                 "max_radio_contacts": 250,
-                "favorites": "{not-json",
                 "auto_decrypt_dm_on_advert": 1,
                 "last_message_times": "{also-not-json",
                 "advert_interval": None,
@@ -641,35 +640,9 @@ class TestAppSettingsRepository:
             settings = await AppSettingsRepository.get()
 
         assert settings.max_radio_contacts == 250
-        assert settings.favorites == []
         assert settings.last_message_times == {}
         assert settings.advert_interval == 0
         assert settings.last_advert_time == 0
-
-    @pytest.mark.asyncio
-    async def test_add_favorite_is_idempotent(self):
-        """Adding an existing favorite does not write duplicate entries."""
-        from app.models import AppSettings, Favorite
-
-        existing = AppSettings(favorites=[Favorite(type="contact", id="aa" * 32)])
-
-        with (
-            patch(
-                "app.repository.AppSettingsRepository.get",
-                new_callable=AsyncMock,
-                return_value=existing,
-            ),
-            patch(
-                "app.repository.AppSettingsRepository.update",
-                new_callable=AsyncMock,
-            ) as mock_update,
-        ):
-            from app.repository import AppSettingsRepository
-
-            result = await AppSettingsRepository.add_favorite("contact", "aa" * 32)
-
-        assert result == existing
-        mock_update.assert_not_awaited()
 
 
 class TestMessageRepositoryGetById:

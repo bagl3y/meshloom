@@ -21,7 +21,7 @@ from meshcore import EventType, MeshCore
 from app.channel_constants import PUBLIC_CHANNEL_KEY, PUBLIC_CHANNEL_NAME
 from app.config import settings
 from app.event_handlers import cleanup_expired_acks, on_contact_message
-from app.models import Contact, ContactUpsert, Favorite
+from app.models import Contact, ContactUpsert
 from app.radio import RadioOperationBusyError
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
@@ -1071,18 +1071,17 @@ async def sync_contacts_from_radio(mc: MeshCore) -> dict:
         logger.debug("Synced %d contacts from radio snapshot", synced)
 
         # Import radio-favorited contacts into app favorites
-        radio_fav_keys = {pk for pk, data in contacts.items() if data.get("flags", 0) & 0x01}
+        radio_fav_keys = [pk for pk, data in contacts.items() if data.get("flags", 0) & 0x01]
         if radio_fav_keys:
             try:
-                settings_obj = await AppSettingsRepository.get()
-                existing_fav_ids = {f.id for f in settings_obj.favorites}
-                new_favs = radio_fav_keys - existing_fav_ids
-                if new_favs:
-                    merged = settings_obj.favorites + [
-                        Favorite(type="contact", id=pk) for pk in sorted(new_favs)
-                    ]
-                    await AppSettingsRepository.update(favorites=merged)
-                    logger.info("Imported %d radio favorite(s) into app favorites", len(new_favs))
+                imported = 0
+                for pk in radio_fav_keys:
+                    existing = await ContactRepository.get_by_key(pk)
+                    if existing and not existing.favorite:
+                        await ContactRepository.set_favorite(pk, True)
+                        imported += 1
+                if imported:
+                    logger.info("Imported %d radio favorite(s) into app favorites", imported)
             except Exception as e:
                 logger.warning("Failed to import radio favorites: %s", e)
 
@@ -1297,26 +1296,9 @@ async def get_contacts_selected_for_radio_sync() -> list[Contact]:
     selected_contacts: list[Contact] = []
     selected_keys: set[str] = set()
 
+    # Favorites first — always loaded up to max_contacts
     favorite_contacts_loaded = 0
-    for favorite in app_settings.favorites:
-        if favorite.type != "contact":
-            continue
-        try:
-            contact = await ContactRepository.get_by_key_or_prefix(favorite.id)
-        except AmbiguousPublicKeyPrefixError:
-            logger.warning(
-                "Skipping favorite contact '%s': ambiguous key prefix; use full key",
-                favorite.id,
-            )
-            continue
-        if not contact:
-            continue
-        if len(contact.public_key) < 64:
-            logger.debug(
-                "Skipping unresolved prefix-only favorite contact '%s' for radio sync",
-                favorite.id,
-            )
-            continue
+    for contact in await ContactRepository.get_favorites():
         key = contact.public_key.lower()
         if key in selected_keys:
             continue

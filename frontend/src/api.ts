@@ -9,7 +9,6 @@ import type {
   ContactAnalytics,
   ContactAdvertPathSummary,
   FanoutConfig,
-  Favorite,
   HealthStatus,
   MaintenanceResult,
   Message,
@@ -334,8 +333,8 @@ export const api = {
     }),
 
   // Favorites
-  toggleFavorite: (type: Favorite['type'], id: string) =>
-    fetchJson<AppSettings>('/settings/favorites/toggle', {
+  toggleFavorite: (type: 'channel' | 'contact', id: string) =>
+    fetchJson<{ type: string; id: string; favorite: boolean }>('/settings/favorites/toggle', {
       method: 'POST',
       body: JSON.stringify({ type, id }),
     }),

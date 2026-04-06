@@ -145,6 +145,7 @@ const publicChannel = {
   is_hashtag: false,
   on_radio: false,
   last_read_at: null,
+  favorite: false,
 };
 
 describe('App startup hash resolution', () => {
@@ -166,7 +167,6 @@ describe('App startup hash resolution', () => {
     });
     mocks.api.getSettings.mockResolvedValue({
       max_radio_contacts: 200,
-      favorites: [],
       auto_decrypt_dm_on_advert: false,
       last_message_times: {},
 
@@ -247,6 +247,7 @@ describe('App startup hash resolution', () => {
       is_hashtag: false,
       on_radio: false,
       last_read_at: null,
+      favorite: false,
     };
 
     window.location.hash = '';
@@ -278,6 +279,7 @@ describe('App startup hash resolution', () => {
       is_hashtag: false,
       on_radio: false,
       last_read_at: null,
+      favorite: false,
     };
 
     window.location.hash = '';
@@ -308,6 +310,7 @@ describe('App startup hash resolution', () => {
       is_hashtag: false,
       on_radio: false,
       last_read_at: null,
+      favorite: false,
     };
 
     window.location.hash = '';
@@ -345,6 +348,7 @@ describe('App startup hash resolution', () => {
       lon: null,
       last_seen: null,
       on_radio: false,
+      favorite: false,
       last_contacted: null,
       last_read_at: null,
       first_seen: null,

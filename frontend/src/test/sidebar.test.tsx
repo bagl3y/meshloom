@@ -2,13 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Sidebar } from '../components/Sidebar';
-import {
-  CONTACT_TYPE_REPEATER,
-  CONTACT_TYPE_ROOM,
-  type Channel,
-  type Contact,
-  type Favorite,
-} from '../types';
+import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM, type Channel, type Contact } from '../types';
 import { getStateKey, type ConversationTimes } from '../utils/conversationState';
 import { PUBLIC_CHANNEL_KEY } from '../utils/publicChannel';
 
@@ -19,6 +13,7 @@ function makeChannel(key: string, name: string): Channel {
     is_hashtag: false,
     on_radio: false,
     last_read_at: null,
+    favorite: false,
   };
 }
 
@@ -41,6 +36,7 @@ function makeContact(
     lon: null,
     last_seen: null,
     on_radio: false,
+    favorite: false,
     last_contacted: null,
     last_read_at: null,
     first_seen: null,
@@ -51,7 +47,6 @@ function makeContact(
 function renderSidebar(overrides?: {
   unreadCounts?: Record<string, number>;
   mentions?: Record<string, boolean>;
-  favorites?: Favorite[];
   lastMessageTimes?: ConversationTimes;
   channels?: Channel[];
   isConversationNotificationsEnabled?: (type: 'channel' | 'contact', id: string) => boolean;
@@ -59,7 +54,7 @@ function renderSidebar(overrides?: {
   const aliceName = 'Alice';
   const roomName = 'Ops Board';
   const publicChannel = makeChannel('AA'.repeat(16), 'Public');
-  const flightChannel = makeChannel('BB'.repeat(16), '#flight');
+  const flightChannel = { ...makeChannel('BB'.repeat(16), '#flight'), favorite: true };
   const opsChannel = makeChannel('CC'.repeat(16), '#ops');
   const alice = makeContact('11'.repeat(32), aliceName);
   const board = makeContact('33'.repeat(32), roomName, CONTACT_TYPE_ROOM);
@@ -73,7 +68,6 @@ function renderSidebar(overrides?: {
     [getStateKey('contact', relay.public_key)]: 4,
   };
 
-  const favorites = overrides?.favorites ?? [{ type: 'channel', id: flightChannel.key }];
   const channels = overrides?.channels ?? [publicChannel, flightChannel, opsChannel];
   const onSelectConversation = vi.fn();
 
@@ -91,7 +85,6 @@ function renderSidebar(overrides?: {
       crackerRunning={false}
       onToggleCracker={vi.fn()}
       onMarkAllRead={vi.fn()}
-      favorites={favorites}
       isConversationNotificationsEnabled={overrides?.isConversationNotificationsEnabled}
     />
   );
@@ -138,7 +131,6 @@ describe('Sidebar section summaries', () => {
         crackerRunning={false}
         onToggleCracker={vi.fn()}
         onMarkAllRead={vi.fn()}
-        favorites={[]}
       />
     );
 
@@ -195,11 +187,26 @@ describe('Sidebar section summaries', () => {
   });
 
   it('turns favorite contact row badges red', () => {
-    const { aliceName } = renderSidebar({
-      favorites: [{ type: 'contact', id: '11'.repeat(32) }],
-    });
+    const alice = makeContact('11'.repeat(32), 'Alice', 1, { favorite: true });
 
-    const aliceRow = screen.getByText(aliceName).closest('div');
+    render(
+      <Sidebar
+        contacts={[alice]}
+        channels={[makeChannel(PUBLIC_CHANNEL_KEY, 'Public')]}
+        activeConversation={null}
+        onSelectConversation={vi.fn()}
+        onNewMessage={vi.fn()}
+        lastMessageTimes={{}}
+        unreadCounts={{ [getStateKey('contact', alice.public_key)]: 3 }}
+        mentions={{}}
+        showCracker={false}
+        crackerRunning={false}
+        onToggleCracker={vi.fn()}
+        onMarkAllRead={vi.fn()}
+      />
+    );
+
+    const aliceRow = screen.getByText('Alice').closest('div');
     if (!aliceRow) throw new Error('Missing Alice row');
     expect(within(aliceRow).getByText('3')).toHaveClass(
       'bg-badge-mention',
@@ -297,7 +304,6 @@ describe('Sidebar section summaries', () => {
         crackerRunning={false}
         onToggleCracker={vi.fn()}
         onMarkAllRead={vi.fn()}
-        favorites={[]}
       />
     );
 
@@ -393,7 +399,6 @@ describe('Sidebar section summaries', () => {
       crackerRunning: false,
       onToggleCracker: vi.fn(),
       onMarkAllRead: vi.fn(),
-      favorites: [],
     };
 
     const getChannelsOrder = () => screen.getAllByText(/^#/).map((node) => node.textContent);
@@ -464,7 +469,6 @@ describe('Sidebar section summaries', () => {
         crackerRunning={false}
         onToggleCracker={vi.fn()}
         onMarkAllRead={vi.fn()}
-        favorites={[]}
       />
     );
 
@@ -498,7 +502,6 @@ describe('Sidebar section summaries', () => {
         crackerRunning={false}
         onToggleCracker={vi.fn()}
         onMarkAllRead={vi.fn()}
-        favorites={[]}
       />
     );
 
@@ -546,7 +549,6 @@ describe('Sidebar section summaries', () => {
         crackerRunning={false}
         onToggleCracker={vi.fn()}
         onMarkAllRead={vi.fn()}
-        favorites={[]}
       />
     );
 
@@ -578,7 +580,6 @@ describe('Sidebar section summaries', () => {
         crackerRunning={false}
         onToggleCracker={vi.fn()}
         onMarkAllRead={vi.fn()}
-        favorites={[]}
       />
     );
 
@@ -593,8 +594,8 @@ describe('Sidebar section summaries', () => {
 
   it('sorts favorites independently and persists the favorites sort preference', () => {
     const publicChannel = makeChannel(PUBLIC_CHANNEL_KEY, 'Public');
-    const zed = makeContact('11'.repeat(32), 'Zed', 1, { last_advert: 150 });
-    const amy = makeContact('22'.repeat(32), 'Amy');
+    const zed = makeContact('11'.repeat(32), 'Zed', 1, { last_advert: 150, favorite: true });
+    const amy = makeContact('22'.repeat(32), 'Amy', 1, { favorite: true });
 
     const props = {
       contacts: [zed, amy],
@@ -611,10 +612,6 @@ describe('Sidebar section summaries', () => {
       crackerRunning: false,
       onToggleCracker: vi.fn(),
       onMarkAllRead: vi.fn(),
-      favorites: [
-        { type: 'contact', id: zed.public_key },
-        { type: 'contact', id: amy.public_key },
-      ] satisfies Favorite[],
     };
 
     const getFavoritesOrder = () =>
@@ -641,8 +638,8 @@ describe('Sidebar section summaries', () => {
     localStorage.setItem('remoteterm-sortOrder', 'alpha');
 
     const publicChannel = makeChannel(PUBLIC_CHANNEL_KEY, 'Public');
-    const zed = makeContact('11'.repeat(32), 'Zed', 1, { last_advert: 150 });
-    const amy = makeContact('22'.repeat(32), 'Amy');
+    const zed = makeContact('11'.repeat(32), 'Zed', 1, { last_advert: 150, favorite: true });
+    const amy = makeContact('22'.repeat(32), 'Amy', 1, { favorite: true });
 
     render(
       <Sidebar
@@ -660,10 +657,6 @@ describe('Sidebar section summaries', () => {
         crackerRunning={false}
         onToggleCracker={vi.fn()}
         onMarkAllRead={vi.fn()}
-        favorites={[
-          { type: 'contact', id: zed.public_key },
-          { type: 'contact', id: amy.public_key },
-        ]}
       />
     );
 

@@ -24,6 +24,7 @@ function makeContact(
     lon: null,
     last_seen: null,
     on_radio: false,
+    favorite: false,
     last_contacted: null,
     last_read_at: null,
     first_seen: null,

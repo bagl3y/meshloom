@@ -35,7 +35,14 @@ function createSearchResult(overrides: Partial<Message> = {}): Message {
 const defaultProps = {
   contacts: [],
   channels: [
-    { key: 'ABC123', name: 'Public', is_hashtag: true, on_radio: false, last_read_at: null },
+    {
+      key: 'ABC123',
+      name: 'Public',
+      is_hashtag: true,
+      on_radio: false,
+      last_read_at: null,
+      favorite: false,
+    },
   ],
   onNavigateToMessage: vi.fn(),
 };
@@ -239,6 +246,7 @@ describe('SearchView', () => {
             lon: null,
             last_seen: null,
             on_radio: false,
+            favorite: false,
             last_contacted: null,
             first_seen: null,
             last_read_at: null,

@@ -91,6 +91,7 @@ class Contact(BaseModel):
     lon: float | None = None
     last_seen: int | None = None
     on_radio: bool = False
+    favorite: bool = False
     last_contacted: int | None = None  # Last time we sent/received a message
     last_read_at: int | None = None  # Server-side read state tracking
     first_seen: int | None = None
@@ -326,6 +327,7 @@ class Channel(BaseModel):
         description="Per-channel path hash mode override (0=1-byte, 1=2-byte, 2=3-byte, null = use radio default)",
     )
     last_read_at: int | None = None  # Server-side read state tracking
+    favorite: bool = False
 
 
 class ChannelMessageCounts(BaseModel):
@@ -756,13 +758,6 @@ class RadioDiscoveryResponse(BaseModel):
     )
 
 
-class Favorite(BaseModel):
-    """A favorite conversation."""
-
-    type: Literal["channel", "contact"] = Field(description="'channel' or 'contact'")
-    id: str = Field(description="Channel key or contact public key")
-
-
 class UnreadCounts(BaseModel):
     """Aggregated unread counts, mention flags, and last message times for all conversations."""
 
@@ -789,9 +784,6 @@ class AppSettings(BaseModel):
             "Configured radio contact capacity used for maintenance thresholds; "
             "favorites reload first, then background fill targets about 80% of this value"
         ),
-    )
-    favorites: list[Favorite] = Field(
-        default_factory=list, description="List of favorited conversations"
     )
     auto_decrypt_dm_on_advert: bool = Field(
         default=True,

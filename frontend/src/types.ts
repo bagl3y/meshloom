@@ -121,6 +121,7 @@ export interface Contact {
   lon: number | null;
   last_seen: number | null;
   on_radio: boolean;
+  favorite: boolean;
   last_contacted: number | null;
   last_read_at: number | null;
   first_seen: number | null;
@@ -203,6 +204,7 @@ export interface Channel {
   flood_scope_override?: string | null;
   path_hash_mode_override?: number | null;
   last_read_at: number | null;
+  favorite: boolean;
 }
 
 export interface ChannelMessageCounts {
@@ -323,14 +325,8 @@ export interface RawPacket {
   } | null;
 }
 
-export interface Favorite {
-  type: 'channel' | 'contact';
-  id: string; // channel key or contact public key
-}
-
 export interface AppSettings {
   max_radio_contacts: number;
-  favorites: Favorite[];
   auto_decrypt_dm_on_advert: boolean;
   last_message_times: Record<string, number>;
   advert_interval: number;

@@ -23,6 +23,7 @@ const BOT_CHANNEL: Channel = {
   is_hashtag: true,
   on_radio: false,
   last_read_at: null,
+  favorite: false,
 };
 
 const BOT_PACKET: RawPacket = {

@@ -10,8 +10,33 @@ import {
   useFaviconBadge,
   useUnreadTitle,
 } from '../hooks/useFaviconBadge';
-import type { Favorite } from '../types';
+import type { Channel, Contact } from '../types';
 import { getStateKey } from '../utils/conversationState';
+
+function makeChannel(key: string, favorite = false): Channel {
+  return { key, name: key, is_hashtag: false, on_radio: false, last_read_at: null, favorite };
+}
+
+function makeContact(publicKey: string, favorite = false): Contact {
+  return {
+    public_key: publicKey,
+    name: publicKey,
+    type: 1,
+    flags: 0,
+    direct_path: null,
+    direct_path_len: -1,
+    direct_path_hash_mode: -1,
+    last_advert: null,
+    lat: null,
+    lon: null,
+    last_seen: null,
+    on_radio: false,
+    favorite,
+    last_contacted: null,
+    last_read_at: null,
+    first_seen: null,
+  };
+}
 
 function getIconHref(rel: 'icon' | 'shortcut icon'): string | null {
   return (
@@ -71,16 +96,16 @@ describe('useFaviconBadge', () => {
   });
 
   it('derives badge priority from unread counts, mentions, and favorites', () => {
-    const favorites: Favorite[] = [{ type: 'channel', id: 'fav-chan' }];
+    const channels = [makeChannel('fav-chan', true)];
 
-    expect(deriveFaviconBadgeState({}, {}, favorites)).toBe('none');
+    expect(deriveFaviconBadgeState({}, {}, channels)).toBe('none');
     expect(
       deriveFaviconBadgeState(
         {
           [getStateKey('channel', 'fav-chan')]: 3,
         },
         {},
-        favorites
+        channels
       )
     ).toBe('green');
     expect(
@@ -89,7 +114,7 @@ describe('useFaviconBadge', () => {
           [getStateKey('contact', 'abc')]: 12,
         },
         {},
-        favorites
+        channels
       )
     ).toBe('red');
     expect(
@@ -100,7 +125,7 @@ describe('useFaviconBadge', () => {
         {
           [getStateKey('channel', 'fav-chan')]: true,
         },
-        favorites
+        channels
       )
     ).toBe('red');
   });
@@ -116,7 +141,7 @@ describe('useFaviconBadge', () => {
   it('derives the unread count and page title', () => {
     expect(getTotalUnreadCount({})).toBe(0);
     expect(getTotalUnreadCount({ a: 2, b: 5 })).toBe(7);
-    expect(getFavoriteUnreadCount({}, [])).toBe(0);
+    expect(getFavoriteUnreadCount({}, [], [])).toBe(0);
     expect(
       getFavoriteUnreadCount(
         {
@@ -124,20 +149,19 @@ describe('useFaviconBadge', () => {
           [getStateKey('contact', 'fav-contact')]: 3,
           [getStateKey('channel', 'other-chan')]: 9,
         },
-        [
-          { type: 'channel', id: 'fav-chan' },
-          { type: 'contact', id: 'fav-contact' },
-        ]
+        [makeContact('fav-contact', true)],
+        [makeChannel('fav-chan', true)]
       )
     ).toBe(10);
-    expect(getUnreadTitle({}, [])).toBe('RemoteTerm for MeshCore');
+    expect(getUnreadTitle({}, [], [])).toBe('RemoteTerm for MeshCore');
     expect(
       getUnreadTitle(
         {
           [getStateKey('channel', 'fav-chan')]: 7,
           [getStateKey('channel', 'other-chan')]: 9,
         },
-        [{ type: 'channel', id: 'fav-chan' }]
+        [],
+        [makeChannel('fav-chan', true)]
       )
     ).toBe('(7) RemoteTerm');
     expect(
@@ -145,28 +169,29 @@ describe('useFaviconBadge', () => {
         {
           [getStateKey('channel', 'fav-chan')]: 120,
         },
-        [{ type: 'channel', id: 'fav-chan' }]
+        [],
+        [makeChannel('fav-chan', true)]
       )
     ).toBe('(99+) RemoteTerm');
   });
 
   it('switches between the base favicon and generated blob badges', async () => {
-    const favorites: Favorite[] = [{ type: 'channel', id: 'fav-chan' }];
+    const channels = [makeChannel('fav-chan', true)];
     const { rerender } = renderHook(
       ({
         unreadCounts,
         mentions,
-        currentFavorites,
+        currentChannels,
       }: {
         unreadCounts: Record<string, number>;
         mentions: Record<string, boolean>;
-        currentFavorites: Favorite[];
-      }) => useFaviconBadge(unreadCounts, mentions, currentFavorites),
+        currentChannels: Channel[];
+      }) => useFaviconBadge(unreadCounts, mentions, currentChannels),
       {
         initialProps: {
           unreadCounts: {},
           mentions: {},
-          currentFavorites: favorites,
+          currentChannels: channels,
         },
       }
     );
@@ -181,7 +206,7 @@ describe('useFaviconBadge', () => {
         [getStateKey('channel', 'fav-chan')]: 1,
       },
       mentions: {},
-      currentFavorites: favorites,
+      currentChannels: channels,
     });
 
     await waitFor(() => {
@@ -194,7 +219,7 @@ describe('useFaviconBadge', () => {
         [getStateKey('contact', 'dm-key')]: 12,
       },
       mentions: {},
-      currentFavorites: favorites,
+      currentChannels: channels,
     });
 
     await waitFor(() => {
@@ -205,7 +230,7 @@ describe('useFaviconBadge', () => {
     rerender({
       unreadCounts: {},
       mentions: {},
-      currentFavorites: favorites,
+      currentChannels: channels,
     });
 
     await waitFor(() => {
@@ -220,18 +245,22 @@ describe('useFaviconBadge', () => {
   });
 
   it('writes unread counts into the page title', () => {
+    const channels = [makeChannel('fav-chan', true)];
     const { rerender, unmount } = renderHook(
       ({
         unreadCounts,
-        favorites,
+        contacts,
+        currentChannels,
       }: {
         unreadCounts: Record<string, number>;
-        favorites: Favorite[];
-      }) => useUnreadTitle(unreadCounts, favorites),
+        contacts: Contact[];
+        currentChannels: Channel[];
+      }) => useUnreadTitle(unreadCounts, contacts, currentChannels),
       {
         initialProps: {
           unreadCounts: {},
-          favorites: [{ type: 'channel', id: 'fav-chan' }],
+          contacts: [],
+          currentChannels: channels,
         },
       }
     );
@@ -243,7 +272,8 @@ describe('useFaviconBadge', () => {
         [getStateKey('channel', 'fav-chan')]: 4,
         [getStateKey('contact', 'dm-key')]: 2,
       },
-      favorites: [{ type: 'channel', id: 'fav-chan' }],
+      contacts: [],
+      currentChannels: channels,
     });
 
     expect(document.title).toBe('(4) RemoteTerm');

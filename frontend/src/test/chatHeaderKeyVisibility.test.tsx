@@ -2,12 +2,12 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, expect, it, vi } from 'vitest';
 
 import { ChatHeader } from '../components/ChatHeader';
-import type { Channel, Contact, Conversation, Favorite, PathDiscoveryResponse } from '../types';
+import type { Channel, Contact, Conversation, PathDiscoveryResponse } from '../types';
 import { CONTACT_TYPE_ROOM } from '../types';
 import { PUBLIC_CHANNEL_KEY } from '../utils/publicChannel';
 
 function makeChannel(key: string, name: string, isHashtag: boolean): Channel {
-  return { key, name, is_hashtag: isHashtag, on_radio: false, last_read_at: null };
+  return { key, name, is_hashtag: isHashtag, on_radio: false, last_read_at: null, favorite: false };
 }
 
 const noop = () => {};
@@ -15,7 +15,6 @@ const noop = () => {};
 const baseProps = {
   contacts: [],
   config: null,
-  favorites: [] as Favorite[],
   notificationsSupported: true,
   notificationsEnabled: false,
   notificationsPermission: 'granted' as const,
@@ -186,6 +185,7 @@ describe('ChatHeader key visibility', () => {
       lon: null,
       last_seen: null,
       on_radio: false,
+      favorite: false,
       last_contacted: null,
       last_read_at: null,
       first_seen: null,
@@ -237,6 +237,7 @@ describe('ChatHeader key visibility', () => {
       lon: null,
       last_seen: null,
       on_radio: false,
+      favorite: false,
       last_contacted: null,
       last_read_at: null,
       first_seen: null,
@@ -286,6 +287,7 @@ describe('ChatHeader key visibility', () => {
       lon: null,
       last_seen: null,
       on_radio: false,
+      favorite: false,
       last_contacted: null,
       last_read_at: null,
       first_seen: null,

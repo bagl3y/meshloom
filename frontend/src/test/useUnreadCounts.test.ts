@@ -35,6 +35,7 @@ function makeChannel(key: string, name: string): Channel {
     is_hashtag: false,
     on_radio: false,
     last_read_at: null,
+    favorite: false,
   };
 }
 
@@ -52,6 +53,7 @@ function makeContact(pubkey: string): Contact {
     lon: null,
     last_seen: null,
     on_radio: false,
+    favorite: false,
     last_contacted: null,
     last_read_at: null,
     first_seen: null,

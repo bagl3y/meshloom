@@ -10,6 +10,7 @@ const publicChannel: Channel = {
   is_hashtag: false,
   on_radio: false,
   last_read_at: null,
+  favorite: false,
 };
 
 function createArgs(overrides: Partial<Parameters<typeof useConversationNavigation>[0]> = {}) {

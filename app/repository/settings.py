@@ -1,10 +1,10 @@
 import json
 import logging
 import time
-from typing import Any, Literal
+from typing import Any
 
 from app.database import db
-from app.models import AppSettings, Favorite
+from app.models import AppSettings
 from app.path_utils import bucket_path_hash_widths
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class AppSettingsRepository:
         """
         cursor = await db.conn.execute(
             """
-            SELECT max_radio_contacts, favorites, auto_decrypt_dm_on_advert,
+            SELECT max_radio_contacts, auto_decrypt_dm_on_advert,
                    last_message_times,
                    advert_interval, last_advert_time, flood_scope,
                    blocked_keys, blocked_names, discovery_blocked_types,
@@ -39,20 +39,6 @@ class AppSettingsRepository:
         if not row:
             # Should not happen after migration, but handle gracefully
             return AppSettings()
-
-        # Parse favorites JSON
-        favorites = []
-        if row["favorites"]:
-            try:
-                favorites_data = json.loads(row["favorites"])
-                favorites = [Favorite(**f) for f in favorites_data]
-            except (json.JSONDecodeError, TypeError, KeyError) as e:
-                logger.warning(
-                    "Failed to parse favorites JSON, using empty list: %s (data=%r)",
-                    e,
-                    row["favorites"][:100] if row["favorites"] else None,
-                )
-                favorites = []
 
         # Parse last_message_times JSON
         last_message_times: dict[str, int] = {}
@@ -107,7 +93,6 @@ class AppSettingsRepository:
 
         return AppSettings(
             max_radio_contacts=row["max_radio_contacts"],
-            favorites=favorites,
             auto_decrypt_dm_on_advert=bool(row["auto_decrypt_dm_on_advert"]),
             last_message_times=last_message_times,
             advert_interval=row["advert_interval"] or 0,
@@ -123,7 +108,6 @@ class AppSettingsRepository:
     @staticmethod
     async def update(
         max_radio_contacts: int | None = None,
-        favorites: list[Favorite] | None = None,
         auto_decrypt_dm_on_advert: bool | None = None,
         last_message_times: dict[str, int] | None = None,
         advert_interval: int | None = None,
@@ -142,11 +126,6 @@ class AppSettingsRepository:
         if max_radio_contacts is not None:
             updates.append("max_radio_contacts = ?")
             params.append(max_radio_contacts)
-
-        if favorites is not None:
-            updates.append("favorites = ?")
-            favorites_json = json.dumps([f.model_dump() for f in favorites])
-            params.append(favorites_json)
 
         if auto_decrypt_dm_on_advert is not None:
             updates.append("auto_decrypt_dm_on_advert = ?")
@@ -194,27 +173,6 @@ class AppSettingsRepository:
             await db.conn.commit()
 
         return await AppSettingsRepository.get()
-
-    @staticmethod
-    async def add_favorite(fav_type: Literal["channel", "contact"], fav_id: str) -> AppSettings:
-        """Add a favorite, avoiding duplicates."""
-        settings = await AppSettingsRepository.get()
-
-        # Check if already favorited
-        if any(f.type == fav_type and f.id == fav_id for f in settings.favorites):
-            return settings
-
-        new_favorites = settings.favorites + [Favorite(type=fav_type, id=fav_id)]
-        return await AppSettingsRepository.update(favorites=new_favorites)
-
-    @staticmethod
-    async def remove_favorite(fav_type: Literal["channel", "contact"], fav_id: str) -> AppSettings:
-        """Remove a favorite."""
-        settings = await AppSettingsRepository.get()
-        new_favorites = [
-            f for f in settings.favorites if not (f.type == fav_type and f.id == fav_id)
-        ]
-        return await AppSettingsRepository.update(favorites=new_favorites)
 
     @staticmethod
     async def toggle_blocked_key(key: str) -> AppSettings:

@@ -215,7 +215,6 @@ describe('App search jump target handling', () => {
     });
     mocks.api.getSettings.mockResolvedValue({
       max_radio_contacts: 200,
-      favorites: [],
       auto_decrypt_dm_on_advert: false,
       last_message_times: {},
 
@@ -230,6 +229,7 @@ describe('App search jump target handling', () => {
         is_hashtag: false,
         on_radio: false,
         last_read_at: null,
+        favorite: false,
       },
     ]);
     mocks.api.getContacts.mockResolvedValue([]);

@@ -28,6 +28,7 @@ const publicChannel: Channel = {
   is_hashtag: false,
   on_radio: false,
   last_read_at: null,
+  favorite: false,
 };
 
 const incomingDm: Message = {
@@ -109,6 +110,7 @@ describe('useRealtimeAppState', () => {
         lon: null,
         last_seen: null,
         on_radio: false,
+        favorite: false,
         last_contacted: null,
         last_read_at: null,
         first_seen: null,
@@ -151,6 +153,7 @@ describe('useRealtimeAppState', () => {
         lon: null,
         last_seen: null,
         on_radio: false,
+        favorite: false,
         last_contacted: null,
         last_read_at: null,
         first_seen: null,
@@ -241,6 +244,7 @@ describe('useRealtimeAppState', () => {
       lon: null,
       last_seen: null,
       on_radio: false,
+      favorite: false,
       last_contacted: 1700000000,
       last_read_at: null,
       first_seen: 1700000000,
