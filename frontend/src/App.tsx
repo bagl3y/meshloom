@@ -18,6 +18,7 @@ import {
   useUnreadTitle,
   useRawPacketStatsSession,
 } from './hooks';
+import { toast } from './components/ui/sonner';
 import { AppShell } from './components/AppShell';
 import type { MessageInputHandle } from './components/MessageInput';
 import { DistanceUnitProvider } from './contexts/DistanceUnitContext';
@@ -150,10 +151,8 @@ export function App() {
 
   const {
     appSettings,
-    favorites,
     fetchAppSettings,
     handleSaveAppSettings,
-    handleToggleFavorite,
     handleToggleBlockedKey,
     handleToggleBlockedName,
     handleToggleTrackedTelemetry,
@@ -203,6 +202,38 @@ export function App() {
     removeConversationMessages: (conversationId) =>
       removeConversationMessagesRef.current(conversationId),
   });
+
+  const handleToggleFavorite = useCallback(
+    async (type: 'channel' | 'contact', id: string) => {
+      // Optimistically toggle the favorite flag
+      if (type === 'contact') {
+        setContacts((prev) =>
+          prev.map((c) => (c.public_key === id ? { ...c, favorite: !c.favorite } : c))
+        );
+      } else {
+        setChannels((prev) =>
+          prev.map((c) => (c.key === id ? { ...c, favorite: !c.favorite } : c))
+        );
+      }
+
+      try {
+        await api.toggleFavorite(type, id);
+      } catch {
+        // Revert on failure
+        if (type === 'contact') {
+          setContacts((prev) =>
+            prev.map((c) => (c.public_key === id ? { ...c, favorite: !c.favorite } : c))
+          );
+        } else {
+          setChannels((prev) =>
+            prev.map((c) => (c.key === id ? { ...c, favorite: !c.favorite } : c))
+          );
+        }
+        toast.error('Failed to update favorite');
+      }
+    },
+    [setContacts, setChannels]
+  );
 
   // useConversationRouter is called second — it receives channels/contacts as inputs
   const {
@@ -290,8 +321,8 @@ export function App() {
     markAllRead,
     refreshUnreads,
   } = useUnreadCounts(channels, contacts, activeConversation);
-  useFaviconBadge(unreadCounts, mentions, favorites);
-  useUnreadTitle(unreadCounts, favorites);
+  useFaviconBadge(unreadCounts, mentions, channels);
+  useUnreadTitle(unreadCounts, contacts, channels);
 
   useEffect(() => {
     if (activeConversation?.type !== 'channel') {
@@ -491,7 +522,6 @@ export function App() {
     onMarkAllRead: () => {
       void markAllRead();
     },
-    favorites,
     isConversationNotificationsEnabled,
     blockedKeys: appSettings?.blocked_keys ?? [],
     blockedNames: appSettings?.blocked_names ?? [],
@@ -507,7 +537,6 @@ export function App() {
     rawPacketStatsSession,
     config,
     health,
-    favorites,
     messages: sortedMessages,
     preSorted: activeContactIsRoom,
     messagesLoading,
@@ -614,7 +643,6 @@ export function App() {
     onClose: handleCloseContactInfo,
     contacts,
     config,
-    favorites,
     onToggleFavorite: handleToggleFavorite,
     onNavigateToChannel: handleNavigateToChannel,
     onSearchMessagesByKey: (publicKey: string) => {
@@ -632,7 +660,6 @@ export function App() {
     channelKey: infoPaneChannelKey,
     onClose: handleCloseChannelInfo,
     channels,
-    favorites,
     onToggleFavorite: handleToggleFavorite,
   };
 

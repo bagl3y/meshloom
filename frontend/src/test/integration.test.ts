@@ -278,6 +278,7 @@ function makeContact(overrides: Partial<Contact> = {}): Contact {
     lon: null,
     last_seen: null,
     on_radio: true,
+    favorite: false,
     last_contacted: null,
     last_read_at: null,
     first_seen: null,

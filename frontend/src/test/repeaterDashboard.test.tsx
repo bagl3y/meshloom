@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { RepeaterDashboard } from '../components/RepeaterDashboard';
 import type { UseRepeaterDashboardResult } from '../hooks/useRepeaterDashboard';
-import type { Contact, Conversation, Favorite } from '../types';
+import type { Contact, Conversation } from '../types';
 
 // Mock the hook — typed as mutable version of the return type
 const mockHook: {
@@ -99,18 +99,16 @@ const contacts: Contact[] = [
     lon: null,
     last_seen: null,
     on_radio: false,
+    favorite: false,
     last_contacted: null,
     last_read_at: null,
     first_seen: null,
   },
 ];
 
-const favorites: Favorite[] = [];
-
 const defaultProps = {
   conversation,
   contacts,
-  favorites,
   notificationsSupported: true,
   notificationsEnabled: false,
   notificationsPermission: 'granted' as const,
@@ -337,6 +335,7 @@ describe('RepeaterDashboard', () => {
         lon: 115.87,
         last_seen: null,
         on_radio: false,
+        favorite: false,
         last_contacted: null,
         last_read_at: null,
         first_seen: null,
@@ -397,6 +396,7 @@ describe('RepeaterDashboard', () => {
         lon: 115.87,
         last_seen: null,
         on_radio: false,
+        favorite: false,
         last_contacted: null,
         last_read_at: null,
         first_seen: null,

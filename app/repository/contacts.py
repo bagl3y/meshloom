@@ -170,6 +170,7 @@ class ContactRepository:
             lon=row["lon"],
             last_seen=row["last_seen"],
             on_radio=bool(row["on_radio"]),
+            favorite=bool(row["favorite"]) if "favorite" in available_columns else False,
             last_contacted=row["last_contacted"],
             last_read_at=row["last_read_at"],
             first_seen=row["first_seen"],
@@ -390,6 +391,24 @@ class ContactRepository:
                 f"UPDATE contacts SET on_radio = 0 WHERE on_radio = 1 AND public_key NOT IN ({placeholders})",
                 keep_keys,
             )
+        await db.conn.commit()
+
+    @staticmethod
+    async def get_favorites() -> list[Contact]:
+        """Return all contacts marked as favorite."""
+        cursor = await db.conn.execute(
+            "SELECT * FROM contacts WHERE favorite = 1 AND LENGTH(public_key) = 64"
+        )
+        rows = await cursor.fetchall()
+        return [ContactRepository._row_to_contact(row) for row in rows]
+
+    @staticmethod
+    async def set_favorite(public_key: str, value: bool) -> None:
+        """Set or clear the favorite flag for a contact."""
+        await db.conn.execute(
+            "UPDATE contacts SET favorite = ? WHERE public_key = ?",
+            (1 if value else 0, public_key.lower()),
+        )
         await db.conn.commit()
 
     @staticmethod

@@ -13,7 +13,6 @@ from meshcore import EventType
 from meshcore.events import Event
 
 import app.radio_sync as radio_sync
-from app.models import Favorite
 from app.radio import RadioManager, radio_manager
 from app.radio_sync import (
     _message_poll_loop,
@@ -363,12 +362,8 @@ class TestSyncRecentContactsToRadio:
         """Favorite contacts not on radio are added via add_contact."""
         await _insert_contact(KEY_A, "Alice", last_contacted=2000)
         await _insert_contact(KEY_B, "Bob", last_contacted=1000)
-        await AppSettingsRepository.update(
-            favorites=[
-                Favorite(type="contact", id=KEY_A),
-                Favorite(type="contact", id=KEY_B),
-            ]
-        )
+        await ContactRepository.set_favorite(KEY_A, True)
+        await ContactRepository.set_favorite(KEY_B, True)
 
         mock_mc = MagicMock()
         mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
@@ -390,9 +385,8 @@ class TestSyncRecentContactsToRadio:
         await _insert_contact("dd" * 32, "Dave", last_advert=3000)
         await _insert_contact("ee" * 32, "Eve", last_advert=2500)
 
-        await AppSettingsRepository.update(
-            max_radio_contacts=5, favorites=[Favorite(type="contact", id=KEY_A)]
-        )
+        await AppSettingsRepository.update(max_radio_contacts=5)
+        await ContactRepository.set_favorite(KEY_A, True)
 
         mock_mc = MagicMock()
         mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
@@ -416,10 +410,9 @@ class TestSyncRecentContactsToRadio:
         for index, key in enumerate(favorite_keys):
             await _insert_contact(key, f"Favorite{index}", last_contacted=2000 - index)
 
-        await AppSettingsRepository.update(
-            max_radio_contacts=4,
-            favorites=[Favorite(type="contact", id=key) for key in favorite_keys],
-        )
+        await AppSettingsRepository.update(max_radio_contacts=4)
+        for key in favorite_keys:
+            await ContactRepository.set_favorite(key, True)
 
         mock_mc = MagicMock()
         mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
@@ -498,7 +491,7 @@ class TestSyncAndOffloadAll:
         await _insert_contact(KEY_A, "Alice", last_advert=3000, contact_type=2)
         await _insert_contact(KEY_B, "Bob", last_advert=2000, contact_type=1)
 
-        await AppSettingsRepository.update(max_radio_contacts=1, favorites=[])
+        await AppSettingsRepository.update(max_radio_contacts=1)
 
         mock_mc = MagicMock()
         mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
@@ -519,13 +512,8 @@ class TestSyncAndOffloadAll:
         await _insert_contact(KEY_A, "Alice", last_contacted=2000)
         await _insert_contact(KEY_B, "Bob", last_contacted=1000)
 
-        await AppSettingsRepository.update(
-            max_radio_contacts=2,
-            favorites=[
-                Favorite(type="contact", id=KEY_A),
-                Favorite(type="contact", id=KEY_A),
-            ],
-        )
+        await AppSettingsRepository.update(max_radio_contacts=2)
+        await ContactRepository.set_favorite(KEY_A, True)
 
         mock_mc = MagicMock()
         mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
@@ -546,7 +534,7 @@ class TestSyncAndOffloadAll:
     async def test_skips_contacts_already_on_radio(self, test_db):
         """Contacts already on radio are counted but not re-added."""
         await _insert_contact(KEY_A, "Alice", on_radio=False)
-        await AppSettingsRepository.update(favorites=[Favorite(type="contact", id=KEY_A)])
+        await ContactRepository.set_favorite(KEY_A, True)
 
         mock_mc = MagicMock()
         mock_mc.get_contact_by_key_prefix = MagicMock(return_value=MagicMock())  # Found
@@ -606,7 +594,7 @@ class TestSyncAndOffloadAll:
     async def test_handles_add_failure(self, test_db):
         """Failed add_contact increments the failed counter."""
         await _insert_contact(KEY_A, "Alice")
-        await AppSettingsRepository.update(favorites=[Favorite(type="contact", id=KEY_A)])
+        await ContactRepository.set_favorite(KEY_A, True)
 
         mock_mc = MagicMock()
         mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
@@ -632,7 +620,7 @@ class TestSyncAndOffloadAll:
             direct_path_len=2,
             direct_path_hash_mode=1,
         )
-        await AppSettingsRepository.update(favorites=[Favorite(type="contact", id=KEY_A)])
+        await ContactRepository.set_favorite(KEY_A, True)
 
         mock_mc = MagicMock()
         mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
@@ -661,7 +649,7 @@ class TestSyncAndOffloadAll:
             direct_path_len=-125,
             direct_path_hash_mode=2,
         )
-        await AppSettingsRepository.update(favorites=[Favorite(type="contact", id=KEY_A)])
+        await ContactRepository.set_favorite(KEY_A, True)
 
         mock_mc = MagicMock()
         mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
@@ -686,7 +674,7 @@ class TestSyncAndOffloadAll:
         so it passes mc directly to avoid deadlock (asyncio.Lock is not reentrant).
         """
         await _insert_contact(KEY_A, "Alice", last_contacted=2000)
-        await AppSettingsRepository.update(favorites=[Favorite(type="contact", id=KEY_A)])
+        await ContactRepository.set_favorite(KEY_A, True)
 
         mock_mc = MagicMock()
         mock_mc.get_contact_by_key_prefix = MagicMock(return_value=None)
@@ -726,7 +714,7 @@ class TestSyncAndOffloadAll:
         """If _meshcore is swapped between pre-check and lock acquisition,
         the function uses the new (post-lock) instance, not the stale one."""
         await _insert_contact(KEY_A, "Alice", last_contacted=2000)
-        await AppSettingsRepository.update(favorites=[Favorite(type="contact", id=KEY_A)])
+        await ContactRepository.set_favorite(KEY_A, True)
 
         old_mc = MagicMock(name="old_mc")
         new_mc = MagicMock(name="new_mc")

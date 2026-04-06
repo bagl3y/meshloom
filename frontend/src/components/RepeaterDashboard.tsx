@@ -9,17 +9,10 @@ import { RepeaterLogin } from './RepeaterLogin';
 import { ServerLoginStatusBanner } from './ServerLoginStatusBanner';
 import { useRememberedServerPassword } from '../hooks/useRememberedServerPassword';
 import { useRepeaterDashboard } from '../hooks/useRepeaterDashboard';
-import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { isValidLocation } from '../utils/pathUtils';
 import { ContactStatusInfo } from './ContactStatusInfo';
-import type {
-  Contact,
-  Conversation,
-  Favorite,
-  PathDiscoveryResponse,
-  TelemetryHistoryEntry,
-} from '../types';
+import type { Contact, Conversation, PathDiscoveryResponse, TelemetryHistoryEntry } from '../types';
 import { cn } from '../lib/utils';
 import { TelemetryPane } from './repeater/RepeaterTelemetryPane';
 import { NeighborsPane } from './repeater/RepeaterNeighborsPane';
@@ -41,7 +34,6 @@ export { formatDuration, formatClockDrift } from './repeater/repeaterPaneShared'
 interface RepeaterDashboardProps {
   conversation: Conversation;
   contacts: Contact[];
-  favorites: Favorite[];
   notificationsSupported: boolean;
   notificationsEnabled: boolean;
   notificationsPermission: NotificationPermission | 'unsupported';
@@ -61,7 +53,6 @@ interface RepeaterDashboardProps {
 export function RepeaterDashboard({
   conversation,
   contacts,
-  favorites,
   notificationsSupported,
   notificationsEnabled,
   notificationsPermission,
@@ -134,7 +125,7 @@ export function RepeaterDashboard({
     setTelemetryHistory(liveHistory);
   }, [paneData.status?.telemetry_history]);
 
-  const isFav = isFavorite(favorites, 'contact', conversation.id);
+  const isFav = contact?.favorite ?? false;
 
   const handleRepeaterLogin = async (nextPassword: string) => {
     await login(nextPassword);

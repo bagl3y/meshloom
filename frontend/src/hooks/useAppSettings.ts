@@ -3,15 +3,10 @@ import { api } from '../api';
 import { takePrefetchOrFetch } from '../prefetch';
 import { toast } from '../components/ui/sonner';
 import { initLastMessageTimes } from '../utils/conversationState';
-import { isFavorite } from '../utils/favorites';
-import type { AppSettings, AppSettingsUpdate, Favorite } from '../types';
+import type { AppSettings, AppSettingsUpdate } from '../types';
 
 export function useAppSettings() {
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
-
-  // Stable empty array prevents a new reference every render when there are none.
-  const emptyFavorites = useRef<Favorite[]>([]).current;
-  const favorites: Favorite[] = appSettings?.favorites ?? emptyFavorites;
 
   // One-time migration guard
   const hasMigratedRef = useRef(false);
@@ -85,32 +80,6 @@ export function useAppSettings() {
     }
   }, []);
 
-  const handleToggleFavorite = useCallback(async (type: 'channel' | 'contact', id: string) => {
-    setAppSettings((prev) => {
-      if (!prev) return prev;
-      const currentFavorites = prev.favorites ?? [];
-      const wasFavorited = isFavorite(currentFavorites, type, id);
-      const optimisticFavorites = wasFavorited
-        ? currentFavorites.filter((f) => !(f.type === type && f.id === id))
-        : [...currentFavorites, { type, id }];
-      return { ...prev, favorites: optimisticFavorites };
-    });
-
-    try {
-      const updatedSettings = await api.toggleFavorite(type, id);
-      setAppSettings(updatedSettings);
-    } catch (err) {
-      console.error('Failed to toggle favorite:', err);
-      try {
-        const settings = await api.getSettings();
-        setAppSettings(settings);
-      } catch {
-        // If refetch also fails, leave optimistic state
-      }
-      toast.error('Failed to update favorite');
-    }
-  }, []);
-
   const handleToggleTrackedTelemetry = useCallback(async (publicKey: string) => {
     const key = publicKey.toLowerCase();
     setAppSettings((prev) => {
@@ -151,7 +120,7 @@ export function useAppSettings() {
     hasMigratedRef.current = true;
 
     const FAVORITES_KEY = 'remoteterm-favorites';
-    let localFavorites: Favorite[] = [];
+    let localFavorites: Array<{ type: 'channel' | 'contact'; id: string }> = [];
     try {
       const stored = localStorage.getItem(FAVORITES_KEY);
       if (stored) localFavorites = JSON.parse(stored);
@@ -161,25 +130,26 @@ export function useAppSettings() {
     if (localFavorites.length === 0) return;
 
     const migrate = async () => {
-      try {
-        for (const f of localFavorites) {
+      let migrated = 0;
+      for (const f of localFavorites) {
+        try {
           await api.toggleFavorite(f.type, f.id);
+          migrated++;
+        } catch {
+          // Entity may have been deleted; skip and continue
         }
-        localStorage.removeItem(FAVORITES_KEY);
-        await fetchAppSettings();
-      } catch (err) {
-        console.error('Failed to migrate legacy favorites:', err);
       }
+      localStorage.removeItem(FAVORITES_KEY);
+      // Reload so contacts/channels pick up the new favorite flags
+      if (migrated > 0) window.location.reload();
     };
     migrate();
-  }, [appSettings, fetchAppSettings]);
+  }, [appSettings]);
 
   return {
     appSettings,
-    favorites,
     fetchAppSettings,
     handleSaveAppSettings,
-    handleToggleFavorite,
     handleToggleBlockedKey,
     handleToggleBlockedName,
     handleToggleTrackedTelemetry,

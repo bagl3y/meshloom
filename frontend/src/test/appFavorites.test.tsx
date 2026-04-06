@@ -187,7 +187,6 @@ const baseConfig = {
 
 const baseSettings = {
   max_radio_contacts: 200,
-  favorites: [] as Array<{ type: 'channel' | 'contact'; id: string }>,
   auto_decrypt_dm_on_advert: false,
   last_message_times: {},
 
@@ -204,6 +203,7 @@ const publicChannel = {
   is_hashtag: false,
   on_radio: false,
   last_read_at: null,
+  favorite: false,
 };
 
 describe('App favorite toggle flow', () => {
@@ -216,8 +216,9 @@ describe('App favorite toggle flow', () => {
     mocks.api.getChannels.mockResolvedValue([publicChannel]);
     mocks.api.getContacts.mockResolvedValue([]);
     mocks.api.toggleFavorite.mockResolvedValue({
-      ...baseSettings,
-      favorites: [{ type: 'channel', id: publicChannel.key }],
+      type: 'channel',
+      id: publicChannel.key,
+      favorite: true,
     });
   });
 
@@ -239,11 +240,8 @@ describe('App favorite toggle flow', () => {
     });
   });
 
-  it('rolls back favorite state by refetching settings on toggle failure', async () => {
+  it('rolls back favorite state on toggle failure', async () => {
     mocks.api.toggleFavorite.mockRejectedValue(new Error('toggle failed'));
-    mocks.api.getSettings
-      .mockResolvedValueOnce({ ...baseSettings }) // initial load
-      .mockResolvedValueOnce({ ...baseSettings }); // rollback refetch
 
     render(<App />);
 
@@ -255,10 +253,6 @@ describe('App favorite toggle flow', () => {
 
     await waitFor(() => {
       expect(mocks.api.toggleFavorite).toHaveBeenCalledWith('channel', publicChannel.key);
-    });
-
-    await waitFor(() => {
-      expect(mocks.api.getSettings).toHaveBeenCalledTimes(2);
     });
 
     await waitFor(() => {

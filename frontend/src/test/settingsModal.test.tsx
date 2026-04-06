@@ -59,7 +59,6 @@ const baseHealth: HealthStatus = {
 
 const baseSettings: AppSettings = {
   max_radio_contacts: 200,
-  favorites: [],
   auto_decrypt_dm_on_advert: false,
   last_message_times: {},
 

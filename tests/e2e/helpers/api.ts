@@ -77,6 +77,7 @@ export interface Channel {
   name: string;
   is_hashtag: boolean;
   on_radio: boolean;
+  favorite: boolean;
   flood_scope_override?: string | null;
 }
 
@@ -216,11 +217,8 @@ export function markAllRead(): Promise<{ status: string; timestamp: number }> {
 
 // --- Settings ---
 
-export type Favorite = { type: string; id: string };
-
 export interface AppSettings {
   max_radio_contacts: number;
-  favorites: Favorite[];
   auto_decrypt_dm_on_advert: boolean;
   last_message_times: Record<string, number>;
   advert_interval: number;

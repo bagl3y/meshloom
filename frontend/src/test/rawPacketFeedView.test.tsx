@@ -14,6 +14,7 @@ const TEST_CHANNEL: Channel = {
   is_hashtag: true,
   on_radio: false,
   last_read_at: null,
+  favorite: false,
 };
 
 const COLLIDING_TEST_CHANNEL: Channel = {
@@ -87,6 +88,7 @@ function createContact(overrides: Partial<Contact> = {}): Contact {
     lon: null,
     last_seen: null,
     on_radio: false,
+    favorite: false,
     last_contacted: null,
     last_read_at: null,
     first_seen: null,

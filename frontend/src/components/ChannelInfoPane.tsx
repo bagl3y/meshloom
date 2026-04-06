@@ -3,17 +3,15 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } 
 import { Star } from 'lucide-react';
 import { api } from '../api';
 import { formatTime } from '../utils/messageParser';
-import { isFavorite } from '../utils/favorites';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
 import { toast } from './ui/sonner';
-import type { Channel, ChannelDetail, Favorite, PathHashWidthStats } from '../types';
+import type { Channel, ChannelDetail, PathHashWidthStats } from '../types';
 
 interface ChannelInfoPaneProps {
   channelKey: string | null;
   onClose: () => void;
   channels: Channel[];
-  favorites: Favorite[];
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
 }
 
@@ -21,7 +19,6 @@ export function ChannelInfoPane({
   channelKey,
   onClose,
   channels,
-  favorites,
   onToggleFavorite,
 }: ChannelInfoPaneProps) {
   const [detail, setDetail] = useState<ChannelDetail | null>(null);
@@ -125,7 +122,7 @@ export function ChannelInfoPane({
                 className="text-sm flex items-center gap-2 hover:text-primary transition-colors"
                 onClick={() => onToggleFavorite('channel', channel.key)}
               >
-                {isFavorite(favorites, 'channel', channel.key) ? (
+                {channel.favorite ? (
                   <>
                     <Star className="h-4.5 w-4.5 fill-current text-favorite" aria-hidden="true" />
                     <span>Remove from favorites</span>

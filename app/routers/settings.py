@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.models import CONTACT_TYPE_REPEATER, AppSettings
 from app.region_scope import normalize_region_scope
-from app.repository import AppSettingsRepository, ContactRepository
+from app.repository import AppSettingsRepository, ChannelRepository, ContactRepository
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -70,6 +70,12 @@ class BlockNameRequest(BaseModel):
 class FavoriteRequest(BaseModel):
     type: Literal["channel", "contact"] = Field(description="'channel' or 'contact'")
     id: str = Field(description="Channel key or contact public key")
+
+
+class FavoriteToggleResponse(BaseModel):
+    type: Literal["channel", "contact"]
+    id: str
+    favorite: bool
 
 
 class TrackedTelemetryRequest(BaseModel):
@@ -157,27 +163,30 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
     return await AppSettingsRepository.get()
 
 
-@router.post("/favorites/toggle", response_model=AppSettings)
-async def toggle_favorite(request: FavoriteRequest) -> AppSettings:
+@router.post("/favorites/toggle", response_model=FavoriteToggleResponse)
+async def toggle_favorite(request: FavoriteRequest) -> FavoriteToggleResponse:
     """Toggle a conversation's favorite status."""
-    settings = await AppSettingsRepository.get()
-    is_favorited = any(f.type == request.type and f.id == request.id for f in settings.favorites)
+    if request.type == "contact":
+        contact = await ContactRepository.get_by_key(request.id)
+        if not contact:
+            raise HTTPException(status_code=404, detail="Contact not found")
+        new_value = not contact.favorite
+        await ContactRepository.set_favorite(request.id, new_value)
+        logger.info("%s contact favorite: %s", "Added" if new_value else "Removed", request.id[:12])
+        # When newly favorited, load to radio immediately for DM ACK support
+        if new_value:
+            from app.radio_sync import ensure_contact_on_radio
 
-    if is_favorited:
-        logger.info("Removing favorite: %s %s", request.type, request.id[:12])
-        result = await AppSettingsRepository.remove_favorite(request.type, request.id)
+            asyncio.create_task(ensure_contact_on_radio(request.id, force=True))
     else:
-        logger.info("Adding favorite: %s %s", request.type, request.id[:12])
-        result = await AppSettingsRepository.add_favorite(request.type, request.id)
+        channel = await ChannelRepository.get_by_key(request.id)
+        if not channel:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        new_value = not channel.favorite
+        await ChannelRepository.set_favorite(request.id, new_value)
+        logger.info("%s channel favorite: %s", "Added" if new_value else "Removed", request.id[:12])
 
-    # When a contact is newly favorited, load just that contact to the radio
-    # immediately so DM ACK support does not wait for the next maintenance cycle.
-    if request.type == "contact" and not is_favorited:
-        from app.radio_sync import ensure_contact_on_radio
-
-        asyncio.create_task(ensure_contact_on_radio(request.id, force=True))
-
-    return result
+    return FavoriteToggleResponse(type=request.type, id=request.id, favorite=new_value)
 
 
 @router.post("/blocked-keys/toggle", response_model=AppSettings)

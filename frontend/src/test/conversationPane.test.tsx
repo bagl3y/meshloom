@@ -3,15 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConversationPane } from '../components/ConversationPane';
-import type {
-  Channel,
-  Contact,
-  Conversation,
-  Favorite,
-  HealthStatus,
-  Message,
-  RadioConfig,
-} from '../types';
+import type { Channel, Contact, Conversation, HealthStatus, Message, RadioConfig } from '../types';
 import type { RawPacketStatsSessionState } from '../utils/rawPacketStats';
 
 const mocks = vi.hoisted(() => ({
@@ -97,6 +89,7 @@ const channel: Channel = {
   is_hashtag: false,
   on_radio: false,
   last_read_at: null,
+  favorite: false,
 };
 
 const message: Message = {
@@ -134,7 +127,6 @@ function createProps(overrides: Partial<React.ComponentProps<typeof Conversation
     notificationsSupported: true,
     notificationsEnabled: false,
     notificationsPermission: 'granted' as const,
-    favorites: [] as Favorite[],
     messages: [message],
     messagesLoading: false,
     loadingOlder: false,
@@ -205,6 +197,7 @@ describe('ConversationPane', () => {
               lon: null,
               last_seen: null,
               on_radio: false,
+              favorite: false,
               last_contacted: null,
               last_read_at: null,
               first_seen: null,
@@ -278,6 +271,7 @@ describe('ConversationPane', () => {
               lon: null,
               last_seen: null,
               on_radio: false,
+              favorite: false,
               last_contacted: null,
               last_read_at: null,
               first_seen: null,
@@ -372,6 +366,7 @@ describe('ConversationPane', () => {
               lon: null,
               last_seen: 1700000000,
               on_radio: false,
+              favorite: false,
               last_contacted: 1700000000,
               last_read_at: null,
               first_seen: 1700000000,
@@ -408,6 +403,7 @@ describe('ConversationPane', () => {
               lon: null,
               last_seen: 1700000000,
               on_radio: false,
+              favorite: false,
               last_contacted: 1700000000,
               last_read_at: null,
               first_seen: 1700000000,

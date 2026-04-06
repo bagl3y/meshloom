@@ -193,6 +193,7 @@ describe('resolveChannelFromHashToken', () => {
       is_hashtag: false,
       on_radio: true,
       last_read_at: null,
+      favorite: false,
     },
     {
       key: '11111111111111111111111111111111',
@@ -200,6 +201,7 @@ describe('resolveChannelFromHashToken', () => {
       is_hashtag: true,
       on_radio: false,
       last_read_at: null,
+      favorite: false,
     },
     {
       key: '22222222222222222222222222222222',
@@ -207,6 +209,7 @@ describe('resolveChannelFromHashToken', () => {
       is_hashtag: false,
       on_radio: false,
       last_read_at: null,
+      favorite: false,
     },
   ];
 
@@ -241,6 +244,7 @@ describe('resolveContactFromHashToken', () => {
       lon: null,
       last_seen: null,
       on_radio: false,
+      favorite: false,
       last_contacted: null,
       last_read_at: null,
       first_seen: null,
@@ -258,6 +262,7 @@ describe('resolveContactFromHashToken', () => {
       lon: null,
       last_seen: null,
       on_radio: false,
+      favorite: false,
       last_contacted: null,
       last_read_at: null,
       first_seen: null,
@@ -275,6 +280,7 @@ describe('resolveContactFromHashToken', () => {
       lon: null,
       last_seen: null,
       on_radio: false,
+      favorite: false,
       last_contacted: null,
       last_read_at: null,
       first_seen: null,

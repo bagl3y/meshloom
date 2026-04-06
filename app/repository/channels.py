@@ -26,7 +26,7 @@ class ChannelRepository:
         """Get a channel by its key (32-char hex string)."""
         cursor = await db.conn.execute(
             """
-            SELECT key, name, is_hashtag, on_radio, flood_scope_override, path_hash_mode_override, last_read_at
+            SELECT key, name, is_hashtag, on_radio, flood_scope_override, path_hash_mode_override, last_read_at, favorite
             FROM channels
             WHERE key = ?
             """,
@@ -42,6 +42,7 @@ class ChannelRepository:
                 flood_scope_override=row["flood_scope_override"],
                 path_hash_mode_override=row["path_hash_mode_override"],
                 last_read_at=row["last_read_at"],
+                favorite=bool(row["favorite"]),
             )
         return None
 
@@ -49,7 +50,7 @@ class ChannelRepository:
     async def get_all() -> list[Channel]:
         cursor = await db.conn.execute(
             """
-            SELECT key, name, is_hashtag, on_radio, flood_scope_override, path_hash_mode_override, last_read_at
+            SELECT key, name, is_hashtag, on_radio, flood_scope_override, path_hash_mode_override, last_read_at, favorite
             FROM channels
             ORDER BY name
             """
@@ -64,9 +65,20 @@ class ChannelRepository:
                 flood_scope_override=row["flood_scope_override"],
                 path_hash_mode_override=row["path_hash_mode_override"],
                 last_read_at=row["last_read_at"],
+                favorite=bool(row["favorite"]),
             )
             for row in rows
         ]
+
+    @staticmethod
+    async def set_favorite(key: str, value: bool) -> bool:
+        """Set or clear the favorite flag for a channel. Returns True if row was found."""
+        cursor = await db.conn.execute(
+            "UPDATE channels SET favorite = ? WHERE key = ?",
+            (1 if value else 0, key.upper()),
+        )
+        await db.conn.commit()
+        return cursor.rowcount > 0
 
     @staticmethod
     async def delete(key: str) -> None:
