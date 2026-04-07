@@ -299,8 +299,11 @@ def parse_advertisement(
     timestamp = int.from_bytes(payload[32:36], byteorder="little")
     flags = payload[100]
 
-    # Parse flags
+    # Parse flags — clamp device_role to valid range (0-4); corrupted
+    # advertisements can have junk in the lower nibble.
     device_role = flags & 0x0F
+    if device_role > 4:
+        device_role = 0
     has_location = bool(flags & 0x10)
     has_feature1 = bool(flags & 0x20)
     has_feature2 = bool(flags & 0x40)

@@ -4,6 +4,10 @@ from pydantic import BaseModel, Field
 
 from app.path_utils import normalize_contact_route, normalize_route_override
 
+# Valid MeshCore contact types: 0=unknown, 1=client, 2=repeater, 3=room, 4=sensor.
+# Corrupted radio data can produce values outside this range.
+_VALID_CONTACT_TYPES = frozenset({0, 1, 2, 3, 4})
+
 
 class ContactRoute(BaseModel):
     """A normalized contact route."""
@@ -59,16 +63,30 @@ class ContactUpsert(BaseModel):
                 -1 if radio_data.get("out_path_len", -1) == -1 else 0,
             ),
         )
+        # Clamp invalid contact types to 0 (unknown) — corrupted radio data
+        # can produce values like 111 or 240 that break downstream branching.
+        raw_type = radio_data.get("type", 0)
+        contact_type = raw_type if raw_type in _VALID_CONTACT_TYPES else 0
+
+        # Null out impossible coordinates — the contact is still ingested,
+        # but garbage lat/lon (e.g. 1953.7) is discarded rather than stored.
+        lat = radio_data.get("adv_lat")
+        lon = radio_data.get("adv_lon")
+        if lat is not None and not (-90 <= lat <= 90):
+            lat = None
+        if lon is not None and not (-180 <= lon <= 180):
+            lon = None
+
         return cls(
             public_key=public_key,
             name=radio_data.get("adv_name"),
-            type=radio_data.get("type", 0),
+            type=contact_type,
             flags=radio_data.get("flags", 0),
             direct_path=direct_path,
             direct_path_len=direct_path_len,
             direct_path_hash_mode=direct_path_hash_mode,
-            lat=radio_data.get("adv_lat"),
-            lon=radio_data.get("adv_lon"),
+            lat=lat,
+            lon=lon,
             last_advert=radio_data.get("last_advert"),
             on_radio=on_radio,
         )
