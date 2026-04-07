@@ -692,9 +692,18 @@ class ContactAdvertPathRepository:
         cursor = await db.conn.execute(
             """
             SELECT public_key, path_hex, path_len, first_seen, last_seen, heard_count
-            FROM contact_advert_paths
+            FROM (
+                SELECT *,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY public_key
+                           ORDER BY last_seen DESC, heard_count DESC, path_len ASC, path_hex ASC
+                       ) AS rn
+                FROM contact_advert_paths
+            )
+            WHERE rn <= ?
             ORDER BY public_key ASC, last_seen DESC, heard_count DESC, path_len ASC, path_hex ASC
-            """
+            """,
+            (limit_per_contact,),
         )
         rows = await cursor.fetchall()
 
@@ -705,8 +714,6 @@ class ContactAdvertPathRepository:
             if paths is None:
                 paths = []
                 grouped[key] = paths
-            if len(paths) >= limit_per_contact:
-                continue
             paths.append(ContactAdvertPathRepository._row_to_path(row))
 
         return [
