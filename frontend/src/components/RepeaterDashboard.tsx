@@ -48,6 +48,8 @@ interface RepeaterDashboardProps {
   onOpenContactInfo?: (publicKey: string) => void;
   trackedTelemetryRepeaters: string[];
   onToggleTrackedTelemetry: (publicKey: string) => Promise<void>;
+  autoLoginAndLoadAll?: boolean;
+  onAutoLoginConsumed?: () => void;
 }
 
 export function RepeaterDashboard({
@@ -67,6 +69,8 @@ export function RepeaterDashboard({
   onOpenContactInfo,
   trackedTelemetryRepeaters,
   onToggleTrackedTelemetry,
+  autoLoginAndLoadAll,
+  onAutoLoginConsumed,
 }: RepeaterDashboardProps) {
   const [pathDiscoveryOpen, setPathDiscoveryOpen] = useState(false);
   const contact = contacts.find((c) => c.public_key === conversation.id) ?? null;
@@ -124,6 +128,15 @@ export function RepeaterDashboard({
     telemetryHistorySourceRef.current = 'live';
     setTelemetryHistory(liveHistory);
   }, [paneData.status?.telemetry_history]);
+
+  // Command palette "ACL login + load all" auto-action
+  const autoLoginConsumedRef = useRef(false);
+  useEffect(() => {
+    if (!autoLoginAndLoadAll || autoLoginConsumedRef.current) return;
+    autoLoginConsumedRef.current = true;
+    onAutoLoginConsumed?.();
+    void loginAsGuest().then(() => loadAll());
+  }, [autoLoginAndLoadAll, onAutoLoginConsumed, loginAsGuest, loadAll]);
 
   const isFav = contact?.favorite ?? false;
 

@@ -88,6 +88,7 @@ export function App() {
     useState<NewMessagePrefillRequest | null>(null);
   const [showBulkAddChannelTab, setShowBulkAddChannelTab] = useState(false);
   const [bulkAddResult, setBulkAddResult] = useState<BulkCreateHashtagChannelsResult | null>(null);
+  const [repeaterAutoLoginKey, setRepeaterAutoLoginKey] = useState<string | null>(null);
   const [visibilityVersion, setVisibilityVersion] = useState(0);
   const lastUnreadBackfillAttemptRef = useRef<string | null>(null);
   const {
@@ -457,6 +458,18 @@ export function App() {
     [fetchUndecryptedCount, setChannels]
   );
 
+  const handleRepeaterAutoLogin = useCallback(
+    (publicKey: string, displayName: string) => {
+      handleSelectConversationWithTargetReset({
+        type: 'contact',
+        id: publicKey,
+        name: displayName,
+      });
+      setRepeaterAutoLoginKey(publicKey);
+    },
+    [handleSelectConversationWithTargetReset]
+  );
+
   const handleOpenNewMessage = useCallback(
     (event?: MouseEvent<HTMLButtonElement>) => {
       setNewMessagePrefillRequest(null);
@@ -587,6 +600,8 @@ export function App() {
     },
     trackedTelemetryRepeaters: appSettings?.tracked_telemetry_repeaters ?? [],
     onToggleTrackedTelemetry: handleToggleTrackedTelemetry,
+    repeaterAutoLoginKey,
+    onClearRepeaterAutoLogin: () => setRepeaterAutoLoginKey(null),
   };
   const searchProps = {
     contacts,
@@ -720,6 +735,7 @@ export function App() {
         bulkAddChannelResultModalProps={bulkAddChannelResultModalProps}
         contactInfoPaneProps={contactInfoPaneProps}
         channelInfoPaneProps={channelInfoPaneProps}
+        onRepeaterAutoLogin={handleRepeaterAutoLogin}
       />
     </DistanceUnitProvider>
   );

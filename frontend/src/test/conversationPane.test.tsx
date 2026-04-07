@@ -158,6 +158,8 @@ function createProps(overrides: Partial<React.ComponentProps<typeof Conversation
     onToggleNotifications: vi.fn(),
     trackedTelemetryRepeaters: [],
     onToggleTrackedTelemetry: vi.fn(async () => {}),
+    repeaterAutoLoginKey: null,
+    onClearRepeaterAutoLogin: vi.fn(),
     ...overrides,
   };
 }
