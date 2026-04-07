@@ -25,7 +25,8 @@ import { DistanceUnitProvider } from './contexts/DistanceUnitContext';
 import { messageContainsMention } from './utils/messageParser';
 import { getStateKey } from './utils/conversationState';
 import type { BulkCreateHashtagChannelsResult, Conversation, Message, RawPacket } from './types';
-import { CONTACT_TYPE_ROOM } from './types';
+import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM } from './types';
+import { shouldAutoFocusInput } from './utils/autoFocusInput';
 
 interface ChannelUnreadMarker {
   channelId: string;
@@ -295,6 +296,21 @@ export function App() {
     clearConversationMessages,
   } = useConversationMessages(activeConversation, targetMessageId);
   removeConversationMessagesRef.current = removeConversationMessages;
+
+  // Auto-focus the message input on conversation change (desktop only by default)
+  useEffect(() => {
+    if (!activeConversation) return;
+    if (activeConversation.type !== 'channel' && activeConversation.type !== 'contact') return;
+    // Repeaters show a login form, not a message input
+    if (activeConversation.type === 'contact') {
+      const contact = contacts.find((c) => c.public_key === activeConversation.id);
+      if (contact?.type === CONTACT_TYPE_REPEATER) return;
+    }
+    if (!shouldAutoFocusInput()) return;
+    // Defer to let the input mount/render first
+    const raf = requestAnimationFrame(() => messageInputRef.current?.focus?.());
+    return () => cancelAnimationFrame(raf);
+  }, [activeConversation?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Room servers replay stored history as a burst of DMs, all arriving with similar received_at
   // but spanning a wide range of sender_timestamps. Sort by sender_timestamp for room contacts

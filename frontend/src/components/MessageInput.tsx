@@ -44,6 +44,7 @@ type LimitState = 'normal' | 'warning' | 'danger' | 'error';
 
 export interface MessageInputHandle {
   appendText: (text: string) => void;
+  focus: () => void;
 }
 
 export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(function MessageInput(
@@ -58,6 +59,9 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
     appendText: (appendedText: string) => {
       setText((prev) => prev + appendedText);
       // Focus the input after appending
+      inputRef.current?.focus();
+    },
+    focus: () => {
       inputRef.current?.focus();
     },
   }));

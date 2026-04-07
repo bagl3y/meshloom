@@ -2,6 +2,7 @@ import { useCallback, type FormEvent } from 'react';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
+import { shouldAutoFocusInput } from '../utils/autoFocusInput';
 
 interface RepeaterLoginProps {
   repeaterName: string;
@@ -64,7 +65,7 @@ export function RepeaterLogin({
             placeholder={passwordPlaceholder}
             aria-label="Repeater password"
             disabled={loading}
-            autoFocus
+            autoFocus={shouldAutoFocusInput()}
           />
 
           <label

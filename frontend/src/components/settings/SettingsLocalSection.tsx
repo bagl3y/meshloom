@@ -27,6 +27,7 @@ import {
   getSavedFontScale,
   setSavedFontScale,
 } from '../../utils/fontScale';
+import { getAutoFocusInputEnabled, setAutoFocusInputEnabled } from '../../utils/autoFocusInput';
 
 export function SettingsLocalSection({
   onLocalLabelChange,
@@ -48,6 +49,7 @@ export function SettingsLocalSection({
   });
   const [localLabelText, setLocalLabelText] = useState(() => getLocalLabel().text);
   const [localLabelColor, setLocalLabelColor] = useState(() => getLocalLabel().color);
+  const [autoFocusInput, setAutoFocusInput] = useState(getAutoFocusInputEnabled);
   const [fontScale, setFontScale] = useState(getSavedFontScale);
   const [fontScaleSlider, setFontScaleSlider] = useState(getSavedFontScale);
   const [fontScaleInput, setFontScaleInput] = useState(() => String(getSavedFontScale()));
@@ -130,85 +132,6 @@ export function SettingsLocalSection({
       <Separator />
 
       <div className="space-y-3">
-        <Label htmlFor="font-scale-input">Relative Font Size</Label>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <input
-            type="range"
-            min={MIN_FONT_SCALE}
-            max={MAX_FONT_SCALE}
-            step={FONT_SCALE_SLIDER_STEP}
-            value={fontScaleSlider}
-            onChange={(event) => handleSliderChange(Number(event.target.value))}
-            onMouseUp={(event) => handleSliderCommit(Number(event.currentTarget.value))}
-            onTouchEnd={(event) => handleSliderCommit(Number(event.currentTarget.value))}
-            onKeyUp={(event) => handleSliderCommit(Number(event.currentTarget.value))}
-            onBlur={(event) => handleSliderCommit(Number(event.currentTarget.value))}
-            aria-label="Relative font size slider"
-            className="w-full accent-primary sm:flex-1"
-          />
-          <div className="flex items-center gap-2 sm:w-40">
-            <Input
-              id="font-scale-input"
-              type="number"
-              inputMode="decimal"
-              min={MIN_FONT_SCALE}
-              max={MAX_FONT_SCALE}
-              step="any"
-              value={fontScaleInput}
-              onChange={(event) => {
-                const nextValue = event.target.value;
-                setFontScaleInput(nextValue);
-
-                if (nextValue === '') {
-                  return;
-                }
-
-                if (event.target.validity.valid && Number.isFinite(event.target.valueAsNumber)) {
-                  commitFontScale(event.target.valueAsNumber);
-                }
-              }}
-              onBlur={() => {
-                const parsed = Number.parseFloat(fontScaleInput);
-                if (!Number.isFinite(parsed)) {
-                  restoreFontScaleInput();
-                  return;
-                }
-                commitFontScale(parsed);
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter') {
-                  return;
-                }
-                event.preventDefault();
-                const parsed = Number.parseFloat(fontScaleInput);
-                if (!Number.isFinite(parsed)) {
-                  restoreFontScaleInput();
-                  return;
-                }
-                commitFontScale(parsed);
-              }}
-              aria-label="Relative font size percentage"
-            />
-            <span className="text-sm text-muted-foreground">%</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => commitFontScale(DEFAULT_FONT_SCALE)}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={fontScale === DEFAULT_FONT_SCALE}
-          >
-            Reset
-          </button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Scales the app&apos;s typography for this browser only. The slider moves in 5% steps; the
-          number field accepts any value from 25% to 400%.
-        </p>
-      </div>
-
-      <Separator />
-
-      <div className="space-y-3">
         <Label htmlFor="distance-units">Distance Units</Label>
         <select
           id="distance-units"
@@ -233,33 +156,128 @@ export function SettingsLocalSection({
 
       <Separator />
 
-      <label className="flex items-center gap-3 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={reopenLastConversation}
-          onChange={(e) => handleToggleReopenLastConversation(e.target.checked)}
-          className="w-4 h-4 rounded border-input accent-primary"
-        />
-        <span className="text-sm">Reopen to last viewed channel/conversation</span>
-      </label>
+      <div className="space-y-3">
+        <Label>UI Tweaks</Label>
 
-      <label className="flex items-center gap-3 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={darkMap}
-          onChange={(e) => {
-            const v = e.target.checked;
-            setDarkMap(v);
-            try {
-              localStorage.setItem('remoteterm-dark-map', String(v));
-            } catch {
-              // localStorage may be disabled
-            }
-          }}
-          className="w-4 h-4 rounded border-input accent-primary"
-        />
-        <span className="text-sm">Dark mode map tiles</span>
-      </label>
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={reopenLastConversation}
+            onChange={(e) => handleToggleReopenLastConversation(e.target.checked)}
+            className="w-4 h-4 rounded border-input accent-primary"
+          />
+          <span className="text-sm">Reopen to last viewed channel/conversation</span>
+        </label>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={darkMap}
+            onChange={(e) => {
+              const v = e.target.checked;
+              setDarkMap(v);
+              try {
+                localStorage.setItem('remoteterm-dark-map', String(v));
+              } catch {
+                // localStorage may be disabled
+              }
+            }}
+            className="w-4 h-4 rounded border-input accent-primary"
+          />
+          <span className="text-sm">Dark mode map tiles</span>
+        </label>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={autoFocusInput}
+            onChange={(e) => {
+              const v = e.target.checked;
+              setAutoFocusInput(v);
+              setAutoFocusInputEnabled(v);
+            }}
+            className="w-4 h-4 rounded border-input accent-primary"
+          />
+          <span className="text-sm">Auto-focus input on conversation load (desktop only)</span>
+        </label>
+
+        <div className="space-y-3">
+          <Label htmlFor="font-scale-input">Relative Font Size</Label>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <input
+              type="range"
+              min={MIN_FONT_SCALE}
+              max={MAX_FONT_SCALE}
+              step={FONT_SCALE_SLIDER_STEP}
+              value={fontScaleSlider}
+              onChange={(event) => handleSliderChange(Number(event.target.value))}
+              onMouseUp={(event) => handleSliderCommit(Number(event.currentTarget.value))}
+              onTouchEnd={(event) => handleSliderCommit(Number(event.currentTarget.value))}
+              onKeyUp={(event) => handleSliderCommit(Number(event.currentTarget.value))}
+              onBlur={(event) => handleSliderCommit(Number(event.currentTarget.value))}
+              aria-label="Relative font size slider"
+              className="w-full accent-primary sm:flex-1"
+            />
+            <div className="flex items-center gap-2 sm:w-40">
+              <Input
+                id="font-scale-input"
+                type="number"
+                inputMode="decimal"
+                min={MIN_FONT_SCALE}
+                max={MAX_FONT_SCALE}
+                step="any"
+                value={fontScaleInput}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setFontScaleInput(nextValue);
+
+                  if (nextValue === '') {
+                    return;
+                  }
+
+                  if (event.target.validity.valid && Number.isFinite(event.target.valueAsNumber)) {
+                    commitFontScale(event.target.valueAsNumber);
+                  }
+                }}
+                onBlur={() => {
+                  const parsed = Number.parseFloat(fontScaleInput);
+                  if (!Number.isFinite(parsed)) {
+                    restoreFontScaleInput();
+                    return;
+                  }
+                  commitFontScale(parsed);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') {
+                    return;
+                  }
+                  event.preventDefault();
+                  const parsed = Number.parseFloat(fontScaleInput);
+                  if (!Number.isFinite(parsed)) {
+                    restoreFontScaleInput();
+                    return;
+                  }
+                  commitFontScale(parsed);
+                }}
+                aria-label="Relative font size percentage"
+              />
+              <span className="text-sm text-muted-foreground">%</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => commitFontScale(DEFAULT_FONT_SCALE)}
+              className="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={fontScale === DEFAULT_FONT_SCALE}
+            >
+              Reset
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Scales the app&apos;s typography for this browser only. The slider moves in 5% steps;
+            the number field accepts any value from 25% to 400%.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
