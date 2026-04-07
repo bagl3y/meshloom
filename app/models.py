@@ -884,6 +884,11 @@ class NoiseFloorHistoryStats(BaseModel):
     samples: list[NoiseFloorSample] = Field(default_factory=list)
 
 
+class PacketsPerHourBucket(BaseModel):
+    timestamp: int = Field(description="Unix timestamp at the start of the hour")
+    count: int = Field(description="Number of packets received in that hour")
+
+
 class StatisticsResponse(BaseModel):
     busiest_channels_24h: list[BusyChannel]
     contact_count: int
@@ -899,6 +904,7 @@ class StatisticsResponse(BaseModel):
     repeaters_heard: ContactActivityCounts
     known_channels_active: ContactActivityCounts
     path_hash_width_24h: PathHashWidthStats
+    packets_per_hour_72h: list[PacketsPerHourBucket]
     noise_floor_24h: NoiseFloorHistoryStats
 
 

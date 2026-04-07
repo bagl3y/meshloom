@@ -43,6 +43,7 @@ class TestStatisticsEmpty:
             "double_byte_pct": 0.0,
             "triple_byte_pct": 0.0,
         }
+        assert result["packets_per_hour_72h"] == []
 
 
 class TestStatisticsCounts:
@@ -395,6 +396,54 @@ class TestPathHashWidthStats:
         assert breakdown["single_byte"] == 1
         assert breakdown["double_byte"] == 1
         assert breakdown["triple_byte"] == 1
+
+
+class TestPacketsPerHour:
+    @pytest.mark.asyncio
+    async def test_buckets_packets_by_hour(self, test_db):
+        """Packets within 72h are bucketed by hour."""
+        now = int(time.time())
+        hour_start = (now // 3600) * 3600
+        conn = test_db.conn
+
+        # 3 packets in the current hour, 1 in the previous hour
+        for i in range(3):
+            await conn.execute(
+                "INSERT INTO raw_packets (timestamp, data, payload_hash) VALUES (?, ?, ?)",
+                (hour_start + i, b"\x01", bytes([i]) * 32),
+            )
+        await conn.execute(
+            "INSERT INTO raw_packets (timestamp, data, payload_hash) VALUES (?, ?, ?)",
+            (hour_start - 1800, b"\x02", b"\xaa" * 32),
+        )
+        # 1 packet outside the 72h window — should be excluded
+        await conn.execute(
+            "INSERT INTO raw_packets (timestamp, data, payload_hash) VALUES (?, ?, ?)",
+            (now - 260000, b"\x03", b"\xbb" * 32),
+        )
+        await conn.commit()
+
+        result = await StatisticsRepository.get_all()
+        buckets = result["packets_per_hour_72h"]
+
+        assert len(buckets) == 2
+        by_ts = {b["timestamp"]: b["count"] for b in buckets}
+        assert by_ts[hour_start] == 3
+        assert by_ts[hour_start - 3600] == 1
+
+    @pytest.mark.asyncio
+    async def test_empty_when_no_recent_packets(self, test_db):
+        """Returns empty list when all packets are older than 72h."""
+        now = int(time.time())
+        conn = test_db.conn
+        await conn.execute(
+            "INSERT INTO raw_packets (timestamp, data, payload_hash) VALUES (?, ?, ?)",
+            (now - 300000, b"\x01", b"\x01" * 32),
+        )
+        await conn.commit()
+
+        result = await StatisticsRepository.get_all()
+        assert result["packets_per_hour_72h"] == []
 
 
 class TestStatisticsEndpoint:

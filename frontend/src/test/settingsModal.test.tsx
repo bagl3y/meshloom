@@ -652,6 +652,10 @@ describe('SettingsModal', () => {
         double_byte_pct: 30,
         triple_byte_pct: 20,
       },
+      packets_per_hour_72h: [
+        { timestamp: 1711792800, count: 12 },
+        { timestamp: 1711796400, count: 8 },
+      ],
       noise_floor_24h: {
         sample_interval_seconds: 300,
         coverage_seconds: 3600,
@@ -722,6 +726,7 @@ describe('SettingsModal', () => {
         double_byte_pct: 30,
         triple_byte_pct: 20,
       },
+      packets_per_hour_72h: [],
       noise_floor_24h: {
         sample_interval_seconds: 300,
         coverage_seconds: 0,

@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 SECONDS_1H = 3600
 SECONDS_24H = 86400
+SECONDS_72H = 259200
 SECONDS_7D = 604800
 RAW_PACKET_STATS_BATCH_SIZE = 500
 
@@ -275,6 +276,25 @@ class StatisticsRepository:
         }
 
     @staticmethod
+    async def _packets_per_hour_72h() -> list[dict[str, int]]:
+        """Return packet counts bucketed by hour for the last 72 hours."""
+        now = int(time.time())
+        cutoff = now - SECONDS_72H
+        # Bucket timestamps to the start of each hour
+        cursor = await db.conn.execute(
+            """
+            SELECT (timestamp / 3600) * 3600 AS hour_ts, COUNT(*) AS count
+            FROM raw_packets
+            WHERE timestamp >= ?
+            GROUP BY hour_ts
+            ORDER BY hour_ts
+            """,
+            (cutoff,),
+        )
+        rows = await cursor.fetchall()
+        return [{"timestamp": row["hour_ts"], "count": row["count"]} for row in rows]
+
+    @staticmethod
     async def _path_hash_width_24h() -> dict[str, int | float]:
         """Count parsed raw packets from the last 24h by hop hash width."""
         now = int(time.time())
@@ -350,6 +370,7 @@ class StatisticsRepository:
         repeaters_heard = await StatisticsRepository._activity_counts(contact_type=2)
         known_channels_active = await StatisticsRepository._known_channels_active()
         path_hash_width_24h = await StatisticsRepository._path_hash_width_24h()
+        packets_per_hour_72h = await StatisticsRepository._packets_per_hour_72h()
 
         return {
             "busiest_channels_24h": busiest_channels_24h,
@@ -366,4 +387,5 @@ class StatisticsRepository:
             "repeaters_heard": repeaters_heard,
             "known_channels_active": known_channels_active,
             "path_hash_width_24h": path_hash_width_24h,
+            "packets_per_hour_72h": packets_per_hour_72h,
         }

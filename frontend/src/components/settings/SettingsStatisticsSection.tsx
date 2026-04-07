@@ -42,6 +42,87 @@ function formatTime(ts: number): string {
   });
 }
 
+function formatDateTime(ts: number): string {
+  const d = new Date(ts * 1000);
+  return (
+    d.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
+    ' ' +
+    d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+  );
+}
+
+function PacketsPerHourChart({ buckets }: { buckets: { timestamp: number; count: number }[] }) {
+  // Fill gaps so hours with zero packets still appear on the chart
+  const filled: { timestamp: number; count: number }[] = [];
+  if (buckets.length > 0) {
+    const first = buckets[0].timestamp;
+    const last = buckets[buckets.length - 1].timestamp;
+    const byTs = new Map(buckets.map((b) => [b.timestamp, b.count]));
+    for (let ts = first; ts <= last; ts += 3600) {
+      filled.push({ timestamp: ts, count: byTs.get(ts) ?? 0 });
+    }
+  }
+
+  const data = filled.map((b, i) => ({
+    idx: i,
+    label: formatDateTime(b.timestamp),
+    count: b.count,
+  }));
+
+  // Show ~6 evenly-spaced tick labels
+  const tickCount = Math.min(6, data.length);
+  const tickIndices: number[] = [];
+  if (data.length > 1) {
+    for (let i = 0; i < tickCount; i++) {
+      tickIndices.push(Math.round((i / (tickCount - 1)) * (data.length - 1)));
+    }
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height={140}>
+      <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+        <XAxis
+          dataKey="idx"
+          type="number"
+          domain={[0, data.length - 1]}
+          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+          tickLine={false}
+          axisLine={false}
+          ticks={tickIndices}
+          tickFormatter={(idx) => data[idx]?.label ?? ''}
+        />
+        <YAxis
+          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+          tickLine={false}
+          axisLine={false}
+          allowDecimals={false}
+        />
+        <RechartsTooltip
+          {...TOOLTIP_STYLE}
+          cursor={{
+            stroke: 'hsl(var(--muted-foreground))',
+            strokeWidth: 1,
+            strokeDasharray: '3 3',
+          }}
+          labelFormatter={(idx) => data[Number(idx)]?.label ?? ''}
+          formatter={(value) => [`${Number(value).toLocaleString()} packets`, 'Count']}
+        />
+        <Area
+          type="monotone"
+          dataKey="count"
+          stroke="#0ea5e9"
+          fill="#0ea5e9"
+          fillOpacity={0.15}
+          strokeWidth={1.5}
+          dot={false}
+          activeDot={{ r: 4, fill: '#0ea5e9', strokeWidth: 2, stroke: 'hsl(var(--popover))' }}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
 function NoiseFloorChart({
   samples,
 }: {
@@ -240,6 +321,17 @@ export function SettingsStatisticsSection({ className }: { className?: string })
               </div>
             </div>
           </div>
+
+          {/* Packets per Hour (72h) */}
+          {stats.packets_per_hour_72h?.length > 0 && (
+            <>
+              <Separator />
+              <div>
+                <h4 className="text-sm font-medium mb-2">Packets per Hour (72h)</h4>
+                <PacketsPerHourChart buckets={stats.packets_per_hour_72h} />
+              </div>
+            </>
+          )}
 
           <Separator />
 
