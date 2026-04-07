@@ -1070,8 +1070,15 @@ async def sync_contacts_from_radio(mc: MeshCore) -> dict:
 
         logger.debug("Synced %d contacts from radio snapshot", synced)
 
-        # Import radio-favorited contacts into app favorites
-        radio_fav_keys = [pk for pk, data in contacts.items() if data.get("flags", 0) & 0x01]
+        # Import radio-favorited contacts into app favorites.
+        # Only trust the favorite bit on contacts with a valid type (0-4);
+        # garbled radio data can have junk flags with bit 0 set.
+        _VALID_CONTACT_TYPES = {0, 1, 2, 3, 4}
+        radio_fav_keys = [
+            pk
+            for pk, data in contacts.items()
+            if data.get("flags", 0) & 0x01 and data.get("type", -1) in _VALID_CONTACT_TYPES
+        ]
         if radio_fav_keys:
             try:
                 imported = 0
