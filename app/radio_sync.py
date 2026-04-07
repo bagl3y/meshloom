@@ -21,7 +21,7 @@ from meshcore import EventType, MeshCore
 from app.channel_constants import PUBLIC_CHANNEL_KEY, PUBLIC_CHANNEL_NAME
 from app.config import settings
 from app.event_handlers import cleanup_expired_acks, on_contact_message
-from app.models import Contact, ContactUpsert, _VALID_CONTACT_TYPES
+from app.models import _VALID_CONTACT_TYPES, Contact, ContactUpsert
 from app.radio import RadioOperationBusyError
 from app.repository import (
     AmbiguousPublicKeyPrefixError,

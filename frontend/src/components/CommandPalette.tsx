@@ -423,14 +423,11 @@ function RepeaterGroup({
         </CommandItem>,
         <CommandItem
           key={`${c.public_key}-acl`}
-          onSelect={() =>
-            onSelect(() => onRepeaterAutoLogin(c.public_key, displayName))
-          }
+          onSelect={() => onSelect(() => onRepeaterAutoLogin(c.public_key, displayName))}
         >
           <Waypoints className="text-muted-foreground" />
           <span>
-            {displayName}{' '}
-            <span className="text-muted-foreground">(ACL login + load all)</span>
+            {displayName} <span className="text-muted-foreground">(ACL login + load all)</span>
           </span>
         </CommandItem>,
       ])}
