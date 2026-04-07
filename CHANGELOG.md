@@ -1,3 +1,24 @@
+## [3.9.0] - 2026-04-06
+
+* Feature: Add hop counts to hop-width selection options
+* Feature: Show cached repeater telemetry inline in settings
+* Feature: Retain recent traces and make them click-to-re-run
+* Feature: Autofocus channel/DM textbox on desktop
+* Feature: Favorites on the radio are now imported as favorites
+* Bugfix: Be clearer on issue identification for missing HTTPS context in channel finder
+* Bugfix: Don't use sender timestamp for message sequence display
+* Bugfix: Function on subdomains happily
+* Misc: Be gentler, room s/cracker/finder/
+* Misc: Test and frontend correctness & test fixes
+* Misc: Don't repeat clock sync failure logs
+* Misc: Make warning in readme clearer about taking over the radio
+* Misc: Improve readme phrasings
+* Misc: Better y-axis selection for battery read-out
+* Misc: Provide clearer warning on docker setup without docker installed
+* Misc: Default visualizer stale pruning to on/5 minutes
+* Misc: Migrate favorites to better storage pattern
+* Misc: Provide dumper script for API + WS interfaces for prep for HA integration
+
 ## [3.8.0] - 2026-04-03
 
 * Feature: Per-channel hop width override
