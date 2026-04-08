@@ -12,7 +12,16 @@ export function mergeContactIntoList(contacts: Contact[], incoming: Contact): Co
   const idx = contacts.findIndex((c) => c.public_key === incoming.public_key);
   if (idx >= 0) {
     const existing = contacts[idx];
-    const merged = { ...existing, ...incoming };
+    // Preserve user-action-only fields that should not be overwritten by
+    // radio-event-driven WS updates (adverts, path updates, syncs).  These
+    // fields are only changed via explicit user actions (favorite toggle,
+    // mark-read) or full REST refetches, not via mesh/radio events.
+    const merged = {
+      ...existing,
+      ...incoming,
+      favorite: existing.favorite,
+      last_read_at: existing.last_read_at,
+    };
     const unchanged = (Object.keys(merged) as (keyof Contact)[]).every(
       (k) => existing[k] === merged[k]
     );

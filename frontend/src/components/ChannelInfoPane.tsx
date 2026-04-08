@@ -120,7 +120,12 @@ export function ChannelInfoPane({
               <button
                 type="button"
                 className="text-sm flex items-center gap-2 hover:text-primary transition-colors"
-                onClick={() => onToggleFavorite('channel', channel.key)}
+                onClick={(e) => {
+                  console.log(
+                    `[fav-debug] ChannelInfoPane star clicked t=${performance.now().toFixed(2)} detail=${e.detail} isTrusted=${e.isTrusted}`
+                  );
+                  onToggleFavorite('channel', channel.key);
+                }}
               >
                 {channel.favorite ? (
                   <>
