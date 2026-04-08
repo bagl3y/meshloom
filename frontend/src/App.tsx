@@ -207,36 +207,20 @@ export function App() {
 
   const handleToggleFavorite = useCallback(
     async (type: 'channel' | 'contact', id: string) => {
-      const ts = performance.now().toFixed(2);
-      console.log(
-        `[fav-debug] handleToggleFavorite called t=${ts} type=${type} id=${id.slice(0, 12)}`
-      );
-
       // Optimistically toggle the favorite flag
       if (type === 'contact') {
-        setContacts((prev) => {
-          const match = prev.find((c) => c.public_key === id);
-          console.log(
-            `[fav-debug] optimistic contact toggle t=${ts} current=${match?.favorite} → ${!match?.favorite}`
-          );
-          return prev.map((c) => (c.public_key === id ? { ...c, favorite: !c.favorite } : c));
-        });
+        setContacts((prev) =>
+          prev.map((c) => (c.public_key === id ? { ...c, favorite: !c.favorite } : c))
+        );
       } else {
-        setChannels((prev) => {
-          const match = prev.find((c) => c.key === id);
-          console.log(
-            `[fav-debug] optimistic channel toggle t=${ts} current=${match?.favorite} → ${!match?.favorite}`
-          );
-          return prev.map((c) => (c.key === id ? { ...c, favorite: !c.favorite } : c));
-        });
+        setChannels((prev) =>
+          prev.map((c) => (c.key === id ? { ...c, favorite: !c.favorite } : c))
+        );
       }
 
       try {
-        console.log(`[fav-debug] firing API request t=${ts}`);
-        const result = await api.toggleFavorite(type, id);
-        console.log(`[fav-debug] API response t=${ts}`, result);
-      } catch (err) {
-        console.error(`[fav-debug] API error t=${ts}`, err);
+        await api.toggleFavorite(type, id);
+      } catch {
         // Revert on failure
         if (type === 'contact') {
           setContacts((prev) =>

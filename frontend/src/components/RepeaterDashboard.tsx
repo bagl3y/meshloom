@@ -266,12 +266,7 @@ export function RepeaterDashboard({
           )}
           <button
             className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={(e) => {
-              console.log(
-                `[fav-debug] RepeaterDashboard star clicked t=${performance.now().toFixed(2)} detail=${e.detail} isTrusted=${e.isTrusted}`
-              );
-              onToggleFavorite('contact', conversation.id);
-            }}
+            onClick={() => onToggleFavorite('contact', conversation.id)}
             title={
               isFav
                 ? 'Remove from favorites. Favorite contacts stay loaded on the radio for ACK support.'

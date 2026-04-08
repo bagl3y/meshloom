@@ -351,12 +351,9 @@ export function ChatHeader({
         {(conversation.type === 'channel' || conversation.type === 'contact') && (
           <button
             className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={(e) => {
-              console.log(
-                `[fav-debug] star clicked t=${performance.now().toFixed(2)} detail=${e.detail} isTrusted=${e.isTrusted}`
-              );
-              onToggleFavorite(conversation.type as 'channel' | 'contact', conversation.id);
-            }}
+            onClick={() =>
+              onToggleFavorite(conversation.type as 'channel' | 'contact', conversation.id)
+            }
             title={favoriteTitle}
             aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
           >
