@@ -15,7 +15,7 @@ const RAW_PACKET_STATS_WINDOW_SECONDS: Record<Exclude<RawPacketStatsWindow, 'ses
 
 export const MAX_RAW_PACKET_STATS_OBSERVATIONS = 20000;
 
-const KNOWN_PAYLOAD_TYPES = [
+export const KNOWN_PAYLOAD_TYPES = [
   'Advert',
   'GroupText',
   'TextMessage',

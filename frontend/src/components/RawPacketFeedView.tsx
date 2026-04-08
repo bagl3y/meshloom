@@ -11,11 +11,14 @@ import {
   Cell,
 } from 'recharts';
 
+import { MeshCoreDecoder, Utils } from '@michaelhart/meshcore-decoder';
+
 import { RawPacketList } from './RawPacketList';
 import { RawPacketInspectorDialog } from './RawPacketDetailModal';
 import { Button } from './ui/button';
 import type { Channel, Contact, RawPacket } from '../types';
 import {
+  KNOWN_PAYLOAD_TYPES,
   RAW_PACKET_STATS_WINDOWS,
   buildRawPacketStatsSnapshot,
   type NeighborStat,
@@ -24,8 +27,25 @@ import {
   type RawPacketStatsSessionState,
   type RawPacketStatsWindow,
 } from '../utils/rawPacketStats';
+import { createDecoderOptions } from '../utils/rawPacketInspector';
 import { getContactDisplayName } from '../utils/pubkey';
 import { cn } from '@/lib/utils';
+
+const KNOWN_PAYLOAD_TYPE_SET = new Set<string>(KNOWN_PAYLOAD_TYPES);
+
+function getPacketTypeName(
+  packet: RawPacket,
+  decoderOptions?: ReturnType<typeof createDecoderOptions>
+): string {
+  try {
+    const decoded = MeshCoreDecoder.decode(packet.data, decoderOptions);
+    if (!decoded.isValid) return 'Unknown';
+    const name = Utils.getPayloadTypeName(decoded.payloadType);
+    return KNOWN_PAYLOAD_TYPE_SET.has(name) ? name : 'Unknown';
+  } catch {
+    return 'Unknown';
+  }
+}
 
 interface RawPacketFeedViewProps {
   packets: RawPacket[];
@@ -428,6 +448,48 @@ export function RawPacketFeedView({
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
   const [selectedPacket, setSelectedPacket] = useState<RawPacket | null>(null);
   const [analyzeModalOpen, setAnalyzeModalOpen] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [enabledTypes, setEnabledTypes] = useState<Set<string>>(() => new Set(KNOWN_PAYLOAD_TYPES));
+
+  const decoderOptions = useMemo(() => createDecoderOptions(channels), [channels]);
+
+  const packetsWithTypes = useMemo(
+    () =>
+      packets.map((packet) => ({
+        packet,
+        payloadType: getPacketTypeName(packet, decoderOptions),
+      })),
+    [packets, decoderOptions]
+  );
+
+  const allTypesEnabled = enabledTypes.size === KNOWN_PAYLOAD_TYPES.length;
+
+  const filteredPackets = useMemo(() => {
+    if (allTypesEnabled) return packets;
+    return packetsWithTypes
+      .filter(({ payloadType }) => enabledTypes.has(payloadType))
+      .map(({ packet }) => packet);
+  }, [packetsWithTypes, enabledTypes, packets, allTypesEnabled]);
+
+  const handleToggleAll = () => {
+    setEnabledTypes(allTypesEnabled ? new Set() : new Set(KNOWN_PAYLOAD_TYPES));
+  };
+
+  const handleToggleType = (type: string) => {
+    setEnabledTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  };
+
+  const handleOnly = (type: string) => {
+    setEnabledTypes(new Set([type]));
+  };
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -468,38 +530,129 @@ export function RawPacketFeedView({
   );
   return (
     <>
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
-        <div>
-          <h2 className="font-semibold text-base text-foreground">Raw Packet Feed</h2>
-          <p className="text-xs text-muted-foreground">
-            Collecting stats since {formatTimestamp(rawPacketStatsSession.sessionStartedAt)}
-          </p>
+      <div className="border-b border-border px-4 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-base text-foreground">Raw Packet Feed</h2>
+            <p className="hidden md:block text-xs text-muted-foreground">
+              Collecting stats since {formatTimestamp(rawPacketStatsSession.sessionStartedAt)}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setAnalyzeModalOpen(true)}
+            >
+              Analyze Packet
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setStatsOpen((current) => !current)}
+              aria-expanded={statsOpen}
+            >
+              {statsOpen ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
+              {statsOpen ? 'Hide Stats' : 'Show Stats'}
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setAnalyzeModalOpen(true)}
-          >
-            Analyze Packet
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setStatsOpen((current) => !current)}
-            aria-expanded={statsOpen}
-          >
-            {statsOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-            {statsOpen ? 'Hide Stats' : 'Show Stats'}
-          </Button>
+        <p className="md:hidden text-xs text-muted-foreground">
+          Collecting stats since {formatTimestamp(rawPacketStatsSession.sessionStartedAt)}
+          {!mobileFiltersOpen && (
+            <>
+              {' · '}
+              <button
+                type="button"
+                className="text-primary hover:text-primary/80 transition-colors"
+                onClick={() => setMobileFiltersOpen(true)}
+              >
+                Show Filters
+              </button>
+            </>
+          )}
+        </p>
+
+        {mobileFiltersOpen && (
+          <div className="mt-1.5 md:hidden flex flex-wrap items-center gap-x-3 gap-y-1">
+            <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                checked={allTypesEnabled}
+                onChange={handleToggleAll}
+                className="rounded"
+              />
+              All
+            </label>
+            {KNOWN_PAYLOAD_TYPES.map((type) => (
+              <span key={type} className="inline-flex items-center gap-1 text-xs">
+                <label className="flex items-center gap-1 text-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enabledTypes.has(type)}
+                    onChange={() => handleToggleType(type)}
+                    className="rounded"
+                  />
+                  {type}
+                </label>
+                <button
+                  type="button"
+                  className="text-[0.625rem] text-muted-foreground hover:text-primary transition-colors"
+                  onClick={() => handleOnly(type)}
+                >
+                  (only)
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-1.5 hidden md:flex flex-wrap items-center gap-x-3 gap-y-1">
+          <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allTypesEnabled}
+              onChange={handleToggleAll}
+              className="rounded"
+            />
+            All
+          </label>
+          {KNOWN_PAYLOAD_TYPES.map((type) => (
+            <span key={type} className="inline-flex items-center gap-1 text-xs">
+              <label className="flex items-center gap-1 text-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enabledTypes.has(type)}
+                  onChange={() => handleToggleType(type)}
+                  className="rounded"
+                />
+                {type}
+              </label>
+              <button
+                type="button"
+                className="text-[0.625rem] text-muted-foreground hover:text-primary transition-colors"
+                onClick={() => handleOnly(type)}
+              >
+                (only)
+              </button>
+            </span>
+          ))}
         </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <div className={cn('min-h-0 min-w-0 flex-1', statsOpen && 'md:border-r md:border-border')}>
-          <RawPacketList packets={packets} channels={channels} onPacketClick={setSelectedPacket} />
+          <RawPacketList
+            packets={filteredPackets}
+            channels={channels}
+            onPacketClick={setSelectedPacket}
+          />
         </div>
 
         <aside
