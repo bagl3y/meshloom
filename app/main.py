@@ -1,5 +1,41 @@
-import asyncio
 import logging
+import sys
+
+# ---------------------------------------------------------------------------
+# Windows event-loop advisory for MQTT fanout
+# ---------------------------------------------------------------------------
+# On Windows, uvicorn's default event loop (ProactorEventLoop) does not
+# implement add_reader()/add_writer(), which paho-mqtt (via aiomqtt) requires.
+# We cannot fix this from inside the app — the loop is already created by the
+# time this module is imported.  Log a prominent warning so Windows operators
+# who want MQTT know to add ``--loop none`` to their uvicorn command.
+# ---------------------------------------------------------------------------
+if sys.platform == "win32":
+    import asyncio as _asyncio
+
+    _loop = _asyncio.get_event_loop()
+    _is_proactor = type(_loop).__name__ == "ProactorEventLoop"
+    if _is_proactor:
+        print(
+            "\n" + "!" * 78 + "\n"
+            "  NOTE FOR WINDOWS USERS\n" + "!" * 78 + "\n"
+            "\n"
+            "  The running event loop is ProactorEventLoop, which is not\n"
+            "  compatible with MQTT fanout (aiomqtt / paho-mqtt).\n"
+            "\n"
+            "  If you use MQTT integrations, restart with --loop none:\n"
+            "\n"
+            "    uv run uvicorn app.main:app \033[1m--loop none\033[0m"
+            " [... other options ...]\n"
+            "\n"
+            "  Everything else works fine as-is.\n"
+            "\n" + "!" * 78 + "\n",
+            file=sys.stderr,
+            flush=True,
+        )
+    del _loop, _is_proactor
+
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 

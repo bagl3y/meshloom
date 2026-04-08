@@ -199,6 +199,15 @@ $env:MESHCORE_SERIAL_PORT="COM8" # or your COM port
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
+> [!WARNING]
+> **Windows + MQTT fanout:** Python's default Windows event loop (ProactorEventLoop) is not compatible with the MQTT libraries used by RemoteTerm. If you configure any MQTT integration, add `--loop none` to your uvicorn command:
+>
+> ```powershell
+> uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --loop none
+> ```
+>
+> If you forget, the app will start normally but MQTT connections will fail and you'll see a toast in the UI with this same guidance.
+
 If you enable Basic Auth, protect the app with HTTPS. HTTP Basic credentials are not safe on plain HTTP. Also note that the app's permissive CORS policy is a deliberate trusted-network tradeoff, so cross-origin browser JavaScript is not a reliable way to use that Basic Auth gate.
 
 ## Where To Go Next

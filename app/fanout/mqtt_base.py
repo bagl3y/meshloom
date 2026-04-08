@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 import time
 from abc import ABC, abstractmethod
 from typing import Any
@@ -251,6 +252,34 @@ class BaseMqttPublisher(ABC):
                 self.connected = False
                 self._client = None
                 self._last_error = _format_error_detail(e)
+
+                # Windows ProactorEventLoop does not implement add_reader /
+                # add_writer, which paho-mqtt requires.  The failure can
+                # surface as a direct NotImplementedError (add_writer in
+                # __aenter__) or as a generic timeout (add_reader fails
+                # inside an event-loop callback, so paho never hears back).
+                # Either way, if we're on Windows with Proactor the root
+                # cause is the same and retrying won't help.
+                _on_proactor = (
+                    sys.platform == "win32"
+                    and type(asyncio.get_event_loop()).__name__ == "ProactorEventLoop"
+                )
+                if _on_proactor:
+                    broadcast_error(
+                        "MQTT unavailable — Windows event loop incompatible",
+                        "The default Windows event loop (ProactorEventLoop) does "
+                        "not support MQTT. Add --loop none to your uvicorn "
+                        "command and restart. See README.md for details.",
+                    )
+                    _broadcast_health()
+                    logger.error(
+                        "%s cannot run: Windows ProactorEventLoop does not "
+                        "implement add_reader/add_writer required by paho-mqtt. "
+                        "Restart uvicorn with '--loop none' to use "
+                        "SelectorEventLoop instead. Giving up (will not retry).",
+                        self._integration_label(),
+                    )
+                    return
 
                 title, detail = self._on_error()
                 broadcast_error(title, detail)
