@@ -161,6 +161,29 @@ To stop:
 sudo docker compose down
 ```
 
+## Install Path 3: Arch Linux (AUR)
+
+A [`remoteterm-meshcore`](https://aur.archlinux.org/packages/remoteterm-meshcore) package is available in the AUR. Install it with an AUR helper or build it manually:
+
+```bash
+# with an AUR helper
+yay -S remoteterm-meshcore
+
+# or manually
+git clone https://aur.archlinux.org/remoteterm-meshcore.git
+cd remoteterm-meshcore
+makepkg -si
+```
+
+Configure your radio connection, then start the service:
+
+```bash
+sudo vi /etc/remoteterm-meshcore/remoteterm.env
+sudo systemctl enable --now remoteterm-meshcore
+```
+
+Access the app at http://localhost:8000.
+
 ## Standard Environment Variables
 
 Only one transport may be active at a time. If multiple are set, the server will refuse to start.
