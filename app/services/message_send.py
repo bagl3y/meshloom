@@ -264,38 +264,43 @@ async def send_channel_message_with_effective_scope(
         return send_result
     finally:
         if override_scope and override_scope != baseline_scope:
-            try:
-                restore_result = await mc.commands.set_flood_scope(
-                    baseline_scope if baseline_scope else ""
-                )
-                if restore_result is not None and restore_result.type == EventType.ERROR:
-                    logger.error(
-                        "Failed to restore baseline flood_scope after sending to %s: %s",
+            restored = False
+            for attempt in range(3):
+                try:
+                    restore_result = await mc.commands.set_flood_scope(
+                        baseline_scope if baseline_scope else ""
+                    )
+                    if restore_result is not None and restore_result.type == EventType.ERROR:
+                        logger.warning(
+                            "Attempt %d/3: failed to restore flood_scope after sending to %s: %s",
+                            attempt + 1,
+                            channel.name,
+                            restore_result.payload,
+                        )
+                    else:
+                        logger.debug(
+                            "Restored baseline flood_scope after channel send: %r",
+                            baseline_scope or "(disabled)",
+                        )
+                        restored = True
+                        break
+                except Exception:
+                    logger.exception(
+                        "Attempt %d/3: exception restoring flood_scope after sending to %s",
+                        attempt + 1,
                         channel.name,
-                        restore_result.payload,
                     )
-                    error_broadcast_fn(
-                        "Regional override restore failed",
-                        (
-                            f"Sent to {channel.name}, but restoring flood scope failed. "
-                            "The radio may still be region-scoped. Consider rebooting the radio."
-                        ),
-                    )
-                else:
-                    logger.debug(
-                        "Restored baseline flood_scope after channel send: %r",
-                        baseline_scope or "(disabled)",
-                    )
-            except Exception:
-                logger.exception(
-                    "Failed to restore baseline flood_scope after sending to %s",
+            if not restored:
+                logger.error(
+                    "All 3 attempts to restore flood_scope failed for %s",
                     channel.name,
                 )
                 error_broadcast_fn(
                     "Regional override restore failed",
                     (
-                        f"Sent to {channel.name}, but restoring flood scope failed. "
-                        "The radio may still be region-scoped. Consider rebooting the radio."
+                        f"Sent to {channel.name}, but restoring flood scope failed "
+                        f"after 3 attempts. The radio may still be region-scoped. "
+                        f"Consider rebooting the radio."
                     ),
                 )
 

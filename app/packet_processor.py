@@ -39,6 +39,7 @@ from app.repository import (
     ChannelRepository,
     ContactAdvertPathRepository,
     ContactRepository,
+    MessageRepository,
     RawPacketRepository,
 )
 from app.services.contact_reconciliation import (
@@ -645,10 +646,30 @@ async def _process_direct_message(
         )
 
         if result is not None:
-            # Successfully decrypted!
+            # In the ambiguous direction case (both first bytes match), we
+            # defaulted to incoming.  Check if a matching outgoing message
+            # already exists — if so, this is actually our own outgoing echo
+            # and should be treated as such instead of creating a duplicate
+            # incoming row.
+            effective_outgoing = is_outgoing
+            if not is_outgoing and dest_hash == src_hash:
+                existing_outgoing = await MessageRepository.get_by_content(
+                    msg_type="PRIV",
+                    conversation_key=contact.public_key.lower(),
+                    text=result.message,
+                    sender_timestamp=result.timestamp,
+                    outgoing=True,
+                )
+                if existing_outgoing is not None:
+                    effective_outgoing = True
+                    logger.debug(
+                        "Ambiguous DM resolved as outgoing echo (matched existing sent msg %d)",
+                        existing_outgoing.id,
+                    )
+
             logger.debug(
                 "Decrypted DM %s contact %s: %s",
-                "to" if is_outgoing else "from",
+                "to" if effective_outgoing else "from",
                 contact.name or contact.public_key[:12],
                 result.message[:50] if result.message else "",
             )
@@ -664,7 +685,7 @@ async def _process_direct_message(
                 path_len=packet_info.path_length if packet_info else None,
                 rssi=rssi,
                 snr=snr,
-                outgoing=is_outgoing,
+                outgoing=effective_outgoing,
             )
 
             return {
