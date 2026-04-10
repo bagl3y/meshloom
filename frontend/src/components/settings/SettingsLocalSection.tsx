@@ -28,6 +28,13 @@ import {
   setSavedFontScale,
 } from '../../utils/fontScale';
 import { getAutoFocusInputEnabled, setAutoFocusInputEnabled } from '../../utils/autoFocusInput';
+import {
+  getShowBatteryPercent,
+  setShowBatteryPercent as saveBatteryPercent,
+  getShowBatteryVoltage,
+  setShowBatteryVoltage as saveBatteryVoltage,
+} from '../../utils/batteryDisplay';
+import { BATTERY_DISPLAY_CHANGE_EVENT } from '../StatusBar';
 
 export function SettingsLocalSection({
   onLocalLabelChange,
@@ -50,6 +57,8 @@ export function SettingsLocalSection({
   const [localLabelText, setLocalLabelText] = useState(() => getLocalLabel().text);
   const [localLabelColor, setLocalLabelColor] = useState(() => getLocalLabel().color);
   const [autoFocusInput, setAutoFocusInput] = useState(getAutoFocusInputEnabled);
+  const [batteryPercent, setBatteryPercent] = useState(getShowBatteryPercent);
+  const [batteryVoltage, setBatteryVoltage] = useState(getShowBatteryVoltage);
   const [fontScale, setFontScale] = useState(getSavedFontScale);
   const [fontScaleSlider, setFontScaleSlider] = useState(getSavedFontScale);
   const [fontScaleInput, setFontScaleInput] = useState(() => String(getSavedFontScale()));
@@ -200,6 +209,43 @@ export function SettingsLocalSection({
           />
           <span className="text-sm">Auto-focus input on conversation load (desktop only)</span>
         </label>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={batteryPercent}
+            onChange={(e) => {
+              const v = e.target.checked;
+              setBatteryPercent(v);
+              saveBatteryPercent(v);
+              window.dispatchEvent(new Event(BATTERY_DISPLAY_CHANGE_EVENT));
+            }}
+            className="w-4 h-4 rounded border-input accent-primary"
+          />
+          <span className="text-sm">Show battery percentage in status bar</span>
+        </label>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={batteryVoltage}
+            onChange={(e) => {
+              const v = e.target.checked;
+              setBatteryVoltage(v);
+              saveBatteryVoltage(v);
+              window.dispatchEvent(new Event(BATTERY_DISPLAY_CHANGE_EVENT));
+            }}
+            className="w-4 h-4 rounded border-input accent-primary"
+          />
+          <span className="text-sm">Show battery voltage in status bar</span>
+        </label>
+
+        {(batteryPercent || batteryVoltage) && (
+          <p className="text-xs text-muted-foreground ml-7">
+            Battery data updates every 60 seconds and may take up to a minute to appear after
+            connecting.
+          </p>
+        )}
 
         <div className="space-y-3">
           <Label htmlFor="font-scale-input">Relative Font Size</Label>
