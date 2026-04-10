@@ -421,7 +421,8 @@ async def _retry_direct_message_until_acked(
     message_repository,
 ) -> None:
     next_wait_timeout_ms = wait_timeout_ms
-    for attempt in range(1, DM_SEND_MAX_ATTEMPTS):
+    attempt = 1
+    while attempt < DM_SEND_MAX_ATTEMPTS:
         await sleep_fn((next_wait_timeout_ms / 1000) * DM_RETRY_WAIT_MARGIN)
         if await _is_message_acked(message_id=message_id, message_repository=message_repository):
             return
@@ -463,6 +464,14 @@ async def _retry_direct_message_until_acked(
                     timestamp=sender_timestamp,
                     attempt=attempt,
                 )
+        except RadioOperationBusyError:
+            logger.debug(
+                "Radio busy during DM retry attempt %d/%d for %s, will retry without consuming attempt",
+                attempt + 1,
+                DM_SEND_MAX_ATTEMPTS,
+                contact.public_key[:12],
+            )
+            continue
         except Exception:
             logger.exception(
                 "Background DM retry attempt %d/%d failed for %s",
@@ -470,6 +479,7 @@ async def _retry_direct_message_until_acked(
                 DM_SEND_MAX_ATTEMPTS,
                 contact.public_key[:12],
             )
+            attempt += 1
             continue
 
         if result is None:
@@ -479,6 +489,7 @@ async def _retry_direct_message_until_acked(
                 DM_SEND_MAX_ATTEMPTS,
                 contact.public_key[:12],
             )
+            attempt += 1
             continue
 
         if result.type == EventType.ERROR:
@@ -489,6 +500,7 @@ async def _retry_direct_message_until_acked(
                 contact.public_key[:12],
                 result.payload,
             )
+            attempt += 1
             continue
 
         if await _is_message_acked(message_id=message_id, message_repository=message_repository):
@@ -515,6 +527,8 @@ async def _retry_direct_message_until_acked(
         )
         if ack_count > 0:
             return
+
+        attempt += 1
 
 
 async def send_direct_message_to_contact(
