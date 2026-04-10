@@ -7,7 +7,7 @@ import {
   Radio,
   Route,
   Search,
-  Sparkles,
+  Star,
   User,
   Waypoints,
 } from 'lucide-react';
@@ -296,7 +296,7 @@ export function CommandPalette({
                   >
                     <Hash className="text-muted-foreground" />
                     <span>{ch.name}</span>
-                    <Sparkles className="ml-auto h-3 w-3 text-yellow-500" />
+                    <Star className="ml-auto h-3 w-3 text-favorite" />
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -384,7 +384,7 @@ function ContactGroup({
         >
           <Icon className="text-muted-foreground" />
           <span>{displayName}</span>
-          {showStar && <Sparkles className="ml-auto h-3 w-3 text-yellow-500" />}
+          {showStar && <Star className="ml-auto h-3 w-3 text-favorite" />}
         </CommandItem>
       ))}
     </CommandGroup>
@@ -419,7 +419,7 @@ function RepeaterGroup({
         >
           <Waypoints className="text-muted-foreground" />
           <span>{displayName}</span>
-          {showStar && <Sparkles className="ml-auto h-3 w-3 text-yellow-500" />}
+          {showStar && <Star className="ml-auto h-3 w-3 text-favorite" />}
         </CommandItem>,
         <CommandItem
           key={`${c.public_key}-acl`}
