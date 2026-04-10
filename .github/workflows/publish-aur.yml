@@ -57,7 +57,7 @@ jobs:
             pkg/aur/remoteterm-meshcore.install
             pkg/aur/remoteterm-meshcore.service
             pkg/aur/remoteterm.env
-          commit_username: jkingsman
+          commit_username: jackkingsman
           commit_email: ${{ secrets.AUR_COMMIT_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           commit_message: "Update to ${{ steps.version.outputs.version }}"
