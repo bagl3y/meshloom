@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +193,7 @@ async def run_post_connect_setup(radio_manager) -> None:
                                 logger.info(
                                     "Radio clock at connect: epoch=%d utc=%s",
                                     radio_time,
-                                    datetime.fromtimestamp(radio_time, timezone.utc).strftime(
+                                    datetime.fromtimestamp(radio_time, UTC).strftime(
                                         "%Y-%m-%d %H:%M:%S UTC"
                                     ),
                                 )
@@ -274,7 +274,7 @@ async def prepare_connected_radio(radio_manager, *, broadcast_on_success: bool =
         try:
             await radio_manager.post_connect_setup()
             break
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             if attempt < POST_CONNECT_SETUP_MAX_ATTEMPTS:
                 logger.warning(
                     "Post-connect setup timed out after %ds on attempt %d/%d; retrying once",

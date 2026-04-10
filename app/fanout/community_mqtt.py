@@ -538,7 +538,7 @@ class CommunityMqttPublisher(BaseMqttPublisher):
             self._version_event.clear()
             try:
                 await asyncio.wait_for(self._version_event.wait(), timeout=30)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
             return False
         return True

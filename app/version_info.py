@@ -13,12 +13,11 @@ import importlib.metadata
 import json
 import os
 import subprocess
+import tomllib
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
-
-import tomllib
 
 RELEASE_BUILD_INFO_FILENAME = "build_info.json"
 PROJECT_NAME = "remoteterm-meshcore"

@@ -225,7 +225,7 @@ class FanoutManager:
             handler = getattr(module, handler_name)
             await asyncio.wait_for(handler(data), timeout=_DISPATCH_TIMEOUT_SECONDS)
             self._clear_module_error(config_id)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             timeout_error = f"{handler_name} timed out after {_DISPATCH_TIMEOUT_SECONDS:.1f}s"
             self._set_module_error(config_id, timeout_error)
             logger.error(

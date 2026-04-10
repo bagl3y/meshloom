@@ -2,10 +2,10 @@
 
 import json
 import logging
-from typing import Any, Literal
+from typing import Any, Literal, NotRequired
 
 from pydantic import TypeAdapter
-from typing_extensions import NotRequired, TypedDict
+from typing_extensions import TypedDict
 
 from app.models import Channel, Contact, Message, MessagePath, RawPacketBroadcast
 from app.routers.health import HealthResponse

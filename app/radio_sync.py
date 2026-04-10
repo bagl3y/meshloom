@@ -480,7 +480,7 @@ async def drain_pending_messages(mc: MeshCore) -> int:
             # Small delay between fetches
             await asyncio.sleep(0.1)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             break
         except Exception as e:
             logger.warning("Error draining messages: %s", e, exc_info=True)
@@ -518,7 +518,7 @@ async def poll_for_messages(mc: MeshCore) -> int:
             # If we got a message, there might be more - drain them
             count += await drain_pending_messages(mc)
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         pass
     except Exception as e:
         logger.warning("Message poll exception: %s", e, exc_info=True)

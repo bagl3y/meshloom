@@ -1073,9 +1073,7 @@ class TestPostConnectSetupOrdering:
 
         rm = RadioManager()
         rm._connection_info = "Serial: /dev/ttyUSB0"
-        rm.post_connect_setup = AsyncMock(
-            side_effect=[asyncio.TimeoutError(), asyncio.TimeoutError()]
-        )
+        rm.post_connect_setup = AsyncMock(side_effect=[TimeoutError(), TimeoutError()])
 
         with (
             patch("app.websocket.broadcast_error") as mock_broadcast_error,
@@ -1099,7 +1097,7 @@ class TestPostConnectSetupOrdering:
 
         rm = RadioManager()
         rm._connection_info = "Serial: /dev/ttyUSB0"
-        rm.post_connect_setup = AsyncMock(side_effect=[asyncio.TimeoutError(), None])
+        rm.post_connect_setup = AsyncMock(side_effect=[TimeoutError(), None])
 
         with (
             patch("app.websocket.broadcast_error") as mock_broadcast_error,

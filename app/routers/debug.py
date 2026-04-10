@@ -4,7 +4,7 @@ import os
 import platform
 import struct
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter
@@ -390,7 +390,7 @@ async def debug_support_snapshot() -> DebugSnapshotResponse:
         is_reconnecting=is_reconnecting,
     )
     return DebugSnapshotResponse(
-        captured_at=datetime.now(timezone.utc).isoformat(),
+        captured_at=datetime.now(UTC).isoformat(),
         system=_build_system_info(),
         application=_build_application_info(),
         health=_build_debug_health_summary(health_data, radio_state=radio_state),

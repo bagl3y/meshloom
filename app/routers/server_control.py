@@ -94,7 +94,7 @@ async def fetch_contact_cli_response(
     while _monotonic() < deadline:
         try:
             result = await mc.commands.get_msg(timeout=2.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             continue
         except Exception as exc:
             logger.debug("get_msg() exception: %s", exc)
@@ -196,7 +196,7 @@ async def prepare_authenticated_contact_connection(
                 login_future,
                 timeout=response_timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "No login response from %s %s within %.1fs",
                 contact_label,

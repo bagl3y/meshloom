@@ -23,7 +23,7 @@ For advanced setup and troubleshooting see [README_ADVANCED.md](README_ADVANCED.
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - Node.js LTS or current (20, 22, 24, 25) if you're not using a prebuilt release
 - [UV](https://astral.sh/uv) package manager: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - MeshCore radio connected via USB serial, TCP, or BLE
@@ -134,6 +134,8 @@ To rebuild after pulling updates:
 sudo docker compose pull
 sudo docker compose up -d
 ```
+
+> If you switched to a local build (`build: .` instead of `image:`), use `sudo docker compose up -d --build` instead — `pull` only fetches remote images.
 
 The example file and setup script default to the published Docker Hub image. To build locally from your checkout instead, replace:
 

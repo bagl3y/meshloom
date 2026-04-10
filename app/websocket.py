@@ -59,7 +59,7 @@ class WebSocketManager:
             try:
                 # Timeout prevents blocking on slow/unresponsive clients
                 await asyncio.wait_for(connection.send_text(message), timeout=SEND_TIMEOUT_SECONDS)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.debug("Timeout sending to WebSocket client, marking disconnected")
                 disconnected.append(connection)
             except Exception as e:

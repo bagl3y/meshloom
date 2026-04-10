@@ -196,7 +196,7 @@ class BaseMqttPublisher(ABC):
                             self._version_event.wait(),
                             timeout=self._not_configured_timeout,
                         )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
                 except asyncio.CancelledError:
                     return
@@ -231,7 +231,7 @@ class BaseMqttPublisher(ABC):
                         self._version_event.clear()
                         try:
                             await asyncio.wait_for(self._version_event.wait(), timeout=60)
-                        except asyncio.TimeoutError:
+                        except TimeoutError:
                             elapsed = time.monotonic() - connect_time
                             await self._on_periodic_wake(elapsed)
                             if self._should_break_wait(elapsed):

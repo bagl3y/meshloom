@@ -473,7 +473,7 @@ async def discover_mesh(request: RadioDiscoveryRequest) -> RadioDiscoveryRespons
                     break
                 try:
                     event = await asyncio.wait_for(events.get(), timeout=remaining)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     break
 
                 merged = _merge_discovery_result(
@@ -536,7 +536,7 @@ async def trace_path(request: RadioTraceRequest) -> RadioTraceResponse:
             timeout_seconds = _trace_timeout_seconds(send_result)
             try:
                 event = await asyncio.wait_for(response_task, timeout=timeout_seconds)
-            except asyncio.TimeoutError as exc:
+            except TimeoutError as exc:
                 raise HTTPException(status_code=504, detail="No trace response heard") from exc
         finally:
             if not response_task.done():

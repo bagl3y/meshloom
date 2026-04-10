@@ -118,7 +118,7 @@ async def test_serial_device(port: str, baudrate: int, timeout: float = 3.0) -> 
             return True
 
         return False
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.debug("Device %s timed out", port)
         return False
     except Exception as e:

@@ -3,7 +3,7 @@
 * Feature: Add Arch AUR package
 * Feature: 72hr packet density view in statistics
 * Feature: Add warnings for event loop selection for MQTT on Windows startup
-* Bufix: Bump Apprise to 1.9.9 to fix Matrix bug
+* Bugfix: Bump Apprise to 1.9.9 to fix Matrix bug
 * Misc: More memory-conscious on recent contact fetch
 * Misc: Fix statistics pane e2e test
 
@@ -145,7 +145,7 @@
 * Bugfix: Fix Apprise duplicate names
 * Bugfix: Be better about identity resolution in the stats pane
 * Misc: Docs, test, and performance enhancements
-* Misc: Don't prompt "Are you sure" when leaving an unedited interation
+* Misc: Don't prompt "Are you sure" when leaving an unedited integration
 * Misc: Log node time on startup
 * Misc: Improve community MQTT error bubble-up
 * Misc: Unread DMs always have a red unread counter
@@ -172,7 +172,7 @@
 ## [3.3.0] - 2026-03-13
 
 * Feature: Use dashed lines to show collapsed ambiguous router results
-* Feature: Jump to unred
+* Feature: Jump to unread
 * Feature: Local channel management to prevent need to reload channel every time
 * Feature: Debug endpoint
 * Feature: Force-singleton channel management
@@ -235,7 +235,7 @@
 * Feature: Massive codebase refactor and overhaul
 * Bugfix: Fix packet parsing for trace packets
 * Bugfix: Refetch channels on reconnect
-* Bugfix: Load All on repeater pane on mobile doesn't etend into lower text
+* Bugfix: Load All on repeater pane on mobile doesn't extend into lower text
 * Bugfix: Timestamps in logs
 * Bugfix: Correct wrong clock sync command
 * Misc: Improve bot error bubble up
@@ -251,10 +251,6 @@
 ## [2.7.9] - 2026-03-08
 
 * Bugfix: Don't obscure new integration dropdown on session boundary
-
-## [2.7.8] - 2026-03-08
-
-
 
 ## [2.7.8] - 2026-03-08
 

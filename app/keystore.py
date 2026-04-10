@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 NO_EVENT_RECEIVED_GUIDANCE = (
     "Radio command channel is unresponsive (no_event_received). Ensure that your firmware is not "
-    "incompatible, outdated, or wrong-mode (e.g. repeater, not client), and that"
+    "incompatible, outdated, or wrong-mode (e.g. repeater, not client), and that "
     "serial/TCP/BLE connectivity is successful (try another app and see if that one works?). The app cannot proceed because it cannot "
     "issue commands to the radio."
 )
