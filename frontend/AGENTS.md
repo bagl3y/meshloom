@@ -348,14 +348,14 @@ LocalStorage migration helpers for favorites; canonical favorites are server-sid
 
 `AppSettings` currently includes:
 - `max_radio_contacts`
-- `favorites`
 - `auto_decrypt_dm_on_advert`
 - `last_message_times`
-- `preferences_migrated`
 - `advert_interval`
 - `last_advert_time`
 - `flood_scope`
 - `blocked_keys`, `blocked_names`, `discovery_blocked_types`
+- `tracked_telemetry_repeaters`
+- `auto_resend_channel`
 
 
 Note: MQTT, bot, and community MQTT settings were migrated to the `fanout_configs` table (managed via `/api/fanout`). They are no longer part of `AppSettings`.

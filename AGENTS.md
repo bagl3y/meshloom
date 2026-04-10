@@ -373,7 +373,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | POST | `/api/settings/favorites/toggle` | Toggle favorite status |
 | POST | `/api/settings/blocked-keys/toggle` | Toggle blocked key |
 | POST | `/api/settings/blocked-names/toggle` | Toggle blocked name |
-| POST | `/api/settings/migrate` | One-time migration from frontend localStorage |
+| POST | `/api/settings/tracked-telemetry/toggle` | Toggle tracked telemetry repeater |
 | GET | `/api/fanout` | List all fanout configs |
 | POST | `/api/fanout` | Create new fanout config |
 | PATCH | `/api/fanout/{id}` | Update fanout config (triggers module reload) |
@@ -480,7 +480,7 @@ mc.subscribe(EventType.ACK, handler)
 | `MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK` | `false` | Switch the always-on radio audit task from hourly checks to aggressive 10-second polling; the audit checks both missed message drift and channel-slot cache drift |
 | `MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE` | `false` | Disable channel-slot reuse and force `set_channel(...)` before every channel send, even on serial/BLE |
 
-**Note:** Runtime app settings are stored in the database (`app_settings` table), not environment variables. These include `max_radio_contacts`, `auto_decrypt_dm_on_advert`, `advert_interval`, `last_advert_time`, `favorites`, `last_message_times`, `flood_scope`, `blocked_keys`, `blocked_names`, and `discovery_blocked_types`. `max_radio_contacts` is the configured radio contact capacity baseline used by background maintenance: favorites reload first, non-favorite fill targets about 80% of that value, and full offload/reload triggers around 95% occupancy. They are configured via `GET/PATCH /api/settings`. MQTT, bot, webhook, Apprise, and SQS configs are stored in the `fanout_configs` table, managed via `/api/fanout`. If the radio's channel slots appear unstable or another client is mutating them underneath this app, operators can force the old always-reconfigure send path with `MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE=true`.
+**Note:** Runtime app settings are stored in the database (`app_settings` table), not environment variables. These include `max_radio_contacts`, `auto_decrypt_dm_on_advert`, `advert_interval`, `last_advert_time`, `last_message_times`, `flood_scope`, `blocked_keys`, `blocked_names`, `discovery_blocked_types`, `tracked_telemetry_repeaters`, and `auto_resend_channel`. `max_radio_contacts` is the configured radio contact capacity baseline used by background maintenance: favorites reload first, non-favorite fill targets about 80% of that value, and full offload/reload triggers around 95% occupancy. They are configured via `GET/PATCH /api/settings`. MQTT, bot, webhook, Apprise, and SQS configs are stored in the `fanout_configs` table, managed via `/api/fanout`. If the radio's channel slots appear unstable or another client is mutating them underneath this app, operators can force the old always-reconfigure send path with `MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE=true`.
 
 Byte-perfect channel retries are user-triggered via `POST /api/messages/channel/{message_id}/resend` and are allowed for 30 seconds after the original send.
 

@@ -116,6 +116,8 @@ cp docker-compose.example.yml docker-compose.yml
 bash scripts/setup/install_docker.sh
 ```
 
+> The interactive generator enables a self-signed (snakeoil) TLS certificate by default. If you accept the default, the app will be served over HTTPS and the generated compose file will include certificate mounts and an SSL command override. Decline if you prefer plain HTTP or plan to terminate TLS externally.
+
 Your local `docker-compose.yml` is gitignored so future pulls do not overwrite your Docker settings.
 
 The guided Docker flow can collect BLE settings, but BLE access from Docker still needs manual compose customization such as Bluetooth passthrough and possibly privileged mode or host networking. If you want the simpler path for BLE, use the regular Python launch flow instead.

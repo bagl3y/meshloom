@@ -246,7 +246,7 @@ app/
 - `POST /settings/favorites/toggle`
 - `POST /settings/blocked-keys/toggle`
 - `POST /settings/blocked-names/toggle`
-- `POST /settings/migrate`
+- `POST /settings/tracked-telemetry/toggle`
 
 ### Fanout
 - `GET /fanout` — list all fanout configs
@@ -288,6 +288,8 @@ Main tables:
 - `raw_packets`
 - `contact_advert_paths` (recent unique advertisement paths per contact, keyed by contact + path bytes + hop count)
 - `contact_name_history` (tracks name changes over time)
+- `repeater_telemetry_history` (time-series telemetry snapshots for tracked repeaters)
+- `fanout_configs` (MQTT, bot, webhook, Apprise, SQS integration configs)
 - `app_settings`
 
 Contact route state is canonicalized on the backend:
@@ -303,14 +305,14 @@ Repository writes should prefer typed models such as `ContactUpsert` over ad hoc
 
 `app_settings` fields in active model:
 - `max_radio_contacts`
-- `favorites`
 - `auto_decrypt_dm_on_advert`
 - `last_message_times`
-- `preferences_migrated`
 - `advert_interval`
 - `last_advert_time`
 - `flood_scope`
 - `blocked_keys`, `blocked_names`, `discovery_blocked_types`
+- `tracked_telemetry_repeaters`
+- `auto_resend_channel`
 
 Note: MQTT, community MQTT, and bot configs were migrated to the `fanout_configs` table (migrations 36-38).
 
