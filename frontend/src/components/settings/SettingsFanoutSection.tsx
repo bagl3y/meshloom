@@ -1666,7 +1666,8 @@ function AppriseConfigEditor({
           rows={4}
         />
         <p className="text-xs text-muted-foreground">
-          One URL per line. All URLs receive every matched notification.
+          One URL per line. All URLs receive every matched notification. For Matrix room version 12
+          (servername-less room IDs), append <code>?hsreq=no</code> to the URL.
         </p>
       </div>
 
