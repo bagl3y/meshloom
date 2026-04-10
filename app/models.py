@@ -877,10 +877,6 @@ class NoiseFloorHistoryStats(BaseModel):
     latest_timestamp: int | None = Field(
         default=None, description="Unix timestamp of the most recent sample"
     )
-    supported: bool | None = Field(
-        default=None,
-        description="Whether the connected radio appears to support radio stats sampling",
-    )
     samples: list[NoiseFloorSample] = Field(default_factory=list)
 
 

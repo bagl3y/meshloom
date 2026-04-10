@@ -127,6 +127,78 @@ class TestHealthEndpoint:
             assert data["radio_connected"] is False
             assert data["connection_info"] is None
 
+    def test_health_includes_radio_stats_when_available(self):
+        """Health endpoint includes cached radio stats snapshot."""
+        from fastapi.testclient import TestClient
+
+        fake_stats = {
+            "timestamp": 1700000000,
+            "battery_mv": 4150,
+            "uptime_secs": 3600,
+            "noise_floor": -120,
+            "last_rssi": -85,
+            "last_snr": 9.5,
+            "tx_air_secs": 100,
+            "rx_air_secs": 200,
+            "packets": {
+                "recv": 500,
+                "sent": 250,
+                "flood_tx": 100,
+                "direct_tx": 150,
+                "flood_rx": 300,
+                "direct_rx": 200,
+            },
+        }
+
+        with (
+            patch("app.routers.health.radio_manager") as mock_rm,
+            patch("app.routers.health.get_latest_radio_stats", return_value=fake_stats),
+        ):
+            mock_rm.is_connected = True
+            mock_rm.connection_info = "Serial: /dev/ttyUSB0"
+            mock_rm.is_setup_in_progress = False
+            mock_rm.is_setup_complete = True
+            mock_rm.connection_desired = True
+            mock_rm.is_reconnecting = False
+            mock_rm.device_info_loaded = False
+
+            from app.main import app
+
+            client = TestClient(app)
+            response = client.get("/api/health")
+
+            assert response.status_code == 200
+            stats = response.json()["radio_stats"]
+            assert stats["battery_mv"] == 4150
+            assert stats["uptime_secs"] == 3600
+            assert stats["noise_floor"] == -120
+            assert stats["packets_recv"] == 500
+            assert stats["packets_sent"] == 250
+
+    def test_health_radio_stats_null_when_no_data(self):
+        """Health endpoint returns null radio_stats when cache is empty."""
+        from fastapi.testclient import TestClient
+
+        with (
+            patch("app.routers.health.radio_manager") as mock_rm,
+            patch("app.routers.health.get_latest_radio_stats", return_value={}),
+        ):
+            mock_rm.is_connected = False
+            mock_rm.connection_info = None
+            mock_rm.is_setup_in_progress = False
+            mock_rm.is_setup_complete = False
+            mock_rm.connection_desired = True
+            mock_rm.is_reconnecting = False
+            mock_rm.device_info_loaded = False
+
+            from app.main import app
+
+            client = TestClient(app)
+            response = client.get("/api/health")
+
+            assert response.status_code == 200
+            assert response.json()["radio_stats"] is None
+
 
 class TestDebugEndpoint:
     """Test the debug support snapshot endpoint."""

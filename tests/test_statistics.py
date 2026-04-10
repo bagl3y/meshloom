@@ -450,11 +450,10 @@ class TestStatisticsEndpoint:
     @pytest.mark.asyncio
     async def test_statistics_endpoint_includes_noise_floor_history(self, test_db, client):
         noise_floor_history = {
-            "sample_interval_seconds": 300,
+            "sample_interval_seconds": 60,
             "coverage_seconds": 1800,
             "latest_noise_floor_dbm": -119,
             "latest_timestamp": 1_700_000_000,
-            "supported": True,
             "samples": [
                 {"timestamp": 1_699_998_200, "noise_floor_dbm": -121},
                 {"timestamp": 1_700_000_000, "noise_floor_dbm": -119},
@@ -463,7 +462,7 @@ class TestStatisticsEndpoint:
 
         with patch(
             "app.routers.statistics.get_noise_floor_history",
-            new=AsyncMock(return_value=noise_floor_history),
+            return_value=noise_floor_history,
         ):
             response = await client.get("/api/statistics")
 

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from app.config import settings
 from app.repository import RawPacketRepository
 from app.services.radio_runtime import radio_runtime as radio_manager
+from app.services.radio_stats import get_latest_radio_stats
 from app.version_info import get_app_build_info
 
 router = APIRouter(tags=["health"])
@@ -32,6 +33,28 @@ class FanoutStatusResponse(BaseModel):
     last_error: str | None = None
 
 
+class RadioStatsSnapshot(BaseModel):
+    """Latest cached stats from the local radio's periodic 60s poll."""
+
+    timestamp: int | None = None
+    # Core stats
+    battery_mv: int | None = None
+    uptime_secs: int | None = None
+    # Radio stats
+    noise_floor: int | None = None
+    last_rssi: int | None = None
+    last_snr: float | None = None
+    tx_air_secs: int | None = None
+    rx_air_secs: int | None = None
+    # Packet stats
+    packets_recv: int | None = None
+    packets_sent: int | None = None
+    flood_tx: int | None = None
+    direct_tx: int | None = None
+    flood_rx: int | None = None
+    direct_rx: int | None = None
+
+
 class HealthResponse(BaseModel):
     status: str
     radio_connected: bool
@@ -40,6 +63,7 @@ class HealthResponse(BaseModel):
     connection_info: str | None
     app_info: AppInfoResponse | None = None
     radio_device_info: RadioDeviceInfoResponse | None = None
+    radio_stats: RadioStatsSnapshot | None = None
     database_size_mb: float
     oldest_undecrypted_timestamp: int | None
     fanout_statuses: dict[str, FanoutStatusResponse] = Field(default_factory=dict)
@@ -122,6 +146,28 @@ async def build_health_data(radio_connected: bool, connection_info: str | None) 
             "max_channels": getattr(radio_manager, "max_channels", None),
         }
 
+    # Local radio stats from the 60s background sampler
+    raw_stats = get_latest_radio_stats()
+    radio_stats = None
+    if raw_stats:
+        packets = raw_stats.get("packets") or {}
+        radio_stats = {
+            "timestamp": raw_stats.get("timestamp"),
+            "battery_mv": raw_stats.get("battery_mv"),
+            "uptime_secs": raw_stats.get("uptime_secs"),
+            "noise_floor": raw_stats.get("noise_floor"),
+            "last_rssi": raw_stats.get("last_rssi"),
+            "last_snr": raw_stats.get("last_snr"),
+            "tx_air_secs": raw_stats.get("tx_air_secs"),
+            "rx_air_secs": raw_stats.get("rx_air_secs"),
+            "packets_recv": packets.get("recv"),
+            "packets_sent": packets.get("sent"),
+            "flood_tx": packets.get("flood_tx"),
+            "direct_tx": packets.get("direct_tx"),
+            "flood_rx": packets.get("flood_rx"),
+            "direct_rx": packets.get("direct_rx"),
+        }
+
     return {
         "status": "ok" if radio_connected and not radio_initializing else "degraded",
         "radio_connected": radio_connected,
@@ -133,6 +179,7 @@ async def build_health_data(radio_connected: bool, connection_info: str | None) 
             "commit_hash": app_build_info.commit_hash,
         },
         "radio_device_info": radio_device_info,
+        "radio_stats": radio_stats,
         "database_size_mb": db_size_mb,
         "oldest_undecrypted_timestamp": oldest_ts,
         "fanout_statuses": fanout_statuses,

@@ -62,6 +62,23 @@ export interface AppInfo {
   commit_hash: string | null;
 }
 
+export interface RadioStatsSnapshot {
+  timestamp: number | null;
+  battery_mv: number | null;
+  uptime_secs: number | null;
+  noise_floor: number | null;
+  last_rssi: number | null;
+  last_snr: number | null;
+  tx_air_secs: number | null;
+  rx_air_secs: number | null;
+  packets_recv: number | null;
+  packets_sent: number | null;
+  flood_tx: number | null;
+  direct_tx: number | null;
+  flood_rx: number | null;
+  direct_rx: number | null;
+}
+
 export interface HealthStatus {
   status: string;
   radio_connected: boolean;
@@ -76,6 +93,7 @@ export interface HealthStatus {
     max_contacts: number | null;
     max_channels: number | null;
   } | null;
+  radio_stats?: RadioStatsSnapshot | null;
   database_size_mb: number;
   oldest_undecrypted_timestamp: number | null;
   fanout_statuses: Record<string, FanoutStatusEntry>;
@@ -540,7 +558,6 @@ export interface NoiseFloorHistoryStats {
   coverage_seconds: number;
   latest_noise_floor_dbm: number | null;
   latest_timestamp: number | null;
-  supported: boolean | null;
   samples: NoiseFloorSample[];
 }
 

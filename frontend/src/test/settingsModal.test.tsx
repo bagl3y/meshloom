@@ -657,11 +657,10 @@ describe('SettingsModal', () => {
         { timestamp: 1711796400, count: 8 },
       ],
       noise_floor_24h: {
-        sample_interval_seconds: 300,
+        sample_interval_seconds: 60,
         coverage_seconds: 3600,
         latest_noise_floor_dbm: -105,
         latest_timestamp: 1711800000,
-        supported: true,
         samples: [],
       },
     };
@@ -728,11 +727,10 @@ describe('SettingsModal', () => {
       },
       packets_per_hour_72h: [],
       noise_floor_24h: {
-        sample_interval_seconds: 300,
+        sample_interval_seconds: 60,
         coverage_seconds: 0,
         latest_noise_floor_dbm: null,
         latest_timestamp: null,
-        supported: null,
         samples: [],
       },
     };
