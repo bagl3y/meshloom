@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   BatteryFull,
   BatteryLow,
@@ -71,6 +71,23 @@ export function StatusBar({
     window.addEventListener(BATTERY_DISPLAY_CHANGE_EVENT, handler);
     return () => window.removeEventListener(BATTERY_DISPLAY_CHANGE_EVENT, handler);
   }, []);
+
+  const batteryMv = health?.radio_stats?.battery_mv;
+  const batteryInfo = useMemo(() => {
+    if ((!showBatteryPercent && !showBatteryVoltage) || !batteryMv || batteryMv <= 0) return null;
+    const pct = mvToPercent(batteryMv);
+    const Icon =
+      pct >= 80 ? BatteryFull : pct >= 40 ? BatteryMedium : pct >= 15 ? BatteryLow : BatteryWarning;
+    const color =
+      pct >= 40 ? 'text-status-connected' : pct >= 15 ? 'text-warning' : 'text-destructive';
+    const label =
+      showBatteryPercent && showBatteryVoltage
+        ? `${pct}% (${batteryMv}mV)`
+        : showBatteryPercent
+          ? `${pct}%`
+          : `${batteryMv}mV`;
+    return { pct, Icon, color, label, mv: batteryMv };
+  }, [batteryMv, showBatteryPercent, showBatteryVoltage]);
 
   const radioState =
     health?.radio_state ??
@@ -169,41 +186,17 @@ export function StatusBar({
         <span className="hidden lg:inline text-muted-foreground">{statusLabel}</span>
       </div>
 
-      {(showBatteryPercent || showBatteryVoltage) &&
-        connected &&
-        health?.radio_stats?.battery_mv != null &&
-        health.radio_stats.battery_mv > 0 &&
-        (() => {
-          const mv = health.radio_stats.battery_mv!;
-          const pct = mvToPercent(mv);
-          const Icon =
-            pct >= 80
-              ? BatteryFull
-              : pct >= 40
-                ? BatteryMedium
-                : pct >= 15
-                  ? BatteryLow
-                  : BatteryWarning;
-          const color =
-            pct >= 40 ? 'text-status-connected' : pct >= 15 ? 'text-warning' : 'text-destructive';
-          const label =
-            showBatteryPercent && showBatteryVoltage
-              ? `${pct}% (${mv}mV)`
-              : showBatteryPercent
-                ? `${pct}%`
-                : `${mv}mV`;
-          return (
-            <div
-              className={cn('flex items-center gap-1', color)}
-              title={`Battery: ${pct}% (${(mv / 1000).toFixed(2)}V)`}
-              role="status"
-              aria-label={`Battery ${pct} percent`}
-            >
-              <Icon className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline text-[0.6875rem]">{label}</span>
-            </div>
-          );
-        })()}
+      {connected && batteryInfo && (
+        <div
+          className={cn('flex items-center gap-1', batteryInfo.color)}
+          title={`Battery: ${batteryInfo.pct}% (${(batteryInfo.mv / 1000).toFixed(2)}V)`}
+          role="status"
+          aria-label={`Battery ${batteryInfo.pct} percent`}
+        >
+          <batteryInfo.Icon className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden sm:inline text-[0.6875rem]">{batteryInfo.label}</span>
+        </div>
+      )}
 
       {config && (
         <div className="hidden lg:flex items-center gap-2 text-muted-foreground">
