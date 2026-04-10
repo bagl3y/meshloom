@@ -1,3 +1,14 @@
+## [3.11.0] - 2026-04-10
+
+* Feature: Radio health and contact data accessible on fanout bus
+* Feature: Local node radio stats (voltage etc.) on WS health bus
+* Feature: Battery indicator optional in status bar (configured in Local Settings)
+* Bugfix: Fix same-second same-message collision in room servers
+* Bugfix: Don't consume DM resend attempt if the radio was just busy
+* Bugfix: Assume that a same-second same-message same-first-byte-key DM is more likely an echo than them sending the same message
+* Bugfix: Multi-retry for flood scope restoration
+* Misc: Testing & documentation improvements
+
 ## [3.10.0] - 2026-04-10
 
 * Feature: Add Arch AUR package
