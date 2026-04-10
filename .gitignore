@@ -30,3 +30,6 @@ references/
 docker-compose.yml
 docker-compose.yaml
 .docker-certs/
+
+# HA test environment (created by scripts/setup/start_ha_test_env.sh)
+ha_test_config/

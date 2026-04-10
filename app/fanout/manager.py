@@ -31,12 +31,14 @@ def _register_module_types() -> None:
     from app.fanout.bot import BotModule
     from app.fanout.map_upload import MapUploadModule
     from app.fanout.mqtt_community import MqttCommunityModule
+    from app.fanout.mqtt_ha import MqttHaModule
     from app.fanout.mqtt_private import MqttPrivateModule
     from app.fanout.sqs import SqsModule
     from app.fanout.webhook import WebhookModule
 
     _MODULE_TYPES["mqtt_private"] = MqttPrivateModule
     _MODULE_TYPES["mqtt_community"] = MqttCommunityModule
+    _MODULE_TYPES["mqtt_ha"] = MqttHaModule
     _MODULE_TYPES["bot"] = BotModule
     _MODULE_TYPES["webhook"] = WebhookModule
     _MODULE_TYPES["apprise"] = AppriseModule
