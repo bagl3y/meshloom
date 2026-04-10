@@ -1,4 +1,4 @@
-# Maintainer: Jack Kingsman <jack.kingsman@gmail.com>
+# Maintainer: Jack Kingsman <jack@jackkingsman.me>
 
 pkgname=remoteterm-meshcore
 # pkgver is rewritten by .github/workflows/publish-aur.yml on each release.
