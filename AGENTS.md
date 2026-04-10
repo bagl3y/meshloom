@@ -209,6 +209,7 @@ This message-layer echo/path handling is independent of raw-packet storage dedup
 │   │       ├── MapView.tsx       # Leaflet map showing node locations
 │   │       └── ...
 │   └── vite.config.ts
+├── pkg/aur/                # AUR package files (PKGBUILD, systemd service, env, install hooks)
 ├── scripts/                # Quality / release helpers (listing below is representative, not exhaustive)
 │   ├── build/
 │   │   ├── collect_licenses.sh # Gather third-party license attributions
@@ -216,7 +217,8 @@ This message-layer echo/path handling is independent of raw-packet storage dedup
 │   ├── quality/
 │   │   ├── all_quality.sh      # Repo-standard autofix + validate gate
 │   │   ├── e2e.sh              # End-to-end test runner
-│   │   └── extended_quality.sh # Quality gate plus e2e and Docker matrix
+│   │   ├── extended_quality.sh # Quality gate plus e2e and Docker matrix
+│   │   └── test_aur_package.sh # Build + install AUR package in Arch Docker containers
 │   └── setup/
 │       ├── fetch_prebuilt_frontend.py # Download release frontend fallback
 │       └── install_service.sh         # Install/configure Linux systemd service

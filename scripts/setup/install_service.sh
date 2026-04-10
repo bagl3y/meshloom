@@ -114,8 +114,8 @@ case "$TRANSPORT_CHOICE" in
             echo -e "${RED}TCP host is required.${NC}"
             read -rp "TCP host: " TCP_HOST
         done
-        read -rp "TCP port (default: 4000): " TCP_PORT
-        TCP_PORT="${TCP_PORT:-4000}"
+        read -rp "TCP port (default: 5000): " TCP_PORT
+        TCP_PORT="${TCP_PORT:-5000}"
         echo -e "${GREEN}TCP: ${TCP_HOST}:${TCP_PORT}${NC}"
         ;;
     4)
