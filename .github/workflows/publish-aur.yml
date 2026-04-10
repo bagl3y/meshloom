@@ -56,6 +56,8 @@ jobs:
           assets: |
             pkg/aur/remoteterm-meshcore.install
             pkg/aur/remoteterm-meshcore.service
+            pkg/aur/remoteterm-meshcore.sysusers
+            pkg/aur/remoteterm-meshcore.tmpfiles
             pkg/aur/remoteterm.env
           commit_username: jackkingsman
           commit_email: ${{ secrets.AUR_COMMIT_EMAIL }}

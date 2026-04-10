@@ -53,7 +53,8 @@ echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 BUILD_DIR=/home/builder/build
 mkdir -p "$BUILD_DIR"
 cp /pkg/PKGBUILD /pkg/remoteterm-meshcore.install \
-   /pkg/remoteterm-meshcore.service /pkg/remoteterm.env "$BUILD_DIR/"
+   /pkg/remoteterm-meshcore.service /pkg/remoteterm-meshcore.sysusers \
+   /pkg/remoteterm-meshcore.tmpfiles /pkg/remoteterm.env "$BUILD_DIR/"
 chown -R builder:builder "$BUILD_DIR"
 
 echo "Building package..."
@@ -84,13 +85,14 @@ docker run -d \
     archlinux:latest bash -c '
 set -euo pipefail
 
-# Install the package (triggers pre_install which creates the remoteterm user)
+# Install the package (sysusers.d creates the remoteterm user, tmpfiles.d creates the data dir)
 pacman -Syu --noconfirm >/dev/null 2>&1
 pacman -U --noconfirm /pkg/*.pkg.tar.zst
 
-# Create the state directory (systemd StateDirectory= would do this on a real host)
-mkdir -p /var/lib/remoteterm-meshcore
-chown remoteterm:remoteterm /var/lib/remoteterm-meshcore
+# In a container there is no systemd to trigger sysusers/tmpfiles automatically,
+# so run them manually.
+systemd-sysusers
+systemd-tmpfiles --create
 
 echo "============================================"
 echo " RemoteTerm installed — starting server"

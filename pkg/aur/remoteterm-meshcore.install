@@ -1,14 +1,3 @@
-pre_install() {
-  getent group  remoteterm > /dev/null || groupadd -r remoteterm
-  getent passwd remoteterm > /dev/null || \
-    useradd -r -g remoteterm -d /var/lib/remoteterm-meshcore -s /sbin/nologin \
-      -c "RemoteTerm for MeshCore" remoteterm
-}
-
-pre_upgrade() {
-  pre_install
-}
-
 post_install() {
   echo "==> Set your radio connection (serial, TCP, or BLE) in"
   echo "==>   /etc/remoteterm-meshcore/remoteterm.env"
