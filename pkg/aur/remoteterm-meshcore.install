@@ -20,8 +20,10 @@ post_upgrade() {
   # Clean orphaned __pycache__ dirs left by the previous Python version
   find /opt/remoteterm-meshcore -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
-  systemctl daemon-reload
-  if systemctl is-active --quiet remoteterm-meshcore; then
-    systemctl restart remoteterm-meshcore
+  if command -v systemctl &>/dev/null && systemctl --version &>/dev/null 2>&1; then
+    systemctl daemon-reload
+    if systemctl is-active --quiet remoteterm-meshcore; then
+      systemctl restart remoteterm-meshcore
+    fi
   fi
 }
