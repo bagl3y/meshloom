@@ -372,6 +372,8 @@ export function useConversationMessages(
   const olderAbortControllerRef = useRef<AbortController | null>(null);
   const newerAbortControllerRef = useRef<AbortController | null>(null);
   const fetchingConversationIdRef = useRef<string | null>(null);
+  const activeConversationRef = useRef(activeConversation);
+  activeConversationRef.current = activeConversation;
   const latestReconcileRequestIdRef = useRef(0);
   const pendingReconnectReconcileRef = useRef(false);
   const messagesRef = useRef<Message[]>([]);
@@ -664,9 +666,11 @@ export function useConversationMessages(
   }, [activeConversation]);
 
   const reconcileOnReconnect = useCallback(() => {
-    if (!isMessageConversation(activeConversation)) {
-      return;
-    }
+    // Read the current conversation from the ref rather than closing over
+    // activeConversation, so that a conversation switch during WS reconnect
+    // targets the right conversation instead of a stale capture.
+    const current = activeConversationRef.current;
+    if (!isMessageConversation(current)) return;
 
     if (hasNewerMessagesRef.current) {
       pendingReconnectReconcileRef.current = true;
@@ -677,8 +681,8 @@ export function useConversationMessages(
     const controller = new AbortController();
     const requestId = latestReconcileRequestIdRef.current + 1;
     latestReconcileRequestIdRef.current = requestId;
-    reconcileFromBackend(activeConversation, controller.signal, requestId);
-  }, [activeConversation, reconcileFromBackend]);
+    reconcileFromBackend(current, controller.signal, requestId);
+  }, [reconcileFromBackend]);
 
   useEffect(() => {
     if (abortControllerRef.current) {

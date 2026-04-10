@@ -557,10 +557,11 @@ class MessageRepository:
     @staticmethod
     async def increment_ack_count(message_id: int) -> int:
         """Increment ack count and return the new value."""
-        await db.conn.execute("UPDATE messages SET acked = acked + 1 WHERE id = ?", (message_id,))
-        await db.conn.commit()
-        cursor = await db.conn.execute("SELECT acked FROM messages WHERE id = ?", (message_id,))
+        cursor = await db.conn.execute(
+            "UPDATE messages SET acked = acked + 1 WHERE id = ? RETURNING acked", (message_id,)
+        )
         row = await cursor.fetchone()
+        await db.conn.commit()
         return row["acked"] if row else 1
 
     @staticmethod

@@ -192,6 +192,9 @@ class RadioManager:
         if not blocking:
             if self._operation_lock.locked():
                 raise RadioOperationBusyError(f"Radio is busy (operation: {name})")
+            # In single-threaded asyncio the lock cannot be acquired between the
+            # check above and the await below (no other coroutine runs until we
+            # yield). The await returns immediately for an uncontested lock.
             await self._operation_lock.acquire()
         else:
             await self._operation_lock.acquire()
