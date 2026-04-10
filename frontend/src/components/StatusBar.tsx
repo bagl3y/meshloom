@@ -13,7 +13,11 @@ import { api } from '../api';
 import { toast } from './ui/sonner';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { applyTheme, getSavedTheme, THEME_CHANGE_EVENT } from '../utils/theme';
-import { getShowBatteryPercent, getShowBatteryVoltage } from '../utils/batteryDisplay';
+import {
+  BATTERY_DISPLAY_CHANGE_EVENT,
+  getShowBatteryPercent,
+  getShowBatteryVoltage,
+} from '../utils/batteryDisplay';
 import { cn } from '@/lib/utils';
 
 // Meshtastic default OCV table (meshtastic/firmware src/power.h)
@@ -42,8 +46,6 @@ function mvToPercent(mv: number): number {
   }
   return 0;
 }
-
-export const BATTERY_DISPLAY_CHANGE_EVENT = 'remoteterm-battery-display-change';
 
 interface StatusBarProps {
   health: HealthStatus | null;

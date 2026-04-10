@@ -29,12 +29,12 @@ import {
 } from '../../utils/fontScale';
 import { getAutoFocusInputEnabled, setAutoFocusInputEnabled } from '../../utils/autoFocusInput';
 import {
+  BATTERY_DISPLAY_CHANGE_EVENT,
   getShowBatteryPercent,
   setShowBatteryPercent as saveBatteryPercent,
   getShowBatteryVoltage,
   setShowBatteryVoltage as saveBatteryVoltage,
 } from '../../utils/batteryDisplay';
-import { BATTERY_DISPLAY_CHANGE_EVENT } from '../StatusBar';
 
 export function SettingsLocalSection({
   onLocalLabelChange,

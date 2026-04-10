@@ -1,3 +1,5 @@
+export const BATTERY_DISPLAY_CHANGE_EVENT = 'remoteterm-battery-display-change';
+
 const PERCENT_KEY = 'remoteterm-show-battery-percent';
 const VOLTAGE_KEY = 'remoteterm-show-battery-voltage';
 
