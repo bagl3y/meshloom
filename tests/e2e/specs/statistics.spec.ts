@@ -15,6 +15,6 @@ test.describe('Statistics page', () => {
     await expect(page.locator('h4').getByText('Network')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Contacts', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Channels', { exact: true }).first()).toBeVisible();
-    await expect(page.locator('h4').getByText('Packets')).toBeVisible();
+    await expect(page.locator('h4').getByText('Packets', { exact: true })).toBeVisible();
   });
 });
