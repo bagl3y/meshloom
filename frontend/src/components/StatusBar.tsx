@@ -1,10 +1,24 @@
-import { useEffect, useState } from 'react';
-import { Menu, Moon, Sun } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  BatteryFull,
+  BatteryLow,
+  BatteryMedium,
+  BatteryWarning,
+  Menu,
+  Moon,
+  Sun,
+} from 'lucide-react';
 import type { HealthStatus, RadioConfig } from '../types';
 import { api } from '../api';
 import { toast } from './ui/sonner';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { applyTheme, getSavedTheme, THEME_CHANGE_EVENT } from '../utils/theme';
+import {
+  BATTERY_DISPLAY_CHANGE_EVENT,
+  getShowBatteryPercent,
+  getShowBatteryVoltage,
+  mvToPercent,
+} from '../utils/batteryDisplay';
 import { cn } from '@/lib/utils';
 
 interface StatusBarProps {
@@ -22,6 +36,35 @@ export function StatusBar({
   onSettingsClick,
   onMenuClick,
 }: StatusBarProps) {
+  const [showBatteryPercent, setShowBatteryPercent] = useState(getShowBatteryPercent);
+  const [showBatteryVoltage, setShowBatteryVoltage] = useState(getShowBatteryVoltage);
+
+  useEffect(() => {
+    const handler = () => {
+      setShowBatteryPercent(getShowBatteryPercent());
+      setShowBatteryVoltage(getShowBatteryVoltage());
+    };
+    window.addEventListener(BATTERY_DISPLAY_CHANGE_EVENT, handler);
+    return () => window.removeEventListener(BATTERY_DISPLAY_CHANGE_EVENT, handler);
+  }, []);
+
+  const batteryMv = health?.radio_stats?.battery_mv;
+  const batteryInfo = useMemo(() => {
+    if ((!showBatteryPercent && !showBatteryVoltage) || !batteryMv || batteryMv <= 0) return null;
+    const pct = mvToPercent(batteryMv);
+    const Icon =
+      pct >= 80 ? BatteryFull : pct >= 40 ? BatteryMedium : pct >= 15 ? BatteryLow : BatteryWarning;
+    const color =
+      pct >= 40 ? 'text-status-connected' : pct >= 15 ? 'text-warning' : 'text-destructive';
+    const label =
+      showBatteryPercent && showBatteryVoltage
+        ? `${pct}% (${batteryMv}mV)`
+        : showBatteryPercent
+          ? `${pct}%`
+          : `${batteryMv}mV`;
+    return { pct, Icon, color, label, mv: batteryMv };
+  }, [batteryMv, showBatteryPercent, showBatteryVoltage]);
+
   const radioState =
     health?.radio_state ??
     (health?.radio_initializing
@@ -118,6 +161,18 @@ export function StatusBar({
         />
         <span className="hidden lg:inline text-muted-foreground">{statusLabel}</span>
       </div>
+
+      {connected && batteryInfo && (
+        <div
+          className={cn('flex items-center gap-1', batteryInfo.color)}
+          title={`Battery: ${batteryInfo.pct}% (${(batteryInfo.mv / 1000).toFixed(2)}V)`}
+          role="status"
+          aria-label={`Battery ${batteryInfo.pct} percent`}
+        >
+          <batteryInfo.Icon className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden sm:inline text-[0.6875rem]">{batteryInfo.label}</span>
+        </div>
+      )}
 
       {config && (
         <div className="hidden lg:flex items-center gap-2 text-muted-foreground">
