@@ -18,3 +18,18 @@ post_upgrade() {
     fi
   fi
 }
+
+pre_remove() {
+  if [ -d /run/systemd/system ] && command -v systemctl &>/dev/null; then
+    systemctl disable --now remoteterm-meshcore 2>/dev/null || true
+  fi
+}
+
+post_remove() {
+  if [ -d /run/systemd/system ] && command -v systemctl &>/dev/null; then
+    systemctl daemon-reload
+  fi
+
+  echo "==> Database and config remain in /var/lib/remoteterm-meshcore/, remoteterm user retained."
+  echo "==> To fully clean up: sudo rm -rf /var/lib/remoteterm-meshcore"
+}
