@@ -1286,3 +1286,109 @@ class TestMessageAckedBroadcastShape:
         assert isinstance(payload["ack_count"], int)
         assert payload["ack_count"] == 0  # Outgoing DM duplicates no longer count as delivery
         assert payload["packet_id"] == pkt1
+
+
+class TestRoomServerMessageDedup:
+    """Test that room-server posts from different authors are not collapsed.
+
+    Room messages are PRIV type sharing one conversation_key (the room contact's
+    pubkey).  The dedup index includes sender_key so that two different room
+    participants sending identical text in the same clock second are stored as
+    separate messages.
+    """
+
+    ROOM_PUB = "bb" * 32  # Room contact public key
+    SENDER_A_KEY = "aa" * 32
+    SENDER_B_KEY = "cc" * 32
+
+    @pytest.mark.asyncio
+    async def test_distinct_room_authors_same_text_same_second_stored_separately(self, test_db):
+        """Two room users sending identical text in the same second produce two rows."""
+        msg_id_a = await MessageRepository.create(
+            msg_type="PRIV",
+            text="ok",
+            conversation_key=self.ROOM_PUB,
+            sender_timestamp=SENDER_TIMESTAMP,
+            received_at=SENDER_TIMESTAMP,
+            outgoing=False,
+            sender_key=self.SENDER_A_KEY,
+            sender_name="Alice",
+        )
+        assert msg_id_a is not None
+
+        msg_id_b = await MessageRepository.create(
+            msg_type="PRIV",
+            text="ok",
+            conversation_key=self.ROOM_PUB,
+            sender_timestamp=SENDER_TIMESTAMP,
+            received_at=SENDER_TIMESTAMP + 1,
+            outgoing=False,
+            sender_key=self.SENDER_B_KEY,
+            sender_name="Bob",
+        )
+        assert msg_id_b is not None, (
+            "Second room post with different sender_key should not be deduped"
+        )
+        assert msg_id_a != msg_id_b
+
+        messages = await MessageRepository.get_all(
+            msg_type="PRIV", conversation_key=self.ROOM_PUB, limit=10
+        )
+        assert len(messages) == 2
+
+    @pytest.mark.asyncio
+    async def test_same_room_author_same_text_same_second_still_deduped(self, test_db):
+        """True echo from the same room author is still collapsed (same sender_key)."""
+        msg_id_1 = await MessageRepository.create(
+            msg_type="PRIV",
+            text="ok",
+            conversation_key=self.ROOM_PUB,
+            sender_timestamp=SENDER_TIMESTAMP,
+            received_at=SENDER_TIMESTAMP,
+            outgoing=False,
+            sender_key=self.SENDER_A_KEY,
+            sender_name="Alice",
+        )
+        assert msg_id_1 is not None
+
+        msg_id_2 = await MessageRepository.create(
+            msg_type="PRIV",
+            text="ok",
+            conversation_key=self.ROOM_PUB,
+            sender_timestamp=SENDER_TIMESTAMP,
+            received_at=SENDER_TIMESTAMP + 1,
+            outgoing=False,
+            sender_key=self.SENDER_A_KEY,
+            sender_name="Alice",
+        )
+        assert msg_id_2 is None, "Same sender_key should still be deduped"
+
+        messages = await MessageRepository.get_all(
+            msg_type="PRIV", conversation_key=self.ROOM_PUB, limit=10
+        )
+        assert len(messages) == 1
+
+    @pytest.mark.asyncio
+    async def test_null_sender_key_still_dedupes_normally(self, test_db):
+        """Non-room incoming DMs (sender_key=None) still dedupe on content."""
+        msg_id_1 = await MessageRepository.create(
+            msg_type="PRIV",
+            text="hello",
+            conversation_key=CONTACT_PUB.lower(),
+            sender_timestamp=SENDER_TIMESTAMP,
+            received_at=SENDER_TIMESTAMP,
+            outgoing=False,
+            sender_key=None,
+        )
+        assert msg_id_1 is not None
+
+        msg_id_2 = await MessageRepository.create(
+            msg_type="PRIV",
+            text="hello",
+            conversation_key=CONTACT_PUB.lower(),
+            sender_timestamp=SENDER_TIMESTAMP,
+            received_at=SENDER_TIMESTAMP + 1,
+            outgoing=False,
+            sender_key=None,
+        )
+        assert msg_id_2 is None, "Both NULL sender_key should still collide"

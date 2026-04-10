@@ -136,7 +136,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_dedup_null_safe
     ON messages(type, conversation_key, text, COALESCE(sender_timestamp, 0))
     WHERE type = 'CHAN';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_incoming_priv_dedup
-    ON messages(type, conversation_key, text, COALESCE(sender_timestamp, 0))
+    ON messages(type, conversation_key, text, COALESCE(sender_timestamp, 0), COALESCE(sender_key, ''))
     WHERE type = 'PRIV' AND outgoing = 0;
 CREATE INDEX IF NOT EXISTS idx_messages_sender_key ON messages(sender_key);
 CREATE INDEX IF NOT EXISTS idx_messages_pagination

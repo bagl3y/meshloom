@@ -161,6 +161,80 @@ describe('getMessageContentKey', () => {
 
     expect(getMessageContentKey(msg1)).toBe(getMessageContentKey(msg2));
   });
+
+  it('PRIV messages with different sender_key produce different keys (room dedup)', () => {
+    const msg1 = createMessage({
+      type: 'PRIV',
+      conversation_key: 'room_pubkey',
+      text: 'ok',
+      sender_timestamp: 1700000000,
+      sender_key: 'alice_key',
+    });
+    const msg2 = createMessage({
+      type: 'PRIV',
+      conversation_key: 'room_pubkey',
+      text: 'ok',
+      sender_timestamp: 1700000000,
+      sender_key: 'bob_key',
+    });
+
+    expect(getMessageContentKey(msg1)).not.toBe(getMessageContentKey(msg2));
+  });
+
+  it('PRIV messages with same sender_key still dedup (true room echo)', () => {
+    const msg1 = createMessage({
+      type: 'PRIV',
+      conversation_key: 'room_pubkey',
+      text: 'ok',
+      sender_timestamp: 1700000000,
+      sender_key: 'alice_key',
+    });
+    const msg2 = createMessage({
+      type: 'PRIV',
+      conversation_key: 'room_pubkey',
+      text: 'ok',
+      sender_timestamp: 1700000000,
+      sender_key: 'alice_key',
+    });
+
+    expect(getMessageContentKey(msg1)).toBe(getMessageContentKey(msg2));
+  });
+
+  it('CHAN messages ignore sender_key (channel dedup unchanged)', () => {
+    const msg1 = createMessage({
+      type: 'CHAN',
+      text: 'hello',
+      sender_timestamp: 1700000000,
+      sender_key: 'alice_key',
+    });
+    const msg2 = createMessage({
+      type: 'CHAN',
+      text: 'hello',
+      sender_timestamp: 1700000000,
+      sender_key: 'bob_key',
+    });
+
+    expect(getMessageContentKey(msg1)).toBe(getMessageContentKey(msg2));
+  });
+
+  it('PRIV messages with null sender_key still dedup normally', () => {
+    const msg1 = createMessage({
+      type: 'PRIV',
+      conversation_key: 'contact_key',
+      text: 'hi',
+      sender_timestamp: 1700000000,
+      sender_key: null,
+    });
+    const msg2 = createMessage({
+      type: 'PRIV',
+      conversation_key: 'contact_key',
+      text: 'hi',
+      sender_timestamp: 1700000000,
+      sender_key: null,
+    });
+
+    expect(getMessageContentKey(msg1)).toBe(getMessageContentKey(msg2));
+  });
 });
 
 describe('mergePendingAck', () => {

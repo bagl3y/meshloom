@@ -7,6 +7,12 @@ import pytest
 
 from app.migrations import get_version, run_migrations, set_version
 
+# Updated automatically when a new migration is added.  Migration tests that
+# run ``run_migrations`` to completion assert ``get_version == LATEST`` and
+# ``applied == LATEST - starting_version`` so only this constant needs to
+# change, not every individual assertion.
+LATEST_SCHEMA_VERSION = 56
+
 
 class TestMigration001:
     """Test migration 001: add last_read_at columns."""
@@ -833,9 +839,9 @@ class TestMigration044:
             assert [row["message_id"] for row in await cursor.fetchall()] == [1, 1]
 
             cursor = await conn.execute(
-                "INSERT OR IGNORE INTO messages (type, conversation_key, text, sender_timestamp, received_at, outgoing) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                ("PRIV", "abc123", "hello", 0, 9999, 0),
+                "INSERT OR IGNORE INTO messages (type, conversation_key, text, sender_timestamp, received_at, outgoing, sender_key) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                ("PRIV", "abc123", "hello", 0, 9999, 0, "abc123"),
             )
             assert cursor.rowcount == 0
 
@@ -844,6 +850,7 @@ class TestMigration044:
             )
             index_sql = (await cursor.fetchone())["sql"]
             assert "WHERE type = 'PRIV' AND outgoing = 0" in index_sql
+            assert "sender_key" in index_sql
         finally:
             await conn.close()
 
@@ -1224,8 +1231,8 @@ class TestMigration039:
 
             applied = await run_migrations(conn)
 
-            assert applied == 17
-            assert await get_version(conn) == 55
+            assert applied == LATEST_SCHEMA_VERSION - 38
+            assert await get_version(conn) == LATEST_SCHEMA_VERSION
 
             cursor = await conn.execute(
                 """
@@ -1296,8 +1303,8 @@ class TestMigration039:
 
             applied = await run_migrations(conn)
 
-            assert applied == 17
-            assert await get_version(conn) == 55
+            assert applied == LATEST_SCHEMA_VERSION - 38
+            assert await get_version(conn) == LATEST_SCHEMA_VERSION
 
             cursor = await conn.execute(
                 """
@@ -1363,8 +1370,8 @@ class TestMigration039:
 
             applied = await run_migrations(conn)
 
-            assert applied == 11
-            assert await get_version(conn) == 55
+            assert applied == LATEST_SCHEMA_VERSION - 44
+            assert await get_version(conn) == LATEST_SCHEMA_VERSION
 
             cursor = await conn.execute(
                 """
@@ -1416,8 +1423,8 @@ class TestMigration040:
 
             applied = await run_migrations(conn)
 
-            assert applied == 16
-            assert await get_version(conn) == 55
+            assert applied == LATEST_SCHEMA_VERSION - 39
+            assert await get_version(conn) == LATEST_SCHEMA_VERSION
 
             await conn.execute(
                 """
@@ -1478,8 +1485,8 @@ class TestMigration041:
 
             applied = await run_migrations(conn)
 
-            assert applied == 15
-            assert await get_version(conn) == 55
+            assert applied == LATEST_SCHEMA_VERSION - 40
+            assert await get_version(conn) == LATEST_SCHEMA_VERSION
 
             await conn.execute(
                 """
@@ -1531,8 +1538,8 @@ class TestMigration042:
 
             applied = await run_migrations(conn)
 
-            assert applied == 14
-            assert await get_version(conn) == 55
+            assert applied == LATEST_SCHEMA_VERSION - 41
+            assert await get_version(conn) == LATEST_SCHEMA_VERSION
 
             await conn.execute(
                 """
@@ -1671,8 +1678,8 @@ class TestMigration046:
 
             applied = await run_migrations(conn)
 
-            assert applied == 10
-            assert await get_version(conn) == 55
+            assert applied == LATEST_SCHEMA_VERSION - 45
+            assert await get_version(conn) == LATEST_SCHEMA_VERSION
 
             cursor = await conn.execute(
                 """
@@ -1765,8 +1772,8 @@ class TestMigration047:
 
             applied = await run_migrations(conn)
 
-            assert applied == 9
-            assert await get_version(conn) == 55
+            assert applied == LATEST_SCHEMA_VERSION - 46
+            assert await get_version(conn) == LATEST_SCHEMA_VERSION
 
             cursor = await conn.execute(
                 """
