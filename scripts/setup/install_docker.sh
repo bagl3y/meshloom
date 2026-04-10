@@ -35,7 +35,7 @@ SERIAL_HOST_PATH="/dev/ttyACM0"
 SERIAL_COMPOSE_HOST_PATH="/dev/ttyACM0"
 SERIAL_CONTAINER_PATH="/dev/meshcore-radio"
 TCP_HOST=""
-TCP_PORT="4000"
+TCP_PORT="5000"
 BLE_ADDRESS=""
 BLE_PIN=""
 ENABLE_BOTS="N"
@@ -311,8 +311,8 @@ case "$TRANSPORT_CHOICE" in
             echo -e "${RED}TCP host is required.${NC}"
             read -r -p "TCP host: " TCP_HOST
         done
-        read -r -p "TCP port (default: 4000): " TCP_PORT
-        TCP_PORT="${TCP_PORT:-4000}"
+        read -r -p "TCP port (default: 5000): " TCP_PORT
+        TCP_PORT="${TCP_PORT:-5000}"
         echo -e "${GREEN}TCP: ${TCP_HOST}:${TCP_PORT}${NC}"
         ;;
     3)
