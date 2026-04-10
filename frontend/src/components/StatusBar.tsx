@@ -1,11 +1,49 @@
 import { useEffect, useState } from 'react';
-import { Menu, Moon, Sun } from 'lucide-react';
+import {
+  BatteryFull,
+  BatteryLow,
+  BatteryMedium,
+  BatteryWarning,
+  Menu,
+  Moon,
+  Sun,
+} from 'lucide-react';
 import type { HealthStatus, RadioConfig } from '../types';
 import { api } from '../api';
 import { toast } from './ui/sonner';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { applyTheme, getSavedTheme, THEME_CHANGE_EVENT } from '../utils/theme';
+import { getShowBatteryPercent, getShowBatteryVoltage } from '../utils/batteryDisplay';
 import { cn } from '@/lib/utils';
+
+// Meshtastic default OCV table (meshtastic/firmware src/power.h)
+const OCV_TABLE: [number, number][] = [
+  [4190, 100],
+  [4050, 90],
+  [3990, 80],
+  [3890, 70],
+  [3800, 60],
+  [3720, 50],
+  [3630, 40],
+  [3530, 30],
+  [3420, 20],
+  [3300, 10],
+  [3100, 0],
+];
+
+function mvToPercent(mv: number): number {
+  if (mv >= OCV_TABLE[0][0]) return 100;
+  if (mv <= OCV_TABLE[OCV_TABLE.length - 1][0]) return 0;
+  for (let i = 0; i < OCV_TABLE.length - 1; i++) {
+    const [highMv, highPct] = OCV_TABLE[i];
+    const [lowMv, lowPct] = OCV_TABLE[i + 1];
+    if (mv >= lowMv)
+      return Math.round(lowPct + ((mv - lowMv) / (highMv - lowMv)) * (highPct - lowPct));
+  }
+  return 0;
+}
+
+export const BATTERY_DISPLAY_CHANGE_EVENT = 'remoteterm-battery-display-change';
 
 interface StatusBarProps {
   health: HealthStatus | null;
@@ -22,6 +60,18 @@ export function StatusBar({
   onSettingsClick,
   onMenuClick,
 }: StatusBarProps) {
+  const [showBatteryPercent, setShowBatteryPercent] = useState(getShowBatteryPercent);
+  const [showBatteryVoltage, setShowBatteryVoltage] = useState(getShowBatteryVoltage);
+
+  useEffect(() => {
+    const handler = () => {
+      setShowBatteryPercent(getShowBatteryPercent());
+      setShowBatteryVoltage(getShowBatteryVoltage());
+    };
+    window.addEventListener(BATTERY_DISPLAY_CHANGE_EVENT, handler);
+    return () => window.removeEventListener(BATTERY_DISPLAY_CHANGE_EVENT, handler);
+  }, []);
+
   const radioState =
     health?.radio_state ??
     (health?.radio_initializing
@@ -118,6 +168,42 @@ export function StatusBar({
         />
         <span className="hidden lg:inline text-muted-foreground">{statusLabel}</span>
       </div>
+
+      {(showBatteryPercent || showBatteryVoltage) &&
+        connected &&
+        health?.radio_stats?.battery_mv != null &&
+        health.radio_stats.battery_mv > 0 &&
+        (() => {
+          const mv = health.radio_stats.battery_mv!;
+          const pct = mvToPercent(mv);
+          const Icon =
+            pct >= 80
+              ? BatteryFull
+              : pct >= 40
+                ? BatteryMedium
+                : pct >= 15
+                  ? BatteryLow
+                  : BatteryWarning;
+          const color =
+            pct >= 40 ? 'text-status-connected' : pct >= 15 ? 'text-warning' : 'text-destructive';
+          const label =
+            showBatteryPercent && showBatteryVoltage
+              ? `${pct}% (${mv}mV)`
+              : showBatteryPercent
+                ? `${pct}%`
+                : `${mv}mV`;
+          return (
+            <div
+              className={cn('flex items-center gap-1', color)}
+              title={`Battery: ${pct}% (${(mv / 1000).toFixed(2)}V)`}
+              role="status"
+              aria-label={`Battery ${pct} percent`}
+            >
+              <Icon className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline text-[0.6875rem]">{label}</span>
+            </div>
+          );
+        })()}
 
       {config && (
         <div className="hidden lg:flex items-center gap-2 text-muted-foreground">
