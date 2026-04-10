@@ -56,7 +56,7 @@ SOFTWARE.
 
 </details>
 
-### apprise (1.9.7) — BSD-2-Clause
+### apprise (1.9.9) — BSD-2-Clause
 
 <details>
 <summary>Full license text</summary>
@@ -64,7 +64,7 @@ SOFTWARE.
 ```
 BSD 2-Clause License
 
-Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
+Copyright (c) 2026, Chris Caron <lead2gold@gmail.com>
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

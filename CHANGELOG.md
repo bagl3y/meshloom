@@ -1,3 +1,12 @@
+## [3.10.0] - 2026-04-10
+
+* Feature: Add Arch AUR package
+* Feature: 72hr packet density view in statistics
+* Feature: Add warnings for event loop selection for MQTT on Windows startup
+* Bufix: Bump Apprise to 1.9.9 to fix Matrix bug
+* Misc: More memory-conscious on recent contact fetch
+* Misc: Fix statistics pane e2e test
+
 ## [3.9.0] - 2026-04-06
 
 * Feature: Add hop counts to hop-width selection options
