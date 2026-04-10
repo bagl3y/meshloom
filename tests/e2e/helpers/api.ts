@@ -282,14 +282,19 @@ export function deleteFanoutConfig(id: string): Promise<{ deleted: boolean }> {
 // --- Helpers ---
 
 /**
- * Ensure #flightless channel exists, creating it if needed.
+ * Ensure a channel exists by name, creating it if needed.
  * Returns the channel object.
  */
-export async function ensureFlightlessChannel(): Promise<Channel> {
+export async function ensureChannel(name: string): Promise<Channel> {
   const channels = await getChannels();
-  const existing = channels.find((c) => c.name === '#flightless');
+  const existing = channels.find((c) => c.name === name);
   if (existing) return existing;
-  return createChannel('#flightless');
+  return createChannel(name);
+}
+
+/** Convenience alias — ensures #flightless exists. */
+export async function ensureFlightlessChannel(): Promise<Channel> {
+  return ensureChannel('#flightless');
 }
 
 /**

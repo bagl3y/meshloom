@@ -6,50 +6,46 @@ import {
   getMessages,
   setContactRoutingOverride,
 } from '../helpers/api';
+import {
+  E2E_PARTNER_RADIO_PUBKEY,
+  E2E_PARTNER_RADIO_NAME,
+} from '../helpers/env';
 
-const DEV_ONLY_ENV = 'MESHCORE_ENABLE_DEV_FLIGHTLESS_ROUTE_E2E';
-const FLIGHTLESS_NAME = 'FlightlessDt🥝';
-const FLIGHTLESS_PUBLIC_KEY =
-  'ae92577bae6c269a1da3c87b5333e1bdb007e372b66e94204b9f92a6b52a62b1';
-const DEVELOPER_ONLY_NOTICE =
-  `Developer-only hardware test. This scenario assumes ${FLIGHTLESS_NAME} ` +
-  `(${FLIGHTLESS_PUBLIC_KEY.slice(0, 12)}...) is a nearby reachable node for the author's test radio. ` +
-  `Set ${DEV_ONLY_ENV}=1 to run it intentionally.`;
+const PARTNER_RADIO_NOTICE =
+  `Partner-radio hardware test. Requires a nearby node "${E2E_PARTNER_RADIO_NAME}" ` +
+  `(${E2E_PARTNER_RADIO_PUBKEY.slice(0, 12)}...) that will ACK DMs from this radio. ` +
+  `Set E2E_USE_PARTNER_RADIO_FOR_DM_ACK_TEST=1 to run, and override ` +
+  `E2E_PARTNER_RADIO_PUBKEY / E2E_PARTNER_RADIO_NAME to match your hardware.`;
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-test.describe('Developer-only direct-route learning for FlightlessDt🥝', () => {
-  test('zero-hop adverts then DM ACK learns a direct route', { tag: '@developer-only' }, async ({
+test.describe('Partner-radio direct-route learning via DM ACK', () => {
+  test('zero-hop adverts then DM ACK learns a direct route', { tag: '@partner-radio' }, async ({
     page,
   }, testInfo) => {
-    testInfo.annotations.push({ type: 'notice', description: DEVELOPER_ONLY_NOTICE });
-    if (process.env[DEV_ONLY_ENV] !== '1') {
-      test.skip(true, DEVELOPER_ONLY_NOTICE);
-    }
-
+    testInfo.annotations.push({ type: 'notice', description: PARTNER_RADIO_NOTICE });
     test.setTimeout(180_000);
-    console.warn(`[developer-only e2e] ${DEVELOPER_ONLY_NOTICE}`);
 
     try {
-      await deleteContact(FLIGHTLESS_PUBLIC_KEY);
+      await deleteContact(E2E_PARTNER_RADIO_PUBKEY);
     } catch {
       // Best-effort reset; the contact may not exist yet in the temp E2E DB.
     }
 
-    await createContact(FLIGHTLESS_PUBLIC_KEY, FLIGHTLESS_NAME);
-    await setContactRoutingOverride(FLIGHTLESS_PUBLIC_KEY, '');
+    await createContact(E2E_PARTNER_RADIO_PUBKEY, E2E_PARTNER_RADIO_NAME);
+    await setContactRoutingOverride(E2E_PARTNER_RADIO_PUBKEY, '');
 
     await expect
       .poll(
         async () => {
-          const contact = await getContactByKey(FLIGHTLESS_PUBLIC_KEY);
+          const contact = await getContactByKey(E2E_PARTNER_RADIO_PUBKEY);
           return contact?.direct_path_len ?? null;
         },
         {
           timeout: 10_000,
-          message: 'Waiting for recreated FlightlessDt contact to start in flood mode',
+          message: 'Waiting for recreated partner contact to start in flood mode',
         }
       )
       .toBe(-1);
@@ -74,22 +70,22 @@ test.describe('Developer-only direct-route learning for FlightlessDt🥝', () =>
     });
 
     const searchInput = page.getByLabel('Search conversations');
-    await searchInput.fill(FLIGHTLESS_PUBLIC_KEY.slice(0, 12));
-    await expect(page.getByText(FLIGHTLESS_NAME, { exact: true })).toBeVisible({
+    await searchInput.fill(E2E_PARTNER_RADIO_PUBKEY.slice(0, 12));
+    await expect(page.getByText(E2E_PARTNER_RADIO_NAME, { exact: true })).toBeVisible({
       timeout: 15_000,
     });
-    await page.getByText(FLIGHTLESS_NAME, { exact: true }).click();
+    await page.getByText(E2E_PARTNER_RADIO_NAME, { exact: true }).click();
     await expect
       .poll(() => page.url(), {
         timeout: 15_000,
-        message: 'Waiting for FlightlessDt conversation route to load',
+        message: 'Waiting for partner contact conversation route to load',
       })
-      .toContain(`#contact/${encodeURIComponent(FLIGHTLESS_PUBLIC_KEY)}`);
+      .toContain(`#contact/${encodeURIComponent(E2E_PARTNER_RADIO_PUBKEY)}`);
     await expect(
-      page.getByPlaceholder(new RegExp(`message\\s+${escapeRegex(FLIGHTLESS_NAME)}`, 'i'))
+      page.getByPlaceholder(new RegExp(`message\\s+${escapeRegex(E2E_PARTNER_RADIO_NAME)}`, 'i'))
     ).toBeVisible({ timeout: 15_000 });
 
-    const text = `dev-flightless-direct-${Date.now()}`;
+    const text = `dm-ack-route-test-${Date.now()}`;
     const input = page.getByPlaceholder(/message/i);
     await input.fill(text);
     await page.getByRole('button', { name: 'Send', exact: true }).click();
@@ -100,7 +96,7 @@ test.describe('Developer-only direct-route learning for FlightlessDt🥝', () =>
         async () => {
           const messages = await getMessages({
             type: 'PRIV',
-            conversation_key: FLIGHTLESS_PUBLIC_KEY,
+            conversation_key: E2E_PARTNER_RADIO_PUBKEY,
             limit: 25,
           });
           const match = messages.find((message) => message.outgoing && message.text === text);
@@ -108,7 +104,7 @@ test.describe('Developer-only direct-route learning for FlightlessDt🥝', () =>
         },
         {
           timeout: 90_000,
-          message: 'Waiting for FlightlessDt DM ACK',
+          message: 'Waiting for partner radio DM ACK',
         }
       )
       .toBeGreaterThan(0);
@@ -116,17 +112,17 @@ test.describe('Developer-only direct-route learning for FlightlessDt🥝', () =>
     await expect
       .poll(
         async () => {
-          const contact = await getContactByKey(FLIGHTLESS_PUBLIC_KEY);
+          const contact = await getContactByKey(E2E_PARTNER_RADIO_PUBKEY);
           return contact?.direct_path_len ?? null;
         },
         {
           timeout: 90_000,
-          message: 'Waiting for FlightlessDt route to update from flood to direct',
+          message: 'Waiting for partner radio route to update from flood to direct',
         }
       )
       .toBe(0);
 
-    const learnedContact = await getContactByKey(FLIGHTLESS_PUBLIC_KEY);
+    const learnedContact = await getContactByKey(E2E_PARTNER_RADIO_PUBKEY);
     expect(learnedContact?.direct_path ?? '').toBe('');
 
     await page.locator('[title="View contact info"]').click();
