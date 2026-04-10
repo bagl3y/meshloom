@@ -187,7 +187,7 @@ function TraceNodeRow({
 }
 
 export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) {
-  const distanceUnit = useDistanceUnit();
+  const { distanceUnit } = useDistanceUnit();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortMode, setSortMode] = useState<TraceSortMode>('alpha');
   const [draftHops, setDraftHops] = useState<TraceDraftHop[]>([]);
