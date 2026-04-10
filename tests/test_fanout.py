@@ -101,6 +101,9 @@ class StubModule(FanoutModule):
         super().__init__("stub", {})
         self.message_calls: list[dict] = []
         self.raw_calls: list[dict] = []
+        self.contact_calls: list[dict] = []
+        self.telemetry_calls: list[dict] = []
+        self.health_calls: list[dict] = []
         self._status = "connected"
 
     async def start(self) -> None:
@@ -114,6 +117,15 @@ class StubModule(FanoutModule):
 
     async def on_raw(self, data: dict) -> None:
         self.raw_calls.append(data)
+
+    async def on_contact(self, data: dict) -> None:
+        self.contact_calls.append(data)
+
+    async def on_telemetry(self, data: dict) -> None:
+        self.telemetry_calls.append(data)
+
+    async def on_health(self, data: dict) -> None:
+        self.health_calls.append(data)
 
     @property
     def status(self) -> str:
@@ -302,6 +314,113 @@ class TestFanoutManagerDispatch:
 
 
 # ---------------------------------------------------------------------------
+# New event dispatch (contact, telemetry, health)
+# ---------------------------------------------------------------------------
+
+
+class TestFanoutManagerNewEventDispatch:
+    @pytest.mark.asyncio
+    async def test_broadcast_contact_dispatches_to_all_modules(self):
+        manager = FanoutManager()
+        mod = StubModule()
+        manager._modules["test-id"] = (mod, {})
+
+        await manager.broadcast_contact({"public_key": "aabb", "name": "Alice"})
+
+        assert len(mod.contact_calls) == 1
+        assert mod.contact_calls[0]["public_key"] == "aabb"
+
+    @pytest.mark.asyncio
+    async def test_broadcast_contact_ignores_scope(self):
+        """Contact dispatch is unconditional — scope doesn't affect it."""
+        manager = FanoutManager()
+        mod = StubModule()
+        manager._modules["test-id"] = (mod, {"messages": "none", "raw_packets": "none"})
+
+        await manager.broadcast_contact({"public_key": "aabb"})
+
+        assert len(mod.contact_calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_broadcast_telemetry_dispatches_to_all_modules(self):
+        manager = FanoutManager()
+        mod = StubModule()
+        manager._modules["test-id"] = (mod, {})
+
+        await manager.broadcast_telemetry(
+            {"public_key": "ccdd", "battery_volts": 4.1, "timestamp": 1000}
+        )
+
+        assert len(mod.telemetry_calls) == 1
+        assert mod.telemetry_calls[0]["battery_volts"] == 4.1
+
+    @pytest.mark.asyncio
+    async def test_broadcast_health_fanout_dispatches_to_all_modules(self):
+        manager = FanoutManager()
+        mod = StubModule()
+        manager._modules["test-id"] = (mod, {})
+
+        await manager.broadcast_health_fanout({"connected": True, "noise_floor_dbm": -112})
+
+        assert len(mod.health_calls) == 1
+        assert mod.health_calls[0]["connected"] is True
+
+    @pytest.mark.asyncio
+    async def test_new_events_do_not_affect_message_or_raw(self):
+        """Verify new dispatch paths are independent of message/raw."""
+        manager = FanoutManager()
+        mod = StubModule()
+        manager._modules["test-id"] = (mod, {"messages": "all", "raw_packets": "all"})
+
+        await manager.broadcast_contact({"public_key": "aabb"})
+        await manager.broadcast_telemetry({"public_key": "ccdd", "battery_volts": 3.8})
+        await manager.broadcast_health_fanout({"connected": False})
+
+        assert len(mod.message_calls) == 0
+        assert len(mod.raw_calls) == 0
+        assert len(mod.contact_calls) == 1
+        assert len(mod.telemetry_calls) == 1
+        assert len(mod.health_calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_base_module_no_ops_do_not_raise(self):
+        """Default FanoutModule no-ops accept data without error."""
+        manager = FanoutManager()
+
+        class MinimalModule(FanoutModule):
+            @property
+            def status(self) -> str:
+                return "connected"
+
+        mod = MinimalModule("test", {})
+        manager._modules["test-id"] = (mod, {})
+
+        # Should not raise — base class no-ops silently accept
+        await manager.broadcast_contact({"public_key": "aabb"})
+        await manager.broadcast_telemetry({"public_key": "ccdd"})
+        await manager.broadcast_health_fanout({"connected": True})
+
+    @pytest.mark.asyncio
+    async def test_error_in_one_module_does_not_block_others(self):
+        manager = FanoutManager()
+
+        bad_mod = StubModule()
+
+        async def fail(data):
+            raise RuntimeError("boom")
+
+        bad_mod.on_contact = fail
+
+        good_mod = StubModule()
+        manager._modules["bad"] = (bad_mod, {})
+        manager._modules["good"] = (good_mod, {})
+
+        await manager.broadcast_contact({"public_key": "aabb"})
+
+        assert len(good_mod.contact_calls) == 1
+
+
+# ---------------------------------------------------------------------------
 # Repository tests
 # ---------------------------------------------------------------------------
 
@@ -475,6 +594,47 @@ class TestBroadcastEventRealtime:
 
             mock_ws.broadcast.assert_called_once()
             mock_fm.broadcast_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_contact_event_dispatches_to_fanout(self):
+        """broadcast_event for 'contact' should trigger fanout contact dispatch."""
+        from app.websocket import broadcast_event
+
+        with (
+            patch("app.websocket.ws_manager") as mock_ws,
+            patch("app.fanout.manager.fanout_manager") as mock_fm,
+        ):
+            mock_ws.broadcast = AsyncMock()
+            mock_fm.broadcast_contact = AsyncMock()
+
+            broadcast_event("contact", {"public_key": "aabb"}, realtime=True)
+
+            import asyncio
+
+            await asyncio.sleep(0)
+
+            mock_ws.broadcast.assert_called_once()
+            mock_fm.broadcast_contact.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_contact_event_skipped_when_not_realtime(self):
+        """broadcast_event('contact', ..., realtime=False) should skip fanout."""
+        from app.websocket import broadcast_event
+
+        with (
+            patch("app.websocket.ws_manager") as mock_ws,
+            patch("app.fanout.manager.fanout_manager") as mock_fm,
+        ):
+            mock_ws.broadcast = AsyncMock()
+
+            broadcast_event("contact", {"public_key": "aabb"}, realtime=False)
+
+            import asyncio
+
+            await asyncio.sleep(0)
+
+            mock_ws.broadcast.assert_called_once()
+            mock_fm.broadcast_contact.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

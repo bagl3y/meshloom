@@ -38,6 +38,15 @@ class FanoutModule:
     async def on_raw(self, data: dict) -> None:
         """Called for raw RF packets. Override if needed."""
 
+    async def on_contact(self, data: dict) -> None:
+        """Called for contact upserts (adverts, sync). Override if needed."""
+
+    async def on_telemetry(self, data: dict) -> None:
+        """Called for repeater telemetry snapshots. Override if needed."""
+
+    async def on_health(self, data: dict) -> None:
+        """Called for periodic radio health snapshots. Override if needed."""
+
     @property
     def status(self) -> str:
         """Return 'connected', 'disconnected', or 'error'."""

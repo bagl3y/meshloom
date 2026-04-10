@@ -86,6 +86,11 @@ def _scope_matches_raw(scope: dict, _data: dict) -> bool:
     return scope.get("raw_packets", "none") == "all"
 
 
+def _always_match(_scope: dict, _data: dict) -> bool:
+    """Match all modules unconditionally (filtering is module-internal)."""
+    return True
+
+
 class FanoutManager:
     """Owns all active fanout modules and dispatches events."""
 
@@ -268,6 +273,33 @@ class FanoutManager:
             matcher=_scope_matches_raw,
             handler_name="on_raw",
             log_label="on_raw",
+        )
+
+    async def broadcast_contact(self, data: dict) -> None:
+        """Dispatch a contact upsert to all modules."""
+        await self._dispatch_matching(
+            data,
+            matcher=_always_match,
+            handler_name="on_contact",
+            log_label="on_contact",
+        )
+
+    async def broadcast_telemetry(self, data: dict) -> None:
+        """Dispatch a repeater telemetry snapshot to all modules."""
+        await self._dispatch_matching(
+            data,
+            matcher=_always_match,
+            handler_name="on_telemetry",
+            log_label="on_telemetry",
+        )
+
+    async def broadcast_health_fanout(self, data: dict) -> None:
+        """Dispatch a radio health snapshot to all modules."""
+        await self._dispatch_matching(
+            data,
+            matcher=_always_match,
+            handler_name="on_health",
+            log_label="on_health",
         )
 
     async def stop_all(self) -> None:

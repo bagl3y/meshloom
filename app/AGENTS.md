@@ -40,7 +40,7 @@ app/
 │   ├── contact_reconciliation.py # Prefix-claim, sender-key backfill, name-history wiring
 │   ├── radio_lifecycle.py       # Post-connect setup and reconnect/setup helpers
 │   ├── radio_commands.py        # Radio config/private-key command workflows
-│   ├── radio_noise_floor.py     # In-memory local radio noise-floor sampling/history
+│   ├── radio_stats.py           # In-memory local radio stats sampling and noise-floor history
 │   └── radio_runtime.py         # Router/dependency seam over the global RadioManager
 ├── radio.py             # RadioManager transport/session state + lock management
 ├── radio_sync.py        # Polling, sync, periodic advertisement loop
@@ -161,10 +161,12 @@ app/
 
 - All external integrations (MQTT, bots, webhooks, Apprise, SQS) are managed through the fanout bus (`app/fanout/`).
 - Configs stored in `fanout_configs` table, managed via `GET/POST/PATCH/DELETE /api/fanout`.
-- `broadcast_event()` in `websocket.py` dispatches to the fanout manager for `message` and `raw_packet` events.
-- Each integration is a `FanoutModule` with scope-based filtering.
+- `broadcast_event()` in `websocket.py` dispatches to the fanout manager for `message`, `raw_packet`, and `contact` events.
+- `on_message` and `on_raw` are scope-gated. `on_contact`, `on_telemetry`, and `on_health` are dispatched to all modules unconditionally (modules filter internally).
+- Repeater telemetry broadcasts are emitted after `RepeaterTelemetryRepository.record()` in both `radio_sync.py` (auto-collect) and `routers/repeaters.py` (manual fetch).
+- The 60-second radio stats sampling loop in `radio_stats.py` dispatches an enriched health snapshot (radio identity + full stats) to all fanout modules after each sample.
 - Community MQTT publishes raw packets only, but its derived `path` field for direct packets is emitted as comma-separated hop identifiers, not flat path bytes.
-- See `app/fanout/AGENTS_fanout.md` for full architecture details.
+- See `app/fanout/AGENTS_fanout.md` for full architecture details and event payload shapes.
 
 ## API Surface (all under `/api`)
 

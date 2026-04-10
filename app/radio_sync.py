@@ -1585,9 +1585,10 @@ async def _collect_repeater_telemetry(mc: MeshCore, contact: Contact) -> bool:
     }
 
     try:
+        timestamp = int(time.time())
         await RepeaterTelemetryRepository.record(
             public_key=contact.public_key,
-            timestamp=int(time.time()),
+            timestamp=timestamp,
             data=data,
         )
         logger.info(
@@ -1595,6 +1596,21 @@ async def _collect_repeater_telemetry(mc: MeshCore, contact: Contact) -> bool:
             contact.name or contact.public_key[:12],
             contact.public_key[:12],
         )
+
+        # Dispatch to fanout modules (e.g. HA MQTT discovery)
+        from app.fanout.manager import fanout_manager
+
+        asyncio.create_task(
+            fanout_manager.broadcast_telemetry(
+                {
+                    "public_key": contact.public_key,
+                    "name": contact.name or contact.public_key[:12],
+                    "timestamp": timestamp,
+                    **data,
+                }
+            )
+        )
+
         return True
     except Exception as e:
         logger.warning(

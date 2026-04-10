@@ -1,12 +1,19 @@
 """In-memory local-radio stats sampling.
 
 A single 60s loop fetches core, radio, and packet stats from the connected
-radio in one radio-lock acquisition and caches everything in memory.  The
-noise-floor 24h history deque is maintained as a side effect.
+radio in one radio-lock acquisition.  The noise-floor 24h history deque is
+maintained as a side effect.
+
+After each sample the loop:
+1. Broadcasts a WS ``health`` frame so frontend dashboards refresh.
+2. Dispatches a ``broadcast_health_fanout`` event carrying the full stats
+   snapshot plus radio identity, so fanout modules (e.g. HA MQTT) can
+   publish sensor state without a second radio poll.
 
 Consumers:
 - GET /api/health      → get_latest_radio_stats()  (battery, uptime, etc.)
 - GET /api/statistics  → get_noise_floor_history()  (24h noise-floor chart)
+- Fanout on_health     → _build_fanout_payload()    (identity + stats)
 """
 
 import asyncio
@@ -31,24 +38,25 @@ _noise_floor_samples: deque[tuple[int, int]] = deque(maxlen=MAX_NOISE_FLOOR_SAMP
 _latest_stats: dict[str, Any] = {}
 
 
-async def _sample_all_stats() -> None:
-    """Fetch core, radio, and packet stats in one radio operation."""
-    global _latest_stats
+async def _sample_all_stats() -> dict[str, Any]:
+    """Fetch core, radio, and packet stats in one radio operation.
 
+    Returns the snapshot dict (may be empty if the radio is disconnected or
+    all commands errored).
+    """
     if not radio_manager.is_connected:
-        _latest_stats = {}
-        return
+        return {}
 
     try:
-        async with radio_manager.radio_operation("radio_stats_sample") as mc:
+        async with radio_manager.radio_operation("radio_stats_sample", blocking=False) as mc:
             core_event = await mc.commands.get_stats_core()
             radio_event = await mc.commands.get_stats_radio()
             packet_event = await mc.commands.get_stats_packets()
     except (RadioDisconnectedError, RadioOperationBusyError):
-        return
+        return {}
     except Exception as exc:
         logger.debug("Radio stats sampling failed: %s", exc)
-        return
+        return {}
 
     now = int(time.time())
     snapshot: dict[str, Any] = {"timestamp": now}
@@ -66,16 +74,62 @@ async def _sample_all_stats() -> None:
         snapshot["packets"] = packet_event.payload
 
     has_any_data = len(snapshot) > 1
-    _latest_stats = snapshot if has_any_data else {}
+    return snapshot if has_any_data else {}
+
+
+def _build_fanout_payload(stats: dict[str, Any]) -> dict:
+    """Build the health fanout payload from a stats snapshot + radio identity.
+
+    Includes radio identity (public_key, name), connection state, and the
+    full stats snapshot so fanout modules can publish rich sensor data
+    without a second radio poll.
+    """
+    mc = radio_manager.meshcore
+    self_info = mc.self_info if mc else None
+
+    payload: dict = {
+        "connected": radio_manager.is_connected,
+        "connection_info": radio_manager.connection_info,
+        "public_key": (self_info.get("public_key") or None) if self_info else None,
+        "name": (self_info.get("name") or None) if self_info else None,
+    }
+
+    if stats:
+        payload["noise_floor_dbm"] = stats.get("noise_floor")
+        payload["battery_mv"] = stats.get("battery_mv")
+        payload["uptime_secs"] = stats.get("uptime_secs")
+        payload["last_rssi"] = stats.get("last_rssi")
+        payload["last_snr"] = stats.get("last_snr")
+        payload["tx_air_secs"] = stats.get("tx_air_secs")
+        payload["rx_air_secs"] = stats.get("rx_air_secs")
+        packets = stats.get("packets") or {}
+        payload["packets_recv"] = packets.get("recv")
+        payload["packets_sent"] = packets.get("sent")
+        payload["flood_tx"] = packets.get("flood_tx")
+        payload["direct_tx"] = packets.get("direct_tx")
+        payload["flood_rx"] = packets.get("flood_rx")
+        payload["direct_rx"] = packets.get("direct_rx")
+
+    return payload
 
 
 async def _stats_sampling_loop() -> None:
+    global _latest_stats
     while True:
         try:
-            await _sample_all_stats()
+            snapshot = await _sample_all_stats()
+            if snapshot:
+                _latest_stats = snapshot
+            elif not radio_manager.is_connected:
+                _latest_stats = {}
             from app.websocket import broadcast_health
 
             broadcast_health(radio_manager.is_connected, radio_manager.connection_info)
+
+            # Dispatch enriched health snapshot to fanout modules
+            from app.fanout.manager import fanout_manager
+
+            await fanout_manager.broadcast_health_fanout(_build_fanout_payload(snapshot))
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -137,5 +191,5 @@ def get_noise_floor_history() -> dict:
 
 
 def get_latest_radio_stats() -> dict[str, Any]:
-    """Return the most recent radio stats snapshot."""
+    """Return the most recent radio stats snapshot (for health endpoint)."""
     return dict(_latest_stats)
