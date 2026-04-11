@@ -1,12 +1,11 @@
 """Tests for database migration(s)."""
 
-
 import aiosqlite
 import pytest
 
 from app.migrations import get_version, run_migrations, set_version
-
 from tests.test_migrations.conftest import LATEST_SCHEMA_VERSION
+
 
 class TestMigration041:
     """Test migration 041: add nullable routing override columns."""

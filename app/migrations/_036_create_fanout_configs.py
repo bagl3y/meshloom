@@ -1,6 +1,6 @@
 import json
-import uuid
 import logging
+import uuid
 
 import aiosqlite
 

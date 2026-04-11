@@ -7,13 +7,13 @@ import pytest
 
 from app.migrations import run_migrations, set_version
 
+
 class TestMigration013:
     """Test migration 013: convert bot_enabled/bot_code to multi-bot format."""
 
     @pytest.mark.asyncio
     async def test_migration_converts_existing_bot_to_array(self):
         """Migration converts existing bot_enabled/bot_code to bots array."""
-        import json
 
         conn = await aiosqlite.connect(":memory:")
         conn.row_factory = aiosqlite.Row

@@ -7,13 +7,13 @@ import pytest
 
 from app.migrations import run_migrations, set_version
 
+
 class TestMigration028:
     """Test migration 028: convert payload_hash from TEXT to BLOB."""
 
     @pytest.mark.asyncio
     async def test_migration_converts_hex_text_to_blob(self):
         """Migration converts 64-char hex TEXT payload_hash values to 32-byte BLOBs."""
-        from hashlib import sha256
 
         conn = await aiosqlite.connect(":memory:")
         conn.row_factory = aiosqlite.Row

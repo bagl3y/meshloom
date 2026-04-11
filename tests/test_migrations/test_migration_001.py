@@ -1,10 +1,10 @@
 """Tests for database migration(s)."""
 
-
 import aiosqlite
 import pytest
 
 from app.migrations import run_migrations
+
 
 class TestMigration001:
     """Test migration 001: add last_read_at columns."""

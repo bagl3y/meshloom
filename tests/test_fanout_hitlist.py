@@ -351,7 +351,9 @@ class TestMigration036:
             )
             await conn.commit()
 
-            from app.migrations._036_create_fanout_configs import migrate as _migrate_036_create_fanout_configs
+            from app.migrations._036_create_fanout_configs import (
+                migrate as _migrate_036_create_fanout_configs,
+            )
 
             await _migrate_036_create_fanout_configs(conn)
 
@@ -382,7 +384,9 @@ class TestMigration036:
             )
             await conn.commit()
 
-            from app.migrations._036_create_fanout_configs import migrate as _migrate_036_create_fanout_configs
+            from app.migrations._036_create_fanout_configs import (
+                migrate as _migrate_036_create_fanout_configs,
+            )
 
             await _migrate_036_create_fanout_configs(conn)
 
@@ -413,7 +417,9 @@ class TestMigration036:
             )
             await conn.commit()
 
-            from app.migrations._036_create_fanout_configs import migrate as _migrate_036_create_fanout_configs
+            from app.migrations._036_create_fanout_configs import (
+                migrate as _migrate_036_create_fanout_configs,
+            )
 
             await _migrate_036_create_fanout_configs(conn)
 
@@ -439,7 +445,9 @@ class TestMigration036:
             await conn.execute("INSERT INTO app_settings (id) VALUES (1)")
             await conn.commit()
 
-            from app.migrations._036_create_fanout_configs import migrate as _migrate_036_create_fanout_configs
+            from app.migrations._036_create_fanout_configs import (
+                migrate as _migrate_036_create_fanout_configs,
+            )
 
             await _migrate_036_create_fanout_configs(conn)
 
@@ -536,7 +544,9 @@ class TestMigration038:
             await conn.execute("INSERT INTO app_settings (id) VALUES (1)")
             await conn.commit()
 
-            from app.migrations._038_drop_legacy_columns import migrate as _migrate_038_drop_legacy_columns
+            from app.migrations._038_drop_legacy_columns import (
+                migrate as _migrate_038_drop_legacy_columns,
+            )
 
             await _migrate_038_drop_legacy_columns(conn)
 
@@ -561,7 +571,9 @@ class TestMigration038:
             await conn.execute("CREATE TABLE app_settings (id INTEGER PRIMARY KEY)")
             await conn.commit()
 
-            from app.migrations._038_drop_legacy_columns import migrate as _migrate_038_drop_legacy_columns
+            from app.migrations._038_drop_legacy_columns import (
+                migrate as _migrate_038_drop_legacy_columns,
+            )
 
             # Should not raise
             await _migrate_038_drop_legacy_columns(conn)

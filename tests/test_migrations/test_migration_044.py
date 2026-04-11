@@ -7,6 +7,7 @@ import pytest
 
 from app.migrations import run_migrations, set_version
 
+
 class TestMigration044:
     """Test migration 044: dedupe incoming direct messages."""
 

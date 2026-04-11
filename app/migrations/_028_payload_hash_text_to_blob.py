@@ -1,5 +1,5 @@
-from hashlib import sha256
 import logging
+from hashlib import sha256
 
 import aiosqlite
 

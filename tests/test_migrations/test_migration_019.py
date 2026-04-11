@@ -1,10 +1,10 @@
 """Tests for database migration(s)."""
 
-
 import aiosqlite
 import pytest
 
 from app.migrations import run_migrations, set_version
+
 
 class TestMigration019:
     """Test migration 019: drop UNIQUE constraint from messages."""

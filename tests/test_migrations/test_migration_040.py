@@ -1,12 +1,11 @@
 """Tests for database migration(s)."""
 
-
 import aiosqlite
 import pytest
 
 from app.migrations import get_version, run_migrations, set_version
-
 from tests.test_migrations.conftest import LATEST_SCHEMA_VERSION
+
 
 class TestMigration040:
     """Test migration 040: include path_len in advert-path identity."""

@@ -1,11 +1,10 @@
 """Tests for database migration(s)."""
 
-from hashlib import sha256
-
 import aiosqlite
 import pytest
 
 from app.migrations import run_migrations, set_version
+
 
 class TestMigration018:
     """Test migration 018: drop UNIQUE(data) from raw_packets."""
