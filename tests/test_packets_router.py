@@ -5,7 +5,7 @@ undecrypted count endpoint, and the maintenance endpoint.
 """
 
 import time
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -307,38 +307,37 @@ class TestDecryptHistoricalPackets:
 
 class TestUndecryptedTextPacketStreaming:
     @pytest.mark.asyncio
-    async def test_count_undecrypted_text_messages_uses_batched_streaming(self, test_db):
-        """Counting undecrypted DM packets should stream batches and filter by payload type."""
+    async def test_count_undecrypted_text_messages_uses_keyset_pagination(self, test_db):
+        """Counting undecrypted DM packets should use keyset pagination and filter by payload type."""
 
-        class FakeCursor:
-            def __init__(self):
-                self._batches = [
-                    [
-                        {"id": 1, "data": b"\x09\x00dm", "timestamp": 1000},
-                        {"id": 2, "data": b"\x15\x00chan", "timestamp": 1001},
-                    ],
-                    [{"id": 3, "data": b"\x09\x00dm2", "timestamp": 1002}],
-                    [],
-                ]
-                self.fetchall_called = False
+        # Simulate keyset pagination: each execute() call returns a cursor
+        # whose fetchall() yields one batch.  The generator stops when a
+        # batch is empty.
+        batches = [
+            [
+                {"id": 1, "data": b"\x09\x00dm", "timestamp": 1000},
+                {"id": 2, "data": b"\x15\x00chan", "timestamp": 1001},
+            ],
+            [{"id": 3, "data": b"\x09\x00dm2", "timestamp": 1002}],
+            [],
+        ]
 
-            async def fetchmany(self, size):
-                assert size > 0
-                return self._batches.pop(0)
+        async def fake_execute(*_args, **_kwargs):
+            batch = batches.pop(0)
 
-            async def close(self):
-                return None
+            class FakeCursor:
+                async def fetchall(self):
+                    return batch
 
-            async def fetchall(self):
-                self.fetchall_called = True
-                raise AssertionError("fetchall() should not be used")
+                async def close(self):
+                    pass
 
-        fake_cursor = FakeCursor()
+            return FakeCursor()
 
-        with patch.object(test_db.conn, "execute", new=AsyncMock(return_value=fake_cursor)):
+        with patch.object(test_db.conn, "execute", side_effect=fake_execute):
             count = await RawPacketRepository.count_undecrypted_text_messages(batch_size=2)
 
-        assert fake_cursor.fetchall_called is False
+        # header byte 0x09 -> payload type 2 (TEXT_MESSAGE); 0x15 -> type 5 (not TEXT_MESSAGE)
         assert count == 2
 
 

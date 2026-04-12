@@ -63,7 +63,6 @@ export default defineConfig({
     timeout: 180_000,
     env: {
       MESHCORE_DATABASE_PATH: path.join(tmpDir, 'e2e-test.db'),
-      MESHCORE_SKIP_POST_CONNECT_SYNC: 'true',
       // Pass through the serial port from the environment
       ...(process.env.MESHCORE_SERIAL_PORT
         ? { MESHCORE_SERIAL_PORT: process.env.MESHCORE_SERIAL_PORT }

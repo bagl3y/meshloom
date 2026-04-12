@@ -352,27 +352,14 @@ class TestPathHashWidthStats:
         assert breakdown["triple_byte_pct"] == pytest.approx(100 / 3, rel=1e-3)
 
     @pytest.mark.asyncio
-    async def test_path_hash_width_scan_uses_batched_fetchmany(self, test_db):
-        """Hash-width stats should stream batches instead of calling fetchall()."""
+    async def test_path_hash_width_scan_fetches_all_then_buckets(self, test_db):
+        """Hash-width stats should fetchall() then bucket synchronously."""
+
+        fake_rows = [{"data": b"a"}, {"data": b"b"}, {"data": b"c"}]
 
         class FakeCursor:
-            def __init__(self):
-                self._batches = [
-                    [{"data": b"a"}, {"data": b"b"}],
-                    [{"data": b"c"}],
-                    [],
-                ]
-                self.fetchall_called = False
-
-            async def fetchmany(self, size):
-                assert size > 0
-                return self._batches.pop(0)
-
             async def fetchall(self):
-                self.fetchall_called = True
-                raise AssertionError("fetchall() should not be used")
-
-        fake_cursor = FakeCursor()
+                return fake_rows
 
         def fake_parse(raw_packet: bytes):
             hash_sizes = {
@@ -386,12 +373,11 @@ class TestPathHashWidthStats:
             return SimpleNamespace(hash_size=hash_size)
 
         with (
-            patch.object(test_db.conn, "execute", new=AsyncMock(return_value=fake_cursor)),
+            patch.object(test_db.conn, "execute", new=AsyncMock(return_value=FakeCursor())),
             patch("app.path_utils.parse_packet_envelope", side_effect=fake_parse),
         ):
             breakdown = await StatisticsRepository._path_hash_width_24h()
 
-        assert fake_cursor.fetchall_called is False
         assert breakdown["total_packets"] == 3
         assert breakdown["single_byte"] == 1
         assert breakdown["double_byte"] == 1

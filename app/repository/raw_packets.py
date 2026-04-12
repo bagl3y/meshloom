@@ -74,41 +74,52 @@ class RawPacketRepository:
     async def stream_all_undecrypted(
         batch_size: int = UNDECRYPTED_PACKET_BATCH_SIZE,
     ) -> AsyncIterator[tuple[int, bytes, int]]:
-        """Yield all undecrypted packets as (id, data, timestamp) in bounded batches."""
-        cursor = await db.conn.execute(
-            "SELECT id, data, timestamp FROM raw_packets WHERE message_id IS NULL ORDER BY timestamp ASC"
-        )
-        try:
-            while True:
-                rows = await cursor.fetchmany(batch_size)
-                if not rows:
-                    break
-                for row in rows:
-                    yield (row["id"], bytes(row["data"]), row["timestamp"])
-        finally:
+        """Yield all undecrypted packets as (id, data, timestamp) in bounded batches.
+
+        Uses keyset pagination so each batch is a fresh query with a fully
+        consumed cursor — no open statement held across yield boundaries.
+        """
+        last_id = -1
+        while True:
+            cursor = await db.conn.execute(
+                "SELECT id, data, timestamp FROM raw_packets "
+                "WHERE message_id IS NULL AND id > ? ORDER BY id ASC LIMIT ?",
+                (last_id, batch_size),
+            )
+            rows = await cursor.fetchall()
             await cursor.close()
+            if not rows:
+                break
+            for row in rows:
+                last_id = row["id"]
+                yield (row["id"], bytes(row["data"]), row["timestamp"])
 
     @staticmethod
     async def stream_undecrypted_text_messages(
         batch_size: int = UNDECRYPTED_PACKET_BATCH_SIZE,
     ) -> AsyncIterator[tuple[int, bytes, int]]:
-        """Yield undecrypted TEXT_MESSAGE packets in bounded-size batches."""
-        cursor = await db.conn.execute(
-            "SELECT id, data, timestamp FROM raw_packets WHERE message_id IS NULL ORDER BY timestamp ASC"
-        )
-        try:
-            while True:
-                rows = await cursor.fetchmany(batch_size)
-                if not rows:
-                    break
+        """Yield undecrypted TEXT_MESSAGE packets in bounded-size batches.
 
-                for row in rows:
-                    data = bytes(row["data"])
-                    payload_type = get_packet_payload_type(data)
-                    if payload_type == PayloadType.TEXT_MESSAGE:
-                        yield (row["id"], data, row["timestamp"])
-        finally:
+        Uses keyset pagination so each batch is a fresh query with a fully
+        consumed cursor — no open statement held across yield boundaries.
+        """
+        last_id = -1
+        while True:
+            cursor = await db.conn.execute(
+                "SELECT id, data, timestamp FROM raw_packets "
+                "WHERE message_id IS NULL AND id > ? ORDER BY id ASC LIMIT ?",
+                (last_id, batch_size),
+            )
+            rows = await cursor.fetchall()
             await cursor.close()
+            if not rows:
+                break
+            for row in rows:
+                last_id = row["id"]
+                data = bytes(row["data"])
+                payload_type = get_packet_payload_type(data)
+                if payload_type == PayloadType.TEXT_MESSAGE:
+                    yield (row["id"], data, row["timestamp"])
 
     @staticmethod
     async def count_undecrypted_text_messages(

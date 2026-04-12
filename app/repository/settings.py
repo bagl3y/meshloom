@@ -13,7 +13,6 @@ SECONDS_1H = 3600
 SECONDS_24H = 86400
 SECONDS_72H = 259200
 SECONDS_7D = 604800
-RAW_PACKET_STATS_BATCH_SIZE = 500
 
 
 class AppSettingsRepository:
@@ -302,7 +301,8 @@ class StatisticsRepository:
             "SELECT data FROM raw_packets WHERE timestamp >= ?",
             (now - SECONDS_24H,),
         )
-        return await bucket_path_hash_widths(cursor, batch_size=RAW_PACKET_STATS_BATCH_SIZE)
+        rows = await cursor.fetchall()
+        return bucket_path_hash_widths(rows)
 
     @staticmethod
     async def get_all() -> dict:

@@ -868,7 +868,8 @@ class MessageRepository:
             """,
             (conversation_key, t_24h),
         )
-        path_hash_width_24h = await bucket_path_hash_widths(cursor3)
+        rows3 = await cursor3.fetchall()
+        path_hash_width_24h = bucket_path_hash_widths(rows3)
 
         return {
             "message_counts": message_counts,
