@@ -178,6 +178,22 @@ class Database:
         # Persists in the DB file but we set it explicitly on every connection.
         await self._connection.execute("PRAGMA journal_mode = WAL")
 
+        # synchronous = NORMAL is safe with WAL — only the most recent
+        # transaction can be lost on an OS crash (no corruption risk).
+        # Reduces fsync overhead vs. the default FULL.
+        await self._connection.execute("PRAGMA synchronous = NORMAL")
+
+        # Retry for up to 5s on lock contention instead of failing instantly.
+        # Matters when a second connection (e.g. VACUUM) touches the DB.
+        await self._connection.execute("PRAGMA busy_timeout = 5000")
+
+        # Bump page cache to ~64 MB (negative value = KB). Keeps hot pages
+        # in memory for read-heavy queries (unreads, pagination, search).
+        await self._connection.execute("PRAGMA cache_size = -64000")
+
+        # Keep temp tables and sort spills in memory instead of on disk.
+        await self._connection.execute("PRAGMA temp_store = MEMORY")
+
         # Incremental auto-vacuum: freed pages are reclaimable via
         # PRAGMA incremental_vacuum without a full VACUUM. Must be set before
         # the first table is created (for new databases); for existing databases
