@@ -867,10 +867,14 @@ function MqttHaConfigEditor({
   const selectedContacts = (config.tracked_contacts as string[]) || [];
   const selectedRepeaters = (config.tracked_repeaters as string[]) || [];
 
-  const contactOptions = contacts.filter((c) => c.type === 0 || c.type === 1 || c.type === 3);
+  const contactOptions = useMemo(
+    () => contacts.filter((c) => c.type === 0 || c.type === 1 || c.type === 3),
+    [contacts]
+  );
 
-  const repeaterOptions = contacts.filter(
-    (c) => c.type === 2 && trackedRepeaters.includes(c.public_key)
+  const repeaterOptions = useMemo(
+    () => contacts.filter((c) => c.type === 2 && trackedRepeaters.includes(c.public_key)),
+    [contacts, trackedRepeaters]
   );
 
   const contactSearchLower = contactSearch.toLowerCase().trim();
