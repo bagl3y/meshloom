@@ -16,7 +16,16 @@ from app.repository.fanout import FanoutConfigRepository
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/fanout", tags=["fanout"])
 
-_VALID_TYPES = {"mqtt_private", "mqtt_community", "bot", "webhook", "apprise", "sqs", "map_upload"}
+_VALID_TYPES = {
+    "mqtt_private",
+    "mqtt_community",
+    "mqtt_ha",
+    "bot",
+    "webhook",
+    "apprise",
+    "sqs",
+    "map_upload",
+}
 
 _IATA_RE = re.compile(r"^[A-Z]{3}$")
 _DEFAULT_COMMUNITY_MQTT_TOPIC_TEMPLATE = "meshcore/{IATA}/{PUBLIC_KEY}/packets"
@@ -96,6 +105,8 @@ def _validate_and_normalize_config(config_type: str, config: dict) -> dict:
         _validate_sqs_config(normalized)
     elif config_type == "map_upload":
         _validate_map_upload_config(normalized)
+    elif config_type == "mqtt_ha":
+        _validate_mqtt_ha_config(normalized)
 
     return normalized
 
@@ -318,6 +329,19 @@ def _validate_map_upload_config(config: dict) -> None:
     config["geofence_radius_km"] = radius
 
 
+def _validate_mqtt_ha_config(config: dict) -> None:
+    """Validate mqtt_ha config blob."""
+    if not config.get("broker_host"):
+        raise HTTPException(status_code=400, detail="broker_host is required for mqtt_ha")
+    port = config.get("broker_port", 1883)
+    if not isinstance(port, int) or port < 1 or port > 65535:
+        raise HTTPException(status_code=400, detail="broker_port must be between 1 and 65535")
+    for field in ("tracked_contacts", "tracked_repeaters"):
+        value = config.get(field)
+        if value is not None and not isinstance(value, list):
+            raise HTTPException(status_code=400, detail=f"{field} must be a list of public keys")
+
+
 def _enforce_scope(config_type: str, scope: dict) -> dict:
     """Enforce type-specific scope constraints. Returns normalized scope."""
     if config_type == "mqtt_community":
@@ -326,7 +350,7 @@ def _enforce_scope(config_type: str, scope: dict) -> dict:
         return {"messages": "none", "raw_packets": "all"}
     if config_type == "bot":
         return {"messages": "all", "raw_packets": "none"}
-    if config_type in ("webhook", "apprise"):
+    if config_type in ("webhook", "apprise", "mqtt_ha"):
         messages = scope.get("messages", "all")
         if messages not in ("all", "none") and not isinstance(messages, dict):
             raise HTTPException(

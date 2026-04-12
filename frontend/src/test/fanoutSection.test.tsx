@@ -118,7 +118,7 @@ describe('SettingsFanoutSection', () => {
     const optionButtons = within(dialog)
       .getAllByRole('button')
       .filter((button) => button.hasAttribute('aria-pressed'));
-    expect(optionButtons).toHaveLength(10);
+    expect(optionButtons).toHaveLength(11);
     expect(within(dialog).getByRole('button', { name: 'Close' })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Create' })).toBeInTheDocument();
     expect(

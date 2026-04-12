@@ -24,6 +24,7 @@ const BotCodeEditor = lazy(() =>
 const TYPE_LABELS: Record<string, string> = {
   mqtt_private: 'Private MQTT',
   mqtt_community: 'Community Sharing',
+  mqtt_ha: 'Home Assistant',
   bot: 'Python Bot',
   webhook: 'Webhook',
   apprise: 'Apprise',
@@ -101,6 +102,7 @@ const DEFAULT_BOT_CODE = `def bot(**kwargs) -> str | list[str] | None:
 
 type DraftType =
   | 'mqtt_private'
+  | 'mqtt_ha'
   | 'mqtt_community'
   | 'mqtt_community_meshrank'
   | 'mqtt_community_letsmesh_us'
@@ -130,7 +132,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
     value: 'mqtt_private',
     savedType: 'mqtt_private',
     label: 'Private MQTT',
-    section: 'Bulk Forwarding',
+    section: 'Private Forwarding',
     description:
       'Customizable-scope forwarding of all or some messages to an MQTT broker of your choosing, in raw and/or decrypted form.',
     defaultName: 'Private MQTT',
@@ -146,6 +148,30 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
         topic_prefix: 'meshcore',
       },
       scope: { messages: 'all', raw_packets: 'all' },
+    },
+  },
+  {
+    value: 'mqtt_ha',
+    savedType: 'mqtt_ha',
+    label: 'Home Assistant MQTT Discovery',
+    section: 'Private Forwarding',
+    description:
+      "Publishes MQTT Discovery payloads so mesh devices appear natively in Home Assistant. Requires HA's built-in MQTT integration connected to the same broker. Select specific contacts for GPS tracking and repeaters for telemetry sensors.",
+    defaultName: 'Home Assistant',
+    nameMode: 'fixed',
+    defaults: {
+      config: {
+        broker_host: '',
+        broker_port: 1883,
+        username: '',
+        password: '',
+        use_tls: false,
+        tls_insecure: false,
+        topic_prefix: 'meshcore',
+        tracked_contacts: [],
+        tracked_repeaters: [],
+      },
+      scope: { messages: 'all', raw_packets: 'none' },
     },
   },
   {
@@ -261,7 +287,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
     value: 'sqs',
     savedType: 'sqs',
     label: 'Amazon SQS',
-    section: 'Bulk Forwarding',
+    section: 'Private Forwarding',
     description: 'Send full or scope-customized raw or decrypted packets to an SQS',
     defaultName: 'Amazon SQS',
     nameMode: 'counted',
@@ -799,6 +825,441 @@ function MqttPrivateConfigEditor({
       <Separator />
 
       <ScopeSelector scope={scope} onChange={onScopeChange} showRawPackets />
+    </div>
+  );
+}
+
+function MqttHaConfigEditor({
+  config,
+  scope,
+  onChange,
+  onScopeChange,
+}: {
+  config: Record<string, unknown>;
+  scope: Record<string, unknown>;
+  onChange: (config: Record<string, unknown>) => void;
+  onScopeChange: (scope: Record<string, unknown>) => void;
+}) {
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [trackedRepeaters, setTrackedRepeaters] = useState<string[]>([]);
+  const [contactSearch, setContactSearch] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      const all: Contact[] = [];
+      const pageSize = 1000;
+      let offset = 0;
+      while (true) {
+        const page = await api.getContacts(pageSize, offset);
+        all.push(...page);
+        if (page.length < pageSize) break;
+        offset += pageSize;
+      }
+      setContacts(all);
+    })().catch(console.error);
+
+    api
+      .getSettings()
+      .then((s) => setTrackedRepeaters(s.tracked_telemetry_repeaters ?? []))
+      .catch(console.error);
+  }, []);
+
+  const selectedContacts = (config.tracked_contacts as string[]) || [];
+  const selectedRepeaters = (config.tracked_repeaters as string[]) || [];
+
+  const contactOptions = useMemo(
+    () => contacts.filter((c) => c.type === 0 || c.type === 1 || c.type === 3),
+    [contacts]
+  );
+
+  const repeaterOptions = useMemo(
+    () => contacts.filter((c) => c.type === 2 && trackedRepeaters.includes(c.public_key)),
+    [contacts, trackedRepeaters]
+  );
+
+  const contactSearchLower = contactSearch.toLowerCase().trim();
+  const filteredContacts = useMemo(() => {
+    const matches = contactOptions.filter((c) => {
+      if (!contactSearchLower) return true;
+      const name = (c.name || '').toLowerCase();
+      const key = c.public_key.toLowerCase();
+      return name.includes(contactSearchLower) || key.startsWith(contactSearchLower);
+    });
+    // Selected contacts sort to top
+    return matches.sort((a, b) => {
+      const aSelected = selectedContacts.includes(a.public_key) ? 0 : 1;
+      const bSelected = selectedContacts.includes(b.public_key) ? 0 : 1;
+      if (aSelected !== bSelected) return aSelected - bSelected;
+      return (a.name || a.public_key).localeCompare(b.name || b.public_key);
+    });
+  }, [contactOptions, contactSearchLower, selectedContacts]);
+
+  const selectedContactDetails = contactOptions.filter((c) =>
+    selectedContacts.includes(c.public_key)
+  );
+
+  const toggleTrackedContact = (key: string) => {
+    const current = [...selectedContacts];
+    const idx = current.indexOf(key);
+    if (idx >= 0) current.splice(idx, 1);
+    else current.push(key);
+    onChange({ ...config, tracked_contacts: current });
+  };
+
+  const toggleTrackedRepeater = (key: string) => {
+    const current = [...selectedRepeaters];
+    const idx = current.indexOf(key);
+    if (idx >= 0) current.splice(idx, 1);
+    else current.push(key);
+    onChange({ ...config, tracked_repeaters: current });
+  };
+
+  const prefix = ((config.topic_prefix as string) || 'meshcore').trim() || 'meshcore';
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Uses{' '}
+        <span
+          role="link"
+          tabIndex={0}
+          className="underline cursor-pointer hover:text-primary transition-colors"
+          onClick={() =>
+            window.open('https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery', '_blank')
+          }
+          onKeyDown={(e) => {
+            if (e.key === 'Enter')
+              window.open(
+                'https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery',
+                '_blank'
+              );
+          }}
+        >
+          MQTT Discovery
+        </span>{' '}
+        to automatically create devices and entities in Home Assistant. Your HA instance must have
+        the MQTT integration configured and connected to the same broker. See{' '}
+        <span
+          role="link"
+          tabIndex={0}
+          className="underline cursor-pointer hover:text-primary transition-colors"
+          onClick={() =>
+            window.open(
+              'https://github.com/jkingsman/Remote-Terminal-for-MeshCore/blob/main/README_HA.md',
+              '_blank'
+            )
+          }
+          onKeyDown={(e) => {
+            if (e.key === 'Enter')
+              window.open(
+                'https://github.com/jkingsman/Remote-Terminal-for-MeshCore/blob/main/README_HA.md',
+                '_blank'
+              );
+          }}
+        >
+          README_HA.md
+        </span>{' '}
+        for automation examples and setup details. Note that entities like repeaters and contact GPS
+        won't update until new data is available; there is no caching layer (so devices/entities
+        might take hours to days to appear).
+      </p>
+
+      <details className="group">
+        <summary className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium cursor-pointer select-none flex items-center gap-1">
+          <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-0 -rotate-90" />
+          What gets created in Home Assistant
+        </summary>
+        <div className="mt-2 space-y-2 text-xs text-muted-foreground rounded-md border border-border bg-muted/20 p-3">
+          <div>
+            <span className="font-medium text-foreground">Local radio device</span> (always)
+            <span className="ml-1">&mdash; updates every 60s</span>
+            <ul className="mt-0.5 ml-4 list-disc space-y-0.5">
+              <li>
+                <code className="text-[0.6875rem]">binary_sensor.meshcore_*_connected</code> &mdash;
+                radio online/offline
+              </li>
+              <li>
+                <code className="text-[0.6875rem]">sensor.meshcore_*_noise_floor</code> &mdash;
+                radio noise floor (dBm)
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <span className="font-medium text-foreground">Per tracked repeater</span> &mdash;
+            updates on telemetry collect cycle (~8h) or manual dashboard fetch
+            <ul className="mt-0.5 ml-4 list-disc space-y-0.5">
+              <li>
+                <code className="text-[0.6875rem]">sensor.meshcore_*_battery_voltage</code> (V)
+              </li>
+              <li>
+                <code className="text-[0.6875rem]">sensor.meshcore_*_noise_floor</code>,{' '}
+                <code className="text-[0.6875rem]">*_last_rssi</code>,{' '}
+                <code className="text-[0.6875rem]">*_last_snr</code> (dBm/dB)
+              </li>
+              <li>
+                <code className="text-[0.6875rem]">sensor.meshcore_*_packets_received</code>,{' '}
+                <code className="text-[0.6875rem]">*_packets_sent</code>
+              </li>
+              <li>
+                <code className="text-[0.6875rem]">sensor.meshcore_*_uptime</code> (seconds)
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <span className="font-medium text-foreground">Per tracked contact</span> &mdash; updates
+            passively when advertisements with GPS are heard
+            <ul className="mt-0.5 ml-4 list-disc space-y-0.5">
+              <li>
+                <code className="text-[0.6875rem]">device_tracker.meshcore_*</code> &mdash;
+                latitude/longitude
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <span className="font-medium text-foreground">Message events</span> &mdash; fires for
+            each message matching the scope below
+            <ul className="mt-0.5 ml-4 list-disc space-y-0.5">
+              <li>
+                <code className="text-[0.6875rem]">event.meshcore_messages</code> &mdash; trigger
+                automations on sender, channel, or message content
+              </li>
+            </ul>
+          </div>
+
+          <p className="text-[0.6875rem] mt-1.5">
+            Entity IDs use the first 12 characters of the node&apos;s public key. Entities are
+            removed from HA when this integration is disabled or deleted. State topics are published
+            under{' '}
+            <code className="text-[0.6875rem]">{prefix}/&lt;node_id&gt;/health|telemetry|gps</code>.
+          </p>
+        </div>
+      </details>
+
+      <Separator />
+
+      <p className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
+        MQTT Broker
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="fanout-ha-host">Broker Host</Label>
+          <Input
+            id="fanout-ha-host"
+            type="text"
+            placeholder="e.g. 192.168.1.100"
+            value={(config.broker_host as string) || ''}
+            onChange={(e) => onChange({ ...config, broker_host: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="fanout-ha-port">Broker Port</Label>
+          <Input
+            id="fanout-ha-port"
+            type="number"
+            min="1"
+            max="65535"
+            value={getNumberInputValue(config.broker_port, 1883)}
+            onChange={(e) =>
+              onChange({ ...config, broker_port: parseIntegerInputValue(e.target.value) })
+            }
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="fanout-ha-user">Username</Label>
+          <Input
+            id="fanout-ha-user"
+            type="text"
+            placeholder="Optional"
+            value={(config.username as string) || ''}
+            onChange={(e) => onChange({ ...config, username: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="fanout-ha-pass">Password</Label>
+          <Input
+            id="fanout-ha-pass"
+            type="password"
+            placeholder="Optional"
+            value={(config.password as string) || ''}
+            onChange={(e) => onChange({ ...config, password: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={!!config.use_tls}
+          onChange={(e) => onChange({ ...config, use_tls: e.target.checked })}
+          className="h-4 w-4 rounded border-border"
+        />
+        <span className="text-sm">Use TLS</span>
+      </label>
+
+      {!!config.use_tls && (
+        <label className="flex items-center gap-3 cursor-pointer ml-7">
+          <input
+            type="checkbox"
+            checked={!!config.tls_insecure}
+            onChange={(e) => onChange({ ...config, tls_insecure: e.target.checked })}
+            className="h-4 w-4 rounded border-border"
+          />
+          <span className="text-sm">Skip certificate verification</span>
+        </label>
+      )}
+
+      <div className="space-y-2">
+        <Label htmlFor="fanout-ha-prefix">Topic Prefix</Label>
+        <Input
+          id="fanout-ha-prefix"
+          type="text"
+          placeholder="meshcore"
+          value={(config.topic_prefix as string | undefined) ?? ''}
+          onChange={(e) => onChange({ ...config, topic_prefix: e.target.value })}
+        />
+        <p className="text-[0.6875rem] text-muted-foreground">
+          State updates publish under <code className="text-[0.6875rem]">{prefix}/</code>. Discovery
+          configs always use the <code className="text-[0.6875rem]">homeassistant/</code> prefix.
+        </p>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-2">
+        <p className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
+          GPS Tracked Contacts
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Each selected contact becomes a <code className="text-[0.6875rem]">device_tracker</code>{' '}
+          in HA, updated whenever an advertisement with GPS coordinates is heard. Useful for
+          tracking mobile nodes on an HA map dashboard.
+        </p>
+
+        {selectedContactDetails.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {selectedContactDetails.map((c) => (
+              <span
+                key={c.public_key}
+                className="inline-flex items-center gap-1 text-[0.6875rem] px-2 py-0.5 rounded-full bg-primary/10 text-primary"
+              >
+                {c.name || c.public_key.slice(0, 12)}
+                <button
+                  type="button"
+                  className="ml-0.5 hover:text-destructive transition-colors"
+                  onClick={() => toggleTrackedContact(c.public_key)}
+                  aria-label={`Remove ${c.name || c.public_key.slice(0, 12)}`}
+                >
+                  &times;
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {contactOptions.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">No contacts available.</p>
+        ) : (
+          <>
+            <Input
+              type="text"
+              placeholder={`Search ${contactOptions.length} contacts...`}
+              value={contactSearch}
+              onChange={(e) => setContactSearch(e.target.value)}
+              className="h-8 text-sm"
+            />
+            <div className="max-h-48 overflow-y-auto space-y-1 rounded border border-border p-2">
+              {filteredContacts.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic py-1">
+                  No contacts match &ldquo;{contactSearch}&rdquo;
+                </p>
+              ) : (
+                filteredContacts.map((c) => (
+                  <label
+                    key={c.public_key}
+                    className="flex items-center gap-2 cursor-pointer text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedContacts.includes(c.public_key)}
+                      onChange={() => toggleTrackedContact(c.public_key)}
+                      className="h-3.5 w-3.5 rounded border-border"
+                    />
+                    <span className="truncate">{c.name || c.public_key.slice(0, 12)}</span>
+                    <span className="text-[0.625rem] text-muted-foreground ml-auto font-mono shrink-0">
+                      {c.public_key.slice(0, 12)}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      <Separator />
+
+      <div className="space-y-2">
+        <p className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
+          Telemetry Tracked Repeaters
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Each selected repeater becomes an HA device with sensors for battery voltage, RSSI, SNR,
+          noise floor, packet counts, and uptime. Data updates whenever telemetry is collected
+          (auto-collect runs every ~8 hours, or on manual dashboard fetch). Only repeaters already
+          in the auto-telemetry tracking list appear here (add new repeaters by logging into the
+          repeater and opting in at the bottom of the page).
+        </p>
+        {trackedRepeaters.length === 0 ? (
+          <div className="rounded-md border border-muted bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            No repeaters are being auto-tracked for telemetry. Add repeaters to the auto-telemetry
+            tracking list in the Radio section first, then return here to select which ones to
+            expose to HA.
+          </div>
+        ) : repeaterOptions.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">
+            Auto-tracked repeaters not found in contact list.
+          </p>
+        ) : (
+          <div className="max-h-40 overflow-y-auto space-y-1 rounded border border-border p-2">
+            {repeaterOptions.map((c) => (
+              <label key={c.public_key} className="flex items-center gap-2 cursor-pointer text-sm">
+                <input
+                  type="checkbox"
+                  checked={selectedRepeaters.includes(c.public_key)}
+                  onChange={() => toggleTrackedRepeater(c.public_key)}
+                  className="h-3.5 w-3.5 rounded border-border"
+                />
+                <span className="truncate">{c.name || c.public_key.slice(0, 12)}</span>
+                <span className="text-[0.625rem] text-muted-foreground ml-auto font-mono">
+                  {c.public_key.slice(0, 12)}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <Separator />
+
+      <div className="space-y-2">
+        <p className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
+          Message Events
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Matching messages fire an{' '}
+          <code className="text-[0.6875rem]">event.meshcore_messages</code> entity in HA with
+          sender, text, channel, and direction attributes. Use HA automations to trigger actions on
+          specific messages, channels, or contacts.
+        </p>
+      </div>
+      <ScopeSelector scope={scope} onChange={onScopeChange} />
     </div>
   );
 }
@@ -2178,6 +2639,15 @@ export function SettingsFanoutSection({
 
         {detailType === 'mqtt_private' && (
           <MqttPrivateConfigEditor
+            config={editConfig}
+            scope={editScope}
+            onChange={setEditConfig}
+            onScopeChange={setEditScope}
+          />
+        )}
+
+        {detailType === 'mqtt_ha' && (
+          <MqttHaConfigEditor
             config={editConfig}
             scope={editScope}
             onChange={setEditConfig}
