@@ -7,7 +7,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-SCHEMA = """
+SCHEMA_TABLES = """
 CREATE TABLE IF NOT EXISTS contacts (
     public_key TEXT PRIMARY KEY,
     name TEXT,
@@ -130,7 +130,12 @@ CREATE TABLE IF NOT EXISTS repeater_telemetry_history (
     data TEXT NOT NULL,
     FOREIGN KEY (public_key) REFERENCES contacts(public_key) ON DELETE CASCADE
 );
+"""
 
+# Indexes are created after migrations so that legacy databases have all
+# required columns (e.g. sender_key, added by migration 25) before index
+# creation runs.
+SCHEMA_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_messages_received ON messages(received_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_dedup_null_safe
     ON messages(type, conversation_key, text, COALESCE(sender_timestamp, 0))
@@ -185,14 +190,19 @@ class Database:
         # constraints, then re-enabled for all subsequent application queries.
         await self._connection.execute("PRAGMA foreign_keys = OFF")
 
-        await self._connection.executescript(SCHEMA)
+        await self._connection.executescript(SCHEMA_TABLES)
         await self._connection.commit()
-        logger.debug("Database schema initialized")
+        logger.debug("Database tables initialized")
 
-        # Run any pending migrations
+        # Run any pending migrations before creating indexes, so that
+        # legacy databases have all required columns first.
         from app.migrations import run_migrations
 
         await run_migrations(self._connection)
+
+        await self._connection.executescript(SCHEMA_INDEXES)
+        await self._connection.commit()
+        logger.debug("Database indexes initialized")
 
         # Enable FK enforcement for all application queries from this point on.
         await self._connection.execute("PRAGMA foreign_keys = ON")
