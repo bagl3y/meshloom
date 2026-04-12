@@ -401,6 +401,7 @@ class MqttHaModule(FanoutModule):
     # ── Lifecycle ──────────────────────────────────────────────────────
 
     async def start(self) -> None:
+        self._seed_radio_identity_from_runtime()
         settings = _config_to_settings(self.config)
         await self._publisher.start(settings)
 
@@ -479,6 +480,29 @@ class MqttHaModule(FanoutModule):
         except Exception:
             pass
         return pub_key[:12]
+
+    def _seed_radio_identity_from_runtime(self) -> None:
+        """Best-effort bootstrap from the currently connected radio session."""
+        try:
+            from app.services.radio_runtime import radio_runtime
+
+            if not radio_runtime.is_connected:
+                return
+
+            mc = radio_runtime.meshcore
+            self_info = mc.self_info if mc is not None else None
+            if not isinstance(self_info, dict):
+                return
+
+            pub_key = self_info.get("public_key")
+            if isinstance(pub_key, str) and pub_key.strip():
+                self._radio_key = pub_key.strip().lower()
+
+            name = self_info.get("name")
+            if isinstance(name, str) and name.strip():
+                self._radio_name = name.strip()
+        except Exception:
+            logger.debug("HA MQTT: failed to seed radio identity from runtime", exc_info=True)
 
     # ── Event handlers ────────────────────────────────────────────────
 

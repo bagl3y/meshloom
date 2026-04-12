@@ -1,5 +1,6 @@
 """Tests for the Home Assistant MQTT Discovery fanout module."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -284,6 +285,31 @@ class TestMqttHaHealth:
 
         assert mod._radio_key == "aabbccddeeff"
         assert mod._radio_name == "MyRadio"
+
+
+class TestMqttHaLifecycle:
+    @pytest.mark.asyncio
+    async def test_start_seeds_radio_identity_from_connected_runtime(self, monkeypatch):
+        from app.services.radio_runtime import radio_runtime
+
+        monkeypatch.setattr(
+            radio_runtime.manager,
+            "_meshcore",
+            SimpleNamespace(
+                is_connected=True,
+                self_info={"public_key": "AABBCCDDEEFF", "name": "MyRadio"},
+            ),
+        )
+
+        mod = MqttHaModule("test", _base_config())
+        mod._publisher = MagicMock()
+        mod._publisher.start = AsyncMock()
+
+        await mod.start()
+
+        assert mod._radio_key == "aabbccddeeff"
+        assert mod._radio_name == "MyRadio"
+        mod._publisher.start.assert_awaited_once()
 
 
 class TestMqttHaMessage:
