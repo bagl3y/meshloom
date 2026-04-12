@@ -519,12 +519,16 @@ class MqttHaModule(FanoutModule):
 
             if key_changed:
                 old_key = self._radio_key
+                old_topics = list(self._discovery_topics)
+                if old_topics:
+                    await self._clear_retained_topics(old_topics)
+                    self._discovery_topics.clear()
                 self._radio_key = pub_key
                 self._radio_name = new_name
                 # Remove stale discovery entries from the old identity (e.g.
                 # "unknown" placeholder from before the radio key was known),
                 # then re-publish with the real identity.
-                if old_key is not None:
+                if old_key is not None and not old_topics:
                     await self._clear_retained_topics(
                         [t for t, _ in _radio_discovery_configs(self._prefix, old_key, "")]
                     )

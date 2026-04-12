@@ -286,6 +286,56 @@ class TestMqttHaHealth:
         assert mod._radio_key == "aabbccddeeff"
         assert mod._radio_name == "MyRadio"
 
+    @pytest.mark.asyncio
+    async def test_on_health_key_change_clears_all_existing_discovery_topics(self):
+        mod = MqttHaModule("test", _base_config())
+        mod._publisher = MagicMock()
+        mod._publisher.connected = True
+        mod._publisher.publish = AsyncMock()
+        mod._radio_key = "aabbccddeeff"
+        mod._radio_name = "OldRadio"
+        mod._discovery_topics = [
+            "homeassistant/sensor/meshcore_aabbccddeeff/noise_floor/config",
+            "homeassistant/event/meshcore_aabbccddeeff/messages/config",
+            "homeassistant/device_tracker/meshcore_ccdd11223344/config",
+            "homeassistant/sensor/meshcore_eeff11223344/battery_voltage/config",
+        ]
+
+        mod._clear_retained_topics = AsyncMock()
+
+        async def publish_discovery_side_effect():
+            assert mod._discovery_topics == []
+            mod._discovery_topics = [
+                "homeassistant/sensor/meshcore_112233445566/noise_floor/config",
+                "homeassistant/event/meshcore_112233445566/messages/config",
+            ]
+
+        mod._publish_discovery = AsyncMock(side_effect=publish_discovery_side_effect)
+
+        await mod.on_health(
+            {
+                "connected": True,
+                "public_key": "112233445566",
+                "name": "NewRadio",
+            }
+        )
+
+        mod._clear_retained_topics.assert_awaited_once_with(
+            [
+                "homeassistant/sensor/meshcore_aabbccddeeff/noise_floor/config",
+                "homeassistant/event/meshcore_aabbccddeeff/messages/config",
+                "homeassistant/device_tracker/meshcore_ccdd11223344/config",
+                "homeassistant/sensor/meshcore_eeff11223344/battery_voltage/config",
+            ]
+        )
+        mod._publish_discovery.assert_awaited_once()
+        assert mod._radio_key == "112233445566"
+        assert mod._radio_name == "NewRadio"
+        assert mod._discovery_topics == [
+            "homeassistant/sensor/meshcore_112233445566/noise_floor/config",
+            "homeassistant/event/meshcore_112233445566/messages/config",
+        ]
+
 
 class TestMqttHaLifecycle:
     @pytest.mark.asyncio
