@@ -364,7 +364,7 @@ export function Sidebar({
     () =>
       query
         ? sortedChannels.filter(
-            (c) => c.name.toLowerCase().includes(query) || c.key.toLowerCase().includes(query)
+            (c) => c.name.toLowerCase().includes(query) || c.key.toLowerCase().startsWith(query)
           )
         : sortedChannels,
     [sortedChannels, query]
@@ -374,7 +374,8 @@ export function Sidebar({
     const visible = sortedNonRepeaterContacts.filter((c) => !isContactBlocked(c));
     return query
       ? visible.filter(
-          (c) => c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().includes(query)
+          (c) =>
+            c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().startsWith(query)
         )
       : visible;
   }, [sortedNonRepeaterContacts, query, isContactBlocked]);
@@ -383,7 +384,8 @@ export function Sidebar({
     const visible = sortedRooms.filter((c) => !isContactBlocked(c));
     return query
       ? visible.filter(
-          (c) => c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().includes(query)
+          (c) =>
+            c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().startsWith(query)
         )
       : visible;
   }, [sortedRooms, query, isContactBlocked]);
@@ -392,7 +394,8 @@ export function Sidebar({
     const visible = sortedRepeaters.filter((c) => !isContactBlocked(c));
     return query
       ? visible.filter(
-          (c) => c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().includes(query)
+          (c) =>
+            c.name?.toLowerCase().includes(query) || c.public_key.toLowerCase().startsWith(query)
         )
       : visible;
   }, [sortedRepeaters, query, isContactBlocked]);

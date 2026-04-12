@@ -43,6 +43,7 @@ interface CommandPaletteProps {
 
 interface Searchable {
   searchText: string;
+  keyText?: string;
 }
 
 interface SearchableContact extends Searchable {
@@ -106,7 +107,9 @@ function filterList<T extends Searchable>(items: T[], query: string): T[] {
   if (!query) return items.slice(0, MAX_PER_GROUP);
   const results: T[] = [];
   for (const item of items) {
-    if (fuzzyMatch(item.searchText, query)) {
+    const nameMatch = fuzzyMatch(item.searchText, query);
+    const keyMatch = item.keyText ? item.keyText.startsWith(query) : false;
+    if (nameMatch || keyMatch) {
       results.push(item);
       if (results.length >= MAX_PER_GROUP) break;
     }
@@ -159,7 +162,8 @@ export function CommandPalette({
       const entry: SearchableContact = {
         contact: c,
         displayName,
-        searchText: `${displayName} ${c.public_key}`.toLowerCase(),
+        searchText: displayName.toLowerCase(),
+        keyText: c.public_key.toLowerCase(),
       };
       if (c.type === CONTACT_TYPE_REPEATER) {
         (c.favorite ? fr : rp).push(entry);
@@ -174,7 +178,8 @@ export function CommandPalette({
     for (const ch of channels) {
       const entry: SearchableChannel = {
         channel: ch,
-        searchText: `${ch.name} ${ch.key}`.toLowerCase(),
+        searchText: ch.name.toLowerCase(),
+        keyText: ch.key.toLowerCase(),
       };
       (ch.favorite ? fch : rch).push(entry);
     }

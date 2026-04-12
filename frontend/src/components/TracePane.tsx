@@ -224,8 +224,8 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
     const matching = query
       ? repeaters.filter(
           (contact) =>
-            contact.public_key.toLowerCase().includes(query) ||
-            (contact.name ?? '').toLowerCase().includes(query)
+            (contact.name ?? '').toLowerCase().includes(query) ||
+            contact.public_key.toLowerCase().startsWith(query)
         )
       : repeaters;
 
