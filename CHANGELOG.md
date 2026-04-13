@@ -1,3 +1,8 @@
+## [3.11.2] - 2026-04-12
+
+* Feature: Unread DMs are always at the top of the DM list no matter what
+* Bugfix: Webmanifest needs withCredentials
+
 ## [3.11.1] - 2026-04-12
 
 * Feature: Home Assistant MQTT fanout
