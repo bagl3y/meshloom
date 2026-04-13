@@ -1,3 +1,11 @@
+## [3.11.1] - 2026-04-12
+
+* Feature: Home Assistant MQTT fanout
+* Feature: Add dummy service worker to enable PWA
+* Bugfix: DB connection plurality issues
+* Misc: Migration improvements
+* Misc: Search keys from beginning
+
 ## [3.11.0] - 2026-04-10
 
 * Feature: Radio health and contact data accessible on fanout bus
