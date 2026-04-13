@@ -1,3 +1,8 @@
+## [3.11.3] - 2026-04-12
+
+* Bugfix: Add icons and screenshots for webmanifest
+* Bugfix: Use incoming DMs, not just outgoing, for recency ranking for preferential radio contact load
+
 ## [3.11.2] - 2026-04-12
 
 * Feature: Unread DMs are always at the top of the DM list no matter what
