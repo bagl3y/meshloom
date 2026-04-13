@@ -85,6 +85,68 @@ _REPEATER_SENSORS: list[dict[str, str | None]] = [
     },
 ]
 
+# ── LPP sensor metadata ─────────────────────────────────────────────────
+
+_LPP_HA_META: dict[str, dict[str, str | None]] = {
+    "temperature": {"device_class": "temperature", "unit": "°C"},
+    "humidity": {"device_class": "humidity", "unit": "%"},
+    "barometer": {"device_class": "atmospheric_pressure", "unit": "hPa"},
+    "voltage": {"device_class": "voltage", "unit": "V"},
+    "current": {"device_class": "current", "unit": "mA"},
+    "luminosity": {"device_class": "illuminance", "unit": "lux"},
+    "power": {"device_class": "power", "unit": "W"},
+    "energy": {"device_class": "energy", "unit": "kWh"},
+    "distance": {"device_class": "distance", "unit": "mm"},
+    "concentration": {"device_class": None, "unit": "ppm"},
+    "direction": {"device_class": None, "unit": "°"},
+    "altitude": {"device_class": None, "unit": "m"},
+}
+
+
+def _lpp_sensor_key(type_name: str, channel: int) -> str:
+    """Build the flat telemetry-payload key for an LPP sensor."""
+    return f"lpp_{type_name}_ch{channel}"
+
+
+def _lpp_discovery_configs(
+    prefix: str,
+    pub_key: str,
+    device: dict,
+    lpp_sensors: list[dict],
+    state_topic: str,
+) -> list[tuple[str, dict]]:
+    """Build HA discovery configs for a repeater's LPP sensors."""
+    configs: list[tuple[str, dict]] = []
+    for sensor in lpp_sensors:
+        type_name = sensor.get("type_name", "unknown")
+        channel = sensor.get("channel", 0)
+        field = _lpp_sensor_key(type_name, channel)
+        meta = _LPP_HA_META.get(type_name, {})
+
+        nid = _node_id(pub_key)
+        object_id = field
+        display = type_name.replace("_", " ").title()
+        name = f"{display} (Ch {channel})"
+
+        cfg: dict[str, Any] = {
+            "name": name,
+            "unique_id": f"meshcore_{nid}_{object_id}",
+            "device": device,
+            "state_topic": state_topic,
+            "value_template": "{{ value_json." + field + " }}",
+            "state_class": "measurement",
+            "expire_after": 36000,
+        }
+        if meta.get("device_class"):
+            cfg["device_class"] = meta["device_class"]
+        if meta.get("unit"):
+            cfg["unit_of_measurement"] = meta["unit"]
+
+        topic = f"homeassistant/sensor/meshcore_{nid}/{object_id}/config"
+        configs.append((topic, cfg))
+
+    return configs
+
 
 # ── Local radio sensor definitions ────────────────────────────────────────
 
@@ -424,12 +486,21 @@ class MqttHaModule(FanoutModule):
         radio_name = self._radio_name or "MeshCore Radio"
         configs.extend(_radio_discovery_configs(self._prefix, self._radio_key, radio_name))
 
-        # Tracked repeaters — resolve names from DB best-effort
+        # Tracked repeaters — resolve names and LPP sensors from DB best-effort
         for pub_key in self._tracked_repeaters:
             rname = await self._resolve_contact_name(pub_key)
             configs.extend(
                 _repeater_discovery_configs(self._prefix, pub_key, rname, self._radio_key)
             )
+            # Dynamic LPP sensor entities from last known telemetry snapshot
+            lpp_sensors = await self._resolve_lpp_sensors(pub_key)
+            if lpp_sensors:
+                nid = _node_id(pub_key)
+                device = _device_payload(pub_key, rname, "Repeater", via_device_key=self._radio_key)
+                state_topic = f"{self._prefix}/{nid}/telemetry"
+                configs.extend(
+                    _lpp_discovery_configs(self._prefix, pub_key, device, lpp_sensors, state_topic)
+                )
 
         # Tracked contacts — resolve names from DB best-effort
         for pub_key in self._tracked_contacts:
@@ -480,6 +551,19 @@ class MqttHaModule(FanoutModule):
         except Exception:
             pass
         return pub_key[:12]
+
+    @staticmethod
+    async def _resolve_lpp_sensors(pub_key: str) -> list[dict]:
+        """Return the LPP sensor list from the most recent telemetry snapshot, or []."""
+        try:
+            from app.repository.repeater_telemetry import RepeaterTelemetryRepository
+
+            latest = await RepeaterTelemetryRepository.get_latest(pub_key)
+            if latest:
+                return latest.get("data", {}).get("lpp_sensors", [])
+        except Exception:
+            pass
+        return []
 
     def _seed_radio_identity_from_runtime(self) -> None:
         """Best-effort bootstrap from the currently connected radio session."""
@@ -590,6 +674,23 @@ class MqttHaModule(FanoutModule):
             field = s["field"]
             if field is not None:
                 payload[field] = data.get(field)
+
+        # Flatten LPP sensors into the same payload so HA value_templates work
+        lpp_sensors: list[dict] = data.get("lpp_sensors", [])
+        rediscover = False
+        for sensor in lpp_sensors:
+            key = _lpp_sensor_key(sensor.get("type_name", "unknown"), sensor.get("channel", 0))
+            payload[key] = sensor.get("value")
+            # Check if discovery for this sensor has been published yet
+            expected_topic = f"homeassistant/sensor/meshcore_{nid}/{key}/config"
+            if expected_topic not in self._discovery_topics:
+                rediscover = True
+
+        # If new LPP sensor types appeared, re-publish discovery *before*
+        # the state payload so HA already knows the entity when the value arrives.
+        if rediscover:
+            await self._publish_discovery()
+
         await self._publisher.publish(f"{self._prefix}/{nid}/telemetry", payload)
 
     async def on_message(self, data: dict) -> None:

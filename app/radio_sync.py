@@ -1584,6 +1584,35 @@ async def _collect_repeater_telemetry(mc: MeshCore, contact: Contact) -> bool:
         "full_events": status.get("full_evts", 0),
     }
 
+    # Best-effort LPP sensor fetch — failure here does not fail the overall
+    # collection; status telemetry is still recorded without sensor data.
+    try:
+        lpp_raw = await mc.commands.req_telemetry_sync(
+            contact.public_key, timeout=10, min_timeout=5
+        )
+        if lpp_raw:
+            lpp_sensors = []
+            for entry in lpp_raw:
+                value = entry.get("value", 0)
+                # Skip multi-value sensors (GPS, accelerometer, etc.)
+                if isinstance(value, dict):
+                    continue
+                lpp_sensors.append(
+                    {
+                        "channel": entry.get("channel", 0),
+                        "type_name": str(entry.get("type", "unknown")),
+                        "value": value,
+                    }
+                )
+            if lpp_sensors:
+                data["lpp_sensors"] = lpp_sensors
+    except Exception as e:
+        logger.debug(
+            "Telemetry collect: LPP sensor fetch failed for %s (non-fatal): %s",
+            contact.public_key[:12],
+            e,
+        )
+
     try:
         timestamp = int(time.time())
         await RepeaterTelemetryRepository.record(

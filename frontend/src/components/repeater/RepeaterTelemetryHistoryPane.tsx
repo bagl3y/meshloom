@@ -11,18 +11,35 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import type { TelemetryHistoryEntry, Contact } from '../../types';
+import { LPP_UNIT_MAP } from './repeaterPaneShared';
+import type { TelemetryHistoryEntry, TelemetryLppSensor, Contact } from '../../types';
 
 const MAX_TRACKED = 8;
 
-type Metric = 'battery_volts' | 'noise_floor_dbm' | 'packets' | 'uptime_seconds';
+type BuiltinMetric = 'battery_volts' | 'noise_floor_dbm' | 'packets' | 'uptime_seconds';
 
-const METRIC_CONFIG: Record<Metric, { label: string; unit: string; color: string }> = {
+interface MetricConfig {
+  label: string;
+  unit: string;
+  color: string;
+}
+
+const BUILTIN_METRIC_CONFIG: Record<BuiltinMetric, MetricConfig> = {
   battery_volts: { label: 'Voltage', unit: 'V', color: '#22c55e' },
   noise_floor_dbm: { label: 'Noise Floor', unit: 'dBm', color: '#8b5cf6' },
   packets: { label: 'Packets', unit: '', color: '#0ea5e9' },
   uptime_seconds: { label: 'Uptime', unit: 's', color: '#f59e0b' },
 };
+
+const BUILTIN_METRICS: BuiltinMetric[] = Object.keys(BUILTIN_METRIC_CONFIG) as BuiltinMetric[];
+
+// Stable color rotation for dynamic LPP sensors
+const LPP_COLORS = ['#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16', '#e11d48'];
+
+/** Build a flat data key for an LPP sensor: lpp_{type_name}_ch{channel} */
+function lppKey(s: TelemetryLppSensor): string {
+  return `lpp_${s.type_name}_ch${s.channel}`;
+}
 
 const TOOLTIP_STYLE = {
   contentStyle: {
@@ -66,18 +83,61 @@ export function TelemetryHistoryPane({
   trackedTelemetryRepeaters,
   onToggleTrackedTelemetry,
 }: TelemetryHistoryPaneProps) {
-  const [metric, setMetric] = useState<Metric>('battery_volts');
+  const [metric, setMetric] = useState<string>('battery_volts');
   const [toggling, setToggling] = useState(false);
 
   const isTracked = trackedTelemetryRepeaters.includes(publicKey);
   const slotsFull = trackedTelemetryRepeaters.length >= MAX_TRACKED && !isTracked;
 
-  const config = METRIC_CONFIG[metric];
+  // Discover unique LPP sensors across all history entries
+  const lppMetrics = useMemo(() => {
+    const seen = new Map<string, { type_name: string; channel: number }>();
+    for (const e of entries) {
+      for (const s of e.data.lpp_sensors ?? []) {
+        const k = lppKey(s);
+        if (!seen.has(k)) seen.set(k, { type_name: s.type_name, channel: s.channel });
+      }
+    }
+    const result: { key: string; config: MetricConfig; type_name: string; channel: number }[] = [];
+    let colorIdx = 0;
+    for (const [k, info] of seen) {
+      const label =
+        info.type_name.charAt(0).toUpperCase() +
+        info.type_name.slice(1).replace(/_/g, ' ') +
+        ` Ch${info.channel}`;
+      const unit = LPP_UNIT_MAP[info.type_name] ?? '';
+      result.push({
+        key: k,
+        config: { label, unit, color: LPP_COLORS[colorIdx % LPP_COLORS.length] },
+        type_name: info.type_name,
+        channel: info.channel,
+      });
+      colorIdx++;
+    }
+    return result;
+  }, [entries]);
+
+  const allMetricKeys = useMemo(
+    () => [...BUILTIN_METRICS, ...lppMetrics.map((m) => m.key)],
+    [lppMetrics]
+  );
+
+  // If the selected metric disappears (e.g. different repeater), reset to default
+  const activeMetric = allMetricKeys.includes(metric) ? metric : 'battery_volts';
+
+  const isBuiltin = BUILTIN_METRICS.includes(activeMetric as BuiltinMetric);
+  const activeConfig: MetricConfig = isBuiltin
+    ? BUILTIN_METRIC_CONFIG[activeMetric as BuiltinMetric]
+    : (lppMetrics.find((m) => m.key === activeMetric)?.config ?? {
+        label: activeMetric,
+        unit: '',
+        color: '#888',
+      });
 
   const chartData = useMemo(() => {
     return entries.map((e) => {
       const d = e.data;
-      return {
+      const point: Record<string, number | undefined> = {
         timestamp: e.timestamp,
         battery_volts: d.battery_volts,
         noise_floor_dbm: d.noise_floor_dbm,
@@ -85,19 +145,25 @@ export function TelemetryHistoryPane({
         packets_sent: d.packets_sent,
         uptime_seconds: d.uptime_seconds,
       };
+      // Flatten LPP sensors into the point
+      for (const s of d.lpp_sensors ?? []) {
+        point[lppKey(s)] = typeof s.value === 'number' ? s.value : undefined;
+      }
+      return point;
     });
   }, [entries]);
 
-  const dataKeys = metric === 'packets' ? ['packets_received', 'packets_sent'] : [metric];
+  const dataKeys =
+    activeMetric === 'packets' ? ['packets_received', 'packets_sent'] : [activeMetric];
 
   const yDomain = useMemo<[number, number] | undefined>(() => {
-    if (metric !== 'battery_volts' || chartData.length === 0) return undefined;
+    if (activeMetric !== 'battery_volts' || chartData.length === 0) return undefined;
     const values = chartData.map((d) => d.battery_volts).filter((v) => v != null) as number[];
     if (values.length === 0) return [3, 5];
     const lo = Math.min(...values);
     const hi = Math.max(...values);
     return [Math.min(3, Math.floor(lo) - 1), Math.max(5, Math.ceil(hi) + 1)];
-  }, [metric, chartData]);
+  }, [activeMetric, chartData]);
 
   const handleToggle = async () => {
     setToggling(true);
@@ -181,20 +247,35 @@ export function TelemetryHistoryPane({
         <Separator className="mb-3" />
 
         {/* Metric selector */}
-        <div className="flex gap-1 mb-2">
-          {(Object.keys(METRIC_CONFIG) as Metric[]).map((m) => (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {BUILTIN_METRICS.map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => setMetric(m)}
               className={cn(
                 'text-[0.6875rem] px-2 py-0.5 rounded transition-colors',
-                metric === m
+                activeMetric === m
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-accent'
               )}
             >
-              {METRIC_CONFIG[m].label}
+              {BUILTIN_METRIC_CONFIG[m].label}
+            </button>
+          ))}
+          {lppMetrics.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              onClick={() => setMetric(m.key)}
+              className={cn(
+                'text-[0.6875rem] px-2 py-0.5 rounded transition-colors',
+                activeMetric === m.key
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+              )}
+            >
+              {m.config.label}
             </button>
           ))}
         </div>
@@ -221,7 +302,9 @@ export function TelemetryHistoryPane({
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(v) => (metric === 'uptime_seconds' ? formatUptime(v) : `${v}`)}
+                tickFormatter={(v) =>
+                  activeMetric === 'uptime_seconds' ? formatUptime(v) : `${v}`
+                }
               />
               <RechartsTooltip
                 {...TOOLTIP_STYLE}
@@ -234,15 +317,20 @@ export function TelemetryHistoryPane({
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 formatter={(value: any, name: any) => {
                   const numVal = typeof value === 'number' ? value : Number(value);
-                  const display = metric === 'uptime_seconds' ? formatUptime(numVal) : `${value}`;
+                  const display =
+                    activeMetric === 'uptime_seconds' ? formatUptime(numVal) : `${value}`;
                   const suffix =
-                    metric === 'uptime_seconds' ? '' : config.unit ? ` ${config.unit}` : '';
+                    activeMetric === 'uptime_seconds'
+                      ? ''
+                      : activeConfig.unit
+                        ? ` ${activeConfig.unit}`
+                        : '';
                   const label =
-                    metric === 'packets'
+                    activeMetric === 'packets'
                       ? name === 'packets_received'
                         ? 'Received'
                         : 'Sent'
-                      : config.label;
+                      : activeConfig.label;
                   return [`${display}${suffix}`, label];
                 }}
               />
@@ -251,19 +339,41 @@ export function TelemetryHistoryPane({
                   key={key}
                   type="linear"
                   dataKey={key}
-                  stroke={metric === 'packets' ? (i === 0 ? '#0ea5e9' : '#f43f5e') : config.color}
-                  fill={metric === 'packets' ? (i === 0 ? '#0ea5e9' : '#f43f5e') : config.color}
+                  stroke={
+                    activeMetric === 'packets'
+                      ? i === 0
+                        ? '#0ea5e9'
+                        : '#f43f5e'
+                      : activeConfig.color
+                  }
+                  fill={
+                    activeMetric === 'packets'
+                      ? i === 0
+                        ? '#0ea5e9'
+                        : '#f43f5e'
+                      : activeConfig.color
+                  }
                   fillOpacity={0.15}
                   strokeWidth={1.5}
                   dot={{
                     r: 4,
-                    fill: metric === 'packets' ? (i === 0 ? '#0ea5e9' : '#f43f5e') : config.color,
+                    fill:
+                      activeMetric === 'packets'
+                        ? i === 0
+                          ? '#0ea5e9'
+                          : '#f43f5e'
+                        : activeConfig.color,
                     strokeWidth: 1.5,
                     stroke: 'hsl(var(--popover))',
                   }}
                   activeDot={{
                     r: 6,
-                    fill: metric === 'packets' ? (i === 0 ? '#0ea5e9' : '#f43f5e') : config.color,
+                    fill:
+                      activeMetric === 'packets'
+                        ? i === 0
+                          ? '#0ea5e9'
+                          : '#f43f5e'
+                        : activeConfig.color,
                     strokeWidth: 2,
                     stroke: 'hsl(var(--popover))',
                   }}

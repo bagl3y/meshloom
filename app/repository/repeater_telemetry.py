@@ -73,3 +73,24 @@ class RepeaterTelemetryRepository:
             }
             for row in rows
         ]
+
+    @staticmethod
+    async def get_latest(public_key: str) -> dict | None:
+        """Return the most recent telemetry row for a repeater, or None."""
+        cursor = await db.conn.execute(
+            """
+            SELECT timestamp, data
+            FROM repeater_telemetry_history
+            WHERE public_key = ?
+            ORDER BY timestamp DESC
+            LIMIT 1
+            """,
+            (public_key,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return {
+            "timestamp": row["timestamp"],
+            "data": json.loads(row["data"]),
+        }

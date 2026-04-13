@@ -1004,6 +1004,11 @@ function MqttHaConfigEditor({
               <li>
                 <code className="text-[0.6875rem]">sensor.meshcore_*_uptime</code> (seconds)
               </li>
+              <li>
+                <code className="text-[0.6875rem]">sensor.meshcore_*_lpp_temperature_ch*</code>,{' '}
+                <code className="text-[0.6875rem]">*_lpp_humidity_ch*</code>, etc. &mdash;
+                CayenneLPP sensors (auto-detected from repeater)
+              </li>
             </ul>
           </div>
 

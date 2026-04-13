@@ -487,9 +487,15 @@ export interface PaneState {
   fetched_at?: number | null;
 }
 
+export interface TelemetryLppSensor {
+  channel: number;
+  type_name: string;
+  value: number;
+}
+
 export interface TelemetryHistoryEntry {
   timestamp: number;
-  data: Record<string, number>;
+  data: Record<string, number> & { lpp_sensors?: TelemetryLppSensor[] };
 }
 
 export interface TraceResponse {

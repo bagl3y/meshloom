@@ -9,6 +9,8 @@ from app.fanout.mqtt_ha import (
     MqttHaModule,
     _contact_tracker_discovery_config,
     _device_payload,
+    _lpp_discovery_configs,
+    _lpp_sensor_key,
     _message_event_discovery_config,
     _node_id,
     _radio_discovery_configs,
@@ -479,3 +481,197 @@ class TestMqttHaValidation:
         result = _enforce_scope("mqtt_ha", {"messages": "all", "raw_packets": "all"})
         assert result["raw_packets"] == "none"
         assert result["messages"] == "all"
+
+
+# ---------------------------------------------------------------------------
+# LPP sensor discovery and telemetry
+# ---------------------------------------------------------------------------
+
+
+class TestLppSensorKey:
+    def test_basic(self):
+        assert _lpp_sensor_key("temperature", 1) == "lpp_temperature_ch1"
+
+    def test_zero_channel(self):
+        assert _lpp_sensor_key("humidity", 0) == "lpp_humidity_ch0"
+
+
+class TestLppDiscoveryConfigs:
+    def test_produces_config_per_sensor(self):
+        nid = "ccdd11223344"
+        device = _device_payload(nid, "Rep1", "Repeater")
+        sensors = [
+            {"channel": 1, "type_name": "temperature", "value": 23.5},
+            {"channel": 2, "type_name": "humidity", "value": 45.0},
+        ]
+        configs = _lpp_discovery_configs("mc", nid, device, sensors, f"mc/{nid}/telemetry")
+
+        assert len(configs) == 2
+        topics = [t for t, _ in configs]
+        assert f"homeassistant/sensor/meshcore_{nid}/lpp_temperature_ch1/config" in topics
+        assert f"homeassistant/sensor/meshcore_{nid}/lpp_humidity_ch2/config" in topics
+
+    def test_sensor_config_shape(self):
+        nid = "ccdd11223344"
+        device = _device_payload(nid, "Rep1", "Repeater")
+        sensors = [{"channel": 1, "type_name": "temperature", "value": 23.5}]
+        configs = _lpp_discovery_configs("mc", nid, device, sensors, f"mc/{nid}/telemetry")
+
+        _, cfg = configs[0]
+        assert cfg["name"] == "Temperature (Ch 1)"
+        assert cfg["unique_id"] == f"meshcore_{nid}_lpp_temperature_ch1"
+        assert cfg["device_class"] == "temperature"
+        assert cfg["unit_of_measurement"] == "°C"
+        assert cfg["state_class"] == "measurement"
+        assert cfg["expire_after"] == 36000
+        assert "lpp_temperature_ch1" in cfg["value_template"]
+
+    def test_unknown_sensor_type_no_device_class(self):
+        nid = "ccdd11223344"
+        device = _device_payload(nid, "Rep1", "Repeater")
+        sensors = [{"channel": 0, "type_name": "exotic_sensor", "value": 1.0}]
+        configs = _lpp_discovery_configs("mc", nid, device, sensors, f"mc/{nid}/telemetry")
+
+        _, cfg = configs[0]
+        assert "device_class" not in cfg
+        assert "unit_of_measurement" not in cfg
+
+
+class TestMqttHaTelemetryWithLpp:
+    @pytest.mark.asyncio
+    async def test_on_telemetry_flattens_lpp_sensors(self):
+        key = "ccdd11223344"
+        mod = MqttHaModule("test", _base_config(tracked_repeaters=[key]))
+        mod._publisher = MagicMock()
+        mod._publisher.connected = True
+        mod._publisher.publish = AsyncMock()
+        # Pretend discovery already covers these sensors
+        nid = _node_id(key)
+        mod._discovery_topics = [
+            f"homeassistant/sensor/meshcore_{nid}/lpp_temperature_ch1/config",
+            f"homeassistant/sensor/meshcore_{nid}/lpp_humidity_ch2/config",
+        ]
+
+        await mod.on_telemetry(
+            {
+                "public_key": key,
+                "battery_volts": 4.1,
+                "lpp_sensors": [
+                    {"channel": 1, "type_name": "temperature", "value": 23.5},
+                    {"channel": 2, "type_name": "humidity", "value": 45.0},
+                ],
+            }
+        )
+
+        mod._publisher.publish.assert_called_once()
+        payload = mod._publisher.publish.call_args[0][1]
+        assert payload["battery_volts"] == 4.1
+        assert payload["lpp_temperature_ch1"] == 23.5
+        assert payload["lpp_humidity_ch2"] == 45.0
+
+    @pytest.mark.asyncio
+    async def test_on_telemetry_triggers_rediscovery_for_new_lpp_sensor(self):
+        key = "ccdd11223344"
+        mod = MqttHaModule("test", _base_config(tracked_repeaters=[key]))
+        mod._publisher = MagicMock()
+        mod._publisher.connected = True
+        mod._publisher.publish = AsyncMock()
+        mod._discovery_topics = []  # No sensors discovered yet
+        mod._publish_discovery = AsyncMock()
+
+        await mod.on_telemetry(
+            {
+                "public_key": key,
+                "battery_volts": 4.1,
+                "lpp_sensors": [
+                    {"channel": 1, "type_name": "temperature", "value": 23.5},
+                ],
+            }
+        )
+
+        mod._publish_discovery.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_on_telemetry_discovery_published_before_state(self):
+        """Discovery configs must arrive before the state payload so HA knows the entity."""
+        key = "ccdd11223344"
+        mod = MqttHaModule("test", _base_config(tracked_repeaters=[key]))
+        mod._publisher = MagicMock()
+        mod._publisher.connected = True
+        mod._publisher.publish = AsyncMock()
+        mod._discovery_topics = []  # New sensor triggers rediscovery
+
+        call_order: list[str] = []
+
+        async def fake_discovery():
+            call_order.append("discovery")
+
+        mod._publish_discovery = AsyncMock(side_effect=fake_discovery)
+
+        original_publish = mod._publisher.publish
+
+        async def tracking_publish(topic, payload, **kw):
+            if "/telemetry" in topic:
+                call_order.append("state")
+            return await original_publish(topic, payload, **kw)
+
+        mod._publisher.publish = AsyncMock(side_effect=tracking_publish)
+
+        await mod.on_telemetry(
+            {
+                "public_key": key,
+                "battery_volts": 4.1,
+                "lpp_sensors": [
+                    {"channel": 1, "type_name": "temperature", "value": 23.5},
+                ],
+            }
+        )
+
+        assert call_order == ["discovery", "state"]
+
+    @pytest.mark.asyncio
+    async def test_on_telemetry_no_rediscovery_when_already_known(self):
+        key = "ccdd11223344"
+        nid = _node_id(key)
+        mod = MqttHaModule("test", _base_config(tracked_repeaters=[key]))
+        mod._publisher = MagicMock()
+        mod._publisher.connected = True
+        mod._publisher.publish = AsyncMock()
+        mod._discovery_topics = [
+            f"homeassistant/sensor/meshcore_{nid}/lpp_temperature_ch1/config",
+        ]
+        mod._publish_discovery = AsyncMock()
+
+        await mod.on_telemetry(
+            {
+                "public_key": key,
+                "battery_volts": 4.1,
+                "lpp_sensors": [
+                    {"channel": 1, "type_name": "temperature", "value": 23.5},
+                ],
+            }
+        )
+
+        mod._publish_discovery.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_on_telemetry_without_lpp_sensors(self):
+        """Existing behavior: no lpp_sensors key means no LPP fields in payload."""
+        key = "ccdd11223344"
+        mod = MqttHaModule("test", _base_config(tracked_repeaters=[key]))
+        mod._publisher = MagicMock()
+        mod._publisher.connected = True
+        mod._publisher.publish = AsyncMock()
+
+        await mod.on_telemetry(
+            {
+                "public_key": key,
+                "battery_volts": 4.1,
+                "noise_floor_dbm": -112,
+            }
+        )
+
+        payload = mod._publisher.publish.call_args[0][1]
+        assert payload["battery_volts"] == 4.1
+        # No lpp keys
+        assert not any(k.startswith("lpp_") for k in payload)

@@ -6,6 +6,7 @@ import { Separator } from '../ui/separator';
 import { toast } from '../ui/sonner';
 import { api } from '../../api';
 import { formatTime } from '../../utils/messageParser';
+import { LPP_UNIT_MAP } from '../repeater/repeaterPaneShared';
 import { BulkDeleteContactsModal } from './BulkDeleteContactsModal';
 import type {
   AppSettings,
@@ -308,6 +309,22 @@ export function SettingsDatabaseSection({
                       <span>
                         tx {d.packets_sent != null ? d.packets_sent.toLocaleString() : '?'}
                       </span>
+                      {d.lpp_sensors?.map((s) => {
+                        const unit = LPP_UNIT_MAP[s.type_name] ?? '';
+                        const val =
+                          typeof s.value === 'number'
+                            ? s.value % 1 === 0
+                              ? s.value
+                              : s.value.toFixed(1)
+                            : s.value;
+                        const label = s.type_name.charAt(0).toUpperCase() + s.type_name.slice(1);
+                        return (
+                          <span key={`${s.type_name}-${s.channel}`}>
+                            {label} {val}
+                            {unit ? ` ${unit}` : ''}
+                          </span>
+                        );
+                      })}
                       <span className="ml-auto">checked {formatTime(snap.timestamp)}</span>
                     </div>
                   ) : snap === null ? (

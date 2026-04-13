@@ -94,6 +94,7 @@ async def repeater_status(public_key: str) -> RepeaterStatusResponse:
     contact = await _resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
+    lpp_raw = None
     async with radio_manager.radio_operation(
         "repeater_status", pause_polling=True, suspend_auto_fetch=True
     ) as mc:
@@ -101,6 +102,15 @@ async def repeater_status(public_key: str) -> RepeaterStatusResponse:
         await _ensure_on_radio(mc, contact)
 
         status = await mc.commands.req_status_sync(contact.public_key, timeout=10, min_timeout=5)
+
+        # Best-effort LPP sensor fetch while we still hold the lock
+        if status is not None:
+            try:
+                lpp_raw = await mc.commands.req_telemetry_sync(
+                    contact.public_key, timeout=10, min_timeout=5
+                )
+            except Exception as e:
+                logger.debug("LPP sensor fetch failed for %s (non-fatal): %s", public_key[:12], e)
 
     if status is None:
         raise HTTPException(status_code=504, detail="No status response from repeater")
@@ -128,6 +138,24 @@ async def repeater_status(public_key: str) -> RepeaterStatusResponse:
     # Record to telemetry history as a JSON blob (best-effort)
     now = int(time.time())
     status_dict = response.model_dump(exclude={"telemetry_history"})
+
+    # Attach scalar LPP sensors to the stored snapshot (same logic as auto-collect)
+    if lpp_raw:
+        lpp_sensors = []
+        for entry in lpp_raw:
+            value = entry.get("value", 0)
+            if isinstance(value, dict):
+                continue
+            lpp_sensors.append(
+                {
+                    "channel": entry.get("channel", 0),
+                    "type_name": str(entry.get("type", "unknown")),
+                    "value": value,
+                }
+            )
+        if lpp_sensors:
+            status_dict["lpp_sensors"] = lpp_sensors
+
     try:
         await RepeaterTelemetryRepository.record(
             public_key=contact.public_key,

@@ -1695,3 +1695,170 @@ class TestPeriodicSyncLoopRaces:
         mock_cleanup.assert_called_once()
         mock_sync.assert_not_called()
         mock_time.assert_called_once_with(mock_mc)
+
+
+# ---------------------------------------------------------------------------
+# _collect_repeater_telemetry — LPP sensor collection
+# ---------------------------------------------------------------------------
+
+
+class TestCollectRepeaterTelemetryLpp:
+    """Verify that _collect_repeater_telemetry fetches LPP sensors."""
+
+    @pytest.mark.asyncio
+    async def test_lpp_sensors_included_in_data(self):
+        from app.radio_sync import _collect_repeater_telemetry
+
+        mc = MagicMock()
+        mc.commands.add_contact = AsyncMock()
+        mc.commands.req_status_sync = AsyncMock(
+            return_value={"bat": 4100, "noise_floor": -110, "nb_recv": 10, "nb_sent": 5}
+        )
+        mc.commands.req_telemetry_sync = AsyncMock(
+            return_value=[
+                {"channel": 1, "type": "temperature", "value": 23.5},
+                {"channel": 2, "type": "humidity", "value": 45.0},
+            ]
+        )
+
+        contact = MagicMock()
+        contact.public_key = "aabbccddeeff11223344"
+        contact.name = "TestRepeater"
+        contact.to_radio_dict.return_value = {}
+
+        recorded_data = {}
+
+        async def mock_record(public_key, timestamp, data):
+            recorded_data.update(data)
+
+        mock_fanout = MagicMock()
+        mock_fanout.broadcast_telemetry = AsyncMock()
+
+        with (
+            patch(
+                "app.radio_sync.RepeaterTelemetryRepository.record",
+                new_callable=AsyncMock,
+                side_effect=mock_record,
+            ),
+            patch("app.fanout.manager.fanout_manager", mock_fanout),
+        ):
+            result = await _collect_repeater_telemetry(mc, contact)
+
+        assert result is True
+        assert "lpp_sensors" in recorded_data
+        assert len(recorded_data["lpp_sensors"]) == 2
+        assert recorded_data["lpp_sensors"][0]["type_name"] == "temperature"
+        assert recorded_data["lpp_sensors"][0]["value"] == 23.5
+        assert recorded_data["lpp_sensors"][1]["type_name"] == "humidity"
+
+    @pytest.mark.asyncio
+    async def test_lpp_failure_does_not_fail_collection(self):
+        from app.radio_sync import _collect_repeater_telemetry
+
+        mc = MagicMock()
+        mc.commands.add_contact = AsyncMock()
+        mc.commands.req_status_sync = AsyncMock(return_value={"bat": 4100, "noise_floor": -110})
+        mc.commands.req_telemetry_sync = AsyncMock(side_effect=Exception("no sensors"))
+
+        contact = MagicMock()
+        contact.public_key = "aabbccddeeff11223344"
+        contact.name = "TestRepeater"
+        contact.to_radio_dict.return_value = {}
+
+        recorded_data = {}
+
+        async def mock_record(public_key, timestamp, data):
+            recorded_data.update(data)
+
+        mock_fanout = MagicMock()
+        mock_fanout.broadcast_telemetry = AsyncMock()
+
+        with (
+            patch(
+                "app.radio_sync.RepeaterTelemetryRepository.record",
+                new_callable=AsyncMock,
+                side_effect=mock_record,
+            ),
+            patch("app.fanout.manager.fanout_manager", mock_fanout),
+        ):
+            result = await _collect_repeater_telemetry(mc, contact)
+
+        assert result is True
+        assert "lpp_sensors" not in recorded_data
+        # Status data still present
+        assert recorded_data["battery_volts"] == 4.1
+
+    @pytest.mark.asyncio
+    async def test_lpp_multivalue_sensors_skipped(self):
+        from app.radio_sync import _collect_repeater_telemetry
+
+        mc = MagicMock()
+        mc.commands.add_contact = AsyncMock()
+        mc.commands.req_status_sync = AsyncMock(return_value={"bat": 4000})
+        mc.commands.req_telemetry_sync = AsyncMock(
+            return_value=[
+                {"channel": 1, "type": "temperature", "value": 23.5},
+                {"channel": 3, "type": "gps", "value": {"lat": 1.0, "lon": 2.0, "alt": 3.0}},
+            ]
+        )
+
+        contact = MagicMock()
+        contact.public_key = "aabbccddeeff11223344"
+        contact.name = "TestRepeater"
+        contact.to_radio_dict.return_value = {}
+
+        recorded_data = {}
+
+        async def mock_record(public_key, timestamp, data):
+            recorded_data.update(data)
+
+        mock_fanout = MagicMock()
+        mock_fanout.broadcast_telemetry = AsyncMock()
+
+        with (
+            patch(
+                "app.radio_sync.RepeaterTelemetryRepository.record",
+                new_callable=AsyncMock,
+                side_effect=mock_record,
+            ),
+            patch("app.fanout.manager.fanout_manager", mock_fanout),
+        ):
+            result = await _collect_repeater_telemetry(mc, contact)
+
+        assert result is True
+        assert len(recorded_data["lpp_sensors"]) == 1
+        assert recorded_data["lpp_sensors"][0]["type_name"] == "temperature"
+
+    @pytest.mark.asyncio
+    async def test_lpp_none_response_no_sensors_key(self):
+        from app.radio_sync import _collect_repeater_telemetry
+
+        mc = MagicMock()
+        mc.commands.add_contact = AsyncMock()
+        mc.commands.req_status_sync = AsyncMock(return_value={"bat": 4000})
+        mc.commands.req_telemetry_sync = AsyncMock(return_value=None)
+
+        contact = MagicMock()
+        contact.public_key = "aabbccddeeff11223344"
+        contact.name = "TestRepeater"
+        contact.to_radio_dict.return_value = {}
+
+        recorded_data = {}
+
+        async def mock_record(public_key, timestamp, data):
+            recorded_data.update(data)
+
+        mock_fanout = MagicMock()
+        mock_fanout.broadcast_telemetry = AsyncMock()
+
+        with (
+            patch(
+                "app.radio_sync.RepeaterTelemetryRepository.record",
+                new_callable=AsyncMock,
+                side_effect=mock_record,
+            ),
+            patch("app.fanout.manager.fanout_manager", mock_fanout),
+        ):
+            await _collect_repeater_telemetry(mc, contact)
+
+        assert "lpp_sensors" not in recorded_data
