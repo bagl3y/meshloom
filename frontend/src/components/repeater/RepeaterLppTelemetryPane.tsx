@@ -1,4 +1,5 @@
 import { RepeaterPane, NotFetched, LppSensorRow } from './repeaterPaneShared';
+import { useDistanceUnit } from '../../contexts/DistanceUnitContext';
 import type { RepeaterLppTelemetryResponse, PaneState } from '../../types';
 
 export function LppTelemetryPane({
@@ -12,6 +13,7 @@ export function LppTelemetryPane({
   onRefresh: () => void;
   disabled?: boolean;
 }) {
+  const { distanceUnit } = useDistanceUnit();
   return (
     <RepeaterPane title="LPP Sensors" state={state} onRefresh={onRefresh} disabled={disabled}>
       {!data ? (
@@ -21,7 +23,7 @@ export function LppTelemetryPane({
       ) : (
         <div className="space-y-0.5">
           {data.sensors.map((sensor, i) => (
-            <LppSensorRow key={i} sensor={sensor} />
+            <LppSensorRow key={i} sensor={sensor} unitPref={distanceUnit} />
           ))}
         </div>
       )}

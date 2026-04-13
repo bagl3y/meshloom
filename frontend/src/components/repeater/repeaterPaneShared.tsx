@@ -223,11 +223,26 @@ export const LPP_UNIT_MAP: Record<string, string> = {
   colour: '',
 };
 
+/**
+ * Return the display unit and converted value for an LPP sensor,
+ * respecting the user's unit preference for temperature.
+ */
+export function lppDisplayUnit(
+  typeName: string,
+  value: number,
+  unitPref: 'metric' | 'imperial' | string
+): { unit: string; value: number } {
+  if (typeName === 'temperature' && unitPref === 'imperial') {
+    return { unit: '°F', value: (value * 9) / 5 + 32 };
+  }
+  return { unit: LPP_UNIT_MAP[typeName] ?? '', value };
+}
+
 export function formatLppLabel(typeName: string): string {
   return typeName.charAt(0).toUpperCase() + typeName.slice(1).replace(/_/g, ' ');
 }
 
-export function LppSensorRow({ sensor }: { sensor: LppSensor }) {
+export function LppSensorRow({ sensor, unitPref }: { sensor: LppSensor; unitPref?: string }) {
   const label = formatLppLabel(sensor.type_name);
 
   if (typeof sensor.value === 'object' && sensor.value !== null) {
@@ -248,10 +263,10 @@ export function LppSensorRow({ sensor }: { sensor: LppSensor }) {
     );
   }
 
-  const unit = LPP_UNIT_MAP[sensor.type_name] ?? '';
+  const display = lppDisplayUnit(sensor.type_name, sensor.value as number, unitPref ?? 'metric');
   const formatted =
     typeof sensor.value === 'number'
-      ? `${sensor.value % 1 === 0 ? sensor.value : sensor.value.toFixed(2)}${unit ? ` ${unit}` : ''}`
+      ? `${display.value % 1 === 0 ? display.value : display.value.toFixed(2)}${display.unit ? ` ${display.unit}` : ''}`
       : String(sensor.value);
 
   return <KvRow label={label} value={formatted} />;

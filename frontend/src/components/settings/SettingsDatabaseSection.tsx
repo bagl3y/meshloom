@@ -6,7 +6,8 @@ import { Separator } from '../ui/separator';
 import { toast } from '../ui/sonner';
 import { api } from '../../api';
 import { formatTime } from '../../utils/messageParser';
-import { LPP_UNIT_MAP } from '../repeater/repeaterPaneShared';
+import { lppDisplayUnit } from '../repeater/repeaterPaneShared';
+import { useDistanceUnit } from '../../contexts/DistanceUnitContext';
 import { BulkDeleteContactsModal } from './BulkDeleteContactsModal';
 import type {
   AppSettings,
@@ -45,6 +46,7 @@ export function SettingsDatabaseSection({
   onToggleTrackedTelemetry?: (publicKey: string) => Promise<void>;
   className?: string;
 }) {
+  const { distanceUnit } = useDistanceUnit();
   const [retentionDays, setRetentionDays] = useState('14');
   const [cleaning, setCleaning] = useState(false);
   const [purgingDecryptedRaw, setPurgingDecryptedRaw] = useState(false);
@@ -310,18 +312,18 @@ export function SettingsDatabaseSection({
                         tx {d.packets_sent != null ? d.packets_sent.toLocaleString() : '?'}
                       </span>
                       {d.lpp_sensors?.map((s) => {
-                        const unit = LPP_UNIT_MAP[s.type_name] ?? '';
+                        const display = lppDisplayUnit(s.type_name, s.value, distanceUnit);
                         const val =
-                          typeof s.value === 'number'
-                            ? s.value % 1 === 0
-                              ? s.value
-                              : s.value.toFixed(1)
-                            : s.value;
+                          typeof display.value === 'number'
+                            ? display.value % 1 === 0
+                              ? display.value
+                              : display.value.toFixed(1)
+                            : display.value;
                         const label = s.type_name.charAt(0).toUpperCase() + s.type_name.slice(1);
                         return (
                           <span key={`${s.type_name}-${s.channel}`}>
                             {label} {val}
-                            {unit ? ` ${unit}` : ''}
+                            {display.unit ? ` ${display.unit}` : ''}
                           </span>
                         );
                       })}

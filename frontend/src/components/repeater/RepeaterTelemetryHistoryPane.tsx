@@ -11,7 +11,8 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { LPP_UNIT_MAP } from './repeaterPaneShared';
+import { lppDisplayUnit } from './repeaterPaneShared';
+import { useDistanceUnit } from '../../contexts/DistanceUnitContext';
 import type { TelemetryHistoryEntry, TelemetryLppSensor, Contact } from '../../types';
 
 const MAX_TRACKED = 8;
@@ -83,6 +84,7 @@ export function TelemetryHistoryPane({
   trackedTelemetryRepeaters,
   onToggleTrackedTelemetry,
 }: TelemetryHistoryPaneProps) {
+  const { distanceUnit } = useDistanceUnit();
   const [metric, setMetric] = useState<string>('battery_volts');
   const [toggling, setToggling] = useState(false);
 
@@ -105,7 +107,7 @@ export function TelemetryHistoryPane({
         info.type_name.charAt(0).toUpperCase() +
         info.type_name.slice(1).replace(/_/g, ' ') +
         ` Ch${info.channel}`;
-      const unit = LPP_UNIT_MAP[info.type_name] ?? '';
+      const { unit } = lppDisplayUnit(info.type_name, 0, distanceUnit);
       result.push({
         key: k,
         config: { label, unit, color: LPP_COLORS[colorIdx % LPP_COLORS.length] },
@@ -115,7 +117,7 @@ export function TelemetryHistoryPane({
       colorIdx++;
     }
     return result;
-  }, [entries]);
+  }, [entries, distanceUnit]);
 
   const allMetricKeys = useMemo(
     () => [...BUILTIN_METRICS, ...lppMetrics.map((m) => m.key)],
@@ -145,13 +147,15 @@ export function TelemetryHistoryPane({
         packets_sent: d.packets_sent,
         uptime_seconds: d.uptime_seconds,
       };
-      // Flatten LPP sensors into the point
+      // Flatten LPP sensors into the point, converting units as needed
       for (const s of d.lpp_sensors ?? []) {
-        point[lppKey(s)] = typeof s.value === 'number' ? s.value : undefined;
+        if (typeof s.value === 'number') {
+          point[lppKey(s)] = lppDisplayUnit(s.type_name, s.value, distanceUnit).value;
+        }
       }
       return point;
     });
-  }, [entries]);
+  }, [entries, distanceUnit]);
 
   const dataKeys =
     activeMetric === 'packets' ? ['packets_received', 'packets_sent'] : [activeMetric];
