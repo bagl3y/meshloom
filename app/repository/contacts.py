@@ -295,6 +295,28 @@ class ContactRepository:
         return [ContactRepository._row_to_contact(row) for row in rows]
 
     @staticmethod
+    async def get_recently_dm_active_non_repeaters(limit: int = 200) -> list[Contact]:
+        """Get non-repeater contacts with the most recent DM activity (sent or received)."""
+        cursor = await db.conn.execute(
+            """
+            SELECT c.*
+            FROM contacts c
+            INNER JOIN (
+                SELECT conversation_key, MAX(received_at) AS last_dm
+                FROM messages
+                WHERE type = 'PRIV'
+                GROUP BY conversation_key
+            ) m ON c.public_key = m.conversation_key
+            WHERE c.type != 2 AND length(c.public_key) = 64
+            ORDER BY m.last_dm DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = await cursor.fetchall()
+        return [ContactRepository._row_to_contact(row) for row in rows]
+
+    @staticmethod
     async def get_recently_advertised_non_repeaters(limit: int = 200) -> list[Contact]:
         """Get recently advert-heard non-repeater contacts."""
         cursor = await db.conn.execute(

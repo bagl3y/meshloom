@@ -377,13 +377,21 @@ class TestSyncRecentContactsToRadio:
         assert result["loaded"] == 2
 
     @pytest.mark.asyncio
-    async def test_fills_remaining_slots_with_recently_contacted_then_advertised(self, test_db):
-        """Fill order is favorites, then recent contacts, then recent adverts."""
-        await _insert_contact(KEY_A, "Alice", last_contacted=100)
-        await _insert_contact(KEY_B, "Bob", last_contacted=2000)
-        await _insert_contact("cc" * 32, "Carol", last_contacted=1000)
+    async def test_fills_remaining_slots_with_dm_active_then_advertised(self, test_db):
+        """Fill order is favorites, then DM-active contacts, then recent adverts."""
+        await _insert_contact(KEY_A, "Alice")
+        await _insert_contact(KEY_B, "Bob")
+        await _insert_contact("cc" * 32, "Carol")
         await _insert_contact("dd" * 32, "Dave", last_advert=3000)
         await _insert_contact("ee" * 32, "Eve", last_advert=2500)
+
+        # Create DM activity for Alice (oldest), Bob (most recent), Carol (middle)
+        for key, ts in [(KEY_A, 100), (KEY_B, 2000), ("cc" * 32, 1000)]:
+            await test_db.conn.execute(
+                "INSERT INTO messages (type, conversation_key, text, received_at) VALUES ('PRIV', ?, 'hi', ?)",
+                (key, ts),
+            )
+        await test_db.conn.commit()
 
         await AppSettingsRepository.update(max_radio_contacts=5)
         await ContactRepository.set_favorite(KEY_A, True)
@@ -401,6 +409,7 @@ class TestSyncRecentContactsToRadio:
         loaded_keys = [
             call.args[0]["public_key"] for call in mock_mc.commands.add_contact.call_args_list
         ]
+        # Alice (favorite), then Bob & Carol (DM-active, most recent first), then Dave (advert)
         assert loaded_keys == [KEY_A, KEY_B, "cc" * 32, "dd" * 32]
 
     @pytest.mark.asyncio
@@ -509,8 +518,15 @@ class TestSyncAndOffloadAll:
     @pytest.mark.asyncio
     async def test_duplicate_favorite_not_loaded_twice(self, test_db):
         """Duplicate favorite entries still load the contact only once."""
-        await _insert_contact(KEY_A, "Alice", last_contacted=2000)
-        await _insert_contact(KEY_B, "Bob", last_contacted=1000)
+        await _insert_contact(KEY_A, "Alice")
+        await _insert_contact(KEY_B, "Bob")
+
+        # Bob has DM activity so he appears in tier 2
+        await test_db.conn.execute(
+            "INSERT INTO messages (type, conversation_key, text, received_at) VALUES ('PRIV', ?, 'hi', 1000)",
+            (KEY_B,),
+        )
+        await test_db.conn.commit()
 
         await AppSettingsRepository.update(max_radio_contacts=2)
         await ContactRepository.set_favorite(KEY_A, True)
@@ -1862,3 +1878,102 @@ class TestCollectRepeaterTelemetryLpp:
             await _collect_repeater_telemetry(mc, contact)
 
         assert "lpp_sensors" not in recorded_data
+
+
+# ---------------------------------------------------------------------------
+# get_contacts_selected_for_radio_sync — DM-active prioritization
+# ---------------------------------------------------------------------------
+
+
+class TestContactSelectionDmActive:
+    """Verify that tier 2 prioritizes contacts with recent DM activity."""
+
+    @pytest.mark.asyncio
+    async def test_incoming_dm_contact_selected_over_advert_only(self, test_db):
+        """A contact who sent us a DM should be prioritized over one who only advertised."""
+        from app.radio_sync import get_contacts_selected_for_radio_sync
+
+        # Create two non-repeater contacts
+        dm_sender_key = "aa" * 32
+        advert_only_key = "bb" * 32
+
+        await test_db.conn.execute(
+            "INSERT INTO contacts (public_key, name, type, last_seen, last_advert) VALUES (?, ?, 1, 100, 100)",
+            (dm_sender_key, "DM Sender"),
+        )
+        await test_db.conn.execute(
+            "INSERT INTO contacts (public_key, name, type, last_seen, last_advert) VALUES (?, ?, 1, 200, 200)",
+            (advert_only_key, "Advert Only"),
+        )
+
+        # DM Sender sent us a message (incoming DM)
+        await test_db.conn.execute(
+            "INSERT INTO messages (type, conversation_key, text, received_at) VALUES ('PRIV', ?, 'hello', 300)",
+            (dm_sender_key,),
+        )
+        await test_db.conn.commit()
+
+        with patch(
+            "app.radio_sync.AppSettingsRepository.get",
+            new_callable=AsyncMock,
+            return_value=MagicMock(max_radio_contacts=200, tracked_telemetry_repeaters=[]),
+        ):
+            selected = await get_contacts_selected_for_radio_sync()
+
+        keys = [c.public_key for c in selected]
+        assert dm_sender_key in keys
+        assert advert_only_key in keys
+        # DM Sender should come before Advert Only (tier 2 before tier 3)
+        assert keys.index(dm_sender_key) < keys.index(advert_only_key)
+
+    @pytest.mark.asyncio
+    async def test_outgoing_dm_contact_also_selected(self, test_db):
+        """A contact we sent a DM to should also appear via DM-active tier."""
+        from app.radio_sync import get_contacts_selected_for_radio_sync
+
+        contact_key = "cc" * 32
+        await test_db.conn.execute(
+            "INSERT INTO contacts (public_key, name, type) VALUES (?, ?, 1)",
+            (contact_key, "Outgoing Target"),
+        )
+        await test_db.conn.execute(
+            "INSERT INTO messages (type, conversation_key, text, received_at, outgoing) VALUES ('PRIV', ?, 'hey', 300, 1)",
+            (contact_key,),
+        )
+        await test_db.conn.commit()
+
+        with patch(
+            "app.radio_sync.AppSettingsRepository.get",
+            new_callable=AsyncMock,
+            return_value=MagicMock(max_radio_contacts=200, tracked_telemetry_repeaters=[]),
+        ):
+            selected = await get_contacts_selected_for_radio_sync()
+
+        keys = [c.public_key for c in selected]
+        assert contact_key in keys
+
+    @pytest.mark.asyncio
+    async def test_repeaters_excluded_from_dm_active_tier(self, test_db):
+        """Repeater contacts should not appear in tier 2 even with DM activity."""
+        from app.radio_sync import get_contacts_selected_for_radio_sync
+
+        repeater_key = "dd" * 32
+        await test_db.conn.execute(
+            "INSERT INTO contacts (public_key, name, type) VALUES (?, ?, 2)",
+            (repeater_key, "Repeater"),
+        )
+        await test_db.conn.execute(
+            "INSERT INTO messages (type, conversation_key, text, received_at) VALUES ('PRIV', ?, 'cmd', 300)",
+            (repeater_key,),
+        )
+        await test_db.conn.commit()
+
+        with patch(
+            "app.radio_sync.AppSettingsRepository.get",
+            new_callable=AsyncMock,
+            return_value=MagicMock(max_radio_contacts=200, tracked_telemetry_repeaters=[]),
+        ):
+            selected = await get_contacts_selected_for_radio_sync()
+
+        keys = [c.public_key for c in selected]
+        assert repeater_key not in keys

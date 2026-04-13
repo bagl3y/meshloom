@@ -1295,7 +1295,13 @@ async def stop_background_contact_reconciliation() -> None:
 
 
 async def get_contacts_selected_for_radio_sync() -> list[Contact]:
-    """Return the contacts that would be loaded onto the radio right now."""
+    """Return the contacts that would be loaded onto the radio right now.
+
+    Fill order:
+    1. Favorites (up to full capacity)
+    2. Most recently DM-active non-repeaters (sent or received, up to 80% refill target)
+    3. Most recently advertised non-repeaters (up to 80% refill target)
+    """
     app_settings = await AppSettingsRepository.get()
     max_contacts = _effective_radio_capacity(app_settings.max_radio_contacts)
     refill_target, _full_sync_trigger = _compute_radio_contact_limits(max_contacts)
@@ -1315,7 +1321,7 @@ async def get_contacts_selected_for_radio_sync() -> list[Contact]:
             break
 
     if len(selected_contacts) < refill_target:
-        for contact in await ContactRepository.get_recently_contacted_non_repeaters(
+        for contact in await ContactRepository.get_recently_dm_active_non_repeaters(
             limit=max_contacts
         ):
             key = contact.public_key.lower()
@@ -1354,8 +1360,8 @@ async def _sync_contacts_to_radio_inner(mc: MeshCore) -> dict:
 
     Fill order is:
     1. Favorite contacts
-    2. Most recently interacted-with non-repeaters
-    3. Most recently advert-heard non-repeaters without interaction history
+    2. Most recently DM-active non-repeaters (sent or received)
+    3. Most recently advert-heard non-repeaters
 
     Favorite contacts are always reloaded first, up to the configured capacity.
     Additional non-favorite fill stops at the refill target (80% of capacity).
@@ -1489,8 +1495,8 @@ async def sync_recent_contacts_to_radio(force: bool = False, mc: MeshCore | None
     """
     Load contacts to the radio for DM ACK support.
 
-    Fill order is favorites, then recently contacted non-repeaters,
-    then recently advert-heard non-repeaters. Favorites are always reloaded
+    Fill order is favorites, then recently DM-active non-repeaters (sent or
+    received), then recently advert-heard non-repeaters. Favorites are always reloaded
     up to the configured capacity; additional non-favorite fill stops at the
     80% refill target.
     Only runs at most once every CONTACT_SYNC_THROTTLE_SECONDS unless forced.
