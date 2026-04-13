@@ -513,6 +513,42 @@ describe('Sidebar section summaries', () => {
     expect(contactRows).toEqual(['DM Recent', 'Advert Only', 'No Recency']);
   });
 
+  it('floats contacts with unread DMs above read contacts regardless of recency', () => {
+    const publicChannel = makeChannel(PUBLIC_CHANNEL_KEY, 'Public');
+    const readRecent = makeContact('11'.repeat(32), 'Read Recent', 1, { last_advert: 500 });
+    const unreadOld = makeContact('22'.repeat(32), 'Unread Old', 1, { last_advert: 100 });
+
+    render(
+      <Sidebar
+        contacts={[readRecent, unreadOld]}
+        channels={[publicChannel]}
+        activeConversation={null}
+        onSelectConversation={vi.fn()}
+        onNewMessage={vi.fn()}
+        lastMessageTimes={{
+          [getStateKey('contact', readRecent.public_key)]: 500,
+          [getStateKey('contact', unreadOld.public_key)]: 200,
+        }}
+        unreadCounts={{
+          [getStateKey('contact', unreadOld.public_key)]: 3,
+        }}
+        mentions={{}}
+        showCracker={false}
+        crackerRunning={false}
+        onToggleCracker={vi.fn()}
+        onMarkAllRead={vi.fn()}
+      />
+    );
+
+    const contactRows = screen
+      .getAllByText(/^(Read Recent|Unread Old)$/)
+      .map((node) => node.textContent)
+      .filter((text): text is string => Boolean(text));
+
+    // Unread Old has unread DMs so it floats above Read Recent despite older recency
+    expect(contactRows).toEqual(['Unread Old', 'Read Recent']);
+  });
+
   it('sorts repeaters by heard recency even when message times disagree', () => {
     const publicChannel = makeChannel(PUBLIC_CHANNEL_KEY, 'Public');
     const staleMessageRelay = makeContact(

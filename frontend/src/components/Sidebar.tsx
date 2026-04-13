@@ -265,6 +265,12 @@ export function Sidebar({
   const sortContactsByOrder = useCallback(
     (items: Contact[], order: SortOrder) =>
       [...items].sort((a, b) => {
+        // Unread DM contacts always float to the top
+        const unreadA = unreadCounts[getStateKey('contact', a.public_key)] || 0;
+        const unreadB = unreadCounts[getStateKey('contact', b.public_key)] || 0;
+        if (unreadA > 0 && unreadB === 0) return -1;
+        if (unreadA === 0 && unreadB > 0) return 1;
+
         if (order === 'recent') {
           const timeA = getContactRecentTime(a);
           const timeB = getContactRecentTime(b);
@@ -274,7 +280,7 @@ export function Sidebar({
         }
         return (a.name || a.public_key).localeCompare(b.name || b.public_key);
       }),
-    [getContactRecentTime]
+    [getContactRecentTime, unreadCounts]
   );
 
   const sortRepeatersByOrder = useCallback(
