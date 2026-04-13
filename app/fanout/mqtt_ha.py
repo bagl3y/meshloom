@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 # ── Repeater telemetry sensor definitions ─────────────────────────────────
 
-_REPEATER_SENSORS: list[dict[str, str | None]] = [
+_REPEATER_SENSORS: list[dict[str, Any]] = [
     {
         "field": "battery_volts",
         "name": "Battery Voltage",
@@ -34,6 +34,7 @@ _REPEATER_SENSORS: list[dict[str, str | None]] = [
         "device_class": "voltage",
         "state_class": "measurement",
         "unit": "V",
+        "precision": 2,
     },
     {
         "field": "noise_floor_dbm",
@@ -42,6 +43,7 @@ _REPEATER_SENSORS: list[dict[str, str | None]] = [
         "device_class": "signal_strength",
         "state_class": "measurement",
         "unit": "dBm",
+        "precision": 0,
     },
     {
         "field": "last_rssi_dbm",
@@ -50,6 +52,7 @@ _REPEATER_SENSORS: list[dict[str, str | None]] = [
         "device_class": "signal_strength",
         "state_class": "measurement",
         "unit": "dBm",
+        "precision": 0,
     },
     {
         "field": "last_snr_db",
@@ -58,6 +61,7 @@ _REPEATER_SENSORS: list[dict[str, str | None]] = [
         "device_class": None,
         "state_class": "measurement",
         "unit": "dB",
+        "precision": 1,
     },
     {
         "field": "packets_received",
@@ -66,6 +70,7 @@ _REPEATER_SENSORS: list[dict[str, str | None]] = [
         "device_class": None,
         "state_class": "total_increasing",
         "unit": None,
+        "precision": 0,
     },
     {
         "field": "packets_sent",
@@ -74,6 +79,7 @@ _REPEATER_SENSORS: list[dict[str, str | None]] = [
         "device_class": None,
         "state_class": "total_increasing",
         "unit": None,
+        "precision": 0,
     },
     {
         "field": "uptime_seconds",
@@ -82,24 +88,25 @@ _REPEATER_SENSORS: list[dict[str, str | None]] = [
         "device_class": "duration",
         "state_class": None,
         "unit": "s",
+        "precision": 0,
     },
 ]
 
 # ── LPP sensor metadata ─────────────────────────────────────────────────
 
-_LPP_HA_META: dict[str, dict[str, str | None]] = {
-    "temperature": {"device_class": "temperature", "unit": "°C"},
-    "humidity": {"device_class": "humidity", "unit": "%"},
-    "barometer": {"device_class": "atmospheric_pressure", "unit": "hPa"},
-    "voltage": {"device_class": "voltage", "unit": "V"},
-    "current": {"device_class": "current", "unit": "mA"},
-    "luminosity": {"device_class": "illuminance", "unit": "lux"},
-    "power": {"device_class": "power", "unit": "W"},
-    "energy": {"device_class": "energy", "unit": "kWh"},
-    "distance": {"device_class": "distance", "unit": "mm"},
-    "concentration": {"device_class": None, "unit": "ppm"},
-    "direction": {"device_class": None, "unit": "°"},
-    "altitude": {"device_class": None, "unit": "m"},
+_LPP_HA_META: dict[str, dict[str, Any]] = {
+    "temperature": {"device_class": "temperature", "unit": "°C", "precision": 1},
+    "humidity": {"device_class": "humidity", "unit": "%", "precision": 1},
+    "barometer": {"device_class": "atmospheric_pressure", "unit": "hPa", "precision": 1},
+    "voltage": {"device_class": "voltage", "unit": "V", "precision": 2},
+    "current": {"device_class": "current", "unit": "mA", "precision": 1},
+    "luminosity": {"device_class": "illuminance", "unit": "lux", "precision": 0},
+    "power": {"device_class": "power", "unit": "W", "precision": 1},
+    "energy": {"device_class": "energy", "unit": "kWh", "precision": 2},
+    "distance": {"device_class": "distance", "unit": "mm", "precision": 0},
+    "concentration": {"device_class": None, "unit": "ppm", "precision": 0},
+    "direction": {"device_class": None, "unit": "°", "precision": 0},
+    "altitude": {"device_class": None, "unit": "m", "precision": 1},
 }
 
 
@@ -141,6 +148,8 @@ def _lpp_discovery_configs(
             cfg["device_class"] = meta["device_class"]
         if meta.get("unit"):
             cfg["unit_of_measurement"] = meta["unit"]
+        if meta.get("precision") is not None:
+            cfg["suggested_display_precision"] = meta["precision"]
 
         topic = f"homeassistant/sensor/meshcore_{nid}/{object_id}/config"
         configs.append((topic, cfg))
@@ -150,7 +159,7 @@ def _lpp_discovery_configs(
 
 # ── Local radio sensor definitions ────────────────────────────────────────
 
-_RADIO_SENSORS: list[dict[str, str | None]] = [
+_RADIO_SENSORS: list[dict[str, Any]] = [
     {
         "field": "noise_floor_dbm",
         "name": "Noise Floor",
@@ -158,14 +167,16 @@ _RADIO_SENSORS: list[dict[str, str | None]] = [
         "device_class": "signal_strength",
         "state_class": "measurement",
         "unit": "dBm",
+        "precision": 0,
     },
     {
-        "field": "battery_mv",
+        "field": "battery_volts",
         "name": "Battery",
         "object_id": "battery",
         "device_class": "voltage",
         "state_class": "measurement",
-        "unit": "mV",
+        "unit": "V",
+        "precision": 2,
     },
     {
         "field": "uptime_secs",
@@ -174,6 +185,7 @@ _RADIO_SENSORS: list[dict[str, str | None]] = [
         "device_class": "duration",
         "state_class": None,
         "unit": "s",
+        "precision": 0,
     },
     {
         "field": "last_rssi",
@@ -182,6 +194,7 @@ _RADIO_SENSORS: list[dict[str, str | None]] = [
         "device_class": "signal_strength",
         "state_class": "measurement",
         "unit": "dBm",
+        "precision": 0,
     },
     {
         "field": "last_snr",
@@ -190,6 +203,7 @@ _RADIO_SENSORS: list[dict[str, str | None]] = [
         "device_class": None,
         "state_class": "measurement",
         "unit": "dB",
+        "precision": 1,
     },
     {
         "field": "tx_air_secs",
@@ -198,6 +212,7 @@ _RADIO_SENSORS: list[dict[str, str | None]] = [
         "device_class": "duration",
         "state_class": "total_increasing",
         "unit": "s",
+        "precision": 0,
     },
     {
         "field": "rx_air_secs",
@@ -206,6 +221,7 @@ _RADIO_SENSORS: list[dict[str, str | None]] = [
         "device_class": "duration",
         "state_class": "total_increasing",
         "unit": "s",
+        "precision": 0,
     },
     {
         "field": "packets_recv",
@@ -214,6 +230,7 @@ _RADIO_SENSORS: list[dict[str, str | None]] = [
         "device_class": None,
         "state_class": "total_increasing",
         "unit": None,
+        "precision": 0,
     },
     {
         "field": "packets_sent",
@@ -222,6 +239,7 @@ _RADIO_SENSORS: list[dict[str, str | None]] = [
         "device_class": None,
         "state_class": "total_increasing",
         "unit": None,
+        "precision": 0,
     },
 ]
 
@@ -343,6 +361,8 @@ def _radio_discovery_configs(
             cfg["state_class"] = sensor["state_class"]
         if sensor["unit"]:
             cfg["unit_of_measurement"] = sensor["unit"]
+        if sensor.get("precision") is not None:
+            cfg["suggested_display_precision"] = sensor["precision"]
 
         topic = f"homeassistant/sensor/meshcore_{nid}/{sensor['object_id']}/config"
         configs.append((topic, cfg))
@@ -376,6 +396,8 @@ def _repeater_discovery_configs(
             cfg["state_class"] = sensor["state_class"]
         if sensor["unit"]:
             cfg["unit_of_measurement"] = sensor["unit"]
+        if sensor.get("precision") is not None:
+            cfg["suggested_display_precision"] = sensor["precision"]
         # 10 hours — margin over the 8-hour auto-collect cycle
         cfg["expire_after"] = 36000
 
@@ -632,6 +654,13 @@ class MqttHaModule(FanoutModule):
             field = sensor["field"]
             if field is not None:
                 payload[field] = data.get(field)
+
+        # Normalize battery from millivolts to volts for consistency with
+        # repeater battery and the discovery config (unit: V, precision: 2).
+        battery_mv = data.get("battery_mv")
+        if battery_mv is not None:
+            payload["battery_volts"] = battery_mv / 1000.0
+
         await self._publisher.publish(f"{self._prefix}/{nid}/health", payload)
 
     async def on_contact(self, data: dict) -> None:

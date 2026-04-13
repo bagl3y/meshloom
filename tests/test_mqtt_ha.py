@@ -104,6 +104,21 @@ class TestRadioDiscovery:
         for _, cfg in configs[1:]:
             assert cfg["expire_after"] == 120
 
+    def test_sensor_configs_have_display_precision(self):
+        configs = _radio_discovery_configs("mc", "aabbccddeeff", "R")
+        # All sensor configs (skip the binary_sensor at index 0)
+        for _, cfg in configs[1:]:
+            assert "suggested_display_precision" in cfg
+            assert isinstance(cfg["suggested_display_precision"], int)
+
+    def test_battery_sensor_uses_volts(self):
+        configs = _radio_discovery_configs("mc", "aabbccddeeff", "R")
+        battery_cfgs = [(t, c) for t, c in configs if "battery" in t]
+        assert len(battery_cfgs) == 1
+        _, cfg = battery_cfgs[0]
+        assert cfg["unit_of_measurement"] == "V"
+        assert cfg["suggested_display_precision"] == 2
+
 
 class TestRepeaterDiscovery:
     def test_produces_sensor_per_field(self):
@@ -123,6 +138,11 @@ class TestRepeaterDiscovery:
         configs = _repeater_discovery_configs("mc", "ccdd", "Rep1", None)
         for _, cfg in configs:
             assert cfg["expire_after"] == 36000
+
+    def test_sensors_have_display_precision(self):
+        configs = _repeater_discovery_configs("mc", "ccdd", "Rep1", None)
+        for _, cfg in configs:
+            assert "suggested_display_precision" in cfg
 
 
 class TestContactTrackerDiscovery:
@@ -263,7 +283,7 @@ class TestMqttHaHealth:
         payload = health_calls[-1][0][1]
         assert payload["connected"] is True
         assert payload["noise_floor_dbm"] == -110
-        assert payload["battery_mv"] == 4150
+        assert payload["battery_volts"] == 4.15
         assert payload["uptime_secs"] == 3600
         assert payload["last_rssi"] == -85
         assert payload["packets_recv"] == 500
@@ -524,6 +544,7 @@ class TestLppDiscoveryConfigs:
         assert cfg["unit_of_measurement"] == "°C"
         assert cfg["state_class"] == "measurement"
         assert cfg["expire_after"] == 36000
+        assert cfg["suggested_display_precision"] == 1
         assert "lpp_temperature_ch1" in cfg["value_template"]
 
     def test_unknown_sensor_type_no_device_class(self):
