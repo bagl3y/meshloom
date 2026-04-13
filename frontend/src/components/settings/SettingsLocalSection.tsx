@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { ChevronRight, Logs, MessageSquare, Send, Settings } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { BellRing, ChevronRight, Logs, MessageSquare, Send, Settings, Trash2 } from 'lucide-react';
+import { toast } from '../ui/sonner';
+import { usePushSubscription } from '../../hooks/usePushSubscription';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -40,6 +42,122 @@ import {
   getStatusDotPulseEnabled,
   setStatusDotPulseEnabled as saveStatusDotPulse,
 } from '../../utils/statusDotPulse';
+
+function PushDeviceManagement() {
+  const {
+    isSupported,
+    isSubscribed,
+    allSubscriptions,
+    loading,
+    subscribe,
+    unsubscribe,
+    deleteSubscription,
+    testPush,
+    refreshSubscriptions,
+  } = usePushSubscription();
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (expanded) refreshSubscriptions();
+  }, [expanded, refreshSubscriptions]);
+
+  if (!isSupported) {
+    return (
+      <div className="space-y-2">
+        <Label className="flex items-center gap-2">
+          <BellRing className="h-4 w-4" /> Web Push Notifications
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          {window.isSecureContext
+            ? 'Push notifications are not supported by this browser.'
+            : 'Web Push requires HTTPS. Access RemoteTerm over HTTPS (self-signed certificates work) to enable push notifications.'}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <Label className="flex items-center gap-2">
+        <BellRing className="h-4 w-4" /> Web Push Notifications
+      </Label>
+      <p className="text-xs text-muted-foreground">
+        Receive notifications even when the browser tab is closed. Notifications are delivered via
+        your browser&apos;s push service and will arrive even when you&apos;re not on the same
+        network as RemoteTerm.
+      </p>
+
+      {isSubscribed ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void unsubscribe()}
+          disabled={loading}
+          className="border-destructive/50 text-destructive hover:bg-destructive/10"
+        >
+          {loading ? 'Updating...' : 'Unsubscribe This Browser'}
+        </Button>
+      ) : (
+        <Button variant="outline" size="sm" onClick={() => void subscribe()} disabled={loading}>
+          {loading ? 'Subscribing...' : 'Subscribe This Browser'}
+        </Button>
+      )}
+
+      {allSubscriptions.length > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-1 text-[0.6875rem] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronRight className={cn('h-3 w-3 transition-transform', expanded && 'rotate-90')} />
+            {allSubscriptions.length} registered device{allSubscriptions.length !== 1 ? 's' : ''}
+          </button>
+          {expanded && (
+            <div className="mt-2 space-y-1.5">
+              {allSubscriptions.map((sub) => (
+                <div
+                  key={sub.id}
+                  className="flex items-center justify-between gap-2 rounded border border-border px-2 py-1.5 text-sm"
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className="block truncate">{sub.label || 'Unknown device'}</span>
+                    <span className="text-[0.625rem] text-muted-foreground">
+                      {sub.last_success_at
+                        ? `Last push: ${new Date(sub.last_success_at * 1000).toLocaleDateString()}`
+                        : 'Never pushed'}
+                      {sub.failure_count > 0 && ` · ${sub.failure_count} failures`}
+                    </span>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => void testPush(sub.id)}
+                    >
+                      Test
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-destructive hover:text-destructive"
+                      onClick={() => {
+                        void deleteSubscription(sub.id).then(() => toast.success('Device removed'));
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function SettingsLocalSection({
   onLocalLabelChange,
@@ -397,6 +515,10 @@ function ThemePreview({ className }: { className?: string }) {
           />
         </div>
       </div>
+
+      <Separator />
+
+      <PushDeviceManagement />
 
       {/* ── Style Reference (collapsible) ── */}
       <button

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, ChevronsLeftRight, Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
+import { Bell, BellRing, ChevronsLeftRight, Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
 import { toast } from './ui/sonner';
 import { DirectTraceIcon } from './DirectTraceIcon';
 import { ContactPathDiscoveryModal } from './ContactPathDiscoveryModal';
@@ -26,6 +26,10 @@ interface ChatHeaderProps {
   onTrace: () => void;
   onPathDiscovery: (publicKey: string) => Promise<PathDiscoveryResponse>;
   onToggleNotifications: () => void;
+  pushSupported?: boolean;
+  pushSubscribed?: boolean;
+  pushEnabledForConversation?: boolean;
+  onTogglePush?: () => void;
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
   onSetChannelFloodScopeOverride?: (key: string, floodScopeOverride: string) => void;
   onSetChannelPathHashModeOverride?: (key: string, pathHashModeOverride: number | null) => void;
@@ -46,6 +50,10 @@ export function ChatHeader({
   onTrace,
   onPathDiscovery,
   onToggleNotifications,
+  pushSupported,
+  pushSubscribed,
+  pushEnabledForConversation,
+  onTogglePush,
   onToggleFavorite,
   onSetChannelFloodScopeOverride,
   onSetChannelPathHashModeOverride,
@@ -313,6 +321,35 @@ export function ChatHeader({
             {notificationsEnabled && (
               <span className="hidden md:inline text-[0.6875rem] font-medium text-status-connected">
                 Notifications On
+              </span>
+            )}
+          </button>
+        )}
+        {pushSupported && !activeContactIsRoomServer && onTogglePush && (
+          <button
+            className="flex items-center gap-1 rounded px-1 py-1 hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={onTogglePush}
+            title={
+              pushEnabledForConversation
+                ? 'Disable push notifications for this conversation'
+                : pushSubscribed
+                  ? 'Enable push notifications for this conversation'
+                  : 'Enable Web Push notifications (works when tab is closed)'
+            }
+            aria-label={
+              pushEnabledForConversation
+                ? 'Disable push notifications'
+                : 'Enable push notifications'
+            }
+          >
+            <BellRing
+              className={`h-4 w-4 ${pushEnabledForConversation ? 'text-amber-500' : 'text-muted-foreground'}`}
+              fill={pushEnabledForConversation ? 'currentColor' : 'none'}
+              aria-hidden="true"
+            />
+            {pushEnabledForConversation && (
+              <span className="hidden md:inline text-[0.6875rem] font-medium text-amber-500">
+                Push On
               </span>
             )}
           </button>

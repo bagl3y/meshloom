@@ -22,6 +22,7 @@ import type {
   RadioTraceResponse,
   RadioDiscoveryTarget,
   PathDiscoveryResponse,
+  PushSubscriptionInfo,
   ResendChannelMessageResponse,
   RepeaterAclResponse,
   RepeaterAdvertIntervalsResponse,
@@ -441,4 +442,30 @@ export const api = {
     fetchJson<RepeaterLppTelemetryResponse>(`/contacts/${publicKey}/room/lpp-telemetry`, {
       method: 'POST',
     }),
+
+  // Push Notifications
+  getVapidPublicKey: () => fetchJson<{ public_key: string }>('/push/vapid-public-key'),
+  pushSubscribe: (subscription: {
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    label?: string;
+  }) =>
+    fetchJson<PushSubscriptionInfo>('/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify(subscription),
+    }),
+  getPushSubscriptions: () => fetchJson<PushSubscriptionInfo[]>('/push/subscriptions'),
+  updatePushSubscription: (
+    id: string,
+    update: { label?: string; filter_mode?: string; filter_conversations?: string[] }
+  ) =>
+    fetchJson<PushSubscriptionInfo>(`/push/subscriptions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(update),
+    }),
+  deletePushSubscription: (id: string) =>
+    fetchJson<{ deleted: boolean }>(`/push/subscriptions/${id}`, { method: 'DELETE' }),
+  testPushSubscription: (id: string) =>
+    fetchJson<{ status: string }>(`/push/subscriptions/${id}/test`, { method: 'POST' }),
 };

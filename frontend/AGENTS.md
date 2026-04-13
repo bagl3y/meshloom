@@ -57,6 +57,7 @@ frontend/src/
 │   ├── useConversationRouter.ts    # URL hash → active conversation routing
 │   ├── useContactsAndChannels.ts   # Contact/channel loading, creation, deletion
 │   ├── useBrowserNotifications.ts  # Per-conversation browser notification preferences + dispatch
+│   ├── usePushSubscription.ts      # Web Push subscription lifecycle, per-conversation filters
 │   ├── useFaviconBadge.ts          # Browser tab unread badge state
 │   ├── useRawPacketStatsSession.ts # Session-scoped packet-feed stats history
 │   └── useRememberedServerPassword.ts # Browser-local repeater/room password persistence
@@ -428,6 +429,17 @@ The `SearchView` component (`components/SearchView.tsx`) provides full-text sear
 - **Jump-to-message**: `useConversationMessages` handles optional `targetMessageId` by calling `api.getMessagesAround()` instead of the normal latest-page fetch, loading context around the target message. `MessageList` scrolls to the target via `data-message-id` attribute and applies a `message-highlight` CSS animation.
 - **Bidirectional pagination**: After jumping mid-history, `hasNewerMessages` enables forward pagination via `fetchNewerMessages`. The scroll-to-bottom button calls `jumpToBottom` (re-fetches latest page) instead of just scrolling.
 - **WS message suppression**: When `hasNewerMessages` is true, incoming WS messages for the active conversation are not added to the message list (the user is viewing historical context, not the latest page).
+
+## Web Push Notifications
+
+Web Push allows notifications even when the browser tab is closed. Requires HTTPS (self-signed OK).
+
+- **Service worker**: `frontend/public/sw.js` handles `push` events (show notification) and `notificationclick` (focus/open tab, navigate via `url_hash`). Registered in `main.tsx` on secure contexts only.
+- **`usePushSubscription` hook**: manages the full subscription lifecycle — subscribe (register SW → `PushManager.subscribe()` → POST to backend), unsubscribe, per-conversation filter management (`addConversation`/`removeConversation`), device listing and deletion.
+- **ChatHeader integration**: `BellRing` icon (amber when active) appears next to the existing desktop notification `Bell` on secure contexts. First click subscribes the browser and enables push for that conversation; subsequent clicks toggle the conversation on/off.
+- **Settings > Local**: `PushDeviceManagement` component shows subscription status, lists all registered devices with test/delete buttons. Uses `usePushSubscription` hook directly.
+- Auto-generates device labels from User-Agent (e.g., "Chrome on macOS").
+- `PushSubscriptionInfo` type in `types.ts`; API methods in `api.ts`.
 
 ## Styling
 

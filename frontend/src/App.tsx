@@ -22,6 +22,7 @@ import { toast } from './components/ui/sonner';
 import { AppShell } from './components/AppShell';
 import type { MessageInputHandle } from './components/MessageInput';
 import { DistanceUnitProvider } from './contexts/DistanceUnitContext';
+import { usePushSubscription } from './hooks/usePushSubscription';
 import { messageContainsMention } from './utils/messageParser';
 import { getStateKey } from './utils/conversationState';
 import type { BulkCreateHashtagChannelsResult, Conversation, Message, RawPacket } from './types';
@@ -99,6 +100,7 @@ export function App() {
     toggleConversationNotifications,
     notifyIncomingMessage,
   } = useBrowserNotifications();
+  const pushSubscription = usePushSubscription();
   const { rawPacketStatsSession, recordRawPacketObservation } = useRawPacketStatsSession();
   const {
     showNewMessage,
@@ -613,6 +615,29 @@ export function App() {
           activeConversation.id,
           activeConversation.name
         );
+      }
+    },
+    pushSupported: pushSubscription.isSupported,
+    pushSubscribed: pushSubscription.isSubscribed,
+    pushEnabledForConversation:
+      activeConversation?.type === 'contact' || activeConversation?.type === 'channel'
+        ? pushSubscription.isConversationPushEnabled(
+            getStateKey(activeConversation.type, activeConversation.id)
+          )
+        : false,
+    onTogglePush: () => {
+      if (
+        !activeConversation ||
+        (activeConversation.type !== 'contact' && activeConversation.type !== 'channel')
+      )
+        return;
+      const key = getStateKey(activeConversation.type, activeConversation.id);
+      if (!pushSubscription.isSubscribed) {
+        void pushSubscription.subscribe(key);
+      } else if (pushSubscription.isConversationPushEnabled(key)) {
+        void pushSubscription.removeConversation(key);
+      } else {
+        void pushSubscription.addConversation(key);
       }
     },
     trackedTelemetryRepeaters: appSettings?.tracked_telemetry_repeaters ?? [],

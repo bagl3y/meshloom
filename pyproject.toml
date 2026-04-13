@@ -16,6 +16,7 @@ dependencies = [
     "aiomqtt>=2.0",
     "apprise>=1.9.8",
     "boto3>=1.38.0",
+    "pywebpush>=0.14.0",
 ]
 
 [project.optional-dependencies]

@@ -510,6 +510,17 @@ export interface TelemetryHistoryEntry {
   data: Record<string, number> & { lpp_sensors?: TelemetryLppSensor[] };
 }
 
+export interface PushSubscriptionInfo {
+  id: string;
+  endpoint: string;
+  label: string;
+  filter_mode: 'all_messages' | 'all_dms' | 'selected';
+  filter_conversations: string[];
+  created_at: number;
+  last_success_at: number | null;
+  failure_count: number;
+}
+
 export interface TraceResponse {
   remote_snr: number | null;
   local_snr: number | null;
