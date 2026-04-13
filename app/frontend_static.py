@@ -148,6 +148,39 @@ def register_frontend_static_routes(app: FastAPI, frontend_dir: Path) -> bool:
                     "type": "image/png",
                     "purpose": "maskable",
                 },
+                {
+                    "src": f"{base}favicon.svg",
+                    "sizes": "any",
+                    "type": "image/svg+xml",
+                    "purpose": "any",
+                },
+                {
+                    "src": f"{base}favicon-256x256.png",
+                    "sizes": "256x256",
+                    "type": "image/png",
+                    "purpose": "any",
+                },
+            ],
+            "screenshots": [
+                {
+                    "src": f"{base}screenshot-wide.png",
+                    "sizes": "1367x909",
+                    "type": "image/png",
+                    "form_factor": "wide",
+                    "label": "RemoteTerm desktop view",
+                },
+                {
+                    "src": f"{base}screenshot-mobile.png",
+                    "sizes": "1170x2532",
+                    "type": "image/png",
+                    "label": "RemoteTerm mobile view",
+                },
+                {
+                    "src": f"{base}screenshot-mobile-2.png",
+                    "sizes": "750x1334",
+                    "type": "image/png",
+                    "label": "RemoteTerm mobile conversation",
+                },
             ],
         }
         return JSONResponse(
