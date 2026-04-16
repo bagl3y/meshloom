@@ -20,7 +20,11 @@ import type {
 } from '../types';
 import type { RawPacketStatsSessionState } from '../utils/rawPacketStats';
 import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM } from '../types';
-import { isPrefixOnlyContact, isUnknownFullKeyContact } from '../utils/pubkey';
+import {
+  getContactDisplayName,
+  isPrefixOnlyContact,
+  isUnknownFullKeyContact,
+} from '../utils/pubkey';
 
 const RepeaterDashboard = lazy(() =>
   import('./RepeaterDashboard').then((m) => ({ default: m.RepeaterDashboard }))
@@ -65,6 +69,7 @@ interface ConversationPaneProps {
     channelKey: string,
     pathHashModeOverride: number | null
   ) => Promise<void>;
+  onSelectConversation: (conversation: Conversation) => void;
   onOpenContactInfo: (publicKey: string, fromChannel?: boolean) => void;
   onOpenChannelInfo: (channelKey: string) => void;
   onSenderClick: (sender: string) => void;
@@ -137,6 +142,7 @@ export function ConversationPane({
   onDeleteChannel,
   onSetChannelFloodScopeOverride,
   onSetChannelPathHashModeOverride,
+  onSelectConversation,
   onOpenContactInfo,
   onOpenChannelInfo,
   onSenderClick,
@@ -197,6 +203,17 @@ export function ConversationPane({
               focusedKey={activeConversation.mapFocusKey}
               rawPackets={rawPackets}
               config={config}
+              onSelectContact={(contact) =>
+                onSelectConversation({
+                  type: 'contact',
+                  id: contact.public_key,
+                  name: getContactDisplayName(
+                    contact.name,
+                    contact.public_key,
+                    contact.last_advert
+                  ),
+                })
+              }
             />
           </Suspense>
         </div>

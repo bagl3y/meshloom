@@ -21,6 +21,9 @@ interface MapViewProps {
   focusedKey?: string | null;
   rawPackets?: RawPacket[];
   config?: RadioConfig | null;
+  /** When provided, the contact name in each popup becomes a clickable link
+   *  that opens the conversation for that contact (DM, repeater, or room). */
+  onSelectContact?: (contact: Contact) => void;
 }
 
 // --- Tile layer presets ---
@@ -379,7 +382,13 @@ function ParticleOverlay({ particles }: { particles: MapParticle[] }) {
 
 // --- Main component ---
 
-export function MapView({ contacts, focusedKey, rawPackets, config }: MapViewProps) {
+export function MapView({
+  contacts,
+  focusedKey,
+  rawPackets,
+  config,
+  onSelectContact,
+}: MapViewProps) {
   const [sevenDaysAgo] = useState(() => Date.now() / 1000 - 7 * 24 * 60 * 60);
   const [darkMap, setDarkMap] = useState(getSavedDarkMap);
   const tile = darkMap ? TILE_DARK : TILE_LIGHT;
@@ -839,7 +848,21 @@ export function MapView({ contacts, focusedKey, rawPackets, config }: MapViewPro
                             🛜
                           </span>
                         )}
-                        {displayName}
+                        {onSelectContact ? (
+                          <button
+                            type="button"
+                            className="p-0 bg-transparent border-0 font-inherit text-primary underline hover:text-primary/80 cursor-pointer"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onSelectContact(contact);
+                            }}
+                            title={`Open conversation with ${displayName}`}
+                          >
+                            {displayName}
+                          </button>
+                        ) : (
+                          displayName
+                        )}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">Last heard: {lastHeardLabel}</div>
                       <div className="text-xs text-gray-400 mt-1 font-mono">

@@ -145,6 +145,7 @@ function createProps(overrides: Partial<React.ComponentProps<typeof Conversation
     onDeleteContact: vi.fn(async () => {}),
     onDeleteChannel: vi.fn(async () => {}),
     onSetChannelFloodScopeOverride: vi.fn(async () => {}),
+    onSelectConversation: vi.fn(),
     onOpenContactInfo: vi.fn(),
     onOpenChannelInfo: vi.fn(),
     onSenderClick: vi.fn(),

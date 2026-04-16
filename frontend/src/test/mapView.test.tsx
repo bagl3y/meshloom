@@ -1,5 +1,5 @@
 import { forwardRef } from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { MapView } from '../components/MapView';
 import type { Contact } from '../types';
@@ -52,6 +52,68 @@ describe('MapView', () => {
       screen.getByText(/showing 1 contact heard in the last 7 days plus the focused contact/i)
     ).toBeInTheDocument();
     expect(screen.getByText('Last heard: Never heard by this server')).toBeInTheDocument();
+  });
+
+  it('invokes onSelectContact when the popup name is clicked', () => {
+    const contact: Contact = {
+      public_key: 'cc'.repeat(32),
+      name: 'Clickable',
+      type: 1,
+      flags: 0,
+      direct_path: null,
+      direct_path_len: -1,
+      direct_path_hash_mode: -1,
+      route_override_path: null,
+      route_override_len: null,
+      route_override_hash_mode: null,
+      last_advert: null,
+      lat: 42,
+      lon: -72,
+      last_seen: Math.floor(Date.now() / 1000),
+      on_radio: false,
+      favorite: false,
+      last_contacted: null,
+      last_read_at: null,
+      first_seen: null,
+    };
+    const onSelectContact = vi.fn();
+
+    render(<MapView contacts={[contact]} onSelectContact={onSelectContact} />);
+
+    const link = screen.getByRole('button', { name: 'Clickable' });
+    expect(link).toHaveAttribute('title', 'Open conversation with Clickable');
+    fireEvent.click(link);
+
+    expect(onSelectContact).toHaveBeenCalledWith(contact);
+  });
+
+  it('renders the popup name as plain text when no onSelectContact is provided', () => {
+    const contact: Contact = {
+      public_key: 'dd'.repeat(32),
+      name: 'Static',
+      type: 1,
+      flags: 0,
+      direct_path: null,
+      direct_path_len: -1,
+      direct_path_hash_mode: -1,
+      route_override_path: null,
+      route_override_len: null,
+      route_override_hash_mode: null,
+      last_advert: null,
+      lat: 42,
+      lon: -72,
+      last_seen: Math.floor(Date.now() / 1000),
+      on_radio: false,
+      favorite: false,
+      last_contacted: null,
+      last_read_at: null,
+      first_seen: null,
+    };
+
+    render(<MapView contacts={[contact]} />);
+
+    expect(screen.queryByRole('button', { name: /open conversation with static/i })).toBeNull();
+    expect(screen.getByText('Static')).toBeInTheDocument();
   });
 
   it('keeps the 7-day cutoff stable for the lifetime of the mounted map', () => {

@@ -588,6 +588,7 @@ export function App() {
     onDeleteChannel: handleDeleteChannel,
     onSetChannelFloodScopeOverride: handleSetChannelFloodScopeOverride,
     onSetChannelPathHashModeOverride: handleSetChannelPathHashModeOverride,
+    onSelectConversation: handleSelectConversationWithTargetReset,
     onOpenContactInfo: handleOpenContactInfo,
     onOpenChannelInfo: handleOpenChannelInfo,
     onSenderClick: handleSenderClick,
