@@ -1881,6 +1881,305 @@ class TestCollectRepeaterTelemetryLpp:
 
 
 # ---------------------------------------------------------------------------
+# _telemetry_collect_loop — UTC modulo scheduler
+# ---------------------------------------------------------------------------
+
+
+class TestTelemetryCollectSchedulerDecision:
+    """Verify the scheduler's run/skip decision at an hourly wake.
+
+    We test the decision logic by stubbing the sleep + datetime functions
+    and asserting ``_run_telemetry_cycle`` is called exactly on matching
+    hours. Full end-to-end of the loop is covered implicitly by the
+    existing telemetry-collect tests; what we're pinning here is the
+    hour-modulo gate the new scheduler depends on.
+    """
+
+    @pytest.mark.asyncio
+    async def test_skips_when_hour_modulo_mismatch(self):
+        """At 09:00 UTC with interval 8h, the loop must NOT run a cycle."""
+        from unittest.mock import AsyncMock, patch
+
+        from app import radio_sync
+        from app.models import AppSettings
+
+        settings = AppSettings(
+            tracked_telemetry_repeaters=["aa" * 32],
+            telemetry_interval_hours=8,
+        )
+        ran = False
+
+        async def fake_cycle():
+            nonlocal ran
+            ran = True
+
+        def make_fake_datetime(hour: int):
+            class FakeDatetime:
+                @classmethod
+                def now(cls, tz=None):
+                    import datetime as real_datetime
+
+                    return real_datetime.datetime(2026, 4, 16, hour, 0, 0, tzinfo=real_datetime.UTC)
+
+            return FakeDatetime
+
+        sleep_count = 0
+
+        async def fake_sleep(_duration):
+            # The loop does: (1) initial-delay sleep, (2) sleep-to-top-of-hour,
+            # then evaluates the run/skip decision. Allow both sleeps to
+            # pass, then cancel on the 3rd (next iteration's top-of-hour sleep).
+            nonlocal sleep_count
+            sleep_count += 1
+            if sleep_count >= 3:
+                raise asyncio.CancelledError()
+
+        with (
+            patch(
+                "app.radio_sync.AppSettingsRepository.get",
+                new_callable=AsyncMock,
+                return_value=settings,
+            ),
+            patch("app.radio_sync._run_telemetry_cycle", new=fake_cycle),
+            patch("app.radio_sync.asyncio.sleep", new=fake_sleep),
+            patch("app.radio_sync.datetime", new=make_fake_datetime(9)),
+        ):
+            try:
+                await radio_sync._telemetry_collect_loop()
+            except asyncio.CancelledError:
+                pass
+
+        assert ran is False, "09:00 UTC is not a multiple of 8h; cycle must not run"
+
+    @pytest.mark.asyncio
+    async def test_runs_when_hour_modulo_matches(self):
+        """At 16:00 UTC with interval 8h, the loop must run a cycle."""
+        from unittest.mock import AsyncMock, patch
+
+        from app import radio_sync
+        from app.models import AppSettings
+
+        settings = AppSettings(
+            tracked_telemetry_repeaters=["aa" * 32],
+            telemetry_interval_hours=8,
+        )
+        ran = False
+
+        async def fake_cycle():
+            nonlocal ran
+            ran = True
+
+        class FakeDatetime:
+            @classmethod
+            def now(cls, tz=None):
+                import datetime as real_datetime
+
+                return real_datetime.datetime(2026, 4, 16, 16, 0, 0, tzinfo=real_datetime.UTC)
+
+        sleep_count = 0
+
+        async def fake_sleep(_duration):
+            # Let the loop's initial-delay + top-of-hour sleeps pass; cancel
+            # on the third sleep (next iteration's top-of-hour wake).
+            nonlocal sleep_count
+            sleep_count += 1
+            if sleep_count >= 3:
+                raise asyncio.CancelledError()
+
+        with (
+            patch(
+                "app.radio_sync.AppSettingsRepository.get",
+                new_callable=AsyncMock,
+                return_value=settings,
+            ),
+            patch("app.radio_sync._run_telemetry_cycle", new=fake_cycle),
+            patch("app.radio_sync.asyncio.sleep", new=fake_sleep),
+            patch("app.radio_sync.datetime", new=FakeDatetime),
+        ):
+            try:
+                await radio_sync._telemetry_collect_loop()
+            except asyncio.CancelledError:
+                pass
+
+        assert ran is True, "16:00 UTC is a multiple of 8h; cycle must run"
+
+    @pytest.mark.asyncio
+    async def test_skips_when_no_repeaters_tracked(self):
+        """Empty tracked list short-circuits regardless of modulo match."""
+        from unittest.mock import AsyncMock, patch
+
+        from app import radio_sync
+        from app.models import AppSettings
+
+        settings = AppSettings(tracked_telemetry_repeaters=[], telemetry_interval_hours=8)
+        ran = False
+
+        async def fake_cycle():
+            nonlocal ran
+            ran = True
+
+        class FakeDatetime:
+            @classmethod
+            def now(cls, tz=None):
+                import datetime as real_datetime
+
+                return real_datetime.datetime(2026, 4, 16, 16, 0, 0, tzinfo=real_datetime.UTC)
+
+        sleep_count = 0
+
+        async def fake_sleep(_duration):
+            # Let the loop's initial-delay + top-of-hour sleeps pass; cancel
+            # on the third sleep (next iteration's top-of-hour wake).
+            nonlocal sleep_count
+            sleep_count += 1
+            if sleep_count >= 3:
+                raise asyncio.CancelledError()
+
+        with (
+            patch(
+                "app.radio_sync.AppSettingsRepository.get",
+                new_callable=AsyncMock,
+                return_value=settings,
+            ),
+            patch("app.radio_sync._run_telemetry_cycle", new=fake_cycle),
+            patch("app.radio_sync.asyncio.sleep", new=fake_sleep),
+            patch("app.radio_sync.datetime", new=FakeDatetime),
+        ):
+            try:
+                await radio_sync._telemetry_collect_loop()
+            except asyncio.CancelledError:
+                pass
+
+        assert ran is False, "No tracked repeaters: no cycle regardless of hour"
+
+    @pytest.mark.asyncio
+    async def test_runs_on_boundary_immediately_after_initial_delay(self):
+        """Regression test: if the post-boot initial delay finishes inside a
+        matching hour, the cycle must run even if the first
+        sleep-to-next-top-of-hour would otherwise carry us past the boundary.
+
+        Scenario: server starts at 23:59:30 UTC with a 24-hour interval. The
+        60-second boot guard pushes the first check into 00:00:30 — a matching
+        hour that we must NOT skip. Before the fix, the loop went straight to
+        sleeping until 01:00 and then failing the modulo, missing the entire
+        day's only scheduled collection.
+        """
+        from unittest.mock import AsyncMock, patch
+
+        from app import radio_sync
+        from app.models import AppSettings
+
+        settings = AppSettings(
+            tracked_telemetry_repeaters=["aa" * 32],
+            telemetry_interval_hours=24,  # daily cadence; only matching hour is 00
+        )
+        ran = False
+
+        async def fake_cycle():
+            nonlocal ran
+            ran = True
+
+        class FakeDatetime:
+            @classmethod
+            def now(cls, tz=None):
+                import datetime as real_datetime
+
+                # Simulates "initial delay just ended at 00:00:30 UTC on a
+                # restart that began at 23:59:30." Without the post-boot
+                # boundary check, the loop would have skipped this.
+                return real_datetime.datetime(2026, 4, 16, 0, 0, 30, tzinfo=real_datetime.UTC)
+
+        sleep_count = 0
+
+        async def fake_sleep(_duration):
+            # Let the initial delay pass, then cancel before the first
+            # top-of-hour sleep so we isolate the post-boot check as the
+            # only opportunity to run.
+            nonlocal sleep_count
+            sleep_count += 1
+            if sleep_count >= 2:
+                raise asyncio.CancelledError()
+
+        with (
+            patch(
+                "app.radio_sync.AppSettingsRepository.get",
+                new_callable=AsyncMock,
+                return_value=settings,
+            ),
+            patch("app.radio_sync._run_telemetry_cycle", new=fake_cycle),
+            patch("app.radio_sync.asyncio.sleep", new=fake_sleep),
+            patch("app.radio_sync.datetime", new=FakeDatetime),
+        ):
+            try:
+                await radio_sync._telemetry_collect_loop()
+            except asyncio.CancelledError:
+                pass
+
+        assert ran is True, (
+            "Post-boot check must fire the due 00:00 cycle; otherwise a "
+            "restart near midnight suppresses the whole day's collection."
+        )
+
+    @pytest.mark.asyncio
+    async def test_clamps_up_when_preferred_illegal_for_current_count(self):
+        """5 tracked repeaters with saved pref 1h: scheduler should use 6h.
+
+        At 02:00 UTC: 2 % 6 == 2 (not a run), so cycle must not fire.
+        If clamping were skipped, 2 % 1 == 0 and cycle would incorrectly run.
+        """
+        from unittest.mock import AsyncMock, patch
+
+        from app import radio_sync
+        from app.models import AppSettings
+
+        settings = AppSettings(
+            tracked_telemetry_repeaters=["aa" * 32] * 5,
+            telemetry_interval_hours=1,  # illegal at N=5; shortest legal is 6h
+        )
+        ran = False
+
+        async def fake_cycle():
+            nonlocal ran
+            ran = True
+
+        class FakeDatetime:
+            @classmethod
+            def now(cls, tz=None):
+                import datetime as real_datetime
+
+                return real_datetime.datetime(2026, 4, 16, 2, 0, 0, tzinfo=real_datetime.UTC)
+
+        sleep_count = 0
+
+        async def fake_sleep(_duration):
+            # Let the loop's initial-delay + top-of-hour sleeps pass; cancel
+            # on the third sleep (next iteration's top-of-hour wake).
+            nonlocal sleep_count
+            sleep_count += 1
+            if sleep_count >= 3:
+                raise asyncio.CancelledError()
+
+        with (
+            patch(
+                "app.radio_sync.AppSettingsRepository.get",
+                new_callable=AsyncMock,
+                return_value=settings,
+            ),
+            patch("app.radio_sync._run_telemetry_cycle", new=fake_cycle),
+            patch("app.radio_sync.asyncio.sleep", new=fake_sleep),
+            patch("app.radio_sync.datetime", new=FakeDatetime),
+        ):
+            try:
+                await radio_sync._telemetry_collect_loop()
+            except asyncio.CancelledError:
+                pass
+
+        assert ran is False, (
+            "Clamping to 6h must prevent the 02:00 run that 1h cadence would've triggered"
+        )
+
+
+# ---------------------------------------------------------------------------
 # get_contacts_selected_for_radio_sync — DM-active prioritization
 # ---------------------------------------------------------------------------
 

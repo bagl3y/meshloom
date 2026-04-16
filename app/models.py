@@ -842,6 +842,14 @@ class AppSettings(BaseModel):
         default_factory=list,
         description="Public keys of repeaters opted into periodic telemetry collection (max 8)",
     )
+    telemetry_interval_hours: int = Field(
+        default=8,
+        description=(
+            "User-preferred telemetry collection interval in hours. The backend "
+            "clamps this up to the shortest legal interval given the number of "
+            "tracked repeaters so daily checks stay under a 24/day ceiling."
+        ),
+    )
     auto_resend_channel: bool = Field(
         default=False,
         description=(

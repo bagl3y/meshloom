@@ -15,6 +15,7 @@ import type {
   Contact,
   HealthStatus,
   TelemetryHistoryEntry,
+  TelemetrySchedule,
 } from '../../types';
 
 export function SettingsDatabaseSection({
@@ -54,18 +55,44 @@ export function SettingsDatabaseSection({
   const [discoveryBlockedTypes, setDiscoveryBlockedTypes] = useState<number[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const [latestTelemetry, setLatestTelemetry] = useState<
     Record<string, TelemetryHistoryEntry | null>
   >({});
   const telemetryFetchedRef = useRef(false);
 
+  const [schedule, setSchedule] = useState<TelemetrySchedule | null>(null);
+  const [intervalDraft, setIntervalDraft] = useState<number>(appSettings.telemetry_interval_hours);
+
+  // Serialization chain for every auto-persisted control on this page.
+  // Without this, rapid successive toggles (or mixed dropdown + checkbox
+  // interactions) can dispatch overlapping PATCHes that land out of order
+  // on HTTP/2 — a stale write then wins, reverting the user's last click.
+  // Each call awaits the previous one before sending its request, so the
+  // server sees updates in the order the user made them.
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+
   useEffect(() => {
     setAutoDecryptOnAdvert(appSettings.auto_decrypt_dm_on_advert);
     setDiscoveryBlockedTypes(appSettings.discovery_blocked_types ?? []);
+    setIntervalDraft(appSettings.telemetry_interval_hours);
   }, [appSettings]);
+
+  // Re-fetch the scheduler derivation whenever the tracked list changes or
+  // the stored preference changes. Cheap: single GET, no radio lock.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getTelemetrySchedule()
+      .then((s) => {
+        if (!cancelled) setSchedule(s);
+      })
+      .catch(() => {
+        // Non-critical: dropdown falls back to the unfiltered menu.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trackedTelemetryRepeaters.length, appSettings.telemetry_interval_hours]);
 
   useEffect(() => {
     if (trackedTelemetryRepeaters.length === 0 || telemetryFetchedRef.current) return;
@@ -132,28 +159,26 @@ export function SettingsDatabaseSection({
     }
   };
 
-  const handleSave = async () => {
-    setBusy(true);
-    setError(null);
-
-    try {
-      const update: AppSettingsUpdate = { auto_decrypt_dm_on_advert: autoDecryptOnAdvert };
-      const currentBlocked = appSettings.discovery_blocked_types ?? [];
-      if (
-        discoveryBlockedTypes.length !== currentBlocked.length ||
-        discoveryBlockedTypes.some((t) => !currentBlocked.includes(t))
-      ) {
-        update.discovery_blocked_types = discoveryBlockedTypes;
+  /**
+   * Apply an AppSettings PATCH after any already-queued saves finish, and
+   * revert local state if the save fails. Every auto-persist control on
+   * this page routes through here so the user-visible order of clicks is
+   * the order the backend sees, regardless of network reordering.
+   */
+  const persistAppSettings = (update: AppSettingsUpdate, revert: () => void): Promise<void> => {
+    const chained = saveChainRef.current.then(async () => {
+      try {
+        await onSaveAppSettings(update);
+      } catch (err) {
+        console.error('Failed to save database settings:', err);
+        revert();
+        toast.error('Failed to save setting', {
+          description: err instanceof Error ? err.message : 'Unknown error',
+        });
       }
-      await onSaveAppSettings(update);
-      toast.success('Database settings saved');
-    } catch (err) {
-      console.error('Failed to save database settings:', err);
-      setError(err instanceof Error ? err.message : 'Failed to save');
-      toast.error('Failed to save settings');
-    } finally {
-      setBusy(false);
-    }
+    });
+    saveChainRef.current = chained;
+    return chained;
   };
 
   return (
@@ -249,7 +274,14 @@ export function SettingsDatabaseSection({
           <input
             type="checkbox"
             checked={autoDecryptOnAdvert}
-            onChange={(e) => setAutoDecryptOnAdvert(e.target.checked)}
+            onChange={(e) => {
+              const next = e.target.checked;
+              const prev = autoDecryptOnAdvert;
+              setAutoDecryptOnAdvert(next);
+              void persistAppSettings({ auto_decrypt_dm_on_advert: next }, () =>
+                setAutoDecryptOnAdvert(prev)
+              );
+            }}
             className="w-4 h-4 rounded border-input accent-primary"
           />
           <span className="text-sm">Auto-decrypt historical DMs when new contact advertises</span>
@@ -266,9 +298,60 @@ export function SettingsDatabaseSection({
       <div className="space-y-3">
         <Label className="text-base">Tracked Repeater Telemetry</Label>
         <p className="text-xs text-muted-foreground">
-          Repeaters opted into automatic telemetry collection are polled every 8 hours. Up to 8
-          repeaters may be tracked at a time ({trackedTelemetryRepeaters.length} / 8 slots used).
+          Repeaters opted into automatic telemetry collection are polled on a scheduled interval. To
+          limit mesh traffic, the app caps telemetry at 24 checks per day across all tracked
+          repeaters — so fewer tracked repeaters allows shorter intervals, and more tracked
+          repeaters forces longer ones. Up to {schedule?.max_tracked ?? 8} repeaters may be tracked
+          at once ({trackedTelemetryRepeaters.length} / {schedule?.max_tracked ?? 8} slots used).
         </p>
+
+        {/* Interval picker. Legal options depend on current tracked count;
+            we list only those. If the saved preference is no longer legal,
+            the effective interval is shown below so the user knows what the
+            scheduler is actually using. */}
+        <div className="space-y-1.5">
+          <Label htmlFor="telemetry-interval" className="text-sm">
+            Collection interval
+          </Label>
+          <div className="flex items-center gap-2">
+            <select
+              id="telemetry-interval"
+              value={intervalDraft}
+              onChange={(e) => {
+                const nextValue = Number(e.target.value);
+                if (!Number.isFinite(nextValue) || nextValue === intervalDraft) return;
+                const prevValue = intervalDraft;
+                setIntervalDraft(nextValue);
+                void persistAppSettings({ telemetry_interval_hours: nextValue }, () =>
+                  setIntervalDraft(prevValue)
+                );
+              }}
+              className="h-9 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              {(schedule?.options ?? [1, 2, 3, 4, 6, 8, 12, 24]).map((hrs) => (
+                <option key={hrs} value={hrs}>
+                  Every {hrs} hour{hrs === 1 ? '' : 's'} ({Math.floor(24 / hrs)} check
+                  {Math.floor(24 / hrs) === 1 ? '' : 's'}/day)
+                </option>
+              ))}
+            </select>
+          </div>
+          {schedule && schedule.effective_hours !== schedule.preferred_hours && (
+            <p className="text-xs text-warning">
+              Saved preference is {schedule.preferred_hours} hour
+              {schedule.preferred_hours === 1 ? '' : 's'}, but the scheduler is using{' '}
+              {schedule.effective_hours} hours because {schedule.tracked_count} repeater
+              {schedule.tracked_count === 1 ? '' : 's'}{' '}
+              {schedule.tracked_count === 1 ? 'is' : 'are'} tracked. Your preference will be
+              restored if you drop back to a supported count.
+            </p>
+          )}
+          {schedule?.next_run_at != null && (
+            <p className="text-xs text-muted-foreground">
+              Next run at {formatTime(schedule.next_run_at)} (UTC top of hour).
+            </p>
+          )}
+        </div>
 
         {trackedTelemetryRepeaters.length === 0 ? (
           <p className="text-sm text-muted-foreground italic">
@@ -341,16 +424,6 @@ export function SettingsDatabaseSection({
         )}
       </div>
 
-      {error && (
-        <div className="text-sm text-destructive" role="alert">
-          {error}
-        </div>
-      )}
-
-      <Button onClick={handleSave} disabled={busy} className="w-full">
-        {busy ? 'Saving...' : 'Save Settings'}
-      </Button>
-
       <Separator />
 
       {/* ── Contact Management ── */}
@@ -380,11 +453,14 @@ export function SettingsDatabaseSection({
                 <input
                   type="checkbox"
                   checked={checked}
-                  onChange={() =>
-                    setDiscoveryBlockedTypes((prev) =>
-                      checked ? prev.filter((t) => t !== typeCode) : [...prev, typeCode]
-                    )
-                  }
+                  onChange={() => {
+                    const prev = discoveryBlockedTypes;
+                    const next = checked ? prev.filter((t) => t !== typeCode) : [...prev, typeCode];
+                    setDiscoveryBlockedTypes(next);
+                    void persistAppSettings({ discovery_blocked_types: next }, () =>
+                      setDiscoveryBlockedTypes(prev)
+                    );
+                  }}
                   className="rounded border-input"
                 />
                 {label}

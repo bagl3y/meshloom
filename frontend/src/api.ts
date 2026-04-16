@@ -33,6 +33,7 @@ import type {
   RepeaterRadioSettingsResponse,
   RepeaterStatusResponse,
   TelemetryHistoryEntry,
+  TelemetrySchedule,
   TrackedTelemetryResponse,
   StatisticsResponse,
   TraceResponse,
@@ -331,6 +332,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ public_key: publicKey }),
     }),
+
+  getTelemetrySchedule: () => fetchJson<TelemetrySchedule>('/settings/tracked-telemetry/schedule'),
 
   // Favorites
   toggleFavorite: (type: 'channel' | 'contact', id: string) =>

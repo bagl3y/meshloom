@@ -11,6 +11,7 @@ from app.routers.settings import (
     AppSettingsUpdate,
     FavoriteRequest,
     TrackedTelemetryRequest,
+    get_telemetry_schedule,
     toggle_favorite,
     toggle_tracked_telemetry,
     update_settings,
@@ -244,3 +245,88 @@ class TestToggleTrackedTelemetry:
         result = await toggle_tracked_telemetry(TrackedTelemetryRequest(public_key=keys[0]))
         assert keys[0] not in result.tracked_telemetry_repeaters
         assert len(result.tracked_telemetry_repeaters) == 7
+
+    @pytest.mark.asyncio
+    async def test_toggle_response_includes_schedule(self, test_db):
+        """After toggle, response must carry the schedule derivation so the UI
+        can update the interval dropdown without a follow-up fetch."""
+        key = "aa" * 32
+        await self._create_repeater(key)
+
+        result = await toggle_tracked_telemetry(TrackedTelemetryRequest(public_key=key))
+
+        assert result.schedule.tracked_count == 1
+        # N=1 unlocks the full menu including 1h
+        assert 1 in result.schedule.options
+        assert result.schedule.max_tracked == 8
+
+
+class TestTelemetryIntervalValidation:
+    """PATCH /settings validation for telemetry_interval_hours."""
+
+    @pytest.mark.asyncio
+    async def test_accepts_valid_interval(self, test_db):
+        result = await update_settings(AppSettingsUpdate(telemetry_interval_hours=4))
+        assert result.telemetry_interval_hours == 4
+
+    @pytest.mark.asyncio
+    async def test_invalid_interval_falls_back_to_default(self, test_db):
+        """Non-menu values are defaulted rather than 400-ing to keep stale
+        clients from getting stuck on a save error."""
+        result = await update_settings(AppSettingsUpdate(telemetry_interval_hours=99))
+        assert result.telemetry_interval_hours == 8  # DEFAULT_TELEMETRY_INTERVAL_HOURS
+
+    @pytest.mark.asyncio
+    async def test_preference_is_preserved_even_when_illegal_for_count(self, test_db):
+        """User picks 1h at N=5 tracked: stored pref must stay 1h. Scheduler
+        handles the clamping at run time; storage is verbatim."""
+        # Seed 5 tracked repeaters
+        keys = [f"{i:02x}" * 32 for i in range(5)]
+        for k in keys:
+            await ContactRepository.upsert(
+                ContactUpsert(public_key=k, name=f"R{k[:4]}", type=CONTACT_TYPE_REPEATER)
+            )
+        await AppSettingsRepository.update(tracked_telemetry_repeaters=keys)
+
+        result = await update_settings(AppSettingsUpdate(telemetry_interval_hours=1))
+        assert result.telemetry_interval_hours == 1
+
+        # But the GET schedule endpoint should report the clamped effective value.
+        schedule = await get_telemetry_schedule()
+        assert schedule.preferred_hours == 1
+        assert schedule.effective_hours == 6  # N=5 -> shortest legal = 6h
+
+
+class TestTelemetryScheduleEndpoint:
+    """GET /settings/tracked-telemetry/schedule."""
+
+    @pytest.mark.asyncio
+    async def test_schedule_with_no_tracked_repeaters(self, test_db):
+        """No tracked repeaters means nothing to schedule; next_run_at is None.
+
+        At N=0 the clamp helper returns the default 8h, which is a fine
+        display value for an empty state. Options start at 8h for the same
+        reason — any lower shortest-legal only makes sense once the user
+        has at least one repeater tracked.
+        """
+        schedule = await get_telemetry_schedule()
+
+        assert schedule.tracked_count == 0
+        assert schedule.next_run_at is None
+        # At N=0 shortest-legal defaults to 8h.
+        assert schedule.options == [8, 12, 24]
+
+    @pytest.mark.asyncio
+    async def test_schedule_filters_options_by_tracked_count(self, test_db):
+        keys = [f"{i:02x}" * 32 for i in range(5)]
+        for k in keys:
+            await ContactRepository.upsert(
+                ContactUpsert(public_key=k, name=f"R{k[:4]}", type=CONTACT_TYPE_REPEATER)
+            )
+        await AppSettingsRepository.update(tracked_telemetry_repeaters=keys)
+
+        schedule = await get_telemetry_schedule()
+
+        assert schedule.tracked_count == 5
+        assert schedule.options == [6, 8, 12, 24]
+        assert schedule.next_run_at is not None

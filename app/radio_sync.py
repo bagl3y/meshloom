@@ -14,6 +14,7 @@ import logging
 import math
 import time
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from meshcore import EventType, MeshCore
@@ -36,6 +37,7 @@ from app.services.contact_reconciliation import (
 )
 from app.services.messages import create_fallback_channel_message
 from app.services.radio_runtime import radio_runtime as radio_manager
+from app.telemetry_interval import clamp_telemetry_interval
 from app.websocket import broadcast_error, broadcast_event
 
 logger = logging.getLogger(__name__)
@@ -159,10 +161,10 @@ MIN_ADVERT_INTERVAL = 3600
 # Periodic telemetry collection task handle
 _telemetry_collect_task: asyncio.Task | None = None
 
-# Telemetry collection interval (8 hours)
-TELEMETRY_COLLECT_INTERVAL = 8 * 3600
-
-# Initial delay before the first telemetry collection cycle (let radio settle)
+# Initial delay before the scheduler starts (let radio settle). After this,
+# the loop wakes at each UTC top-of-hour and decides whether to run a cycle
+# based on the user's telemetry_interval_hours preference, clamped up to
+# the shortest-legal interval for the current tracked-repeater count.
 TELEMETRY_COLLECT_INITIAL_DELAY = 60
 
 # Counter to pause polling during repeater operations (supports nested pauses)
@@ -1656,62 +1658,122 @@ async def _collect_repeater_telemetry(mc: MeshCore, contact: Contact) -> bool:
         return False
 
 
+async def _run_telemetry_cycle() -> None:
+    """Collect one telemetry sample from every tracked repeater."""
+    if not radio_manager.is_connected:
+        logger.debug("Telemetry collect: radio not connected, skipping cycle")
+        return
+
+    app_settings = await AppSettingsRepository.get()
+    tracked = app_settings.tracked_telemetry_repeaters
+    if not tracked:
+        return
+
+    logger.info("Telemetry collect: starting cycle for %d repeater(s)", len(tracked))
+    collected = 0
+
+    for pub_key in tracked:
+        contact = await ContactRepository.get_by_key(pub_key)
+        if not contact or contact.type != 2:
+            logger.debug(
+                "Telemetry collect: skipping %s (not found or not repeater)",
+                pub_key[:12],
+            )
+            continue
+
+        try:
+            async with radio_manager.radio_operation(
+                "telemetry_collect",
+                blocking=False,
+                suspend_auto_fetch=True,
+            ) as mc:
+                if await _collect_repeater_telemetry(mc, contact):
+                    collected += 1
+        except RadioOperationBusyError:
+            logger.debug(
+                "Telemetry collect: radio busy, skipping %s",
+                pub_key[:12],
+            )
+
+    logger.info(
+        "Telemetry collect: cycle complete, %d/%d successful",
+        collected,
+        len(tracked),
+    )
+
+
+async def _sleep_until_next_utc_top_of_hour() -> None:
+    """Sleep until the next UTC top-of-hour (or a minimum of 1 second)."""
+    now = datetime.now(UTC)
+    next_top = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    delay = (next_top - now).total_seconds()
+    if delay < 1:
+        delay = 1
+    await asyncio.sleep(delay)
+
+
+async def _maybe_run_scheduled_cycle(now: datetime) -> None:
+    """Evaluate the modulo gate for the given UTC time and run a cycle if due.
+
+    Factored out of the loop so we can also invoke it immediately after the
+    post-boot initial delay — otherwise a restart within the initial-delay
+    window before a scheduled boundary would carry the task past that boundary
+    and skip a due cycle (for 24h cadence users, that's a full day of missed
+    telemetry).
+    """
+    app_settings = await AppSettingsRepository.get()
+    tracked_count = len(app_settings.tracked_telemetry_repeaters)
+    if tracked_count == 0:
+        return
+    effective_hours = clamp_telemetry_interval(app_settings.telemetry_interval_hours, tracked_count)
+    if effective_hours <= 0:
+        return
+    if now.hour % effective_hours != 0:
+        return
+    await _run_telemetry_cycle()
+
+
 async def _telemetry_collect_loop() -> None:
-    """Background task that collects telemetry from tracked repeaters every 8 hours.
+    """Background task that runs tracked-repeater telemetry collection.
 
-    Runs a first cycle after a short initial delay (so newly tracked repeaters
-    get a sample promptly), then sleeps the full interval between subsequent cycles.
+    After an initial post-boot delay we evaluate the modulo gate once
+    (covers the edge case where the initial delay crossed a scheduled
+    boundary on restart). Then we wake at every UTC top-of-hour and
+    evaluate the gate again. A cycle runs only when
+    ``current_utc_hour % effective_interval_hours == 0``, where the
+    effective interval is the user preference clamped up to the shortest
+    legal interval for the current tracked-repeater count. This keeps the
+    total daily check count bounded at ``DAILY_CHECK_CEILING`` (24).
 
-    Acquires the radio lock per-repeater (non-blocking) so manual operations can
+    The loop never updates the stored user preference. If the user picks a
+    short interval and then adds repeaters that make it illegal, they keep
+    their pick stored and we silently use the clamped value until they drop
+    repeaters.
+
+    Radio lock is acquired per-repeater (non-blocking) so manual ops can
     interleave. Failures are logged and skipped.
     """
-    first_run = True
+    try:
+        await asyncio.sleep(TELEMETRY_COLLECT_INITIAL_DELAY)
+    except asyncio.CancelledError:
+        logger.info("Telemetry collect task cancelled before initial delay")
+        return
+
+    # Post-boot boundary check: if the delay carried us into a matching hour
+    # (or we booted exactly at a matching hour), run now rather than waiting
+    # another full cycle.
+    try:
+        await _maybe_run_scheduled_cycle(datetime.now(UTC))
+    except asyncio.CancelledError:
+        logger.info("Telemetry collect task cancelled after initial delay")
+        return
+    except Exception as e:
+        logger.error("Error in post-boot telemetry check: %s", e, exc_info=True)
+
     while True:
         try:
-            delay = TELEMETRY_COLLECT_INITIAL_DELAY if first_run else TELEMETRY_COLLECT_INTERVAL
-            await asyncio.sleep(delay)
-            first_run = False
-
-            if not radio_manager.is_connected:
-                logger.debug("Telemetry collect: radio not connected, skipping cycle")
-                continue
-
-            app_settings = await AppSettingsRepository.get()
-            tracked = app_settings.tracked_telemetry_repeaters
-            if not tracked:
-                continue
-
-            logger.info("Telemetry collect: starting cycle for %d repeater(s)", len(tracked))
-            collected = 0
-
-            for pub_key in tracked:
-                contact = await ContactRepository.get_by_key(pub_key)
-                if not contact or contact.type != 2:
-                    logger.debug(
-                        "Telemetry collect: skipping %s (not found or not repeater)",
-                        pub_key[:12],
-                    )
-                    continue
-
-                try:
-                    async with radio_manager.radio_operation(
-                        "telemetry_collect",
-                        blocking=False,
-                        suspend_auto_fetch=True,
-                    ) as mc:
-                        if await _collect_repeater_telemetry(mc, contact):
-                            collected += 1
-                except RadioOperationBusyError:
-                    logger.debug(
-                        "Telemetry collect: radio busy, skipping %s",
-                        pub_key[:12],
-                    )
-
-            logger.info(
-                "Telemetry collect: cycle complete, %d/%d successful",
-                collected,
-                len(tracked),
-            )
+            await _sleep_until_next_utc_top_of_hour()
+            await _maybe_run_scheduled_cycle(datetime.now(UTC))
 
         except asyncio.CancelledError:
             logger.info("Telemetry collect task cancelled")
@@ -1725,10 +1787,7 @@ def start_telemetry_collect() -> None:
     global _telemetry_collect_task
     if _telemetry_collect_task is None or _telemetry_collect_task.done():
         _telemetry_collect_task = asyncio.create_task(_telemetry_collect_loop())
-        logger.info(
-            "Started periodic telemetry collection (interval: %ds)",
-            TELEMETRY_COLLECT_INTERVAL,
-        )
+        logger.info("Started periodic telemetry collection (UTC-hourly scheduler)")
 
 
 async def stop_telemetry_collect() -> None:

@@ -6,6 +6,7 @@ from typing import Any
 from app.database import db
 from app.models import AppSettings
 from app.path_utils import bucket_path_hash_widths
+from app.telemetry_interval import DEFAULT_TELEMETRY_INTERVAL_HOURS
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,8 @@ class AppSettingsRepository:
                    last_message_times,
                    advert_interval, last_advert_time, flood_scope,
                    blocked_keys, blocked_names, discovery_blocked_types,
-                   tracked_telemetry_repeaters, auto_resend_channel
+                   tracked_telemetry_repeaters, auto_resend_channel,
+                   telemetry_interval_hours
             FROM app_settings WHERE id = 1
             """
         )
@@ -91,6 +93,16 @@ class AppSettingsRepository:
         except (KeyError, TypeError):
             auto_resend_channel = False
 
+        # Parse telemetry_interval_hours (migration adds the column with
+        # default=8, but guard against older rows / partial migrations).
+        try:
+            raw_interval = row["telemetry_interval_hours"]
+            telemetry_interval_hours = (
+                int(raw_interval) if raw_interval is not None else DEFAULT_TELEMETRY_INTERVAL_HOURS
+            )
+        except (KeyError, TypeError, ValueError):
+            telemetry_interval_hours = DEFAULT_TELEMETRY_INTERVAL_HOURS
+
         return AppSettings(
             max_radio_contacts=row["max_radio_contacts"],
             auto_decrypt_dm_on_advert=bool(row["auto_decrypt_dm_on_advert"]),
@@ -103,6 +115,7 @@ class AppSettingsRepository:
             discovery_blocked_types=discovery_blocked_types,
             tracked_telemetry_repeaters=tracked_telemetry_repeaters,
             auto_resend_channel=auto_resend_channel,
+            telemetry_interval_hours=telemetry_interval_hours,
         )
 
     @staticmethod
@@ -118,6 +131,7 @@ class AppSettingsRepository:
         discovery_blocked_types: list[int] | None = None,
         tracked_telemetry_repeaters: list[str] | None = None,
         auto_resend_channel: bool | None = None,
+        telemetry_interval_hours: int | None = None,
     ) -> AppSettings:
         """Update app settings. Only provided fields are updated."""
         updates = []
@@ -166,6 +180,10 @@ class AppSettingsRepository:
         if auto_resend_channel is not None:
             updates.append("auto_resend_channel = ?")
             params.append(1 if auto_resend_channel else 0)
+
+        if telemetry_interval_hours is not None:
+            updates.append("telemetry_interval_hours = ?")
+            params.append(telemetry_interval_hours)
 
         if updates:
             query = f"UPDATE app_settings SET {', '.join(updates)} WHERE id = 1"

@@ -8,6 +8,13 @@ from pydantic import BaseModel, Field
 from app.models import CONTACT_TYPE_REPEATER, AppSettings
 from app.region_scope import normalize_region_scope
 from app.repository import AppSettingsRepository, ChannelRepository, ContactRepository
+from app.telemetry_interval import (
+    DEFAULT_TELEMETRY_INTERVAL_HOURS,
+    TELEMETRY_INTERVAL_OPTIONS_HOURS,
+    clamp_telemetry_interval,
+    legal_interval_options,
+    next_run_timestamp_utc,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -57,6 +64,15 @@ class AppSettingsUpdate(BaseModel):
         default=None,
         description="Auto-resend channel messages once if no echo heard within 2 seconds",
     )
+    telemetry_interval_hours: int | None = Field(
+        default=None,
+        description=(
+            "Preferred tracked-repeater telemetry interval in hours. "
+            f"Must be one of {list(TELEMETRY_INTERVAL_OPTIONS_HOURS)}. "
+            "Effective interval is clamped up to the shortest legal value "
+            "based on the current tracked-repeater count."
+        ),
+    )
 
 
 class BlockKeyRequest(BaseModel):
@@ -82,12 +98,53 @@ class TrackedTelemetryRequest(BaseModel):
     public_key: str = Field(description="Public key of the repeater to toggle tracking")
 
 
+class TelemetrySchedule(BaseModel):
+    """Surface of telemetry scheduling derivations for the UI.
+
+    ``preferred_hours`` is the stored user choice. ``effective_hours`` is the
+    value the scheduler actually uses (preferred, clamped up to the shortest
+    legal interval given the current tracked-repeater count). ``options``
+    lists the subset of the menu that is legal at the current count; the UI
+    should hide anything not in this list. ``next_run_at`` is the Unix
+    timestamp (seconds, UTC) of the next scheduled cycle, or ``None`` when
+    no repeaters are tracked (nothing to schedule).
+    """
+
+    preferred_hours: int = Field(description="User's saved telemetry interval preference")
+    effective_hours: int = Field(description="Scheduler's clamped interval")
+    options: list[int] = Field(description="Legal interval choices at the current count")
+    tracked_count: int = Field(description="Number of repeaters currently tracked")
+    max_tracked: int = Field(description="Maximum number of repeaters that can be tracked")
+    next_run_at: int | None = Field(
+        default=None,
+        description="Unix timestamp (UTC seconds) of the next scheduled cycle",
+    )
+
+
 class TrackedTelemetryResponse(BaseModel):
     tracked_telemetry_repeaters: list[str] = Field(
         description="Current list of tracked repeater public keys"
     )
     names: dict[str, str] = Field(
         description="Map of public key to display name for tracked repeaters"
+    )
+    schedule: TelemetrySchedule = Field(description="Current scheduling state")
+
+
+def _build_schedule(tracked_count: int, preferred_hours: int | None) -> TelemetrySchedule:
+    pref = (
+        preferred_hours
+        if preferred_hours in TELEMETRY_INTERVAL_OPTIONS_HOURS
+        else DEFAULT_TELEMETRY_INTERVAL_HOURS
+    )
+    effective = clamp_telemetry_interval(pref, tracked_count)
+    return TelemetrySchedule(
+        preferred_hours=pref,
+        effective_hours=effective,
+        options=legal_interval_options(tracked_count),
+        tracked_count=tracked_count,
+        max_tracked=MAX_TRACKED_TELEMETRY_REPEATERS,
+        next_run_at=next_run_timestamp_utc(effective) if tracked_count > 0 else None,
     )
 
 
@@ -135,6 +192,20 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
     # Auto-resend channel
     if update.auto_resend_channel is not None:
         kwargs["auto_resend_channel"] = update.auto_resend_channel
+
+    # Telemetry interval preference. Invalid values fall back to default
+    # rather than 400-ing so a stale client can't brick settings saves.
+    if update.telemetry_interval_hours is not None:
+        raw_interval = update.telemetry_interval_hours
+        if raw_interval not in TELEMETRY_INTERVAL_OPTIONS_HOURS:
+            logger.warning(
+                "telemetry_interval_hours=%r is not in the menu; defaulting to %d",
+                raw_interval,
+                DEFAULT_TELEMETRY_INTERVAL_HOURS,
+            )
+            raw_interval = DEFAULT_TELEMETRY_INTERVAL_HOURS
+        logger.info("Updating telemetry_interval_hours to %d", raw_interval)
+        kwargs["telemetry_interval_hours"] = raw_interval
 
     # Flood scope
     flood_scope_changed = False
@@ -229,6 +300,7 @@ async def toggle_tracked_telemetry(request: TrackedTelemetryRequest) -> TrackedT
         return TrackedTelemetryResponse(
             tracked_telemetry_repeaters=new_list,
             names=await _resolve_names(new_list),
+            schedule=_build_schedule(len(new_list), settings.telemetry_interval_hours),
         )
 
     # Validate it's a repeater
@@ -255,4 +327,20 @@ async def toggle_tracked_telemetry(request: TrackedTelemetryRequest) -> TrackedT
     return TrackedTelemetryResponse(
         tracked_telemetry_repeaters=new_list,
         names=await _resolve_names(new_list),
+        schedule=_build_schedule(len(new_list), settings.telemetry_interval_hours),
+    )
+
+
+@router.get("/tracked-telemetry/schedule", response_model=TelemetrySchedule)
+async def get_telemetry_schedule() -> TelemetrySchedule:
+    """Return the current telemetry scheduling derivation.
+
+    The UI uses this to render the interval dropdown (legal options),
+    surface saved-vs-effective when they differ, and show the next-run-at
+    timestamp so users know when the next cycle will fire.
+    """
+    app_settings = await AppSettingsRepository.get()
+    return _build_schedule(
+        len(app_settings.tracked_telemetry_repeaters),
+        app_settings.telemetry_interval_hours,
     )

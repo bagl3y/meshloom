@@ -355,6 +355,7 @@ export interface AppSettings {
   discovery_blocked_types: number[];
   tracked_telemetry_repeaters: string[];
   auto_resend_channel: boolean;
+  telemetry_interval_hours: number;
 }
 
 export interface AppSettingsUpdate {
@@ -366,11 +367,22 @@ export interface AppSettingsUpdate {
   blocked_keys?: string[];
   blocked_names?: string[];
   discovery_blocked_types?: number[];
+  telemetry_interval_hours?: number;
+}
+
+export interface TelemetrySchedule {
+  preferred_hours: number;
+  effective_hours: number;
+  options: number[];
+  tracked_count: number;
+  max_tracked: number;
+  next_run_at: number | null;
 }
 
 export interface TrackedTelemetryResponse {
   tracked_telemetry_repeaters: string[];
   names: Record<string, string>;
+  schedule: TelemetrySchedule;
 }
 
 /** Contact type constants */
