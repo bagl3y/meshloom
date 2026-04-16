@@ -1811,6 +1811,162 @@ function getFilterKeys(filter: unknown): string[] {
   return [];
 }
 
+const MAX_SCOPE_PILL_DISPLAY = 32;
+
+interface PillsSearchListItem {
+  key: string;
+  label: string;
+  /** Optional trailing monospace hint (e.g. pubkey prefix) */
+  trailing?: string;
+}
+
+/**
+ * Search-and-pills picker for the generic fanout scope selector.
+ * Shows selected items as removable pills (up to MAX_SCOPE_PILL_DISPLAY),
+ * a search input, and a scrollable list of filtered items with checkboxes.
+ * When more than MAX_SCOPE_PILL_DISPLAY items are selected, the pill row
+ * collapses to a single informational badge to keep the interface clean.
+ */
+function PillsSearchList({
+  label,
+  labelSuffix,
+  items,
+  selectedKeys,
+  onToggle,
+  onAll,
+  onNone,
+  searchPlaceholder,
+  emptyItemsMessage,
+}: {
+  label: string;
+  labelSuffix: string;
+  items: PillsSearchListItem[];
+  selectedKeys: string[];
+  onToggle: (key: string) => void;
+  onAll: () => void;
+  onNone: () => void;
+  searchPlaceholder: string;
+  emptyItemsMessage: string;
+}) {
+  const [search, setSearch] = useState('');
+  const searchLower = search.toLowerCase().trim();
+
+  const filtered = useMemo(() => {
+    const matches = items.filter((it) => {
+      if (!searchLower) return true;
+      return (
+        it.label.toLowerCase().includes(searchLower) || it.key.toLowerCase().startsWith(searchLower)
+      );
+    });
+    // Selected items sort to top (mirrors the Home Assistant tracked-contacts picker)
+    return matches.sort((a, b) => {
+      const aSel = selectedKeys.includes(a.key) ? 0 : 1;
+      const bSel = selectedKeys.includes(b.key) ? 0 : 1;
+      if (aSel !== bSel) return aSel - bSel;
+      return a.label.localeCompare(b.label);
+    });
+  }, [items, searchLower, selectedKeys]);
+
+  const selectedDetails = useMemo(
+    () => items.filter((it) => selectedKeys.includes(it.key)),
+    [items, selectedKeys]
+  );
+  const overPillLimit = selectedDetails.length > MAX_SCOPE_PILL_DISPLAY;
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs">
+          {label} <span className="text-muted-foreground font-normal">({labelSuffix})</span>
+        </Label>
+        <span className="flex gap-1">
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            onClick={onAll}
+          >
+            All
+          </button>
+          <span className="text-xs text-muted-foreground">/</span>
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            onClick={onNone}
+          >
+            None
+          </button>
+        </span>
+      </div>
+
+      {selectedDetails.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {overPillLimit ? (
+            <span className="inline-flex items-center text-[0.6875rem] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+              &gt;{MAX_SCOPE_PILL_DISPLAY} selections made; hiding selection preview to keep the
+              interface clean
+            </span>
+          ) : (
+            selectedDetails.map((it) => (
+              <span
+                key={it.key}
+                className="inline-flex items-center gap-1 text-[0.6875rem] px-2 py-0.5 rounded-full bg-primary/10 text-primary"
+              >
+                {it.label}
+                <button
+                  type="button"
+                  className="ml-0.5 hover:text-destructive transition-colors"
+                  onClick={() => onToggle(it.key)}
+                  aria-label={`Remove ${it.label}`}
+                >
+                  &times;
+                </button>
+              </span>
+            ))
+          )}
+        </div>
+      )}
+
+      {items.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic">{emptyItemsMessage}</p>
+      ) : (
+        <>
+          <Input
+            type="text"
+            placeholder={searchPlaceholder}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-8 text-sm"
+          />
+          <div className="max-h-48 overflow-y-auto space-y-1 rounded border border-border p-2">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic py-1">
+                No {label.toLowerCase()} match &ldquo;{search}&rdquo;
+              </p>
+            ) : (
+              filtered.map((it) => (
+                <label key={it.key} className="flex items-center gap-2 cursor-pointer text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedKeys.includes(it.key)}
+                    onChange={() => onToggle(it.key)}
+                    className="h-3.5 w-3.5 rounded border-input accent-primary"
+                  />
+                  <span className="truncate">{it.label}</span>
+                  {it.trailing && (
+                    <span className="text-[0.625rem] text-muted-foreground ml-auto font-mono shrink-0">
+                      {it.trailing}
+                    </span>
+                  )}
+                </label>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ScopeSelector({
   scope,
   onChange,
@@ -1920,9 +2076,6 @@ function ScopeSelector({
       selectedContacts.length >= filteredContacts.length);
   const showEmptyScopeWarning = messagesEffectivelyNone && !rawEnabled;
 
-  const isChannelChecked = (key: string) => selectedChannels.includes(key);
-  const isContactChecked = (key: string) => selectedContacts.includes(key);
-
   const listHint =
     mode === 'only'
       ? 'Newly added channels or contacts will not be automatically included.'
@@ -1976,107 +2129,51 @@ function ScopeSelector({
           <p className="text-xs text-muted-foreground">{listHint}</p>
 
           {channels.length > 0 && (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">
-                  Channels{' '}
-                  <span className="text-muted-foreground font-normal">({checkboxLabel})</span>
-                </Label>
-                <span className="flex gap-1">
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() =>
-                      onChange({
-                        ...scope,
-                        messages: buildMessages(
-                          channels.map((ch) => ch.key),
-                          selectedContacts
-                        ),
-                      })
-                    }
-                  >
-                    All
-                  </button>
-                  <span className="text-xs text-muted-foreground">/</span>
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() =>
-                      onChange({ ...scope, messages: buildMessages([], selectedContacts) })
-                    }
-                  >
-                    None
-                  </button>
-                </span>
-              </div>
-              <div className="max-h-32 overflow-y-auto border border-input rounded-md p-2 space-y-1">
-                {channels.map((ch) => (
-                  <label key={ch.key} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isChannelChecked(ch.key)}
-                      onChange={() => toggleChannel(ch.key)}
-                      className="h-3.5 w-3.5 rounded border-input accent-primary"
-                    />
-                    <span className="text-sm truncate">{ch.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+            <PillsSearchList
+              label="Channels"
+              labelSuffix={checkboxLabel}
+              items={channels.map((ch) => ({ key: ch.key, label: ch.name }))}
+              selectedKeys={selectedChannels}
+              onToggle={toggleChannel}
+              onAll={() =>
+                onChange({
+                  ...scope,
+                  messages: buildMessages(
+                    channels.map((ch) => ch.key),
+                    selectedContacts
+                  ),
+                })
+              }
+              onNone={() => onChange({ ...scope, messages: buildMessages([], selectedContacts) })}
+              searchPlaceholder={`Search ${channels.length} channel${channels.length === 1 ? '' : 's'}...`}
+              emptyItemsMessage="No channels available."
+            />
           )}
 
           {filteredContacts.length > 0 && (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">
-                  Contacts{' '}
-                  <span className="text-muted-foreground font-normal">({checkboxLabel})</span>
-                </Label>
-                <span className="flex gap-1">
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() =>
-                      onChange({
-                        ...scope,
-                        messages: buildMessages(
-                          selectedChannels,
-                          filteredContacts.map((c) => c.public_key)
-                        ),
-                      })
-                    }
-                  >
-                    All
-                  </button>
-                  <span className="text-xs text-muted-foreground">/</span>
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() =>
-                      onChange({ ...scope, messages: buildMessages(selectedChannels, []) })
-                    }
-                  >
-                    None
-                  </button>
-                </span>
-              </div>
-              <div className="max-h-32 overflow-y-auto border border-input rounded-md p-2 space-y-1">
-                {filteredContacts.map((c) => (
-                  <label key={c.public_key} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isContactChecked(c.public_key)}
-                      onChange={() => toggleContact(c.public_key)}
-                      className="h-3.5 w-3.5 rounded border-input accent-primary"
-                    />
-                    <span className="text-sm truncate">
-                      {c.name || c.public_key.substring(0, 12) + '...'}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
+            <PillsSearchList
+              label="Contacts"
+              labelSuffix={checkboxLabel}
+              items={filteredContacts.map((c) => ({
+                key: c.public_key,
+                label: c.name || c.public_key.slice(0, 12),
+                trailing: c.public_key.slice(0, 12),
+              }))}
+              selectedKeys={selectedContacts}
+              onToggle={toggleContact}
+              onAll={() =>
+                onChange({
+                  ...scope,
+                  messages: buildMessages(
+                    selectedChannels,
+                    filteredContacts.map((c) => c.public_key)
+                  ),
+                })
+              }
+              onNone={() => onChange({ ...scope, messages: buildMessages(selectedChannels, []) })}
+              searchPlaceholder={`Search ${filteredContacts.length} contact${filteredContacts.length === 1 ? '' : 's'}...`}
+              emptyItemsMessage="No contacts available."
+            />
           )}
         </>
       )}
