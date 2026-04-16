@@ -69,7 +69,12 @@ def test_valid_dist_serves_static_and_spa_fallback(tmp_path):
         assert manifest["scope"] == "http://testserver/"
         assert manifest["id"] == "http://testserver/"
         assert manifest["display"] == "standalone"
-        assert manifest["icons"][0]["src"] == "http://testserver/web-app-manifest-192x192.png"
+        icon_srcs = {icon["src"] for icon in manifest["icons"]}
+        assert "http://testserver/web-app-manifest-192x192.png" in icon_srcs
+        assert "http://testserver/web-app-manifest-512x512.png" in icon_srcs
+        # SVG icons cause inconsistent PWA icon rendering on iOS; the manifest
+        # must be PNG-only.
+        assert all(icon["type"] == "image/png" for icon in manifest["icons"])
 
         file_response = client.get("/robots.txt")
         assert file_response.status_code == 200
@@ -152,7 +157,9 @@ def test_webmanifest_includes_forwarded_prefix(tmp_path):
         assert data["start_url"] == expected_base
         assert data["scope"] == expected_base
         assert data["id"] == expected_base
-        assert data["icons"][0]["src"] == f"{expected_base}web-app-manifest-192x192.png"
+        icon_srcs = {icon["src"] for icon in data["icons"]}
+        assert f"{expected_base}web-app-manifest-192x192.png" in icon_srcs
+        assert f"{expected_base}web-app-manifest-512x512.png" in icon_srcs
 
 
 def test_first_available_prefers_dist_over_prebuilt(tmp_path):

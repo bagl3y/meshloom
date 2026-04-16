@@ -135,7 +135,34 @@ def register_frontend_static_routes(app: FastAPI, frontend_dir: Path) -> bool:
             "display_override": ["window-controls-overlay", "standalone", "fullscreen"],
             "theme_color": "#111419",
             "background_color": "#111419",
+            # Icons are PNG-only on purpose. iOS Safari's manifest parser has
+            # historically been unreliable with SVG icons, and Android/Chrome
+            # PWA install flows prefer PNG for the install prompt.
+            #
+            # The "any" purpose entries are what iOS and desktop Chrome use
+            # for the home-screen / install icon. "maskable" entries are
+            # Android-only (adaptive icon with safe-zone crop); iOS does not
+            # apply the safe-zone mask, so a maskable-only icon set would
+            # render with excessive padding.
             "icons": [
+                {
+                    "src": f"{base}favicon-96x96.png",
+                    "sizes": "96x96",
+                    "type": "image/png",
+                    "purpose": "any",
+                },
+                {
+                    "src": f"{base}apple-touch-icon.png",
+                    "sizes": "180x180",
+                    "type": "image/png",
+                    "purpose": "any",
+                },
+                {
+                    "src": f"{base}favicon-256x256.png",
+                    "sizes": "256x256",
+                    "type": "image/png",
+                    "purpose": "any",
+                },
                 {
                     "src": f"{base}web-app-manifest-192x192.png",
                     "sizes": "192x192",
@@ -147,18 +174,6 @@ def register_frontend_static_routes(app: FastAPI, frontend_dir: Path) -> bool:
                     "sizes": "512x512",
                     "type": "image/png",
                     "purpose": "maskable",
-                },
-                {
-                    "src": f"{base}favicon.svg",
-                    "sizes": "any",
-                    "type": "image/svg+xml",
-                    "purpose": "any",
-                },
-                {
-                    "src": f"{base}favicon-256x256.png",
-                    "sizes": "256x256",
-                    "type": "image/png",
-                    "purpose": "any",
                 },
             ],
             "screenshots": [
