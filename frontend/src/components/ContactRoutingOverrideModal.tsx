@@ -3,10 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import type { Contact } from '../types';
 import {
-  formatRouteLabel,
+  formatForcedRouteSummary,
+  formatLearnedRouteSummary,
   formatRoutingOverrideInput,
-  getDirectContactRoute,
-  hasRoutingOverride,
 } from '../utils/pathUtils';
 import { Button } from './ui/button';
 import {
@@ -28,18 +27,6 @@ interface ContactRoutingOverrideModalProps {
   onError: (message: string) => void;
 }
 
-function summarizeLearnedRoute(contact: Contact): string {
-  return formatRouteLabel(getDirectContactRoute(contact)?.path_len ?? -1, true);
-}
-
-function summarizeForcedRoute(contact: Contact): string | null {
-  if (!hasRoutingOverride(contact)) {
-    return null;
-  }
-  const routeOverrideLen = contact.route_override_len;
-  return routeOverrideLen == null ? null : formatRouteLabel(routeOverrideLen, true);
-}
-
 export function ContactRoutingOverrideModal({
   open,
   onClose,
@@ -59,7 +46,8 @@ export function ContactRoutingOverrideModal({
     setError(null);
   }, [contact, open]);
 
-  const forcedRouteSummary = useMemo(() => summarizeForcedRoute(contact), [contact]);
+  const learnedRouteSummary = useMemo(() => formatLearnedRouteSummary(contact), [contact]);
+  const forcedRouteSummary = useMemo(() => formatForcedRouteSummary(contact), [contact]);
 
   const saveRoute = async (value: string) => {
     setSaving(true);
@@ -98,7 +86,7 @@ export function ContactRoutingOverrideModal({
           <div className="rounded-md border border-border bg-muted/20 p-3 text-sm">
             <div className="font-medium">{contact.name || contact.public_key.slice(0, 12)}</div>
             <div className="mt-1 text-muted-foreground">
-              Current learned route: {summarizeLearnedRoute(contact)}
+              Current learned route: {learnedRouteSummary}
             </div>
             {forcedRouteSummary && (
               <div className="mt-1 text-destructive">

@@ -209,6 +209,37 @@ export function formatRouteLabel(pathLen: number, capitalize: boolean = false): 
   return capitalize ? label.charAt(0).toUpperCase() + label.slice(1) : label;
 }
 
+/**
+ * Format the learned direct route for display in route-editing dialogs,
+ * e.g. "2 hops (AE -> F1)", "Direct", or "Flood".
+ */
+export function formatLearnedRouteSummary(contact: Contact): string {
+  const directRoute = getDirectContactRoute(contact);
+  if (!directRoute) {
+    return formatRouteLabel(-1, true);
+  }
+  const hops = parsePathHops(directRoute.path, directRoute.path_len);
+  const label = formatRouteLabel(directRoute.path_len, true);
+  return hops.length > 0 ? `${label} (${hops.join(' -> ')})` : label;
+}
+
+/**
+ * Format the forced (override) route for display in route-editing dialogs,
+ * matching the learned-route format. Returns null when no override is set.
+ */
+export function formatForcedRouteSummary(contact: Contact): string | null {
+  if (!hasRoutingOverride(contact)) {
+    return null;
+  }
+  const effectiveRoute = getEffectiveContactRoute(contact);
+  if (effectiveRoute.pathLen === -1) {
+    return formatRouteLabel(-1, true);
+  }
+  const hops = parsePathHops(effectiveRoute.path, effectiveRoute.pathLen);
+  const label = formatRouteLabel(effectiveRoute.pathLen, true);
+  return hops.length > 0 ? `${label} (${hops.join(' -> ')})` : label;
+}
+
 export function formatRoutingOverrideInput(contact: Contact): string {
   const routeOverride = getRouteOverride(contact);
   if (!routeOverride) {

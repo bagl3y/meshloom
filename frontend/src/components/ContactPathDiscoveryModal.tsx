@@ -3,10 +3,9 @@ import { useMemo, useState } from 'react';
 import type { Contact, PathDiscoveryResponse, PathDiscoveryRoute } from '../types';
 import {
   findContactsByPrefix,
+  formatForcedRouteSummary,
+  formatLearnedRouteSummary,
   formatRouteLabel,
-  getDirectContactRoute,
-  getEffectiveContactRoute,
-  hasRoutingOverride,
   parsePathHops,
 } from '../utils/pathUtils';
 import { Button } from './ui/button';
@@ -99,30 +98,9 @@ export function ContactPathDiscoveryModal({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PathDiscoveryResponse | null>(null);
 
-  const effectiveRoute = useMemo(() => getEffectiveContactRoute(contact), [contact]);
-  const directRoute = useMemo(() => getDirectContactRoute(contact), [contact]);
-  const hasForcedRoute = hasRoutingOverride(contact);
-  const learnedRouteSummary = useMemo(() => {
-    if (!directRoute) {
-      return 'Flood';
-    }
-    const hops = parsePathHops(directRoute.path, directRoute.path_len);
-    return hops.length > 0
-      ? `${formatRouteLabel(directRoute.path_len, true)} (${hops.join(' -> ')})`
-      : formatRouteLabel(directRoute.path_len, true);
-  }, [directRoute]);
-  const forcedRouteSummary = useMemo(() => {
-    if (!hasForcedRoute) {
-      return null;
-    }
-    if (effectiveRoute.pathLen === -1) {
-      return 'Flood';
-    }
-    const hops = parsePathHops(effectiveRoute.path, effectiveRoute.pathLen);
-    return hops.length > 0
-      ? `${formatRouteLabel(effectiveRoute.pathLen, true)} (${hops.join(' -> ')})`
-      : formatRouteLabel(effectiveRoute.pathLen, true);
-  }, [effectiveRoute, hasForcedRoute]);
+  const learnedRouteSummary = useMemo(() => formatLearnedRouteSummary(contact), [contact]);
+  const forcedRouteSummary = useMemo(() => formatForcedRouteSummary(contact), [contact]);
+  const hasForcedRoute = forcedRouteSummary !== null;
 
   const forwardChain = result
     ? renderRouteNodes(
