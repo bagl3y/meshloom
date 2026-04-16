@@ -1,5 +1,14 @@
 import { Fragment, useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap, Polyline } from 'react-leaflet';
+import {
+  MapContainer,
+  TileLayer,
+  CircleMarker,
+  Popup,
+  useMap,
+  useMapEvents,
+  Polyline,
+  LayersControl,
+} from 'react-leaflet';
 import type { LatLngBoundsExpression, CircleMarker as LeafletCircleMarker } from 'leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -27,24 +36,124 @@ interface MapViewProps {
 }
 
 // --- Tile layer presets ---
-const TILE_LIGHT = {
-  url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  background: '#1a1a2e',
-};
-const TILE_DARK = {
-  url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-  background: '#0d0d0d',
-};
+// Every provider here is free and works without an API key. Attribution strings
+// follow each provider's requirements; do not remove them. If you add a new
+// provider, verify its terms of service (especially for Esri / Google-style
+// satellite tiles) before committing.
+interface TileLayerPreset {
+  id: string;
+  label: string;
+  url: string;
+  attribution: string;
+  background: string;
+  /** Highest zoom the provider publishes tiles at. When the layer is active,
+   *  the map's zoom ceiling is tightened to this value via
+   *  `MaxZoomByActiveLayer` so the user cannot zoom into a grey void. */
+  maxZoom?: number;
+}
 
-function getSavedDarkMap(): boolean {
+// Global zoom bounds for the MapContainer itself. These are pinned to the
+// container so Leaflet's internal tile-range math never has to guess when
+// layers swap in/out via LayersControl. Without this, an initial-mount race
+// between MapContainer layout and LayersControl.BaseLayer addition has been
+// observed to throw "Attempted to load an infinite number of tiles".
+const MAP_MIN_ZOOM = 2;
+const MAP_MAX_ZOOM = 19;
+
+const TILE_LAYERS: readonly TileLayerPreset[] = [
+  {
+    id: 'light',
+    label: 'Light (OpenStreetMap)',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    background: '#1a1a2e',
+    maxZoom: 19,
+  },
+  {
+    id: 'dark',
+    label: 'Dark (CARTO)',
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+    background: '#0d0d0d',
+    maxZoom: 19,
+  },
+  {
+    id: 'topographic',
+    label: 'Topographic (OpenTopoMap)',
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution:
+      'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
+    background: '#a3b3bc',
+    maxZoom: 17,
+  },
+  {
+    id: 'satellite',
+    label: 'Satellite (Esri)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution:
+      'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+    background: '#1a1f2e',
+    // Esri's tile service advertises LODs up to 23 and returns HTTP 200 for
+    // every tile request, but the underlying imagery is only high-resolution
+    // up to ~18 in most developed areas and shallower in rural regions. We
+    // cap at 18 rather than 19 so users don't zoom into visibly-empty or
+    // severely-upscaled tiles. Remote regions may still be sparse at 18.
+    maxZoom: 18,
+  },
+] as const;
+
+const MAP_LAYER_STORAGE_KEY = 'remoteterm-map-layer';
+const LEGACY_DARK_MAP_STORAGE_KEY = 'remoteterm-dark-map';
+
+function getSavedLayerId(): string {
   try {
-    return localStorage.getItem('remoteterm-dark-map') === 'true';
+    const stored = localStorage.getItem(MAP_LAYER_STORAGE_KEY);
+    if (stored && TILE_LAYERS.some((l) => l.id === stored)) return stored;
+    // Legacy migration: boolean dark-map flag predates multi-layer support.
+    const legacyDark = localStorage.getItem(LEGACY_DARK_MAP_STORAGE_KEY) === 'true';
+    return legacyDark ? 'dark' : 'light';
   } catch {
-    return false;
+    return 'light';
   }
+}
+
+/**
+ * Leaflet-internal companion component: listens for base-layer changes driven
+ * by Leaflet's own LayersControl UI and pipes the selection back to React.
+ * Kept separate so the persistence/state logic stays out of the render tree.
+ */
+function LayerChangeWatcher({ onChange }: { onChange: (name: string) => void }) {
+  useMapEvents({
+    baselayerchange: (event) => {
+      if (event.name) onChange(event.name);
+    },
+  });
+  return null;
+}
+
+/**
+ * Enforces the active layer's zoom ceiling on the underlying Leaflet map.
+ *
+ * Leaflet's `map.getMaxZoom()` prefers `options.maxZoom` (set on MapContainer)
+ * over per-layer `maxZoom`, so a per-TileLayer cap is silently ignored unless
+ * we push it down to the map itself. We do that here whenever the active
+ * layer changes, and clamp the current zoom if the user happened to be zoomed
+ * past the new cap at the moment of the switch.
+ *
+ * The MapContainer's fixed `minZoom`/`maxZoom` remain the absolute hull that
+ * prevents the "Attempted to load an infinite number of tiles" race during
+ * initial mount (see `MAP_MIN_ZOOM`/`MAP_MAX_ZOOM` below).
+ */
+function MaxZoomByActiveLayer({ maxZoom }: { maxZoom: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setMaxZoom(maxZoom);
+    if (map.getZoom() > maxZoom) {
+      map.setZoom(maxZoom);
+    }
+  }, [map, maxZoom]);
+  return null;
 }
 
 const MAP_RECENCY_COLORS = {
@@ -390,16 +499,33 @@ export function MapView({
   onSelectContact,
 }: MapViewProps) {
   const [sevenDaysAgo] = useState(() => Date.now() / 1000 - 7 * 24 * 60 * 60);
-  const [darkMap, setDarkMap] = useState(getSavedDarkMap);
-  const tile = darkMap ? TILE_DARK : TILE_LIGHT;
+  const [selectedLayerId, setSelectedLayerId] = useState<string>(getSavedLayerId);
+  const activeLayer = TILE_LAYERS.find((l) => l.id === selectedLayerId) ?? TILE_LAYERS[0];
 
-  // Sync with settings changes from other components
+  // Sync layer selection across tabs and windows.
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'remoteterm-dark-map') setDarkMap(e.newValue === 'true');
+      if (e.key !== MAP_LAYER_STORAGE_KEY) return;
+      const next = e.newValue ?? '';
+      if (TILE_LAYERS.some((l) => l.id === next)) {
+        setSelectedLayerId(next);
+      }
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const handleLayerChange = useCallback((layerName: string) => {
+    const match = TILE_LAYERS.find((l) => l.label === layerName);
+    if (!match) return;
+    setSelectedLayerId(match.id);
+    try {
+      localStorage.setItem(MAP_LAYER_STORAGE_KEY, match.id);
+      // Clear the legacy key so a future downgrade-rollback doesn't revert us.
+      localStorage.removeItem(LEGACY_DARK_MAP_STORAGE_KEY);
+    } catch {
+      // localStorage may be disabled; selection stays in memory only.
+    }
   }, []);
 
   const [showPackets, setShowPackets] = useState(false);
@@ -800,10 +926,28 @@ export function MapView({
         <MapContainer
           center={[20, 0]}
           zoom={2}
+          minZoom={MAP_MIN_ZOOM}
+          maxZoom={MAP_MAX_ZOOM}
           className="h-full w-full"
-          style={{ background: tile.background }}
+          style={{ background: activeLayer.background }}
         >
-          <TileLayer key={tile.url} attribution={tile.attribution} url={tile.url} />
+          <LayersControl position="topright">
+            {TILE_LAYERS.map((layer) => (
+              <LayersControl.BaseLayer
+                key={layer.id}
+                name={layer.label}
+                checked={layer.id === selectedLayerId}
+              >
+                <TileLayer
+                  url={layer.url}
+                  attribution={layer.attribution}
+                  maxZoom={layer.maxZoom}
+                />
+              </LayersControl.BaseLayer>
+            ))}
+          </LayersControl>
+          <LayerChangeWatcher onChange={handleLayerChange} />
+          <MaxZoomByActiveLayer maxZoom={activeLayer.maxZoom ?? MAP_MAX_ZOOM} />
           <MapBoundsHandler contacts={mappableContacts} focusedContact={focusedContact} />
 
           {/* Faint route lines for active packet paths */}

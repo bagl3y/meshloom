@@ -4,23 +4,40 @@ import { describe, expect, it, vi } from 'vitest';
 import { MapView } from '../components/MapView';
 import type { Contact } from '../types';
 
-vi.mock('react-leaflet', () => ({
-  MapContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  TileLayer: () => null,
-  CircleMarker: forwardRef<
-    HTMLDivElement,
-    { children: React.ReactNode; pathOptions?: { fillColor?: string } }
-  >(({ children, pathOptions }, ref) => (
-    <div ref={ref} data-fill-color={pathOptions?.fillColor}>
-      {children}
-    </div>
-  )),
-  Popup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  useMap: () => ({
-    setView: vi.fn(),
-    fitBounds: vi.fn(),
-  }),
-}));
+vi.mock('react-leaflet', () => {
+  const BaseLayer = ({
+    children,
+  }: {
+    children: React.ReactNode;
+    name: string;
+    checked?: boolean;
+  }) => <div>{children}</div>;
+  const LayersControlMock = ({ children }: { children: React.ReactNode }) => <div>{children}</div>;
+  (LayersControlMock as unknown as { BaseLayer: typeof BaseLayer }).BaseLayer = BaseLayer;
+  return {
+    MapContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    TileLayer: () => null,
+    CircleMarker: forwardRef<
+      HTMLDivElement,
+      { children: React.ReactNode; pathOptions?: { fillColor?: string } }
+    >(({ children, pathOptions }, ref) => (
+      <div ref={ref} data-fill-color={pathOptions?.fillColor}>
+        {children}
+      </div>
+    )),
+    Popup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    Polyline: () => null,
+    LayersControl: LayersControlMock,
+    useMap: () => ({
+      setView: vi.fn(),
+      fitBounds: vi.fn(),
+      setMaxZoom: vi.fn(),
+      setZoom: vi.fn(),
+      getZoom: vi.fn(() => 2),
+    }),
+    useMapEvents: () => null,
+  };
+});
 
 describe('MapView', () => {
   it('renders a never-heard fallback for a focused contact without last_seen', () => {
