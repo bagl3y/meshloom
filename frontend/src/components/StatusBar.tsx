@@ -19,6 +19,14 @@ import {
   getShowBatteryVoltage,
   mvToPercent,
 } from '../utils/batteryDisplay';
+import {
+  STATUS_DOT_PULSE_CHANGE_EVENT,
+  STATUS_DOT_PULSE_DURATION_MS,
+  STATUS_DOT_PULSE_PACKET_EVENT,
+  getStatusDotPulseEnabled,
+  pulseColorFor,
+  type StatusDotPulseKind,
+} from '../utils/statusDotPulse';
 import { cn } from '@/lib/utils';
 
 interface StatusBarProps {
@@ -85,6 +93,40 @@ export function StatusBar({
             : 'Radio Disconnected';
   const [reconnecting, setReconnecting] = useState(false);
   const [currentTheme, setCurrentTheme] = useState(getSavedTheme);
+  const [pulseEnabled, setPulseEnabled] = useState(getStatusDotPulseEnabled);
+  const [pulseKind, setPulseKind] = useState<StatusDotPulseKind | null>(null);
+
+  useEffect(() => {
+    const handler = () => setPulseEnabled(getStatusDotPulseEnabled());
+    window.addEventListener(STATUS_DOT_PULSE_CHANGE_EVENT, handler);
+    return () => window.removeEventListener(STATUS_DOT_PULSE_CHANGE_EVENT, handler);
+  }, []);
+
+  useEffect(() => {
+    if (!pulseEnabled) {
+      setPulseKind(null);
+      return;
+    }
+    let timer: number | null = null;
+    const handler = (event: Event) => {
+      const kind = (event as CustomEvent<StatusDotPulseKind>).detail;
+      setPulseKind(kind);
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+      timer = window.setTimeout(() => {
+        setPulseKind(null);
+        timer = null;
+      }, STATUS_DOT_PULSE_DURATION_MS);
+    };
+    window.addEventListener(STATUS_DOT_PULSE_PACKET_EVENT, handler);
+    return () => {
+      window.removeEventListener(STATUS_DOT_PULSE_PACKET_EVENT, handler);
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [pulseEnabled]);
 
   useEffect(() => {
     const handleThemeChange = (event: Event) => {
@@ -154,9 +196,12 @@ export function StatusBar({
             radioState === 'initializing' || radioState === 'connecting'
               ? 'bg-warning'
               : connected
-                ? 'bg-status-connected shadow-[0_0_6px_hsl(var(--status-connected)/0.5)]'
+                ? pulseKind
+                  ? ''
+                  : 'bg-status-connected shadow-[0_0_6px_hsl(var(--status-connected)/0.5)]'
                 : 'bg-status-disconnected'
           )}
+          style={connected && pulseKind ? { backgroundColor: pulseColorFor(pulseKind) } : undefined}
           aria-hidden="true"
         />
         <span className="hidden lg:inline text-muted-foreground">{statusLabel}</span>

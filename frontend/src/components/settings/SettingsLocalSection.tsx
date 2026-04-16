@@ -35,6 +35,11 @@ import {
   getShowBatteryVoltage,
   setShowBatteryVoltage as saveBatteryVoltage,
 } from '../../utils/batteryDisplay';
+import {
+  STATUS_DOT_PULSE_CHANGE_EVENT,
+  getStatusDotPulseEnabled,
+  setStatusDotPulseEnabled as saveStatusDotPulse,
+} from '../../utils/statusDotPulse';
 
 export function SettingsLocalSection({
   onLocalLabelChange,
@@ -52,6 +57,7 @@ export function SettingsLocalSection({
   const [autoFocusInput, setAutoFocusInput] = useState(getAutoFocusInputEnabled);
   const [batteryPercent, setBatteryPercent] = useState(getShowBatteryPercent);
   const [batteryVoltage, setBatteryVoltage] = useState(getShowBatteryVoltage);
+  const [statusDotPulse, setStatusDotPulse] = useState(getStatusDotPulseEnabled);
   const [fontScale, setFontScale] = useState(getSavedFontScale);
   const [fontScaleSlider, setFontScaleSlider] = useState(getSavedFontScale);
   const [fontScaleInput, setFontScaleInput] = useState(() => String(getSavedFontScale()));
@@ -221,6 +227,24 @@ export function SettingsLocalSection({
             connecting.
           </p>
         )}
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={statusDotPulse}
+            onChange={(e) => {
+              const v = e.target.checked;
+              setStatusDotPulse(v);
+              saveStatusDotPulse(v);
+              window.dispatchEvent(new Event(STATUS_DOT_PULSE_CHANGE_EVENT));
+            }}
+            className="w-4 h-4 rounded border-input accent-primary"
+          />
+          <span className="text-sm">
+            Glitter status dot as packets arrive (blue = channel, purple = DM, cyan = advert, dark
+            green = other)
+          </span>
+        </label>
 
         <div className="space-y-3">
           <Label htmlFor="font-scale-input">Relative Font Size</Label>

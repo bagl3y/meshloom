@@ -12,6 +12,7 @@ import { getStateKey } from '../utils/conversationState';
 import { mergeContactIntoList } from '../utils/contactMerge';
 import { getContactDisplayName } from '../utils/pubkey';
 import { appendRawPacketUnique } from '../utils/rawPacketIdentity';
+import { emitStatusDotPulse } from '../utils/statusDotPulse';
 import type {
   Channel,
   Contact,
@@ -253,6 +254,7 @@ export function useRealtimeAppState({
       },
       onRawPacket: (packet: RawPacket) => {
         recordRawPacketObservation?.(packet);
+        emitStatusDotPulse(packet.payload_type);
         setRawPackets((prev) => appendRawPacketUnique(prev, packet, maxRawPackets));
       },
       onMessageAcked: (
