@@ -809,10 +809,12 @@ export function MapView({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Info bar */}
-      <div className="px-4 py-2 bg-muted/50 text-xs text-muted-foreground flex items-center justify-between">
+      {/* Info bar: stacks vertically on narrow viewports (info label, legend
+          row, controls row) so nothing truncates; flattens to a single row
+          with right-aligned cluster at md and up. */}
+      <div className="px-4 py-2 bg-muted/50 text-xs text-muted-foreground flex flex-col gap-1 md:flex-row md:items-center md:justify-between md:gap-3">
         <span>{infoLabel}</span>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 md:justify-end">
           {!showPackets && (
             <>
               <span className="flex items-center gap-1">
@@ -893,7 +895,7 @@ export function MapView({
             />{' '}
             repeater
           </span>
-          <label className="flex items-center gap-1.5 cursor-pointer ml-2">
+          <label className="flex items-center gap-1.5 cursor-pointer">
             <input
               type="checkbox"
               checked={showPackets}
@@ -931,7 +933,7 @@ export function MapView({
           className="h-full w-full"
           style={{ background: activeLayer.background }}
         >
-          <LayersControl position="topright">
+          <LayersControl position="topright" collapsed={false}>
             {TILE_LAYERS.map((layer) => (
               <LayersControl.BaseLayer
                 key={layer.id}
