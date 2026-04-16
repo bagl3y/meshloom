@@ -252,6 +252,11 @@ async def _store_direct_message(
 
         if update_last_contacted_key:
             await contact_repository.update_last_contacted(update_last_contacted_key, received_at)
+            # Incoming DMs are direct RF evidence that this contact transmitted;
+            # outgoing DMs are our own send and must not bump the contact's
+            # last_seen.
+            if not outgoing:
+                await contact_repository.touch_last_seen(update_last_contacted_key, received_at)
 
         return message
 

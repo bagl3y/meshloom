@@ -1134,12 +1134,14 @@ class TestOnNewContact:
 
             await on_new_contact(MockEvent())
 
-            # Verify contact was created in real DB
+            # Verify contact was created in real DB. NEW_CONTACT is the radio's
+            # stored contact DB, not an RF observation, so last_seen stays NULL
+            # until we actually hear the contact on the air.
             contact = await ContactRepository.get_by_key("cc" * 32)
             assert contact is not None
             assert contact.name == "Charlie"
             assert contact.on_radio is False
-            assert contact.last_seen == 1700000000
+            assert contact.last_seen is None
 
             mock_broadcast.assert_called_once()
             event_type, contact_data = mock_broadcast.call_args[0]

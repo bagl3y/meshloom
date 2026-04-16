@@ -94,7 +94,12 @@ class ContactRepository:
                 last_advert = COALESCE(excluded.last_advert, contacts.last_advert),
                 lat = COALESCE(excluded.lat, contacts.lat),
                 lon = COALESCE(excluded.lon, contacts.lon),
-                last_seen = excluded.last_seen,
+                last_seen = CASE
+                    WHEN excluded.last_seen IS NULL THEN contacts.last_seen
+                    WHEN contacts.last_seen IS NULL THEN excluded.last_seen
+                    WHEN excluded.last_seen > contacts.last_seen THEN excluded.last_seen
+                    ELSE contacts.last_seen
+                END,
                 on_radio = COALESCE(excluded.on_radio, contacts.on_radio),
                 last_contacted = COALESCE(excluded.last_contacted, contacts.last_contacted),
                 first_seen = COALESCE(contacts.first_seen, excluded.first_seen)
@@ -114,7 +119,7 @@ class ContactRepository:
                 contact_row.last_advert,
                 contact_row.lat,
                 contact_row.lon,
-                contact_row.last_seen if contact_row.last_seen is not None else int(time.time()),
+                contact_row.last_seen,
                 contact_row.on_radio,
                 contact_row.last_contacted,
                 contact_row.first_seen,
@@ -339,6 +344,15 @@ class ContactRepository:
         path_hash_mode: int | None = None,
         updated_at: int | None = None,
     ) -> None:
+        """Persist a learned direct route for a contact.
+
+        Both callers (the RF PATH packet processor and the firmware PATH_UPDATE
+        event handler) are RF-backed: firmware ``onContactPathUpdated`` only
+        fires from ``onContactPathRecv`` during RF PATH packet reception. So
+        this method also advances ``last_seen`` monotonically. Never moves
+        ``last_seen`` backwards if an out-of-order arrival lands with an older
+        timestamp.
+        """
         normalized_path, normalized_path_len, normalized_hash_mode = normalize_contact_route(
             path,
             path_len,
@@ -349,11 +363,18 @@ class ContactRepository:
             """UPDATE contacts SET direct_path = ?, direct_path_len = ?,
                direct_path_hash_mode = COALESCE(?, direct_path_hash_mode),
                direct_path_updated_at = ?,
-               last_seen = ? WHERE public_key = ?""",
+               last_seen = CASE
+                   WHEN last_seen IS NULL THEN ?
+                   WHEN ? > last_seen THEN ?
+                   ELSE last_seen
+               END
+               WHERE public_key = ?""",
             (
                 normalized_path,
                 normalized_path_len,
                 normalized_hash_mode,
+                ts,
+                ts,
                 ts,
                 ts,
                 public_key.lower(),
@@ -444,11 +465,43 @@ class ContactRepository:
 
     @staticmethod
     async def update_last_contacted(public_key: str, timestamp: int | None = None) -> None:
-        """Update the last_contacted timestamp for a contact."""
+        """Update the last_contacted timestamp for a contact.
+
+        ``last_contacted`` tracks the most recent direct-conversation activity
+        with this contact in either direction (incoming or outgoing DM). It is
+        the field that powers "recent conversations" ordering on the frontend.
+
+        It deliberately does not touch ``last_seen``: ``last_seen`` is reserved
+        for actual RF reception from the contact, and outgoing sends are not
+        evidence that we heard from them. RF observations from DM ingest update
+        ``last_seen`` via :meth:`touch_last_seen` on incoming DMs only.
+        """
         ts = timestamp if timestamp is not None else int(time.time())
         await db.conn.execute(
-            "UPDATE contacts SET last_contacted = ?, last_seen = ? WHERE public_key = ?",
-            (ts, ts, public_key.lower()),
+            "UPDATE contacts SET last_contacted = ? WHERE public_key = ?",
+            (ts, public_key.lower()),
+        )
+        await db.conn.commit()
+
+    @staticmethod
+    async def touch_last_seen(public_key: str, timestamp: int) -> None:
+        """Monotonically bump last_seen for a contact from an RF observation.
+
+        Never moves last_seen backwards; a no-op if the contact row does not
+        exist. Use this from packet-ingest paths that have attributed a packet
+        to a specific contact pubkey (advert, incoming DM, decrypted PATH, etc.).
+        """
+        await db.conn.execute(
+            """
+            UPDATE contacts
+            SET last_seen = CASE
+                WHEN last_seen IS NULL THEN ?
+                WHEN ? > last_seen THEN ?
+                ELSE last_seen
+            END
+            WHERE public_key = ?
+            """,
+            (timestamp, timestamp, timestamp, public_key.lower()),
         )
         await db.conn.commit()
 

@@ -105,13 +105,15 @@ class TestCreateContact:
         data = response.json()
         assert data["public_key"] == KEY_A
         assert data["name"] == "NewContact"
-        assert data["last_seen"] is not None
+        # Manually created contacts have no RF observation yet, so last_seen
+        # stays NULL until we actually hear them on the air.
+        assert data["last_seen"] is None
 
         # Verify in DB
         contact = await ContactRepository.get_by_key(KEY_A)
         assert contact is not None
         assert contact.name == "NewContact"
-        assert data["last_seen"] == contact.last_seen
+        assert contact.last_seen is None
         mock_broadcast.assert_called_once_with("contact", contact.model_dump())
 
     @pytest.mark.asyncio

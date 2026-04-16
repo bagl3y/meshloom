@@ -697,3 +697,126 @@ class TestContactRepositoryUpsertContracts:
         assert contact.name == "Bob"
         assert contact.type == 2
         assert contact.on_radio is True
+
+
+class TestContactRepositoryLastSeenSemantics:
+    """Guard the 'last_seen = last RF reception' contract.
+
+    Radio-driven contact-DB syncs must not clobber an earlier real RF timestamp,
+    and callers that don't supply last_seen must leave the existing value alone.
+    """
+
+    @pytest.mark.asyncio
+    async def test_upsert_without_last_seen_preserves_existing(self, test_db):
+        real_rf_observation = 1_700_000_000
+        await ContactRepository.upsert(
+            ContactUpsert(
+                public_key="aa" * 32,
+                name="Alice",
+                type=1,
+                last_seen=real_rf_observation,
+                on_radio=False,
+            )
+        )
+
+        # A subsequent radio-sync style upsert (no last_seen supplied) must not
+        # overwrite the real RF timestamp with now().
+        await ContactRepository.upsert(
+            ContactUpsert(public_key="aa" * 32, name="Alice", type=1, on_radio=False)
+        )
+
+        contact = await ContactRepository.get_by_key("aa" * 32)
+        assert contact is not None
+        assert contact.last_seen == real_rf_observation
+
+    @pytest.mark.asyncio
+    async def test_upsert_monotonically_bumps_last_seen(self, test_db):
+        await ContactRepository.upsert(
+            ContactUpsert(public_key="aa" * 32, last_seen=1_700_000_000, on_radio=False)
+        )
+
+        # Newer RF observation advances last_seen.
+        await ContactRepository.upsert(
+            ContactUpsert(public_key="aa" * 32, last_seen=1_700_000_500, on_radio=False)
+        )
+        contact = await ContactRepository.get_by_key("aa" * 32)
+        assert contact is not None
+        assert contact.last_seen == 1_700_000_500
+
+        # An older timestamp (out-of-order arrival) must not move it backwards.
+        await ContactRepository.upsert(
+            ContactUpsert(public_key="aa" * 32, last_seen=1_699_999_000, on_radio=False)
+        )
+        contact = await ContactRepository.get_by_key("aa" * 32)
+        assert contact is not None
+        assert contact.last_seen == 1_700_000_500
+
+    @pytest.mark.asyncio
+    async def test_upsert_inserts_null_last_seen_when_not_supplied(self, test_db):
+        # A radio-sync-only contact (never heard on RF) should have last_seen=NULL.
+        await ContactRepository.upsert(
+            ContactUpsert(public_key="aa" * 32, name="Alice", type=1, on_radio=False)
+        )
+
+        contact = await ContactRepository.get_by_key("aa" * 32)
+        assert contact is not None
+        assert contact.last_seen is None
+
+    @pytest.mark.asyncio
+    async def test_touch_last_seen_bumps_monotonically(self, test_db):
+        await ContactRepository.upsert(
+            ContactUpsert(public_key="aa" * 32, last_seen=1_700_000_000, on_radio=False)
+        )
+
+        await ContactRepository.touch_last_seen("aa" * 32, 1_700_000_500)
+        contact = await ContactRepository.get_by_key("aa" * 32)
+        assert contact is not None
+        assert contact.last_seen == 1_700_000_500
+
+        # Older timestamps never move last_seen backwards.
+        await ContactRepository.touch_last_seen("aa" * 32, 1_699_999_000)
+        contact = await ContactRepository.get_by_key("aa" * 32)
+        assert contact is not None
+        assert contact.last_seen == 1_700_000_500
+
+    @pytest.mark.asyncio
+    async def test_update_last_contacted_does_not_touch_last_seen(self, test_db):
+        # last_contacted = we sent TO them. It must not forge RF reception.
+        await ContactRepository.upsert(
+            ContactUpsert(public_key="aa" * 32, last_seen=1_700_000_000, on_radio=False)
+        )
+
+        await ContactRepository.update_last_contacted("aa" * 32, 1_700_500_000)
+
+        contact = await ContactRepository.get_by_key("aa" * 32)
+        assert contact is not None
+        assert contact.last_contacted == 1_700_500_000
+        assert contact.last_seen == 1_700_000_000
+
+    @pytest.mark.asyncio
+    async def test_update_direct_path_bumps_last_seen_monotonically(self, test_db):
+        # update_direct_path is driven by RF PATH reception on both callers
+        # (packet processor + firmware PATH_UPDATE, which only fires from
+        # onContactPathRecv during RF reception). It should advance last_seen
+        # forward-only.
+        await ContactRepository.upsert(
+            ContactUpsert(public_key="aa" * 32, last_seen=1_700_000_000, on_radio=False)
+        )
+
+        await ContactRepository.update_direct_path(
+            "aa" * 32, path="ab", path_len=1, path_hash_mode=0, updated_at=1_700_000_500
+        )
+        contact = await ContactRepository.get_by_key("aa" * 32)
+        assert contact is not None
+        assert contact.last_seen == 1_700_000_500
+        assert contact.direct_path == "ab"
+
+        # Out-of-order PATH arrival with an older timestamp must not rewind.
+        await ContactRepository.update_direct_path(
+            "aa" * 32, path="cd", path_len=1, path_hash_mode=0, updated_at=1_699_999_000
+        )
+        contact = await ContactRepository.get_by_key("aa" * 32)
+        assert contact is not None
+        assert contact.last_seen == 1_700_000_500
+        # The path itself still updates — only last_seen is monotonic-guarded.
+        assert contact.direct_path == "cd"
