@@ -1,6 +1,7 @@
-"""Fanout module for uploading heard advert packets to map.meshcore.dev.
+"""Fanout module for uploading heard advert packets to map.meshcore.io.
 
-Mirrors the logic of the standalone map.meshcore.dev-uploader project:
+Mirrors the logic of the standalone map.meshcore.dev-uploader project
+(historical name; the live service is now hosted at map.meshcore.io):
 - Listens on raw RF packets via on_raw
 - Filters for ADVERT packets, only processes repeaters (role 2) and rooms (role 3)
 - Skips nodes with no valid location (lat/lon None)
@@ -16,7 +17,7 @@ the raw hex link.
 Config keys
 -----------
 api_url : str, default ""
-    Upload endpoint. Empty string falls back to the public map.meshcore.dev API.
+    Upload endpoint. Empty string falls back to the public map.meshcore.io API.
 dry_run : bool, default True
     When True, log the payload at INFO level instead of sending it.
 geofence_enabled : bool, default False
@@ -46,7 +47,7 @@ from app.services.radio_runtime import radio_runtime
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_API_URL = "https://map.meshcore.dev/api/v1/uploader/node"
+_DEFAULT_API_URL = "https://map.meshcore.io/api/v1/uploader/node"
 
 # Re-upload guard: skip re-uploading a pubkey seen within this window (AU parity)
 _REUPLOAD_SECONDS = 3600

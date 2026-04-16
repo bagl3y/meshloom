@@ -479,7 +479,7 @@ class TestLiveSend:
 
     @pytest.mark.asyncio
     async def test_live_send_defaults_to_map_url(self):
-        """Empty api_url should default to the map.meshcore.dev endpoint."""
+        """Empty api_url should default to the map.meshcore.io endpoint."""
         mod = _make_module({"dry_run": False, "api_url": ""})
         await mod.start()
 

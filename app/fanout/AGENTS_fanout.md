@@ -144,8 +144,8 @@ Amazon SQS delivery. Config blob:
 - Supports both decoded messages and raw packets via normal scope selection
 
 ### map_upload (map_upload.py)
-Uploads heard repeater and room-server advertisements to map.meshcore.dev. Config blob:
-- `api_url` (optional, default `""`) — upload endpoint; empty falls back to the public map.meshcore.dev API
+Uploads heard repeater and room-server advertisements to map.meshcore.io. Config blob:
+- `api_url` (optional, default `""`) — upload endpoint; empty falls back to the public map.meshcore.io API
 - `dry_run` (bool, default `true`) — when true, logs the payload at INFO level without sending
 - `geofence_enabled` (bool, default `false`) — when true, only uploads nodes within `geofence_radius_km` of the radio's own configured lat/lon
 - `geofence_radius_km` (float, default `0`) — filter radius in kilometres

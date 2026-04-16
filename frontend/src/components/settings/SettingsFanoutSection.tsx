@@ -325,7 +325,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
     label: 'Map Upload',
     section: 'Community Sharing',
     description:
-      'Upload repeaters and room servers to map.meshcore.dev or a compatible map API endpoint.',
+      'Upload repeaters and room servers to map.meshcore.io or a compatible map API endpoint.',
     defaultName: 'Map Upload',
     nameMode: 'counted',
     defaults: {
@@ -1668,12 +1668,12 @@ function MapUploadConfigEditor({
       <p className="text-xs text-muted-foreground">
         Automatically upload heard repeater and room server advertisements to{' '}
         <a
-          href="https://map.meshcore.dev"
+          href="https://map.meshcore.io"
           target="_blank"
           rel="noopener noreferrer"
           className="underline hover:text-foreground"
         >
-          map.meshcore.dev
+          map.meshcore.io
         </a>
         . Requires the radio&apos;s private key to be available (firmware must have{' '}
         <code>ENABLE_PRIVATE_KEY_EXPORT=1</code>). Only raw RF packets are shared &mdash; never
@@ -1710,12 +1710,12 @@ function MapUploadConfigEditor({
         <Input
           id="fanout-map-api-url"
           type="url"
-          placeholder="https://map.meshcore.dev/api/v1/uploader/node"
+          placeholder="https://map.meshcore.io/api/v1/uploader/node"
           value={(config.api_url as string) || ''}
           onChange={(e) => onChange({ ...config, api_url: e.target.value })}
         />
         <p className="text-xs text-muted-foreground">
-          Leave blank to use the default <code>map.meshcore.dev</code> endpoint.
+          Leave blank to use the default <code>map.meshcore.io</code> endpoint.
         </p>
       </div>
 
