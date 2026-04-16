@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { Channel, Contact, Message, MessagePath, RadioConfig, RawPacket } from '../types';
-import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM } from '../types';
+import { CONTACT_TYPE_ROOM } from '../types';
 import { api } from '../api';
 import {
   findLinkedChannelReferences,
@@ -808,12 +808,13 @@ export function MessageList({
         {sortedMessages.map((msg, index) => {
           // For DMs, look up contact; for channel messages, use parsed sender
           const contact = msg.type === 'PRIV' ? getContact(msg.conversation_key) : null;
-          const isRepeater = contact?.type === CONTACT_TYPE_REPEATER;
           const isRoomServer = contact?.type === CONTACT_TYPE_ROOM;
 
-          // Skip sender parsing for repeater messages (CLI responses often have colons)
+          // Only parse "sender: text" prefix for channel messages — DMs never carry
+          // an in-text sender prefix, so parsing them would incorrectly strip
+          // user text that happens to contain a colon (e.g. "TEST1: TEST2").
           const { sender, content } =
-            isRepeater || (isRoomServer && msg.type === 'PRIV')
+            msg.type === 'PRIV'
               ? { sender: null, content: msg.text }
               : parseSenderFromText(msg.text);
           const directSenderName =
@@ -845,7 +846,8 @@ export function MessageList({
             isCorruptChannelMessage
           );
           const prevMsg = sortedMessages[index - 1];
-          const prevParsedSender = prevMsg ? parseSenderFromText(prevMsg.text).sender : null;
+          const prevParsedSender =
+            prevMsg && prevMsg.type === 'CHAN' ? parseSenderFromText(prevMsg.text).sender : null;
           const prevSenderKey = prevMsg
             ? getSenderKey(
                 prevMsg,

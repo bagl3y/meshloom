@@ -220,6 +220,24 @@ describe('MessageList channel sender rendering', () => {
     expect(onChannelReferenceClick).toHaveBeenCalledWith('#ops-room');
   });
 
+  it('does not strip colon-prefixed text in direct messages (issue #198)', () => {
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            type: 'PRIV',
+            conversation_key: 'ab'.repeat(32),
+            text: 'TEST1: TEST2',
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+      />
+    );
+
+    expect(screen.getByText('TEST1: TEST2')).toBeInTheDocument();
+  });
+
   it('renders and dismisses an unread marker at the first unread message boundary', async () => {
     const user = userEvent.setup();
     const messages = [
