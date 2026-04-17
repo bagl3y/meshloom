@@ -1,3 +1,25 @@
+## [3.12.0] - 2026-04-17
+
+* Feature: Web Push -- get your mesh notifications on a locked phone or when your browser is closed!
+* Feature: Add link to node from map display
+* Feature: Map layers
+* Feature: Better contact/channel selection for fanout
+* Feature: Add glittering status dot option
+* Feature: Add airtime math and average packets/min for repeater info displays
+* Feature: Offer multiple timing intervals for repeater telemetry aurofetch
+* Feature: Add ability to follow OS light/dark mode
+* Bugfix: Clear 100% of messages from radio in fallback mode; don't stop at 100
+* Bugfix: Don't stop DM retry just because the radio did not provide a radio ack on the wire
+* Bugfix: Don't strip outgoing colons on DMs or room servers
+* Bugfix: Patch statusbar overlap on PWA
+* Bugfix: Patch default map upload URL
+* Bugfix: Show learned path in routing override
+* Bugfix: Centralize on "only means RF heard" for first_seen/last_seen
+* Misc: Reduce frequency of time set failure chirping
+* Misc: QoL improvements for Home Assistant integration
+* Misc: Overhaul settings styling
+* Misc: Documentation + tests updates
+
 ## [3.11.3] - 2026-04-12
 
 * Bugfix: Add icons and screenshots for webmanifest
