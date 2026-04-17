@@ -392,7 +392,7 @@ export function SettingsRadioSection({
     <div className={className}>
       {/* ── Connection ── */}
       <div className="space-y-3">
-        <Label className="text-base">Connection</Label>
+        <h3 className="text-base font-semibold tracking-tight">Connection</h3>
         <div className="flex items-center gap-2">
           <div
             className={`w-2 h-2 rounded-full ${
@@ -423,7 +423,7 @@ export function SettingsRadioSection({
         >
           {connectionBusy ? `${connectionActionLabel}...` : connectionActionLabel}
         </Button>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           Disconnect pauses automatic reconnect attempts so another device can use the radio.
         </p>
       </div>
@@ -432,7 +432,7 @@ export function SettingsRadioSection({
 
       {/* ── Identity ── */}
       <div className="space-y-2">
-        <Label className="text-base">Identity</Label>
+        <h3 className="text-base font-semibold tracking-tight">Identity</h3>
       </div>
 
       <div className="space-y-2">
@@ -477,7 +477,7 @@ export function SettingsRadioSection({
 
       {/* ── Radio Parameters ── */}
       <div className="space-y-2">
-        <Label className="text-base">Radio Parameters</Label>
+        <h3 className="text-base font-semibold tracking-tight">Radio Parameters</h3>
       </div>
 
       <div className="space-y-2">
@@ -590,7 +590,7 @@ export function SettingsRadioSection({
       {/* ── Location ── */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label className="text-base">Location</Label>
+          <h3 className="text-base font-semibold tracking-tight">Location</h3>
           <Button
             type="button"
             variant="outline"
@@ -645,7 +645,7 @@ export function SettingsRadioSection({
             <option value="off">Off</option>
             <option value="current">Include Node Location</option>
           </select>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[0.8125rem] text-muted-foreground">
             Companion-radio firmware does not distinguish between saved coordinates and live GPS
             here. When enabled, adverts include the node&apos;s current location state. That may be
             the last coordinates you set from RemoteTerm or live GPS coordinates if the node itself
@@ -674,7 +674,7 @@ export function SettingsRadioSection({
           {rebooting ? 'Rebooting...' : 'Save & Reboot'}
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[0.8125rem] text-muted-foreground">
         Some settings may require a reboot to take effect on some radios.
       </p>
 
@@ -682,7 +682,7 @@ export function SettingsRadioSection({
 
       {/* ── Messaging ── */}
       <div className="space-y-2">
-        <Label className="text-base">Messaging</Label>
+        <h3 className="text-base font-semibold tracking-tight">Messaging</h3>
       </div>
 
       <div className="space-y-2">
@@ -695,7 +695,7 @@ export function SettingsRadioSection({
           />
           <div className="space-y-1">
             <Label htmlFor="multi-acks-enabled">Extra Direct ACK Transmission</Label>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[0.8125rem] text-muted-foreground">
               When enabled, the radio sends one extra direct ACK transmission before the normal ACK
               for received direct messages. This is a firmware-level receive behavior, not a
               RemoteTerm retry setting.
@@ -714,7 +714,7 @@ export function SettingsRadioSection({
           />
           <div className="space-y-1">
             <Label htmlFor="auto-resend-channel">Auto-Resend Unheard Channel Messages</Label>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[0.8125rem] text-muted-foreground">
               When enabled, outgoing channel messages that receive no echo within 2 seconds are
               automatically resent once (byte-perfect, within the 30-second dedup window). Repeaters
               that already heard the original will ignore the duplicate. This functionality will NOT
@@ -732,7 +732,7 @@ export function SettingsRadioSection({
           onChange={(e) => setFloodScope(e.target.value)}
           placeholder="MyRegion"
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           Tag outgoing flood messages with a region name (e.g. MyRegion). Repeaters configured for
           that region can forward the traffic, while repeaters configured to deny other regions may
           drop it. Leave empty to disable.
@@ -749,7 +749,7 @@ export function SettingsRadioSection({
           value={maxRadioContacts}
           onChange={(e) => setMaxRadioContacts(e.target.value)}
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           Configured radio contact capacity. Favorites reload first, then background maintenance
           refills to about 80% of this value and offloads once occupancy reaches about 95%.
         </p>
@@ -775,134 +775,137 @@ export function SettingsRadioSection({
       <Separator />
 
       {/* ── Advertising & Discovery ── */}
-      <div className="space-y-2">
-        <Label className="text-base">Advertising &amp; Discovery</Label>
-      </div>
+      <div className="space-y-5">
+        <h3 className="text-base font-semibold tracking-tight">Advertising &amp; Discovery</h3>
 
-      <div className="space-y-2">
-        <Label htmlFor="advert-interval">Periodic Advertising Interval</Label>
-        <div className="flex items-center gap-2">
-          <Input
-            id="advert-interval"
-            type="number"
-            min="0"
-            value={advertIntervalHours}
-            onChange={(e) => setAdvertIntervalHours(e.target.value)}
-            className="w-28"
-          />
-          <span className="text-sm text-muted-foreground">hours (0 = off)</span>
+        <div className="space-y-2">
+          <Label htmlFor="advert-interval">Periodic Advertising Interval</Label>
+          <div className="flex items-center gap-2">
+            <Input
+              id="advert-interval"
+              type="number"
+              min="0"
+              value={advertIntervalHours}
+              onChange={(e) => setAdvertIntervalHours(e.target.value)}
+              className="w-28"
+            />
+            <span className="text-sm text-muted-foreground">hours (0 = off)</span>
+          </div>
+          <p className="text-[0.8125rem] text-muted-foreground">
+            How often to automatically advertise presence. Set to 0 to disable. Minimum: 1 hour.
+            Recommended: 24 hours or higher.
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          How often to automatically advertise presence. Set to 0 to disable. Minimum: 1 hour.
-          Recommended: 24 hours or higher.
-        </p>
-      </div>
 
-      <div className="space-y-2">
-        <Label>Send Advertisement</Label>
-        <p className="text-xs text-muted-foreground">
-          Flood adverts propagate through repeaters. Zero-hop adverts are local-only and use less
-          airtime.
-        </p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <Button
-            onClick={() => handleAdvertise('flood')}
-            disabled={advertisingMode !== null || !health?.radio_connected}
-            className="w-full bg-warning hover:bg-warning/90 text-warning-foreground"
-          >
-            {advertisingMode === 'flood' ? 'Sending...' : 'Send Flood Advertisement'}
-          </Button>
-          <Button
-            onClick={() => handleAdvertise('zero_hop')}
-            disabled={advertisingMode !== null || !health?.radio_connected}
-            className="w-full"
-          >
-            {advertisingMode === 'zero_hop' ? 'Sending...' : 'Send Zero-Hop Advertisement'}
-          </Button>
-        </div>
-        {!health?.radio_connected && (
-          <p className="text-sm text-destructive">Radio not connected</p>
-        )}
-      </div>
-
-      <div className="space-y-3">
-        <Label>Mesh Discovery</Label>
-        <p className="text-xs text-muted-foreground">
-          Discover nearby node types that currently respond to mesh discovery requests: repeaters
-          and sensors.
-        </p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {[
-            { target: 'repeaters', label: 'Discover Repeaters' },
-            { target: 'sensors', label: 'Discover Sensors' },
-            { target: 'all', label: 'Discover Both' },
-          ].map(({ target, label }) => (
+        <div className="space-y-2">
+          <h4 className="text-sm font-semibold">Send Advertisement</h4>
+          <p className="text-[0.8125rem] text-muted-foreground">
+            Flood adverts propagate through repeaters. Zero-hop adverts are local-only and use less
+            airtime.
+          </p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Button
-              key={target}
-              type="button"
-              variant="outline"
-              onClick={() => handleDiscover(target as RadioDiscoveryTarget)}
-              disabled={meshDiscoveryLoadingTarget !== null || !health?.radio_connected}
+              onClick={() => handleAdvertise('flood')}
+              disabled={advertisingMode !== null || !health?.radio_connected}
+              className="w-full bg-warning hover:bg-warning/90 text-warning-foreground"
+            >
+              {advertisingMode === 'flood' ? 'Sending...' : 'Send Flood Advertisement'}
+            </Button>
+            <Button
+              onClick={() => handleAdvertise('zero_hop')}
+              disabled={advertisingMode !== null || !health?.radio_connected}
               className="w-full"
             >
-              {meshDiscoveryLoadingTarget === target ? 'Listening...' : label}
+              {advertisingMode === 'zero_hop' ? 'Sending...' : 'Send Zero-Hop Advertisement'}
             </Button>
-          ))}
-        </div>
-        {!health?.radio_connected && (
-          <p className="text-sm text-destructive">Radio not connected</p>
-        )}
-        {discoverError && (
-          <p className="text-sm text-destructive" role="alert">
-            {discoverError}
-          </p>
-        )}
-        {meshDiscovery && (
-          <div className="space-y-2 rounded-md border border-input bg-muted/20 p-3">
-            <div className="flex items-center justify-between gap-4">
-              <p className="text-sm font-medium">
-                Last sweep: {meshDiscovery.results.length} node
-                {meshDiscovery.results.length === 1 ? '' : 's'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {meshDiscovery.duration_seconds.toFixed(0)}s listen window
-              </p>
-            </div>
-            {meshDiscovery.results.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No supported nodes responded during the last discovery sweep.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {meshDiscovery.results.map((result) => (
-                  <div
-                    key={result.public_key}
-                    className="rounded-md border border-input bg-background px-3 py-2"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium">
-                        {result.name ?? <span className="capitalize">{result.node_type}</span>}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        heard {result.heard_count} time{result.heard_count === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                    {result.name && (
-                      <p className="text-xs capitalize text-muted-foreground">{result.node_type}</p>
-                    )}
-                    <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
-                      {result.public_key}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Heard here: {result.local_snr ?? 'n/a'} dB SNR / {result.local_rssi ?? 'n/a'}{' '}
-                      dBm RSSI. Remote heard us: {result.remote_snr ?? 'n/a'} dB SNR.
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
-        )}
+          {!health?.radio_connected && (
+            <p className="text-sm text-destructive">Radio not connected</p>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold">Mesh Discovery</h4>
+          <p className="text-[0.8125rem] text-muted-foreground">
+            Discover nearby node types that currently respond to mesh discovery requests: repeaters
+            and sensors.
+          </p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {[
+              { target: 'repeaters', label: 'Discover Repeaters' },
+              { target: 'sensors', label: 'Discover Sensors' },
+              { target: 'all', label: 'Discover Both' },
+            ].map(({ target, label }) => (
+              <Button
+                key={target}
+                type="button"
+                variant="outline"
+                onClick={() => handleDiscover(target as RadioDiscoveryTarget)}
+                disabled={meshDiscoveryLoadingTarget !== null || !health?.radio_connected}
+                className="w-full"
+              >
+                {meshDiscoveryLoadingTarget === target ? 'Listening...' : label}
+              </Button>
+            ))}
+          </div>
+          {!health?.radio_connected && (
+            <p className="text-sm text-destructive">Radio not connected</p>
+          )}
+          {discoverError && (
+            <p className="text-sm text-destructive" role="alert">
+              {discoverError}
+            </p>
+          )}
+          {meshDiscovery && (
+            <div className="space-y-2 rounded-md border border-input bg-muted/20 p-3">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm font-medium">
+                  Last sweep: {meshDiscovery.results.length} node
+                  {meshDiscovery.results.length === 1 ? '' : 's'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {meshDiscovery.duration_seconds.toFixed(0)}s listen window
+                </p>
+              </div>
+              {meshDiscovery.results.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No supported nodes responded during the last discovery sweep.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {meshDiscovery.results.map((result) => (
+                    <div
+                      key={result.public_key}
+                      className="rounded-md border border-input bg-background px-3 py-2"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-medium">
+                          {result.name ?? <span className="capitalize">{result.node_type}</span>}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          heard {result.heard_count} time{result.heard_count === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      {result.name && (
+                        <p className="text-xs capitalize text-muted-foreground">
+                          {result.node_type}
+                        </p>
+                      )}
+                      <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                        {result.public_key}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Heard here: {result.local_snr ?? 'n/a'} dB SNR /{' '}
+                        {result.local_rssi ?? 'n/a'} dBm RSSI. Remote heard us:{' '}
+                        {result.remote_snr ?? 'n/a'} dB SNR.
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

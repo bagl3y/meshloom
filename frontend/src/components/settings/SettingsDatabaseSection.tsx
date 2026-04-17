@@ -185,7 +185,7 @@ export function SettingsDatabaseSection({
     <div className={className}>
       {/* ── Database Overview ── */}
       <div className="space-y-3">
-        <Label className="text-base">Database Overview</Label>
+        <h3 className="text-base font-semibold tracking-tight">Database Overview</h3>
         <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
           <div className="flex justify-between items-center">
             <span className="text-sm">Database size</span>
@@ -212,11 +212,11 @@ export function SettingsDatabaseSection({
 
       {/* ── Storage Cleanup ── */}
       <div className="space-y-4">
-        <Label className="text-base">Storage Cleanup</Label>
+        <h3 className="text-base font-semibold tracking-tight">Storage Cleanup</h3>
 
         <div className="rounded-md border border-border p-3 space-y-2">
-          <Label className="text-sm">Delete Undecrypted Packets</Label>
-          <p className="text-xs text-muted-foreground">
+          <h3 className="text-sm font-semibold">Delete Undecrypted Packets</h3>
+          <p className="text-[0.8125rem] text-muted-foreground">
             Permanently deletes stored raw packets that have not yet been decrypted. These are
             retained in case you later obtain the correct key — once deleted, these messages can
             never be recovered.
@@ -248,8 +248,8 @@ export function SettingsDatabaseSection({
         </div>
 
         <div className="rounded-md border border-border p-3 space-y-2">
-          <Label className="text-sm">Purge Archival Raw Packets</Label>
-          <p className="text-xs text-muted-foreground">
+          <h3 className="text-sm font-semibold">Purge Archival Raw Packets</h3>
+          <p className="text-[0.8125rem] text-muted-foreground">
             Deletes the raw packet bytes behind messages that are already decrypted and visible in
             chat. This frees space but removes packet-analysis availability for those messages. It
             does not affect displayed messages or future decryption.
@@ -269,7 +269,7 @@ export function SettingsDatabaseSection({
 
       {/* ── DM Decryption ── */}
       <div className="space-y-3">
-        <Label className="text-base">DM Decryption</Label>
+        <h3 className="text-base font-semibold tracking-tight">DM Decryption</h3>
         <label className="flex items-center gap-3 cursor-pointer">
           <input
             type="checkbox"
@@ -286,7 +286,7 @@ export function SettingsDatabaseSection({
           />
           <span className="text-sm">Auto-decrypt historical DMs when new contact advertises</span>
         </label>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           When enabled, the server will automatically try to decrypt stored DM packets when a new
           contact sends an advertisement. This may cause brief delays on large packet backlogs.
         </p>
@@ -296,8 +296,8 @@ export function SettingsDatabaseSection({
 
       {/* ── Tracked Repeater Telemetry ── */}
       <div className="space-y-3">
-        <Label className="text-base">Tracked Repeater Telemetry</Label>
-        <p className="text-xs text-muted-foreground">
+        <h3 className="text-base font-semibold tracking-tight">Tracked Repeater Telemetry</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">
           Repeaters opted into automatic telemetry collection are polled on a scheduled interval. To
           limit mesh traffic, the app caps telemetry at 24 checks per day across all tracked
           repeaters — so fewer tracked repeaters allows shorter intervals, and more tracked
@@ -427,145 +427,143 @@ export function SettingsDatabaseSection({
       <Separator />
 
       {/* ── Contact Management ── */}
-      <div className="space-y-2">
-        <Label className="text-base">Contact Management</Label>
-      </div>
+      <div className="space-y-5">
+        <h3 className="text-base font-semibold tracking-tight">Contact Management</h3>
 
-      {/* Block discovery of new node types */}
-      <div className="space-y-3">
-        <Label>Block Discovery of New Node Types</Label>
-        <p className="text-xs text-muted-foreground">
-          Checked types will be ignored when heard via advertisement. Existing contacts of these
-          types are still updated. This does not affect contacts added manually or via DM.
-        </p>
-        <div className="space-y-1.5">
-          {(
-            [
-              [1, 'Block clients'],
-              [2, 'Block repeaters'],
-              [3, 'Block room servers'],
-              [4, 'Block sensors'],
-            ] as const
-          ).map(([typeCode, label]) => {
-            const checked = discoveryBlockedTypes.includes(typeCode);
-            return (
-              <label key={typeCode} className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => {
-                    const prev = discoveryBlockedTypes;
-                    const next = checked ? prev.filter((t) => t !== typeCode) : [...prev, typeCode];
-                    setDiscoveryBlockedTypes(next);
-                    void persistAppSettings({ discovery_blocked_types: next }, () =>
-                      setDiscoveryBlockedTypes(prev)
-                    );
-                  }}
-                  className="rounded border-input"
-                />
-                {label}
-              </label>
-            );
-          })}
-        </div>
-        {discoveryBlockedTypes.length > 0 && (
-          <p className="text-xs text-warning">
-            New{' '}
-            {discoveryBlockedTypes
-              .map((t) =>
-                t === 1 ? 'clients' : t === 2 ? 'repeaters' : t === 3 ? 'room servers' : 'sensors'
-              )
-              .join(', ')}{' '}
-            heard via advertisement will not be added to your contact list.
+        {/* Block discovery of new node types */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold">Block Discovery of New Node Types</h4>
+          <p className="text-[0.8125rem] text-muted-foreground">
+            Checked types will be ignored when heard via advertisement. Existing contacts of these
+            types are still updated. This does not affect contacts added manually or via DM.
           </p>
-        )}
-      </div>
-
-      <Separator />
-
-      {/* Blocked contacts list */}
-      <div className="space-y-3">
-        <Label>Blocked Contacts</Label>
-        <p className="text-xs text-muted-foreground">
-          Blocked contacts are hidden from the sidebar. Blocking only hides messages from the UI —
-          MQTT forwarding and bot responses are not affected. Messages are still stored and will
-          reappear if unblocked.
-        </p>
-
-        {blockedKeys.length === 0 && blockedNames.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic">
-            No blocked contacts. Block contacts from their info pane, viewed by clicking their
-            avatar in any channel, or their name within the top status bar with the conversation
-            open.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {blockedKeys.length > 0 && (
-              <div>
-                <span className="text-xs text-muted-foreground font-medium">Blocked Keys</span>
-                <div className="mt-1 space-y-1">
-                  {blockedKeys.map((key) => (
-                    <div key={key} className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-mono truncate flex-1">{key}</span>
-                      {onToggleBlockedKey && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => onToggleBlockedKey(key)}
-                          className="h-7 text-xs flex-shrink-0"
-                        >
-                          Unblock
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {blockedNames.length > 0 && (
-              <div>
-                <span className="text-xs text-muted-foreground font-medium">Blocked Names</span>
-                <div className="mt-1 space-y-1">
-                  {blockedNames.map((name) => (
-                    <div key={name} className="flex items-center justify-between gap-2">
-                      <span className="text-sm truncate flex-1">{name}</span>
-                      {onToggleBlockedName && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => onToggleBlockedName(name)}
-                          className="h-7 text-xs flex-shrink-0"
-                        >
-                          Unblock
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+          <div className="space-y-1.5">
+            {(
+              [
+                [1, 'Block clients'],
+                [2, 'Block repeaters'],
+                [3, 'Block room servers'],
+                [4, 'Block sensors'],
+              ] as const
+            ).map(([typeCode, label]) => {
+              const checked = discoveryBlockedTypes.includes(typeCode);
+              return (
+                <label key={typeCode} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => {
+                      const prev = discoveryBlockedTypes;
+                      const next = checked
+                        ? prev.filter((t) => t !== typeCode)
+                        : [...prev, typeCode];
+                      setDiscoveryBlockedTypes(next);
+                      void persistAppSettings({ discovery_blocked_types: next }, () =>
+                        setDiscoveryBlockedTypes(prev)
+                      );
+                    }}
+                    className="rounded border-input"
+                  />
+                  {label}
+                </label>
+              );
+            })}
           </div>
-        )}
-      </div>
+          {discoveryBlockedTypes.length > 0 && (
+            <p className="text-xs text-warning">
+              New{' '}
+              {discoveryBlockedTypes
+                .map((t) =>
+                  t === 1 ? 'clients' : t === 2 ? 'repeaters' : t === 3 ? 'room servers' : 'sensors'
+                )
+                .join(', ')}{' '}
+              heard via advertisement will not be added to your contact list.
+            </p>
+          )}
+        </div>
 
-      <Separator />
+        {/* Blocked contacts list */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold">Blocked Contacts</h4>
+          <p className="text-[0.8125rem] text-muted-foreground">
+            Blocked contacts are hidden from the sidebar. Blocking only hides messages from the UI —
+            MQTT forwarding and bot responses are not affected. Messages are still stored and will
+            reappear if unblocked.
+          </p>
 
-      {/* Bulk delete */}
-      <div className="space-y-3">
-        <Label>Bulk Delete Contacts</Label>
-        <p className="text-xs text-muted-foreground">
-          Remove multiple contacts or repeaters at once. Useful for cleaning up spam or unwanted
-          nodes. Message history will be preserved.
-        </p>
-        <Button variant="outline" className="w-full" onClick={() => setBulkDeleteOpen(true)}>
-          Open Bulk Delete
-        </Button>
-        <BulkDeleteContactsModal
-          open={bulkDeleteOpen}
-          onClose={() => setBulkDeleteOpen(false)}
-          contacts={contacts}
-          onDeleted={(keys) => onBulkDeleteContacts?.(keys)}
-        />
+          {blockedKeys.length === 0 && blockedNames.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">
+              No blocked contacts. Block contacts from their info pane, viewed by clicking their
+              avatar in any channel, or their name within the top status bar with the conversation
+              open.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {blockedKeys.length > 0 && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Blocked Keys</span>
+                  <div className="mt-1 space-y-1">
+                    {blockedKeys.map((key) => (
+                      <div key={key} className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-mono truncate flex-1">{key}</span>
+                        {onToggleBlockedKey && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onToggleBlockedKey(key)}
+                            className="h-7 text-xs flex-shrink-0"
+                          >
+                            Unblock
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {blockedNames.length > 0 && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Blocked Names</span>
+                  <div className="mt-1 space-y-1">
+                    {blockedNames.map((name) => (
+                      <div key={name} className="flex items-center justify-between gap-2">
+                        <span className="text-sm truncate flex-1">{name}</span>
+                        {onToggleBlockedName && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onToggleBlockedName(name)}
+                            className="h-7 text-xs flex-shrink-0"
+                          >
+                            Unblock
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Bulk delete */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold">Bulk Delete Contacts</h4>
+          <p className="text-[0.8125rem] text-muted-foreground">
+            Remove multiple contacts or repeaters at once. Useful for cleaning up spam or unwanted
+            nodes. Message history will be preserved.
+          </p>
+          <Button variant="outline" className="w-full" onClick={() => setBulkDeleteOpen(true)}>
+            Open Bulk Delete
+          </Button>
+          <BulkDeleteContactsModal
+            open={bulkDeleteOpen}
+            onClose={() => setBulkDeleteOpen(false)}
+            contacts={contacts}
+            onDeleted={(keys) => onBulkDeleteContacts?.(keys)}
+          />
+        </div>
       </div>
     </div>
   );

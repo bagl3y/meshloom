@@ -566,7 +566,7 @@ describe('SettingsModal', () => {
     renderModal();
     openLocalSection();
 
-    const checkbox = screen.getByLabelText('Reopen to last viewed channel/conversation');
+    const checkbox = screen.getByLabelText('Reopen Last Conversation');
     expect(checkbox).not.toBeChecked();
 
     fireEvent.click(checkbox);

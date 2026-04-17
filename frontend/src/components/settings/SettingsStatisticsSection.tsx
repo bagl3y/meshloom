@@ -226,7 +226,7 @@ export function SettingsStatisticsSection({ className }: { className?: string })
         <div className="space-y-6">
           {/* Network */}
           <div>
-            <h4 className="text-sm font-medium mb-2">Network</h4>
+            <h3 className="text-base font-semibold tracking-tight mb-2">Network</h3>
             <div className="grid grid-cols-3 gap-3">
               <div className="text-center p-3 bg-muted/50 rounded-md">
                 <div className="text-2xl font-bold">{stats.contact_count}</div>
@@ -247,7 +247,7 @@ export function SettingsStatisticsSection({ className }: { className?: string })
 
           {/* Messages */}
           <div>
-            <h4 className="text-sm font-medium mb-2">Messages</h4>
+            <h3 className="text-base font-semibold tracking-tight mb-2">Messages</h3>
             <div className="grid grid-cols-3 gap-3">
               <div className="text-center p-3 bg-muted/50 rounded-md">
                 <div className="text-2xl font-bold">{stats.total_dms}</div>
@@ -268,7 +268,7 @@ export function SettingsStatisticsSection({ className }: { className?: string })
 
           {/* Activity */}
           <div>
-            <h4 className="text-sm font-medium mb-2">Activity</h4>
+            <h3 className="text-base font-semibold tracking-tight mb-2">Activity</h3>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-muted-foreground">
@@ -305,7 +305,7 @@ export function SettingsStatisticsSection({ className }: { className?: string })
 
           {/* Packets */}
           <div>
-            <h4 className="text-sm font-medium mb-2">Packets</h4>
+            <h3 className="text-base font-semibold tracking-tight mb-2">Packets</h3>
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Total stored</span>
@@ -327,7 +327,9 @@ export function SettingsStatisticsSection({ className }: { className?: string })
             <>
               <Separator />
               <div>
-                <h4 className="text-sm font-medium mb-2">Packets per Hour (72h)</h4>
+                <h3 className="text-base font-semibold tracking-tight mb-2">
+                  Packets per Hour (72h)
+                </h3>
                 <PacketsPerHourChart buckets={stats.packets_per_hour_72h} />
               </div>
             </>
@@ -337,7 +339,7 @@ export function SettingsStatisticsSection({ className }: { className?: string })
 
           {/* Path Hash Width */}
           <div>
-            <h4 className="text-sm font-medium mb-2">Path Hash Width (24h)</h4>
+            <h3 className="text-base font-semibold tracking-tight mb-2">Path Hash Width (24h)</h3>
             <div className="mb-2 text-xs text-muted-foreground">
               Parsed stored raw packets from the last 24 hours:{' '}
               {stats.path_hash_width_24h.total_packets}
@@ -407,7 +409,9 @@ export function SettingsStatisticsSection({ className }: { className?: string })
             <>
               <Separator />
               <div>
-                <h4 className="text-sm font-medium mb-2">Busiest Channels (24h)</h4>
+                <h3 className="text-base font-semibold tracking-tight mb-2">
+                  Busiest Channels (24h)
+                </h3>
                 <ResponsiveContainer
                   width="100%"
                   height={stats.busiest_channels_24h.length * 28 + 8}
@@ -451,7 +455,7 @@ export function SettingsStatisticsSection({ className }: { className?: string })
             <>
               <Separator />
               <div>
-                <h4 className="text-sm font-medium mb-2">Noise Floor (24h)</h4>
+                <h3 className="text-base font-semibold tracking-tight mb-2">Noise Floor (24h)</h3>
                 {stats.noise_floor_24h.latest_noise_floor_dbm != null && (
                   <div className="mb-2 text-xs text-muted-foreground">
                     Latest reading: {stats.noise_floor_24h.latest_noise_floor_dbm} dBm

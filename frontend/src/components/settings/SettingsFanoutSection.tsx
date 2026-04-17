@@ -729,7 +729,7 @@ function MqttPrivateConfigEditor({
 }) {
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[0.8125rem] text-muted-foreground">
         Forward mesh data to your own MQTT broker for home automation, logging, or alerting.
       </p>
 
@@ -1000,7 +1000,7 @@ function MqttHaConfigEditor({
     <div className="space-y-3">
       <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
         <div className="space-y-1">
-          <h3 className="text-base font-semibold text-foreground">Home Assistant MQTT Discovery</h3>
+          <h3 className="text-base font-semibold tracking-tight">Home Assistant MQTT Discovery</h3>
           <p className="text-sm text-muted-foreground">
             Publish discovery configs and MeshCore state to your MQTT broker so Home Assistant
             creates native devices, sensors, GPS trackers, and message events automatically.
@@ -1010,27 +1010,27 @@ function MqttHaConfigEditor({
         <div className="grid gap-2 md:grid-cols-3">
           <div className="rounded-md border border-border/70 bg-background/80 p-3">
             <div className="text-sm font-medium text-foreground">1. Same broker</div>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-[0.8125rem] text-muted-foreground">
               Home Assistant&apos;s built-in MQTT integration must point at the same broker
               configured below.
             </p>
           </div>
           <div className="rounded-md border border-border/70 bg-background/80 p-3">
             <div className="text-sm font-medium text-foreground">2. Pick what to expose</div>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-[0.8125rem] text-muted-foreground">
               Choose repeaters for telemetry sensors and contacts for GPS tracker entities.
             </p>
           </div>
           <div className="rounded-md border border-border/70 bg-background/80 p-3">
             <div className="text-sm font-medium text-foreground">3. Automate in HA</div>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-[0.8125rem] text-muted-foreground">
               Radio health and message events publish continuously; repeater and contact data update
               when new data is heard or collected.
             </p>
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           Uses{' '}
           <span
             role="link"
@@ -1246,7 +1246,7 @@ function MqttHaConfigEditor({
 
       <Separator />
 
-      <p className="text-sm font-semibold text-foreground">MQTT Broker</p>
+      <h3 className="text-base font-semibold tracking-tight">MQTT Broker</h3>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
@@ -1337,8 +1337,8 @@ function MqttHaConfigEditor({
       <Separator />
 
       <div className="space-y-2">
-        <p className="text-sm font-semibold text-foreground">GPS Tracked Contacts</p>
-        <p className="text-xs text-muted-foreground">
+        <h3 className="text-base font-semibold tracking-tight">GPS Tracked Contacts</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">
           Each selected contact becomes a <code className="text-[0.6875rem]">device_tracker</code>{' '}
           in HA, updated whenever an advertisement with GPS coordinates is heard. Useful for
           tracking mobile nodes on an HA map dashboard.
@@ -1366,7 +1366,7 @@ function MqttHaConfigEditor({
         )}
 
         {contactOptions.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">No contacts available.</p>
+          <p className="text-[0.8125rem] text-muted-foreground italic">No contacts available.</p>
         ) : (
           <>
             <Input
@@ -1378,7 +1378,7 @@ function MqttHaConfigEditor({
             />
             <div className="max-h-48 overflow-y-auto space-y-1 rounded border border-border p-2">
               {filteredContacts.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic py-1">
+                <p className="text-[0.8125rem] text-muted-foreground italic py-1">
                   No contacts match &ldquo;{contactSearch}&rdquo;
                 </p>
               ) : (
@@ -1408,8 +1408,8 @@ function MqttHaConfigEditor({
       <Separator />
 
       <div className="space-y-2">
-        <p className="text-sm font-semibold text-foreground">Telemetry Tracked Repeaters</p>
-        <p className="text-xs text-muted-foreground">
+        <h3 className="text-base font-semibold tracking-tight">Telemetry Tracked Repeaters</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">
           Each selected repeater becomes an HA device with sensors for battery voltage, RSSI, SNR,
           noise floor, packet counts, and uptime. Data updates whenever telemetry is collected
           (auto-collect runs every ~8 hours, or on manual dashboard fetch). Only repeaters already
@@ -1417,13 +1417,13 @@ function MqttHaConfigEditor({
           repeater and opting in at the bottom of the page).
         </p>
         {trackedRepeaters.length === 0 ? (
-          <div className="rounded-md border border-muted bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <div className="rounded-md border border-muted bg-muted/30 px-3 py-2 text-[0.8125rem] text-muted-foreground">
             No repeaters are being auto-tracked for telemetry. Add repeaters to the auto-telemetry
             tracking list in the Radio section first, then return here to select which ones to
             expose to HA.
           </div>
         ) : repeaterOptions.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">
+          <p className="text-[0.8125rem] text-muted-foreground italic">
             Auto-tracked repeaters not found in contact list.
           </p>
         ) : (
@@ -1449,8 +1449,8 @@ function MqttHaConfigEditor({
       <Separator />
 
       <div className="space-y-2">
-        <p className="text-sm font-semibold text-foreground">Message Events</p>
-        <p className="text-xs text-muted-foreground">
+        <h3 className="text-base font-semibold tracking-tight">Message Events</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">
           Matching messages fire an{' '}
           <code className="text-[0.6875rem]">{`event.meshcore_${localRadioNodeId}_messages`}</code>{' '}
           entity in HA with sender, text, channel, and direction attributes. Use HA automations to
@@ -1473,7 +1473,7 @@ function MqttCommunityConfigEditor({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[0.8125rem] text-muted-foreground">
         Advanced community MQTT editor. Use this for manual meshcoretomqtt-compatible setups or for
         modifying a saved preset after creation. Only raw RF packets are shared &mdash; never
         decrypted messages.
@@ -1536,7 +1536,7 @@ function MqttCommunityConfigEditor({
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[0.8125rem] text-muted-foreground">
         LetsMesh uses <code>token</code> auth. MeshRank uses <code>none</code>.
       </p>
 
@@ -1551,7 +1551,9 @@ function MqttCommunityConfigEditor({
               value={(config.token_audience as string | undefined) ?? ''}
               onChange={(e) => onChange({ ...config, token_audience: e.target.value })}
             />
-            <p className="text-xs text-muted-foreground">Defaults to the broker host when blank</p>
+            <p className="text-[0.8125rem] text-muted-foreground">
+              Defaults to the broker host when blank
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="fanout-comm-email">Owner Email (optional)</Label>
@@ -1562,7 +1564,7 @@ function MqttCommunityConfigEditor({
               value={(config.email as string) || ''}
               onChange={(e) => onChange({ ...config, email: e.target.value })}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[0.8125rem] text-muted-foreground">
               Used to claim your node on the community aggregator
             </p>
           </div>
@@ -1626,7 +1628,7 @@ function MqttCommunityConfigEditor({
           onChange={(e) => onChange({ ...config, iata: e.target.value.toUpperCase() })}
           className="w-32"
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           Your nearest airport&apos;s IATA code (required)
         </p>
       </div>
@@ -1640,7 +1642,7 @@ function MqttCommunityConfigEditor({
           value={(config.topic_template as string | undefined) ?? ''}
           onChange={(e) => onChange({ ...config, topic_template: e.target.value })}
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           Use <code>{'{IATA}'}</code> and <code>{'{PUBLIC_KEY}'}</code>. Default:{' '}
           <code>{DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE}</code>
         </p>
@@ -1658,7 +1660,7 @@ function MeshRankConfigEditor({
 }) {
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[0.8125rem] text-muted-foreground">
         Pre-filled MeshRank setup. This saves as a regular Community MQTT integration once created,
         but only asks for the MeshRank packet topic you were given.
       </p>
@@ -1685,7 +1687,7 @@ function MeshRankConfigEditor({
             })
           }
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           Paste the full topic template from your MeshRank config, for example{' '}
           <code>meshrank/uplink/B435F6D5F7896B74C6B995FE221C2C1F/{'{PUBLIC_KEY}'}/packets</code>.
         </p>
@@ -1705,7 +1707,7 @@ function LetsMeshConfigEditor({
 }) {
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[0.8125rem] text-muted-foreground">
         Pre-filled LetsMesh setup. This saves as a regular Community MQTT integration once created,
         but only asks for the values LetsMesh expects from you.
       </p>
@@ -1786,7 +1788,7 @@ function BotConfigEditor({
       </div>
 
       <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           Define a <code className="bg-muted px-1 rounded">bot()</code> function that receives
           message data and optionally returns a reply.
         </p>
@@ -1810,7 +1812,7 @@ function BotConfigEditor({
         <BotCodeEditor value={code} onChange={(c) => onChange({ ...config, code: c })} />
       </Suspense>
 
-      <div className="text-xs text-muted-foreground space-y-1">
+      <div className="text-[0.8125rem] text-muted-foreground space-y-1">
         <p>
           <strong>Available:</strong> Standard Python libraries and any modules installed in the
           server environment.
@@ -1858,7 +1860,7 @@ function MapUploadConfigEditor({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[0.8125rem] text-muted-foreground">
         Automatically upload heard repeater and room server advertisements to{' '}
         <a
           href="https://map.meshcore.io"
@@ -1889,7 +1891,7 @@ function MapUploadConfigEditor({
         />
         <div>
           <span className="text-sm font-medium">Dry Run (log only, no uploads)</span>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[0.8125rem] text-muted-foreground">
             When enabled, upload payloads are logged at INFO level but not sent. Disable once you
             have confirmed the logged output looks correct.
           </p>
@@ -1907,7 +1909,7 @@ function MapUploadConfigEditor({
           value={(config.api_url as string) || ''}
           onChange={(e) => onChange({ ...config, api_url: e.target.value })}
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           Leave blank to use the default <code>map.meshcore.io</code> endpoint.
         </p>
       </div>
@@ -1923,7 +1925,7 @@ function MapUploadConfigEditor({
         />
         <div>
           <span className="text-sm font-medium">Enable Geofence</span>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[0.8125rem] text-muted-foreground">
             Only upload nodes whose location falls within the configured radius of your radio&apos;s
             own position. Helps exclude nodes with false or spoofed coordinates. Uses the
             latitude/longitude set in Radio Settings.
@@ -1941,7 +1943,7 @@ function MapUploadConfigEditor({
             </div>
           )}
           {radioLatLonConfigured && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[0.8125rem] text-muted-foreground">
               Using radio position{' '}
               <code>
                 {radioLat?.toFixed(5)}, {radioLon?.toFixed(5)}
@@ -1965,7 +1967,7 @@ function MapUploadConfigEditor({
                 })
               }
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[0.8125rem] text-muted-foreground">
               Nodes further than this distance from your radio&apos;s position will not be uploaded.
             </p>
           </div>
@@ -2120,7 +2122,7 @@ function PillsSearchList({
       )}
 
       {items.length === 0 ? (
-        <p className="text-xs text-muted-foreground italic">{emptyItemsMessage}</p>
+        <p className="text-[0.8125rem] text-muted-foreground italic">{emptyItemsMessage}</p>
       ) : (
         <>
           <Input
@@ -2132,7 +2134,7 @@ function PillsSearchList({
           />
           <div className="max-h-48 overflow-y-auto space-y-1 rounded border border-border p-2">
             {filtered.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic py-1">
+              <p className="text-[0.8125rem] text-muted-foreground italic py-1">
                 No {label.toLowerCase()} match &ldquo;{search}&rdquo;
               </p>
             ) : (
@@ -2282,7 +2284,7 @@ function ScopeSelector({
 
   return (
     <div className="space-y-3">
-      <Label>Message Scope</Label>
+      <h3 className="text-base font-semibold tracking-tight">Message Scope</h3>
 
       {showRawPackets && (
         <label className="flex items-center gap-3 cursor-pointer">
@@ -2319,7 +2321,7 @@ function ScopeSelector({
 
       {isListMode && (
         <>
-          <p className="text-xs text-muted-foreground">{listHint}</p>
+          <p className="text-[0.8125rem] text-muted-foreground">{listHint}</p>
 
           {channels.length > 0 && (
             <PillsSearchList
@@ -2387,7 +2389,7 @@ function AppriseConfigEditor({
 }) {
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[0.8125rem] text-muted-foreground">
         Send push notifications via{' '}
         <a
           href="https://github.com/caronc/apprise"
@@ -2421,7 +2423,7 @@ function AppriseConfigEditor({
           onChange={(e) => onChange({ ...config, urls: e.target.value })}
           rows={4}
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           One URL per line. All URLs receive every matched notification. For Matrix room version 12
           (servername-less room IDs), append <code>?hsreq=no</code> to the URL.
         </p>
@@ -2436,7 +2438,7 @@ function AppriseConfigEditor({
         />
         <div>
           <span className="text-sm">Preserve identity on Discord</span>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[0.8125rem] text-muted-foreground">
             When enabled, Discord webhooks will use their configured name/avatar instead of
             overriding with MeshCore sender info.
           </p>
@@ -2492,7 +2494,7 @@ function WebhookConfigEditor({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[0.8125rem] text-muted-foreground">
         Send message data as JSON to an HTTP endpoint when messages are received.
       </p>
 
@@ -2526,8 +2528,8 @@ function WebhookConfigEditor({
       <Separator />
 
       <div className="space-y-3">
-        <Label>HMAC Signing</Label>
-        <p className="text-xs text-muted-foreground">
+        <h3 className="text-base font-semibold tracking-tight">HMAC Signing</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">
           When a secret is set, each request includes an HMAC-SHA256 signature of the JSON body in
           the specified header (e.g. <code className="bg-muted px-1 rounded">sha256=ab12cd...</code>
           ).
@@ -2590,7 +2592,7 @@ function SqsConfigEditor({
 }) {
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[0.8125rem] text-muted-foreground">
         Send matched mesh events to an Amazon SQS queue for durable processing by workers, Lambdas,
         or downstream automation.
       </p>
@@ -2631,15 +2633,17 @@ function SqsConfigEditor({
             value={(config.endpoint_url as string) || ''}
             onChange={(e) => onChange({ ...config, endpoint_url: e.target.value })}
           />
-          <p className="text-xs text-muted-foreground">Useful for LocalStack or custom endpoints</p>
+          <p className="text-[0.8125rem] text-muted-foreground">
+            Useful for LocalStack or custom endpoints
+          </p>
         </div>
       </div>
 
       <Separator />
 
       <div className="space-y-2">
-        <Label>Static Credentials (optional)</Label>
-        <p className="text-xs text-muted-foreground">
+        <h3 className="text-base font-semibold tracking-tight">Static Credentials (optional)</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">
           Leave blank to use the server&apos;s normal AWS credential chain.
         </p>
       </div>

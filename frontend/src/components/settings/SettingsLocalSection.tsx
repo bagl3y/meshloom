@@ -5,6 +5,7 @@ import { usePush } from '../../contexts/PushSubscriptionContext';
 import type { Channel, Contact } from '../../types';
 import { getContactDisplayName } from '../../utils/pubkey';
 import { Button } from '../ui/button';
+import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
@@ -92,8 +93,8 @@ function PushDeviceManagement({
   if (!isSupported) {
     return (
       <div className="space-y-3">
-        <Label>Web Push Notifications</Label>
-        <p className="text-sm text-muted-foreground">
+        <h3 className="text-base font-semibold tracking-tight">Web Push Notifications</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">
           {window.isSecureContext
             ? 'Push notifications are not supported by this browser.'
             : 'Web Push requires HTTPS. Access RemoteTerm over HTTPS (self-signed certificates work) to enable push notifications.'}
@@ -105,13 +106,13 @@ function PushDeviceManagement({
   return (
     <div className="space-y-4">
       <div className="space-y-1">
-        <Label>Web Push Notifications</Label>
-        <p className="text-sm text-muted-foreground">
+        <h3 className="text-base font-semibold tracking-tight">Web Push Notifications</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">
           Receive notifications even when the browser is closed. Use the bell icon in any
           conversation header to enable push for that contact or channel, or subscribe this browser
           to receive notifications for all push-enabled conversations.
         </p>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           The set of channels or DMs that trigger push notifications are global per-install (i.e.
           all devices that register for Web Push will have the same set of channels/DMs that trigger
           notifications). Subscribing or unsubscribing a particular browser only controls whether
@@ -265,12 +266,12 @@ export function SettingsLocalSection({
 
   return (
     <div className={className}>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-[0.8125rem] text-muted-foreground">
         These settings apply only to this device/browser.
       </p>
 
       <div className="space-y-1">
-        <Label>Color Scheme</Label>
+        <h3 className="text-base font-semibold tracking-tight">Color Scheme</h3>
         <ThemeSelector />
         <ThemePreview className="mt-6" />
       </div>
@@ -278,7 +279,7 @@ export function SettingsLocalSection({
       <Separator />
 
       <div className="space-y-3">
-        <Label>Local Label</Label>
+        <h3 className="text-base font-semibold tracking-tight">Local Label</h3>
         <div className="flex items-center gap-2">
           <Input
             value={localLabelText}
@@ -305,7 +306,7 @@ export function SettingsLocalSection({
             className="w-10 h-9 rounded border border-input cursor-pointer bg-transparent p-0.5"
           />
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           Display a colored banner at the top of the page to identify this instance.
         </p>
       </div>
@@ -330,7 +331,7 @@ export function SettingsLocalSection({
             </option>
           ))}
         </select>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           Controls how distances are shown throughout the app.
         </p>
       </div>
@@ -338,86 +339,107 @@ export function SettingsLocalSection({
       <Separator />
 
       <div className="space-y-3">
-        <Label>UI Tweaks</Label>
+        <h3 className="text-base font-semibold tracking-tight">UI Tweaks</h3>
 
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={reopenLastConversation}
-            onChange={(e) => handleToggleReopenLastConversation(e.target.checked)}
-            className="w-4 h-4 rounded border-input accent-primary"
-          />
-          <span className="text-sm">Reopen to last viewed channel/conversation</span>
-        </label>
+        <div className="space-y-2">
+          <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+            <Checkbox
+              id="reopen-last"
+              checked={reopenLastConversation}
+              onCheckedChange={(checked) => handleToggleReopenLastConversation(checked === true)}
+              className="mt-0.5"
+            />
+            <div className="space-y-1">
+              <Label htmlFor="reopen-last">Reopen Last Conversation</Label>
+              <p className="text-[0.8125rem] text-muted-foreground">
+                Automatically reopen to the last-open channel or contact when the app loads to the
+                bare URL.
+              </p>
+            </div>
+          </div>
 
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={autoFocusInput}
-            onChange={(e) => {
-              const v = e.target.checked;
-              setAutoFocusInput(v);
-              setAutoFocusInputEnabled(v);
-            }}
-            className="w-4 h-4 rounded border-input accent-primary"
-          />
-          <span className="text-sm">Auto-focus input on conversation load (desktop only)</span>
-        </label>
+          <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+            <Checkbox
+              id="auto-focus-input"
+              checked={autoFocusInput}
+              onCheckedChange={(checked) => {
+                const v = checked === true;
+                setAutoFocusInput(v);
+                setAutoFocusInputEnabled(v);
+              }}
+              className="mt-0.5"
+            />
+            <div className="space-y-1">
+              <Label htmlFor="auto-focus-input">Auto-Focus Message Input</Label>
+              <p className="text-[0.8125rem] text-muted-foreground">
+                Place the cursor in the message input when switching conversations. Desktop only.
+              </p>
+            </div>
+          </div>
 
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={batteryPercent}
-            onChange={(e) => {
-              const v = e.target.checked;
-              setBatteryPercent(v);
-              saveBatteryPercent(v);
-              window.dispatchEvent(new Event(BATTERY_DISPLAY_CHANGE_EVENT));
-            }}
-            className="w-4 h-4 rounded border-input accent-primary"
-          />
-          <span className="text-sm">Show battery percentage in status bar</span>
-        </label>
+          <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+            <Checkbox
+              id="battery-percent"
+              checked={batteryPercent}
+              onCheckedChange={(checked) => {
+                const v = checked === true;
+                setBatteryPercent(v);
+                saveBatteryPercent(v);
+                window.dispatchEvent(new Event(BATTERY_DISPLAY_CHANGE_EVENT));
+              }}
+              className="mt-0.5"
+            />
+            <div className="space-y-1">
+              <Label htmlFor="battery-percent">Show Battery Percentage</Label>
+              <p className="text-[0.8125rem] text-muted-foreground">
+                Display the radio&apos;s battery percentage in the status bar. Data updates every 60
+                seconds and may take up to a minute to appear after connecting.
+              </p>
+            </div>
+          </div>
 
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={batteryVoltage}
-            onChange={(e) => {
-              const v = e.target.checked;
-              setBatteryVoltage(v);
-              saveBatteryVoltage(v);
-              window.dispatchEvent(new Event(BATTERY_DISPLAY_CHANGE_EVENT));
-            }}
-            className="w-4 h-4 rounded border-input accent-primary"
-          />
-          <span className="text-sm">Show battery voltage in status bar</span>
-        </label>
+          <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+            <Checkbox
+              id="battery-voltage"
+              checked={batteryVoltage}
+              onCheckedChange={(checked) => {
+                const v = checked === true;
+                setBatteryVoltage(v);
+                saveBatteryVoltage(v);
+                window.dispatchEvent(new Event(BATTERY_DISPLAY_CHANGE_EVENT));
+              }}
+              className="mt-0.5"
+            />
+            <div className="space-y-1">
+              <Label htmlFor="battery-voltage">Show Battery Voltage</Label>
+              <p className="text-[0.8125rem] text-muted-foreground">
+                Display the radio&apos;s battery voltage in the status bar (in mV). Data updates
+                every 60 seconds and may take up to a minute to appear after connecting.
+              </p>
+            </div>
+          </div>
 
-        {(batteryPercent || batteryVoltage) && (
-          <p className="text-xs text-muted-foreground ml-7">
-            Battery data updates every 60 seconds and may take up to a minute to appear after
-            connecting.
-          </p>
-        )}
-
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={statusDotPulse}
-            onChange={(e) => {
-              const v = e.target.checked;
-              setStatusDotPulse(v);
-              saveStatusDotPulse(v);
-              window.dispatchEvent(new Event(STATUS_DOT_PULSE_CHANGE_EVENT));
-            }}
-            className="w-4 h-4 rounded border-input accent-primary"
-          />
-          <span className="text-sm">
-            Glitter status dot as packets arrive (blue = channel, purple = DM, cyan = advert, dark
-            green = other)
-          </span>
-        </label>
+          <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+            <Checkbox
+              id="status-dot-pulse"
+              checked={statusDotPulse}
+              onCheckedChange={(checked) => {
+                const v = checked === true;
+                setStatusDotPulse(v);
+                saveStatusDotPulse(v);
+                window.dispatchEvent(new Event(STATUS_DOT_PULSE_CHANGE_EVENT));
+              }}
+              className="mt-0.5"
+            />
+            <div className="space-y-1">
+              <Label htmlFor="status-dot-pulse">Status Dot Glitters</Label>
+              <p className="text-[0.8125rem] text-muted-foreground">
+                Flash the connection status dot in color as packets arrive: blue for channel, purple
+                for DM, cyan for advert, dark green for other.
+              </p>
+            </div>
+          </div>
+        </div>
 
         <div className="space-y-3">
           <Label htmlFor="font-scale-input">Relative Font Size</Label>
@@ -490,7 +512,7 @@ export function SettingsLocalSection({
               Reset
             </button>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[0.8125rem] text-muted-foreground">
             Scales the app&apos;s typography for this browser only. The slider moves in 5% steps;
             the number field accepts any value from 25% to 400%.
           </p>
@@ -603,15 +625,15 @@ function ThemePreview({ className }: { className?: string }) {
                 desc="Sheet / dialog title"
               />
               <PreviewTextRow
-                classes="text-base font-semibold"
-                label="text-base font-semibold"
-                desc="Section title"
+                classes="text-base font-semibold tracking-tight"
+                label="text-base font-semibold tracking-tight"
+                desc="Section / group title"
               />
               <PreviewTextRow classes="text-sm" label="text-sm" desc="Body text, form labels" />
               <PreviewTextRow
-                classes="text-xs text-muted-foreground"
-                label="text-xs text-muted-foreground"
-                desc="Helper text"
+                classes="text-[0.8125rem] text-muted-foreground"
+                label="text-[0.8125rem] text-muted-foreground"
+                desc="Helper / description text"
               />
               <PreviewTextRow
                 classes="text-[0.6875rem] text-muted-foreground"
@@ -620,7 +642,7 @@ function ThemePreview({ className }: { className?: string }) {
               />
               <div>
                 <p className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
-                  Section Label
+                  Metadata Label
                 </p>
                 <p className="text-[0.625rem] text-muted-foreground/60 mt-0.5">
                   text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium
