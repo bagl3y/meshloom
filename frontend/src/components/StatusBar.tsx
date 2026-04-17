@@ -12,7 +12,7 @@ import type { HealthStatus, RadioConfig } from '../types';
 import { api } from '../api';
 import { toast } from './ui/sonner';
 import { handleKeyboardActivate } from '../utils/a11y';
-import { applyTheme, getSavedTheme, THEME_CHANGE_EVENT } from '../utils/theme';
+import { applyTheme, getEffectiveTheme, THEME_CHANGE_EVENT } from '../utils/theme';
 import {
   BATTERY_DISPLAY_CHANGE_EVENT,
   getShowBatteryPercent,
@@ -92,7 +92,9 @@ export function StatusBar({
             ? 'Radio OK'
             : 'Radio Disconnected';
   const [reconnecting, setReconnecting] = useState(false);
-  const [currentTheme, setCurrentTheme] = useState(getSavedTheme);
+  // Track the *effective* theme (follow-os is resolved to original/light) so the
+  // toggle icon and action match what the user currently sees rendered.
+  const [currentTheme, setCurrentTheme] = useState(getEffectiveTheme);
   const [pulseEnabled, setPulseEnabled] = useState(getStatusDotPulseEnabled);
   const [pulseKind, setPulseKind] = useState<StatusDotPulseKind | null>(null);
 
@@ -129,14 +131,32 @@ export function StatusBar({
   }, [pulseEnabled]);
 
   useEffect(() => {
-    const handleThemeChange = (event: Event) => {
-      const themeId = (event as CustomEvent<string>).detail;
-      setCurrentTheme(typeof themeId === 'string' && themeId ? themeId : getSavedTheme());
-    };
+    const syncEffective = () => setCurrentTheme(getEffectiveTheme());
+    window.addEventListener(THEME_CHANGE_EVENT, syncEffective);
 
-    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange as EventListener);
+    // When saved theme is "follow-os", OS appearance changes alter the effective
+    // theme without firing a THEME_CHANGE_EVENT, so also watch matchMedia.
+    const mql =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia('(prefers-color-scheme: light)')
+        : null;
+    if (mql) {
+      if (typeof mql.addEventListener === 'function') {
+        mql.addEventListener('change', syncEffective);
+      } else if (typeof (mql as MediaQueryList).addListener === 'function') {
+        (mql as MediaQueryList).addListener(syncEffective);
+      }
+    }
+
     return () => {
-      window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange as EventListener);
+      window.removeEventListener(THEME_CHANGE_EVENT, syncEffective);
+      if (mql) {
+        if (typeof mql.removeEventListener === 'function') {
+          mql.removeEventListener('change', syncEffective);
+        } else if (typeof (mql as MediaQueryList).removeListener === 'function') {
+          (mql as MediaQueryList).removeListener(syncEffective);
+        }
+      }
     };
   }, []);
 

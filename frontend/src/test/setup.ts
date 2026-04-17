@@ -8,9 +8,12 @@ class ResizeObserver {
 
 globalThis.ResizeObserver = ResizeObserver;
 
-// Several components call matchMedia at import time for responsive detection
+// Several components call matchMedia at import time for responsive detection.
+// Use a configurable descriptor so individual tests can override the stub.
 if (typeof globalThis.matchMedia === 'undefined') {
   Object.defineProperty(globalThis, 'matchMedia', {
+    configurable: true,
+    writable: true,
     value: (query: string) => ({
       matches: false,
       media: query,
