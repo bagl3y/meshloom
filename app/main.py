@@ -67,6 +67,7 @@ from app.routers import (
     health,
     messages,
     packets,
+    push,
     radio,
     read_state,
     repeaters,
@@ -101,6 +102,14 @@ async def lifespan(app: FastAPI):
     """Manage database and radio connection lifecycle."""
     await db.connect()
     logger.info("Database connected")
+
+    # Initialize VAPID keys for Web Push (generates on first run)
+    from app.push.vapid import ensure_vapid_keys
+
+    try:
+        await ensure_vapid_keys()
+    except Exception:
+        logger.warning("Failed to initialize VAPID keys for Web Push", exc_info=True)
 
     # Ensure default channels exist in the database even before the radio
     # connects. Without this, a fresh or disconnected instance would return
@@ -185,6 +194,7 @@ app.include_router(packets.router, prefix="/api")
 app.include_router(read_state.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(statistics.router, prefix="/api")
+app.include_router(push.router, prefix="/api")
 app.include_router(ws.router, prefix="/api")
 
 # Serve frontend static files in production

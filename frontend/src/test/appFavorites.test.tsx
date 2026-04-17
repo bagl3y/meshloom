@@ -29,6 +29,13 @@ const mocks = vi.hoisted(() => ({
     success: vi.fn(),
     error: vi.fn(),
   },
+  push: {
+    isSupported: false,
+    isSubscribed: false,
+    subscribe: vi.fn<() => Promise<string | null>>(async () => null),
+    toggleConversation: vi.fn(async () => {}),
+    isConversationPushEnabled: vi.fn(() => false),
+  },
   hookFns: {
     fetchOlderMessages: vi.fn(async () => {}),
     observeMessage: vi.fn(() => ({ added: false, activeConversation: false })),
@@ -49,6 +56,25 @@ vi.mock('../api', () => ({
 
 vi.mock('../useWebSocket', () => ({
   useWebSocket: vi.fn(),
+}));
+
+vi.mock('../contexts/PushSubscriptionContext', () => ({
+  usePush: () => ({
+    isSupported: mocks.push.isSupported,
+    isSubscribed: mocks.push.isSubscribed,
+    currentSubscriptionId: mocks.push.isSubscribed ? 'sub-1' : null,
+    allSubscriptions: [],
+    pushConversations: [],
+    loading: false,
+    subscribe: mocks.push.subscribe,
+    unsubscribe: vi.fn(async () => {}),
+    toggleConversation: mocks.push.toggleConversation,
+    isConversationPushEnabled: mocks.push.isConversationPushEnabled,
+    deleteSubscription: vi.fn(async () => {}),
+    testPush: vi.fn(async () => {}),
+    refreshSubscriptions: vi.fn(async () => []),
+    refreshConversations: vi.fn(async () => {}),
+  }),
 }));
 
 vi.mock('../hooks', async (importOriginal) => {
@@ -209,6 +235,10 @@ const publicChannel = {
 describe('App favorite toggle flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.push.isSupported = false;
+    mocks.push.isSubscribed = false;
+    mocks.push.subscribe.mockResolvedValue(null);
+    mocks.push.isConversationPushEnabled.mockReturnValue(false);
 
     mocks.api.getRadioConfig.mockResolvedValue(baseConfig);
     mocks.api.getSettings.mockResolvedValue({ ...baseSettings });
@@ -312,5 +342,45 @@ describe('App favorite toggle flow', () => {
       expect(screen.getByRole('button', { name: 'Radio & Config' })).toBeInTheDocument();
       expect(screen.queryByTestId('settings-modal-section')).not.toBeInTheDocument();
     });
+  });
+
+  it('subscribes this browser before enabling web push for a conversation', async () => {
+    mocks.push.isSupported = true;
+    mocks.push.isSubscribed = false;
+    mocks.push.subscribe.mockResolvedValue('sub-1');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Notification settings' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notification settings' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /web push/i }));
+
+    await waitFor(() => {
+      expect(mocks.push.subscribe).toHaveBeenCalledTimes(1);
+      expect(mocks.push.toggleConversation).toHaveBeenCalledWith(`channel-${publicChannel.key}`);
+    });
+  });
+
+  it('does not enable web push when subscription setup fails', async () => {
+    mocks.push.isSupported = true;
+    mocks.push.isSubscribed = false;
+    mocks.push.subscribe.mockResolvedValue(null);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Notification settings' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notification settings' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /web push/i }));
+
+    await waitFor(() => {
+      expect(mocks.push.subscribe).toHaveBeenCalledTimes(1);
+    });
+    expect(mocks.push.toggleConversation).not.toHaveBeenCalled();
   });
 });

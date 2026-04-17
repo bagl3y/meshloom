@@ -50,6 +50,10 @@ app/
 ├── events.py            # Typed WS event payload serialization
 ├── websocket.py         # WS manager + broadcast helpers
 ├── security.py          # Optional app-wide HTTP Basic auth middleware for HTTP + WS
+├── push/                # Web Push notification subsystem
+│   ├── vapid.py                 # VAPID key generation, storage, caching
+│   ├── send.py                  # pywebpush wrapper (async via thread executor)
+│   └── manager.py               # Push dispatch: filter, build payload, concurrent send
 ├── fanout/              # Fanout bus: MQTT, bots, webhooks, Apprise, SQS (see fanout/AGENTS_fanout.md)
 ├── dependencies.py      # Shared FastAPI dependency providers
 ├── path_utils.py        # Path hex rendering and hop-width helpers
@@ -71,6 +75,7 @@ app/
     ├── fanout.py
     ├── repeaters.py
     ├── statistics.py
+    ├── push.py
     └── ws.py
 ```
 
@@ -168,6 +173,17 @@ app/
 - Community MQTT publishes raw packets only, but its derived `path` field for direct packets is emitted as comma-separated hop identifiers, not flat path bytes.
 - See `app/fanout/AGENTS_fanout.md` for full architecture details and event payload shapes.
 
+### Web Push notifications
+
+Web Push is a standalone subsystem in `app/push/`, separate from the fanout module system. It sends browser push notifications for incoming messages even when the tab is closed.
+
+- **Not a fanout module** — Web Push manages per-browser subscriptions (N browsers, each with its own endpoint and delivery state), unlike fanout which is one-config-to-one-destination.
+- **VAPID keys**: auto-generated P-256 key pair on first startup, stored in `app_settings.vapid_private_key` / `vapid_public_key`. Cached in-module by `app/push/vapid.py`.
+- **Dispatch**: `broadcast_event()` in `websocket.py` fires `push_manager.dispatch_message(data)` alongside fanout for `message` events. The manager checks the global `app_settings.push_conversations` list, then sends to all currently registered subscriptions via `pywebpush` (run in a thread executor).
+- **Stale cleanup**: HTTP 404/410 from the push service triggers immediate subscription deletion.
+- **Subscriptions stored** in `push_subscriptions` table with `UNIQUE(endpoint)` for upsert semantics.
+- Requires HTTPS (self-signed OK) and outbound internet to reach browser push services.
+
 ## API Surface (all under `/api`)
 
 ### Health
@@ -258,6 +274,14 @@ app/
 ### Statistics
 - `GET /statistics` — aggregated mesh network stats (entity counts, message/packet splits, activity windows, busiest channels)
 
+### Push
+- `GET /push/vapid-public-key` — VAPID public key for browser `PushManager.subscribe()`
+- `POST /push/subscribe` — register/upsert push subscription (keyed by endpoint URL)
+- `GET /push/subscriptions` — list all push subscriptions
+- `PATCH /push/subscriptions/{id}` — update label or filter preferences
+- `DELETE /push/subscriptions/{id}` — delete subscription
+- `POST /push/subscriptions/{id}/test` — send test notification
+
 ### WebSocket
 - `WS /ws`
 
@@ -290,7 +314,8 @@ Main tables:
 - `contact_name_history` (tracks name changes over time)
 - `repeater_telemetry_history` (time-series telemetry snapshots for tracked repeaters)
 - `fanout_configs` (MQTT, bot, webhook, Apprise, SQS integration configs)
-- `app_settings`
+- `push_subscriptions` (Web Push browser subscriptions with delivery metadata; UNIQUE on endpoint)
+- `app_settings` (includes `vapid_private_key` and `vapid_public_key` for Web Push VAPID signing)
 
 Contact route state is canonicalized on the backend:
 - stored route inputs: `direct_path`, `direct_path_len`, `direct_path_hash_mode`, `direct_path_updated_at`, plus optional `route_override_*`

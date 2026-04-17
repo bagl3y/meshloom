@@ -282,6 +282,85 @@ class AppSettingsRepository:
             await AppSettingsRepository._apply_updates(conn, blocked_names=new_names)
             return await AppSettingsRepository._get_in_conn(conn)
 
+    @staticmethod
+    async def get_vapid_keys() -> tuple[str, str]:
+        """Return (private_key_pem, public_key_b64url) from app_settings.
+
+        These are internal-only columns not exposed via the AppSettings model.
+        """
+        async with db.readonly() as conn:
+            async with conn.execute(
+                "SELECT vapid_private_key, vapid_public_key FROM app_settings WHERE id = 1"
+            ) as cursor:
+                row = await cursor.fetchone()
+        if row and row["vapid_private_key"] and row["vapid_public_key"]:
+            return row["vapid_private_key"], row["vapid_public_key"]
+        return "", ""
+
+    @staticmethod
+    async def set_vapid_keys(private_key: str, public_key: str) -> None:
+        """Persist auto-generated VAPID key pair to app_settings."""
+        async with db.tx() as conn:
+            await conn.execute(
+                "UPDATE app_settings SET vapid_private_key = ?, vapid_public_key = ? WHERE id = 1",
+                (private_key, public_key),
+            )
+
+    @staticmethod
+    async def get_push_conversations() -> list[str]:
+        """Return the global list of push-enabled conversation state keys.
+
+        Internal-only column, not exposed via the AppSettings model.
+        """
+        async with db.readonly() as conn:
+            async with conn.execute(
+                "SELECT push_conversations FROM app_settings WHERE id = 1"
+            ) as cursor:
+                row = await cursor.fetchone()
+        if row and row["push_conversations"]:
+            try:
+                return json.loads(row["push_conversations"])
+            except (json.JSONDecodeError, TypeError):
+                return []
+        return []
+
+    @staticmethod
+    async def set_push_conversations(conversations: list[str]) -> list[str]:
+        """Replace the global push-enabled conversation list."""
+        async with db.tx() as conn:
+            await conn.execute(
+                "UPDATE app_settings SET push_conversations = ? WHERE id = 1",
+                (json.dumps(conversations),),
+            )
+        return conversations
+
+    @staticmethod
+    async def toggle_push_conversation(key: str) -> list[str]:
+        """Add or remove a conversation state key from the global push list.
+
+        Atomic read-modify-write under a single ``db.tx()`` lock.
+        """
+        async with db.tx() as conn:
+            async with conn.execute(
+                "SELECT push_conversations FROM app_settings WHERE id = 1"
+            ) as cursor:
+                row = await cursor.fetchone()
+            current: list[str] = []
+            if row and row["push_conversations"]:
+                try:
+                    current = json.loads(row["push_conversations"])
+                except (json.JSONDecodeError, TypeError):
+                    current = []
+            if key in current:
+                current = [k for k in current if k != key]
+            else:
+                current.append(key)
+            await conn.execute(
+                "UPDATE app_settings SET push_conversations = ? WHERE id = 1",
+                (json.dumps(current),),
+            )
+        return current
+
 
 class StatisticsRepository:
     @staticmethod

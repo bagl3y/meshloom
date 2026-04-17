@@ -197,6 +197,7 @@ This message-layer echo/path handling is independent of raw-packet storage dedup
 │   ├── event_handlers.py   # Radio events
 │   ├── decoder.py          # Packet decryption
 │   ├── websocket.py        # Real-time broadcasts
+│   ├── push/               # Web Push notification subsystem (VAPID keys, dispatch, send)
 │   └── fanout/             # Fanout bus: MQTT, bots, webhooks, Apprise, SQS (see fanout/AGENTS_fanout.md)
 ├── frontend/               # React frontend
 │   ├── AGENTS.md           # Frontend documentation
@@ -380,6 +381,12 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | DELETE | `/api/fanout/{id}` | Delete fanout config (stops module) |
 | POST | `/api/fanout/bots/disable-until-restart` | Stop bot fanout modules and keep bots disabled until the process restarts |
 | GET | `/api/statistics` | Aggregated mesh network statistics |
+| GET | `/api/push/vapid-public-key` | VAPID public key for browser push subscription |
+| POST | `/api/push/subscribe` | Register/upsert a push subscription |
+| GET | `/api/push/subscriptions` | List all push subscriptions |
+| PATCH | `/api/push/subscriptions/{id}` | Update subscription label or filter preferences |
+| DELETE | `/api/push/subscriptions/{id}` | Delete a push subscription |
+| POST | `/api/push/subscriptions/{id}/test` | Send a test push notification |
 | WS | `/api/ws` | Real-time updates |
 
 ## Key Concepts
@@ -433,6 +440,17 @@ All external integrations are managed through the fanout bus (`app/fanout/`). Ea
 `broadcast_event()` in `websocket.py` dispatches `message` and `raw_packet` events to the fanout manager. See `app/fanout/AGENTS_fanout.md` for full architecture details.
 
 Community MQTT forwards raw packets only. Its derived `path` field, when present on direct packets, is a comma-separated list of hop identifiers as reported by the packet format. Token width therefore varies with the packet's path hash mode; it is intentionally not a flat per-byte rendering.
+
+### Web Push Notifications
+
+Web Push is a standalone subsystem (`app/push/`) that sends browser push notifications for incoming messages even when the browser tab is closed. It is **not** a fanout module — it manages its own per-browser subscriptions, while the set of push-enabled conversations is stored once per server instance.
+
+- **Requires HTTPS** (self-signed certificates work) and outbound internet from the server to reach browser push services (Google FCM, Mozilla autopush).
+- VAPID key pair is auto-generated on first startup and stored in `app_settings`.
+- Each browser subscription is stored in `push_subscriptions` with device identity and delivery state. The set of push-enabled conversations is stored globally in `app_settings.push_conversations`, so all subscribed browsers receive the same configured rooms/DMs.
+- `broadcast_event()` in `websocket.py` dispatches to `push_manager.dispatch_message()` alongside fanout for `message` events.
+- Expired subscriptions (HTTP 404/410 from push service) are auto-deleted.
+- Frontend: service worker (`sw.js`) handles push display and notification click navigation. The `BellRing` icon in `ChatHeader` toggles per-conversation push. Device management lives in Settings > Local.
 
 ### Server-Side Decryption
 

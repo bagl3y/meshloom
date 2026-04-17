@@ -1,5 +1,9 @@
-import { useState } from 'react';
-import { ChevronRight, Logs, MessageSquare, Send, Settings } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronRight, Logs, MessageSquare, Send, Settings, X } from 'lucide-react';
+import { toast } from '../ui/sonner';
+import { usePush } from '../../contexts/PushSubscriptionContext';
+import type { Channel, Contact } from '../../types';
+import { getContactDisplayName } from '../../utils/pubkey';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -41,11 +45,180 @@ import {
   setStatusDotPulseEnabled as saveStatusDotPulse,
 } from '../../utils/statusDotPulse';
 
+/** Resolve a state key like "contact-abc123" or "channel-def456" to a display name. */
+function resolveConversationName(
+  stateKey: string,
+  contacts: Contact[],
+  channels: Channel[]
+): string {
+  if (stateKey.startsWith('contact-')) {
+    const pubkey = stateKey.slice('contact-'.length);
+    const contact = contacts.find((c) => c.public_key === pubkey);
+    return contact ? getContactDisplayName(contact.name, contact.public_key) : pubkey.slice(0, 12);
+  }
+  if (stateKey.startsWith('channel-')) {
+    const key = stateKey.slice('channel-'.length);
+    const channel = channels.find((c) => c.key === key);
+    if (channel?.name) return channel.name.startsWith('#') ? channel.name : `#${channel.name}`;
+    return `#${key.slice(0, 12)}`;
+  }
+  return stateKey;
+}
+
+function PushDeviceManagement({
+  contacts = [],
+  channels = [],
+}: {
+  contacts?: Contact[];
+  channels?: Channel[];
+}) {
+  const {
+    isSupported,
+    allSubscriptions,
+    pushConversations,
+    loading,
+    subscribe,
+    currentSubscriptionId,
+    toggleConversation,
+    deleteSubscription,
+    testPush,
+    refreshSubscriptions,
+  } = usePush();
+
+  useEffect(() => {
+    refreshSubscriptions();
+  }, [refreshSubscriptions]);
+
+  if (!isSupported) {
+    return (
+      <div className="space-y-3">
+        <Label>Web Push Notifications</Label>
+        <p className="text-sm text-muted-foreground">
+          {window.isSecureContext
+            ? 'Push notifications are not supported by this browser.'
+            : 'Web Push requires HTTPS. Access RemoteTerm over HTTPS (self-signed certificates work) to enable push notifications.'}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <Label>Web Push Notifications</Label>
+        <p className="text-sm text-muted-foreground">
+          Receive notifications even when the browser is closed. Use the bell icon in any
+          conversation header to enable push for that contact or channel, or subscribe this browser
+          to receive notifications for all push-enabled conversations.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          The set of channels or DMs that trigger push notifications are global per-install (i.e.
+          all devices that register for Web Push will have the same set of channels/DMs that trigger
+          notifications). Subscribing or unsubscribing a particular browser only controls whether
+          that browser receives notifications for the configured set of channels/DMs.
+        </p>
+      </div>
+
+      {!currentSubscriptionId && (
+        <Button variant="outline" size="sm" onClick={() => void subscribe()} disabled={loading}>
+          {loading ? 'Subscribing...' : 'Subscribe This Browser'}
+        </Button>
+      )}
+
+      {pushConversations.length > 0 && (
+        <div className="space-y-2">
+          <span className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
+            Push-enabled conversations
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {pushConversations.map((key) => (
+              <span
+                key={key}
+                className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-sm"
+              >
+                {resolveConversationName(key, contacts, channels)}
+                <button
+                  type="button"
+                  onClick={() => void toggleConversation(key)}
+                  className="rounded-full p-0.5 hover:bg-accent transition-colors"
+                  title="Remove"
+                  aria-label={`Remove ${resolveConversationName(key, contacts, channels)} from push`}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {allSubscriptions.length > 0 && (
+        <div className="space-y-2">
+          <span className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
+            Registered Devices
+          </span>
+          <div className="mt-2 space-y-2">
+            {allSubscriptions.map((sub) => (
+              <div
+                key={sub.id}
+                className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <span className="truncate text-sm font-medium">
+                      {sub.label || 'Unknown device'}
+                    </span>
+                    {sub.id === currentSubscriptionId && (
+                      <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[0.625rem] font-medium text-primary">
+                        Current device
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {sub.last_success_at
+                      ? `Last push: ${new Date(sub.last_success_at * 1000).toLocaleDateString()}`
+                      : 'Never pushed'}
+                    {sub.failure_count > 0 && ` · ${sub.failure_count} failures`}
+                  </span>
+                </div>
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-sm"
+                    onClick={() => void testPush(sub.id)}
+                  >
+                    Test
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-sm text-destructive hover:text-destructive"
+                    onClick={() => {
+                      void deleteSubscription(sub.id).then(() => toast.success('Device removed'));
+                    }}
+                  >
+                    Unsubscribe this device
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SettingsLocalSection({
   onLocalLabelChange,
+  contacts,
+  channels,
   className,
 }: {
   onLocalLabelChange?: (label: LocalLabel) => void;
+  contacts?: Contact[];
+  channels?: Channel[];
   className?: string;
 }) {
   const { distanceUnit, setDistanceUnit } = useDistanceUnit();
@@ -323,6 +496,10 @@ export function SettingsLocalSection({
           </p>
         </div>
       </div>
+
+      <Separator />
+
+      <PushDeviceManagement contacts={contacts} channels={channels} />
     </div>
   );
 }

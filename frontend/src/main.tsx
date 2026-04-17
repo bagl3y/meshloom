@@ -6,6 +6,7 @@ import './themes.css';
 import './styles.css';
 import { getSavedTheme, applyTheme, initFollowOSListener } from './utils/theme';
 import { applyFontScale, getSavedFontScale } from './utils/fontScale';
+import { PushSubscriptionProvider } from './contexts/PushSubscriptionContext';
 
 // Apply saved theme before first render
 applyTheme(getSavedTheme());
@@ -15,6 +16,13 @@ applyFontScale(getSavedFontScale());
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <PushSubscriptionProvider>
+      <App />
+    </PushSubscriptionProvider>
   </StrictMode>
 );
+
+// Register service worker for Web Push (requires secure context)
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}

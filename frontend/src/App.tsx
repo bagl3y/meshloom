@@ -22,6 +22,7 @@ import { toast } from './components/ui/sonner';
 import { AppShell } from './components/AppShell';
 import type { MessageInputHandle } from './components/MessageInput';
 import { DistanceUnitProvider } from './contexts/DistanceUnitContext';
+import { usePush } from './contexts/PushSubscriptionContext';
 import { messageContainsMention } from './utils/messageParser';
 import { getStateKey } from './utils/conversationState';
 import type { BulkCreateHashtagChannelsResult, Conversation, Message, RawPacket } from './types';
@@ -99,6 +100,7 @@ export function App() {
     toggleConversationNotifications,
     notifyIncomingMessage,
   } = useBrowserNotifications();
+  const pushSubscription = usePush();
   const { rawPacketStatsSession, recordRawPacketObservation } = useRawPacketStatsSession();
   const {
     showNewMessage,
@@ -615,6 +617,36 @@ export function App() {
         );
       }
     },
+    pushSupported: pushSubscription.isSupported,
+    pushSubscribed: pushSubscription.isSubscribed,
+    pushEnabledForConversation:
+      activeConversation?.type === 'contact' || activeConversation?.type === 'channel'
+        ? pushSubscription.isConversationPushEnabled(
+            getStateKey(activeConversation.type, activeConversation.id)
+          )
+        : false,
+    onTogglePush: async () => {
+      if (
+        !activeConversation ||
+        (activeConversation.type !== 'contact' && activeConversation.type !== 'channel')
+      )
+        return;
+      const key = getStateKey(activeConversation.type, activeConversation.id);
+      const pushEnabled = pushSubscription.isConversationPushEnabled(key);
+
+      if (!pushEnabled && !pushSubscription.isSubscribed) {
+        const subscriptionId = await pushSubscription.subscribe();
+        if (!subscriptionId) {
+          return;
+        }
+      }
+
+      await pushSubscription.toggleConversation(key);
+    },
+    onOpenPushSettings: () => {
+      setSettingsSection('local');
+      if (!showSettings) handleToggleSettingsView();
+    },
     trackedTelemetryRepeaters: appSettings?.tracked_telemetry_repeaters ?? [],
     onToggleTrackedTelemetry: handleToggleTrackedTelemetry,
     repeaterAutoLoginKey,
@@ -648,6 +680,7 @@ export function App() {
     onToggleBlockedKey: handleBlockKey,
     onToggleBlockedName: handleBlockName,
     contacts,
+    channels,
     onBulkDeleteContacts: (deletedKeys: string[]) => {
       const keySet = new Set(deletedKeys.map((k) => k.toLowerCase()));
       setContacts((prev) => prev.filter((c) => !keySet.has(c.public_key.toLowerCase())));

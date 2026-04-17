@@ -108,6 +108,10 @@ def broadcast_event(event_type: str, data: dict, *, realtime: bool = True) -> No
 
         if event_type == "message":
             asyncio.create_task(fanout_manager.broadcast_message(data))
+
+            from app.push.manager import push_manager
+
+            asyncio.create_task(push_manager.dispatch_message(data))
         elif event_type == "raw_packet":
             asyncio.create_task(fanout_manager.broadcast_raw(data))
         elif event_type == "contact":
