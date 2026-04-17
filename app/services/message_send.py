@@ -513,14 +513,15 @@ async def _retry_direct_message_until_acked(
 
         ack_code = _extract_expected_ack_code(result)
         if not ack_code:
-            logger.warning(
+            logger.debug(
                 "Background DM retry attempt %d/%d for %s returned no expected_ack; "
-                "stopping retries to avoid duplicate sends",
+                "continuing with previous timeout",
                 attempt + 1,
                 DM_SEND_MAX_ATTEMPTS,
                 contact.public_key[:12],
             )
-            return
+            attempt += 1
+            continue
 
         next_wait_timeout_ms = _get_direct_message_retry_timeout_ms(result)
 
