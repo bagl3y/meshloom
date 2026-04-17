@@ -24,6 +24,45 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 HA_CONFIG="$REPO_ROOT/ha_test_config"
+HA_CLIENT_ID="http://localhost:8123/"
+
+ha_storage_has_domain() {
+  local domain="$1"
+  HA_STORAGE_DIR="$HA_CONFIG/.storage" HA_DOMAIN="$domain" python3 - <<'PY'
+import json
+import os
+import pathlib
+import sys
+
+storage = pathlib.Path(os.environ["HA_STORAGE_DIR"]) / "core.config_entries"
+if not storage.exists():
+    sys.exit(1)
+
+try:
+    data = json.loads(storage.read_text())
+except Exception:
+    sys.exit(1)
+
+entries = data.get("data", {}).get("entries", [])
+found = any(entry.get("domain") == os.environ["HA_DOMAIN"] for entry in entries)
+sys.exit(0 if found else 1)
+PY
+}
+
+wait_for_storage_domain() {
+  local domain="$1"
+  local timeout_seconds="${2:-30}"
+
+  for i in $(seq 1 "$timeout_seconds"); do
+    if ha_storage_has_domain "$domain"; then
+      echo "    Persisted $domain config entry after ${i}s"
+      return 0
+    fi
+    sleep 1
+  done
+
+  return 1
+}
 
 echo "==> Stopping any existing test containers..."
 docker rm -f ha-test-mosquitto 2>/dev/null || true
@@ -81,7 +120,7 @@ done
 echo "==> Running onboarding (user: dev / pass: dev)..."
 ONBOARD_RESP=$(curl -s -X POST http://localhost:8123/api/onboarding/users \
   -H "Content-Type: application/json" \
-  -d '{"client_id":"http://localhost:8123/","name":"Dev","username":"dev","password":"dev","language":"en"}')
+  -d "{\"client_id\":\"$HA_CLIENT_ID\",\"name\":\"Dev\",\"username\":\"dev\",\"password\":\"dev\",\"language\":\"en\"}")
 
 AUTH_CODE=$(echo "$ONBOARD_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('auth_code',''))" 2>/dev/null || echo "")
 if [ -z "$AUTH_CODE" ]; then
@@ -99,7 +138,7 @@ fi
 # Exchange auth code for tokens
 echo "==> Exchanging auth code for access token..."
 TOKEN_RESP=$(curl -s -X POST http://localhost:8123/auth/token \
-  -d "grant_type=authorization_code&code=$AUTH_CODE&client_id=http://localhost:8123/")
+  -d "grant_type=authorization_code&code=$AUTH_CODE&client_id=$HA_CLIENT_ID")
 
 ACCESS_TOKEN=$(echo "$TOKEN_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
 if [ -z "$ACCESS_TOKEN" ]; then
@@ -126,7 +165,7 @@ curl -s -X POST http://localhost:8123/api/onboarding/analytics \
 curl -s -X POST http://localhost:8123/api/onboarding/integration \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{}' > /dev/null 2>&1 || true
+  -d "{\"client_id\":\"$HA_CLIENT_ID\"}" > /dev/null 2>&1 || true
 
 # ── Configure MQTT integration ───────────────────────────────────────────
 
@@ -150,7 +189,14 @@ else
 
   RESULT_TYPE=$(echo "$MQTT_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('type',''))" 2>/dev/null || echo "")
   if [ "$RESULT_TYPE" = "create_entry" ]; then
-    echo "    MQTT integration configured successfully."
+    echo "    MQTT integration configured in HA; waiting for storage flush..."
+    if wait_for_storage_domain "mqtt" 30; then
+      echo "    MQTT integration configured successfully."
+    else
+      echo "    ERROR: MQTT config entry never persisted to $HA_CONFIG/.storage/core.config_entries"
+      echo "    Response: $MQTT_RESULT"
+      exit 1
+    fi
   else
     echo "    WARNING: MQTT config flow returned: $RESULT_TYPE"
     echo "    Response: $MQTT_RESULT"
@@ -166,7 +212,7 @@ sudo tee -a "$HA_CONFIG/configuration.yaml" > /dev/null << 'EOF'
 logger:
   default: warning
   logs:
-    homeassistant.components.mqtt: debug
+    homeassistant.components.mqtt: info
 EOF
 
 # Gracefully stop the backgrounded HA so it flushes config to disk
@@ -174,6 +220,12 @@ EOF
 echo "==> Stopping background HA (graceful, flushing config)..."
 docker stop ha-test-homeassistant > /dev/null 2>&1
 docker rm ha-test-homeassistant > /dev/null 2>&1
+
+if ! ha_storage_has_domain "mqtt"; then
+  echo "    ERROR: MQTT config entry disappeared after Home Assistant shutdown."
+  echo "    Check $HA_CONFIG/.storage/core.config_entries"
+  exit 1
+fi
 
 # ── Summary ───────────────────────────────────────────────────────────────
 

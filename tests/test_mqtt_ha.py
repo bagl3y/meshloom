@@ -15,6 +15,7 @@ from app.fanout.mqtt_ha import (
     _node_id,
     _radio_discovery_configs,
     _repeater_discovery_configs,
+    _repeater_telemetry_payload,
 )
 
 # ---------------------------------------------------------------------------
@@ -249,6 +250,7 @@ class TestMqttHaFiltering:
         assert topic == f"meshcore/{_node_id(key)}/telemetry"
         assert payload["battery_volts"] == 4.1
         assert payload["uptime_seconds"] == 86400
+        assert mod._publisher.publish.call_args.kwargs.get("retain") is not True
 
 
 class TestMqttHaHealth:
@@ -382,6 +384,40 @@ class TestMqttHaLifecycle:
         assert mod._radio_key == "aabbccddeeff"
         assert mod._radio_name == "MyRadio"
         mod._publisher.start.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_publish_discovery_replays_cached_repeater_telemetry_after_configs(self):
+        key = "ccdd11223344"
+        mod = MqttHaModule("test", _base_config(tracked_repeaters=[key]))
+        mod._publisher = MagicMock()
+        mod._publisher.publish = AsyncMock()
+        mod._radio_key = "aabbccddeeff"
+        mod._radio_name = "MyRadio"
+
+        latest = {
+            "timestamp": 1234,
+            "data": {
+                "battery_volts": 4.1,
+                "noise_floor_dbm": -112,
+                "lpp_sensors": [
+                    {"channel": 1, "type_name": "temperature", "value": 23.5},
+                ],
+            },
+        }
+
+        mod._resolve_contact_name = AsyncMock(return_value="Rep1")
+        mod._resolve_latest_telemetry = AsyncMock(return_value=latest)
+
+        await mod._publish_discovery()
+
+        calls = mod._publisher.publish.call_args_list
+        discovery_calls = [c for c in calls if c.args[0].startswith("homeassistant/")]
+        telemetry_calls = [c for c in calls if c.args[0] == f"meshcore/{_node_id(key)}/telemetry"]
+
+        assert telemetry_calls
+        assert telemetry_calls[-1].args[1] == _repeater_telemetry_payload(latest["data"])
+        assert telemetry_calls[-1].kwargs.get("retain") is not True
+        assert calls.index(telemetry_calls[-1]) > calls.index(discovery_calls[-1])
 
 
 class TestMqttHaMessage:
@@ -589,6 +625,7 @@ class TestMqttHaTelemetryWithLpp:
         assert payload["battery_volts"] == 4.1
         assert payload["lpp_temperature_ch1"] == 23.5
         assert payload["lpp_humidity_ch2"] == 45.0
+        assert mod._publisher.publish.call_args.kwargs.get("retain") is not True
 
     @pytest.mark.asyncio
     async def test_on_telemetry_triggers_rediscovery_for_new_lpp_sensor(self):

@@ -19,6 +19,28 @@ RemoteTerm can publish mesh network data to Home Assistant via MQTT Discovery. D
 
 Devices will appear in HA under **Settings > Devices & Services > MQTT** within a few seconds.
 
+## How MeshCore IDs Map Into Home Assistant
+
+RemoteTerm uses each node's public key to derive a stable short identifier:
+
+- Full public key: `ae92577bae6c4f1d...`
+- Node ID: `ae92577bae6c` (the first 12 hex characters, lowercased)
+- Example entity ID: `device_tracker.meshcore_ae92577bae6c`
+- Example runtime topic: `meshcore/ae92577bae6c/gps`
+
+When this README shows `<node_id>`, it always means that 12-character value.
+
+The same node ID appears in:
+
+- Home Assistant entity IDs
+- Home Assistant discovery topics under `homeassistant/...`
+- Runtime MQTT state topics under your configured prefix, usually `meshcore/...`
+
+You can also see these IDs in RemoteTerm's Home Assistant integration UI:
+
+- `What gets created in Home Assistant`
+- `Published Topic Summary`
+
 ## What Gets Created
 
 ### Local Radio Device
@@ -27,24 +49,26 @@ Always created. Updates every 60 seconds.
 
 | Entity | Type | Description |
 |--------|------|-------------|
-| `binary_sensor.meshcore_*_connected` | Connectivity | Radio online/offline |
-| `sensor.meshcore_*_noise_floor` | Signal strength | Radio noise floor (dBm) |
+| `binary_sensor.meshcore_<radio_node_id>_connected` | Connectivity | Radio online/offline |
+| `sensor.meshcore_<radio_node_id>_noise_floor` | Signal strength | Radio noise floor (dBm) |
 
 ### Repeater Devices
 
-One device per tracked repeater (must have repeater opted). Updates when telemetry is collected (auto-collect cycle (~8 hours), or when you manually fetch from the repeater dashboard).
+One device per tracked repeater selected in the HA integration. Updates when telemetry is collected (auto-collect cycle (~8 hours or variable in settings), or when you manually fetch from the repeater dashboard).
 
 Repeaters must first be added to the auto-telemetry tracking list in RemoteTerm's Radio settings section. Only auto-tracked repeaters appear in the HA integration's repeater picker.
 
 | Entity | Type | Unit | Description |
 |--------|------|------|-------------|
-| `sensor.meshcore_*_battery_voltage` | Voltage | V | Battery level |
-| `sensor.meshcore_*_noise_floor` | Signal strength | dBm | Local noise floor |
-| `sensor.meshcore_*_last_rssi` | Signal strength | dBm | Last received signal strength |
-| `sensor.meshcore_*_last_snr` | -- | dB | Last signal-to-noise ratio |
-| `sensor.meshcore_*_packets_received` | -- | count | Total packets received |
-| `sensor.meshcore_*_packets_sent` | -- | count | Total packets sent |
-| `sensor.meshcore_*_uptime` | Duration | s | Uptime since last reboot |
+| `sensor.meshcore_<repeater_node_id>_battery_voltage` | Voltage | V | Battery level |
+| `sensor.meshcore_<repeater_node_id>_noise_floor` | Signal strength | dBm | Local noise floor |
+| `sensor.meshcore_<repeater_node_id>_last_rssi` | Signal strength | dBm | Last received signal strength |
+| `sensor.meshcore_<repeater_node_id>_last_snr` | -- | dB | Last signal-to-noise ratio |
+| `sensor.meshcore_<repeater_node_id>_packets_received` | -- | count | Total packets received |
+| `sensor.meshcore_<repeater_node_id>_packets_sent` | -- | count | Total packets sent |
+| `sensor.meshcore_<repeater_node_id>_uptime` | Duration | s | Uptime since last reboot |
+
+If RemoteTerm already has a cached telemetry snapshot for that repeater, it republishes it on startup so HA can populate the sensors immediately instead of waiting for the next collection cycle.
 
 ### Contact Device Trackers
 
@@ -52,11 +76,11 @@ One `device_tracker` per tracked contact. Updates passively whenever RemoteTerm 
 
 | Entity | Description |
 |--------|-------------|
-| `device_tracker.meshcore_*` | GPS position (latitude/longitude) |
+| `device_tracker.meshcore_<contact_node_id>` | GPS position (latitude/longitude) |
 
 ### Message Event Entity
 
-A single `event.meshcore_messages` entity that fires for each message matching your configured scope. Each event carries these attributes:
+A single radio-scoped event entity, `event.meshcore_<radio_node_id>_messages`, fires for each message matching your configured scope. Each event carries these attributes:
 
 | Attribute | Example | Description |
 |-----------|---------|-------------|
@@ -73,13 +97,27 @@ A single `event.meshcore_messages` entity that fires for each message matching y
 
 Entity IDs use the first 12 characters of the node's public key as an identifier. For example, a contact with public key `ae92577bae6c...` gets entity ID `device_tracker.meshcore_ae92577bae6c`. You can rename entities in HA's UI without affecting the integration.
 
+That same 12-character node ID is also used in the MQTT topic paths. For example:
+
+- Local radio health: `meshcore/<radio_node_id>/health`
+- Repeater telemetry: `meshcore/<repeater_node_id>/telemetry`
+- Contact GPS: `meshcore/<contact_node_id>/gps`
+- Message events: `meshcore/<radio_node_id>/events/message`
+
+## What Appears When
+
+- Always created: the local radio device and its entities
+- Created when selected in the HA integration: tracked repeater devices and tracked contact device trackers
+- Populated only after data exists: contact GPS trackers need an advert with GPS; repeater sensors need telemetry, although cached repeater telemetry is replayed on startup when available
+- Message event entity: always created once the HA integration is enabled for a connected radio
+
 ## Common Automations
 
 ### Low repeater battery alert
 
 Notify when a tracked repeater's battery drops below a threshold.
 
-**GUI:** Settings > Automations > Create > Numeric state trigger on `sensor.meshcore_*_battery_voltage`, below `3.8`, action: notification.
+**GUI:** Settings > Automations > Create > Numeric state trigger on `sensor.meshcore_<repeater_node_id>_battery_voltage`, below `3.8`, action: notification.
 
 **YAML:**
 ```yaml
@@ -102,7 +140,7 @@ automation:
 
 Notify if the radio has been disconnected for more than 5 minutes.
 
-**GUI:** Settings > Automations > Create > State trigger on `binary_sensor.meshcore_*_connected`, to `off`, for `00:05:00`, action: notification.
+**GUI:** Settings > Automations > Create > State trigger on `binary_sensor.meshcore_<radio_node_id>_connected`, to `off`, for `00:05:00`, action: notification.
 
 **YAML:**
 ```yaml
@@ -128,7 +166,7 @@ Trigger when a message arrives in a specific channel. Two approaches:
 
 If you only care about one room, configure the HA integration's message scope to "Only listed channels" and select that room. Then every event fire is from that room.
 
-**GUI:** Settings > Automations > Create > State trigger on `event.meshcore_messages`, action: notification.
+**GUI:** Settings > Automations > Create > State trigger on `event.meshcore_<radio_node_id>_messages`, action: notification.
 
 **YAML:**
 ```yaml
@@ -136,7 +174,7 @@ automation:
   - alias: "Emergency channel alert"
     trigger:
       - platform: state
-        entity_id: event.meshcore_messages
+        entity_id: event.meshcore_aabbccddeeff_messages
     action:
       - service: notify.mobile_app_your_phone
         data:
@@ -150,7 +188,7 @@ automation:
 
 Keep scope as "All messages" and filter in the automation. The trigger is GUI, but the condition uses a one-line template.
 
-**GUI:** Settings > Automations > Create > State trigger on `event.meshcore_messages` > Add condition > Template > enter the template below.
+**GUI:** Settings > Automations > Create > State trigger on `event.meshcore_<radio_node_id>_messages` > Add condition > Template > enter the template below.
 
 **YAML:**
 ```yaml
@@ -158,7 +196,7 @@ automation:
   - alias: "Emergency channel alert"
     trigger:
       - platform: state
-        entity_id: event.meshcore_messages
+        entity_id: event.meshcore_aabbccddeeff_messages
     condition:
       - condition: template
         value_template: >-
@@ -180,7 +218,7 @@ automation:
   - alias: "DM from Alice"
     trigger:
       - platform: state
-        entity_id: event.meshcore_messages
+        entity_id: event.meshcore_aabbccddeeff_messages
     condition:
       - condition: template
         value_template: >-
@@ -201,7 +239,7 @@ automation:
   - alias: "Keyword alert"
     trigger:
       - platform: state
-        entity_id: event.meshcore_messages
+        entity_id: event.meshcore_aabbccddeeff_messages
     condition:
       - condition: template
         value_template: >-
@@ -266,7 +304,9 @@ mosquitto_pub -h <broker> -t 'homeassistant/sensor/meshcore_unknown/noise_floor/
 
 ### Repeater sensors show "Unknown" or "Unavailable"
 
-Repeater telemetry only updates when collected. Trigger a manual fetch by opening the repeater's dashboard in RemoteTerm and clicking "Status", or wait for the next auto-collect cycle (~8 hours). Sensors show "Unknown" until the first telemetry reading arrives.
+Repeater telemetry only updates when collected. Trigger a manual fetch by opening the repeater's dashboard in RemoteTerm and clicking "Status", or wait for the next auto-collect cycle (~8 hours).
+
+If RemoteTerm already has cached telemetry for that repeater, it republishes the last known values on startup. If the sensors are still unknown or unavailable, it usually means no telemetry has ever been collected for that repeater yet.
 
 ### Contact device tracker shows "Unknown"
 
@@ -280,26 +320,52 @@ Radio health entities have a 120-second expiry. If RemoteTerm stops sending heal
 
 Disabling or deleting the HA integration in RemoteTerm's settings publishes empty retained messages to all discovery topics, which removes the devices and entities from HA automatically.
 
+## Local Test Environment
+
+For local development, RemoteTerm includes a helper that starts Mosquitto and Home Assistant with MQTT preconfigured:
+
+```bash
+./scripts/setup/start_ha_test_env.sh
+```
+
+That gives you:
+
+- Home Assistant at `http://localhost:8123`
+- Mosquitto at `localhost:1883`
+- A pre-created HA MQTT integration using that broker
+
+To watch all MQTT traffic during testing:
+
+```bash
+docker exec ha-test-mosquitto mosquitto_sub -h 127.0.0.1 -t '#' -v
+```
+
+To stop and clean up:
+
+```bash
+./scripts/setup/stop_ha_test_env.sh --clean
+```
+
 ## MQTT Topics Reference
 
-State topics (where data is published):
+Runtime/state topics (where data is published):
 
 | Topic | Content | Update frequency |
 |-------|---------|-----------------|
 | `meshcore/{node_id}/health` | `{"connected": bool, "noise_floor_dbm": int}` | Every 60s |
 | `meshcore/{node_id}/telemetry` | `{"battery_volts": float, ...}` | ~8h or manual |
 | `meshcore/{node_id}/gps` | `{"latitude": float, "longitude": float, ...}` | On advert |
-| `meshcore/events/message` | `{"event_type": "message_received", ...}` | On message |
+| `meshcore/{node_id}/events/message` | `{"event_type": "message_received", ...}` | On message |
 
 Discovery topics (entity registration, under `homeassistant/`):
 
 | Pattern | Entity type |
 |---------|------------|
-| `homeassistant/binary_sensor/meshcore_*/connected/config` | Radio connectivity |
-| `homeassistant/sensor/meshcore_*/noise_floor/config` | Noise floor sensor |
-| `homeassistant/sensor/meshcore_*/battery_voltage/config` | Repeater battery |
-| `homeassistant/sensor/meshcore_*/*/config` | Other repeater sensors |
-| `homeassistant/device_tracker/meshcore_*/config` | Contact GPS tracker |
-| `homeassistant/event/meshcore_messages/config` | Message event entity |
+| `homeassistant/binary_sensor/meshcore_<node_id>/connected/config` | Radio connectivity |
+| `homeassistant/sensor/meshcore_<node_id>/noise_floor/config` | Noise floor sensor |
+| `homeassistant/sensor/meshcore_<node_id>/battery_voltage/config` | Repeater battery |
+| `homeassistant/sensor/meshcore_<node_id>/*/config` | Other repeater sensors |
+| `homeassistant/device_tracker/meshcore_<node_id>/config` | Contact GPS tracker |
+| `homeassistant/event/meshcore_<node_id>/messages/config` | Message event entity |
 
 The `{node_id}` is always the first 12 characters of the node's public key, lowercased.

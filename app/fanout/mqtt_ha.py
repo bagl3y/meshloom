@@ -115,6 +115,21 @@ def _lpp_sensor_key(type_name: str, channel: int) -> str:
     return f"lpp_{type_name}_ch{channel}"
 
 
+def _repeater_telemetry_payload(data: dict[str, Any]) -> dict[str, Any]:
+    """Build the flat HA state payload for a repeater telemetry snapshot."""
+    payload: dict[str, Any] = {}
+    for sensor in _REPEATER_SENSORS:
+        field = sensor["field"]
+        if field is not None:
+            payload[field] = data.get(field)
+
+    for sensor in data.get("lpp_sensors", []) or []:
+        key = _lpp_sensor_key(sensor.get("type_name", "unknown"), sensor.get("channel", 0))
+        payload[key] = sensor.get("value")
+
+    return payload
+
+
 def _lpp_discovery_configs(
     prefix: str,
     pub_key: str,
@@ -497,13 +512,14 @@ class MqttHaModule(FanoutModule):
     # ── Discovery publishing ──────────────────────────────────────────
 
     async def _publish_discovery(self) -> None:
-        """Publish all HA discovery configs with retain=True."""
+        """Publish HA discovery configs and one-shot cached repeater state."""
         if not self._radio_key:
             # Don't publish discovery until we know the radio identity —
             # the first health heartbeat will provide it and trigger this.
             return
 
         configs: list[tuple[str, dict]] = []
+        cached_repeater_states: list[tuple[str, dict[str, Any]]] = []
 
         radio_name = self._radio_name or "MeshCore Radio"
         configs.extend(_radio_discovery_configs(self._prefix, self._radio_key, radio_name))
@@ -514,14 +530,23 @@ class MqttHaModule(FanoutModule):
             configs.extend(
                 _repeater_discovery_configs(self._prefix, pub_key, rname, self._radio_key)
             )
+            latest = await self._resolve_latest_telemetry(pub_key)
+            latest_data = latest.get("data", {}) if latest else {}
             # Dynamic LPP sensor entities from last known telemetry snapshot
-            lpp_sensors = await self._resolve_lpp_sensors(pub_key)
+            lpp_sensors = latest_data.get("lpp_sensors", [])
             if lpp_sensors:
                 nid = _node_id(pub_key)
                 device = _device_payload(pub_key, rname, "Repeater", via_device_key=self._radio_key)
                 state_topic = f"{self._prefix}/{nid}/telemetry"
                 configs.extend(
                     _lpp_discovery_configs(self._prefix, pub_key, device, lpp_sensors, state_topic)
+                )
+            if latest_data:
+                cached_repeater_states.append(
+                    (
+                        f"{self._prefix}/{_node_id(pub_key)}/telemetry",
+                        _repeater_telemetry_payload(latest_data),
+                    )
                 )
 
         # Tracked contacts — resolve names from DB best-effort
@@ -539,11 +564,18 @@ class MqttHaModule(FanoutModule):
         for topic, payload in configs:
             await self._publisher.publish(topic, payload, retain=True)
 
+        for topic, payload in cached_repeater_states:
+            # Replay cached state after discovery so newly created HA entities
+            # populate immediately, but do not retain it or HA will treat a
+            # broker reconnect as fresh telemetry and reset expire_after.
+            await self._publisher.publish(topic, payload)
+
         logger.info(
-            "HA MQTT: published %d discovery configs (%d repeaters, %d contacts)",
+            "HA MQTT: published %d discovery configs (%d repeaters, %d contacts, %d cached telemetry states)",
             len(configs),
             len(self._tracked_repeaters),
             len(self._tracked_contacts),
+            len(cached_repeater_states),
         )
 
     async def _clear_retained_topics(self, topics: list[str]) -> None:
@@ -575,17 +607,15 @@ class MqttHaModule(FanoutModule):
         return pub_key[:12]
 
     @staticmethod
-    async def _resolve_lpp_sensors(pub_key: str) -> list[dict]:
-        """Return the LPP sensor list from the most recent telemetry snapshot, or []."""
+    async def _resolve_latest_telemetry(pub_key: str) -> dict | None:
+        """Return the most recent telemetry row for a repeater, or None."""
         try:
             from app.repository.repeater_telemetry import RepeaterTelemetryRepository
 
-            latest = await RepeaterTelemetryRepository.get_latest(pub_key)
-            if latest:
-                return latest.get("data", {}).get("lpp_sensors", [])
+            return await RepeaterTelemetryRepository.get_latest(pub_key)
         except Exception:
             pass
-        return []
+        return None
 
     def _seed_radio_identity_from_runtime(self) -> None:
         """Best-effort bootstrap from the currently connected radio session."""
@@ -698,19 +728,12 @@ class MqttHaModule(FanoutModule):
         nid = _node_id(pub_key)
         # Publish the full telemetry dict — HA sensors use value_template
         # to extract individual fields
-        payload: dict[str, Any] = {}
-        for s in _REPEATER_SENSORS:
-            field = s["field"]
-            if field is not None:
-                payload[field] = data.get(field)
-
-        # Flatten LPP sensors into the same payload so HA value_templates work
+        payload = _repeater_telemetry_payload(data)
         lpp_sensors: list[dict] = data.get("lpp_sensors", [])
         rediscover = False
         for sensor in lpp_sensors:
-            key = _lpp_sensor_key(sensor.get("type_name", "unknown"), sensor.get("channel", 0))
-            payload[key] = sensor.get("value")
             # Check if discovery for this sensor has been published yet
+            key = _lpp_sensor_key(sensor.get("type_name", "unknown"), sensor.get("channel", 0))
             expected_topic = f"homeassistant/sensor/meshcore_{nid}/{key}/config"
             if expected_topic not in self._discovery_topics:
                 rediscover = True

@@ -12,6 +12,7 @@ vi.mock('../api', () => ({
     deleteFanoutConfig: vi.fn(),
     getChannels: vi.fn(),
     getContacts: vi.fn(),
+    getSettings: vi.fn(),
     getRadioConfig: vi.fn(),
   },
 }));
@@ -97,6 +98,20 @@ beforeEach(() => {
   mockedApi.getFanoutConfigs.mockResolvedValue([]);
   mockedApi.getChannels.mockResolvedValue([]);
   mockedApi.getContacts.mockResolvedValue([]);
+  mockedApi.getSettings.mockResolvedValue({
+    max_radio_contacts: 200,
+    auto_decrypt_dm_on_advert: true,
+    last_message_times: {},
+    advert_interval: 0,
+    last_advert_time: 0,
+    flood_scope: '',
+    blocked_keys: [],
+    blocked_names: [],
+    discovery_blocked_types: [],
+    tracked_telemetry_repeaters: [],
+    auto_resend_channel: false,
+    telemetry_interval_hours: 8,
+  });
   mockedApi.getRadioConfig.mockResolvedValue({
     public_key: 'aa'.repeat(32),
     name: 'TestNode',
@@ -973,6 +988,90 @@ describe('SettingsFanoutSection', () => {
         enabled: true,
       })
     );
+  });
+
+  it('shows Home Assistant topic summary with device-key-derived node ids', async () => {
+    mockedApi.getContacts.mockResolvedValue([
+      {
+        public_key: 'bb'.repeat(32),
+        name: 'Alice',
+        type: 1,
+        flags: 0,
+        direct_path: null,
+        direct_path_len: -1,
+        direct_path_hash_mode: -1,
+        direct_path_updated_at: null,
+        route_override_path: null,
+        route_override_len: null,
+        route_override_hash_mode: null,
+        last_advert: null,
+        lat: null,
+        lon: null,
+        last_seen: null,
+        on_radio: false,
+        last_contacted: null,
+        first_seen: null,
+        last_read_at: null,
+        favorite: false,
+      },
+      {
+        public_key: 'cc'.repeat(32),
+        name: 'Repeater One',
+        type: 2,
+        flags: 0,
+        direct_path: null,
+        direct_path_len: -1,
+        direct_path_hash_mode: -1,
+        direct_path_updated_at: null,
+        route_override_path: null,
+        route_override_len: null,
+        route_override_hash_mode: null,
+        last_advert: null,
+        lat: null,
+        lon: null,
+        last_seen: null,
+        on_radio: false,
+        last_contacted: null,
+        first_seen: null,
+        last_read_at: null,
+        favorite: false,
+      },
+    ]);
+    mockedApi.getSettings.mockResolvedValue({
+      max_radio_contacts: 200,
+      auto_decrypt_dm_on_advert: true,
+      last_message_times: {},
+      advert_interval: 0,
+      last_advert_time: 0,
+      flood_scope: '',
+      blocked_keys: [],
+      blocked_names: [],
+      discovery_blocked_types: [],
+      tracked_telemetry_repeaters: ['cc'.repeat(32)],
+      auto_resend_channel: false,
+      telemetry_interval_hours: 8,
+    });
+
+    renderSection();
+    await openCreateIntegrationDialog();
+    selectCreateIntegration('Home Assistant MQTT Discovery');
+    confirmCreateIntegration();
+
+    expect(await screen.findByText('Published Topic Summary')).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByLabelText(/Alice/));
+    fireEvent.click(await screen.findByLabelText(/Repeater One/));
+
+    await waitFor(() => {
+      expect(screen.getAllByText('node id aaaaaaaaaaaa').length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByText('node id bbbbbbbbbbbb')).toBeInTheDocument();
+      expect(screen.getByText('node id cccccccccccc')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('meshcore/aaaaaaaaaaaa/health')).toBeInTheDocument();
+    expect(screen.getByText('meshcore/aaaaaaaaaaaa/events/message')).toBeInTheDocument();
+    expect(screen.getByText('meshcore/bbbbbbbbbbbb/gps')).toBeInTheDocument();
+    expect(screen.getByText('meshcore/cccccccccccc/telemetry')).toBeInTheDocument();
   });
 
   it('LetsMesh (US) preset pre-fills the expected broker defaults', async () => {

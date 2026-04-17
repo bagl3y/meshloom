@@ -843,6 +843,7 @@ function MqttHaConfigEditor({
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [trackedRepeaters, setTrackedRepeaters] = useState<string[]>([]);
   const [contactSearch, setContactSearch] = useState('');
+  const [radioConfig, setRadioConfig] = useState<{ public_key: string; name: string } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -857,6 +858,11 @@ function MqttHaConfigEditor({
       }
       setContacts(all);
     })().catch(console.error);
+
+    api
+      .getRadioConfig()
+      .then((radio) => setRadioConfig({ public_key: radio.public_key, name: radio.name }))
+      .catch(console.error);
 
     api
       .getSettings()
@@ -897,6 +903,82 @@ function MqttHaConfigEditor({
   const selectedContactDetails = contactOptions.filter((c) =>
     selectedContacts.includes(c.public_key)
   );
+  const selectedRepeaterDetails = repeaterOptions.filter((c) =>
+    selectedRepeaters.includes(c.public_key)
+  );
+  const prefix = ((config.topic_prefix as string) || 'meshcore').trim() || 'meshcore';
+
+  const nodeIdForKey = useCallback((publicKey: string) => publicKey.slice(0, 12).toLowerCase(), []);
+
+  const topicSummary = useMemo(() => {
+    const items: Array<{
+      kind: 'radio' | 'event' | 'repeater' | 'contact';
+      label: string;
+      publicKey: string;
+      nodeId: string;
+      topics: string[];
+    }> = [];
+
+    if (radioConfig?.public_key) {
+      const nodeId = nodeIdForKey(radioConfig.public_key);
+      items.push({
+        kind: 'radio',
+        label: radioConfig.name || radioConfig.public_key.slice(0, 12),
+        publicKey: radioConfig.public_key,
+        nodeId,
+        topics: [`${prefix}/${nodeId}/health`],
+      });
+      items.push({
+        kind: 'event',
+        label: radioConfig.name || radioConfig.public_key.slice(0, 12),
+        publicKey: radioConfig.public_key,
+        nodeId,
+        topics: [`${prefix}/${nodeId}/events/message`],
+      });
+    }
+
+    for (const repeater of selectedRepeaterDetails) {
+      const nodeId = nodeIdForKey(repeater.public_key);
+      items.push({
+        kind: 'repeater',
+        label: repeater.name || repeater.public_key.slice(0, 12),
+        publicKey: repeater.public_key,
+        nodeId,
+        topics: [`${prefix}/${nodeId}/telemetry`],
+      });
+    }
+
+    for (const contact of selectedContactDetails) {
+      const nodeId = nodeIdForKey(contact.public_key);
+      items.push({
+        kind: 'contact',
+        label: contact.name || contact.public_key.slice(0, 12),
+        publicKey: contact.public_key,
+        nodeId,
+        topics: [`${prefix}/${nodeId}/gps`],
+      });
+    }
+
+    return items;
+  }, [nodeIdForKey, prefix, radioConfig, selectedContactDetails, selectedRepeaterDetails]);
+
+  const kindLabel: Record<(typeof topicSummary)[number]['kind'], string> = {
+    radio: 'Local radio state',
+    event: 'Message events',
+    repeater: 'Repeater telemetry',
+    contact: 'Contact GPS',
+  };
+  const localRadioNodeId = radioConfig?.public_key
+    ? nodeIdForKey(radioConfig.public_key)
+    : '<radio_node_id>';
+  const exampleRepeaterNodeId =
+    selectedRepeaterDetails.length > 0
+      ? nodeIdForKey(selectedRepeaterDetails[0].public_key)
+      : '<repeater_node_id>';
+  const exampleContactNodeId =
+    selectedContactDetails.length > 0
+      ? nodeIdForKey(selectedContactDetails[0].public_key)
+      : '<contact_node_id>';
 
   const toggleTrackedContact = (key: string) => {
     const current = [...selectedContacts];
@@ -914,111 +996,175 @@ function MqttHaConfigEditor({
     onChange({ ...config, tracked_repeaters: current });
   };
 
-  const prefix = ((config.topic_prefix as string) || 'meshcore').trim() || 'meshcore';
-
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
-        Uses{' '}
-        <span
-          role="link"
-          tabIndex={0}
-          className="underline cursor-pointer hover:text-primary transition-colors"
-          onClick={() =>
-            window.open('https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery', '_blank')
-          }
-          onKeyDown={(e) => {
-            if (e.key === 'Enter')
+      <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
+        <div className="space-y-1">
+          <h3 className="text-base font-semibold text-foreground">Home Assistant MQTT Discovery</h3>
+          <p className="text-sm text-muted-foreground">
+            Publish discovery configs and MeshCore state to your MQTT broker so Home Assistant
+            creates native devices, sensors, GPS trackers, and message events automatically.
+          </p>
+        </div>
+
+        <div className="grid gap-2 md:grid-cols-3">
+          <div className="rounded-md border border-border/70 bg-background/80 p-3">
+            <div className="text-sm font-medium text-foreground">1. Same broker</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Home Assistant&apos;s built-in MQTT integration must point at the same broker
+              configured below.
+            </p>
+          </div>
+          <div className="rounded-md border border-border/70 bg-background/80 p-3">
+            <div className="text-sm font-medium text-foreground">2. Pick what to expose</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Choose repeaters for telemetry sensors and contacts for GPS tracker entities.
+            </p>
+          </div>
+          <div className="rounded-md border border-border/70 bg-background/80 p-3">
+            <div className="text-sm font-medium text-foreground">3. Automate in HA</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Radio health and message events publish continuously; repeater and contact data update
+              when new data is heard or collected.
+            </p>
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Uses{' '}
+          <span
+            role="link"
+            tabIndex={0}
+            className="underline cursor-pointer hover:text-primary transition-colors"
+            onClick={() =>
               window.open(
                 'https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery',
                 '_blank'
-              );
-          }}
-        >
-          MQTT Discovery
-        </span>{' '}
-        to automatically create devices and entities in Home Assistant. Your HA instance must have
-        the MQTT integration configured and connected to the same broker. See{' '}
-        <span
-          role="link"
-          tabIndex={0}
-          className="underline cursor-pointer hover:text-primary transition-colors"
-          onClick={() =>
-            window.open(
-              'https://github.com/jkingsman/Remote-Terminal-for-MeshCore/blob/main/README_HA.md',
-              '_blank'
-            )
-          }
-          onKeyDown={(e) => {
-            if (e.key === 'Enter')
+              )
+            }
+            onKeyDown={(e) => {
+              if (e.key === 'Enter')
+                window.open(
+                  'https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery',
+                  '_blank'
+                );
+            }}
+          >
+            MQTT Discovery
+          </span>{' '}
+          and the topic conventions documented in{' '}
+          <span
+            role="link"
+            tabIndex={0}
+            className="underline cursor-pointer hover:text-primary transition-colors"
+            onClick={() =>
               window.open(
                 'https://github.com/jkingsman/Remote-Terminal-for-MeshCore/blob/main/README_HA.md',
                 '_blank'
-              );
-          }}
-        >
-          README_HA.md
-        </span>{' '}
-        for automation examples and setup details. Note that entities like repeaters and contact GPS
-        won't update until new data is available; there is no caching layer (so devices/entities
-        might take hours to days to appear).
-      </p>
+              )
+            }
+            onKeyDown={(e) => {
+              if (e.key === 'Enter')
+                window.open(
+                  'https://github.com/jkingsman/Remote-Terminal-for-MeshCore/blob/main/README_HA.md',
+                  '_blank'
+                );
+            }}
+          >
+            README_HA.md
+          </span>
+          .
+        </p>
+      </div>
 
       <details className="group">
-        <summary className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium cursor-pointer select-none flex items-center gap-1">
+        <summary className="text-sm font-medium text-foreground cursor-pointer select-none flex items-center gap-1">
           <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-0 -rotate-90" />
           What gets created in Home Assistant
         </summary>
-        <div className="mt-2 space-y-2 text-xs text-muted-foreground rounded-md border border-border bg-muted/20 p-3">
+        <div className="mt-2 space-y-2 text-sm text-muted-foreground rounded-md border border-border bg-muted/20 p-3">
           <div>
             <span className="font-medium text-foreground">Local radio device</span> (always)
             <span className="ml-1">&mdash; updates every 60s</span>
             <ul className="mt-0.5 ml-4 list-disc space-y-0.5">
               <li>
-                <code className="text-[0.6875rem]">binary_sensor.meshcore_*_connected</code> &mdash;
-                radio online/offline
+                <code className="text-[0.6875rem]">
+                  {`binary_sensor.meshcore_${localRadioNodeId}_connected`}
+                </code>{' '}
+                &mdash; radio online/offline
               </li>
               <li>
-                <code className="text-[0.6875rem]">sensor.meshcore_*_noise_floor</code> &mdash;
-                radio noise floor (dBm)
+                <code className="text-[0.6875rem]">
+                  {`sensor.meshcore_${localRadioNodeId}_noise_floor`}
+                </code>{' '}
+                &mdash; radio noise floor (dBm)
               </li>
             </ul>
           </div>
 
           <div>
             <span className="font-medium text-foreground">Per tracked repeater</span> &mdash;
-            updates on telemetry collect cycle (~8h) or manual dashboard fetch
+            updates on telemetry collect cycle (~8h) or manual dashboard fetch. Entity IDs shown use
+            one repeater for example; these sensors are created for each selected repeater.
             <ul className="mt-0.5 ml-4 list-disc space-y-0.5">
               <li>
-                <code className="text-[0.6875rem]">sensor.meshcore_*_battery_voltage</code> (V)
+                <code className="text-[0.6875rem]">
+                  {`sensor.meshcore_${exampleRepeaterNodeId}_battery_voltage`}
+                </code>{' '}
+                (V)
               </li>
               <li>
-                <code className="text-[0.6875rem]">sensor.meshcore_*_noise_floor</code>,{' '}
-                <code className="text-[0.6875rem]">*_last_rssi</code>,{' '}
-                <code className="text-[0.6875rem]">*_last_snr</code> (dBm/dB)
+                <code className="text-[0.6875rem]">
+                  {`sensor.meshcore_${exampleRepeaterNodeId}_noise_floor`}
+                </code>
+                ,{' '}
+                <code className="text-[0.6875rem]">
+                  {`sensor.meshcore_${exampleRepeaterNodeId}_last_rssi`}
+                </code>
+                ,{' '}
+                <code className="text-[0.6875rem]">
+                  {`sensor.meshcore_${exampleRepeaterNodeId}_last_snr`}
+                </code>{' '}
+                (dBm/dB)
               </li>
               <li>
-                <code className="text-[0.6875rem]">sensor.meshcore_*_packets_received</code>,{' '}
-                <code className="text-[0.6875rem]">*_packets_sent</code>
+                <code className="text-[0.6875rem]">
+                  {`sensor.meshcore_${exampleRepeaterNodeId}_packets_received`}
+                </code>
+                ,{' '}
+                <code className="text-[0.6875rem]">
+                  {`sensor.meshcore_${exampleRepeaterNodeId}_packets_sent`}
+                </code>
               </li>
               <li>
-                <code className="text-[0.6875rem]">sensor.meshcore_*_uptime</code> (seconds)
+                <code className="text-[0.6875rem]">
+                  {`sensor.meshcore_${exampleRepeaterNodeId}_uptime`}
+                </code>{' '}
+                (seconds)
               </li>
               <li>
-                <code className="text-[0.6875rem]">sensor.meshcore_*_lpp_temperature_ch*</code>,{' '}
-                <code className="text-[0.6875rem]">*_lpp_humidity_ch*</code>, etc. &mdash;
-                CayenneLPP sensors (auto-detected from repeater)
+                <code className="text-[0.6875rem]">
+                  {`sensor.meshcore_${exampleRepeaterNodeId}_lpp_temperature_ch1`}
+                </code>
+                ,{' '}
+                <code className="text-[0.6875rem]">
+                  {`sensor.meshcore_${exampleRepeaterNodeId}_lpp_humidity_ch1`}
+                </code>
+                , etc. &mdash; CayenneLPP sensors (auto-detected from repeater)
               </li>
             </ul>
           </div>
 
           <div>
             <span className="font-medium text-foreground">Per tracked contact</span> &mdash; updates
-            passively when advertisements with GPS are heard
+            passively when advertisements with GPS are heard. Shown for one contact; a tracker is
+            created for each selected contact.
             <ul className="mt-0.5 ml-4 list-disc space-y-0.5">
               <li>
-                <code className="text-[0.6875rem]">device_tracker.meshcore_*</code> &mdash;
-                latitude/longitude
+                <code className="text-[0.6875rem]">
+                  {`device_tracker.meshcore_${exampleContactNodeId}`}
+                </code>{' '}
+                &mdash; latitude/longitude
               </li>
             </ul>
           </div>
@@ -1028,8 +1174,10 @@ function MqttHaConfigEditor({
             each message matching the scope below
             <ul className="mt-0.5 ml-4 list-disc space-y-0.5">
               <li>
-                <code className="text-[0.6875rem]">event.meshcore_messages</code> &mdash; trigger
-                automations on sender, channel, or message content
+                <code className="text-[0.6875rem]">
+                  {`event.meshcore_${localRadioNodeId}_messages`}
+                </code>{' '}
+                &mdash; trigger automations on sender, channel, or message content
               </li>
             </ul>
           </div>
@@ -1043,11 +1191,62 @@ function MqttHaConfigEditor({
         </div>
       </details>
 
+      <details className="group">
+        <summary className="text-sm font-medium text-foreground cursor-pointer select-none flex items-center gap-1">
+          <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-0 -rotate-90" />
+          Published Topic Summary
+        </summary>
+        <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/20 p-3">
+          <p className="text-xs text-muted-foreground">
+            Home Assistant device and entity IDs are keyed off the first 12 characters of each
+            node&apos;s public key, not the display name. Those same 12 characters are used in the
+            MQTT state topics below.
+          </p>
+          {topicSummary.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic">
+              No topic previews available yet. Connect to a radio to resolve the local radio key,
+              and select contacts or repeaters above to preview their published topics.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {topicSummary.map((item) => (
+                <div
+                  key={`${item.kind}-${item.publicKey}`}
+                  className="rounded border border-border/70 bg-background/70 p-2"
+                >
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                    <span className="font-medium text-foreground">{kindLabel[item.kind]}</span>
+                    <span className="text-foreground">{item.label}</span>
+                    <span className="font-mono text-[0.6875rem] text-muted-foreground">
+                      node id {item.nodeId}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-[0.6875rem] text-muted-foreground font-mono break-all">
+                    key {item.publicKey}
+                  </div>
+                  {item.topics.map((topic) => (
+                    <div
+                      key={topic}
+                      className="mt-1 rounded bg-muted px-2 py-1 text-[0.6875rem] font-mono text-foreground break-all"
+                    >
+                      {topic}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-[0.6875rem] text-muted-foreground">
+            Discovery config topics are also published under{' '}
+            <code className="text-[0.6875rem]">homeassistant/.../config</code>, but the topics above
+            are the primary runtime state and event topics.
+          </p>
+        </div>
+      </details>
+
       <Separator />
 
-      <p className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
-        MQTT Broker
-      </p>
+      <p className="text-sm font-semibold text-foreground">MQTT Broker</p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
@@ -1138,9 +1337,7 @@ function MqttHaConfigEditor({
       <Separator />
 
       <div className="space-y-2">
-        <p className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
-          GPS Tracked Contacts
-        </p>
+        <p className="text-sm font-semibold text-foreground">GPS Tracked Contacts</p>
         <p className="text-xs text-muted-foreground">
           Each selected contact becomes a <code className="text-[0.6875rem]">device_tracker</code>{' '}
           in HA, updated whenever an advertisement with GPS coordinates is heard. Useful for
@@ -1211,9 +1408,7 @@ function MqttHaConfigEditor({
       <Separator />
 
       <div className="space-y-2">
-        <p className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
-          Telemetry Tracked Repeaters
-        </p>
+        <p className="text-sm font-semibold text-foreground">Telemetry Tracked Repeaters</p>
         <p className="text-xs text-muted-foreground">
           Each selected repeater becomes an HA device with sensors for battery voltage, RSSI, SNR,
           noise floor, packet counts, and uptime. Data updates whenever telemetry is collected
@@ -1254,14 +1449,12 @@ function MqttHaConfigEditor({
       <Separator />
 
       <div className="space-y-2">
-        <p className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
-          Message Events
-        </p>
+        <p className="text-sm font-semibold text-foreground">Message Events</p>
         <p className="text-xs text-muted-foreground">
           Matching messages fire an{' '}
-          <code className="text-[0.6875rem]">event.meshcore_messages</code> entity in HA with
-          sender, text, channel, and direction attributes. Use HA automations to trigger actions on
-          specific messages, channels, or contacts.
+          <code className="text-[0.6875rem]">{`event.meshcore_${localRadioNodeId}_messages`}</code>{' '}
+          entity in HA with sender, text, channel, and direction attributes. Use HA automations to
+          trigger actions on specific messages, channels, or contacts.
         </p>
       </div>
       <ScopeSelector scope={scope} onChange={onScopeChange} />
