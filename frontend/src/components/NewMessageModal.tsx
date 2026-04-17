@@ -183,11 +183,11 @@ export function NewMessageModal({
           permitCapitals
         );
         if (channelNames.length === 0) {
-          setError('Enter at least one valid room name');
+          setError('Enter at least one valid channel name');
           return;
         }
         if (invalidNames.length > 0) {
-          setError(`Invalid room names: ${invalidNames.join(', ')}`);
+          setError(`Invalid channel names: ${invalidNames.join(', ')}`);
           return;
         }
         await onBulkAddHashtagChannels(channelNames, tryHistorical);
@@ -249,7 +249,7 @@ export function NewMessageModal({
             {tab === 'new-contact' && 'Add a new contact by entering their name and public key'}
             {tab === 'new-channel' && 'Create a private channel with a shared encryption key'}
             {tab === 'hashtag' && 'Join a public hashtag channel'}
-            {tab === 'bulk-hashtag' && 'Paste multiple hashtag rooms to add them in one batch'}
+            {tab === 'bulk-hashtag' && 'Paste multiple hashtag channels to add them in one batch'}
           </DialogDescription>
         </DialogHeader>
 
@@ -377,11 +377,11 @@ export function NewMessageModal({
                   aria-label="Bulk channel names"
                   value={bulkChannelText}
                   onChange={(e) => setBulkChannelText(e.target.value)}
-                  placeholder={'#ops\nmesh-room\nanother-room'}
+                  placeholder={'#ops\nmesh-chat\nanother-channel'}
                   className="min-h-48 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Paste room names separated by lines, spaces, or commas. Leading # marks are
+                  Paste channel names separated by lines, spaces, or commas. Leading # marks are
                   stripped automatically.
                 </p>
               </div>

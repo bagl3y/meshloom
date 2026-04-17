@@ -668,10 +668,10 @@ export function SettingsRadioSection({
           variant="outline"
           className="flex-1"
         >
-          {busy && !rebooting ? 'Saving...' : 'Save'}
+          {busy && !rebooting ? 'Saving...' : 'Save Radio Config'}
         </Button>
         <Button onClick={handleSaveAndReboot} disabled={busy || rebooting} className="flex-1">
-          {rebooting ? 'Rebooting...' : 'Save & Reboot'}
+          {rebooting ? 'Rebooting...' : 'Save Radio Config & Reboot'}
         </Button>
       </div>
       <p className="text-[0.8125rem] text-muted-foreground">
@@ -769,7 +769,7 @@ export function SettingsRadioSection({
       )}
 
       <Button onClick={handleSaveFloodSettings} disabled={floodBusy} className="w-full">
-        {floodBusy ? 'Saving...' : 'Save Settings'}
+        {floodBusy ? 'Saving...' : 'Save Messaging Settings'}
       </Button>
 
       <Separator />

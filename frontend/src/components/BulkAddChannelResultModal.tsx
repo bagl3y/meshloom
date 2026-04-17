@@ -84,12 +84,12 @@ export function BulkAddChannelResultModal({
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No new rooms were added.</p>
+            <p className="text-sm text-muted-foreground">No new channels were added.</p>
           )}
 
           {result && result.invalid_names.length > 0 && (
             <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
-              Ignored invalid room names: {result.invalid_names.join(', ')}
+              Ignored invalid channel names: {result.invalid_names.join(', ')}
             </div>
           )}
         </div>

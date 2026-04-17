@@ -119,7 +119,7 @@ describe('NewMessageModal form reset', () => {
       expect(screen.queryByRole('tab', { name: 'Bulk Add Channel' })).toBeNull();
     });
 
-    it('opens on the bulk tab when enabled and submits normalized room names', async () => {
+    it('opens on the bulk tab when enabled and submits normalized channel names', async () => {
       const user = userEvent.setup();
       renderModal(true, { showBulkAddChannelTab: true });
 
@@ -145,7 +145,7 @@ describe('NewMessageModal form reset', () => {
       expect(onClose).toHaveBeenCalled();
     });
 
-    it('shows invalid bulk room names before submitting', async () => {
+    it('shows invalid bulk channel names before submitting', async () => {
       const user = userEvent.setup();
       renderModal(true, { showBulkAddChannelTab: true });
 
@@ -156,7 +156,7 @@ describe('NewMessageModal form reset', () => {
       await user.click(screen.getByRole('button', { name: 'Add Channels' }));
 
       expect(onBulkAddHashtagChannels).not.toHaveBeenCalled();
-      expect(screen.getByText('Invalid room names: bad_room')).toBeTruthy();
+      expect(screen.getByText('Invalid channel names: bad_room')).toBeTruthy();
     });
   });
 

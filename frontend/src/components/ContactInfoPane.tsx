@@ -298,17 +298,16 @@ export function ContactInfoPane({
 
             {isPrefixOnlyResolvedContact && (
               <div className="mx-5 mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                We only know a key prefix for this sender, which can happen when a fallback DM
-                arrives before we hear an advertisement. This contact stays read-only until the full
-                key resolves from a later advertisement.
+                We&apos;ve received a message from this sender but don&apos;t have their full
+                identity yet. This contact stays read-only until their identity is confirmed &mdash;
+                this usually happens automatically when they next advertise.
               </div>
             )}
 
             {isUnknownFullKeyResolvedContact && (
               <div className="mx-5 mt-4 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
-                We know this sender&apos;s full key, but we have not yet heard an advertisement that
-                fills in their identity details. Those details will appear automatically when an
-                advertisement arrives.
+                This sender&apos;s profile details (name, location) haven&apos;t arrived yet. They
+                will fill in automatically when the sender&apos;s next advertisement is heard.
               </div>
             )}
 

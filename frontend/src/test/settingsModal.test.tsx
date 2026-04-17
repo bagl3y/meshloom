@@ -334,7 +334,7 @@ describe('SettingsModal', () => {
     fireEvent.change(screen.getByLabelText('Advert Location Source'), {
       target: { value: 'off' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Radio Config' }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith(
@@ -348,7 +348,7 @@ describe('SettingsModal', () => {
     openRadioSection();
 
     fireEvent.click(screen.getByLabelText('Extra Direct ACK Transmission'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Radio Config' }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ multi_acks_enabled: true }));
@@ -362,8 +362,8 @@ describe('SettingsModal', () => {
     const maxContactsInput = screen.getByLabelText('Max Contacts on Radio');
     fireEvent.change(maxContactsInput, { target: { value: '250' } });
 
-    // Click the "Save Settings" button in the Flood & Advert Control section
-    const saveButtons = screen.getAllByRole('button', { name: 'Save Settings' });
+    // Click the "Save Messaging Settings" button
+    const saveButtons = screen.getAllByRole('button', { name: 'Save Messaging Settings' });
     fireEvent.click(saveButtons[0]);
 
     await waitFor(() => {
@@ -377,8 +377,8 @@ describe('SettingsModal', () => {
     });
     openRadioSection();
 
-    // Click the "Save Settings" button in the Flood & Advert Control section
-    const saveButtons = screen.getAllByRole('button', { name: 'Save Settings' });
+    // Click the "Save Messaging Settings" button
+    const saveButtons = screen.getAllByRole('button', { name: 'Save Messaging Settings' });
     fireEvent.click(saveButtons[0]);
 
     await waitFor(() => {
@@ -542,7 +542,7 @@ describe('SettingsModal', () => {
     });
     openRadioSection();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save & Reboot' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Radio Config & Reboot' }));
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledTimes(1);
       expect(onReboot).toHaveBeenCalledTimes(1);

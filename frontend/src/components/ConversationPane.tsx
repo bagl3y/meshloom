@@ -103,17 +103,17 @@ function ContactResolutionBanner({ variant }: { variant: 'unknown-full-key' | 'p
   if (variant === 'prefix-only') {
     return (
       <div className="mx-4 mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-        We only know a key prefix for this sender, which can happen when a fallback DM arrives
-        before we learn their full identity. This conversation is read-only until we hear an
-        advertisement that resolves the full key.
+        We&apos;ve received a message from this sender but don&apos;t have their full identity yet.
+        Sending is disabled until their identity is confirmed &mdash; this usually happens
+        automatically when they next advertise.
       </div>
     );
   }
 
   return (
     <div className="mx-4 mt-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
-      A full identity profile is not yet available because we have not heard an advertisement from
-      this sender. The contact will fill in automatically when an advertisement arrives.
+      This sender&apos;s profile details (name, location) haven&apos;t arrived yet. They will fill
+      in automatically when the sender&apos;s next advert is heard.
     </div>
   );
 }

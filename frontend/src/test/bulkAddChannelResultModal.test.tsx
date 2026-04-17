@@ -43,6 +43,6 @@ describe('BulkAddChannelResultModal', () => {
     expect(opsLink.getAttribute('href')).toContain('#channel/');
     expect(meshLink.getAttribute('href')).toContain('#channel/');
     expect(screen.queryByRole('link', { name: /bad_room/i })).toBeNull();
-    expect(screen.getByText(/Ignored invalid room names: bad_room/)).toBeTruthy();
+    expect(screen.getByText(/Ignored invalid channel names: bad_room/)).toBeTruthy();
   });
 });

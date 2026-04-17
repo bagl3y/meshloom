@@ -379,7 +379,7 @@ describe('ConversationPane', () => {
       />
     );
 
-    expect(screen.getByText(/A full identity profile is not yet available/i)).toBeInTheDocument();
+    expect(screen.getByText(/profile details.*haven't arrived yet/i)).toBeInTheDocument();
     expect(screen.getByTestId('message-input')).toBeInTheDocument();
   });
 
@@ -416,7 +416,9 @@ describe('ConversationPane', () => {
       />
     );
 
-    expect(screen.getByText(/This conversation is read-only/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Sending is disabled until their identity is confirmed/i)
+    ).toBeInTheDocument();
     expect(screen.queryByTestId('message-input')).not.toBeInTheDocument();
   });
 });
