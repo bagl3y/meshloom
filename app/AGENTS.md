@@ -27,10 +27,10 @@ app/
 ├── config.py            # Env-driven runtime settings
 ├── channel_constants.py # Public/default channel constants shared across sync/send logic
 ├── database.py          # SQLite connection + base schema + migration runner
-├── migrations.py        # Schema migrations (SQLite user_version)
+├── migrations/          # Schema migrations (SQLite user_version, per-version modules)
 ├── models.py            # Pydantic request/response models and typed write contracts (for example ContactUpsert)
 ├── version_info.py      # Unified version/build metadata resolution for debug + startup surfaces
-├── repository/          # Data access layer (contacts, channels, messages, raw_packets, settings, fanout)
+├── repository/          # Data access layer (contacts, channels, messages, raw_packets, settings, fanout, push_subscriptions, repeater_telemetry)
 ├── services/            # Shared orchestration/domain services
 │   ├── messages.py              # Shared message creation, dedup, ACK application
 │   ├── message_send.py          # Direct send, channel send, resend workflows
@@ -55,7 +55,7 @@ app/
 │   ├── send.py                  # pywebpush wrapper (async via thread executor)
 │   └── manager.py               # Push dispatch: filter, build payload, concurrent send
 ├── fanout/              # Fanout bus: MQTT, bots, webhooks, Apprise, SQS (see fanout/AGENTS_fanout.md)
-├── dependencies.py      # Shared FastAPI dependency providers
+├── telemetry_interval.py # Shared telemetry interval math for tracked-repeater scheduler
 ├── path_utils.py        # Path hex rendering and hop-width helpers
 ├── region_scope.py      # Normalize/validate regional flood-scope values
 ├── keystore.py          # Ephemeral private/public key storage for DM decryption
@@ -70,7 +70,7 @@ app/
     ├── packets.py
     ├── read_state.py
     ├── rooms.py
-    ├── server_control.py
+    ├── server_control.py   # Shared helpers for repeater/room CLI flows (not an APIRouter)
     ├── settings.py
     ├── fanout.py
     ├── repeaters.py
@@ -140,8 +140,9 @@ app/
 
 ### Echo/repeat dedup
 
-- Message uniqueness: `(type, conversation_key, text, sender_timestamp)`.
-- Duplicate insert is treated as an echo/repeat: the new path (if any) is appended, and the ACK count is incremented only for outgoing channel messages. Incoming direct messages with the same conversation/text/sender timestamp also collapse onto one stored row, with later observations merging path data instead of creating a second DM.
+- Channel message uniqueness: `(type, conversation_key, text, sender_timestamp)`.
+- Incoming PRIV message uniqueness: `(type, conversation_key, text, COALESCE(sender_timestamp, 0), COALESCE(sender_key, ''))` — `sender_key` was added in migration 056 to distinguish room-server posts from different senders in the same second.
+- Duplicate insert is treated as an echo/repeat: the new path (if any) is appended, and the ACK count is incremented only for outgoing channel messages. Incoming direct messages with the same dedup identity also collapse onto one stored row, with later observations merging path data instead of creating a second DM.
 
 ### Raw packet dedup policy
 
@@ -224,6 +225,7 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 - `POST /contacts/{public_key}/repeater/radio-settings`
 - `POST /contacts/{public_key}/repeater/advert-intervals`
 - `POST /contacts/{public_key}/repeater/owner-info`
+- `GET /contacts/{public_key}/repeater/telemetry-history` — stored telemetry history for a repeater (read-only, no radio access)
 - `POST /contacts/{public_key}/room/login`
 - `POST /contacts/{public_key}/room/status`
 - `POST /contacts/{public_key}/room/lpp-telemetry`
@@ -263,6 +265,7 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 - `POST /settings/blocked-keys/toggle`
 - `POST /settings/blocked-names/toggle`
 - `POST /settings/tracked-telemetry/toggle`
+- `GET /settings/tracked-telemetry/schedule` — current telemetry scheduling derivation, interval options, and next-run-at timestamp
 
 ### Fanout
 - `GET /fanout` — list all fanout configs
@@ -281,6 +284,8 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 - `PATCH /push/subscriptions/{id}` — update label or filter preferences
 - `DELETE /push/subscriptions/{id}` — delete subscription
 - `POST /push/subscriptions/{id}/test` — send test notification
+- `GET /push/conversations` — global list of push-enabled conversation state keys
+- `POST /push/conversations/toggle` — add or remove a conversation from the global push list
 
 ### WebSocket
 - `WS /ws`
@@ -338,6 +343,7 @@ Repository writes should prefer typed models such as `ContactUpsert` over ad hoc
 - `blocked_keys`, `blocked_names`, `discovery_blocked_types`
 - `tracked_telemetry_repeaters`
 - `auto_resend_channel`
+- `telemetry_interval_hours`
 
 Note: MQTT, community MQTT, and bot configs were migrated to the `fanout_configs` table (migrations 36-38).
 

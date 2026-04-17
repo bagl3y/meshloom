@@ -40,7 +40,8 @@ frontend/src/
 ├── styles.css              # Additional global app styles
 ├── themes.css              # Color theme definitions
 ├── contexts/
-│   └── DistanceUnitContext.tsx # Browser-local distance-unit context/provider
+│   ├── DistanceUnitContext.tsx # Browser-local distance-unit context/provider
+│   └── PushSubscriptionContext.tsx # Push subscription state context/provider
 ├── lib/
 │   └── utils.ts            # cn() — clsx + tailwind-merge helper
 ├── hooks/
@@ -92,7 +93,13 @@ frontend/src/
 │   ├── radioPresets.ts            # LoRa radio preset configurations
 │   ├── publicChannel.ts           # Public-channel resolution helpers for routing/hash defaults
 │   ├── fontScale.ts               # Browser-local relative font scale persistence/application
-│   └── theme.ts                   # Theme switching helpers
+│   ├── theme.ts                   # Theme switching helpers
+│   ├── autoFocusInput.ts          # Auto-focus input helper
+│   ├── batteryDisplay.ts          # Battery level display helpers
+│   ├── messageIdentity.ts         # Message identity/dedup helpers
+│   ├── rawPacketInspector.ts      # Raw packet inspection helpers
+│   ├── serverLoginState.ts        # Server login state helpers
+│   └── statusDotPulse.ts          # Status dot pulse animation helpers
 ├── components/
 │   ├── StatusBar.tsx
 │   ├── Sidebar.tsx
@@ -135,7 +142,8 @@ frontend/src/
 │   │   ├── SettingsDatabaseSection.tsx   # DB size, cleanup, auto-decrypt, local label
 │   │   ├── SettingsStatisticsSection.tsx # Read-only mesh network stats
 │   │   ├── SettingsAboutSection.tsx     # Version, author, license, links
-│   │   └── ThemeSelector.tsx           # Color theme picker
+│   │   ├── ThemeSelector.tsx           # Color theme picker
+│   │   └── BulkDeleteContactsModal.tsx # Bulk contact deletion dialog
 │   ├── repeater/
 │   │   ├── repeaterPaneShared.tsx        # Shared: RepeaterPane, KvRow, format helpers
 │   │   ├── RepeaterTelemetryPane.tsx    # Battery, airtime, packet counts
@@ -145,6 +153,7 @@ frontend/src/
 │   │   ├── RepeaterRadioSettingsPane.tsx # Radio config + advert intervals
 │   │   ├── RepeaterLppTelemetryPane.tsx # CayenneLPP sensor data
 │   │   ├── RepeaterOwnerInfoPane.tsx    # Owner info + guest password
+│   │   ├── RepeaterTelemetryHistoryPane.tsx # Historical telemetry chart/table
 │   │   ├── RepeaterActionsPane.tsx      # Send Advert, Sync Clock, Reboot
 │   │   └── RepeaterConsolePane.tsx      # CLI console with history
 │   └── ui/                     # shadcn/ui primitives
@@ -357,7 +366,7 @@ LocalStorage migration helpers for favorites; canonical favorites are server-sid
 - `blocked_keys`, `blocked_names`, `discovery_blocked_types`
 - `tracked_telemetry_repeaters`
 - `auto_resend_channel`
-
+- `telemetry_interval_hours`
 
 Note: MQTT, bot, and community MQTT settings were migrated to the `fanout_configs` table (managed via `/api/fanout`). They are no longer part of `AppSettings`.
 
