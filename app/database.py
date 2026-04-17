@@ -1,4 +1,7 @@
+import asyncio
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import aiosqlite
@@ -165,9 +168,74 @@ CREATE INDEX IF NOT EXISTS idx_repeater_telemetry_pk_ts
 
 
 class Database:
+    """Single-connection aiosqlite wrapper with coroutine-level serialization.
+
+    Why the lock: aiosqlite runs one ``sqlite3.Connection`` on a background
+    worker thread and serializes statement execution there. But SQLite's
+    ``COMMIT`` fails with ``OperationalError: cannot commit transaction -
+    SQL statements in progress`` whenever *any* cursor on the connection has
+    a live prepared statement (a ``SELECT`` that returned ``SQLITE_ROW`` but
+    hasn't been fully consumed or closed). Under concurrent coroutines, one
+    task's in-flight ``fetchone()`` can still be in ``SQLITE_ROW`` state when
+    another task's ``commit()`` runs on the worker — triggering the error.
+
+    Fix: all DB work goes through ``tx()`` (writes) or ``readonly()`` (reads),
+    both of which acquire ``self._lock``. The lock is non-reentrant (asyncio
+    default) by design — nested ``tx()`` calls are a bug. Repository methods
+    that compose multiple operations factor the raw SQL into private helpers
+    that take a ``conn`` and don't lock; the public method acquires the lock
+    once and calls those helpers.
+
+    Why reads are also locked: reads must also hold the lock, because a read
+    in ``SQLITE_ROW`` state is precisely the live statement that breaks a
+    concurrent writer's commit. Single-connection aiosqlite cannot safely
+    overlap reads and writes. If we ever split reader/writer connections in
+    the future, ``readonly()`` becomes the seam to point at the reader pool.
+    """
+
     def __init__(self, db_path: str):
         self.db_path = db_path
         self._connection: aiosqlite.Connection | None = None
+        self._lock = asyncio.Lock()
+
+    @asynccontextmanager
+    async def tx(self) -> AsyncIterator[aiosqlite.Connection]:
+        """Acquire the connection for a write transaction.
+
+        Commits on clean exit, rolls back on exception. Callers MUST close
+        every cursor opened inside the block (use ``async with conn.execute(...)
+        as cursor:``) so no prepared statement is alive when commit runs.
+
+        The lock serializes concurrent writers AND ensures no reader's cursor
+        is alive during the commit. Nested calls will deadlock — factor shared
+        SQL into helpers that accept ``conn`` and do not re-enter ``tx()``.
+        """
+        async with self._lock:
+            if self._connection is None:
+                raise RuntimeError("Database not connected")
+            conn = self._connection
+            try:
+                yield conn
+            except BaseException:
+                await conn.rollback()
+                raise
+            else:
+                await conn.commit()
+
+    @asynccontextmanager
+    async def readonly(self) -> AsyncIterator[aiosqlite.Connection]:
+        """Acquire the connection for a read. No commit, no rollback.
+
+        Locked for the same reason writes are: on a single connection, an
+        active read statement blocks a concurrent writer's commit. Callers
+        MUST fully consume or close cursors before the block exits (use
+        ``async with conn.execute(...) as cursor:`` + ``fetchall`` /
+        ``fetchone``; avoid holding a cursor across ``await`` on other IO).
+        """
+        async with self._lock:
+            if self._connection is None:
+                raise RuntimeError("Database not connected")
+            yield self._connection
 
     async def connect(self) -> None:
         logger.info("Connecting to database at %s", self.db_path)

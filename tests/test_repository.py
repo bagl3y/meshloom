@@ -1,11 +1,12 @@
 """Tests for repository layer."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from app.models import Contact, ContactUpsert
 from app.repository import (
+    AppSettingsRepository,
     ContactAdvertPathRepository,
     ContactNameHistoryRepository,
     ContactRepository,
@@ -613,36 +614,102 @@ class TestAppSettingsRepository:
     """Test AppSettingsRepository parsing and migration edge cases."""
 
     @pytest.mark.asyncio
-    async def test_get_handles_corrupted_json_and_invalid_sort_order(self):
-        """Corrupted JSON fields are recovered with safe defaults."""
-        mock_conn = AsyncMock()
-        mock_cursor = AsyncMock()
-        mock_cursor.fetchone = AsyncMock(
-            return_value={
-                "max_radio_contacts": 250,
-                "auto_decrypt_dm_on_advert": 1,
-                "last_message_times": "{also-not-json",
-                "advert_interval": None,
-                "last_advert_time": None,
-                "flood_scope": "",
-                "blocked_keys": "[]",
-                "blocked_names": "[]",
-                "discovery_blocked_types": "[]",
-            }
+    async def test_get_handles_corrupted_json_and_invalid_sort_order(self, test_db):
+        """Corrupted JSON fields are recovered with safe defaults.
+
+        Uses the real DB so it exercises the lock-aware path. We stuff
+        malformed JSON directly into the row, then verify ``get()`` recovers
+        with defaults rather than propagating a parse error.
+        """
+        await test_db.conn.execute(
+            """
+            UPDATE app_settings
+            SET max_radio_contacts = 250,
+                auto_decrypt_dm_on_advert = 1,
+                last_message_times = '{also-not-json',
+                advert_interval = NULL,
+                last_advert_time = NULL,
+                flood_scope = '',
+                blocked_keys = '[]',
+                blocked_names = '[]',
+                discovery_blocked_types = '[]'
+            WHERE id = 1
+            """
         )
-        mock_conn.execute = AsyncMock(return_value=mock_cursor)
-        mock_db = MagicMock()
-        mock_db.conn = mock_conn
+        await test_db.conn.commit()
 
-        with patch("app.repository.settings.db", mock_db):
-            from app.repository import AppSettingsRepository
-
-            settings = await AppSettingsRepository.get()
+        settings = await AppSettingsRepository.get()
 
         assert settings.max_radio_contacts == 250
         assert settings.last_message_times == {}
         assert settings.advert_interval == 0
         assert settings.last_advert_time == 0
+
+    @pytest.mark.asyncio
+    async def test_get_in_conn_tolerates_missing_columns(self):
+        """Defend against partial migrations where columns added by later
+        migrations are absent from the row.
+
+        Real DBs can't produce this state (schema init + migrations always
+        run to the latest version on startup), but hand-rolled snapshots,
+        external DB tools, or interrupted migrations might. The
+        ``KeyError``-catching branches in ``_get_in_conn`` exist specifically
+        to guarantee graceful degradation.
+
+        We test these directly by mocking the connection boundary with a
+        dict-backed row that mimics a pre-migration snapshot missing:
+        - ``tracked_telemetry_repeaters`` (migration 53)
+        - ``auto_resend_channel`` (migration 54)
+        - ``telemetry_interval_hours`` (migration 57)
+        """
+        from unittest.mock import MagicMock
+
+        from app.telemetry_interval import DEFAULT_TELEMETRY_INTERVAL_HOURS
+
+        # sqlite3.Row raises KeyError for missing columns when accessed by
+        # name, which is what we want to simulate. We mimic that here with a
+        # dict-backed object whose __getitem__ raises KeyError for absent
+        # keys (dict.__getitem__ already does this).
+        class PartialRow(dict):
+            def keys(self):  # pragma: no cover - aiosqlite.Row compat
+                return super().keys()
+
+        partial_row = PartialRow(
+            {
+                "max_radio_contacts": 123,
+                "auto_decrypt_dm_on_advert": 1,
+                "last_message_times": "{}",
+                "advert_interval": 0,
+                "last_advert_time": 0,
+                "flood_scope": "",
+                "blocked_keys": "[]",
+                "blocked_names": "[]",
+                "discovery_blocked_types": "[]",
+                # intentionally missing: tracked_telemetry_repeaters,
+                # auto_resend_channel, telemetry_interval_hours
+            }
+        )
+
+        class FakeCursor:
+            async def fetchone(self):
+                return partial_row
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return None
+
+        mock_conn = MagicMock()
+        mock_conn.execute = MagicMock(return_value=FakeCursor())
+
+        settings = await AppSettingsRepository._get_in_conn(mock_conn)
+
+        assert settings.max_radio_contacts == 123
+        # Missing-column defaults kick in:
+        assert settings.tracked_telemetry_repeaters == []
+        assert settings.auto_resend_channel is False
+        assert settings.telemetry_interval_hours == DEFAULT_TELEMETRY_INTERVAL_HOURS
 
 
 class TestMessageRepositoryGetById:

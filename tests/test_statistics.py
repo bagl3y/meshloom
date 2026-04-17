@@ -2,7 +2,7 @@
 
 import time
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -353,13 +353,21 @@ class TestPathHashWidthStats:
 
     @pytest.mark.asyncio
     async def test_path_hash_width_scan_fetches_all_then_buckets(self, test_db):
-        """Hash-width stats should fetchall() then bucket synchronously."""
+        """Hash-width stats should fetchall() then bucket synchronously.
 
-        fake_rows = [{"data": b"a"}, {"data": b"b"}, {"data": b"c"}]
+        Uses real DB rows + a patched parser so it exercises the lock-aware
+        readonly path. Mocking ``conn.execute`` on the pre-refactor code no
+        longer reflects the actual call pattern (we use ``async with``).
+        """
 
-        class FakeCursor:
-            async def fetchall(self):
-                return fake_rows
+        now = int(time.time())
+        # Seed three raw packets in the last 24h with arbitrary distinguishing bytes.
+        for i, data in enumerate((b"a", b"b", b"c")):
+            await test_db.conn.execute(
+                "INSERT INTO raw_packets (timestamp, data) VALUES (?, ?)",
+                (now - (i + 1), data),
+            )
+        await test_db.conn.commit()
 
         def fake_parse(raw_packet: bytes):
             hash_sizes = {
@@ -372,10 +380,7 @@ class TestPathHashWidthStats:
                 return None
             return SimpleNamespace(hash_size=hash_size)
 
-        with (
-            patch.object(test_db.conn, "execute", new=AsyncMock(return_value=FakeCursor())),
-            patch("app.path_utils.parse_packet_envelope", side_effect=fake_parse),
-        ):
+        with patch("app.path_utils.parse_packet_envelope", side_effect=fake_parse):
             breakdown = await StatisticsRepository._path_hash_width_24h()
 
         assert breakdown["total_packets"] == 3
