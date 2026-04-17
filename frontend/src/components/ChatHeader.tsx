@@ -367,7 +367,7 @@ export function ChatHeader({
                       />
                       <div className="min-w-0">
                         <span className="text-sm font-medium text-foreground block leading-tight">
-                          Web Push
+                          Web Push (beta testing)
                         </span>
                         <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
                           {pushSubscribed
