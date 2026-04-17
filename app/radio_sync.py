@@ -461,9 +461,8 @@ async def drain_pending_messages(mc: MeshCore) -> int:
     Returns the count of messages retrieved.
     """
     count = 0
-    max_iterations = 100  # Safety limit
 
-    for _ in range(max_iterations):
+    while True:
         try:
             result = await mc.commands.get_msg(timeout=2.0)
 
