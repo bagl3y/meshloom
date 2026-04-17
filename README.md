@@ -83,7 +83,7 @@ Access the app at http://localhost:8000.
 Source checkouts expect a normal frontend build in `frontend/dist`.
 
 > [!TIP]
-> Running on lightweight hardware, or just do not want to build the frontend locally? From a cloned checkout, run `python3 scripts/setup/fetch_prebuilt_frontend.py` to fetch and unpack a prebuilt frontend into `frontend/prebuilt`, then start the app normally with `uv run uvicorn app.main:app --host 0.0.0.0 --port 8000`.
+> Running on lightweight hardware, or just don't want to build the frontend locally? From a cloned checkout, run `python3 scripts/setup/fetch_prebuilt_frontend.py` to fetch and unpack a prebuilt frontend into `frontend/prebuilt`, then start the app normally with `uv run uvicorn app.main:app --host 0.0.0.0 --port 8000`.
 
 > [!NOTE]
 > On Linux, you can also install RemoteTerm as a persistent `systemd` service that starts on boot and restarts automatically on failure:
@@ -118,7 +118,7 @@ bash scripts/setup/install_docker.sh
 
 > The interactive generator enables a self-signed (snakeoil) TLS certificate by default. If you accept the default, the app will be served over HTTPS and the generated compose file will include certificate mounts and an SSL command override. Decline if you prefer plain HTTP or plan to terminate TLS externally.
 
-Your local `docker-compose.yml` is gitignored so future pulls do not overwrite your Docker settings.
+Your local `docker-compose.yml` is gitignored so future pulls don't overwrite your Docker settings.
 
 The guided Docker flow can collect BLE settings, but BLE access from Docker still needs manual compose customization such as Bluetooth passthrough and possibly privileged mode or host networking. If you want the simpler path for BLE, use the regular Python launch flow instead.
 
@@ -240,6 +240,7 @@ If you enable Basic Auth, protect the app with HTTPS. HTTP Basic credentials are
 ## Where To Go Next
 
 - Advanced setup, troubleshooting, HTTPS, systemd, remediation variables, and debug logging: [README_ADVANCED.md](README_ADVANCED.md)
+- Home Assistant-specific guidance and entity/sensor naming schemes: [README_HA.md](README_HA.md)
 - Contributing, tests, linting, E2E notes, and important AGENTS files: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Live API docs after the backend is running: http://localhost:8000/docs
 
