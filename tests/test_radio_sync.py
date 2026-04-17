@@ -353,6 +353,32 @@ class TestSyncRadioTime:
         assert result is False
         mock_mc.commands.reboot.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_background_failures_log_debug_instead_of_warning(self, caplog):
+        """Periodic syncs should not keep emitting warning-level clock skew logs."""
+        import time as _time
+
+        radio_time = int(_time.time()) + 86400
+        mock_mc = MagicMock()
+        mock_mc.commands.set_time = AsyncMock(
+            return_value=Event(EventType.ERROR, {"reason": "illegal_arg"})
+        )
+        mock_mc.commands.get_time = AsyncMock(
+            return_value=Event(EventType.CURRENT_TIME, {"time": radio_time})
+        )
+        mock_mc.commands.reboot = AsyncMock()
+
+        with caplog.at_level("DEBUG"):
+            result = await sync_radio_time(mock_mc, warn_on_failure=False)
+
+        assert result is False
+        assert "Radio rejected time sync:" in caplog.text
+        assert not [
+            rec
+            for rec in caplog.records
+            if rec.levelname == "WARNING" and "Radio rejected time sync:" in rec.message
+        ]
+
 
 class TestSyncRecentContactsToRadio:
     """Test the sync_recent_contacts_to_radio function."""
@@ -1686,7 +1712,7 @@ class TestPeriodicSyncLoopRaces:
 
         mock_cleanup.assert_called_once()
         mock_sync.assert_called_once_with(mock_mc)
-        mock_time.assert_called_once_with(mock_mc)
+        mock_time.assert_called_once_with(mock_mc, warn_on_failure=False)
 
     @pytest.mark.asyncio
     async def test_skips_full_sync_below_threshold_but_still_syncs_time(self):
@@ -1710,7 +1736,7 @@ class TestPeriodicSyncLoopRaces:
 
         mock_cleanup.assert_called_once()
         mock_sync.assert_not_called()
-        mock_time.assert_called_once_with(mock_mc)
+        mock_time.assert_called_once_with(mock_mc, warn_on_failure=False)
 
 
 # ---------------------------------------------------------------------------
