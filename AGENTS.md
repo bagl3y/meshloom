@@ -179,7 +179,9 @@ Outgoing DMs send once immediately, then may retry up to 2 more times in the bac
 
 ACKs are not a contact-route source. They drive message delivery state and may appear in analytics/detail surfaces, but they do not update `direct_path*` or otherwise influence route selection for future sends.
 
-**Channel messages**: Flood messages echo back through repeaters. Repeats are identified by the database UNIQUE constraint on `(type, conversation_key, text, sender_timestamp)` — when an INSERT hits a duplicate, `_handle_duplicate_message()` in `packet_processor.py` adds the new path and, for outgoing messages only, increments the ack count. Incoming repeats add path data but do not change the ack count. There is no timestamp-windowed matching; deduplication is exact-match only.
+**Channel messages**: Flood messages echo back through repeaters. Repeats are identified by the database UNIQUE constraint `idx_messages_dedup_null_safe` on `(type, conversation_key, text, COALESCE(sender_timestamp, 0))` where `type = 'CHAN'` — when an INSERT hits a duplicate, `_handle_duplicate_message()` in `packet_processor.py` adds the new path and, for outgoing messages only, increments the ack count. Incoming repeats add path data but do not change the ack count. There is no timestamp-windowed matching; deduplication is exact-match only.
+
+**Incoming direct messages**: A separate unique index `idx_messages_incoming_priv_dedup` on `(type, conversation_key, text, COALESCE(sender_timestamp, 0), COALESCE(sender_key, ''))` where `type = 'PRIV' AND outgoing = 0` deduplicates incoming DMs. The additional `sender_key` term (added in migration 056) distinguishes room-server posts from different senders that arrive in the same second with identical text.
 
 This message-layer echo/path handling is independent of raw-packet storage deduplication.
 

@@ -140,8 +140,8 @@ app/
 
 ### Echo/repeat dedup
 
-- Channel message uniqueness: `(type, conversation_key, text, sender_timestamp)`.
-- Incoming PRIV message uniqueness: `(type, conversation_key, text, COALESCE(sender_timestamp, 0), COALESCE(sender_key, ''))` — `sender_key` was added in migration 056 to distinguish room-server posts from different senders in the same second.
+- Channel message uniqueness (`idx_messages_dedup_null_safe`): `(type, conversation_key, text, COALESCE(sender_timestamp, 0))` where `type = 'CHAN'`.
+- Incoming PRIV message uniqueness (`idx_messages_incoming_priv_dedup`): `(type, conversation_key, text, COALESCE(sender_timestamp, 0), COALESCE(sender_key, ''))` where `type = 'PRIV' AND outgoing = 0` — `sender_key` was added in migration 056 to distinguish room-server posts from different senders in the same second.
 - Duplicate insert is treated as an echo/repeat: the new path (if any) is appended, and the ACK count is incremented only for outgoing channel messages. Incoming direct messages with the same dedup identity also collapse onto one stored row, with later observations merging path data instead of creating a second DM.
 
 ### Raw packet dedup policy

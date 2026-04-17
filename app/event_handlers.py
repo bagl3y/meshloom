@@ -237,9 +237,13 @@ async def on_new_contact(event: "Event") -> None:
     logger.debug("New contact: %s", public_key[:12])
 
     contact_upsert = ContactUpsert.from_radio_dict(public_key.lower(), payload, on_radio=False)
-    # Intentionally do not set last_seen here: NEW_CONTACT fires from the
-    # radio's stored contact DB, not an RF observation. last_seen means
-    # "last time we heard this pubkey on RF".
+    # Intentionally do not set first_seen or last_seen here: NEW_CONTACT
+    # fires from the radio's stored contact DB, not an RF observation.
+    # Both first_seen and last_seen are RF-only timestamps — they track
+    # the first and most recent time we actually heard this pubkey over
+    # the air (adverts, messages, path updates). Contacts synced from the
+    # radio's internal DB without any RF activity stay NULL until a real
+    # RF observation fills them in.
     await ContactRepository.upsert(contact_upsert)
     promoted_keys = await promote_prefix_contacts_for_contact(
         public_key=public_key,
