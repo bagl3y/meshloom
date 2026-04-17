@@ -435,7 +435,7 @@ The `SearchView` component (`components/SearchView.tsx`) provides full-text sear
 Web Push allows notifications even when the browser tab is closed. Requires HTTPS (self-signed OK).
 
 - **Service worker**: `frontend/public/sw.js` handles `push` events (show notification) and `notificationclick` (focus/open tab, navigate via `url_hash`). Registered in `main.tsx` on secure contexts only.
-- **`usePushSubscription` hook**: manages the full subscription lifecycle — subscribe (register SW → `PushManager.subscribe()` → POST to backend), unsubscribe, per-conversation filter management (`addConversation`/`removeConversation`), device listing and deletion.
+- **`usePushSubscription` hook**: manages the full subscription lifecycle — subscribe (register SW → `PushManager.subscribe()` → POST to backend), unsubscribe, global push-conversation toggles, device listing, and deletion.
 - **ChatHeader integration**: `BellRing` icon (amber when active) appears next to the existing desktop notification `Bell` on secure contexts. First click subscribes the browser and enables push for that conversation; subsequent clicks toggle the conversation on/off.
 - **Settings > Local**: `PushDeviceManagement` component shows subscription status, lists all registered devices with test/delete buttons. Uses `usePushSubscription` hook directly.
 - Auto-generates device labels from User-Agent (e.g., "Chrome on macOS").

@@ -513,9 +513,9 @@ export interface TelemetryHistoryEntry {
 export interface PushSubscriptionInfo {
   id: string;
   endpoint: string;
+  p256dh: string;
+  auth: string;
   label: string;
-  filter_mode: 'all_messages' | 'all_dms' | 'selected';
-  filter_conversations: string[];
   created_at: number;
   last_success_at: number | null;
   failure_count: number;

@@ -456,16 +456,14 @@ export const api = {
       body: JSON.stringify(subscription),
     }),
   getPushSubscriptions: () => fetchJson<PushSubscriptionInfo[]>('/push/subscriptions'),
-  updatePushSubscription: (
-    id: string,
-    update: { label?: string; filter_mode?: string; filter_conversations?: string[] }
-  ) =>
-    fetchJson<PushSubscriptionInfo>(`/push/subscriptions/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(update),
-    }),
   deletePushSubscription: (id: string) =>
     fetchJson<{ deleted: boolean }>(`/push/subscriptions/${id}`, { method: 'DELETE' }),
   testPushSubscription: (id: string) =>
     fetchJson<{ status: string }>(`/push/subscriptions/${id}/test`, { method: 'POST' }),
+  getPushConversations: () => fetchJson<string[]>('/push/conversations'),
+  togglePushConversation: (key: string) =>
+    fetchJson<string[]>('/push/conversations/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ key }),
+    }),
 };

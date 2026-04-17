@@ -35,6 +35,9 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const urlHash = event.notification.data?.url_hash || "";
+  // Use the SW registration scope as the base URL so subpath deployments
+  // (e.g. archworks.co/meshcore/) navigate correctly.
+  const base = self.registration.scope;
 
   event.waitUntil(
     clients
@@ -42,18 +45,16 @@ self.addEventListener("notificationclick", (event) => {
       .then((windowClients) => {
         // Focus an existing tab if one is open
         for (const client of windowClients) {
-          if (client.url.includes(self.location.origin)) {
+          if (client.url.startsWith(base)) {
             client.focus();
             if (urlHash) {
-              client.navigate(self.location.origin + "/" + urlHash);
+              client.navigate(base + urlHash);
             }
             return;
           }
         }
         // Otherwise open a new tab
-        return clients.openWindow(
-          self.location.origin + "/" + (urlHash || "")
-        );
+        return clients.openWindow(base + (urlHash || ""));
       })
   );
 });

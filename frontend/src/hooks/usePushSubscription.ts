@@ -5,7 +5,6 @@ import type { PushSubscriptionInfo } from '../types';
 
 function generateLabel(): string {
   const ua = navigator.userAgent;
-  // Extract browser + OS in a human-readable form
   if (/Firefox/i.test(ua)) {
     if (/Android/i.test(ua)) return 'Firefox on Android';
     if (/Mac/i.test(ua)) return 'Firefox on macOS';
@@ -29,7 +28,6 @@ function generateLabel(): string {
   return 'Browser';
 }
 
-/** Convert a base64url string to a Uint8Array (for applicationServerKey) */
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -39,14 +37,64 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return arr;
 }
 
-export function usePushSubscription() {
+function uint8ArraysEqual(a: Uint8Array | null, b: Uint8Array): boolean {
+  if (!a || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function getApplicationServerKeyBytes(
+  key: ArrayBuffer | ArrayBufferView | null | undefined
+): Uint8Array | null {
+  if (!key) return null;
+  if (ArrayBuffer.isView(key)) {
+    return new Uint8Array(key.buffer, key.byteOffset, key.byteLength);
+  }
+  return new Uint8Array(key);
+}
+
+export interface PushSubscriptionState {
+  isSupported: boolean;
+  isSubscribed: boolean;
+  currentSubscriptionId: string | null;
+  allSubscriptions: PushSubscriptionInfo[];
+  /** Global list of push-enabled conversation state keys (device-independent). */
+  pushConversations: string[];
+  loading: boolean;
+  subscribe: () => Promise<string | null>;
+  unsubscribe: () => Promise<void>;
+  /** Toggle a conversation in the global push list (device-independent). */
+  toggleConversation: (conversationKey: string) => Promise<void>;
+  isConversationPushEnabled: (conversationKey: string) => boolean;
+  deleteSubscription: (subscriptionId: string) => Promise<void>;
+  testPush: (subscriptionId: string) => Promise<void>;
+  refreshSubscriptions: () => Promise<PushSubscriptionInfo[]>;
+  refreshConversations: () => Promise<void>;
+}
+
+export function usePushSubscription(): PushSubscriptionState {
   const [isSupported, setIsSupported] = useState(false);
   const [currentSubscriptionId, setCurrentSubscriptionId] = useState<string | null>(null);
   const [allSubscriptions, setAllSubscriptions] = useState<PushSubscriptionInfo[]>([]);
+  const [pushConversations, setPushConversations] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const vapidKeyRef = useRef<string | null>(null);
 
-  // Check support on mount
+  const reconcileCurrentSubscription = useCallback(
+    (subs: PushSubscriptionInfo[], endpoint: string | null) => {
+      setAllSubscriptions(subs);
+      if (!endpoint) {
+        setCurrentSubscriptionId(null);
+        return;
+      }
+      const match = subs.find((sub) => sub.endpoint === endpoint);
+      setCurrentSubscriptionId(match?.id ?? null);
+    },
+    []
+  );
+
   useEffect(() => {
     const supported =
       window.isSecureContext &&
@@ -56,105 +104,104 @@ export function usePushSubscription() {
     setIsSupported(supported);
 
     if (supported) {
-      // Check if this browser already has an active push subscription
+      // Always load all registered devices so Settings can manage them even
+      // when this particular browser isn't subscribed.
+      const subsPromise = api.getPushSubscriptions().catch(() => [] as PushSubscriptionInfo[]);
+
+      // Check if THIS browser has an active push subscription and match it
+      // to a backend record.
       navigator.serviceWorker.ready
         .then((reg) => reg.pushManager.getSubscription())
         .then(async (sub) => {
-          if (sub) {
-            // Look up this endpoint in backend to get the subscription ID
-            const existing = await api
-              .getPushSubscriptions()
-              .catch(() => [] as PushSubscriptionInfo[]);
-            const match = existing.find((s) => s.endpoint === sub.endpoint);
-            if (match) {
-              setCurrentSubscriptionId(match.id);
-              setAllSubscriptions(existing);
-            }
-          }
+          const existing = await subsPromise;
+          reconcileCurrentSubscription(existing, sub?.endpoint ?? null);
         })
         .catch(() => {});
+
+      // Load global conversation list
+      api
+        .getPushConversations()
+        .then(setPushConversations)
+        .catch(() => {});
     }
-  }, []);
+  }, [reconcileCurrentSubscription]);
 
   const refreshSubscriptions = useCallback(async () => {
     try {
       const subs = await api.getPushSubscriptions();
-      setAllSubscriptions(subs);
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      reconcileCurrentSubscription(subs, sub?.endpoint ?? null);
       return subs;
     } catch {
       return [];
     }
+  }, [reconcileCurrentSubscription]);
+
+  const refreshConversations = useCallback(async () => {
+    try {
+      const convos = await api.getPushConversations();
+      setPushConversations(convos);
+    } catch {
+      // best effort
+    }
   }, []);
 
-  const subscribe = useCallback(
-    async (conversationKey?: string): Promise<string | null> => {
-      if (!isSupported) return null;
-      setLoading(true);
-      try {
-        // Get VAPID key if not cached
-        if (!vapidKeyRef.current) {
-          const resp = await api.getVapidPublicKey();
-          vapidKeyRef.current = resp.public_key;
-        }
+  const subscribe = useCallback(async (): Promise<string | null> => {
+    if (!isSupported) return null;
+    setLoading(true);
+    try {
+      const resp = await api.getVapidPublicKey();
+      vapidKeyRef.current = resp.public_key;
+      const vapidKeyBytes = urlBase64ToUint8Array(resp.public_key);
 
-        // Register/get service worker
-        const reg = await navigator.serviceWorker.ready;
+      const reg = await navigator.serviceWorker.ready;
+      let pushSub = await reg.pushManager.getSubscription();
+      const existingKeyBytes = getApplicationServerKeyBytes(pushSub?.options?.applicationServerKey);
+      const requiresRecreate =
+        pushSub !== null && !uint8ArraysEqual(existingKeyBytes, vapidKeyBytes);
 
-        // Reuse existing browser subscription if one exists, otherwise create new
-        let pushSub = await reg.pushManager.getSubscription();
-        if (!pushSub) {
-          pushSub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(vapidKeyRef.current).buffer as ArrayBuffer,
-          });
-        }
-
-        const json = pushSub.toJSON();
-        const endpoint = json.endpoint!;
-        const p256dh = json.keys!.p256dh!;
-        const auth = json.keys!.auth!;
-
-        // Register with backend
-        const result = await api.pushSubscribe({
-          endpoint,
-          p256dh,
-          auth,
-          label: generateLabel(),
-        });
-
-        // If subscribing for a specific conversation, set filter_mode to selected
-        if (conversationKey) {
-          await api.updatePushSubscription(result.id, {
-            filter_mode: 'selected',
-            filter_conversations: [conversationKey],
-          });
-        }
-
-        setCurrentSubscriptionId(result.id);
-        await refreshSubscriptions();
-        return result.id;
-      } catch (err) {
-        console.error('Push subscribe failed:', err);
-        toast.error('Failed to enable push notifications', {
-          description: err instanceof Error ? err.message : 'Check that notifications are allowed',
-        });
-        return null;
-      } finally {
-        setLoading(false);
+      if (requiresRecreate) {
+        await pushSub!.unsubscribe();
+        pushSub = null;
       }
-    },
-    [isSupported, refreshSubscriptions]
-  );
+
+      if (!pushSub) {
+        pushSub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: vapidKeyBytes.buffer as ArrayBuffer,
+        });
+      }
+
+      const json = pushSub.toJSON();
+      const result = await api.pushSubscribe({
+        endpoint: json.endpoint!,
+        p256dh: json.keys!.p256dh!,
+        auth: json.keys!.auth!,
+        label: generateLabel(),
+      });
+
+      setCurrentSubscriptionId(result.id);
+      await refreshSubscriptions();
+      return result.id;
+    } catch (err) {
+      console.error('Push subscribe failed:', err);
+      toast.error('Failed to enable push notifications', {
+        description: err instanceof Error ? err.message : 'Check that notifications are allowed',
+      });
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [isSupported, refreshSubscriptions]);
 
   const unsubscribe = useCallback(async () => {
     setLoading(true);
     try {
-      // Unsubscribe from browser Push API
       const reg = await navigator.serviceWorker.ready;
       const pushSub = await reg.pushManager.getSubscription();
       if (pushSub) await pushSub.unsubscribe();
 
-      // Remove from backend
       if (currentSubscriptionId) {
         await api.deletePushSubscription(currentSubscriptionId).catch(() => {});
       }
@@ -168,50 +215,20 @@ export function usePushSubscription() {
     }
   }, [currentSubscriptionId, refreshSubscriptions]);
 
-  const addConversation = useCallback(
-    async (conversationKey: string) => {
-      if (!currentSubscriptionId) return;
-      const sub = allSubscriptions.find((s) => s.id === currentSubscriptionId);
-      if (!sub) return;
-
-      const conversations = [...(sub.filter_conversations || [])];
-      if (!conversations.includes(conversationKey)) {
-        conversations.push(conversationKey);
-      }
-      await api.updatePushSubscription(currentSubscriptionId, {
-        filter_mode: 'selected',
-        filter_conversations: conversations,
-      });
-      await refreshSubscriptions();
-    },
-    [currentSubscriptionId, allSubscriptions, refreshSubscriptions]
-  );
-
-  const removeConversation = useCallback(
-    async (conversationKey: string) => {
-      if (!currentSubscriptionId) return;
-      const sub = allSubscriptions.find((s) => s.id === currentSubscriptionId);
-      if (!sub) return;
-
-      const conversations = (sub.filter_conversations || []).filter((k) => k !== conversationKey);
-      await api.updatePushSubscription(currentSubscriptionId, {
-        filter_conversations: conversations,
-      });
-      await refreshSubscriptions();
-    },
-    [currentSubscriptionId, allSubscriptions, refreshSubscriptions]
-  );
+  const toggleConversation = useCallback(async (conversationKey: string) => {
+    try {
+      const updated = await api.togglePushConversation(conversationKey);
+      setPushConversations(updated);
+    } catch {
+      toast.error('Failed to update push preferences');
+    }
+  }, []);
 
   const isConversationPushEnabled = useCallback(
     (conversationKey: string): boolean => {
-      if (!currentSubscriptionId) return false;
-      const sub = allSubscriptions.find((s) => s.id === currentSubscriptionId);
-      if (!sub) return false;
-      if (sub.filter_mode === 'all_messages') return true;
-      if (sub.filter_mode === 'all_dms') return conversationKey.startsWith('contact-');
-      return (sub.filter_conversations || []).includes(conversationKey);
+      return pushConversations.includes(conversationKey);
     },
-    [currentSubscriptionId, allSubscriptions]
+    [pushConversations]
   );
 
   const deleteSubscription = useCallback(
@@ -219,7 +236,6 @@ export function usePushSubscription() {
       await api.deletePushSubscription(subscriptionId);
       if (subscriptionId === currentSubscriptionId) {
         setCurrentSubscriptionId(null);
-        // Also unsubscribe from browser Push API if it's our own
         try {
           const reg = await navigator.serviceWorker.ready;
           const pushSub = await reg.pushManager.getSubscription();
@@ -247,14 +263,15 @@ export function usePushSubscription() {
     isSubscribed: !!currentSubscriptionId,
     currentSubscriptionId,
     allSubscriptions,
+    pushConversations,
     loading,
     subscribe,
     unsubscribe,
-    addConversation,
-    removeConversation,
+    toggleConversation,
     isConversationPushEnabled,
     deleteSubscription,
     testPush,
     refreshSubscriptions,
+    refreshConversations,
   };
 }

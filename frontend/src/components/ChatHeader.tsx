@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Bell, BellRing, ChevronsLeftRight, Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Bell, ChevronsLeftRight, Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
 import { toast } from './ui/sonner';
 import { DirectTraceIcon } from './DirectTraceIcon';
 import { ContactPathDiscoveryModal } from './ContactPathDiscoveryModal';
@@ -30,6 +30,7 @@ interface ChatHeaderProps {
   pushSubscribed?: boolean;
   pushEnabledForConversation?: boolean;
   onTogglePush?: () => void;
+  onOpenPushSettings?: () => void;
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
   onSetChannelFloodScopeOverride?: (key: string, floodScopeOverride: string) => void;
   onSetChannelPathHashModeOverride?: (key: string, pathHashModeOverride: number | null) => void;
@@ -54,6 +55,7 @@ export function ChatHeader({
   pushSubscribed,
   pushEnabledForConversation,
   onTogglePush,
+  onOpenPushSettings,
   onToggleFavorite,
   onSetChannelFloodScopeOverride,
   onSetChannelPathHashModeOverride,
@@ -66,13 +68,28 @@ export function ChatHeader({
   const [pathDiscoveryOpen, setPathDiscoveryOpen] = useState(false);
   const [channelOverrideOpen, setChannelOverrideOpen] = useState(false);
   const [pathHashModeOverrideOpen, setPathHashModeOverrideOpen] = useState(false);
+  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
+  const notifDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setShowKey(false);
     setPathDiscoveryOpen(false);
     setChannelOverrideOpen(false);
     setPathHashModeOverrideOpen(false);
+    setNotifDropdownOpen(false);
   }, [conversation.id]);
+
+  // Close notification dropdown on outside click
+  useEffect(() => {
+    if (!notifDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (notifDropdownRef.current && !notifDropdownRef.current.contains(e.target as Node)) {
+        setNotifDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [notifDropdownOpen]);
 
   const activeChannel =
     conversation.type === 'channel'
@@ -296,63 +313,94 @@ export function ChatHeader({
             <DirectTraceIcon className="h-4 w-4 text-muted-foreground" />
           </button>
         )}
-        {notificationsSupported && !activeContactIsRoomServer && (
-          <button
-            className="flex items-center gap-1 rounded px-1 py-1 hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={onToggleNotifications}
-            title={
-              notificationsEnabled
-                ? 'Disable desktop notifications for this conversation'
-                : notificationsPermission === 'denied'
-                  ? 'Notifications blocked by the browser'
-                  : 'Enable desktop notifications for this conversation'
-            }
-            aria-label={
-              notificationsEnabled
-                ? 'Disable notifications for this conversation'
-                : 'Enable notifications for this conversation'
-            }
-          >
-            <Bell
-              className={`h-4 w-4 ${notificationsEnabled ? 'text-status-connected' : 'text-muted-foreground'}`}
-              fill={notificationsEnabled ? 'currentColor' : 'none'}
-              aria-hidden="true"
-            />
-            {notificationsEnabled && (
-              <span className="hidden md:inline text-[0.6875rem] font-medium text-status-connected">
-                Notifications On
-              </span>
+        {(notificationsSupported || pushSupported) && !activeContactIsRoomServer && (
+          <div className="relative" ref={notifDropdownRef}>
+            <button
+              className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => setNotifDropdownOpen((v) => !v)}
+              title="Notification settings"
+              aria-label="Notification settings"
+              aria-expanded={notifDropdownOpen}
+            >
+              <Bell
+                className={cn(
+                  'h-4 w-4',
+                  notificationsEnabled || pushEnabledForConversation
+                    ? 'text-primary'
+                    : 'text-muted-foreground'
+                )}
+                fill={notificationsEnabled || pushEnabledForConversation ? 'currentColor' : 'none'}
+                aria-hidden="true"
+              />
+            </button>
+            {notifDropdownOpen && (
+              <div className="absolute right-[-4.5rem] sm:right-0 top-full z-50 mt-1 w-[calc(100vw-2rem)] sm:w-72 max-w-72 rounded-md border border-border bg-popover p-3 shadow-lg space-y-3">
+                {notificationsSupported && (
+                  <label className="flex items-start gap-2.5 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 accent-primary h-4 w-4 shrink-0"
+                      checked={notificationsEnabled}
+                      disabled={notificationsPermission === 'denied'}
+                      onChange={onToggleNotifications}
+                    />
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium text-foreground block leading-tight">
+                        Desktop notifications (legacy)
+                      </span>
+                      <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
+                        {notificationsPermission === 'denied'
+                          ? 'Blocked by browser — check site permissions'
+                          : 'Alerts while this tab is open'}
+                      </span>
+                    </div>
+                  </label>
+                )}
+                {pushSupported && onTogglePush && (
+                  <>
+                    <label className="flex items-start gap-2.5 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 accent-primary h-4 w-4 shrink-0"
+                        checked={!!pushEnabledForConversation}
+                        onChange={onTogglePush}
+                      />
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium text-foreground block leading-tight">
+                          Web Push
+                        </span>
+                        <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
+                          {pushSubscribed
+                            ? 'Alerts even when the browser is closed'
+                            : 'Alerts even when the browser is closed. Requires HTTPS.'}
+                        </span>
+                      </div>
+                    </label>
+                    <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
+                      All notification types require a trusted HTTPS context. Depending on your
+                      browser, a snakeoil certificate may not be sufficient.
+                    </span>
+                    {onOpenPushSettings && (
+                      <p className="text-xs text-muted-foreground leading-snug mt-1.5">
+                        Manage Web Push enabled devices in{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotifDropdownOpen(false);
+                            onOpenPushSettings();
+                          }}
+                          className="text-primary hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        >
+                          Settings &rarr; Local
+                        </button>
+                        .
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
             )}
-          </button>
-        )}
-        {pushSupported && !activeContactIsRoomServer && onTogglePush && (
-          <button
-            className="flex items-center gap-1 rounded px-1 py-1 hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={onTogglePush}
-            title={
-              pushEnabledForConversation
-                ? 'Disable push notifications for this conversation'
-                : pushSubscribed
-                  ? 'Enable push notifications for this conversation'
-                  : 'Enable Web Push notifications (works when tab is closed)'
-            }
-            aria-label={
-              pushEnabledForConversation
-                ? 'Disable push notifications'
-                : 'Enable push notifications'
-            }
-          >
-            <BellRing
-              className={`h-4 w-4 ${pushEnabledForConversation ? 'text-amber-500' : 'text-muted-foreground'}`}
-              fill={pushEnabledForConversation ? 'currentColor' : 'none'}
-              aria-hidden="true"
-            />
-            {pushEnabledForConversation && (
-              <span className="hidden md:inline text-[0.6875rem] font-medium text-amber-500">
-                Push On
-              </span>
-            )}
-          </button>
+          </div>
         )}
         {conversation.type === 'channel' && onSetChannelFloodScopeOverride && (
           <button

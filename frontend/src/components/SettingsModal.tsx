@@ -2,6 +2,7 @@ import { useState, useEffect, type ReactNode } from 'react';
 import type {
   AppSettings,
   AppSettingsUpdate,
+  Channel,
   Contact,
   HealthStatus,
   RadioAdvertMode,
@@ -49,6 +50,7 @@ interface SettingsModalBaseProps {
   onToggleBlockedKey?: (key: string) => void;
   onToggleBlockedName?: (name: string) => void;
   contacts?: Contact[];
+  channels?: Channel[];
   onBulkDeleteContacts?: (deletedKeys: string[]) => void;
   trackedTelemetryRepeaters?: string[];
   onToggleTrackedTelemetry?: (publicKey: string) => Promise<void>;
@@ -86,6 +88,7 @@ export function SettingsModal(props: SettingsModalProps) {
     onToggleBlockedKey,
     onToggleBlockedName,
     contacts,
+    channels,
     onBulkDeleteContacts,
     trackedTelemetryRepeaters,
     onToggleTrackedTelemetry,
@@ -228,6 +231,8 @@ export function SettingsModal(props: SettingsModalProps) {
           {isSectionVisible('local') && (
             <SettingsLocalSection
               onLocalLabelChange={onLocalLabelChange}
+              contacts={contacts}
+              channels={channels}
               className={sectionContentClass}
             />
           )}

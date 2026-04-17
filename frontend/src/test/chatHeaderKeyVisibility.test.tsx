@@ -150,7 +150,7 @@ describe('ChatHeader key visibility', () => {
     expect(screen.getAllByText('#Esperance')).toHaveLength(2);
   });
 
-  it('shows enabled notification state and toggles when clicked', () => {
+  it('shows filled bell when notifications are enabled and toggles via dropdown', () => {
     const conversation: Conversation = { type: 'contact', id: '11'.repeat(32), name: 'Alice' };
     const onToggleNotifications = vi.fn();
 
@@ -164,10 +164,38 @@ describe('ChatHeader key visibility', () => {
       />
     );
 
-    fireEvent.click(screen.getByText('Notifications On'));
+    // Bell button should be present; open the dropdown
+    const bellBtn = screen.getByRole('button', { name: 'Notification settings' });
+    fireEvent.click(bellBtn);
 
-    expect(screen.getByText('Notifications On')).toBeInTheDocument();
+    // Desktop notifications checkbox should be checked
+    const checkbox = screen.getByRole('checkbox', { name: /desktop notifications/i });
+    expect(checkbox).toBeChecked();
+
+    // Toggling calls the handler
+    fireEvent.click(checkbox);
     expect(onToggleNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps desktop notifications available when web push is also supported', () => {
+    const conversation: Conversation = { type: 'contact', id: '13'.repeat(32), name: 'Alice' };
+
+    render(
+      <ChatHeader
+        {...baseProps}
+        conversation={conversation}
+        channels={[]}
+        pushSupported
+        pushSubscribed
+        pushEnabledForConversation
+        onTogglePush={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notification settings' }));
+
+    expect(screen.getByRole('checkbox', { name: /desktop notifications/i })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /web push/i })).toBeInTheDocument();
   });
 
   it('hides trace and notification controls for room-server contacts', () => {
@@ -198,9 +226,7 @@ describe('ChatHeader key visibility', () => {
 
     expect(screen.queryByRole('button', { name: 'Path Discovery' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Direct Trace' })).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Enable notifications for this conversation' })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Notification settings' })).not.toBeInTheDocument();
   });
 
   it('hides the delete button for the canonical Public channel', () => {

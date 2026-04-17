@@ -86,6 +86,7 @@ interface ConversationPaneProps {
   pushSubscribed?: boolean;
   pushEnabledForConversation?: boolean;
   onTogglePush?: () => void;
+  onOpenPushSettings?: () => void;
   trackedTelemetryRepeaters: string[];
   onToggleTrackedTelemetry: (publicKey: string) => Promise<void>;
   repeaterAutoLoginKey: string | null;
@@ -163,6 +164,7 @@ export function ConversationPane({
   pushSubscribed,
   pushEnabledForConversation,
   onTogglePush,
+  onOpenPushSettings,
   trackedTelemetryRepeaters,
   onToggleTrackedTelemetry,
   repeaterAutoLoginKey,
@@ -300,6 +302,7 @@ export function ConversationPane({
         pushSubscribed={pushSubscribed}
         pushEnabledForConversation={pushEnabledForConversation}
         onTogglePush={onTogglePush}
+        onOpenPushSettings={onOpenPushSettings}
         onTrace={onTrace}
         onPathDiscovery={onPathDiscovery}
         onToggleNotifications={onToggleNotifications}

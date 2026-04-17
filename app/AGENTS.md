@@ -177,9 +177,9 @@ app/
 
 Web Push is a standalone subsystem in `app/push/`, separate from the fanout module system. It sends browser push notifications for incoming messages even when the tab is closed.
 
-- **Not a fanout module** — Web Push manages per-browser subscriptions (N browsers, each with own endpoint and preferences), unlike fanout which is one-config-to-one-destination.
+- **Not a fanout module** — Web Push manages per-browser subscriptions (N browsers, each with its own endpoint and delivery state), unlike fanout which is one-config-to-one-destination.
 - **VAPID keys**: auto-generated P-256 key pair on first startup, stored in `app_settings.vapid_private_key` / `vapid_public_key`. Cached in-module by `app/push/vapid.py`.
-- **Dispatch**: `broadcast_event()` in `websocket.py` fires `push_manager.dispatch_message(data)` alongside fanout for `message` events. The manager loads all subscriptions, filters each by its `filter_mode` (`all_messages`, `all_dms`, `selected`), builds a notification payload, and sends concurrently via `pywebpush` (run in thread executor).
+- **Dispatch**: `broadcast_event()` in `websocket.py` fires `push_manager.dispatch_message(data)` alongside fanout for `message` events. The manager checks the global `app_settings.push_conversations` list, then sends to all currently registered subscriptions via `pywebpush` (run in a thread executor).
 - **Stale cleanup**: HTTP 404/410 from the push service triggers immediate subscription deletion.
 - **Subscriptions stored** in `push_subscriptions` table with `UNIQUE(endpoint)` for upsert semantics.
 - Requires HTTPS (self-signed OK) and outbound internet to reach browser push services.
@@ -314,7 +314,7 @@ Main tables:
 - `contact_name_history` (tracks name changes over time)
 - `repeater_telemetry_history` (time-series telemetry snapshots for tracked repeaters)
 - `fanout_configs` (MQTT, bot, webhook, Apprise, SQS integration configs)
-- `push_subscriptions` (Web Push browser subscriptions with per-conversation filter preferences; UNIQUE on endpoint)
+- `push_subscriptions` (Web Push browser subscriptions with delivery metadata; UNIQUE on endpoint)
 - `app_settings` (includes `vapid_private_key` and `vapid_public_key` for Web Push VAPID signing)
 
 Contact route state is canonicalized on the backend:

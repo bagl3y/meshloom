@@ -1,22 +1,25 @@
 """Web Push dispatch manager.
 
-Handles filtering subscriptions by their preferences and sending push
-notifications concurrently when a new message arrives.
+Checks the global push-enabled conversation list (stored in app_settings)
+and sends push notifications to ALL registered devices when a matching
+incoming message arrives.
 """
 
 import asyncio
 import json
 import logging
+from dataclasses import dataclass
 
 from pywebpush import WebPushException
 
 from app.push.send import send_push
 from app.push.vapid import get_vapid_private_key
 from app.repository.push_subscriptions import PushSubscriptionRepository
+from app.repository.settings import AppSettingsRepository
 
 logger = logging.getLogger(__name__)
 
-_SEND_TIMEOUT = 10  # seconds per push send
+_SEND_TIMEOUT = 15  # seconds per push send
 _VAPID_CLAIMS = {"sub": "mailto:noreply@meshcore.local"}
 
 
@@ -27,19 +30,6 @@ def _state_key_for_message(data: dict) -> str:
     if msg_type == "PRIV":
         return f"contact-{conversation_key}"
     return f"channel-{conversation_key}"
-
-
-def _matches_filter(sub: dict, data: dict) -> bool:
-    """Check whether a message event matches a subscription's filter."""
-    mode = sub.get("filter_mode", "all_messages")
-    if mode == "all_messages":
-        return True
-    if mode == "all_dms":
-        return data.get("type") == "PRIV"
-    if mode == "selected":
-        key = _state_key_for_message(data)
-        return key in (sub.get("filter_conversations") or [])
-    return False
 
 
 def _build_payload(data: dict) -> str:
@@ -53,11 +43,11 @@ def _build_payload(data: dict) -> str:
         title = f"Message from {sender_name}" if sender_name else "New direct message"
         body = text
     else:
-        # Channel messages include "SenderName: text" in the text field
-        title = f"#{channel_name}" if channel_name else "Channel message"
+        title = channel_name if channel_name else "Channel message"
         body = text
 
     conversation_key = data.get("conversation_key", "")
+    state_key = _state_key_for_message(data)
     if msg_type == "PRIV":
         url_hash = f"#contact/{conversation_key}"
     else:
@@ -67,7 +57,10 @@ def _build_payload(data: dict) -> str:
         {
             "title": title,
             "body": body,
-            "tag": f"meshcore-{data.get('id', '')}",
+            # Tag per conversation so different conversations coexist in the
+            # notification tray, while repeated messages in the same
+            # conversation replace each other.
+            "tag": f"meshcore-{state_key}",
             "url_hash": url_hash,
         }
     )
@@ -84,11 +77,29 @@ def _subscription_info(sub: dict) -> dict:
     }
 
 
+@dataclass
+class _SendResult:
+    sub_id: str
+    success: bool = False
+    expired: bool = False
+
+
 class PushManager:
     async def dispatch_message(self, data: dict) -> None:
-        """Send push notifications for a message event to matching subscriptions."""
+        """Send push notifications for a message event to all devices."""
         # Don't notify for messages the operator just sent themselves
         if data.get("outgoing"):
+            return
+
+        # Check the global conversation list
+        state_key = _state_key_for_message(data)
+        try:
+            push_conversations = await AppSettingsRepository.get_push_conversations()
+        except Exception:
+            logger.debug("Push dispatch: failed to load push_conversations", exc_info=True)
+            return
+
+        if state_key not in push_conversations:
             return
 
         try:
@@ -100,21 +111,40 @@ class PushManager:
         if not subs:
             return
 
-        matching = [s for s in subs if _matches_filter(s, data)]
-        if not matching:
-            return
-
         payload = _build_payload(data)
         vapid_key = get_vapid_private_key()
         if not vapid_key:
             logger.debug("Push dispatch: no VAPID key configured, skipping")
             return
 
-        tasks = [self._send_one(sub, payload, vapid_key) for sub in matching]
-        await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(
+            *(self._send_one(sub, payload, vapid_key) for sub in subs),
+            return_exceptions=True,
+        )
 
-    async def _send_one(self, sub: dict, payload: str, vapid_key: str) -> None:
+        # Batch-update all delivery outcomes in one transaction.
+        success_ids: list[str] = []
+        failure_ids: list[str] = []
+        remove_ids: list[str] = []
+        for r in results:
+            if isinstance(r, _SendResult):
+                if r.expired:
+                    remove_ids.append(r.sub_id)
+                elif r.success:
+                    success_ids.append(r.sub_id)
+                else:
+                    failure_ids.append(r.sub_id)
+        if success_ids or failure_ids or remove_ids:
+            try:
+                await PushSubscriptionRepository.batch_record_outcomes(
+                    success_ids, failure_ids, remove_ids
+                )
+            except Exception:
+                logger.debug("Push dispatch: failed to record outcomes", exc_info=True)
+
+    async def _send_one(self, sub: dict, payload: str, vapid_key: str) -> _SendResult:
         sub_id = sub["id"]
+        result = _SendResult(sub_id=sub_id)
         try:
             async with asyncio.timeout(_SEND_TIMEOUT):
                 await send_push(
@@ -123,26 +153,20 @@ class PushManager:
                     vapid_private_key=vapid_key,
                     vapid_claims=_VAPID_CLAIMS,
                 )
-            await PushSubscriptionRepository.record_success(sub_id)
+            result.success = True
         except WebPushException as e:
             status = getattr(e, "response", None)
             status_code = getattr(status, "status_code", 0) if status else 0
-            if status_code in (404, 410):
-                logger.info(
-                    "Push subscription expired (HTTP %d), removing %s",
-                    status_code,
-                    sub_id,
-                )
-                await PushSubscriptionRepository.delete(sub_id)
+            if status_code in (403, 404, 410):
+                logger.info("Push subscription expired (HTTP %d), removing %s", status_code, sub_id)
+                result.expired = True
             else:
                 logger.warning("Push send failed for %s: %s", sub_id, e)
-                await PushSubscriptionRepository.record_failure(sub_id)
         except TimeoutError:
             logger.warning("Push send timed out for %s", sub_id)
-            await PushSubscriptionRepository.record_failure(sub_id)
         except Exception:
             logger.debug("Push send error for %s", sub_id, exc_info=True)
-            await PushSubscriptionRepository.record_failure(sub_id)
+        return result
 
 
 push_manager = PushManager()
