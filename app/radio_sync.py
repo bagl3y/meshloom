@@ -43,8 +43,36 @@ from app.websocket import broadcast_error, broadcast_event
 logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_CHANNELS = 40
+_GET_CONTACTS_TIMEOUT = 10
 
 AdvertMode = Literal["flood", "zero_hop"]
+
+_AUTO_ADD_OVERWRITE_OLDEST = 0x01
+
+
+async def _enable_autoevict_on_radio(mc: MeshCore) -> None:
+    """Ensure the radio's AUTO_ADD_OVERWRITE_OLDEST preference bit is set."""
+    try:
+        current = await mc.commands.get_autoadd_config()
+        if current is None or current.type == EventType.ERROR:
+            logger.warning("Could not read autoadd config from radio: %s", current)
+            return
+        current_flags = current.payload.get("config", 0)
+        if current_flags & _AUTO_ADD_OVERWRITE_OLDEST:
+            logger.debug("Radio autoevict already enabled (autoadd_config=0x%02x)", current_flags)
+            return
+        new_flags = current_flags | _AUTO_ADD_OVERWRITE_OLDEST
+        result = await mc.commands.set_autoadd_config(new_flags)
+        if result is not None and result.type == EventType.OK:
+            logger.info(
+                "Enabled radio autoevict (autoadd_config 0x%02x -> 0x%02x)",
+                current_flags,
+                new_flags,
+            )
+        else:
+            logger.warning("Failed to enable radio autoevict: %s", result)
+    except Exception as exc:
+        logger.warning("Error enabling radio autoevict: %s", exc)
 
 
 def _contact_sync_debug_fields(contact: Contact) -> dict[str, object]:
@@ -239,7 +267,7 @@ async def should_run_full_periodic_sync(mc: MeshCore) -> bool:
     capacity = _effective_radio_capacity(app_settings.max_radio_contacts)
     refill_target, full_sync_trigger = _compute_radio_contact_limits(capacity)
 
-    result = await mc.commands.get_contacts()
+    result = await mc.commands.get_contacts(timeout=_GET_CONTACTS_TIMEOUT)
     if result is None or result.type == EventType.ERROR:
         logger.warning("Periodic sync occupancy check failed: %s", result)
         return False
@@ -430,6 +458,10 @@ async def ensure_default_channels() -> None:
 
 async def sync_and_offload_all(mc: MeshCore) -> dict:
     """Run fast startup sync, then background contact reconcile."""
+    autoevict = settings.load_with_autoevict
+
+    if autoevict:
+        await _enable_autoevict_on_radio(mc)
 
     # Contact on_radio is legacy/stale metadata. Clear it during the offload/reload
     # cycle so old rows stop claiming radio residency we do not actively track.
@@ -441,15 +473,31 @@ async def sync_and_offload_all(mc: MeshCore) -> dict:
     # Ensure default channels exist
     await ensure_default_channels()
 
-    start_background_contact_reconciliation(
-        initial_radio_contacts=contacts_result.get("radio_contacts", {}),
-        expected_mc=mc,
-    )
+    contact_reconcile_started = False
+    if "error" in contacts_result and not autoevict:
+        # In normal mode, we can't reconcile blind — skip and warn.
+        # In autoevict mode, we can load blind because adds never fail.
+        logger.warning("Skipping background contact reconcile — could not enumerate radio contacts")
+        broadcast_error(
+            "Could not enumerate radio contacts",
+            "Contact loading skipped — DM auto-acking for favorites and recent "
+            "contacts may not work, but sending and receiving is not affected. "
+            "Set MESHCORE_LOAD_WITH_AUTOEVICT=true to load contacts without "
+            "needing to read the radio first. See 'Contact Loading Issues' in "
+            "the Advanced Setup documentation.",
+        )
+    else:
+        start_background_contact_reconciliation(
+            initial_radio_contacts=contacts_result.get("radio_contacts", {}),
+            expected_mc=mc,
+            autoevict=autoevict,
+        )
+        contact_reconcile_started = True
 
     return {
         "contacts": contacts_result,
         "channels": channels_result,
-        "contact_reconcile_started": True,
+        "contact_reconcile_started": contact_reconcile_started,
     }
 
 
@@ -1045,7 +1093,7 @@ async def sync_contacts_from_radio(mc: MeshCore) -> dict:
     synced = 0
 
     try:
-        result = await mc.commands.get_contacts()
+        result = await mc.commands.get_contacts(timeout=_GET_CONTACTS_TIMEOUT)
 
         if result is None or result.type == EventType.ERROR:
             logger.error(
@@ -1108,12 +1156,19 @@ async def _reconcile_radio_contacts_in_background(
     *,
     initial_radio_contacts: dict[str, dict],
     expected_mc: MeshCore,
+    autoevict: bool = False,
 ) -> None:
-    """Converge radio contacts toward the desired favorites+recents working set."""
+    """Converge radio contacts toward the desired favorites+recents working set.
+
+    When *autoevict* is ``True`` the removal phase is skipped entirely and the
+    radio's ``AUTO_ADD_OVERWRITE_OLDEST`` preference is assumed to be enabled,
+    so ``add_contact`` never returns ``TABLE_FULL``.
+    """
     radio_contacts = dict(initial_radio_contacts)
     removed = 0
     loaded = 0
     failed = 0
+    table_full = False
 
     try:
         while True:
@@ -1127,7 +1182,9 @@ async def _reconcile_radio_contacts_in_background(
                 for contact in selected_contacts
                 if len(contact.public_key) >= 64
             }
-            removable_keys = [key for key in radio_contacts if key not in desired_contacts]
+            removable_keys = (
+                [] if autoevict else [key for key in radio_contacts if key not in desired_contacts]
+            )
             missing_contacts = [
                 contact for key, contact in desired_contacts.items() if key not in radio_contacts
             ]
@@ -1229,6 +1286,14 @@ async def _reconcile_radio_contacts_in_background(
                             else:
                                 failed += 1
                                 reason = add_result.payload
+                                if isinstance(reason, dict) and reason.get("error_code") == 3:
+                                    logger.warning(
+                                        "Radio contact table full — stopping "
+                                        "contact reconcile (loaded %d this cycle)",
+                                        loaded,
+                                    )
+                                    table_full = True
+                                    break
                                 hint = ""
                                 if reason is None:
                                     hint = (
@@ -1246,6 +1311,17 @@ async def _reconcile_radio_contacts_in_background(
                 logger.debug("Background contact reconcile yielding: radio busy")
                 await asyncio.sleep(CONTACT_RECONCILE_BUSY_BACKOFF_SECONDS)
                 continue
+
+            if table_full:
+                broadcast_error(
+                    "Could not load all desired contacts onto the radio for auto-DM ack",
+                    "The radio's contact table is full. Clearing your radio contacts "
+                    "using another client, lowering your contact fill target in "
+                    "settings, or setting MESHCORE_LOAD_WITH_AUTOEVICT=true may "
+                    "relieve this. See 'Contact Loading Issues' in the Advanced "
+                    "Setup documentation.",
+                )
+                break
 
             await asyncio.sleep(CONTACT_RECONCILE_YIELD_SECONDS)
             if not progressed:
@@ -1269,6 +1345,7 @@ def start_background_contact_reconciliation(
     *,
     initial_radio_contacts: dict[str, dict],
     expected_mc: MeshCore,
+    autoevict: bool = False,
 ) -> None:
     """Start or replace the background contact reconcile task for the current radio."""
     global _contact_reconcile_task
@@ -1280,11 +1357,13 @@ def start_background_contact_reconciliation(
         _reconcile_radio_contacts_in_background(
             initial_radio_contacts=initial_radio_contacts,
             expected_mc=expected_mc,
+            autoevict=autoevict,
         )
     )
     logger.info(
-        "Started background contact reconcile for %d radio contact(s)",
+        "Started background contact reconcile for %d radio contact(s)%s",
         len(initial_radio_contacts),
+        " (autoevict mode)" if autoevict else "",
     )
 
 
