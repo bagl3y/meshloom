@@ -48,6 +48,7 @@ _GET_CONTACTS_TIMEOUT = 10
 AdvertMode = Literal["flood", "zero_hop"]
 
 _AUTO_ADD_OVERWRITE_OLDEST = 0x01
+_RADIO_CONTACT_FAVORITE = 0x01
 
 
 async def _enable_autoevict_on_radio(mc: MeshCore) -> bool:
@@ -1298,6 +1299,12 @@ async def _reconcile_radio_contacts_in_background(
                                 public_key = contact.public_key.lower()
                                 try:
                                     add_payload = contact.to_radio_dict()
+                                    # In autoevict mode, app-loaded contacts should
+                                    # remain evictable by the radio even if the
+                                    # stored contact record carries the favorite bit.
+                                    add_payload["flags"] = (
+                                        int(add_payload.get("flags", 0)) & ~_RADIO_CONTACT_FAVORITE
+                                    )
                                     add_result = await mc.commands.add_contact(add_payload)
                                 except Exception as exc:
                                     failed += 1

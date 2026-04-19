@@ -77,6 +77,7 @@ async def _insert_contact(
     name="Alice",
     on_radio=False,
     contact_type=0,
+    flags=0,
     last_contacted=None,
     last_advert=None,
     direct_path=None,
@@ -89,7 +90,7 @@ async def _insert_contact(
             "public_key": public_key,
             "name": name,
             "type": contact_type,
-            "flags": 0,
+            "flags": flags,
             "direct_path": direct_path,
             "direct_path_len": direct_path_len,
             "direct_path_hash_mode": direct_path_hash_mode,
@@ -1013,7 +1014,7 @@ class TestBackgroundContactReconcile:
 
     @pytest.mark.asyncio
     async def test_autoevict_blind_fill_readds_full_desired_set(self, test_db):
-        await _insert_contact(KEY_A, "Alice", last_contacted=2000)
+        await _insert_contact(KEY_A, "Alice", flags=0x01, last_contacted=2000)
         await _insert_contact(KEY_B, "Bob", last_contacted=1000)
         alice = await ContactRepository.get_by_key(KEY_A)
         bob = await ContactRepository.get_by_key(KEY_B)
@@ -1057,6 +1058,10 @@ class TestBackgroundContactReconcile:
             call.args[0]["public_key"] for call in mock_mc.commands.add_contact.call_args_list
         ]
         assert loaded_keys == [KEY_A, KEY_B]
+        loaded_flags = [
+            call.args[0]["flags"] for call in mock_mc.commands.add_contact.call_args_list
+        ]
+        assert loaded_flags == [0, 0]
 
     @pytest.mark.asyncio
     async def test_autoevict_table_full_breaks_with_error(self, test_db):
