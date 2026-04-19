@@ -21,22 +21,20 @@ Devices will appear in HA under **Settings > Devices & Services > MQTT** within 
 
 ## How MeshCore IDs Map Into Home Assistant
 
-RemoteTerm uses each node's public key to derive a stable short identifier:
+RemoteTerm uses each node's public key to derive a stable short identifier for MQTT topics:
 
 - Full public key: `ae92577bae6c4f1d...`
 - Node ID: `ae92577bae6c` (the first 12 hex characters, lowercased)
-- Example entity ID: `device_tracker.meshcore_ae92577bae6c`
-- Example runtime topic: `meshcore/ae92577bae6c/gps`
+- Example MQTT topic: `meshcore/ae92577bae6c/gps`
 
-When this README shows `<node_id>`, it always means that 12-character value.
+When this README shows `<node_id>`, it always means that 12-character value. Node IDs appear in:
 
-The same node ID appears in:
-
-- Home Assistant entity IDs
-- Home Assistant discovery topics under `homeassistant/...`
+- MQTT discovery topics under `homeassistant/...`
 - Runtime MQTT state topics under your configured prefix, usually `meshcore/...`
 
-You can also see these IDs in RemoteTerm's Home Assistant integration UI:
+**Entity IDs** are different — HA auto-generates them from the device name and entity name, not from the node ID. For example, a radio named "MyRadio" produces entities like `binary_sensor.myradio_connected` and `event.myradio_messages`. A contact named "Alice" produces `device_tracker.alice`. You can find your actual entity IDs in **Settings > Devices & Services > MQTT** in HA, and you can rename them in HA's UI without affecting the integration.
+
+You can also see the MQTT topic IDs in RemoteTerm's Home Assistant integration UI:
 
 - `What gets created in Home Assistant`
 - `Published topic summary`
@@ -49,8 +47,8 @@ Always created. Updates every 60 seconds.
 
 | Entity | Type | Description |
 |--------|------|-------------|
-| `binary_sensor.meshcore_<radio_node_id>_connected` | Connectivity | Radio online/offline |
-| `sensor.meshcore_<radio_node_id>_noise_floor` | Signal strength | Radio noise floor (dBm) |
+| `binary_sensor.<radio_name>_connected` | Connectivity | Radio online/offline |
+| `sensor.<radio_name>_noise_floor` | Signal strength | Radio noise floor (dBm) |
 
 ### Repeater Devices
 
@@ -60,13 +58,13 @@ Repeaters must first be added to the auto-telemetry tracking list in RemoteTerm'
 
 | Entity | Type | Unit | Description |
 |--------|------|------|-------------|
-| `sensor.meshcore_<repeater_node_id>_battery_voltage` | Voltage | V | Battery level |
-| `sensor.meshcore_<repeater_node_id>_noise_floor` | Signal strength | dBm | Local noise floor |
-| `sensor.meshcore_<repeater_node_id>_last_rssi` | Signal strength | dBm | Last received signal strength |
-| `sensor.meshcore_<repeater_node_id>_last_snr` | -- | dB | Last signal-to-noise ratio |
-| `sensor.meshcore_<repeater_node_id>_packets_received` | -- | count | Total packets received |
-| `sensor.meshcore_<repeater_node_id>_packets_sent` | -- | count | Total packets sent |
-| `sensor.meshcore_<repeater_node_id>_uptime` | Duration | s | Uptime since last reboot |
+| `sensor.<repeater_name>_battery_voltage` | Voltage | V | Battery level |
+| `sensor.<repeater_name>_noise_floor` | Signal strength | dBm | Local noise floor |
+| `sensor.<repeater_name>_last_rssi` | Signal strength | dBm | Last received signal strength |
+| `sensor.<repeater_name>_last_snr` | -- | dB | Last signal-to-noise ratio |
+| `sensor.<repeater_name>_packets_received` | -- | count | Total packets received |
+| `sensor.<repeater_name>_packets_sent` | -- | count | Total packets sent |
+| `sensor.<repeater_name>_uptime` | Duration | s | Uptime since last reboot |
 
 If RemoteTerm already has a cached telemetry snapshot for that repeater, it republishes it on startup so HA can populate the sensors immediately instead of waiting for the next collection cycle.
 
@@ -76,11 +74,11 @@ One `device_tracker` per tracked contact. Updates passively whenever RemoteTerm 
 
 | Entity | Description |
 |--------|-------------|
-| `device_tracker.meshcore_<contact_node_id>` | GPS position (latitude/longitude) |
+| `device_tracker.<contact_name>` | GPS position (latitude/longitude) |
 
 ### Message Event Entity
 
-A single radio-scoped event entity, `event.meshcore_<radio_node_id>_messages`, fires for each message matching your configured scope. Each event carries these attributes:
+A single radio-scoped event entity, `event.<radio_name>_messages`, fires for each message matching your configured scope. Each event carries these attributes:
 
 | Attribute | Example | Description |
 |-----------|---------|-------------|
@@ -95,9 +93,9 @@ A single radio-scoped event entity, `event.meshcore_<radio_node_id>_messages`, f
 
 ## Entity Naming
 
-Entity IDs use the first 12 characters of the node's public key as an identifier. For example, a contact with public key `ae92577bae6c...` gets entity ID `device_tracker.meshcore_ae92577bae6c`. You can rename entities in HA's UI without affecting the integration.
+HA auto-generates entity IDs by slugifying the device name and entity name. For a radio named "My Radio", entities look like `binary_sensor.my_radio_connected` and `event.my_radio_messages`. For a repeater named "Hilltop", `sensor.hilltop_battery_voltage`. For a contact named "Alice", `device_tracker.alice`. You can rename entities in HA's UI without affecting the integration.
 
-That same 12-character node ID is also used in the MQTT topic paths. For example:
+MQTT topic paths use the 12-character node ID (first 12 hex characters of the public key). For example:
 
 - Local radio health: `meshcore/<radio_node_id>/health`
 - Repeater telemetry: `meshcore/<repeater_node_id>/telemetry`
@@ -117,7 +115,7 @@ That same 12-character node ID is also used in the MQTT topic paths. For example
 
 Notify when a tracked repeater's battery drops below a threshold.
 
-**GUI:** Settings > Automations > Create > Numeric state trigger on `sensor.meshcore_<repeater_node_id>_battery_voltage`, below `3.8`, action: notification.
+**GUI:** Settings > Automations > Create > Numeric state trigger on `sensor.<repeater_name>_battery_voltage`, below `3.8`, action: notification.
 
 **YAML:**
 ```yaml
@@ -125,22 +123,22 @@ automation:
   - alias: "Repeater battery low"
     trigger:
       - platform: numeric_state
-        entity_id: sensor.meshcore_aabbccddeeff_battery_voltage
+        entity_id: sensor.hilltop_battery_voltage
         below: 3.8
     action:
       - service: notify.mobile_app_your_phone
         data:
           title: "Repeater Battery Low"
           message: >-
-            {{ state_attr('sensor.meshcore_aabbccddeeff_battery_voltage', 'friendly_name') }}
-            is at {{ states('sensor.meshcore_aabbccddeeff_battery_voltage') }}V
+            {{ state_attr('sensor.hilltop_battery_voltage', 'friendly_name') }}
+            is at {{ states('sensor.hilltop_battery_voltage') }}V
 ```
 
 ### Radio offline alert
 
 Notify if the radio has been disconnected for more than 5 minutes.
 
-**GUI:** Settings > Automations > Create > State trigger on `binary_sensor.meshcore_<radio_node_id>_connected`, to `off`, for `00:05:00`, action: notification.
+**GUI:** Settings > Automations > Create > State trigger on `binary_sensor.<radio_name>_connected`, to `off`, for `00:05:00`, action: notification.
 
 **YAML:**
 ```yaml
@@ -148,7 +146,7 @@ automation:
   - alias: "Radio offline"
     trigger:
       - platform: state
-        entity_id: binary_sensor.meshcore_aabbccddeeff_connected
+        entity_id: binary_sensor.myradio_connected
         to: "off"
         for: "00:05:00"
     action:
@@ -166,7 +164,7 @@ Trigger when a message arrives in a specific channel. Two approaches:
 
 If you only care about one room, configure the HA integration's message scope to "Only listed channels" and select that room. Then every event fire is from that room.
 
-**GUI:** Settings > Automations > Create > State trigger on `event.meshcore_<radio_node_id>_messages`, action: notification.
+**GUI:** Settings > Automations > Create > State trigger on `event.<radio_name>_messages`, action: notification.
 
 **YAML:**
 ```yaml
@@ -174,7 +172,7 @@ automation:
   - alias: "Emergency channel alert"
     trigger:
       - platform: state
-        entity_id: event.meshcore_aabbccddeeff_messages
+        entity_id: event.myradio_messages
     action:
       - service: notify.mobile_app_your_phone
         data:
@@ -188,7 +186,7 @@ automation:
 
 Keep scope as "All messages" and filter in the automation. The trigger is GUI, but the condition uses a one-line template.
 
-**GUI:** Settings > Automations > Create > State trigger on `event.meshcore_<radio_node_id>_messages` > Add condition > Template > enter the template below.
+**GUI:** Settings > Automations > Create > State trigger on `event.<radio_name>_messages` > Add condition > Template > enter the template below.
 
 **YAML:**
 ```yaml
@@ -196,7 +194,7 @@ automation:
   - alias: "Emergency channel alert"
     trigger:
       - platform: state
-        entity_id: event.meshcore_aabbccddeeff_messages
+        entity_id: event.myradio_messages
     condition:
       - condition: template
         value_template: >-
@@ -218,7 +216,7 @@ automation:
   - alias: "DM from Alice"
     trigger:
       - platform: state
-        entity_id: event.meshcore_aabbccddeeff_messages
+        entity_id: event.myradio_messages
     condition:
       - condition: template
         value_template: >-
@@ -239,7 +237,7 @@ automation:
   - alias: "Keyword alert"
     trigger:
       - platform: state
-        entity_id: event.meshcore_aabbccddeeff_messages
+        entity_id: event.myradio_messages
     condition:
       - condition: template
         value_template: >-
@@ -264,7 +262,7 @@ Add a sensor card to any dashboard:
 
 ```yaml
 type: sensor
-entity: sensor.meshcore_aabbccddeeff_battery_voltage
+entity: sensor.hilltop_battery_voltage
 name: "Hilltop Repeater Battery"
 ```
 
@@ -274,11 +272,11 @@ Or an entities card for multiple repeaters:
 type: entities
 title: "Repeater Status"
 entities:
-  - entity: sensor.meshcore_aabbccddeeff_battery_voltage
+  - entity: sensor.hilltop_battery_voltage
     name: "Hilltop"
-  - entity: sensor.meshcore_ccdd11223344_battery_voltage
+  - entity: sensor.valley_battery_voltage
     name: "Valley"
-  - entity: sensor.meshcore_eeff55667788_battery_voltage
+  - entity: sensor.ridge_battery_voltage
     name: "Ridge"
 ```
 

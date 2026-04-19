@@ -450,7 +450,7 @@ def _message_event_discovery_config(
     device = _device_payload(radio_key, radio_name, "Radio")
     topic = f"homeassistant/event/meshcore_{nid}/messages/config"
     cfg: dict[str, Any] = {
-        "name": "MeshCore Messages",
+        "name": "Messages",
         "unique_id": f"meshcore_{nid}_messages",
         "device": device,
         "state_topic": f"{prefix}/{nid}/events/message",
