@@ -482,30 +482,31 @@ async def sync_and_offload_all(mc: MeshCore) -> dict:
     # Ensure default channels exist
     await ensure_default_channels()
 
-    contact_reconcile_started = False
-    if "error" in contacts_result and not autoevict:
-        # Without confirmed autoevict support we cannot reconcile blindly.
-        logger.warning("Skipping background contact reconcile — could not enumerate radio contacts")
+    snapshot_failed = "error" in contacts_result
+    if snapshot_failed and not autoevict:
+        logger.warning(
+            "Radio contact snapshot failed — attempting best-effort contact "
+            "loading without a full picture of what's already on the radio"
+        )
         broadcast_error(
             "Could not enumerate radio contacts",
-            "Contact loading skipped — DM auto-acking for favorites and recent "
-            "contacts may not work, but sending and receiving is not affected. "
-            "Set MESHCORE_LOAD_WITH_AUTOEVICT=true to load contacts without "
-            "needing to read the radio first. See 'Contact Loading Issues' in "
-            "the Advanced Setup documentation.",
+            "Loading favorites and recent contacts on a best-effort basis — "
+            "some adds may be redundant or fail if the radio's contact table "
+            "is already full. Set MESHCORE_LOAD_WITH_AUTOEVICT=true for more "
+            "reliable loading without needing to read the radio first. "
+            "See 'Contact Loading Issues' in the Advanced Setup documentation.",
         )
-    else:
-        start_background_contact_reconciliation(
-            initial_radio_contacts=contacts_result.get("radio_contacts", {}),
-            expected_mc=mc,
-            autoevict=autoevict,
-        )
-        contact_reconcile_started = True
+
+    start_background_contact_reconciliation(
+        initial_radio_contacts=contacts_result.get("radio_contacts", {}),
+        expected_mc=mc,
+        autoevict=autoevict,
+    )
 
     return {
         "contacts": contacts_result,
         "channels": channels_result,
-        "contact_reconcile_started": contact_reconcile_started,
+        "contact_reconcile_started": True,
     }
 
 
@@ -1180,6 +1181,8 @@ async def _reconcile_radio_contacts_in_background(
     failed = 0
     table_full = False
     autoevict_next_index = 0
+    autoevict_full_pass_retries = 0
+    _MAX_AUTOEVICT_RETRIES = 3
 
     try:
         while True:
@@ -1187,6 +1190,8 @@ async def _reconcile_radio_contacts_in_background(
                 logger.info("Stopping background contact reconcile: radio transport changed")
                 break
 
+            # Pre-lock snapshot for quick-exit checks; authoritative list is
+            # re-fetched inside the radio lock below.
             selected_contacts = await get_contacts_selected_for_radio_sync()
             desired_fill_contacts = [
                 contact for contact in selected_contacts if len(contact.public_key) >= 64
@@ -1282,6 +1287,9 @@ async def _reconcile_radio_contacts_in_background(
 
                     if budget > 0:
                         if autoevict:
+                            # Budget is consumed by the slice bound rather than
+                            # per-operation decrement — autoevict skips the
+                            # removal phase so the full budget is always available.
                             batch_contacts = desired_fill_contacts[
                                 autoevict_next_index : autoevict_next_index + budget
                             ]
@@ -1408,7 +1416,7 @@ async def _reconcile_radio_contacts_in_background(
                         "things are broken on your radio."
                     )
                     broadcast_error(
-                        "Could not load all desired contacts onto the radio for auto-DM ack: ",
+                        "Could not load all desired contacts onto the radio for auto-DM ack",
                         "Despite having auto-evict enabled, we got a contact-table-full error "
                         "from your radio. DM auto-ack is likely unavailable.",
                     )
@@ -1432,6 +1440,16 @@ async def _reconcile_radio_contacts_in_background(
 
             if autoevict and autoevict_pass_complete:
                 if autoevict_pass_failed:
+                    autoevict_full_pass_retries += 1
+                    if autoevict_full_pass_retries >= _MAX_AUTOEVICT_RETRIES:
+                        logger.warning(
+                            "Background contact blind fill giving up after %d full passes "
+                            "with persistent failures (loaded %d, failed %d)",
+                            autoevict_full_pass_retries,
+                            loaded,
+                            failed,
+                        )
+                        break
                     autoevict_next_index = 0
                 else:
                     logger.info(

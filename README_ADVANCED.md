@@ -24,7 +24,7 @@ If the audit finds a mismatch, you'll see an error in the application UI and you
 
 RemoteTerm loads favorite and recently active contacts onto the radio so that the radio can automatically acknowledge incoming DMs on your behalf. To do this, it first enumerates the radio's existing contact table, then reconciles it with the desired working set.
 
-On BLE connections with many contacts (or radios with large contact tables from organic advertisements), the initial contact enumeration may take longer than the default timeout. If this happens, the app will automatically retry with an extended 60-second timeout. You may see a toast warning that the radio is temporarily unresponsive during this process.
+On BLE connections with many contacts (or radios with large contact tables from organic advertisements), the initial contact enumeration may time out. If this happens, the app will still attempt to load your favorites and recent contacts onto the radio on a best-effort basis, but without a full snapshot of what's already on the radio, some adds may be redundant or fail.
 
 If the radio's contact table is already full (from contacts added by advertisements or another client), the app may not be able to load all desired contacts. In this case you'll see a warning that auto-DM acking may not work for all contacts. To resolve this:
 
