@@ -1057,7 +1057,7 @@ describe('SettingsFanoutSection', () => {
     selectCreateIntegration('Home Assistant MQTT Discovery');
     confirmCreateIntegration();
 
-    expect(await screen.findByText('Published Topic Summary')).toBeInTheDocument();
+    expect(await screen.findByText('Published topic summary')).toBeInTheDocument();
 
     fireEvent.click(await screen.findByLabelText(/Alice/));
     fireEvent.click(await screen.findByLabelText(/Repeater One/));

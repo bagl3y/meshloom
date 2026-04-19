@@ -1194,7 +1194,7 @@ function MqttHaConfigEditor({
       <details className="group">
         <summary className="text-sm font-medium text-foreground cursor-pointer select-none flex items-center gap-1">
           <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-0 -rotate-90" />
-          Published Topic Summary
+          Published topic summary
         </summary>
         <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/20 p-3">
           <p className="text-xs text-muted-foreground">

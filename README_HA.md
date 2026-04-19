@@ -39,7 +39,7 @@ The same node ID appears in:
 You can also see these IDs in RemoteTerm's Home Assistant integration UI:
 
 - `What gets created in Home Assistant`
-- `Published Topic Summary`
+- `Published topic summary`
 
 ## What Gets Created
 
