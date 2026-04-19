@@ -280,6 +280,163 @@ entities:
     name: "Ridge"
 ```
 
+### Full monitoring dashboard with message feed
+
+This example creates a dashboard with repeater vitals, a live message feed, and a network activity graph. Replace the three slug values below to match your setup — find your entity IDs in **Settings > Devices & Services > MQTT**.
+
+```yaml
+# ┌─────────────────────────────────────────────────────┐
+# │  Replace these three values to match your entities  │
+# │                                                     │
+# │  radio_slug:    the prefix on your radio sensors    │
+# │                 e.g. sensor.MYRADIO_noise_floor     │
+# │  repeater_slug: the prefix on your repeater sensors │
+# │                 e.g. sensor.HILLTOP_battery_voltage  │
+# │  message_event: your message event entity ID        │
+# │                 e.g. event.MYRADIO_messages          │
+# └─────────────────────────────────────────────────────┘
+#
+#   radio_slug:    myradio
+#   repeater_slug: hilltop
+#   message_event: event.myradio_messages
+```
+
+**Step 1 — Dashboard YAML** (Settings > Dashboards > Add > edit in YAML):
+
+```yaml
+views:
+  - title: MeshCore
+    icon: mdi:radio-tower
+    cards:
+      - type: entities
+        title: Hilltop — Current                     # ← repeater name
+        state_color: true
+        entities:
+          - entity: sensor.hilltop_battery_voltage    # ← repeater_slug
+            name: Battery
+          - entity: sensor.hilltop_noise_floor        # ← repeater_slug
+            name: Noise Floor
+          - entity: sensor.hilltop_last_rssi          # ← repeater_slug
+            name: Last RSSI
+          - entity: sensor.hilltop_last_snr           # ← repeater_slug
+            name: Last SNR
+          - entity: sensor.hilltop_uptime             # ← repeater_slug
+            name: Uptime
+          - entity: sensor.hilltop_packets_received   # ← repeater_slug
+            name: Packets Rx
+          - entity: sensor.hilltop_packets_sent       # ← repeater_slug
+            name: Packets Tx
+
+      - type: statistics-graph
+        title: Battery Voltage
+        entities:
+          - sensor.hilltop_battery_voltage            # ← repeater_slug
+        stat_types: [mean, min, max]
+        days_to_show: 7
+        period: hour
+
+      - type: statistics-graph
+        title: Noise Floor
+        entities:
+          - sensor.hilltop_noise_floor                # ← repeater_slug
+        stat_types: [mean, min, max]
+        days_to_show: 7
+        period: hour
+
+      - type: markdown
+        title: Message Feed (Last 10)
+        content: |
+          {% for i in range(1, 11) %}
+          {% set msg = states('input_text.meshcore_msg_' ~ i) %}
+          {% if msg and msg not in ['unknown', '', 'unavailable'] %}
+          {{ msg }}
+
+          {% endif %}
+          {% endfor %}
+          {% if states('input_text.meshcore_msg_1') in ['unknown', '', 'unavailable'] %}
+          *No messages yet.*
+          {% endif %}
+
+      - type: statistics-graph
+        title: Overall Packets Received
+        entities:
+          - sensor.myradio_packets_received           # ← radio_slug
+        stat_types: [change]
+        days_to_show: 7
+        period: hour
+```
+
+**Step 2 — Message feed helpers**: create 10 text helpers named `MeshCore Msg 1` through `MeshCore Msg 10` (Settings > Helpers > Add > Text). These act as a rolling buffer for the Markdown card above.
+
+**Step 3 — Message feed automation** (Settings > Automations > Create > edit in YAML):
+
+```yaml
+alias: MeshCore Message Feed Buffer
+description: Rolling buffer of recent mesh messages for dashboard display
+mode: queued
+max: 10
+triggers:
+  - trigger: state
+    entity_id: event.myradio_messages               # ← message_event
+actions:
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.meshcore_msg_10
+    data:
+      value: "{{ states('input_text.meshcore_msg_9') }}"
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.meshcore_msg_9
+    data:
+      value: "{{ states('input_text.meshcore_msg_8') }}"
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.meshcore_msg_8
+    data:
+      value: "{{ states('input_text.meshcore_msg_7') }}"
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.meshcore_msg_7
+    data:
+      value: "{{ states('input_text.meshcore_msg_6') }}"
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.meshcore_msg_6
+    data:
+      value: "{{ states('input_text.meshcore_msg_5') }}"
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.meshcore_msg_5
+    data:
+      value: "{{ states('input_text.meshcore_msg_4') }}"
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.meshcore_msg_4
+    data:
+      value: "{{ states('input_text.meshcore_msg_3') }}"
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.meshcore_msg_3
+    data:
+      value: "{{ states('input_text.meshcore_msg_2') }}"
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.meshcore_msg_2
+    data:
+      value: "{{ states('input_text.meshcore_msg_1') }}"
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.meshcore_msg_1
+    data:
+      value: >-
+        {{ as_timestamp(trigger.to_state.last_changed) |
+        timestamp_custom('%-I:%M %p') }} |
+        **{% if trigger.to_state.attributes.channel_name %}{{
+        trigger.to_state.attributes.channel_name }}{% else %}DM{% endif %}** |
+        {{ trigger.to_state.attributes.sender_name or 'Unknown' }}:
+        {{ (trigger.to_state.attributes.text or '')[:180] }}
+```
+
 ## Troubleshooting
 
 ### Devices don't appear in HA
