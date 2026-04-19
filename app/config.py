@@ -26,6 +26,7 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="__CLOWNTOWN_DO_CLOCK_WRAPAROUND",
     )
+    load_with_autoevict: bool = False
     skip_post_connect_sync: bool = False
     basic_auth_username: str = ""
     basic_auth_password: str = ""
