@@ -15,7 +15,15 @@ import { api } from '../api';
 const mockGetChannelDetail = vi.mocked(api.getChannelDetail);
 
 function makeChannel(key: string, name: string, isHashtag: boolean): Channel {
-  return { key, name, is_hashtag: isHashtag, on_radio: false, last_read_at: null, favorite: false };
+  return {
+    key,
+    name,
+    is_hashtag: isHashtag,
+    on_radio: false,
+    last_read_at: null,
+    favorite: false,
+    muted: false,
+  };
 }
 
 function makeDetail(channel: Channel): ChannelDetail {

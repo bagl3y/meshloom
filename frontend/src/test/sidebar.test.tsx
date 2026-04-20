@@ -14,6 +14,7 @@ function makeChannel(key: string, name: string): Channel {
     on_radio: false,
     last_read_at: null,
     favorite: false,
+    muted: false,
   };
 }
 

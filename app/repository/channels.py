@@ -28,7 +28,7 @@ class ChannelRepository:
         async with db.readonly() as conn:
             async with conn.execute(
                 """
-                SELECT key, name, is_hashtag, on_radio, flood_scope_override, path_hash_mode_override, last_read_at, favorite
+                SELECT key, name, is_hashtag, on_radio, flood_scope_override, path_hash_mode_override, last_read_at, favorite, muted
                 FROM channels
                 WHERE key = ?
                 """,
@@ -45,6 +45,7 @@ class ChannelRepository:
                 path_hash_mode_override=row["path_hash_mode_override"],
                 last_read_at=row["last_read_at"],
                 favorite=bool(row["favorite"]),
+                muted=bool(row["muted"]),
             )
         return None
 
@@ -53,7 +54,7 @@ class ChannelRepository:
         async with db.readonly() as conn:
             async with conn.execute(
                 """
-                SELECT key, name, is_hashtag, on_radio, flood_scope_override, path_hash_mode_override, last_read_at, favorite
+                SELECT key, name, is_hashtag, on_radio, flood_scope_override, path_hash_mode_override, last_read_at, favorite, muted
                 FROM channels
                 ORDER BY name
                 """
@@ -69,6 +70,7 @@ class ChannelRepository:
                 path_hash_mode_override=row["path_hash_mode_override"],
                 last_read_at=row["last_read_at"],
                 favorite=bool(row["favorite"]),
+                muted=bool(row["muted"]),
             )
             for row in rows
         ]
@@ -79,6 +81,17 @@ class ChannelRepository:
         async with db.tx() as conn:
             async with conn.execute(
                 "UPDATE channels SET favorite = ? WHERE key = ?",
+                (1 if value else 0, key.upper()),
+            ) as cursor:
+                rowcount = cursor.rowcount
+        return rowcount > 0
+
+    @staticmethod
+    async def set_muted(key: str, value: bool) -> bool:
+        """Set or clear the muted flag for a channel. Returns True if row was found."""
+        async with db.tx() as conn:
+            async with conn.execute(
+                "UPDATE channels SET muted = ? WHERE key = ?",
                 (1 if value else 0, key.upper()),
             ) as cursor:
                 rowcount = cursor.rowcount

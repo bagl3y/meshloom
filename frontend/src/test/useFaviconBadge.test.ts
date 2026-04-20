@@ -14,7 +14,15 @@ import type { Channel, Contact } from '../types';
 import { getStateKey } from '../utils/conversationState';
 
 function makeChannel(key: string, favorite = false): Channel {
-  return { key, name: key, is_hashtag: false, on_radio: false, last_read_at: null, favorite };
+  return {
+    key,
+    name: key,
+    is_hashtag: false,
+    on_radio: false,
+    last_read_at: null,
+    favorite,
+    muted: false,
+  };
 }
 
 function makeContact(publicKey: string, favorite = false): Contact {

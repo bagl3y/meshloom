@@ -90,6 +90,7 @@ const channel: Channel = {
   on_radio: false,
   last_read_at: null,
   favorite: false,
+  muted: false,
 };
 
 const message: Message = {
@@ -142,6 +143,7 @@ function createProps(overrides: Partial<React.ComponentProps<typeof Conversation
       throw new Error('unused');
     }),
     onToggleFavorite: vi.fn(async () => {}),
+    onToggleMute: vi.fn(async () => {}),
     onDeleteContact: vi.fn(async () => {}),
     onDeleteChannel: vi.fn(async () => {}),
     onSetChannelFloodScopeOverride: vi.fn(async () => {}),

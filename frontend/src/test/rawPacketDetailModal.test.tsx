@@ -24,6 +24,7 @@ const BOT_CHANNEL: Channel = {
   on_radio: false,
   last_read_at: null,
   favorite: false,
+  muted: false,
 };
 
 const BOT_PACKET: RawPacket = {

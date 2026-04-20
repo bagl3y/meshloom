@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bell,
+  BellOff,
   Cable,
   ChartNetwork,
   CheckCheck,
@@ -49,6 +50,7 @@ type ConversationRow = {
   unreadCount: number;
   isMention: boolean;
   notificationsEnabled: boolean;
+  muted?: boolean;
   contact?: Contact;
 };
 
@@ -249,6 +251,10 @@ export function Sidebar({
         // Public channel always sorts to the top
         if (isPublicChannelKey(a.key)) return -1;
         if (isPublicChannelKey(b.key)) return 1;
+
+        // Muted channels always sort to the bottom
+        if (a.muted && !b.muted) return 1;
+        if (!a.muted && b.muted) return -1;
 
         if (sectionSortOrders.channels === 'recent') {
           const timeA = getLastMessageTime('channel', a.key);
@@ -530,9 +536,10 @@ export function Sidebar({
     type: 'channel',
     id: channel.key,
     name: channel.name,
-    unreadCount: getUnreadCount('channel', channel.key),
-    isMention: hasMention('channel', channel.key),
+    unreadCount: channel.muted ? 0 : getUnreadCount('channel', channel.key),
+    isMention: channel.muted ? false : hasMention('channel', channel.key),
     notificationsEnabled: isConversationNotificationsEnabled?.('channel', channel.key) ?? false,
+    muted: channel.muted,
   });
 
   const buildContactRow = (contact: Contact, keyPrefix: string): ConversationRow => ({
@@ -584,23 +591,31 @@ export function Sidebar({
         )}
         <span className="name flex-1 truncate text-[0.8125rem]">{row.name}</span>
         <span className="ml-auto flex items-center gap-1">
-          {row.notificationsEnabled && (
-            <span aria-label="Notifications enabled" title="Notifications enabled">
-              <Bell className="h-3.5 w-3.5 text-muted-foreground" />
+          {row.muted ? (
+            <span aria-label="Channel muted" title="Channel muted">
+              <BellOff className="h-3.5 w-3.5 text-muted-foreground" />
             </span>
-          )}
-          {row.unreadCount > 0 && (
-            <span
-              className={cn(
-                'text-[0.625rem] font-semibold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
-                highlightUnread
-                  ? 'bg-badge-mention text-badge-mention-foreground'
-                  : 'bg-badge-unread/90 text-badge-unread-foreground'
+          ) : (
+            <>
+              {row.notificationsEnabled && (
+                <span aria-label="Notifications enabled" title="Notifications enabled">
+                  <Bell className="h-3.5 w-3.5 text-muted-foreground" />
+                </span>
               )}
-              aria-label={`${row.unreadCount} unread message${row.unreadCount !== 1 ? 's' : ''}`}
-            >
-              {row.unreadCount}
-            </span>
+              {row.unreadCount > 0 && (
+                <span
+                  className={cn(
+                    'text-[0.625rem] font-semibold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
+                    highlightUnread
+                      ? 'bg-badge-mention text-badge-mention-foreground'
+                      : 'bg-badge-unread/90 text-badge-unread-foreground'
+                  )}
+                  aria-label={`${row.unreadCount} unread message${row.unreadCount !== 1 ? 's' : ''}`}
+                >
+                  {row.unreadCount}
+                </span>
+              )}
+            </>
           )}
         </span>
       </div>

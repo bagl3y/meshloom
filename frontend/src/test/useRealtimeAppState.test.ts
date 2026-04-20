@@ -29,6 +29,7 @@ const publicChannel: Channel = {
   on_radio: false,
   last_read_at: null,
   favorite: false,
+  muted: false,
 };
 
 const incomingDm: Message = {
@@ -65,6 +66,7 @@ function createRealtimeArgs(overrides: Partial<Parameters<typeof useRealtimeAppS
       fetchAllContacts: vi.fn(async () => [] as Contact[]),
       setContacts,
       blockedKeysRef: { current: [] as string[] },
+      channelsRef: { current: [publicChannel] },
       blockedNamesRef: { current: [] as string[] },
       activeConversationRef: { current: null as Conversation | null },
       observeMessage: vi.fn(() => ({ added: false, activeConversation: false })),

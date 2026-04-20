@@ -194,6 +194,7 @@ describe('resolveChannelFromHashToken', () => {
       on_radio: true,
       last_read_at: null,
       favorite: false,
+      muted: false,
     },
     {
       key: '11111111111111111111111111111111',
@@ -202,6 +203,7 @@ describe('resolveChannelFromHashToken', () => {
       on_radio: false,
       last_read_at: null,
       favorite: false,
+      muted: false,
     },
     {
       key: '22222222222222222222222222222222',
@@ -210,6 +212,7 @@ describe('resolveChannelFromHashToken', () => {
       on_radio: false,
       last_read_at: null,
       favorite: false,
+      muted: false,
     },
   ];
 

@@ -94,6 +94,15 @@ class FavoriteToggleResponse(BaseModel):
     favorite: bool
 
 
+class MuteChannelRequest(BaseModel):
+    key: str = Field(description="Channel key to toggle mute status")
+
+
+class MuteChannelToggleResponse(BaseModel):
+    key: str
+    muted: bool
+
+
 class TrackedTelemetryRequest(BaseModel):
     public_key: str = Field(description="Public key of the repeater to toggle tracking")
 
@@ -258,6 +267,25 @@ async def toggle_favorite(request: FavoriteRequest) -> FavoriteToggleResponse:
         logger.info("%s channel favorite: %s", "Added" if new_value else "Removed", request.id[:12])
 
     return FavoriteToggleResponse(type=request.type, id=request.id, favorite=new_value)
+
+
+@router.post("/muted-channels/toggle", response_model=MuteChannelToggleResponse)
+async def toggle_muted_channel(request: MuteChannelRequest) -> MuteChannelToggleResponse:
+    """Toggle a channel's muted status."""
+    channel = await ChannelRepository.get_by_key(request.key)
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    new_value = not channel.muted
+    await ChannelRepository.set_muted(request.key, new_value)
+    logger.info("%s channel mute: %s", "Muted" if new_value else "Unmuted", request.key[:12])
+
+    refreshed = await ChannelRepository.get_by_key(request.key)
+    if refreshed:
+        from app.websocket import broadcast_event
+
+        broadcast_event("channel", refreshed.model_dump())
+
+    return MuteChannelToggleResponse(key=request.key, muted=new_value)
 
 
 @router.post("/blocked-keys/toggle", response_model=AppSettings)
