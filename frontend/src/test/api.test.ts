@@ -70,6 +70,7 @@ describe('fetchJson (via api methods)', () => {
   });
 
   function installMockFetch() {
+    mockFetch.mockReset();
     global.fetch = mockFetch;
   }
 
