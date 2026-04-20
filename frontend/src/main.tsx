@@ -24,5 +24,7 @@ createRoot(document.getElementById('root')!).render(
 
 // Register service worker for Web Push (requires secure context)
 if ('serviceWorker' in navigator && window.isSecureContext) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  navigator.serviceWorker.register('./sw.js').catch((err) => {
+    console.warn('Service worker registration failed:', err);
+  });
 }

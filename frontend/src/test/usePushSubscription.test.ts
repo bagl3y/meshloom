@@ -150,6 +150,36 @@ describe('usePushSubscription', () => {
     expect(result.current.allSubscriptions).toEqual([]);
   });
 
+  it(
+    'times out and shows a toast when service worker never activates',
+    async () => {
+      // Replace serviceWorker.ready with a promise that never resolves
+      Object.defineProperty(navigator, 'serviceWorker', {
+        configurable: true,
+        value: {
+          ready: new Promise(() => {}),
+        },
+      });
+
+      const { result } = renderHook(() => usePushSubscription());
+
+      await waitFor(() => {
+        expect(result.current.isSupported).toBe(true);
+      });
+
+      // subscribe() will hang on serviceWorker.ready, then the 1s timeout fires
+      await act(async () => {
+        await result.current.subscribe();
+      });
+
+      expect(result.current.loading).toBe(false);
+      expect(mocks.toast.error).toHaveBeenCalledWith('Failed to enable push notifications', {
+        description: expect.stringContaining('trusted TLS certificate for service workers'),
+      });
+    },
+    5_000
+  );
+
   it('recreates a stale browser subscription when the server VAPID key changed', async () => {
     const oldSubscription = activeSubscription;
     mocks.api.getPushSubscriptions

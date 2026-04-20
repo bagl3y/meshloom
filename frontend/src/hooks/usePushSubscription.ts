@@ -37,6 +37,33 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return arr;
 }
 
+/** Race a promise against a timeout; rejects with a descriptive error on expiry. */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `${label} timed out — the service worker may have failed to install. ` +
+              'Mobile browsers require a trusted TLS certificate for service workers, ' +
+              'even if the page itself loads with a self-signed cert.'
+          )
+        ),
+      ms
+    );
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      }
+    );
+  });
+}
+
 function uint8ArraysEqual(a: Uint8Array | null, b: Uint8Array): boolean {
   if (!a || a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
@@ -109,8 +136,9 @@ export function usePushSubscription(): PushSubscriptionState {
       const subsPromise = api.getPushSubscriptions().catch(() => [] as PushSubscriptionInfo[]);
 
       // Check if THIS browser has an active push subscription and match it
-      // to a backend record.
-      navigator.serviceWorker.ready
+      // to a backend record.  Use a timeout so we don't hang forever when the
+      // service worker failed to install (e.g. mobile + self-signed cert).
+      withTimeout(navigator.serviceWorker.ready, 1_000, 'Service worker activation')
         .then((reg) => reg.pushManager.getSubscription())
         .then(async (sub) => {
           const existing = await subsPromise;
@@ -129,7 +157,11 @@ export function usePushSubscription(): PushSubscriptionState {
   const refreshSubscriptions = useCallback(async () => {
     try {
       const subs = await api.getPushSubscriptions();
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await withTimeout(
+        navigator.serviceWorker.ready,
+        10_000,
+        'Service worker activation'
+      );
       const sub = await reg.pushManager.getSubscription();
       reconcileCurrentSubscription(subs, sub?.endpoint ?? null);
       return subs;
@@ -155,7 +187,11 @@ export function usePushSubscription(): PushSubscriptionState {
       vapidKeyRef.current = resp.public_key;
       const vapidKeyBytes = urlBase64ToUint8Array(resp.public_key);
 
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await withTimeout(
+        navigator.serviceWorker.ready,
+        3_000,
+        'Service worker activation'
+      );
       let pushSub = await reg.pushManager.getSubscription();
       const existingKeyBytes = getApplicationServerKeyBytes(pushSub?.options?.applicationServerKey);
       const requiresRecreate =

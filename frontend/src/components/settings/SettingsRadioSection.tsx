@@ -733,9 +733,9 @@ export function SettingsRadioSection({
           placeholder="MyRegion"
         />
         <p className="text-[0.8125rem] text-muted-foreground">
-          Tag outgoing flood messages with a region name (e.g. MyRegion). Repeaters configured for
-          that region can forward the traffic, while repeaters configured to deny other regions may
-          drop it. Leave empty to disable.
+          Tag outgoing messages with a region name (e.g. MyRegion). Repeaters configured for that
+          region can forward the traffic, while repeaters configured to deny other regions may drop
+          it. Leave empty to disable.
         </p>
       </div>
 
