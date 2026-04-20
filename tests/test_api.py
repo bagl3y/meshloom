@@ -203,6 +203,30 @@ class TestHealthEndpoint:
 class TestDebugEndpoint:
     """Test the debug support snapshot endpoint."""
 
+    def test_build_environment_exposes_env_settings(self):
+        """_build_environment should expose env config without secrets."""
+        from app.config import Settings
+        from app.routers.debug import _build_environment
+
+        with patch(
+            "app.routers.debug.settings",
+            Settings(
+                serial_port="/dev/ttyUSB0",
+                serial_baudrate=115200,
+                log_level="DEBUG",
+                database_path="data/test.db",
+            ),
+        ):
+            env = _build_environment()
+
+        assert env.connection_type == "serial"
+        assert env.serial_port == "/dev/ttyUSB0"
+        assert env.log_level == "DEBUG"
+        assert env.database_path == "data/test.db"
+        assert not hasattr(env, "ble_pin")
+        assert not hasattr(env, "basic_auth_password")
+        assert not hasattr(env, "basic_auth_username")
+
     def test_support_snapshot_sanitizes_radio_probe_location_fields(self):
         """Debug radio probe should redact advertised lat/lon from self_info."""
         from app.routers.debug import _sanitize_radio_probe_self_info
@@ -300,6 +324,8 @@ class TestDebugEndpoint:
         assert "multi_acks_enabled" not in payload["radio_probe"]
         assert "max_channels" not in payload["runtime"]
         assert "path_hash_mode" not in payload["runtime"]
+        assert "environment" in payload
+        assert payload["environment"]["connection_type"] in ("serial", "tcp", "ble")
         assert payload["runtime"]["channels_with_incoming_messages"] == 0
         assert payload["database"]["total_dms"] == 0
         assert payload["database"]["total_channel_messages"] == 0

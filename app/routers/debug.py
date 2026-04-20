@@ -64,7 +64,6 @@ class DebugRuntimeInfo(BaseModel):
     path_hash_mode_supported: bool
     channel_slot_reuse_enabled: bool
     channel_send_cache_capacity: int
-    remediation_flags: dict[str, bool]
 
 
 class DebugContactAudit(BaseModel):
@@ -110,6 +109,21 @@ class DebugHealthSummary(BaseModel):
     basic_auth_enabled: bool = False
 
 
+class DebugEnvironment(BaseModel):
+    connection_type: str
+    serial_port: str
+    serial_baudrate: int
+    tcp_host: str
+    tcp_port: int
+    ble_address: str
+    log_level: str
+    database_path: str
+    disable_bots: bool
+    enable_message_poll_fallback: bool
+    force_channel_slot_reconfigure: bool
+    load_with_autoevict: bool
+
+
 class DebugAppSettings(BaseModel):
     max_radio_contacts: int
     auto_decrypt_dm_on_advert: bool
@@ -123,6 +137,7 @@ class DebugSnapshotResponse(BaseModel):
     captured_at: str
     system: DebugSystemInfo
     application: DebugApplicationInfo
+    environment: DebugEnvironment
     health: DebugHealthSummary
     settings: DebugAppSettings
     runtime: DebugRuntimeInfo
@@ -201,6 +216,23 @@ def _coerce_live_max_channels(device_info: dict[str, Any] | None) -> int | None:
         return int(device_info["max_channels"])
     except (TypeError, ValueError):
         return None
+
+
+def _build_environment() -> DebugEnvironment:
+    return DebugEnvironment(
+        connection_type=settings.connection_type,
+        serial_port=settings.serial_port,
+        serial_baudrate=settings.serial_baudrate,
+        tcp_host=settings.tcp_host,
+        tcp_port=settings.tcp_port,
+        ble_address=settings.ble_address,
+        log_level=settings.log_level,
+        database_path=settings.database_path,
+        disable_bots=settings.disable_bots,
+        enable_message_poll_fallback=settings.enable_message_poll_fallback,
+        force_channel_slot_reconfigure=settings.force_channel_slot_reconfigure,
+        load_with_autoevict=settings.load_with_autoevict,
+    )
 
 
 def _build_debug_app_settings(app_settings: AppSettings) -> DebugAppSettings:
@@ -393,6 +425,7 @@ async def debug_support_snapshot() -> DebugSnapshotResponse:
         captured_at=datetime.now(UTC).isoformat(),
         system=_build_system_info(),
         application=_build_application_info(),
+        environment=_build_environment(),
         health=_build_debug_health_summary(health_data, radio_state=radio_state),
         settings=_build_debug_app_settings(app_settings),
         runtime=DebugRuntimeInfo(
@@ -404,10 +437,6 @@ async def debug_support_snapshot() -> DebugSnapshotResponse:
             path_hash_mode_supported=radio_runtime.path_hash_mode_supported,
             channel_slot_reuse_enabled=radio_runtime.channel_slot_reuse_enabled(),
             channel_send_cache_capacity=radio_runtime.get_channel_send_cache_capacity(),
-            remediation_flags={
-                "enable_message_poll_fallback": settings.enable_message_poll_fallback,
-                "force_channel_slot_reconfigure": settings.force_channel_slot_reconfigure,
-            },
         ),
         database=DebugDatabaseInfo(
             total_dms=message_totals["total_dms"],
