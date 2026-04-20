@@ -18,6 +18,7 @@ describe('BulkAddChannelResultModal', () => {
               on_radio: false,
               last_read_at: null,
               favorite: false,
+              muted: false,
             },
             {
               key: 'BB'.repeat(16),
@@ -26,6 +27,7 @@ describe('BulkAddChannelResultModal', () => {
               on_radio: false,
               last_read_at: null,
               favorite: false,
+              muted: false,
             },
           ],
           existing_count: 3,

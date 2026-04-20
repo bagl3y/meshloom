@@ -35,6 +35,7 @@ interface UseRealtimeAppStateArgs {
   setContacts: Dispatch<SetStateAction<Contact[]>>;
   blockedKeysRef: MutableRefObject<string[]>;
   blockedNamesRef: MutableRefObject<string[]>;
+  channelsRef: MutableRefObject<Channel[]>;
   activeConversationRef: MutableRefObject<Conversation | null>;
   observeMessage: (msg: Message) => { added: boolean; activeConversation: boolean };
   recordMessageEvent: (args: {
@@ -94,6 +95,7 @@ export function useRealtimeAppState({
   setContacts,
   blockedKeysRef,
   blockedNamesRef,
+  channelsRef,
   activeConversationRef,
   observeMessage,
   recordMessageEvent,
@@ -191,16 +193,24 @@ export function useRealtimeAppState({
           return;
         }
 
+        const isMutedChannel =
+          msg.type === 'CHAN' &&
+          !!msg.conversation_key &&
+          channelsRef.current.some((c) => c.key === msg.conversation_key && c.muted);
+
         const { added: isNewMessage, activeConversation: isForActiveConversation } =
           observeMessage(msg);
-        recordMessageEvent({
-          msg,
-          activeConversation: isForActiveConversation,
-          isNewMessage,
-          hasMention: checkMention(msg.text),
-        });
 
-        if (!msg.outgoing && isNewMessage) {
+        if (!isMutedChannel) {
+          recordMessageEvent({
+            msg,
+            activeConversation: isForActiveConversation,
+            isNewMessage,
+            hasMention: checkMention(msg.text),
+          });
+        }
+
+        if (!msg.outgoing && isNewMessage && !isMutedChannel) {
           notifyIncomingMessage?.(msg);
         }
       },

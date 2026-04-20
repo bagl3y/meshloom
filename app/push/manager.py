@@ -14,6 +14,7 @@ from pywebpush import WebPushException
 
 from app.push.send import send_push
 from app.push.vapid import get_vapid_private_key
+from app.repository.channels import ChannelRepository
 from app.repository.push_subscriptions import PushSubscriptionRepository
 from app.repository.settings import AppSettingsRepository
 
@@ -101,6 +102,15 @@ class PushManager:
 
         if state_key not in push_conversations:
             return
+
+        # Skip muted channels
+        if data.get("type") == "CHAN" and data.get("conversation_key"):
+            try:
+                ch = await ChannelRepository.get_by_key(data["conversation_key"])
+                if ch and ch.muted:
+                    return
+            except Exception:
+                logger.debug("Push dispatch: failed to check channel mute state", exc_info=True)
 
         try:
             subs = await PushSubscriptionRepository.get_all()

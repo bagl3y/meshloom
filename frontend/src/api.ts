@@ -343,6 +343,12 @@ export const api = {
       body: JSON.stringify({ type, id }),
     }),
 
+  toggleChannelMute: (key: string) =>
+    fetchJson<{ key: string; muted: boolean }>('/settings/muted-channels/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ key }),
+    }),
+
   // Fanout
   getFanoutConfigs: () => fetchJson<FanoutConfig[]>('/fanout'),
   createFanoutConfig: (config: {

@@ -42,6 +42,7 @@ const defaultProps = {
       on_radio: false,
       last_read_at: null,
       favorite: false,
+      muted: false,
     },
   ],
   onNavigateToMessage: vi.fn(),

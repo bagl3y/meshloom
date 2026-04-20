@@ -701,6 +701,7 @@ class MessageRepository:
                 JOIN channels c ON m.conversation_key = c.key
                 WHERE m.type = 'CHAN' AND m.outgoing = 0
                   AND m.received_at > COALESCE(c.last_read_at, 0)
+                  AND COALESCE(c.muted, 0) = 0
                   {blocked_sql}
                 GROUP BY m.conversation_key
                 """,

@@ -15,6 +15,7 @@ const TEST_CHANNEL: Channel = {
   on_radio: false,
   last_read_at: null,
   favorite: false,
+  muted: false,
 };
 
 const COLLIDING_TEST_CHANNEL: Channel = {

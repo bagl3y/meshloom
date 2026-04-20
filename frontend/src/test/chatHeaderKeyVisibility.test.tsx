@@ -7,7 +7,15 @@ import { CONTACT_TYPE_ROOM } from '../types';
 import { PUBLIC_CHANNEL_KEY } from '../utils/publicChannel';
 
 function makeChannel(key: string, name: string, isHashtag: boolean): Channel {
-  return { key, name, is_hashtag: isHashtag, on_radio: false, last_read_at: null, favorite: false };
+  return {
+    key,
+    name,
+    is_hashtag: isHashtag,
+    on_radio: false,
+    last_read_at: null,
+    favorite: false,
+    muted: false,
+  };
 }
 
 const noop = () => {};

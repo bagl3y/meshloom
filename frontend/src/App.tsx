@@ -25,7 +25,13 @@ import { DistanceUnitProvider } from './contexts/DistanceUnitContext';
 import { usePush } from './contexts/PushSubscriptionContext';
 import { messageContainsMention } from './utils/messageParser';
 import { getStateKey } from './utils/conversationState';
-import type { BulkCreateHashtagChannelsResult, Conversation, Message, RawPacket } from './types';
+import type {
+  BulkCreateHashtagChannelsResult,
+  Channel,
+  Conversation,
+  Message,
+  RawPacket,
+} from './types';
 import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM } from './types';
 import { shouldAutoFocusInput } from './utils/autoFocusInput';
 
@@ -207,6 +213,12 @@ export function App() {
       removeConversationMessagesRef.current(conversationId),
   });
 
+  // Keep channels in a ref for WS callback mute filtering
+  const channelsRef = useRef<Channel[]>([]);
+  useEffect(() => {
+    channelsRef.current = channels;
+  }, [channels]);
+
   const handleToggleFavorite = useCallback(
     async (type: 'channel' | 'contact', id: string) => {
       // Optimistically toggle the favorite flag
@@ -343,6 +355,20 @@ export function App() {
   useFaviconBadge(unreadCounts, mentions, channels);
   useUnreadTitle(unreadCounts, contacts, channels);
 
+  const handleToggleMute = useCallback(
+    async (key: string) => {
+      setChannels((prev) => prev.map((c) => (c.key === key ? { ...c, muted: !c.muted } : c)));
+      try {
+        await api.toggleChannelMute(key);
+        await refreshUnreads();
+      } catch {
+        setChannels((prev) => prev.map((c) => (c.key === key ? { ...c, muted: !c.muted } : c)));
+        toast.error('Failed to update mute');
+      }
+    },
+    [setChannels, refreshUnreads]
+  );
+
   useEffect(() => {
     if (activeConversation?.type !== 'channel') {
       setChannelUnreadMarker(null);
@@ -408,6 +434,7 @@ export function App() {
     setContacts,
     blockedKeysRef,
     blockedNamesRef,
+    channelsRef,
     activeConversationRef,
     observeMessage,
     recordMessageEvent,
@@ -586,6 +613,7 @@ export function App() {
     onRunTracePath: api.requestRadioTrace,
     onPathDiscovery: handlePathDiscovery,
     onToggleFavorite: handleToggleFavorite,
+    onToggleMute: handleToggleMute,
     onDeleteContact: handleDeleteContact,
     onDeleteChannel: handleDeleteChannel,
     onSetChannelFloodScopeOverride: handleSetChannelFloodScopeOverride,

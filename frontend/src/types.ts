@@ -223,6 +223,7 @@ export interface Channel {
   path_hash_mode_override?: number | null;
   last_read_at: number | null;
   favorite: boolean;
+  muted: boolean;
 }
 
 export interface ChannelMessageCounts {

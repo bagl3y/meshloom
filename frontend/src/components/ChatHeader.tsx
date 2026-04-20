@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, ChevronsLeftRight, Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
+import { Bell, BellOff, ChevronsLeftRight, Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
 import { toast } from './ui/sonner';
 import { DirectTraceIcon } from './DirectTraceIcon';
 import { ContactPathDiscoveryModal } from './ContactPathDiscoveryModal';
@@ -32,6 +32,7 @@ interface ChatHeaderProps {
   onTogglePush?: () => void;
   onOpenPushSettings?: () => void;
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
+  onToggleMute?: (key: string) => void;
   onSetChannelFloodScopeOverride?: (key: string, floodScopeOverride: string) => void;
   onSetChannelPathHashModeOverride?: (key: string, pathHashModeOverride: number | null) => void;
   onDeleteChannel: (key: string) => void;
@@ -57,6 +58,7 @@ export function ChatHeader({
   onTogglePush,
   onOpenPushSettings,
   onToggleFavorite,
+  onToggleMute,
   onSetChannelFloodScopeOverride,
   onSetChannelPathHashModeOverride,
   onDeleteChannel,
@@ -313,95 +315,125 @@ export function ChatHeader({
             <DirectTraceIcon className="h-4 w-4 text-muted-foreground" />
           </button>
         )}
-        {(notificationsSupported || pushSupported) && !activeContactIsRoomServer && (
-          <div className="relative" ref={notifDropdownRef}>
-            <button
-              className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => setNotifDropdownOpen((v) => !v)}
-              title="Notification settings"
-              aria-label="Notification settings"
-              aria-expanded={notifDropdownOpen}
-            >
-              <Bell
-                className={cn(
-                  'h-4 w-4',
-                  notificationsEnabled || pushEnabledForConversation
-                    ? 'text-primary'
-                    : 'text-muted-foreground'
+        {(notificationsSupported ||
+          pushSupported ||
+          (conversation.type === 'channel' && onToggleMute)) &&
+          !activeContactIsRoomServer && (
+            <div className="relative" ref={notifDropdownRef}>
+              <button
+                className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => setNotifDropdownOpen((v) => !v)}
+                title="Notification settings"
+                aria-label="Notification settings"
+                aria-expanded={notifDropdownOpen}
+              >
+                {activeChannel?.muted ? (
+                  <BellOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                ) : (
+                  <Bell
+                    className={cn(
+                      'h-4 w-4',
+                      notificationsEnabled || pushEnabledForConversation
+                        ? 'text-primary'
+                        : 'text-muted-foreground'
+                    )}
+                    fill={
+                      notificationsEnabled || pushEnabledForConversation ? 'currentColor' : 'none'
+                    }
+                    aria-hidden="true"
+                  />
                 )}
-                fill={notificationsEnabled || pushEnabledForConversation ? 'currentColor' : 'none'}
-                aria-hidden="true"
-              />
-            </button>
-            {notifDropdownOpen && (
-              <div className="absolute right-[-4.5rem] sm:right-0 top-full z-50 mt-1 w-[calc(100vw-2rem)] sm:w-72 max-w-72 rounded-md border border-border bg-popover p-3 shadow-lg space-y-3">
-                {notificationsSupported && (
-                  <label className="flex items-start gap-2.5 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 accent-primary h-4 w-4 shrink-0"
-                      checked={notificationsEnabled}
-                      disabled={notificationsPermission === 'denied'}
-                      onChange={onToggleNotifications}
-                    />
-                    <div className="min-w-0">
-                      <span className="text-sm font-medium text-foreground block leading-tight">
-                        Desktop notifications (legacy)
-                      </span>
-                      <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
-                        {notificationsPermission === 'denied'
-                          ? 'Blocked by browser — check site permissions'
-                          : 'Alerts while this tab is open'}
-                      </span>
-                    </div>
-                  </label>
-                )}
-                {pushSupported && onTogglePush && (
-                  <>
+              </button>
+              {notifDropdownOpen && (
+                <div className="absolute right-[-4.5rem] sm:right-0 top-full z-50 mt-1 w-[calc(100vw-2rem)] sm:w-72 max-w-72 rounded-md border border-border bg-popover p-3 shadow-lg space-y-3">
+                  {notificationsSupported && (
                     <label className="flex items-start gap-2.5 cursor-pointer group">
                       <input
                         type="checkbox"
                         className="mt-0.5 accent-primary h-4 w-4 shrink-0"
-                        checked={!!pushEnabledForConversation}
-                        onChange={onTogglePush}
+                        checked={notificationsEnabled}
+                        disabled={notificationsPermission === 'denied'}
+                        onChange={onToggleNotifications}
                       />
                       <div className="min-w-0">
                         <span className="text-sm font-medium text-foreground block leading-tight">
-                          Web Push (beta testing)
+                          Desktop notifications (legacy)
                         </span>
                         <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
-                          {pushSubscribed
-                            ? 'Alerts even when the browser is closed'
-                            : 'Alerts even when the browser is closed. Requires HTTPS.'}
+                          {notificationsPermission === 'denied'
+                            ? 'Blocked by browser — check site permissions'
+                            : 'Alerts while this tab is open'}
                         </span>
                       </div>
                     </label>
-                    <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
-                      All notification types require a trusted HTTPS context. Depending on your
-                      browser, a snakeoil certificate may not be sufficient.
-                    </span>
-                    {onOpenPushSettings && (
-                      <p className="text-xs text-muted-foreground leading-snug mt-1.5">
-                        Manage Web Push enabled devices in{' '}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNotifDropdownOpen(false);
-                            onOpenPushSettings();
-                          }}
-                          className="text-primary hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        >
-                          Settings &rarr; Local
-                        </button>
-                        .
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                  )}
+                  {pushSupported && onTogglePush && (
+                    <>
+                      <label className="flex items-start gap-2.5 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 accent-primary h-4 w-4 shrink-0"
+                          checked={!!pushEnabledForConversation}
+                          onChange={onTogglePush}
+                        />
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium text-foreground block leading-tight">
+                            Web Push (beta testing)
+                          </span>
+                          <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
+                            {pushSubscribed
+                              ? 'Alerts even when the browser is closed'
+                              : 'Alerts even when the browser is closed. Requires HTTPS.'}
+                          </span>
+                        </div>
+                      </label>
+                      <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
+                        All notification types require a trusted HTTPS context. Depending on your
+                        browser, a snakeoil certificate may not be sufficient.
+                      </span>
+                      {onOpenPushSettings && (
+                        <p className="text-xs text-muted-foreground leading-snug mt-1.5">
+                          Manage Web Push enabled devices in{' '}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNotifDropdownOpen(false);
+                              onOpenPushSettings();
+                            }}
+                            className="text-primary hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          >
+                            Settings &rarr; Local
+                          </button>
+                          .
+                        </p>
+                      )}
+                    </>
+                  )}
+                  {conversation.type === 'channel' && onToggleMute && (
+                    <>
+                      <hr className="border-border" />
+                      <label className="flex items-start gap-2.5 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 accent-primary h-4 w-4 shrink-0"
+                          checked={!!activeChannel?.muted}
+                          onChange={() => onToggleMute(conversation.id)}
+                        />
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium text-foreground block leading-tight">
+                            Mute channel
+                          </span>
+                          <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
+                            Hide unread counts and suppress all notifications
+                          </span>
+                        </div>
+                      </label>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         {conversation.type === 'channel' && onSetChannelFloodScopeOverride && (
           <button
             className="flex shrink-0 items-center gap-1 rounded px-1 py-1 text-lg leading-none transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
