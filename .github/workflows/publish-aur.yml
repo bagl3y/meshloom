@@ -25,6 +25,9 @@ concurrency:
   group: publish-aur
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   publish-aur:
     runs-on: ubuntu-latest
