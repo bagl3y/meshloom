@@ -1,3 +1,11 @@
+## [3.12.1] - 2026-04-19
+
+* Feature: Auto-evict/circular-buffer contact load mode (solves potential T-Beam issues)
+* Feature: Channel mute
+* Misc: HA Documentation improvements
+* Misc: Bump deps & update tests
+* Misc: Improve warnings around web push in untrusted contexts
+
 ## [3.12.0] - 2026-04-17
 
 * Feature: Web Push -- get your mesh notifications on a locked phone or when your browser is closed!
