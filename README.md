@@ -1,6 +1,8 @@
 # RemoteTerm for MeshCore
 
-Backend server + browser interface for MeshCore mesh radio networks. Connect your radio over Serial, TCP, or BLE, and then you can:
+Backend server + browser interface for MeshCore mesh radio networks, providing a rich, web-based power-user management and messaging system through a companion radio.
+
+Connect your radio over Serial, TCP, or BLE, and then you can:
 
 * Send and receive DMs and channel messages
 * Cache all received packets, decrypting as you gain keys
@@ -8,8 +10,8 @@ Backend server + browser interface for MeshCore mesh radio networks. Connect you
 * Monitor unlimited contacts and channels (radio limits don't apply -- packets are decrypted server-side)
 * Access your radio remotely over your network or VPN
 * Search for hashtag channel names for channels you don't have keys for yet
-* Forward packets to MQTT, LetsMesh, MeshRank, SQS, Apprise, etc.
-* Use the more recent 1.14 firmwares which support multibyte pathing
+* Forward packets, messages, and automatic repeater telemetry to MQTT, Home Assistant, LetsMesh, MeshRank, SQS, Apprise, etc.
+* Use the more recent 1.14+ firmwares which support multibyte pathing
 * Visualize the mesh as a map or node set, view repeater stats, and more!
 
 For advanced setup and troubleshooting see [README_ADVANCED.md](README_ADVANCED.md). If you plan to contribute, read [CONTRIBUTING.md](CONTRIBUTING.md).
