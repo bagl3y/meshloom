@@ -171,9 +171,12 @@ describe('usePushSubscription', () => {
     });
 
     expect(result.current.loading).toBe(false);
-    expect(mocks.toast.error).toHaveBeenCalledWith('Failed to enable push notifications', {
-      description: expect.stringContaining('trusted TLS certificate for service workers'),
-    });
+    expect(mocks.toast.error).toHaveBeenCalledWith(
+      'Failed to enable push notifications',
+      expect.objectContaining({
+        description: expect.stringContaining('trusted TLS certificate for service workers'),
+      })
+    );
   }, 5_000);
 
   it('recreates a stale browser subscription when the server VAPID key changed', async () => {

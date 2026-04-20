@@ -224,6 +224,7 @@ export function usePushSubscription(): PushSubscriptionState {
       console.error('Push subscribe failed:', err);
       toast.error('Failed to enable push notifications', {
         description: err instanceof Error ? err.message : 'Check that notifications are allowed',
+        duration: 8_000,
       });
       return null;
     } finally {
