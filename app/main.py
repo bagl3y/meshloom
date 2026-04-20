@@ -180,6 +180,25 @@ async def radio_disconnected_handler(request: Request, exc: RadioDisconnectedErr
     return JSONResponse(status_code=503, content={"detail": "Radio not connected"})
 
 
+@app.middleware("http")
+async def log_server_errors(request: Request, call_next):
+    """Capture 5xx errors and unhandled exceptions into the log ring buffer.
+
+    Starlette writes unhandled-exception tracebacks to stderr, bypassing
+    Python logging, so they never reach the debug dump.  This middleware
+    catches them and logs via ``logger.exception()`` so the full traceback
+    is preserved in the ring buffer for the ``GET /api/debug`` snapshot.
+    """
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+        raise
+    if response.status_code >= 500:
+        logger.error("HTTP %d on %s %s", response.status_code, request.method, request.url.path)
+    return response
+
+
 # API routes - all prefixed with /api for production compatibility
 app.include_router(health.router, prefix="/api")
 app.include_router(debug.router, prefix="/api")
