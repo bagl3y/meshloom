@@ -66,6 +66,8 @@ export interface RadioStatsSnapshot {
   timestamp: number | null;
   battery_mv: number | null;
   uptime_secs: number | null;
+  queue_len: number | null;
+  errors: number | null;
   noise_floor: number | null;
   last_rssi: number | null;
   last_snr: number | null;

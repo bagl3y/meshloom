@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { MapPinned } from 'lucide-react';
+import { ChevronDown, MapPinned } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
@@ -17,7 +17,115 @@ import type {
   RadioConfigUpdate,
   RadioDiscoveryResponse,
   RadioDiscoveryTarget,
+  RadioStatsSnapshot,
 } from '../../types';
+
+function formatUptime(secs: number): string {
+  const days = Math.floor(secs / 86400);
+  const hours = Math.floor((secs % 86400) / 3600);
+  const minutes = Math.floor((secs % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+function formatAirtime(secs: number): string {
+  if (secs < 60) return `${secs}s`;
+  const hours = Math.floor(secs / 3600);
+  const minutes = Math.floor((secs % 3600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+function StatRow({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-2 py-0.5">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span
+        className={`text-xs font-mono tabular-nums ${warn ? 'text-warning font-semibold' : ''}`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function RadioDetailsCollapsible({ stats }: { stats: RadioStatsSnapshot }) {
+  const age = stats.timestamp ? Math.max(0, Math.floor(Date.now() / 1000) - stats.timestamp) : null;
+  const packets = {
+    recv: stats.packets_recv,
+    sent: stats.packets_sent,
+    flood_tx: stats.flood_tx,
+    direct_tx: stats.direct_tx,
+    flood_rx: stats.flood_rx,
+    direct_rx: stats.direct_rx,
+  };
+
+  return (
+    <details className="group">
+      <summary className="text-sm font-medium text-foreground cursor-pointer select-none flex items-center gap-1">
+        <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-0 -rotate-90" />
+        Radio Details
+      </summary>
+      <div className="mt-2 space-y-2 rounded-md border border-input bg-muted/20 p-3">
+        {age !== null && (
+          <p className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
+            Updated {age < 5 ? 'just now' : `${age}s ago`}
+          </p>
+        )}
+
+        {/* Core */}
+        {stats.uptime_secs != null && (
+          <StatRow label="Uptime" value={formatUptime(stats.uptime_secs)} />
+        )}
+        {stats.battery_mv != null && stats.battery_mv > 0 && (
+          <StatRow label="Battery" value={`${(stats.battery_mv / 1000).toFixed(2)}V`} />
+        )}
+        {stats.queue_len != null && (
+          <StatRow
+            label="TX Queue"
+            value={`${stats.queue_len} / 16`}
+            warn={stats.queue_len >= 14}
+          />
+        )}
+        {stats.errors != null && (
+          <StatRow label="Errors" value={String(stats.errors)} warn={stats.errors > 0} />
+        )}
+
+        {/* RF */}
+        {stats.noise_floor != null && (
+          <StatRow label="Noise Floor" value={`${stats.noise_floor} dBm`} />
+        )}
+        {stats.last_rssi != null && <StatRow label="Last RSSI" value={`${stats.last_rssi} dBm`} />}
+        {stats.last_snr != null && <StatRow label="Last SNR" value={`${stats.last_snr} dB`} />}
+
+        {/* Airtime */}
+        {(stats.tx_air_secs != null || stats.rx_air_secs != null) && (
+          <>
+            {stats.tx_air_secs != null && (
+              <StatRow label="TX Airtime" value={formatAirtime(stats.tx_air_secs)} />
+            )}
+            {stats.rx_air_secs != null && (
+              <StatRow label="RX Airtime" value={formatAirtime(stats.rx_air_secs)} />
+            )}
+          </>
+        )}
+
+        {/* Packets */}
+        {packets.recv != null && <StatRow label="Packets Received" value={String(packets.recv)} />}
+        {packets.sent != null && <StatRow label="Packets Sent" value={String(packets.sent)} />}
+        {packets.flood_tx != null && <StatRow label="Flood TX" value={String(packets.flood_tx)} />}
+        {packets.flood_rx != null && <StatRow label="Flood RX" value={String(packets.flood_rx)} />}
+        {packets.direct_tx != null && (
+          <StatRow label="Direct TX" value={String(packets.direct_tx)} />
+        )}
+        {packets.direct_rx != null && (
+          <StatRow label="Direct RX" value={String(packets.direct_rx)} />
+        )}
+      </div>
+    </details>
+  );
+}
 
 export function SettingsRadioSection({
   config,
@@ -414,6 +522,9 @@ export function SettingsRadioSection({
           </span>
         </div>
         {deviceInfoLabel && <p className="text-sm text-muted-foreground">{deviceInfoLabel}</p>}
+
+        {health?.radio_stats && <RadioDetailsCollapsible stats={health.radio_stats} />}
+
         <Button
           type="button"
           variant="outline"

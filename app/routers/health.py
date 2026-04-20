@@ -40,6 +40,8 @@ class RadioStatsSnapshot(BaseModel):
     # Core stats
     battery_mv: int | None = None
     uptime_secs: int | None = None
+    queue_len: int | None = None
+    errors: int | None = None
     # Radio stats
     noise_floor: int | None = None
     last_rssi: int | None = None
@@ -155,6 +157,8 @@ async def build_health_data(radio_connected: bool, connection_info: str | None) 
             "timestamp": raw_stats.get("timestamp"),
             "battery_mv": raw_stats.get("battery_mv"),
             "uptime_secs": raw_stats.get("uptime_secs"),
+            "queue_len": raw_stats.get("queue_len"),
+            "errors": raw_stats.get("errors"),
             "noise_floor": raw_stats.get("noise_floor"),
             "last_rssi": raw_stats.get("last_rssi"),
             "last_snr": raw_stats.get("last_snr"),
