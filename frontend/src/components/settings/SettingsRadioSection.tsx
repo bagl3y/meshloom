@@ -1,11 +1,20 @@
-import { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, MapPinned } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { ChevronDown, Download, MapPinned, Upload } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
 import { toast } from '../ui/sonner';
 import { Checkbox } from '../ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
+import { api } from '../../api';
 import { RADIO_PRESETS } from '../../utils/radioPresets';
 import { stripRegionScopePrefix } from '../../utils/regionScope';
 import type {
@@ -428,6 +437,169 @@ export function SettingsRadioSection({
     }
   };
 
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [keyImportDialogOpen, setKeyImportDialogOpen] = useState(false);
+  const pendingImportRef = useRef<Record<string, unknown> | null>(null);
+
+  const buildConfigProfile = () => ({
+    version: 1,
+    exported_at: new Date().toISOString(),
+    name: config.name,
+    lat: config.lat,
+    lon: config.lon,
+    tx_power: config.tx_power,
+    radio: { ...config.radio },
+    path_hash_mode: config.path_hash_mode,
+    advert_location_source: config.advert_location_source ?? 'current',
+    multi_acks_enabled: config.multi_acks_enabled ?? false,
+  });
+
+  const downloadJson = (profile: object, suffix: string) => {
+    const blob = new Blob([JSON.stringify(profile, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const safeName = (config.name || 'radio').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const timestamp = new Date()
+      .toLocaleString(undefined, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      })
+      .replace(/[/:, ]+/g, '-');
+    a.download = `${safeName}-${suffix}-${timestamp}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportConfig = async () => {
+    const profile = buildConfigProfile();
+    try {
+      const { private_key } = await api.getPrivateKey();
+      downloadJson({ ...profile, private_key }, 'config');
+      toast.success('Export generated with private key');
+    } catch {
+      downloadJson(profile, 'config');
+      toast.info('Export generated without private key', {
+        description: 'See README_ADVANCED.md for private key export enable',
+      });
+    }
+  };
+
+  const validateImportData = (
+    data: unknown
+  ): data is {
+    name: string;
+    radio: { freq: number; bw: number; sf: number; cr: number };
+    [k: string]: unknown;
+  } =>
+    typeof data === 'object' &&
+    data !== null &&
+    'name' in data &&
+    typeof (data as Record<string, unknown>).name === 'string' &&
+    'radio' in data &&
+    typeof (data as Record<string, unknown>).radio === 'object' &&
+    (data as Record<string, unknown>).radio !== null &&
+    typeof (data as Record<string, Record<string, unknown>>).radio.freq === 'number' &&
+    typeof (data as Record<string, Record<string, unknown>>).radio.bw === 'number' &&
+    typeof (data as Record<string, Record<string, unknown>>).radio.sf === 'number' &&
+    typeof (data as Record<string, Record<string, unknown>>).radio.cr === 'number';
+
+  const populateFormFromImport = (data: Record<string, unknown>) => {
+    const radio = data.radio as { freq: number; bw: number; sf: number; cr: number };
+    setName(data.name as string);
+    if (typeof data.lat === 'number') setLat(String(data.lat));
+    if (typeof data.lon === 'number') setLon(String(data.lon));
+    if (typeof data.tx_power === 'number') setTxPower(String(data.tx_power));
+    setFreq(String(radio.freq));
+    setBw(String(radio.bw));
+    setSf(String(radio.sf));
+    setCr(String(radio.cr));
+    if (typeof data.path_hash_mode === 'number') setPathHashMode(String(data.path_hash_mode));
+    if (data.advert_location_source === 'off' || data.advert_location_source === 'current')
+      setAdvertLocationSource(data.advert_location_source);
+    if (typeof data.multi_acks_enabled === 'boolean') setMultiAcksEnabled(data.multi_acks_enabled);
+  };
+
+  const buildUpdateFromImport = (data: Record<string, unknown>): RadioConfigUpdate => {
+    const radio = data.radio as { freq: number; bw: number; sf: number; cr: number };
+    const update: RadioConfigUpdate = {
+      name: data.name as string,
+      lat: typeof data.lat === 'number' ? data.lat : config.lat,
+      lon: typeof data.lon === 'number' ? data.lon : config.lon,
+      tx_power: typeof data.tx_power === 'number' ? (data.tx_power as number) : config.tx_power,
+      radio,
+    };
+    if (data.advert_location_source === 'off' || data.advert_location_source === 'current')
+      update.advert_location_source = data.advert_location_source;
+    if (typeof data.multi_acks_enabled === 'boolean')
+      update.multi_acks_enabled = data.multi_acks_enabled;
+    if (config.path_hash_mode_supported && typeof data.path_hash_mode === 'number')
+      update.path_hash_mode = data.path_hash_mode as number;
+    return update;
+  };
+
+  const applyImport = async (data: Record<string, unknown>) => {
+    populateFormFromImport(data);
+    const update = buildUpdateFromImport(data);
+
+    setBusy(true);
+    setRebooting(true);
+    try {
+      if (typeof data.private_key === 'string' && data.private_key) {
+        await onSetPrivateKey(data.private_key);
+        toast.success('Config + private key imported, saving & rebooting...');
+      } else {
+        toast.success('Config imported, saving & rebooting...');
+      }
+      await onSave(update);
+      await onReboot();
+      if (!pageMode) onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import config');
+    } finally {
+      setRebooting(false);
+      setBusy(false);
+    }
+  };
+
+  const handleImportConfig = async (file: File) => {
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+
+      if (!validateImportData(data)) {
+        toast.error('Invalid config file', {
+          description: 'File must contain name and radio parameters (freq, bw, sf, cr)',
+        });
+        return;
+      }
+
+      if (typeof data.private_key === 'string' && data.private_key) {
+        // Private key present — show warning dialog before applying
+        pendingImportRef.current = data;
+        setKeyImportDialogOpen(true);
+      } else {
+        await applyImport(data);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import config');
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
+
+  const handleConfirmKeyImport = async () => {
+    setKeyImportDialogOpen(false);
+    const data = pendingImportRef.current;
+    pendingImportRef.current = null;
+    if (data) await applyImport(data);
+  };
+
   const radioState =
     health?.radio_state ?? (health?.radio_initializing ? 'initializing' : 'disconnected');
   const connectionActionLabel =
@@ -789,6 +961,37 @@ export function SettingsRadioSection({
         Some settings may require a reboot to take effect on some radios.
       </p>
 
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={handleExportConfig} className="flex-1">
+          <Download className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          Export Config
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => importInputRef.current?.click()}
+          disabled={busy || rebooting}
+          className="flex-1"
+        >
+          <Upload className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          Import &amp; Reboot
+        </Button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleImportConfig(file);
+          }}
+        />
+      </div>
+      <p className="text-[0.8125rem] text-muted-foreground">
+        Export saves the current server config to a JSON file. Import loads a config file, applies
+        it, and reboots the radio.
+      </p>
+
       <Separator />
 
       {/* ── Messaging ── */}
@@ -1018,6 +1221,44 @@ export function SettingsRadioSection({
           )}
         </div>
       </div>
+
+      {/* ── Private Key Import Warning ── */}
+      <Dialog
+        open={keyImportDialogOpen}
+        onOpenChange={(open) => {
+          setKeyImportDialogOpen(open);
+          if (!open) pendingImportRef.current = null;
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import includes Private Key</DialogTitle>
+            <DialogDescription>
+              This config file contains a private key. Importing it will change your radio&apos;s
+              identity &mdash; your radio will have a new public key and other nodes will see it as
+              a different device. This cannot be undone without the original key.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setKeyImportDialogOpen(false);
+                pendingImportRef.current = null;
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmKeyImport}
+              className="border-destructive/50 text-destructive hover:bg-destructive/10"
+              variant="outline"
+            >
+              Import Config &amp; Key
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

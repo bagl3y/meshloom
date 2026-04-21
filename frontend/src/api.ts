@@ -96,6 +96,7 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(config),
     }),
+  getPrivateKey: () => fetchJson<{ private_key: string }>('/radio/private-key'),
   setPrivateKey: (privateKey: string) =>
     fetchJson<{ status: string }>('/radio/private-key', {
       method: 'PUT',

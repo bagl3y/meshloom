@@ -385,6 +385,30 @@ async def update_radio_config(update: RadioConfigUpdate) -> RadioConfigResponse:
     return await get_radio_config()
 
 
+@router.get("/private-key")
+async def get_private_key() -> dict:
+    """Return the in-memory private key (exported from radio on startup).
+
+    Gated behind MESHCORE_ENABLE_LOCAL_PRIVATE_KEY_EXPORT=true.
+    """
+    from app.config import settings
+    from app.keystore import get_private_key as ks_get
+
+    if not settings.enable_local_private_key_export:
+        raise HTTPException(
+            status_code=403,
+            detail="Private key export is disabled (set MESHCORE_ENABLE_LOCAL_PRIVATE_KEY_EXPORT=true)",
+        )
+
+    key = ks_get()
+    if key is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Private key not available (not exported from radio)",
+        )
+    return {"private_key": key.hex()}
+
+
 @router.put("/private-key")
 async def set_private_key(update: PrivateKeyUpdate) -> dict:
     """Set the radio's private key. This is write-only."""
