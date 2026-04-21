@@ -321,6 +321,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | GET | `/api/debug` | Support snapshot: recent logs, live radio probe, contact/channel drift audit, and running version/git info |
 | GET | `/api/radio/config` | Radio configuration, including `path_hash_mode`, `path_hash_mode_supported`, advert-location on/off, and `multi_acks_enabled` |
 | PATCH | `/api/radio/config` | Update name, location, advert-location on/off, `multi_acks_enabled`, radio params, and `path_hash_mode` when supported |
+| GET | `/api/radio/private-key` | Export in-memory private key as hex (requires `MESHCORE_ENABLE_LOCAL_PRIVATE_KEY_EXPORT=true`) |
 | PUT | `/api/radio/private-key` | Import private key to radio |
 | POST | `/api/radio/advertise` | Send advertisement (`mode`: `flood` or `zero_hop`, default `flood`) |
 | POST | `/api/radio/discover` | Run a short mesh discovery sweep for nearby repeaters/sensors |
@@ -504,6 +505,7 @@ mc.subscribe(EventType.ACK, handler)
 | `MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK` | `false` | Switch the always-on radio audit task from hourly checks to aggressive 10-second polling; the audit checks both missed message drift and channel-slot cache drift |
 | `MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE` | `false` | Disable channel-slot reuse and force `set_channel(...)` before every channel send, even on serial/BLE |
 | `MESHCORE_LOAD_WITH_AUTOEVICT` | `false` | Enable autoevict contact loading: sets `AUTO_ADD_OVERWRITE_OLDEST` on the radio so adds never fail with TABLE_FULL, skips the removal phase during reconcile, and allows blind loading when `get_contacts` fails. Loaded contacts are not radio-favorited and may be evicted by new adverts when the table is full. |
+| `MESHCORE_ENABLE_LOCAL_PRIVATE_KEY_EXPORT` | `false` | Enable `GET /api/radio/private-key` to return the in-memory private key as hex. Disabled by default; only enable on a trusted network where you need to retrieve the key (e.g. for backup or migration). |
 
 **Note:** Runtime app settings are stored in the database (`app_settings` table), not environment variables. These include `max_radio_contacts`, `auto_decrypt_dm_on_advert`, `advert_interval`, `last_advert_time`, `last_message_times`, `flood_scope`, `blocked_keys`, `blocked_names`, `discovery_blocked_types`, `tracked_telemetry_repeaters`, `auto_resend_channel`, and `telemetry_interval_hours`. `max_radio_contacts` is the configured radio contact capacity baseline used by background maintenance: favorites reload first, non-favorite fill targets about 80% of that value, and full offload/reload triggers around 95% occupancy. They are configured via `GET/PATCH /api/settings`. MQTT, bot, webhook, Apprise, and SQS configs are stored in the `fanout_configs` table, managed via `/api/fanout`. If the radio's channel slots appear unstable or another client is mutating them underneath this app, operators can force the old always-reconfigure send path with `MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE=true`.
 
