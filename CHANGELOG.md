@@ -1,3 +1,12 @@
+## [3.12.2] - 2026-04-21
+
+* Feature: Auto-disambiguate colliding LPP sensor names
+* Feature: Radio config import/export
+* Bugfix: Don't push stale firmware version/model on community MQTT
+* Misc: Expose env vars in debug blob
+* Misc: Longer linger for web push error
+* Misc: Docs, test, & CI/CD improvements
+
 ## [3.12.1] - 2026-04-19
 
 * Feature: Auto-evict/circular-buffer contact load mode (solves potential T-Beam issues)
