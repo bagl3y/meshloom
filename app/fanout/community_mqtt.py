@@ -477,7 +477,21 @@ class CommunityMqttPublisher(BaseMqttPublisher):
         if radio_manager.meshcore and radio_manager.meshcore.self_info:
             device_name = radio_manager.meshcore.self_info.get("name", "")
 
-        device_info = await self._fetch_device_info()
+        # Prefer the always-fresh radio_manager fields (populated on every reconnect by
+        # radio_lifecycle) over the per-module _cached_device_info, which was only
+        # cleared on module restart and therefore served stale firmware versions after
+        # a radio firmware update.  Fall back to _fetch_device_info() for older firmware
+        # where device_info_loaded is False.
+        if radio_manager.device_info_loaded:
+            raw_ver = radio_manager.firmware_version or "unknown"
+            fw_build = radio_manager.firmware_build or ""
+            fw_str = f"{raw_ver} (Build: {fw_build})" if fw_build else f"{raw_ver}"
+            device_info = {
+                "model": radio_manager.device_model or "unknown",
+                "firmware_version": fw_str,
+            }
+        else:
+            device_info = await self._fetch_device_info()
         stats = await self._fetch_stats() if refresh_stats else self._cached_stats
 
         status_topic = _build_status_topic(settings, pubkey_hex)

@@ -812,16 +812,14 @@ class TestLwtAndStatusPublish:
         mock_radio = MagicMock()
         mock_radio.meshcore = MagicMock()
         mock_radio.meshcore.self_info = {"name": "TestNode"}
+        mock_radio.device_info_loaded = True
+        mock_radio.device_model = "T-Deck"
+        mock_radio.firmware_version = "v2.2.2"
+        mock_radio.firmware_build = "2025-01-15"
 
         with (
             patch("app.keystore.get_public_key", return_value=public_key),
             patch("app.radio.radio_manager", mock_radio),
-            patch.object(
-                pub,
-                "_fetch_device_info",
-                new_callable=AsyncMock,
-                return_value={"model": "T-Deck", "firmware_version": "v2.2.2 (Build: 2025-01-15)"},
-            ),
             patch.object(
                 pub, "_fetch_stats", new_callable=AsyncMock, return_value={"battery_mv": 4200}
             ),
@@ -851,6 +849,82 @@ class TestLwtAndStatusPublish:
         assert payload["radio"] == "915.0,250.0,10,8"
         assert payload["client_version"] == "RemoteTerm/2.4.0-abcdef"
         assert payload["stats"] == {"battery_mv": 4200}
+
+    @pytest.mark.asyncio
+    async def test_publish_status_uses_fallback_fetch_when_device_info_not_loaded(self):
+        """When device_info_loaded is False, _fetch_device_info() should be called as fallback."""
+        pub = CommunityMqttPublisher()
+        private_key, public_key = _make_test_keys()
+        settings = SimpleNamespace(community_mqtt_enabled=True, community_mqtt_iata="LAX")
+
+        mock_radio = MagicMock()
+        mock_radio.meshcore = MagicMock()
+        mock_radio.meshcore.self_info = {"name": "OldNode"}
+        mock_radio.device_info_loaded = False
+
+        with (
+            patch("app.keystore.get_public_key", return_value=public_key),
+            patch("app.radio.radio_manager", mock_radio),
+            patch.object(
+                pub,
+                "_fetch_device_info",
+                new_callable=AsyncMock,
+                return_value={"model": "LegacyBoard", "firmware_version": "v2"},
+            ) as mock_fetch,
+            patch.object(pub, "_fetch_stats", new_callable=AsyncMock, return_value=None),
+            patch("app.fanout.community_mqtt._build_radio_info", return_value="0,0,0,0"),
+            patch("app.fanout.community_mqtt._get_client_version", return_value="RemoteTerm/0-x"),
+            patch.object(pub, "publish", new_callable=AsyncMock) as mock_publish,
+        ):
+            await pub._publish_status(settings)
+
+        mock_fetch.assert_awaited_once()
+        payload = mock_publish.call_args[0][1]
+        assert payload["model"] == "LegacyBoard"
+        assert payload["firmware_version"] == "v2"
+
+    @pytest.mark.asyncio
+    async def test_publish_status_reflects_updated_firmware_version_after_reconnect(self):
+        """After firmware update + radio reconnect, the published firmware_version must be fresh.
+
+        This is a regression test for the stale-cache bug: previously _cached_device_info
+        was never cleared between reconnects, so a radio firmware update was invisible to
+        the Community MQTT status payload until the fanout module itself restarted.
+        """
+        pub = CommunityMqttPublisher()
+        private_key, public_key = _make_test_keys()
+        settings = SimpleNamespace(community_mqtt_enabled=True, community_mqtt_iata="LAX")
+
+        mock_radio = MagicMock()
+        mock_radio.meshcore = MagicMock()
+        mock_radio.meshcore.self_info = {"name": "MyNode"}
+        mock_radio.device_info_loaded = True
+        mock_radio.device_model = "T-Deck"
+        mock_radio.firmware_version = "1.14.1"
+        mock_radio.firmware_build = ""
+
+        async def _publish_once(radio_mock):
+            with (
+                patch("app.keystore.get_public_key", return_value=public_key),
+                patch("app.radio.radio_manager", radio_mock),
+                patch.object(pub, "_fetch_stats", new_callable=AsyncMock, return_value=None),
+                patch("app.fanout.community_mqtt._build_radio_info", return_value="0,0,0,0"),
+                patch("app.fanout.community_mqtt._get_client_version", return_value="RT/0-x"),
+                patch.object(pub, "publish", new_callable=AsyncMock) as mock_pub,
+            ):
+                await pub._publish_status(settings)
+                return mock_pub.call_args[0][1]
+
+        first_payload = await _publish_once(mock_radio)
+        assert first_payload["firmware_version"] == "1.14.1"
+
+        # Simulate firmware update: radio reboots, radio_lifecycle refreshes the manager fields
+        mock_radio.firmware_version = "1.15.0"
+
+        second_payload = await _publish_once(mock_radio)
+        assert second_payload["firmware_version"] == "1.15.0", (
+            "Expected updated firmware version after reconnect; stale cache bug would return v1.14.1"
+        )
 
     def test_lwt_and_online_share_same_topic(self):
         """LWT and on-connect status should use the same topic path."""
@@ -896,6 +970,7 @@ class TestLwtAndStatusPublish:
 
         mock_radio = MagicMock()
         mock_radio.meshcore = None
+        mock_radio.device_info_loaded = False
 
         with (
             patch("app.keystore.get_public_key", return_value=public_key),
@@ -1252,18 +1327,16 @@ class TestPublishStatus:
         mock_radio = MagicMock()
         mock_radio.meshcore = MagicMock()
         mock_radio.meshcore.self_info = {"name": "TestNode"}
+        mock_radio.device_info_loaded = True
+        mock_radio.device_model = "T-Deck"
+        mock_radio.firmware_version = "v2.2.2"
+        mock_radio.firmware_build = "2025-01-15"
 
         stats = {"battery_mv": 4200, "uptime_secs": 3600, "noise_floor": -120}
 
         with (
             patch("app.keystore.get_public_key", return_value=public_key),
             patch("app.radio.radio_manager", mock_radio),
-            patch.object(
-                pub,
-                "_fetch_device_info",
-                new_callable=AsyncMock,
-                return_value={"model": "T-Deck", "firmware_version": "v2.2.2 (Build: 2025-01-15)"},
-            ),
             patch.object(pub, "_fetch_stats", new_callable=AsyncMock, return_value=stats),
             patch("app.fanout.community_mqtt._build_radio_info", return_value="915.0,250.0,10,8"),
             patch(
@@ -1294,6 +1367,7 @@ class TestPublishStatus:
 
         mock_radio = MagicMock()
         mock_radio.meshcore = None
+        mock_radio.device_info_loaded = False
 
         with (
             patch("app.keystore.get_public_key", return_value=public_key),
@@ -1326,6 +1400,7 @@ class TestPublishStatus:
 
         mock_radio = MagicMock()
         mock_radio.meshcore = None
+        mock_radio.device_info_loaded = False
 
         before = time.monotonic()
 
