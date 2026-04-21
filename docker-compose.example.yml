@@ -44,6 +44,7 @@ services:
       # MESHCORE_DISABLE_BOTS: "true"
       # MESHCORE_BASIC_AUTH_USERNAME: changeme
       # MESHCORE_BASIC_AUTH_PASSWORD: changeme
+      # MESHCORE_ENABLE_LOCAL_PRIVATE_KEY_EXPORT: "false"
 
       # Logging
       # MESHCORE_LOG_LEVEL: INFO
