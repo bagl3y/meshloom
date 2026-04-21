@@ -242,8 +242,16 @@ export function formatLppLabel(typeName: string): string {
   return typeName.charAt(0).toUpperCase() + typeName.slice(1).replace(/_/g, ' ');
 }
 
-export function LppSensorRow({ sensor, unitPref }: { sensor: LppSensor; unitPref?: string }) {
-  const label = formatLppLabel(sensor.type_name);
+export function LppSensorRow({
+  sensor,
+  unitPref,
+  label: labelOverride,
+}: {
+  sensor: LppSensor;
+  unitPref?: string;
+  label?: string;
+}) {
+  const label = labelOverride ?? formatLppLabel(sensor.type_name);
 
   if (typeof sensor.value === 'object' && sensor.value !== null) {
     // Multi-value sensor (GPS, accelerometer, etc.)

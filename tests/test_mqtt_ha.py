@@ -7,6 +7,7 @@ import pytest
 
 from app.fanout.mqtt_ha import (
     MqttHaModule,
+    _assign_lpp_keys,
     _contact_tracker_discovery_config,
     _device_payload,
     _lpp_discovery_configs,
@@ -552,6 +553,45 @@ class TestLppSensorKey:
         assert _lpp_sensor_key("humidity", 0) == "lpp_humidity_ch0"
 
 
+class TestAssignLppKeys:
+    def test_no_duplicates(self):
+        sensors = [
+            {"type_name": "temperature", "channel": 1, "value": 20},
+            {"type_name": "humidity", "channel": 2, "value": 45},
+        ]
+        result = _assign_lpp_keys(sensors)
+        assert [(k, n) for _, k, n in result] == [
+            ("lpp_temperature_ch1", 1),
+            ("lpp_humidity_ch2", 1),
+        ]
+
+    def test_duplicate_type_and_channel(self):
+        sensors = [
+            {"type_name": "temperature", "channel": 1, "value": 20},
+            {"type_name": "humidity", "channel": 2, "value": 45},
+            {"type_name": "temperature", "channel": 1, "value": 53},
+        ]
+        result = _assign_lpp_keys(sensors)
+        assert [(k, n) for _, k, n in result] == [
+            ("lpp_temperature_ch1", 1),
+            ("lpp_humidity_ch2", 1),
+            ("lpp_temperature_ch1_2", 2),
+        ]
+
+    def test_triple_duplicate(self):
+        sensors = [
+            {"type_name": "voltage", "channel": 0, "value": 3.3},
+            {"type_name": "voltage", "channel": 0, "value": 5.0},
+            {"type_name": "voltage", "channel": 0, "value": 12.0},
+        ]
+        result = _assign_lpp_keys(sensors)
+        keys = [k for _, k, _ in result]
+        assert keys == ["lpp_voltage_ch0", "lpp_voltage_ch0_2", "lpp_voltage_ch0_3"]
+
+    def test_empty_list(self):
+        assert _assign_lpp_keys([]) == []
+
+
 class TestLppDiscoveryConfigs:
     def test_produces_config_per_sensor(self):
         nid = "ccdd11223344"
@@ -582,6 +622,27 @@ class TestLppDiscoveryConfigs:
         assert cfg["expire_after"] == 36000
         assert cfg["suggested_display_precision"] == 1
         assert "lpp_temperature_ch1" in cfg["value_template"]
+
+    def test_duplicate_type_channel_gets_indexed_keys(self):
+        nid = "ccdd11223344"
+        device = _device_payload(nid, "Rep1", "Repeater")
+        sensors = [
+            {"channel": 1, "type_name": "temperature", "value": 20.0},
+            {"channel": 2, "type_name": "humidity", "value": 45.0},
+            {"channel": 1, "type_name": "temperature", "value": 53.0},
+        ]
+        configs = _lpp_discovery_configs("mc", nid, device, sensors, f"mc/{nid}/telemetry")
+
+        assert len(configs) == 3
+        topics = [t for t, _ in configs]
+        assert f"homeassistant/sensor/meshcore_{nid}/lpp_temperature_ch1/config" in topics
+        assert f"homeassistant/sensor/meshcore_{nid}/lpp_humidity_ch2/config" in topics
+        assert f"homeassistant/sensor/meshcore_{nid}/lpp_temperature_ch1_2/config" in topics
+
+        # First temperature keeps base name, second gets #2 suffix
+        names = {cfg["unique_id"]: cfg["name"] for _, cfg in configs}
+        assert names[f"meshcore_{nid}_lpp_temperature_ch1"] == "Temperature (Ch 1)"
+        assert names[f"meshcore_{nid}_lpp_temperature_ch1_2"] == "Temperature (Ch 1) #2"
 
     def test_unknown_sensor_type_no_device_class(self):
         nid = "ccdd11223344"
@@ -711,6 +772,35 @@ class TestMqttHaTelemetryWithLpp:
         )
 
         mod._publish_discovery.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_on_telemetry_duplicate_lpp_sensors_not_overwritten(self):
+        """Two sensors with same (type_name, channel) get distinct keys."""
+        key = "ccdd11223344"
+        nid = _node_id(key)
+        mod = MqttHaModule("test", _base_config(tracked_repeaters=[key]))
+        mod._publisher = MagicMock()
+        mod._publisher.connected = True
+        mod._publisher.publish = AsyncMock()
+        mod._discovery_topics = [
+            f"homeassistant/sensor/meshcore_{nid}/lpp_temperature_ch1/config",
+            f"homeassistant/sensor/meshcore_{nid}/lpp_temperature_ch1_2/config",
+        ]
+
+        await mod.on_telemetry(
+            {
+                "public_key": key,
+                "battery_volts": 4.1,
+                "lpp_sensors": [
+                    {"channel": 1, "type_name": "temperature", "value": 20.0},
+                    {"channel": 1, "type_name": "temperature", "value": 53.0},
+                ],
+            }
+        )
+
+        payload = mod._publisher.publish.call_args[0][1]
+        assert payload["lpp_temperature_ch1"] == 20.0
+        assert payload["lpp_temperature_ch1_2"] == 53.0
 
     @pytest.mark.asyncio
     async def test_on_telemetry_without_lpp_sensors(self):

@@ -37,9 +37,18 @@ const BUILTIN_METRICS: BuiltinMetric[] = Object.keys(BUILTIN_METRIC_CONFIG) as B
 // Stable color rotation for dynamic LPP sensors
 const LPP_COLORS = ['#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16', '#e11d48'];
 
-/** Build a flat data key for an LPP sensor: lpp_{type_name}_ch{channel} */
-function lppKey(s: TelemetryLppSensor): string {
-  return `lpp_${s.type_name}_ch${s.channel}`;
+/** Assign disambiguated flat keys to an array of LPP sensors.
+ *  First occurrence keeps the base key; duplicates of the same (type, channel) get _2, _3, etc. */
+function assignLppKeys(
+  sensors: TelemetryLppSensor[]
+): { sensor: TelemetryLppSensor; key: string; occurrence: number }[] {
+  const counts = new Map<string, number>();
+  return sensors.map((s) => {
+    const base = `lpp_${s.type_name}_ch${s.channel}`;
+    const n = (counts.get(base) ?? 0) + 1;
+    counts.set(base, n);
+    return { sensor: s, key: n === 1 ? base : `${base}_${n}`, occurrence: n };
+  });
 }
 
 const TOOLTIP_STYLE = {
@@ -93,11 +102,10 @@ export function TelemetryHistoryPane({
 
   // Discover unique LPP sensors across all history entries
   const lppMetrics = useMemo(() => {
-    const seen = new Map<string, { type_name: string; channel: number }>();
+    const seen = new Map<string, { type_name: string; channel: number; occurrence: number }>();
     for (const e of entries) {
-      for (const s of e.data.lpp_sensors ?? []) {
-        const k = lppKey(s);
-        if (!seen.has(k)) seen.set(k, { type_name: s.type_name, channel: s.channel });
+      for (const { sensor: s, key: k, occurrence } of assignLppKeys(e.data.lpp_sensors ?? [])) {
+        if (!seen.has(k)) seen.set(k, { type_name: s.type_name, channel: s.channel, occurrence });
       }
     }
     const result: { key: string; config: MetricConfig; type_name: string; channel: number }[] = [];
@@ -106,7 +114,8 @@ export function TelemetryHistoryPane({
       const label =
         info.type_name.charAt(0).toUpperCase() +
         info.type_name.slice(1).replace(/_/g, ' ') +
-        ` Ch${info.channel}`;
+        ` Ch${info.channel}` +
+        (info.occurrence > 1 ? ` (${info.occurrence})` : '');
       const { unit } = lppDisplayUnit(info.type_name, 0, distanceUnit);
       result.push({
         key: k,
@@ -148,9 +157,9 @@ export function TelemetryHistoryPane({
         uptime_seconds: d.uptime_seconds,
       };
       // Flatten LPP sensors into the point, converting units as needed
-      for (const s of d.lpp_sensors ?? []) {
+      for (const { sensor: s, key } of assignLppKeys(d.lpp_sensors ?? [])) {
         if (typeof s.value === 'number') {
-          point[lppKey(s)] = lppDisplayUnit(s.type_name, s.value, distanceUnit).value;
+          point[key] = lppDisplayUnit(s.type_name, s.value, distanceUnit).value;
         }
       }
       return point;

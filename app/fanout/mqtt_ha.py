@@ -115,6 +115,22 @@ def _lpp_sensor_key(type_name: str, channel: int) -> str:
     return f"lpp_{type_name}_ch{channel}"
 
 
+def _assign_lpp_keys(lpp_sensors: list[dict]) -> list[tuple[dict, str, int]]:
+    """Pair each LPP sensor dict with a disambiguated flat key and occurrence.
+
+    First occurrence keeps the base key (``lpp_temperature_ch1``), occurrence=1;
+    subsequent duplicates of the same (type_name, channel) get ``_2``, ``_3``, etc.
+    """
+    counts: dict[str, int] = {}
+    result: list[tuple[dict, str, int]] = []
+    for sensor in lpp_sensors:
+        base = _lpp_sensor_key(sensor.get("type_name", "unknown"), sensor.get("channel", 0))
+        n = counts.get(base, 0) + 1
+        counts[base] = n
+        result.append((sensor, base if n == 1 else f"{base}_{n}", n))
+    return result
+
+
 def _repeater_telemetry_payload(data: dict[str, Any]) -> dict[str, Any]:
     """Build the flat HA state payload for a repeater telemetry snapshot."""
     payload: dict[str, Any] = {}
@@ -123,8 +139,7 @@ def _repeater_telemetry_payload(data: dict[str, Any]) -> dict[str, Any]:
         if field is not None:
             payload[field] = data.get(field)
 
-    for sensor in data.get("lpp_sensors", []) or []:
-        key = _lpp_sensor_key(sensor.get("type_name", "unknown"), sensor.get("channel", 0))
+    for sensor, key, _ in _assign_lpp_keys(data.get("lpp_sensors", []) or []):
         payload[key] = sensor.get("value")
 
     return payload
@@ -139,16 +154,19 @@ def _lpp_discovery_configs(
 ) -> list[tuple[str, dict]]:
     """Build HA discovery configs for a repeater's LPP sensors."""
     configs: list[tuple[str, dict]] = []
-    for sensor in lpp_sensors:
+    for sensor, field, occurrence in _assign_lpp_keys(lpp_sensors):
         type_name = sensor.get("type_name", "unknown")
         channel = sensor.get("channel", 0)
-        field = _lpp_sensor_key(type_name, channel)
         meta = _LPP_HA_META.get(type_name, {})
 
         nid = _node_id(pub_key)
         object_id = field
         display = type_name.replace("_", " ").title()
-        name = f"{display} (Ch {channel})"
+        name = (
+            f"{display} (Ch {channel})"
+            if occurrence == 1
+            else f"{display} (Ch {channel}) #{occurrence}"
+        )
 
         cfg: dict[str, Any] = {
             "name": name,
@@ -731,9 +749,7 @@ class MqttHaModule(FanoutModule):
         payload = _repeater_telemetry_payload(data)
         lpp_sensors: list[dict] = data.get("lpp_sensors", [])
         rediscover = False
-        for sensor in lpp_sensors:
-            # Check if discovery for this sensor has been published yet
-            key = _lpp_sensor_key(sensor.get("type_name", "unknown"), sensor.get("channel", 0))
+        for _, key, _ in _assign_lpp_keys(lpp_sensors):
             expected_topic = f"homeassistant/sensor/meshcore_{nid}/{key}/config"
             if expected_topic not in self._discovery_topics:
                 rediscover = True
