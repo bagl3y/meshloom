@@ -1,4 +1,12 @@
-import { lazy, Suspense, useCallback, useRef, type ComponentProps } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+} from 'react';
 import { useSwipeable } from 'react-swipeable';
 
 import { StatusBar } from './StatusBar';
@@ -140,6 +148,26 @@ export function AppShell({
     crackerMounted.current = true;
   }
 
+  // Position toasts below the conversation header when in chat, otherwise below the status bar
+  const TOAST_TOP_PADDING = 10;
+  const [toastTopOffset, setToastTopOffset] = useState<number | undefined>(undefined);
+  const hasLocalLabel = !!localLabel.text;
+  const activeType = conversationPaneProps.activeConversation?.type;
+  const activeId = conversationPaneProps.activeConversation?.id;
+  useEffect(() => {
+    const measure = () => {
+      const anchor =
+        document.querySelector('[data-toast-anchor="conversation"]') ??
+        document.querySelector('[data-toast-anchor="statusbar"]');
+      setToastTopOffset(
+        anchor ? anchor.getBoundingClientRect().top + TOAST_TOP_PADDING : undefined
+      );
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [hasLocalLabel, activeType, activeId, showSettings]);
+
   const settingsSidebarContent = (
     <nav
       className="sidebar w-60 h-full min-h-0 overflow-hidden bg-card border-r border-border flex flex-col"
@@ -220,6 +248,7 @@ export function AppShell({
         onSettingsClick={onToggleSettingsView}
         onMenuClick={showSettings ? undefined : () => onSidebarOpenChange(true)}
       />
+      <div data-toast-anchor="statusbar" aria-hidden="true" />
 
       <div className="flex flex-1 overflow-hidden">
         <div className="hidden md:block min-h-0 overflow-hidden">{activeSidebarContent}</div>
@@ -344,7 +373,10 @@ export function AppShell({
       <SecurityWarningModal health={statusProps.health} />
       <ContactInfoPane {...contactInfoPaneProps} />
       <ChannelInfoPane {...channelInfoPaneProps} />
-      <Toaster position="top-right" />
+      <Toaster
+        position="top-right"
+        offset={toastTopOffset !== undefined ? { top: toastTopOffset } : undefined}
+      />
     </div>
   );
 }

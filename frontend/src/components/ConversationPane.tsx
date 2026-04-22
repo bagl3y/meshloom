@@ -326,6 +326,7 @@ export function ConversationPane({
       {activeContactIsRoom && activeContact && (
         <RoomServerPanel contact={activeContact} onAuthenticatedChange={setRoomAuthenticated} />
       )}
+      {showRoomChat && <div data-toast-anchor="conversation" aria-hidden="true" />}
       {showRoomChat && (
         <MessageList
           key={activeConversation.id}
