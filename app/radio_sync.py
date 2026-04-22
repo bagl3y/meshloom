@@ -1273,7 +1273,12 @@ async def _reconcile_radio_contacts_in_background(
                                 continue
 
                             budget -= 1
-                            if remove_result.type == EventType.OK:
+                            not_found = (
+                                remove_result.type != EventType.OK
+                                and isinstance(remove_result.payload, dict)
+                                and remove_result.payload.get("error_code") == 2
+                            )
+                            if remove_result.type == EventType.OK or not_found:
                                 radio_contacts.pop(public_key, None)
                                 _evict_removed_contact_from_library_cache(mc, public_key)
                                 removed += 1
