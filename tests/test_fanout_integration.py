@@ -1171,7 +1171,8 @@ class TestFanoutAppriseIntegration:
             config={
                 "urls": f"json://127.0.0.1:{apprise_capture_server.port}",
                 "preserve_identity": True,
-                "include_path": False,
+                "body_format_dm": "**DM:** {sender_name}: {text}",
+                "body_format_channel": "**{channel_name}:** {sender_name}: {text}",
             },
             scope={"messages": "all", "raw_packets": "none"},
             enabled=True,
@@ -1212,7 +1213,8 @@ class TestFanoutAppriseIntegration:
             name="Channel Apprise",
             config={
                 "urls": f"json://127.0.0.1:{apprise_capture_server.port}",
-                "include_path": False,
+                "body_format_dm": "**DM:** {sender_name}: {text}",
+                "body_format_channel": "**{channel_name}:** {sender_name}: {text}",
             },
             scope={"messages": "all", "raw_packets": "none"},
             enabled=True,
@@ -1541,13 +1543,14 @@ class TestFanoutAppriseIntegration:
 
     @pytest.mark.asyncio
     async def test_apprise_includes_routing_path(self, apprise_capture_server, integration_db):
-        """Apprise with include_path=True shows routing hops in the body."""
+        """Apprise with hops in format string shows routing hops in the body."""
         cfg = await FanoutConfigRepository.create(
             config_type="apprise",
             name="Path Apprise",
             config={
                 "urls": f"json://127.0.0.1:{apprise_capture_server.port}",
-                "include_path": True,
+                "body_format_dm": "**DM:** {sender_name}: {text} **via:** [{hops_backticked}]",
+                "body_format_channel": "**{channel_name}:** {sender_name}: {text} **via:** [{hops_backticked}]",
             },
             scope={"messages": "all", "raw_packets": "none"},
             enabled=True,

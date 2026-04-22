@@ -1,4 +1,13 @@
-import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  lazy,
+  Suspense,
+  type ReactNode,
+} from 'react';
 import { ChevronDown, Info } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -278,7 +287,9 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
       config: {
         urls: '',
         preserve_identity: true,
-        include_path: true,
+        body_format_dm: '**DM:** {sender_name}: {text} **via:** [{hops_backticked}]',
+        body_format_channel:
+          '**{channel_name}:** {sender_name}: {text} **via:** [{hops_backticked}]',
       },
       scope: { messages: 'all', raw_packets: 'none' },
     },
@@ -2376,6 +2387,91 @@ function ScopeSelector({
   );
 }
 
+const APPRISE_DEFAULT_DM = '**DM:** {sender_name}: {text} **via:** [{hops_backticked}]';
+const APPRISE_DEFAULT_CHANNEL =
+  '**{channel_name}:** {sender_name}: {text} **via:** [{hops_backticked}]';
+
+const APPRISE_SAMPLE_VARS: Record<string, string> = {
+  type: 'CHAN',
+  text: 'hello world',
+  sender_name: 'Alice',
+  sender_key: 'a1b2c3d4e5f6',
+  channel_name: '#general',
+  conversation_key: 'abcdef1234567890',
+  hops: '2a, 3b',
+  hops_backticked: '`2a`, `3b`',
+  hop_count: '2',
+  rssi: '-95',
+  snr: '6.5',
+};
+
+const APPRISE_SAMPLE_VARS_DM: Record<string, string> = {
+  ...APPRISE_SAMPLE_VARS,
+  type: 'PRIV',
+  channel_name: '',
+  conversation_key: 'a1b2c3d4e5f6',
+};
+
+function appriseApplyFormat(fmt: string, vars: Record<string, string>): string {
+  let result = fmt;
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.split(`{${key}}`).join(value);
+  }
+  return result;
+}
+
+/** Render a markdown-ish string into inline React elements (bold + code spans). */
+function appriseRenderMarkdown(s: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let key = 0;
+  // Split on **bold** and `code` spans
+  const parts = s.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  for (const part of parts) {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      nodes.push(
+        <strong key={key++} className="font-bold">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    } else if (part.startsWith('`') && part.endsWith('`')) {
+      nodes.push(
+        <code key={key++} className="rounded bg-muted px-1 py-0.5 text-[0.6875rem] font-mono">
+          {part.slice(1, -1)}
+        </code>
+      );
+    } else if (part) {
+      nodes.push(<span key={key++}>{part}</span>);
+    }
+  }
+  return nodes;
+}
+
+function AppriseFormatPreview({ format, vars }: { format: string; vars: Record<string, string> }) {
+  const raw = appriseApplyFormat(format, vars);
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-2 space-y-1.5">
+      <div>
+        <span className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
+          Rendered (Discord, Slack)
+        </span>
+        <p className="text-xs break-all">{appriseRenderMarkdown(raw)}</p>
+      </div>
+      <div>
+        <span className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
+          Raw (Telegram, email)
+        </span>
+        <p className="text-xs font-mono break-all text-muted-foreground">{raw}</p>
+      </div>
+    </div>
+  );
+}
+
+function appriseIsDefault(value: unknown, defaultStr: string): boolean {
+  if (value == null) return true;
+  const s = String(value).trim();
+  return s === '' || s === defaultStr;
+}
+
 function AppriseConfigEditor({
   config,
   scope,
@@ -2387,6 +2483,10 @@ function AppriseConfigEditor({
   onChange: (config: Record<string, unknown>) => void;
   onScopeChange: (scope: Record<string, unknown>) => void;
 }) {
+  const dmFormat = ((config.body_format_dm as string) || '').trim() || APPRISE_DEFAULT_DM;
+  const chanFormat =
+    ((config.body_format_channel as string) || '').trim() || APPRISE_DEFAULT_CHANNEL;
+
   return (
     <div className="space-y-3">
       <p className="text-[0.8125rem] text-muted-foreground">
@@ -2445,15 +2545,111 @@ function AppriseConfigEditor({
         </div>
       </label>
 
-      <label className="flex items-center gap-3 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={config.include_path !== false}
-          onChange={(e) => onChange({ ...config, include_path: e.target.checked })}
-          className="h-4 w-4 rounded border-border"
+      <Separator />
+
+      <h3 className="text-base font-semibold tracking-tight">Message Format</h3>
+
+      <details className="group">
+        <summary className="text-sm font-medium text-foreground cursor-pointer select-none flex items-center gap-1">
+          <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-0 -rotate-90" />
+          Available variables
+        </summary>
+        <div className="mt-2 rounded-md border border-border bg-muted/30 p-2 text-xs space-y-0.5">
+          <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+            <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">{'{text}'}</code>
+            <span className="text-muted-foreground">Message body</span>
+            <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">
+              {'{sender_name}'}
+            </code>
+            <span className="text-muted-foreground">Sender display name</span>
+            <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">
+              {'{sender_key}'}
+            </code>
+            <span className="text-muted-foreground">Sender public key (hex)</span>
+            <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">
+              {'{channel_name}'}
+            </code>
+            <span className="text-muted-foreground">Channel name (channel messages only)</span>
+            <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">
+              {'{conversation_key}'}
+            </code>
+            <span className="text-muted-foreground">
+              Contact pubkey (DM) or channel key (channel)
+            </span>
+            <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">{'{type}'}</code>
+            <span className="text-muted-foreground">PRIV or CHAN</span>
+            <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">{'{hops}'}</code>
+            <span className="text-muted-foreground">
+              Comma-separated hop IDs, or &quot;direct&quot;
+            </span>
+            <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">
+              {'{hops_backticked}'}
+            </code>
+            <span className="text-muted-foreground">Hops wrapped in backticks for markdown</span>
+            <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">
+              {'{hop_count}'}
+            </code>
+            <span className="text-muted-foreground">Number of hops (0 for direct)</span>
+            <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">{'{rssi}'}</code>
+            <span className="text-muted-foreground">Last-hop RSSI in dBm</span>
+            <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">{'{snr}'}</code>
+            <span className="text-muted-foreground">Last-hop SNR in dB</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Empty textareas use the default format. RSSI/SNR may be empty if unavailable.
+          </p>
+        </div>
+      </details>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="fanout-apprise-fmt-dm">DM format</Label>
+          {!appriseIsDefault(config.body_format_dm, APPRISE_DEFAULT_DM) && (
+            <button
+              type="button"
+              aria-label="Reset DM format to default"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => onChange({ ...config, body_format_dm: APPRISE_DEFAULT_DM })}
+            >
+              Reset to default
+            </button>
+          )}
+        </div>
+        <textarea
+          id="fanout-apprise-fmt-dm"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono min-h-[56px]"
+          placeholder={APPRISE_DEFAULT_DM}
+          value={(config.body_format_dm as string) ?? ''}
+          onChange={(e) => onChange({ ...config, body_format_dm: e.target.value })}
+          rows={2}
         />
-        <span className="text-sm">Include routing path in notifications</span>
-      </label>
+        <AppriseFormatPreview format={dmFormat} vars={APPRISE_SAMPLE_VARS_DM} />
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="fanout-apprise-fmt-chan">Channel format</Label>
+          {!appriseIsDefault(config.body_format_channel, APPRISE_DEFAULT_CHANNEL) && (
+            <button
+              type="button"
+              aria-label="Reset channel format to default"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => onChange({ ...config, body_format_channel: APPRISE_DEFAULT_CHANNEL })}
+            >
+              Reset to default
+            </button>
+          )}
+        </div>
+        <textarea
+          id="fanout-apprise-fmt-chan"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono min-h-[56px]"
+          placeholder={APPRISE_DEFAULT_CHANNEL}
+          value={(config.body_format_channel as string) ?? ''}
+          onChange={(e) => onChange({ ...config, body_format_channel: e.target.value })}
+          rows={2}
+        />
+        <AppriseFormatPreview format={chanFormat} vars={APPRISE_SAMPLE_VARS} />
+      </div>
 
       <Separator />
 

@@ -1049,7 +1049,8 @@ class TestAppriseFormatBody:
         from app.fanout.apprise_mod import _format_body
 
         body = _format_body(
-            {"type": "PRIV", "text": "hi", "sender_name": "Alice"}, include_path=False
+            {"type": "PRIV", "text": "hi", "sender_name": "Alice"},
+            body_format_dm="**DM:** {sender_name}: {text}",
         )
         assert body == "**DM:** Alice: hi"
 
@@ -1058,7 +1059,7 @@ class TestAppriseFormatBody:
 
         body = _format_body(
             {"type": "CHAN", "text": "hi", "sender_name": "Bob", "channel_name": "#general"},
-            include_path=False,
+            body_format_channel="**{channel_name}:** {sender_name}: {text}",
         )
         assert body == "**#general:** Bob: hi"
 
@@ -1072,7 +1073,7 @@ class TestAppriseFormatBody:
                 "sender_name": "Bob",
                 "channel_name": "#general",
             },
-            include_path=False,
+            body_format_channel="**{channel_name}:** {sender_name}: {text}",
         )
         assert body == "**#general:** Bob: hi"
 
@@ -1086,7 +1087,7 @@ class TestAppriseFormatBody:
                 "sender_name": "Alice",
                 "paths": [{"path": "2027"}],
             },
-            include_path=True,
+            body_format_dm="**DM:** {sender_name}: {text} **via:** [{hops_backticked}]",
         )
         assert "**via:**" in body
         assert "`20`" in body
@@ -1097,7 +1098,7 @@ class TestAppriseFormatBody:
 
         body = _format_body(
             {"type": "PRIV", "text": "hi", "sender_name": "Alice"},
-            include_path=True,
+            body_format_dm="**DM:** {sender_name}: {text} **via:** [{hops_backticked}]",
         )
         assert "`direct`" in body
 
@@ -1112,7 +1113,7 @@ class TestAppriseFormatBody:
                 "sender_name": "Alice",
                 "paths": [{"path": "aabbccdd", "path_len": 2}],
             },
-            include_path=True,
+            body_format_dm="**DM:** {sender_name}: {text} **via:** [{hops_backticked}]",
         )
         assert "**via:**" in body
         assert "`aabb`" in body
@@ -1129,7 +1130,7 @@ class TestAppriseFormatBody:
                 "sender_name": "Alice",
                 "paths": [{"path": "aabbccddeeff", "path_len": 2}],
             },
-            include_path=True,
+            body_format_dm="**DM:** {sender_name}: {text} **via:** [{hops_backticked}]",
         )
         assert "**via:**" in body
         assert "`aabbcc`" in body
@@ -1147,7 +1148,7 @@ class TestAppriseFormatBody:
                 "channel_name": "#general",
                 "paths": [{"path": "aabbccdd", "path_len": 2}],
             },
-            include_path=True,
+            body_format_channel="**{channel_name}:** {sender_name}: {text} **via:** [{hops_backticked}]",
         )
         assert "**#general:**" in body
         assert "`aabb`" in body
@@ -1164,11 +1165,117 @@ class TestAppriseFormatBody:
                 "sender_name": "Alice",
                 "paths": [{"path": "aabb"}],
             },
-            include_path=True,
+            body_format_dm="**DM:** {sender_name}: {text} **via:** [{hops_backticked}]",
         )
         assert "**via:**" in body
         assert "`aa`" in body
         assert "`bb`" in body
+
+    def test_default_format_strings(self):
+        """Default format strings produce expected output."""
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {
+                "type": "PRIV",
+                "text": "hi",
+                "sender_name": "Alice",
+                "paths": [{"path": "2a3b"}],
+            },
+        )
+        assert body == "**DM:** Alice: hi **via:** [`2a`, `3b`]"
+
+    def test_custom_format_with_rssi(self):
+        """Custom format string can include rssi/snr."""
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {
+                "type": "PRIV",
+                "text": "hi",
+                "sender_name": "Alice",
+                "paths": [{"path": "2a", "rssi": -95, "snr": 6.5}],
+            },
+            body_format_dm="From {sender_name}: {text} (rssi: {rssi}, snr: {snr})",
+        )
+        assert body == "From Alice: hi (rssi: -95, snr: 6.5)"
+
+    def test_unknown_placeholder_left_as_is(self):
+        """Unknown {placeholders} pass through unchanged."""
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {"type": "PRIV", "text": "hi", "sender_name": "Alice"},
+            body_format_dm="{sender_name}: {text} {unknown_var}",
+        )
+        assert body == "Alice: hi {unknown_var}"
+
+    def test_none_fields_render_empty(self):
+        """None optional fields render as empty string, not 'None'."""
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {"type": "PRIV", "text": "hi", "sender_name": "Alice"},
+            body_format_dm="{sender_name}: {text} rssi={rssi}",
+        )
+        assert body == "Alice: hi rssi="
+        assert "None" not in body
+
+    def test_hops_direct_when_no_paths(self):
+        """hops is 'direct' when no path data exists."""
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {"type": "CHAN", "text": "hi", "sender_name": "Bob", "channel_name": "#gen"},
+            body_format_channel="{channel_name} {hops}",
+        )
+        assert body == "#gen direct"
+
+    def test_hops_direct_when_empty_path(self):
+        """hops is 'direct' when path string is empty."""
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {
+                "type": "PRIV",
+                "text": "hi",
+                "sender_name": "Alice",
+                "paths": [{"path": ""}],
+            },
+            body_format_dm="{hops}",
+        )
+        assert body == "direct"
+
+    def test_no_re_expansion_of_substituted_values(self):
+        """Placeholders in message text must not be expanded by later passes."""
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {"type": "PRIV", "text": "hello {sender_name}", "sender_name": "Alice"},
+            body_format_dm="{sender_name}: {text}",
+        )
+        assert body == "Alice: hello {sender_name}"
+
+    @pytest.mark.asyncio
+    async def test_empty_format_string_uses_default(self):
+        """Empty format strings in config should produce default output, not blank."""
+        from unittest.mock import patch as _patch
+
+        from app.fanout.apprise_mod import AppriseModule
+
+        mod = AppriseModule(
+            "test",
+            {"urls": "json://localhost", "body_format_dm": "", "body_format_channel": "  "},
+        )
+        with _patch("app.fanout.apprise_mod._send_sync", return_value=True) as mock_send:
+            await mod.on_message(
+                {"type": "PRIV", "text": "hi", "outgoing": False, "sender_name": "Alice"}
+            )
+            mock_send.assert_called_once()
+            body = mock_send.call_args[0][1]
+            assert "Alice" in body
+            assert "hi" in body
+            assert body != ""
 
 
 class TestAppriseNormalizeDiscordUrl:
@@ -1232,6 +1339,26 @@ class TestAppriseValidation:
         from app.routers.fanout import _validate_apprise_config
 
         _validate_apprise_config({"urls": "discord://123/abc"})
+
+    def test_validate_apprise_config_accepts_format_strings(self):
+        from app.routers.fanout import _validate_apprise_config
+
+        _validate_apprise_config(
+            {
+                "urls": "discord://123/abc",
+                "body_format_dm": "DM from {sender_name}: {text}",
+                "body_format_channel": "{channel_name}: {text}",
+            }
+        )
+
+    def test_validate_apprise_config_rejects_non_string_format(self):
+        from fastapi import HTTPException
+
+        from app.routers.fanout import _validate_apprise_config
+
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_apprise_config({"urls": "discord://123/abc", "body_format_dm": 123})
+        assert exc_info.value.status_code == 400
 
     def test_enforce_scope_apprise_strips_raw_packets(self):
         from app.routers.fanout import _enforce_scope

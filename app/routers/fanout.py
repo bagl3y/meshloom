@@ -259,6 +259,21 @@ def _validate_apprise_config(config: dict) -> None:
     if not urls or not urls.strip():
         raise HTTPException(status_code=400, detail="At least one Apprise URL is required")
 
+    from app.fanout.apprise_mod import FORMAT_VARIABLES, _apply_format
+
+    dummy_vars: dict[str, str] = dict.fromkeys(FORMAT_VARIABLES, "test")
+    for field in ("body_format_dm", "body_format_channel"):
+        value = config.get(field)
+        if value is not None and not isinstance(value, str):
+            raise HTTPException(status_code=400, detail=f"{field} must be a string")
+        if isinstance(value, str) and value.strip():
+            try:
+                _apply_format(value, dummy_vars)
+            except Exception:
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid format string in {field}"
+                ) from None
+
 
 def _validate_webhook_config(config: dict) -> None:
     """Validate webhook config blob."""
