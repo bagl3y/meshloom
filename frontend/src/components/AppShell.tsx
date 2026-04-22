@@ -376,6 +376,7 @@ export function AppShell({
       <Toaster
         position="top-right"
         offset={toastTopOffset !== undefined ? { top: toastTopOffset } : undefined}
+        mobileOffset={toastTopOffset !== undefined ? { top: toastTopOffset } : undefined}
       />
     </div>
   );

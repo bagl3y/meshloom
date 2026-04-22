@@ -300,6 +300,7 @@ export function RepeaterDashboard({
           />
         )}
       </header>
+      <div data-toast-anchor="conversation" aria-hidden="true" />
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-4">
