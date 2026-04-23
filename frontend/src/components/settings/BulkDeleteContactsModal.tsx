@@ -15,6 +15,9 @@ const CONTACT_TYPE_LABELS: Record<number, string> = {
   4: 'Sensor',
 };
 
+type SortField = 'name' | 'type' | 'key' | 'first_seen' | 'last_seen';
+type SortDir = 'asc' | 'desc';
+
 function formatDate(ts: number): string {
   return new Date(ts * 1000).toLocaleDateString([], {
     year: 'numeric',
@@ -30,6 +33,32 @@ function formatDateISO(ts: number): string {
 function datetimeToUnix(datetimeStr: string): number {
   const d = new Date(datetimeStr);
   return Math.floor(d.getTime() / 1000);
+}
+
+function SortableHeader({
+  label,
+  field,
+  sortField,
+  sortDir,
+  onSort,
+  className,
+}: {
+  label: string;
+  field: SortField;
+  sortField: SortField;
+  sortDir: SortDir;
+  onSort: (field: SortField) => void;
+  className?: string;
+}) {
+  const active = sortField === field;
+  return (
+    <th
+      className={`px-3 py-1.5 cursor-pointer select-none hover:text-foreground transition-colors ${className ?? ''}`}
+      onClick={() => onSort(field)}
+    >
+      {label} {active ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+    </th>
+  );
 }
 
 interface BulkDeleteContactsModalProps {
@@ -49,22 +78,42 @@ export function BulkDeleteContactsModal({
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [lastHeardAfter, setLastHeardAfter] = useState('');
+  const [lastHeardBefore, setLastHeardBefore] = useState('');
   const [typeFilter, setTypeFilter] = useState<number | 'all'>('all');
+  const [sortField, setSortField] = useState<SortField>('first_seen');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [deleting, setDeleting] = useState(false);
   const lastClickedKeyRef = useRef<string | null>(null);
+
+  const handleSort = useCallback(
+    (field: SortField) => {
+      if (sortField === field) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+      } else {
+        setSortField(field);
+        setSortDir(field === 'name' || field === 'key' ? 'asc' : 'desc');
+      }
+    },
+    [sortField]
+  );
 
   const resetAndClose = useCallback(() => {
     setStep('select');
     setSelectedKeys(new Set());
     setStartDate('');
     setEndDate('');
+    setLastHeardAfter('');
+    setLastHeardBefore('');
     setTypeFilter('all');
+    setSortField('first_seen');
+    setSortDir('desc');
     lastClickedKeyRef.current = null;
     onClose();
   }, [onClose]);
 
   const filteredContacts = useMemo(() => {
-    let list = [...contacts].sort((a, b) => (b.first_seen ?? 0) - (a.first_seen ?? 0));
+    let list = [...contacts];
     if (typeFilter !== 'all') {
       list = list.filter((c) => c.type === typeFilter);
     }
@@ -76,8 +125,44 @@ export function BulkDeleteContactsModal({
       const end = datetimeToUnix(endDate);
       list = list.filter((c) => (c.first_seen ?? 0) <= end);
     }
+    if (lastHeardAfter) {
+      const after = datetimeToUnix(lastHeardAfter);
+      list = list.filter((c) => (c.last_seen ?? 0) >= after);
+    }
+    if (lastHeardBefore) {
+      const before = datetimeToUnix(lastHeardBefore);
+      list = list.filter((c) => (c.last_seen ?? 0) <= before);
+    }
+
+    const dir = sortDir === 'asc' ? 1 : -1;
+    list.sort((a, b) => {
+      switch (sortField) {
+        case 'name': {
+          const an = getContactDisplayName(a.name, a.public_key, a.last_advert).toLowerCase();
+          const bn = getContactDisplayName(b.name, b.public_key, b.last_advert).toLowerCase();
+          return an < bn ? -dir : an > bn ? dir : 0;
+        }
+        case 'type':
+          return (a.type - b.type) * dir;
+        case 'key':
+          return a.public_key < b.public_key ? -dir : a.public_key > b.public_key ? dir : 0;
+        case 'first_seen':
+          return ((a.first_seen ?? 0) - (b.first_seen ?? 0)) * dir;
+        case 'last_seen':
+          return ((a.last_seen ?? 0) - (b.last_seen ?? 0)) * dir;
+      }
+    });
     return list;
-  }, [contacts, typeFilter, startDate, endDate]);
+  }, [
+    contacts,
+    typeFilter,
+    startDate,
+    endDate,
+    lastHeardAfter,
+    lastHeardBefore,
+    sortField,
+    sortDir,
+  ]);
 
   const handleToggle = (key: string, shiftKey: boolean) => {
     if (shiftKey && lastClickedKeyRef.current && lastClickedKeyRef.current !== key) {
@@ -148,6 +233,8 @@ export function BulkDeleteContactsModal({
     }
   };
 
+  const hasFilters = startDate || endDate || lastHeardAfter || lastHeardBefore;
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && resetAndClose()}>
       <DialogContent className="sm:max-w-2xl max-h-[85dvh] flex flex-col">
@@ -164,40 +251,64 @@ export function BulkDeleteContactsModal({
 
         {step === 'select' && (
           <>
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Show</label>
-                <select
-                  value={typeFilter === 'all' ? 'all' : String(typeFilter)}
-                  onChange={(e) =>
-                    setTypeFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))
-                  }
-                  className="block h-8 rounded-md border border-input bg-background px-2 text-sm"
-                >
-                  <option value="all">All</option>
-                  <option value="1">Clients</option>
-                  <option value="2">Repeaters</option>
-                  <option value="3">Room Servers</option>
-                  <option value="4">Sensors</option>
-                </select>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Show</label>
+                  <select
+                    value={typeFilter === 'all' ? 'all' : String(typeFilter)}
+                    onChange={(e) =>
+                      setTypeFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                    }
+                    className="block h-8 rounded-md border border-input bg-background px-2 text-sm"
+                  >
+                    <option value="all">All</option>
+                    <option value="1">Clients</option>
+                    <option value="2">Repeaters</option>
+                    <option value="3">Room Servers</option>
+                    <option value="4">Sensors</option>
+                  </select>
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Created after</label>
-                <Input
-                  type="datetime-local"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-48 h-8 text-sm"
-                />
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Created after</label>
+                  <Input
+                    type="datetime-local"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-48 h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Created before</label>
+                  <Input
+                    type="datetime-local"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-48 h-8 text-sm"
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Created before</label>
-                <Input
-                  type="datetime-local"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-48 h-8 text-sm"
-                />
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Last heard after</label>
+                  <Input
+                    type="datetime-local"
+                    value={lastHeardAfter}
+                    onChange={(e) => setLastHeardAfter(e.target.value)}
+                    className="w-48 h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Last heard before</label>
+                  <Input
+                    type="datetime-local"
+                    value={lastHeardBefore}
+                    onChange={(e) => setLastHeardBefore(e.target.value)}
+                    className="w-48 h-8 text-sm"
+                  />
+                </div>
               </div>
               <div className="flex gap-1.5">
                 <Button type="button" variant="outline" size="sm" onClick={handleSelectAll}>
@@ -211,7 +322,7 @@ export function BulkDeleteContactsModal({
 
             <div className="text-xs text-muted-foreground">
               {filteredContacts.length} contact{filteredContacts.length === 1 ? '' : 's'} shown
-              {(startDate || endDate) && ' (filtered)'}
+              {hasFilters && ' (filtered)'}
               {' · '}
               {selectedKeys.size} selected
             </div>
@@ -219,17 +330,51 @@ export function BulkDeleteContactsModal({
             <div className="flex-1 overflow-y-auto min-h-0 border border-border rounded-md">
               {filteredContacts.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
-                  No contacts match the selected date range.
+                  No contacts match the selected filters.
                 </div>
               ) : (
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-muted/90 backdrop-blur-sm">
                     <tr className="text-left text-xs text-muted-foreground">
                       <th className="px-3 py-1.5 w-8" />
-                      <th className="px-3 py-1.5">Name</th>
-                      <th className="px-3 py-1.5 hidden sm:table-cell">Type</th>
-                      <th className="px-3 py-1.5">Key</th>
-                      <th className="px-3 py-1.5 hidden sm:table-cell">Created</th>
+                      <SortableHeader
+                        label="Name"
+                        field="name"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      />
+                      <SortableHeader
+                        label="Type"
+                        field="type"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="hidden sm:table-cell"
+                      />
+                      <SortableHeader
+                        label="Key"
+                        field="key"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      />
+                      <SortableHeader
+                        label="Created"
+                        field="first_seen"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="hidden sm:table-cell"
+                      />
+                      <SortableHeader
+                        label="Last heard"
+                        field="last_seen"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="hidden sm:table-cell"
+                      />
                     </tr>
                   </thead>
                   <tbody>
@@ -265,6 +410,9 @@ export function BulkDeleteContactsModal({
                         <td className="px-3 py-1.5 hidden sm:table-cell text-xs text-muted-foreground">
                           {c.first_seen ? formatDate(c.first_seen) : '—'}
                         </td>
+                        <td className="px-3 py-1.5 hidden sm:table-cell text-xs text-muted-foreground">
+                          {c.last_seen ? formatDate(c.last_seen) : '—'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -298,6 +446,7 @@ export function BulkDeleteContactsModal({
                     <th className="px-3 py-1.5">Type</th>
                     <th className="px-3 py-1.5">Key</th>
                     <th className="px-3 py-1.5 hidden sm:table-cell">Created</th>
+                    <th className="px-3 py-1.5 hidden sm:table-cell">Last heard</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -314,6 +463,9 @@ export function BulkDeleteContactsModal({
                       </td>
                       <td className="px-3 py-1.5 hidden sm:table-cell text-xs text-muted-foreground">
                         {c.first_seen ? formatDate(c.first_seen) : '—'}
+                      </td>
+                      <td className="px-3 py-1.5 hidden sm:table-cell text-xs text-muted-foreground">
+                        {c.last_seen ? formatDate(c.last_seen) : '—'}
                       </td>
                     </tr>
                   ))}
