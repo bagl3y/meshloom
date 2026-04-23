@@ -63,9 +63,10 @@ test.describe('Apprise integration settings', () => {
     const preserveIdentity = page.getByText('Preserve identity on Discord');
     await expect(preserveIdentity).toBeVisible();
 
-    // Verify include routing path checkbox is checked by default
-    const includePath = page.getByText('Include routing path in notifications');
-    await expect(includePath).toBeVisible();
+    // Verify format textareas are present under Message Format heading
+    await expect(page.getByText('Message Format')).toBeVisible();
+    await expect(page.locator('#fanout-apprise-fmt-dm')).toBeVisible();
+    await expect(page.locator('#fanout-apprise-fmt-chan')).toBeVisible();
 
     // Rename it
     const nameInput = page.locator('#fanout-edit-name');
@@ -94,7 +95,8 @@ test.describe('Apprise integration settings', () => {
       config: {
         urls: `${appriseUrl}\nslack://token_a/token_b/token_c`,
         preserve_identity: false,
-        include_path: false,
+        body_format_dm: '{sender_name}: {text}',
+        body_format_channel: '{channel_name} | {sender_name}: {text}',
       },
       enabled: true,
     });
@@ -113,18 +115,18 @@ test.describe('Apprise integration settings', () => {
     await expect(urlsTextarea).toHaveValue(new RegExp(appriseUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     await expect(urlsTextarea).toHaveValue(/slack:\/\/token_a/);
 
-    // Verify checkboxes reflect our config (both unchecked)
+    // Verify preserve identity checkbox reflects our config (unchecked)
     const preserveCheckbox = page
       .getByText('Preserve identity on Discord')
       .locator('xpath=ancestor::label[1]')
       .locator('input[type="checkbox"]');
     await expect(preserveCheckbox).not.toBeChecked();
 
-    const pathCheckbox = page
-      .getByText('Include routing path in notifications')
-      .locator('xpath=ancestor::label[1]')
-      .locator('input[type="checkbox"]');
-    await expect(pathCheckbox).not.toBeChecked();
+    // Verify format textareas reflect our custom formats
+    const dmFormat = page.locator('#fanout-apprise-fmt-dm');
+    await expect(dmFormat).toHaveValue('{sender_name}: {text}');
+    const chanFormat = page.locator('#fanout-apprise-fmt-chan');
+    await expect(chanFormat).toHaveValue('{channel_name} | {sender_name}: {text}');
 
     // Go back
     page.once('dialog', (dialog) => dialog.accept());
