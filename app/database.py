@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS channels (
     flood_scope_override TEXT,
     path_hash_mode_override INTEGER,
     last_read_at INTEGER,
-    favorite INTEGER DEFAULT 0
+    favorite INTEGER DEFAULT 0,
+    muted INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -112,7 +113,10 @@ CREATE TABLE IF NOT EXISTS app_settings (
     discovery_blocked_types TEXT DEFAULT '[]',
     tracked_telemetry_repeaters TEXT DEFAULT '[]',
     auto_resend_channel INTEGER DEFAULT 0,
-    telemetry_interval_hours INTEGER DEFAULT 8
+    telemetry_interval_hours INTEGER DEFAULT 8,
+    vapid_private_key TEXT DEFAULT '',
+    vapid_public_key TEXT DEFAULT '',
+    push_conversations TEXT DEFAULT '[]'
 );
 INSERT OR IGNORE INTO app_settings (id) VALUES (1);
 
@@ -133,6 +137,18 @@ CREATE TABLE IF NOT EXISTS repeater_telemetry_history (
     timestamp INTEGER NOT NULL,
     data TEXT NOT NULL,
     FOREIGN KEY (public_key) REFERENCES contacts(public_key) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id TEXT PRIMARY KEY,
+    endpoint TEXT NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    label TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    last_success_at INTEGER,
+    failure_count INTEGER DEFAULT 0,
+    UNIQUE(endpoint)
 );
 """
 

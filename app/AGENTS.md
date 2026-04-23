@@ -196,6 +196,7 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 ### Radio
 - `GET /radio/config` — includes `path_hash_mode`, `path_hash_mode_supported`, advert-location on/off, and `multi_acks_enabled`
 - `PATCH /radio/config` — may update `path_hash_mode` (`0..2`) when firmware supports it, and `multi_acks_enabled`
+- `GET /radio/private-key` — export in-memory private key as hex (requires `MESHCORE_ENABLE_LOCAL_PRIVATE_KEY_EXPORT=true`)
 - `PUT /radio/private-key`
 - `POST /radio/advertise` — manual advert send; request body may set `mode` to `flood` or `zero_hop` (defaults to `flood`)
 - `POST /radio/discover` — short mesh discovery sweep for nearby repeaters/sensors
@@ -266,6 +267,7 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 - `POST /settings/blocked-names/toggle`
 - `POST /settings/tracked-telemetry/toggle`
 - `GET /settings/tracked-telemetry/schedule` — current telemetry scheduling derivation, interval options, and next-run-at timestamp
+- `POST /settings/muted-channels/toggle`
 
 ### Fanout
 - `GET /fanout` — list all fanout configs
@@ -396,7 +398,7 @@ tests/
 ├── test_message_prefix_claim.py # Message prefix claim logic
 ├── test_mqtt.py                # MQTT publisher topic routing and lifecycle
 ├── test_messages_search.py     # Message search, around, forward pagination
-├── test_migrations.py          # Schema migration system
+├── test_mqtt_ha.py             # MQTT HA (high-availability) behavior
 ├── test_packet_pipeline.py     # End-to-end packet processing
 ├── test_packets_router.py      # Packets router endpoints (decrypt, maintenance)
 ├── test_path_utils.py          # Path hex rendering helpers
@@ -415,7 +417,13 @@ tests/
 ├── test_security.py            # Optional Basic Auth middleware / config behavior
 ├── test_send_messages.py       # Outgoing messages, bot triggers, concurrent sends
 ├── test_settings_router.py     # Settings endpoints, advert validation
+├── test_push_send.py           # Web Push send/dispatch
+├── test_radio_stats.py         # Radio stats sampling and noise-floor history
+├── test_repeater_telemetry.py  # Repeater telemetry history recording
+├── test_service_installer.py   # Service installer script behavior
+├── test_sqs_fanout.py          # SQS fanout module
 ├── test_statistics.py          # Statistics aggregation
+├── test_telemetry_interval.py  # Telemetry interval scheduling math
 ├── test_version_info.py        # Version/build metadata resolution
 ├── test_websocket.py           # WS manager broadcast/cleanup
 └── test_websocket_route.py     # WS endpoint lifecycle

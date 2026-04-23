@@ -75,7 +75,6 @@ frontend/src/
 ├── utils/
 │   ├── urlHash.ts              # Hash parsing and encoding
 │   ├── conversationState.ts    # State keys, in-memory + localStorage helpers
-│   ├── favorites.ts            # LocalStorage migration for favorites
 │   ├── messageParser.ts        # Message text → rendered segments
 │   ├── pathUtils.ts            # Distance/validation helpers for paths + map
 │   ├── pubkey.ts               # getContactDisplayName (12-char prefix fallback)
@@ -132,6 +131,9 @@ frontend/src/
 │   ├── ServerLoginStatusBanner.tsx # Shared repeater/room login state banner
 │   ├── ChannelInfoPane.tsx     # Channel detail sheet (stats, top senders)
 │   ├── ChannelFloodScopeOverrideModal.tsx # Per-channel flood-scope override editor
+│   ├── ChannelPathHashModeOverrideModal.tsx # Per-channel path hash mode override editor
+│   ├── BulkAddChannelResultModal.tsx # Results dialog for bulk channel creation
+│   ├── CommandPalette.tsx      # Command palette overlay
 │   ├── DirectTraceIcon.tsx     # Shared direct-trace glyph used in header/dashboard
 │   ├── NeighborsMiniMap.tsx    # Leaflet mini-map for repeater neighbor locations
 │   ├── settings/
@@ -178,7 +180,6 @@ frontend/src/
     ├── prefetch.test.ts
     ├── rawPacketDetailModal.test.tsx
     ├── rawPacketFeedView.test.tsx
-    ├── radioPresets.test.ts
     ├── rawPacketIdentity.test.ts
     ├── repeaterDashboard.test.tsx
     ├── repeaterFormatters.test.ts
@@ -349,10 +350,6 @@ It falls back to a 12-char prefix when `name` is missing.
 ### `utils/pathUtils.ts`
 
 Distance/validation helpers used by path + map UI.
-
-### `utils/favorites.ts`
-
-LocalStorage migration helpers for favorites; canonical favorites are server-side.
 
 ## Types and Contracts (`types.ts`)
 

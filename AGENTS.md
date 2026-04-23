@@ -380,6 +380,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | POST | `/api/settings/blocked-names/toggle` | Toggle blocked name |
 | POST | `/api/settings/tracked-telemetry/toggle` | Toggle tracked telemetry repeater |
 | GET | `/api/settings/tracked-telemetry/schedule` | Current telemetry scheduling derivation and next-run-at timestamp |
+| POST | `/api/settings/muted-channels/toggle` | Toggle muted status for a channel |
 | GET | `/api/fanout` | List all fanout configs |
 | POST | `/api/fanout` | Create new fanout config |
 | PATCH | `/api/fanout/{id}` | Update fanout config (triggers module reload) |

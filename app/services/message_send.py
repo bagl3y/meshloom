@@ -862,7 +862,7 @@ async def send_channel_message_to_channel(
                 )
             )
     except Exception:
-        pass  # Never let watchdog setup failure break the send
+        logger.error("Echo watchdog setup failed", exc_info=True)
 
     return outgoing_message
 
