@@ -221,6 +221,9 @@ class CreateContactRequest(BaseModel):
 
     public_key: str = Field(min_length=64, max_length=64, description="Public key (64-char hex)")
     name: str | None = Field(default=None, description="Display name for the contact")
+    type: int = Field(
+        default=0, ge=0, le=3, description="Contact type (0=unknown, 1=client, 2=repeater, 3=room)"
+    )
     try_historical: bool = Field(
         default=False,
         description="Attempt to decrypt historical DM packets for this contact",

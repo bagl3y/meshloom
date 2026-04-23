@@ -32,7 +32,12 @@ interface NewMessageModalProps {
     nonce: number;
   } | null;
   onClose: () => void;
-  onCreateContact: (name: string, publicKey: string, tryHistorical: boolean) => Promise<void>;
+  onCreateContact: (
+    name: string,
+    publicKey: string,
+    tryHistorical: boolean,
+    type?: number
+  ) => Promise<void>;
   onCreateChannel: (name: string, key: string, tryHistorical: boolean) => Promise<void>;
   onCreateHashtagChannel: (name: string, tryHistorical: boolean) => Promise<void>;
   onBulkAddHashtagChannels: (channelNames: string[], tryHistorical: boolean) => Promise<void>;
@@ -91,6 +96,7 @@ export function NewMessageModal({
 }: NewMessageModalProps) {
   const [tab, setTab] = useState<Tab>('new-contact');
   const [name, setName] = useState('');
+  const [contactType, setContactType] = useState(1);
   const [contactKey, setContactKey] = useState('');
   const [channelKey, setChannelKey] = useState('');
   const [bulkChannelText, setBulkChannelText] = useState('');
@@ -103,6 +109,7 @@ export function NewMessageModal({
 
   const resetForm = () => {
     setName('');
+    setContactType(1);
     setContactKey('');
     setChannelKey('');
     setBulkChannelText('');
@@ -161,7 +168,7 @@ export function NewMessageModal({
           setError('Name and public key are required');
           return;
         }
-        await onCreateContact(name.trim(), contactKey.trim(), tryHistorical);
+        await onCreateContact(name.trim(), contactKey.trim(), tryHistorical, contactType);
       } else if (tab === 'new-channel') {
         if (!name.trim() || !channelKey.trim()) {
           setError('Channel name and key are required');
@@ -292,6 +299,19 @@ export function NewMessageModal({
                 onChange={(e) => setContactKey(e.target.value)}
                 placeholder="64-character hex public key"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contact-type">Type</Label>
+              <select
+                id="contact-type"
+                value={contactType}
+                onChange={(e) => setContactType(Number(e.target.value))}
+                className="block h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm"
+              >
+                <option value={1}>Client</option>
+                <option value={2}>Repeater</option>
+                <option value={3}>Room Server</option>
+              </select>
             </div>
           </TabsContent>
 

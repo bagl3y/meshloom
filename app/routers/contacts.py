@@ -315,6 +315,7 @@ async def create_contact(
     contact_upsert = ContactUpsert(
         public_key=lower_key,
         name=request.name,
+        type=request.type,
         on_radio=False,
     )
     await ContactRepository.upsert(contact_upsert)

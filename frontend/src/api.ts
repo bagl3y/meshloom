@@ -158,10 +158,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ public_keys: publicKeys }),
     }),
-  createContact: (publicKey: string, name?: string, tryHistorical?: boolean) =>
+  createContact: (publicKey: string, name?: string, tryHistorical?: boolean, type?: number) =>
     fetchJson<Contact>('/contacts', {
       method: 'POST',
-      body: JSON.stringify({ public_key: publicKey, name, try_historical: tryHistorical }),
+      body: JSON.stringify({ public_key: publicKey, name, type, try_historical: tryHistorical }),
     }),
   markContactRead: (publicKey: string) =>
     fetchJson<{ status: string; public_key: string }>(`/contacts/${publicKey}/mark-read`, {

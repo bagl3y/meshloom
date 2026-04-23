@@ -50,8 +50,8 @@ export function useContactsAndChannels({
   }, []);
 
   const handleCreateContact = useCallback(
-    async (name: string, publicKey: string, tryHistorical: boolean) => {
-      const created = await api.createContact(publicKey, name || undefined, tryHistorical);
+    async (name: string, publicKey: string, tryHistorical: boolean, type?: number) => {
+      const created = await api.createContact(publicKey, name || undefined, tryHistorical, type);
       const data = await fetchAllContacts();
       setContacts(data);
 

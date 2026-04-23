@@ -172,7 +172,7 @@ describe('NewMessageModal form reset', () => {
       await user.click(screen.getByRole('button', { name: 'Create' }));
 
       await waitFor(() => {
-        expect(onCreateContact).toHaveBeenCalledWith('Bob', 'bb'.repeat(32), false);
+        expect(onCreateContact).toHaveBeenCalledWith('Bob', 'bb'.repeat(32), false, 1);
       });
       expect(onClose).toHaveBeenCalled();
     });
