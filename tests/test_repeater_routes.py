@@ -722,6 +722,7 @@ class TestRepeaterStatus:
                 "flood_dups": 10,
                 "direct_dups": 5,
                 "full_evts": 0,
+                "recv_errors": 42,
             }
         )
 
@@ -741,6 +742,7 @@ class TestRepeaterStatus:
         assert response.uptime_seconds == 86400
         assert response.sent_flood == 100
         assert response.recv_direct == 700
+        assert response.recv_errors == 42
 
     @pytest.mark.asyncio
     async def test_504_on_timeout(self, test_db):

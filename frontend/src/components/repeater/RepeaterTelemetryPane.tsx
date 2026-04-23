@@ -91,6 +91,9 @@ export function TelemetryPane({
             label="Duplicates"
             value={`${data.flood_dups.toLocaleString()} flood / ${data.direct_dups.toLocaleString()} direct`}
           />
+          {data.recv_errors != null && (
+            <KvRow label="RX Errors" value={data.recv_errors.toLocaleString()} />
+          )}
           <Separator className="my-1" />
           <KvRow label="TX Queue" value={data.tx_queue_len} />
           <KvRow label="Debug Flags" value={data.full_events} />

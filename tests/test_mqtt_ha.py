@@ -125,7 +125,7 @@ class TestRadioDiscovery:
 class TestRepeaterDiscovery:
     def test_produces_sensor_per_field(self):
         configs = _repeater_discovery_configs("mc", "ccdd11223344", "Rep1", "aabb")
-        assert len(configs) == 7  # matches _REPEATER_SENSORS length
+        assert len(configs) == 8  # matches _REPEATER_SENSORS length
 
         topics = [t for t, _ in configs]
         assert "homeassistant/sensor/meshcore_ccdd11223344/battery_voltage/config" in topics

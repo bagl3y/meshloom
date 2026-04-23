@@ -135,6 +135,7 @@ class TestRoomStatus:
                 "flood_dups": 2,
                 "direct_dups": 1,
                 "full_evts": 0,
+                "recv_errors": 7,
             }
         )
 
@@ -147,6 +148,7 @@ class TestRoomStatus:
         assert response.battery_volts == 4.025
         assert response.packets_received == 80
         assert response.recv_direct == 73
+        assert response.recv_errors == 7
 
     @pytest.mark.asyncio
     async def test_room_acl_maps_entries(self, test_db):

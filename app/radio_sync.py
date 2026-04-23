@@ -1821,6 +1821,7 @@ async def _collect_repeater_telemetry(mc: MeshCore, contact: Contact) -> bool:
         "flood_dups": status.get("flood_dups", 0),
         "direct_dups": status.get("direct_dups", 0),
         "full_events": status.get("full_evts", 0),
+        "recv_errors": status.get("recv_errors"),
     }
 
     # Best-effort LPP sensor fetch — failure here does not fail the overall
