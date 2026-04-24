@@ -396,11 +396,6 @@ export function SettingsRadioSection({
 
     try {
       const update: AppSettingsUpdate = {};
-      const hours = parseInt(advertIntervalHours, 10);
-      const newAdvertInterval = isNaN(hours) ? 0 : hours * 3600;
-      if (newAdvertInterval !== appSettings.advert_interval) {
-        update.advert_interval = newAdvertInterval;
-      }
       if (floodScope !== stripRegionScopePrefix(appSettings.flood_scope)) {
         update.flood_scope = floodScope;
       }
@@ -416,6 +411,27 @@ export function SettingsRadioSection({
       setFloodError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setFloodBusy(false);
+    }
+  };
+
+  const [advertIntervalBusy, setAdvertIntervalBusy] = useState(false);
+  const [advertIntervalError, setAdvertIntervalError] = useState<string | null>(null);
+
+  const handleSaveAdvertInterval = async () => {
+    setAdvertIntervalError(null);
+    setAdvertIntervalBusy(true);
+
+    try {
+      const hours = parseInt(advertIntervalHours, 10);
+      const newAdvertInterval = isNaN(hours) ? 0 : hours * 3600;
+      if (newAdvertInterval !== appSettings.advert_interval) {
+        await onSaveAppSettings({ advert_interval: newAdvertInterval });
+      }
+      toast.success('Advertising interval saved');
+    } catch (err) {
+      setAdvertIntervalError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setAdvertIntervalBusy(false);
     }
   };
 
@@ -1109,6 +1125,18 @@ export function SettingsRadioSection({
             How often to automatically advertise presence. Set to 0 to disable. Minimum: 1 hour.
             Recommended: 24 hours or higher.
           </p>
+          {advertIntervalError && (
+            <div className="text-sm text-destructive" role="alert">
+              {advertIntervalError}
+            </div>
+          )}
+          <Button
+            onClick={handleSaveAdvertInterval}
+            disabled={advertIntervalBusy}
+            className="w-full"
+          >
+            {advertIntervalBusy ? 'Saving...' : 'Save Advertising Interval'}
+          </Button>
         </div>
 
         <div className="space-y-2">
