@@ -1,3 +1,11 @@
+## [3.12.3] - 2026-04-24
+
+* Feature: Customizable Apprise strings
+* Feature: Choose contact addition type
+* Featuer: Make bulk-delete sortable by last-heard
+* Misc: Bypass error on fail-to-unload-contact when it's not there
+* Misc: Docs & test updates
+
 ## [3.12.2] - 2026-04-21
 
 * Feature: Auto-disambiguate colliding LPP sensor names
