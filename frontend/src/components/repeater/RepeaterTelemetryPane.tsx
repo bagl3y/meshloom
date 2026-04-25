@@ -92,7 +92,19 @@ export function TelemetryPane({
             value={`${data.flood_dups.toLocaleString()} flood / ${data.direct_dups.toLocaleString()} direct`}
           />
           {data.recv_errors != null && (
-            <KvRow label="RX Errors" value={data.recv_errors.toLocaleString()} />
+            <KvRow
+              label="RX Errors"
+              value={
+                <>
+                  {data.recv_errors.toLocaleString()}
+                  {data.packets_received > 0 && (
+                    <Secondary>
+                      ({((data.recv_errors / data.packets_received) * 100).toFixed(2)}%)
+                    </Secondary>
+                  )}
+                </>
+              }
+            />
           )}
           <Separator className="my-1" />
           <KvRow label="TX Queue" value={data.tx_queue_len} />
