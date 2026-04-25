@@ -34,6 +34,13 @@ import {
 } from '../../utils/fontScale';
 import { getAutoFocusInputEnabled, setAutoFocusInputEnabled } from '../../utils/autoFocusInput';
 import {
+  getTextReplaceEnabled,
+  setTextReplaceEnabled as saveTextReplaceEnabled,
+  getTextReplaceMapJson,
+  setTextReplaceMapJson,
+  DEFAULT_MAP_JSON,
+} from '../../utils/textReplace';
+import {
   BATTERY_DISPLAY_CHANGE_EVENT,
   getShowBatteryPercent,
   setShowBatteryPercent as saveBatteryPercent,
@@ -232,6 +239,9 @@ export function SettingsLocalSection({
   const [batteryPercent, setBatteryPercent] = useState(getShowBatteryPercent);
   const [batteryVoltage, setBatteryVoltage] = useState(getShowBatteryVoltage);
   const [statusDotPulse, setStatusDotPulse] = useState(getStatusDotPulseEnabled);
+  const [textReplaceEnabled, setTextReplaceEnabled] = useState(getTextReplaceEnabled);
+  const [textReplaceJson, setTextReplaceJson] = useState(getTextReplaceMapJson);
+  const [textReplaceError, setTextReplaceError] = useState<string | null>(null);
   const [fontScale, setFontScale] = useState(getSavedFontScale);
   const [fontScaleSlider, setFontScaleSlider] = useState(getSavedFontScale);
   const [fontScaleInput, setFontScaleInput] = useState(() => String(getSavedFontScale()));
@@ -438,6 +448,63 @@ export function SettingsLocalSection({
                 for DM, cyan for advert, dark green for other.
               </p>
             </div>
+          </div>
+
+          <div className="rounded-md border border-border/60 p-3 space-y-2">
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="text-replace"
+                checked={textReplaceEnabled}
+                onCheckedChange={(checked) => {
+                  const v = checked === true;
+                  setTextReplaceEnabled(v);
+                  saveTextReplaceEnabled(v);
+                }}
+                className="mt-0.5"
+              />
+              <div className="space-y-1">
+                <Label htmlFor="text-replace">Replace as you Type</Label>
+                <p className="text-[0.8125rem] text-muted-foreground">
+                  Automatically replace characters as you type in the message input. Define
+                  replacements as a JSON object mapping source strings to their replacements.
+                </p>
+              </div>
+            </div>
+            {textReplaceEnabled && (
+              <div className="space-y-2 pl-7">
+                <textarea
+                  value={textReplaceJson}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setTextReplaceJson(val);
+                    setTextReplaceError(setTextReplaceMapJson(val));
+                  }}
+                  spellCheck={false}
+                  rows={10}
+                  className={cn(
+                    'w-full rounded-md border bg-background px-3 py-2 text-sm font-mono',
+                    textReplaceError ? 'border-destructive' : 'border-input'
+                  )}
+                  aria-label="Text replacement map (JSON)"
+                />
+                {textReplaceError && (
+                  <p className="text-xs text-destructive">
+                    {textReplaceError} Changes are not saved until this is resolved.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTextReplaceJson(DEFAULT_MAP_JSON);
+                    setTextReplaceMapJson(DEFAULT_MAP_JSON);
+                    setTextReplaceError(null);
+                  }}
+                  className="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Reset to Default
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

@@ -99,7 +99,12 @@ export function TelemetryPane({
                   {data.recv_errors.toLocaleString()}
                   {data.packets_received > 0 && (
                     <Secondary>
-                      ({((data.recv_errors / (data.packets_received + data.recv_errors)) * 100).toFixed(2)}%)
+                      (
+                      {(
+                        (data.recv_errors / (data.packets_received + data.recv_errors)) *
+                        100
+                      ).toFixed(2)}
+                      %)
                     </Secondary>
                   )}
                 </>
