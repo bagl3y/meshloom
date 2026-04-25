@@ -768,7 +768,7 @@ wheels = [
 
 [[package]]
 name = "meshcore"
-version = "2.3.2"
+version = "2.3.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bleak" },
@@ -776,9 +776,9 @@ dependencies = [
     { name = "pycryptodome" },
     { name = "pyserial-asyncio-fast" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4c/32/6e7a3e7dcc379888bc2bfcbbdf518af89e47b3697977cbfefd0b87fdf333/meshcore-2.3.2.tar.gz", hash = "sha256:98ceb8c28a8abe5b5b77f0941b30f99ba3d4fc2350f76de99b6c8a4e778dad6f", size = 69871 }
+sdist = { url = "https://files.pythonhosted.org/packages/50/d1/e45d8fa3cac24d58c3bc2523fe67b8cd00c05ea68e1704fbbaf56cb19753/meshcore-2.3.7.tar.gz", hash = "sha256:267107e09a96f7d0d63f4bdb1402d033a724baadd9c9becf9b71a458170f60bb", size = 90787 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/db/e4/9aafcd70315e48ca1bbae2f4ad1e00a13d5ef00019c486f964b31c34c488/meshcore-2.3.2-py3-none-any.whl", hash = "sha256:7b98e6d71f2c1e1ee146dd2fe96da40eb5bf33077e34ca840557ee53b192e322", size = 53325 },
+    { url = "https://files.pythonhosted.org/packages/80/3d/ff4b5971a3210da07dc793b54af9b1231fea42dfb87e2818fdcc83e10d72/meshcore-2.3.7-py3-none-any.whl", hash = "sha256:952f028b25527155e78103d01598fa3897cccfa793ba2028a32bc36c86759f14", size = 60352 },
 ]
 
 [[package]]
@@ -1569,7 +1569,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.38.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "meshcore", specifier = "==2.3.2" },
+    { name = "meshcore", specifier = "==2.3.7" },
     { name = "pycryptodome", specifier = ">=3.20.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
     { name = "pynacl", specifier = ">=1.5.0" },
