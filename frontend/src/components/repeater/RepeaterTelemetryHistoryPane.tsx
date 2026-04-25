@@ -17,7 +17,12 @@ import type { TelemetryHistoryEntry, TelemetryLppSensor, Contact } from '../../t
 
 const MAX_TRACKED = 8;
 
-type BuiltinMetric = 'battery_volts' | 'noise_floor_dbm' | 'packets' | 'uptime_seconds';
+type BuiltinMetric =
+  | 'battery_volts'
+  | 'noise_floor_dbm'
+  | 'packets'
+  | 'recv_errors'
+  | 'uptime_seconds';
 
 interface MetricConfig {
   label: string;
@@ -29,6 +34,7 @@ const BUILTIN_METRIC_CONFIG: Record<BuiltinMetric, MetricConfig> = {
   battery_volts: { label: 'Voltage', unit: 'V', color: '#22c55e' },
   noise_floor_dbm: { label: 'Noise Floor', unit: 'dBm', color: '#8b5cf6' },
   packets: { label: 'Packets', unit: '', color: '#0ea5e9' },
+  recv_errors: { label: 'RX Errors', unit: '', color: '#ef4444' },
   uptime_seconds: { label: 'Uptime', unit: 's', color: '#f59e0b' },
 };
 
@@ -154,6 +160,7 @@ export function TelemetryHistoryPane({
         noise_floor_dbm: d.noise_floor_dbm,
         packets_received: d.packets_received,
         packets_sent: d.packets_sent,
+        recv_errors: d.recv_errors ?? undefined,
         uptime_seconds: d.uptime_seconds,
       };
       // Flatten LPP sensors into the point, converting units as needed

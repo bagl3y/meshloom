@@ -31,6 +31,7 @@ SAMPLE_STATUS = {
     "flood_dups": 5,
     "direct_dups": 2,
     "full_events": 0,
+    "recv_errors": None,
 }
 
 

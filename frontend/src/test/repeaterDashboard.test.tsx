@@ -438,6 +438,7 @@ describe('RepeaterDashboard', () => {
       flood_dups: 1,
       direct_dups: 0,
       full_events: 0,
+      recv_errors: 5,
       telemetry_history: [],
     };
 
@@ -707,6 +708,7 @@ describe('RepeaterDashboard', () => {
         flood_dups: 1,
         direct_dups: 0,
         full_events: 0,
+        recv_errors: null,
         telemetry_history: [liveEntry],
       };
 
@@ -742,6 +744,7 @@ describe('RepeaterDashboard', () => {
         flood_dups: 1,
         direct_dups: 0,
         full_events: 0,
+        recv_errors: null,
         telemetry_history: [{ timestamp: 1700000000, data: { battery_volts: 4.2 } }],
       };
 

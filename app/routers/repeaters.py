@@ -133,6 +133,7 @@ async def repeater_status(public_key: str) -> RepeaterStatusResponse:
         flood_dups=status.get("flood_dups", 0),
         direct_dups=status.get("direct_dups", 0),
         full_events=status.get("full_evts", 0),
+        recv_errors=status.get("recv_errors"),
     )
 
     # Record to telemetry history as a JSON blob (best-effort)

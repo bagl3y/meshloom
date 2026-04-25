@@ -82,6 +82,15 @@ _REPEATER_SENSORS: list[dict[str, Any]] = [
         "precision": 0,
     },
     {
+        "field": "recv_errors",
+        "name": "RX Errors",
+        "object_id": "recv_errors",
+        "device_class": None,
+        "state_class": "total_increasing",
+        "unit": None,
+        "precision": 0,
+    },
+    {
         "field": "uptime_seconds",
         "name": "Uptime",
         "object_id": "uptime",

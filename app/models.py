@@ -540,6 +540,7 @@ class RepeaterStatusResponse(BaseModel):
     flood_dups: int = Field(description="Duplicate flood packets")
     direct_dups: int = Field(description="Duplicate direct packets")
     full_events: int = Field(description="Full event queue count")
+    recv_errors: int | None = Field(default=None, description="Radio-level RX packet errors")
     telemetry_history: list["TelemetryHistoryEntry"] = Field(
         default_factory=list, description="Recent telemetry history snapshots"
     )
