@@ -576,12 +576,32 @@ class MqttHaModule(FanoutModule):
                     )
                 )
 
-        # Tracked contacts — resolve names from DB best-effort
+        # Tracked contacts — resolve names and LPP sensors from DB best-effort
         for pub_key in self._tracked_contacts:
             cname = await self._resolve_contact_name(pub_key)
             configs.append(
                 _contact_tracker_discovery_config(self._prefix, pub_key, cname, self._radio_key)
             )
+            # LPP sensor entities for contacts with telemetry history
+            latest_ct = await self._resolve_latest_contact_telemetry(pub_key)
+            latest_ct_data = latest_ct.get("data", {}) if latest_ct else {}
+            ct_lpp_sensors = latest_ct_data.get("lpp_sensors", [])
+            if ct_lpp_sensors:
+                ct_nid = _node_id(pub_key)
+                ct_device = _device_payload(
+                    pub_key, cname, "Node", via_device_key=self._radio_key
+                )
+                ct_state_topic = f"{self._prefix}/{ct_nid}/telemetry"
+                configs.extend(
+                    _lpp_discovery_configs(
+                        self._prefix, pub_key, ct_device, ct_lpp_sensors, ct_state_topic
+                    )
+                )
+            if latest_ct_data:
+                ct_payload = _repeater_telemetry_payload(latest_ct_data)
+                cached_repeater_states.append(
+                    (f"{self._prefix}/{_node_id(pub_key)}/telemetry", ct_payload)
+                )
 
         # Message event entity (namespaced to this radio)
         configs.append(_message_event_discovery_config(self._prefix, self._radio_key, radio_name))
@@ -640,6 +660,17 @@ class MqttHaModule(FanoutModule):
             from app.repository.repeater_telemetry import RepeaterTelemetryRepository
 
             return await RepeaterTelemetryRepository.get_latest(pub_key)
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    async def _resolve_latest_contact_telemetry(pub_key: str) -> dict | None:
+        """Return the most recent contact telemetry row, or None."""
+        try:
+            from app.repository.contact_telemetry import ContactTelemetryRepository
+
+            return await ContactTelemetryRepository.get_latest(pub_key)
         except Exception:
             pass
         return None
@@ -749,7 +780,7 @@ class MqttHaModule(FanoutModule):
             return
 
         pub_key = data.get("public_key", "")
-        if pub_key not in self._tracked_repeaters:
+        if pub_key not in self._tracked_repeaters and pub_key not in self._tracked_contacts:
             return
 
         nid = _node_id(pub_key)

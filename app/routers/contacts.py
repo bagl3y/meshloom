@@ -663,6 +663,20 @@ async def request_contact_telemetry(public_key: str) -> ContactTelemetryResponse
         data=data,
     )
 
+    # Dispatch to fanout modules (e.g. HA MQTT)
+    from app.fanout.manager import fanout_manager
+
+    asyncio.create_task(
+        fanout_manager.broadcast_telemetry(
+            {
+                "public_key": contact.public_key,
+                "name": contact.name or contact.public_key[:12],
+                "timestamp": fetched_at,
+                **data,
+            }
+        )
+    )
+
     # Fetch recent history (30 days)
     since = fetched_at - 30 * 86400
     rows = await ContactTelemetryRepository.get_history(contact.public_key, since)
