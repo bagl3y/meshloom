@@ -183,6 +183,9 @@ export function SettingsRadioSection({
   const [pathHashMode, setPathHashMode] = useState('0');
   const [advertLocationSource, setAdvertLocationSource] = useState<'off' | 'current'>('current');
   const [multiAcksEnabled, setMultiAcksEnabled] = useState(false);
+  const [telemetryModeBase, setTelemetryModeBase] = useState(0);
+  const [telemetryModeLoc, setTelemetryModeLoc] = useState(0);
+  const [telemetryModeEnv, setTelemetryModeEnv] = useState(0);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rebooting, setRebooting] = useState(false);
@@ -218,6 +221,9 @@ export function SettingsRadioSection({
     setPathHashMode(String(config.path_hash_mode));
     setAdvertLocationSource(config.advert_location_source ?? 'current');
     setMultiAcksEnabled(config.multi_acks_enabled ?? false);
+    setTelemetryModeBase(config.telemetry_mode_base ?? 0);
+    setTelemetryModeLoc(config.telemetry_mode_loc ?? 0);
+    setTelemetryModeEnv(config.telemetry_mode_env ?? 0);
   }, [config]);
 
   useEffect(() => {
@@ -312,6 +318,15 @@ export function SettingsRadioSection({
         : {}),
       ...(multiAcksEnabled !== (config.multi_acks_enabled ?? false)
         ? { multi_acks_enabled: multiAcksEnabled }
+        : {}),
+      ...(telemetryModeBase !== (config.telemetry_mode_base ?? 0)
+        ? { telemetry_mode_base: telemetryModeBase }
+        : {}),
+      ...(telemetryModeLoc !== (config.telemetry_mode_loc ?? 0)
+        ? { telemetry_mode_loc: telemetryModeLoc }
+        : {}),
+      ...(telemetryModeEnv !== (config.telemetry_mode_env ?? 0)
+        ? { telemetry_mode_env: telemetryModeEnv }
         : {}),
       radio: {
         freq: parsedFreq,
@@ -468,6 +483,9 @@ export function SettingsRadioSection({
     path_hash_mode: config.path_hash_mode,
     advert_location_source: config.advert_location_source ?? 'current',
     multi_acks_enabled: config.multi_acks_enabled ?? false,
+    telemetry_mode_base: config.telemetry_mode_base ?? 0,
+    telemetry_mode_loc: config.telemetry_mode_loc ?? 0,
+    telemetry_mode_env: config.telemetry_mode_env ?? 0,
   });
 
   const downloadJson = (profile: object, suffix: string) => {
@@ -539,6 +557,10 @@ export function SettingsRadioSection({
     if (data.advert_location_source === 'off' || data.advert_location_source === 'current')
       setAdvertLocationSource(data.advert_location_source);
     if (typeof data.multi_acks_enabled === 'boolean') setMultiAcksEnabled(data.multi_acks_enabled);
+    if (typeof data.telemetry_mode_base === 'number')
+      setTelemetryModeBase(data.telemetry_mode_base);
+    if (typeof data.telemetry_mode_loc === 'number') setTelemetryModeLoc(data.telemetry_mode_loc);
+    if (typeof data.telemetry_mode_env === 'number') setTelemetryModeEnv(data.telemetry_mode_env);
   };
 
   const buildUpdateFromImport = (data: Record<string, unknown>): RadioConfigUpdate => {
@@ -554,6 +576,12 @@ export function SettingsRadioSection({
       update.advert_location_source = data.advert_location_source;
     if (typeof data.multi_acks_enabled === 'boolean')
       update.multi_acks_enabled = data.multi_acks_enabled;
+    if (typeof data.telemetry_mode_base === 'number')
+      update.telemetry_mode_base = data.telemetry_mode_base as number;
+    if (typeof data.telemetry_mode_loc === 'number')
+      update.telemetry_mode_loc = data.telemetry_mode_loc as number;
+    if (typeof data.telemetry_mode_env === 'number')
+      update.telemetry_mode_env = data.telemetry_mode_env as number;
     if (config.path_hash_mode_supported && typeof data.path_hash_mode === 'number')
       update.path_hash_mode = data.path_hash_mode as number;
     return update;
@@ -951,6 +979,66 @@ export function SettingsRadioSection({
             is already updating them. RemoteTerm cannot enable GPS on the node through the interface
             library.
           </p>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* ── Telemetry Sharing ── */}
+      <div className="space-y-3">
+        <h3 className="text-base font-semibold tracking-tight">Telemetry Sharing</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">
+          Controls what this radio shares when other nodes request its telemetry. &ldquo;Deny&rdquo;
+          blocks all requests, &ldquo;Per-Contact&rdquo; uses per-contact permission flags on the
+          radio, and &ldquo;Allow All&rdquo; shares with any requester.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="telemetry-mode-base" className="text-sm">
+              Battery &amp; Base
+            </Label>
+            <select
+              id="telemetry-mode-base"
+              value={telemetryModeBase}
+              onChange={(e) => setTelemetryModeBase(Number(e.target.value))}
+              className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              <option value={0}>Deny</option>
+              <option value={1}>Per-Contact</option>
+              <option value={2}>Allow All</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="telemetry-mode-loc" className="text-sm">
+              Location
+            </Label>
+            <select
+              id="telemetry-mode-loc"
+              value={telemetryModeLoc}
+              onChange={(e) => setTelemetryModeLoc(Number(e.target.value))}
+              className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              <option value={0}>Deny</option>
+              <option value={1}>Per-Contact</option>
+              <option value={2}>Allow All</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="telemetry-mode-env" className="text-sm">
+              Environment Sensors
+            </Label>
+            <select
+              id="telemetry-mode-env"
+              value={telemetryModeEnv}
+              onChange={(e) => setTelemetryModeEnv(Number(e.target.value))}
+              className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              <option value={0}>Deny</option>
+              <option value={1}>Per-Contact</option>
+              <option value={2}>Allow All</option>
+            </select>
+          </div>
         </div>
       </div>
 
