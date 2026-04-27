@@ -588,9 +588,7 @@ class MqttHaModule(FanoutModule):
             ct_lpp_sensors = latest_ct_data.get("lpp_sensors", [])
             if ct_lpp_sensors:
                 ct_nid = _node_id(pub_key)
-                ct_device = _device_payload(
-                    pub_key, cname, "Node", via_device_key=self._radio_key
-                )
+                ct_device = _device_payload(pub_key, cname, "Node", via_device_key=self._radio_key)
                 ct_state_topic = f"{self._prefix}/{ct_nid}/telemetry"
                 configs.extend(
                     _lpp_discovery_configs(
