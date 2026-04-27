@@ -70,6 +70,7 @@ const baseSettings: AppSettings = {
   blocked_names: [],
   discovery_blocked_types: [],
   tracked_telemetry_repeaters: [],
+  tracked_telemetry_contacts: [],
   auto_resend_channel: false,
   telemetry_interval_hours: 8,
   telemetry_routed_hourly: false,

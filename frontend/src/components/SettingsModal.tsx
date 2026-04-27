@@ -54,6 +54,8 @@ interface SettingsModalBaseProps {
   onBulkDeleteContacts?: (deletedKeys: string[]) => void;
   trackedTelemetryRepeaters?: string[];
   onToggleTrackedTelemetry?: (publicKey: string) => Promise<void>;
+  trackedTelemetryContacts?: string[];
+  onToggleTrackedTelemetryContact?: (publicKey: string) => Promise<void>;
 }
 
 export type SettingsModalProps = SettingsModalBaseProps &
@@ -92,6 +94,8 @@ export function SettingsModal(props: SettingsModalProps) {
     onBulkDeleteContacts,
     trackedTelemetryRepeaters,
     onToggleTrackedTelemetry,
+    trackedTelemetryContacts,
+    onToggleTrackedTelemetryContact,
   } = props;
   const externalSidebarNav = props.externalSidebarNav === true;
   const desktopSection = props.externalSidebarNav ? props.desktopSection : undefined;
@@ -257,6 +261,8 @@ export function SettingsModal(props: SettingsModalProps) {
                 onBulkDeleteContacts={onBulkDeleteContacts}
                 trackedTelemetryRepeaters={trackedTelemetryRepeaters}
                 onToggleTrackedTelemetry={onToggleTrackedTelemetry}
+                trackedTelemetryContacts={trackedTelemetryContacts}
+                onToggleTrackedTelemetryContact={onToggleTrackedTelemetryContact}
                 className={sectionContentClass}
               />
             ) : (

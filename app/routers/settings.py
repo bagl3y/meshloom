@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 MAX_TRACKED_TELEMETRY_REPEATERS = 8
+MAX_TRACKED_TELEMETRY_CONTACTS = 8
 
 
 class AppSettingsUpdate(BaseModel):
@@ -350,6 +351,8 @@ async def toggle_tracked_telemetry(request: TrackedTelemetryRequest) -> TrackedT
             names[k] = contact.name if contact and contact.name else k[:12]
         return names
 
+    n_contacts = len(settings.tracked_telemetry_contacts)
+
     if key in current:
         # Remove
         new_list = [k for k in current if k != key]
@@ -359,7 +362,7 @@ async def toggle_tracked_telemetry(request: TrackedTelemetryRequest) -> TrackedT
             tracked_telemetry_repeaters=new_list,
             names=await _resolve_names(new_list),
             schedule=_build_schedule(
-                len(new_list),
+                len(new_list) + n_contacts,
                 settings.telemetry_interval_hours,
                 settings.telemetry_routed_hourly,
             ),
@@ -390,7 +393,7 @@ async def toggle_tracked_telemetry(request: TrackedTelemetryRequest) -> TrackedT
         tracked_telemetry_repeaters=new_list,
         names=await _resolve_names(new_list),
         schedule=_build_schedule(
-            len(new_list),
+            len(new_list) + n_contacts,
             settings.telemetry_interval_hours,
             settings.telemetry_routed_hourly,
         ),
@@ -404,10 +407,117 @@ async def get_telemetry_schedule() -> TelemetrySchedule:
     The UI uses this to render the interval dropdown (legal options),
     surface saved-vs-effective when they differ, and show the next-run-at
     timestamp so users know when the next cycle will fire.
+
+    The tracked count includes both repeaters and contacts for ceiling
+    enforcement.
     """
     app_settings = await AppSettingsRepository.get()
+    combined_count = len(app_settings.tracked_telemetry_repeaters) + len(
+        app_settings.tracked_telemetry_contacts
+    )
     return _build_schedule(
-        len(app_settings.tracked_telemetry_repeaters),
+        combined_count,
+        app_settings.telemetry_interval_hours,
+        app_settings.telemetry_routed_hourly,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tracked contact telemetry (non-repeater LPP telemetry collection)
+# ---------------------------------------------------------------------------
+
+
+class TrackedTelemetryContactsResponse(BaseModel):
+    tracked_telemetry_contacts: list[str] = Field(
+        description="Current list of tracked contact public keys"
+    )
+    names: dict[str, str] = Field(
+        description="Map of public key to display name for tracked contacts"
+    )
+    schedule: TelemetrySchedule = Field(description="Current scheduling state")
+
+
+@router.post("/tracked-telemetry-contacts/toggle", response_model=TrackedTelemetryContactsResponse)
+async def toggle_tracked_telemetry_contact(
+    request: TrackedTelemetryRequest,
+) -> TrackedTelemetryContactsResponse:
+    """Toggle periodic LPP telemetry collection for any contact.
+
+    Max 8 contacts may be tracked. The daily check ceiling is shared with
+    tracked repeaters.
+    """
+    key = request.public_key.lower()
+    settings = await AppSettingsRepository.get()
+    current = settings.tracked_telemetry_contacts
+
+    async def _resolve_names(keys: list[str]) -> dict[str, str]:
+        names: dict[str, str] = {}
+        for k in keys:
+            contact = await ContactRepository.get_by_key(k)
+            names[k] = contact.name if contact and contact.name else k[:12]
+        return names
+
+    def combined_count(lst: list[str]) -> int:
+        return len(settings.tracked_telemetry_repeaters) + len(lst)
+
+    if key in current:
+        # Remove
+        new_list = [k for k in current if k != key]
+        logger.info("Removing contact %s from tracked telemetry", key[:12])
+        await AppSettingsRepository.update(tracked_telemetry_contacts=new_list)
+        return TrackedTelemetryContactsResponse(
+            tracked_telemetry_contacts=new_list,
+            names=await _resolve_names(new_list),
+            schedule=_build_schedule(
+                combined_count(new_list),
+                settings.telemetry_interval_hours,
+                settings.telemetry_routed_hourly,
+            ),
+        )
+
+    # Validate contact exists
+    contact = await ContactRepository.get_by_key(key)
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+
+    if len(current) >= MAX_TRACKED_TELEMETRY_CONTACTS:
+        names = await _resolve_names(current)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": f"Limit of {MAX_TRACKED_TELEMETRY_CONTACTS} tracked contacts reached",
+                "tracked_telemetry_contacts": current,
+                "names": names,
+            },
+        )
+
+    new_list = current + [key]
+    logger.info("Adding contact %s to tracked telemetry", key[:12])
+    await AppSettingsRepository.update(tracked_telemetry_contacts=new_list)
+    return TrackedTelemetryContactsResponse(
+        tracked_telemetry_contacts=new_list,
+        names=await _resolve_names(new_list),
+        schedule=_build_schedule(
+            combined_count(new_list),
+            settings.telemetry_interval_hours,
+            settings.telemetry_routed_hourly,
+        ),
+    )
+
+
+@router.get("/tracked-telemetry-contacts/schedule", response_model=TelemetrySchedule)
+async def get_contact_telemetry_schedule() -> TelemetrySchedule:
+    """Return the current telemetry scheduling derivation for contacts.
+
+    Uses the combined tracked count (repeaters + contacts) for ceiling
+    enforcement since they share one collection loop.
+    """
+    app_settings = await AppSettingsRepository.get()
+    combined_count = len(app_settings.tracked_telemetry_repeaters) + len(
+        app_settings.tracked_telemetry_contacts
+    )
+    return _build_schedule(
+        combined_count,
         app_settings.telemetry_interval_hours,
         app_settings.telemetry_routed_hourly,
     )

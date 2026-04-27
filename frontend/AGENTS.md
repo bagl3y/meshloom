@@ -361,7 +361,7 @@ Distance/validation helpers used by path + map UI.
 - `last_advert_time`
 - `flood_scope`
 - `blocked_keys`, `blocked_names`, `discovery_blocked_types`
-- `tracked_telemetry_repeaters`
+- `tracked_telemetry_repeaters`, `tracked_telemetry_contacts`
 - `auto_resend_channel`
 - `telemetry_interval_hours`
 
@@ -382,6 +382,7 @@ Clicking a contact's avatar in `ChatHeader` or `MessageList` opens a `ContactInf
 - Header: avatar, name, public key, type badge, on-radio badge
 - Info grid: last seen, first heard, last contacted, distance, hops
 - GPS location (clickable → map)
+- On-demand LPP telemetry: "Request" button fetches `POST /contacts/{key}/telemetry`, displays sensor readings via `LppSensorRow`, optional GPS mini-map (Leaflet), and history chart (Recharts). Opt-in tracking toggle uses `POST /settings/tracked-telemetry-contacts/toggle`.
 - Favorite toggle
 - Name history ("Also Known As") — shown only when the contact has used multiple names
 - Message stats: DM count, channel message count

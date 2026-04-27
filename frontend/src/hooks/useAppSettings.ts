@@ -113,6 +113,39 @@ export function useAppSettings() {
     }
   }, []);
 
+  const handleToggleTrackedTelemetryContact = useCallback(async (publicKey: string) => {
+    const key = publicKey.toLowerCase();
+    setAppSettings((prev) => {
+      if (!prev) return prev;
+      const current = prev.tracked_telemetry_contacts ?? [];
+      const wasTracked = current.includes(key);
+      const optimistic = wasTracked ? current.filter((k) => k !== key) : [...current, key];
+      return { ...prev, tracked_telemetry_contacts: optimistic };
+    });
+
+    try {
+      const result = await api.toggleTrackedTelemetryContact(publicKey);
+      setAppSettings((prev) =>
+        prev ? { ...prev, tracked_telemetry_contacts: result.tracked_telemetry_contacts } : prev
+      );
+    } catch (err) {
+      console.error('Failed to toggle tracked contact telemetry:', err);
+      try {
+        const settings = await api.getSettings();
+        setAppSettings(settings);
+      } catch {
+        // If refetch also fails, leave optimistic state
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const detail = (err as any)?.body?.detail;
+      if (typeof detail === 'object' && detail?.message) {
+        toast.error(detail.message);
+      } else {
+        toast.error('Failed to update tracked contact telemetry');
+      }
+    }
+  }, []);
+
   // Legacy favorites migration: if pre-server-side favorites exist in
   // localStorage, toggle each one via the existing API and clear the key.
   useEffect(() => {
@@ -153,5 +186,6 @@ export function useAppSettings() {
     handleToggleBlockedKey,
     handleToggleBlockedName,
     handleToggleTrackedTelemetry,
+    handleToggleTrackedTelemetryContact,
   };
 }

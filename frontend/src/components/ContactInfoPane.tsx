@@ -1,6 +1,8 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { Ban, Search, Star } from 'lucide-react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { Activity, Ban, ChevronDown, ChevronRight, Search, Star } from 'lucide-react';
 import {
+  AreaChart,
+  Area,
   LineChart,
   Line,
   XAxis,
@@ -10,6 +12,8 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import { api, isAbortError } from '../api';
 import { formatTime } from '../utils/messageParser';
 import {
@@ -31,6 +35,7 @@ import { isPublicChannelKey } from '../utils/publicChannel';
 import { getMapFocusHash } from '../utils/urlHash';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { ContactAvatar } from './ContactAvatar';
+import { LppSensorRow, formatLppLabel } from './repeater/repeaterPaneShared';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
 import { toast } from './ui/sonner';
 import { useDistanceUnit } from '../contexts/DistanceUnitContext';
@@ -41,7 +46,10 @@ import type {
   ContactAnalytics,
   ContactAnalyticsHourlyBucket,
   ContactAnalyticsWeeklyBucket,
+  LppSensor,
   RadioConfig,
+  TelemetryHistoryEntry,
+  TelemetryLppSensor,
 } from '../types';
 
 const CONTACT_TYPE_LABELS: Record<number, string> = {
@@ -96,6 +104,8 @@ export function ContactInfoPane({
 
   const [analytics, setAnalytics] = useState<ContactAnalytics | null>(null);
   const [loading, setLoading] = useState(false);
+  const [telemetryLoading, setTelemetryLoading] = useState(false);
+  const [telemetryHistory, setTelemetryHistory] = useState<TelemetryHistoryEntry[]>([]);
 
   // Get live contact data from contacts array (real-time via WS)
   const liveContact =
@@ -132,6 +142,41 @@ export function ContactInfoPane({
       controller.abort();
     };
   }, [contactKey, isNameOnly, nameOnlyValue]);
+
+  // Load telemetry history when pane opens for a contact
+  useEffect(() => {
+    if (!contactKey || isNameOnly) {
+      setTelemetryHistory([]);
+      return;
+    }
+    let cancelled = false;
+    api
+      .contactTelemetryHistory(contactKey)
+      .then((data) => {
+        if (!cancelled) setTelemetryHistory(data);
+      })
+      .catch(() => {
+        if (!cancelled) setTelemetryHistory([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [contactKey, isNameOnly]);
+
+  const handleFetchTelemetry = useCallback(async () => {
+    if (!contactKey || isNameOnly) return;
+    setTelemetryLoading(true);
+    try {
+      const result = await api.requestContactTelemetry(contactKey);
+      setTelemetryHistory(result.telemetry_history);
+    } catch (err) {
+      if (!isAbortError(err)) {
+        toast.error(err instanceof Error ? err.message : 'Failed to fetch telemetry');
+      }
+    } finally {
+      setTelemetryLoading(false);
+    }
+  }, [contactKey, isNameOnly]);
 
   // Use live contact data where available, fall back to analytics snapshot
   const contact = liveContact ?? analytics?.contact ?? null;
@@ -370,6 +415,14 @@ export function ContactInfoPane({
                 </span>
               </div>
             )}
+
+            {/* Contact Telemetry */}
+            <ContactTelemetrySection
+              contact={contact}
+              loading={telemetryLoading}
+              onFetch={handleFetchTelemetry}
+              telemetryHistory={telemetryHistory}
+            />
 
             {/* Favorite toggle */}
             <div className="px-5 py-3 border-b border-border">
@@ -906,6 +959,279 @@ function InfoItem({ label, value }: { label: string; value: ReactNode }) {
     <div>
       <span className="text-muted-foreground text-xs">{label}</span>
       <p className="font-medium text-sm leading-tight">{value}</p>
+    </div>
+  );
+}
+
+// Stable color rotation for dynamic LPP sensors in the history chart
+const LPP_CHART_COLORS = ['#22c55e', '#8b5cf6', '#0ea5e9', '#ef4444', '#f59e0b', '#ec4899'];
+
+function ContactTelemetrySection({
+  contact,
+  loading,
+  onFetch,
+  telemetryHistory,
+}: {
+  contact: Contact;
+  loading: boolean;
+  onFetch: () => void;
+  telemetryHistory: TelemetryHistoryEntry[];
+}) {
+  const { distanceUnit } = useDistanceUnit();
+  const [expanded, setExpanded] = useState(true);
+  const [mapExpanded, setMapExpanded] = useState(false);
+  const [chartExpanded, setChartExpanded] = useState(false);
+
+  // Latest telemetry snapshot from history
+  const latestEntry =
+    telemetryHistory.length > 0 ? telemetryHistory[telemetryHistory.length - 1] : null;
+  const sensors: LppSensor[] = useMemo(() => {
+    if (!latestEntry?.data?.lpp_sensors) return [];
+    return latestEntry.data.lpp_sensors.map((s: TelemetryLppSensor) => ({
+      channel: s.channel,
+      type_name: s.type_name,
+      value: s.value,
+    }));
+  }, [latestEntry]);
+  const fetchedAt = latestEntry?.timestamp ?? null;
+
+  // Extract GPS from sensors
+  const gpsSensor = sensors.find(
+    (s) => s.type_name === 'gps' && typeof s.value === 'object' && s.value !== null
+  );
+  const gpsValue = gpsSensor?.value as Record<string, number> | undefined;
+  const hasGps =
+    gpsValue != null &&
+    typeof gpsValue.latitude === 'number' &&
+    typeof gpsValue.longitude === 'number';
+
+  // Non-GPS sensors for display
+  const displaySensors = sensors.filter((s) => s.type_name !== 'gps');
+
+  // Build disambiguated labels
+  const labels = useMemo(() => {
+    const counts = new Map<string, number>();
+    return displaySensors.map((s) => {
+      const base = `${s.type_name}_${s.channel}`;
+      const n = (counts.get(base) ?? 0) + 1;
+      counts.set(base, n);
+      return formatLppLabel(s.type_name) + (n > 1 ? ` (${n})` : '');
+    });
+  }, [displaySensors]);
+
+  // Discover unique LPP sensor series from history for charting
+  const sensorSeries = useMemo(() => {
+    const seen = new Map<string, { type_name: string; channel: number }>();
+    for (const entry of telemetryHistory) {
+      for (const s of entry.data?.lpp_sensors ?? []) {
+        if (typeof s.value !== 'number') continue;
+        const key = `${s.type_name}_ch${s.channel}`;
+        if (!seen.has(key)) seen.set(key, { type_name: s.type_name, channel: s.channel });
+      }
+    }
+    return Array.from(seen.entries()).map(([key, info], i) => ({
+      key,
+      label: formatLppLabel(info.type_name),
+      color: LPP_CHART_COLORS[i % LPP_CHART_COLORS.length],
+      ...info,
+    }));
+  }, [telemetryHistory]);
+
+  const [selectedMetric, setSelectedMetric] = useState<string | null>(null);
+  const activeMetric = selectedMetric ?? (sensorSeries.length > 0 ? sensorSeries[0].key : null);
+
+  // Build chart data for selected metric
+  const chartData = useMemo(() => {
+    if (!activeMetric) return [];
+    const series = sensorSeries.find((s) => s.key === activeMetric);
+    if (!series) return [];
+    return telemetryHistory
+      .filter((e) => e.data?.lpp_sensors)
+      .map((e) => {
+        const sensor = (e.data.lpp_sensors ?? []).find(
+          (s: TelemetryLppSensor) =>
+            s.type_name === series.type_name && s.channel === series.channel
+        );
+        return {
+          time: e.timestamp,
+          value: sensor && typeof sensor.value === 'number' ? sensor.value : null,
+        };
+      })
+      .filter((d) => d.value !== null);
+  }, [telemetryHistory, activeMetric, sensorSeries]);
+
+  const activeSeries = sensorSeries.find((s) => s.key === activeMetric);
+
+  return (
+    <div className="px-5 py-3 border-b border-border">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          className="flex items-center gap-1.5 text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium"
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+          Telemetry
+        </button>
+        <button
+          type="button"
+          onClick={onFetch}
+          disabled={loading}
+          className="text-xs px-2 py-0.5 rounded border border-border hover:bg-accent disabled:opacity-50 transition-colors flex items-center gap-1"
+        >
+          <Activity className="h-3 w-3" />
+          {loading ? 'Fetching...' : 'Request'}
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="mt-2">
+          {sensors.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">
+              {fetchedAt ? 'No sensor data in last response' : 'Not yet fetched'}
+            </p>
+          ) : (
+            <>
+              <div className="space-y-0.5">
+                {displaySensors.map((sensor, i) => (
+                  <LppSensorRow
+                    key={`${sensor.type_name}-${sensor.channel}-${i}`}
+                    sensor={sensor}
+                    unitPref={distanceUnit}
+                    label={labels[i]}
+                  />
+                ))}
+              </div>
+
+              {hasGps && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                    onClick={() => setMapExpanded(!mapExpanded)}
+                  >
+                    {mapExpanded ? (
+                      <ChevronDown className="h-3 w-3" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3" />
+                    )}
+                    GPS: {gpsValue!.latitude.toFixed(5)}, {gpsValue!.longitude.toFixed(5)}
+                  </button>
+                  {mapExpanded && (
+                    <div className="mt-1 h-48 rounded border border-border overflow-hidden">
+                      <MapContainer
+                        center={[gpsValue!.latitude, gpsValue!.longitude]}
+                        zoom={13}
+                        className="h-full w-full"
+                        style={{ background: '#1a1a2e' }}
+                      >
+                        <TileLayer
+                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
+                        <CircleMarker
+                          center={[gpsValue!.latitude, gpsValue!.longitude]}
+                          radius={7}
+                          pathOptions={{
+                            color: '#1d4ed8',
+                            fillColor: '#3b82f6',
+                            fillOpacity: 1,
+                            weight: 2,
+                          }}
+                        >
+                          <Popup>
+                            <span className="text-sm">
+                              {contact.name ?? contact.public_key.slice(0, 12)}
+                            </span>
+                          </Popup>
+                        </CircleMarker>
+                      </MapContainer>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {fetchedAt && (
+                <p className="text-[0.6875rem] text-muted-foreground mt-1.5">
+                  Fetched {formatTime(fetchedAt)}
+                </p>
+              )}
+            </>
+          )}
+
+          {/* History chart */}
+          {telemetryHistory.length > 1 && sensorSeries.length > 0 && (
+            <div className="mt-2">
+              <button
+                type="button"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                onClick={() => setChartExpanded(!chartExpanded)}
+              >
+                {chartExpanded ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+                History ({telemetryHistory.length} samples)
+              </button>
+              {chartExpanded && (
+                <div className="mt-1">
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {sensorSeries.map((s) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => setSelectedMetric(s.key)}
+                        className={`text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded transition-colors ${
+                          activeMetric === s.key
+                            ? 'bg-primary/10 text-primary'
+                            : 'bg-muted text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                  {chartData.length > 1 && activeSeries && (
+                    <ResponsiveContainer width="100%" height={120}>
+                      <AreaChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis
+                          dataKey="time"
+                          tickFormatter={(t: number) => {
+                            const d = new Date(t * 1000);
+                            return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`;
+                          }}
+                          fontSize={9}
+                          tick={{ fill: 'var(--muted-foreground)' }}
+                        />
+                        <YAxis fontSize={9} tick={{ fill: 'var(--muted-foreground)' }} width={40} />
+                        <RechartsTooltip
+                          labelFormatter={(t) => new Date(Number(t) * 1000).toLocaleString()}
+                          contentStyle={{
+                            backgroundColor: 'var(--popover)',
+                            border: '1px solid var(--border)',
+                            fontSize: '0.75rem',
+                          }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="value"
+                          name={activeSeries.label}
+                          stroke={activeSeries.color}
+                          fill={activeSeries.color}
+                          fillOpacity={0.15}
+                          dot={false}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

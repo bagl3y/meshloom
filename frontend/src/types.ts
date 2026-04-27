@@ -359,6 +359,7 @@ export interface AppSettings {
   blocked_names: string[];
   discovery_blocked_types: number[];
   tracked_telemetry_repeaters: string[];
+  tracked_telemetry_contacts: string[];
   auto_resend_channel: boolean;
   telemetry_interval_hours: number;
   telemetry_routed_hourly: boolean;
@@ -490,6 +491,18 @@ export interface LppSensor {
 
 export interface RepeaterLppTelemetryResponse {
   sensors: LppSensor[];
+}
+
+export interface ContactTelemetryResponse {
+  sensors: LppSensor[];
+  fetched_at: number;
+  telemetry_history: TelemetryHistoryEntry[];
+}
+
+export interface TrackedTelemetryContactsResponse {
+  tracked_telemetry_contacts: string[];
+  names: Record<string, string>;
+  schedule: TelemetrySchedule;
 }
 
 export type PaneName =

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -42,7 +44,7 @@ class ContactUpsert(BaseModel):
     first_seen: int | None = None
 
     @classmethod
-    def from_contact(cls, contact: "Contact", **changes) -> "ContactUpsert":
+    def from_contact(cls, contact: Contact, **changes) -> ContactUpsert:
         return cls.model_validate(
             {
                 **contact.model_dump(exclude={"last_read_at"}),
@@ -53,7 +55,7 @@ class ContactUpsert(BaseModel):
     @classmethod
     def from_radio_dict(
         cls, public_key: str, radio_data: dict, on_radio: bool = False
-    ) -> "ContactUpsert":
+    ) -> ContactUpsert:
         """Convert radio contact data to the contact-row write shape."""
         direct_path, direct_path_len, direct_path_hash_mode = normalize_contact_route(
             radio_data.get("out_path"),
@@ -543,7 +545,7 @@ class RepeaterStatusResponse(BaseModel):
     direct_dups: int = Field(description="Duplicate direct packets")
     full_events: int = Field(description="Full event queue count")
     recv_errors: int | None = Field(default=None, description="Radio-level RX packet errors")
-    telemetry_history: list["TelemetryHistoryEntry"] = Field(
+    telemetry_history: list[TelemetryHistoryEntry] = Field(
         default_factory=list, description="Recent telemetry history snapshots"
     )
 
@@ -596,6 +598,16 @@ class RepeaterLppTelemetryResponse(BaseModel):
     """CayenneLPP sensor telemetry from a repeater."""
 
     sensors: list[LppSensor] = Field(default_factory=list, description="List of sensor readings")
+
+
+class ContactTelemetryResponse(BaseModel):
+    """On-demand CayenneLPP telemetry snapshot from any contact."""
+
+    sensors: list[LppSensor] = Field(default_factory=list, description="List of sensor readings")
+    fetched_at: int = Field(description="Unix timestamp when this telemetry was fetched")
+    telemetry_history: list[TelemetryHistoryEntry] = Field(
+        default_factory=list, description="Recent telemetry history entries"
+    )
 
 
 class NeighborInfo(BaseModel):
@@ -849,18 +861,22 @@ class AppSettings(BaseModel):
         default_factory=list,
         description="Public keys of repeaters opted into periodic telemetry collection (max 8)",
     )
+    tracked_telemetry_contacts: list[str] = Field(
+        default_factory=list,
+        description="Public keys of contacts opted into periodic LPP telemetry collection (max 8)",
+    )
     telemetry_interval_hours: int = Field(
         default=8,
         description=(
             "User-preferred telemetry collection interval in hours. The backend "
             "clamps this up to the shortest legal interval given the number of "
-            "tracked repeaters so daily checks stay under a 24/day ceiling."
+            "tracked repeaters and contacts so daily checks stay under a 24/day ceiling."
         ),
     )
     telemetry_routed_hourly: bool = Field(
         default=False,
         description=(
-            "When enabled, tracked repeaters with a direct or routed (non-flood) "
+            "When enabled, tracked repeaters/contacts with a direct or routed (non-flood) "
             "path are polled every hour instead of on the normal scheduled interval."
         ),
     )

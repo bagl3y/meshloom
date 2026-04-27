@@ -14,11 +14,14 @@ from app.models import (
     ContactAdvertPathSummary,
     ContactAnalytics,
     ContactRoutingOverrideRequest,
+    ContactTelemetryResponse,
     ContactUpsert,
     CreateContactRequest,
+    LppSensor,
     NearestRepeater,
     PathDiscoveryResponse,
     PathDiscoveryRoute,
+    TelemetryHistoryEntry,
     TraceResponse,
 )
 from app.packet_processor import start_historical_dm_decryption
@@ -613,3 +616,71 @@ async def set_contact_routing_override(
         await _broadcast_contact_update(updated_contact)
 
     return {"status": "ok", "public_key": contact.public_key}
+
+
+# ---------------------------------------------------------------------------
+# On-demand contact telemetry (CayenneLPP)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{public_key}/telemetry", response_model=ContactTelemetryResponse)
+async def request_contact_telemetry(public_key: str) -> ContactTelemetryResponse:
+    """Fetch CayenneLPP telemetry from any contact (single attempt, 10s timeout).
+
+    Persists the result in contact_telemetry_history and returns the latest
+    sensor readings along with recent telemetry history.
+    """
+    from app.repository.contact_telemetry import ContactTelemetryRepository
+
+    radio_manager.require_connected()
+    contact = await _resolve_contact_or_404(public_key)
+
+    async with radio_manager.radio_operation(
+        "contact_telemetry", pause_polling=True, suspend_auto_fetch=True
+    ) as mc:
+        await _ensure_on_radio(mc, contact)
+        telemetry = await mc.commands.req_telemetry_sync(
+            contact.public_key, timeout=10, min_timeout=5
+        )
+
+    if telemetry is None:
+        raise HTTPException(status_code=504, detail="No telemetry response from contact")
+
+    sensors: list[LppSensor] = []
+    for entry in telemetry:
+        channel = entry.get("channel", 0)
+        type_name = str(entry.get("type", "unknown"))
+        value = entry.get("value", 0)
+        sensors.append(LppSensor(channel=channel, type_name=type_name, value=value))
+
+    fetched_at = int(time.time())
+
+    # Persist snapshot
+    data = {"lpp_sensors": [s.model_dump() for s in sensors]}
+    await ContactTelemetryRepository.record(
+        public_key=contact.public_key,
+        timestamp=fetched_at,
+        data=data,
+    )
+
+    # Fetch recent history (30 days)
+    since = fetched_at - 30 * 86400
+    rows = await ContactTelemetryRepository.get_history(contact.public_key, since)
+    history = [TelemetryHistoryEntry(**row) for row in rows]
+
+    return ContactTelemetryResponse(
+        sensors=sensors,
+        fetched_at=fetched_at,
+        telemetry_history=history,
+    )
+
+
+@router.get("/{public_key}/telemetry-history", response_model=list[TelemetryHistoryEntry])
+async def get_contact_telemetry_history(public_key: str) -> list[TelemetryHistoryEntry]:
+    """Get stored telemetry history for a contact (read-only, no radio access)."""
+    from app.repository.contact_telemetry import ContactTelemetryRepository
+
+    contact = await _resolve_contact_or_404(public_key)
+    since = int(time.time()) - 30 * 86400
+    rows = await ContactTelemetryRepository.get_history(contact.public_key, since)
+    return [TelemetryHistoryEntry(**row) for row in rows]

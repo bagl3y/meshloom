@@ -31,6 +31,8 @@ export function SettingsDatabaseSection({
   onBulkDeleteContacts,
   trackedTelemetryRepeaters = [],
   onToggleTrackedTelemetry,
+  trackedTelemetryContacts = [],
+  onToggleTrackedTelemetryContact,
   className,
 }: {
   appSettings: AppSettings;
@@ -45,6 +47,8 @@ export function SettingsDatabaseSection({
   onBulkDeleteContacts?: (deletedKeys: string[]) => void;
   trackedTelemetryRepeaters?: string[];
   onToggleTrackedTelemetry?: (publicKey: string) => Promise<void>;
+  trackedTelemetryContacts?: string[];
+  onToggleTrackedTelemetryContact?: (publicKey: string) => Promise<void>;
   className?: string;
 }) {
   const { distanceUnit } = useDistanceUnit();
@@ -59,6 +63,11 @@ export function SettingsDatabaseSection({
     Record<string, TelemetryHistoryEntry | null>
   >({});
   const telemetryFetchedRef = useRef(false);
+
+  const [latestContactTelemetry, setLatestContactTelemetry] = useState<
+    Record<string, TelemetryHistoryEntry | null>
+  >({});
+  const contactTelemetryFetchedRef = useRef(false);
 
   const [schedule, setSchedule] = useState<TelemetrySchedule | null>(null);
   const [intervalDraft, setIntervalDraft] = useState<number>(appSettings.telemetry_interval_hours);
@@ -94,6 +103,7 @@ export function SettingsDatabaseSection({
     };
   }, [
     trackedTelemetryRepeaters.length,
+    trackedTelemetryContacts.length,
     appSettings.telemetry_interval_hours,
     appSettings.telemetry_routed_hourly,
   ]);
@@ -116,6 +126,25 @@ export function SettingsDatabaseSection({
       cancelled = true;
     };
   }, [trackedTelemetryRepeaters]);
+
+  useEffect(() => {
+    if (trackedTelemetryContacts.length === 0 || contactTelemetryFetchedRef.current) return;
+    contactTelemetryFetchedRef.current = true;
+    let cancelled = false;
+    const fetches = trackedTelemetryContacts.map((key) =>
+      api.contactTelemetryHistory(key).then(
+        (history) => [key, history.length > 0 ? history[history.length - 1] : null] as const,
+        () => [key, null] as const
+      )
+    );
+    Promise.all(fetches).then((entries) => {
+      if (cancelled) return;
+      setLatestContactTelemetry(Object.fromEntries(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [trackedTelemetryContacts]);
 
   const handleCleanup = async () => {
     const days = parseInt(retentionDays, 10);
@@ -449,6 +478,102 @@ export function SettingsDatabaseSection({
                         tx {d.packets_sent != null ? d.packets_sent.toLocaleString() : '?'}
                       </span>
                       {d.lpp_sensors?.map((s) => {
+                        const display = lppDisplayUnit(s.type_name, s.value, distanceUnit);
+                        const val =
+                          typeof display.value === 'number'
+                            ? display.value % 1 === 0
+                              ? display.value
+                              : display.value.toFixed(1)
+                            : display.value;
+                        const label = s.type_name.charAt(0).toUpperCase() + s.type_name.slice(1);
+                        return (
+                          <span key={`${s.type_name}-${s.channel}`}>
+                            {label} {val}
+                            {display.unit ? ` ${display.unit}` : ''}
+                          </span>
+                        );
+                      })}
+                      <span className="ml-auto">checked {formatTime(snap.timestamp)}</span>
+                    </div>
+                  ) : snap === null ? (
+                    <div className="mt-1 text-[0.625rem] text-muted-foreground italic">
+                      No telemetry recorded yet
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <Separator />
+
+      {/* ── Tracked Contact Telemetry ── */}
+      <div className="space-y-3">
+        <h3 className="text-base font-semibold tracking-tight">Tracked Contact Telemetry</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">
+          Non-repeater contacts (companions, rooms, sensors) can also be tracked for periodic LPP
+          telemetry collection (battery, sensors, GPS). Up to 8 contacts may be tracked. The daily
+          check ceiling is shared with tracked repeaters — adding contacts may clamp the interval
+          upward.
+        </p>
+
+        {trackedTelemetryContacts.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic">
+            No contacts are being tracked. Enable tracking from a contact&apos;s info pane.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {trackedTelemetryContacts.map((key) => {
+              const contact = contacts.find((c) => c.public_key === key);
+              const displayName = contact?.name ?? key.slice(0, 12);
+              const routeSource = contact?.effective_route_source ?? 'flood';
+              const hasRealPath =
+                contact?.effective_route != null && contact.effective_route.path_len >= 0;
+              const routeLabel = !hasRealPath
+                ? 'flood'
+                : routeSource === 'override'
+                  ? 'routed'
+                  : routeSource === 'direct'
+                    ? 'direct'
+                    : 'flood';
+              const routeColor = hasRealPath
+                ? 'text-primary bg-primary/10'
+                : 'text-muted-foreground bg-muted';
+              const snap = latestContactTelemetry[key];
+              const d = snap?.data;
+              return (
+                <div key={key} className="rounded-md border border-border px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm truncate block">{displayName}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[0.625rem] text-muted-foreground font-mono">
+                          {key.slice(0, 12)}
+                        </span>
+                        <span
+                          className={`text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium ${routeColor}`}
+                        >
+                          {routeLabel}
+                        </span>
+                      </div>
+                    </div>
+                    {onToggleTrackedTelemetryContact && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onToggleTrackedTelemetryContact(key)}
+                        className="h-7 text-xs flex-shrink-0 text-destructive hover:text-destructive"
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                  {d ? (
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[0.625rem] text-muted-foreground">
+                      {d.lpp_sensors?.map((s) => {
+                        if (typeof s.value !== 'number') return null;
                         const display = lppDisplayUnit(s.type_name, s.value, distanceUnit);
                         const val =
                           typeof display.value === 'number'

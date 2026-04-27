@@ -4,14 +4,17 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { ContactInfoPane } from '../components/ContactInfoPane';
 import type { Contact, ContactAnalytics } from '../types';
 
-const { getContactAnalytics } = vi.hoisted(() => ({
+const { getContactAnalytics, contactTelemetryHistory } = vi.hoisted(() => ({
   getContactAnalytics: vi.fn(),
+  contactTelemetryHistory: vi.fn(),
 }));
 
 vi.mock('../api', () => ({
   api: {
     getContactAnalytics,
+    contactTelemetryHistory,
   },
+  isAbortError: () => false,
 }));
 
 vi.mock('../components/ui/sheet', () => ({
@@ -24,6 +27,13 @@ vi.mock('../components/ui/sheet', () => ({
 
 vi.mock('../components/ContactAvatar', () => ({
   ContactAvatar: () => <div data-testid="contact-avatar" />,
+}));
+
+vi.mock('react-leaflet', () => ({
+  MapContainer: () => null,
+  TileLayer: () => null,
+  CircleMarker: () => null,
+  Popup: () => null,
 }));
 
 vi.mock('../components/ui/sonner', () => ({
@@ -99,6 +109,8 @@ const baseProps = {
 describe('ContactInfoPane', () => {
   beforeEach(() => {
     getContactAnalytics.mockReset();
+    contactTelemetryHistory.mockReset();
+    contactTelemetryHistory.mockResolvedValue([]);
     baseProps.onSearchMessagesByKey = vi.fn();
     baseProps.onSearchMessagesByName = vi.fn();
   });
