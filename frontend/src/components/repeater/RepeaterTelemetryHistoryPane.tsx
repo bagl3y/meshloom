@@ -221,16 +221,16 @@ export function TelemetryHistoryPane({
             via the repeater pane, API calls to the endpoint (
             <code className="text-[0.6875rem]">POST /api/contacts/&lt;key&gt;/repeater/status</code>
             ), or when the repeater is opted into interval telemetry polling, in which case the
-            repeater will be polled for metrics every 8 hours. You can see which repeaters are opted
-            into this flow in the{' '}
+            repeater will be polled for metrics automatically. Fetch frequency can be configured in{' '}
             <a
               href="#settings/database"
               className="underline text-primary hover:text-primary/80 transition-colors"
             >
-              Database &amp; Messaging
-            </a>{' '}
-            settings pane. A maximum of {MAX_TRACKED} repeaters may be opted into this for the sake
-            of keeping mesh congestion reasonable.
+              Settings &rarr; Database &amp; Messaging
+            </a>
+            , where you can also see which repeaters are currently opted in. A maximum of{' '}
+            {MAX_TRACKED} repeaters may be opted into this for the sake of keeping mesh congestion
+            reasonable.
           </p>
 
           {isTracked ? (
@@ -259,7 +259,7 @@ export function TelemetryHistoryPane({
               disabled={toggling}
               className="border-green-600/50 text-green-600 hover:bg-green-600/10"
             >
-              {toggling ? 'Updating...' : 'Opt Repeater into 8hr Interval Metrics Tracking'}
+              {toggling ? 'Updating...' : 'Opt Repeater into Interval Metrics Tracking'}
             </Button>
           )}
         </div>

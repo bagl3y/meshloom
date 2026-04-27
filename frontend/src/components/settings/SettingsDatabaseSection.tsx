@@ -92,7 +92,11 @@ export function SettingsDatabaseSection({
     return () => {
       cancelled = true;
     };
-  }, [trackedTelemetryRepeaters.length, appSettings.telemetry_interval_hours]);
+  }, [
+    trackedTelemetryRepeaters.length,
+    appSettings.telemetry_interval_hours,
+    appSettings.telemetry_routed_hourly,
+  ]);
 
   useEffect(() => {
     if (trackedTelemetryRepeaters.length === 0 || telemetryFetchedRef.current) return;
@@ -346,12 +350,40 @@ export function SettingsDatabaseSection({
               restored if you drop back to a supported count.
             </p>
           )}
-          {schedule?.next_run_at != null && (
-            <p className="text-xs text-muted-foreground">
-              Next run at {formatTime(schedule.next_run_at)} (UTC top of hour).
-            </p>
-          )}
         </div>
+
+        {/* Routed hourly toggle */}
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={appSettings.telemetry_routed_hourly}
+            onChange={() => {
+              const next = !appSettings.telemetry_routed_hourly;
+              void persistAppSettings({ telemetry_routed_hourly: next }, () => {});
+            }}
+            className="w-4 h-4 rounded border-input accent-primary mt-0.5"
+          />
+          <div>
+            <span className="text-sm">Poll direct/routed-path repeaters hourly</span>
+            <p className="text-[0.8125rem] text-muted-foreground">
+              When enabled, tracked repeaters with a direct or routed path (not flood) are polled
+              every hour instead of on the scheduled interval above. Flood-only repeaters still
+              follow the normal schedule.
+            </p>
+          </div>
+        </label>
+
+        {schedule?.next_run_at != null && (
+          <p className="text-xs text-muted-foreground">
+            {schedule.routed_hourly ? 'Next flood run at' : 'Next run at'}{' '}
+            {formatTime(schedule.next_run_at)} (UTC top of hour).
+          </p>
+        )}
+        {schedule?.next_routed_run_at != null && (
+          <p className="text-xs text-muted-foreground">
+            Next direct/routed run at {formatTime(schedule.next_routed_run_at)} (UTC top of hour).
+          </p>
+        )}
 
         {trackedTelemetryRepeaters.length === 0 ? (
           <p className="text-sm text-muted-foreground italic">
@@ -362,6 +394,21 @@ export function SettingsDatabaseSection({
             {trackedTelemetryRepeaters.map((key) => {
               const contact = contacts.find((c) => c.public_key === key);
               const displayName = contact?.name ?? key.slice(0, 12);
+              const routeSource = contact?.effective_route_source ?? 'flood';
+              // A forced-flood override (path_len < 0) still reports source
+              // "override", but the actual route is flood. Check the real path.
+              const hasRealPath =
+                contact?.effective_route != null && contact.effective_route.path_len >= 0;
+              const routeLabel = !hasRealPath
+                ? 'flood'
+                : routeSource === 'override'
+                  ? 'routed'
+                  : routeSource === 'direct'
+                    ? 'direct'
+                    : 'flood';
+              const routeColor = hasRealPath
+                ? 'text-primary bg-primary/10'
+                : 'text-muted-foreground bg-muted';
               const snap = latestTelemetry[key];
               const d = snap?.data;
               return (
@@ -369,9 +416,16 @@ export function SettingsDatabaseSection({
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <span className="text-sm truncate block">{displayName}</span>
-                      <span className="text-[0.625rem] text-muted-foreground font-mono">
-                        {key.slice(0, 12)}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[0.625rem] text-muted-foreground font-mono">
+                          {key.slice(0, 12)}
+                        </span>
+                        <span
+                          className={`text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium ${routeColor}`}
+                        >
+                          {routeLabel}
+                        </span>
+                      </div>
                     </div>
                     {onToggleTrackedTelemetry && (
                       <Button

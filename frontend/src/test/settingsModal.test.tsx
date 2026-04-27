@@ -5,6 +5,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import type {
   AppSettings,
   AppSettingsUpdate,
+  Contact,
   HealthStatus,
   RadioAdvertMode,
   RadioConfig,
@@ -71,6 +72,7 @@ const baseSettings: AppSettings = {
   tracked_telemetry_repeaters: [],
   auto_resend_channel: false,
   telemetry_interval_hours: 8,
+  telemetry_routed_hourly: false,
 };
 
 function renderModal(overrides?: {
@@ -89,6 +91,8 @@ function renderModal(overrides?: {
   meshDiscovery?: RadioDiscoveryResponse | null;
   meshDiscoveryLoadingTarget?: RadioDiscoveryTarget | null;
   onDiscoverMesh?: (target: RadioDiscoveryTarget) => Promise<void>;
+  contacts?: Contact[];
+  trackedTelemetryRepeaters?: string[];
   open?: boolean;
   pageMode?: boolean;
   externalSidebarNav?: boolean;
@@ -127,6 +131,8 @@ function renderModal(overrides?: {
     onDiscoverMesh,
     onHealthRefresh: vi.fn(async () => {}),
     onRefreshAppSettings,
+    contacts: overrides?.contacts,
+    trackedTelemetryRepeaters: overrides?.trackedTelemetryRepeaters,
   };
 
   const view = overrides?.externalSidebarNav
@@ -793,5 +799,69 @@ describe('SettingsModal', () => {
     await waitFor(() => {
       expect(screen.getByText('Network')).toBeInTheDocument();
     });
+  });
+
+  it('renders routed hourly checkbox and calls save on toggle', async () => {
+    const onSaveAppSettings = vi.fn(async () => {});
+
+    renderModal({
+      externalSidebarNav: true,
+      desktopSection: 'database',
+      onSaveAppSettings,
+    });
+
+    const checkbox = screen.getByRole('checkbox', {
+      name: /Poll direct\/routed-path repeaters hourly/i,
+    }) as HTMLInputElement;
+
+    expect(checkbox).toBeInTheDocument();
+    expect(checkbox.checked).toBe(false);
+
+    fireEvent.click(checkbox);
+
+    await waitFor(() => {
+      expect(onSaveAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ telemetry_routed_hourly: true })
+      );
+    });
+  });
+
+  it('shows route badge per tracked repeater', async () => {
+    const directKey = 'bb'.repeat(32);
+
+    renderModal({
+      externalSidebarNav: true,
+      desktopSection: 'database',
+      appSettings: {
+        ...baseSettings,
+        tracked_telemetry_repeaters: [directKey],
+      },
+      trackedTelemetryRepeaters: [directKey],
+      contacts: [
+        {
+          public_key: directKey,
+          name: 'DirectRepeater',
+          type: 2,
+          flags: 0,
+          direct_path: 'aabb',
+          direct_path_len: 1,
+          direct_path_hash_mode: 1,
+          last_advert: null,
+          lat: null,
+          lon: null,
+          last_seen: null,
+          on_radio: false,
+          favorite: false,
+          last_contacted: null,
+          last_read_at: null,
+          first_seen: null,
+          effective_route: { path: 'aabb', path_len: 1, path_hash_mode: 1 },
+          effective_route_source: 'direct',
+        },
+      ],
+    });
+
+    expect(screen.getByText('DirectRepeater')).toBeInTheDocument();
+    expect(screen.getByText('direct')).toBeInTheDocument();
   });
 });

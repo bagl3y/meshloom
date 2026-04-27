@@ -855,6 +855,13 @@ class AppSettings(BaseModel):
             "tracked repeaters so daily checks stay under a 24/day ceiling."
         ),
     )
+    telemetry_routed_hourly: bool = Field(
+        default=False,
+        description=(
+            "When enabled, tracked repeaters with a direct or routed (non-flood) "
+            "path are polled every hour instead of on the normal scheduled interval."
+        ),
+    )
     auto_resend_channel: bool = Field(
         default=False,
         description=(

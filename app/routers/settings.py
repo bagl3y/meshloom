@@ -73,6 +73,13 @@ class AppSettingsUpdate(BaseModel):
             "based on the current tracked-repeater count."
         ),
     )
+    telemetry_routed_hourly: bool | None = Field(
+        default=None,
+        description=(
+            "When enabled, tracked repeaters with a direct or routed (non-flood) "
+            "path are polled every hour instead of on the normal scheduled interval."
+        ),
+    )
 
 
 class BlockKeyRequest(BaseModel):
@@ -126,7 +133,18 @@ class TelemetrySchedule(BaseModel):
     max_tracked: int = Field(description="Maximum number of repeaters that can be tracked")
     next_run_at: int | None = Field(
         default=None,
-        description="Unix timestamp (UTC seconds) of the next scheduled cycle",
+        description="Unix timestamp (UTC seconds) of the next scheduled flood cycle",
+    )
+    routed_hourly: bool = Field(
+        default=False,
+        description="Whether hourly routed/direct-path telemetry is enabled",
+    )
+    next_routed_run_at: int | None = Field(
+        default=None,
+        description=(
+            "Unix timestamp (UTC seconds) of the next hourly routed/direct check, "
+            "or None when routed_hourly is off or no repeaters are tracked"
+        ),
     )
 
 
@@ -140,20 +158,27 @@ class TrackedTelemetryResponse(BaseModel):
     schedule: TelemetrySchedule = Field(description="Current scheduling state")
 
 
-def _build_schedule(tracked_count: int, preferred_hours: int | None) -> TelemetrySchedule:
+def _build_schedule(
+    tracked_count: int,
+    preferred_hours: int | None,
+    routed_hourly: bool = False,
+) -> TelemetrySchedule:
     pref = (
         preferred_hours
         if preferred_hours in TELEMETRY_INTERVAL_OPTIONS_HOURS
         else DEFAULT_TELEMETRY_INTERVAL_HOURS
     )
     effective = clamp_telemetry_interval(pref, tracked_count)
+    has_tracked = tracked_count > 0
     return TelemetrySchedule(
         preferred_hours=pref,
         effective_hours=effective,
         options=legal_interval_options(tracked_count),
         tracked_count=tracked_count,
         max_tracked=MAX_TRACKED_TELEMETRY_REPEATERS,
-        next_run_at=next_run_timestamp_utc(effective) if tracked_count > 0 else None,
+        next_run_at=next_run_timestamp_utc(effective) if has_tracked else None,
+        routed_hourly=routed_hourly,
+        next_routed_run_at=(next_run_timestamp_utc(1) if has_tracked and routed_hourly else None),
     )
 
 
@@ -215,6 +240,11 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
             raw_interval = DEFAULT_TELEMETRY_INTERVAL_HOURS
         logger.info("Updating telemetry_interval_hours to %d", raw_interval)
         kwargs["telemetry_interval_hours"] = raw_interval
+
+    # Telemetry routed hourly
+    if update.telemetry_routed_hourly is not None:
+        logger.info("Updating telemetry_routed_hourly to %s", update.telemetry_routed_hourly)
+        kwargs["telemetry_routed_hourly"] = update.telemetry_routed_hourly
 
     # Flood scope
     flood_scope_changed = False
@@ -328,7 +358,11 @@ async def toggle_tracked_telemetry(request: TrackedTelemetryRequest) -> TrackedT
         return TrackedTelemetryResponse(
             tracked_telemetry_repeaters=new_list,
             names=await _resolve_names(new_list),
-            schedule=_build_schedule(len(new_list), settings.telemetry_interval_hours),
+            schedule=_build_schedule(
+                len(new_list),
+                settings.telemetry_interval_hours,
+                settings.telemetry_routed_hourly,
+            ),
         )
 
     # Validate it's a repeater
@@ -355,7 +389,11 @@ async def toggle_tracked_telemetry(request: TrackedTelemetryRequest) -> TrackedT
     return TrackedTelemetryResponse(
         tracked_telemetry_repeaters=new_list,
         names=await _resolve_names(new_list),
-        schedule=_build_schedule(len(new_list), settings.telemetry_interval_hours),
+        schedule=_build_schedule(
+            len(new_list),
+            settings.telemetry_interval_hours,
+            settings.telemetry_routed_hourly,
+        ),
     )
 
 
@@ -371,4 +409,5 @@ async def get_telemetry_schedule() -> TelemetrySchedule:
     return _build_schedule(
         len(app_settings.tracked_telemetry_repeaters),
         app_settings.telemetry_interval_hours,
+        app_settings.telemetry_routed_hourly,
     )

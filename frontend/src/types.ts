@@ -359,6 +359,7 @@ export interface AppSettings {
   tracked_telemetry_repeaters: string[];
   auto_resend_channel: boolean;
   telemetry_interval_hours: number;
+  telemetry_routed_hourly: boolean;
 }
 
 export interface AppSettingsUpdate {
@@ -371,6 +372,7 @@ export interface AppSettingsUpdate {
   blocked_names?: string[];
   discovery_blocked_types?: number[];
   telemetry_interval_hours?: number;
+  telemetry_routed_hourly?: boolean;
 }
 
 export interface TelemetrySchedule {
@@ -380,6 +382,8 @@ export interface TelemetrySchedule {
   tracked_count: number;
   max_tracked: number;
   next_run_at: number | null;
+  routed_hourly: boolean;
+  next_routed_run_at: number | null;
 }
 
 export interface TrackedTelemetryResponse {

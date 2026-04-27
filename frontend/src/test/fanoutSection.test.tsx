@@ -111,6 +111,7 @@ beforeEach(() => {
     tracked_telemetry_repeaters: [],
     auto_resend_channel: false,
     telemetry_interval_hours: 8,
+    telemetry_routed_hourly: false,
   });
   mockedApi.getRadioConfig.mockResolvedValue({
     public_key: 'aa'.repeat(32),
@@ -1050,6 +1051,7 @@ describe('SettingsFanoutSection', () => {
       tracked_telemetry_repeaters: ['cc'.repeat(32)],
       auto_resend_channel: false,
       telemetry_interval_hours: 8,
+      telemetry_routed_hourly: false,
     });
 
     renderSection();

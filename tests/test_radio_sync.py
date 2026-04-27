@@ -2219,6 +2219,262 @@ class TestCollectRepeaterTelemetryLpp:
         assert "lpp_sensors" not in recorded_data
 
 
+class TestRunTelemetryCycleRoutedOnly:
+    """Verify that _run_telemetry_cycle(routed_only=True) skips flood repeaters."""
+
+    @pytest.mark.asyncio
+    async def test_routed_only_skips_flood_contacts(self):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from app.models import AppSettings, Contact
+        from app.radio_sync import _run_telemetry_cycle
+
+        flood_key = "aa" * 32
+        direct_key = "bb" * 32
+        override_key = "cc" * 32
+
+        flood_contact = Contact(
+            public_key=flood_key,
+            name="Flood",
+            type=2,
+            direct_path=None,
+            direct_path_len=-1,
+            direct_path_hash_mode=-1,
+        )
+        direct_contact = Contact(
+            public_key=direct_key,
+            name="Direct",
+            type=2,
+            direct_path="aabb",
+            direct_path_len=1,
+            direct_path_hash_mode=1,
+        )
+        override_contact = Contact(
+            public_key=override_key,
+            name="Override",
+            type=2,
+            direct_path=None,
+            direct_path_len=-1,
+            direct_path_hash_mode=-1,
+            route_override_path="ccdd",
+            route_override_len=1,
+            route_override_hash_mode=1,
+        )
+
+        settings = AppSettings(
+            tracked_telemetry_repeaters=[flood_key, direct_key, override_key],
+        )
+
+        contact_map = {
+            flood_key: flood_contact,
+            direct_key: direct_contact,
+            override_key: override_contact,
+        }
+        collected_keys: list[str] = []
+
+        async def fake_get_by_key(key):
+            return contact_map.get(key)
+
+        async def fake_collect(mc, contact):
+            collected_keys.append(contact.public_key)
+            return True
+
+        fake_radio_manager = MagicMock()
+        fake_radio_manager.is_connected = True
+        fake_radio_manager.radio_operation = MagicMock()
+
+        # Make radio_operation an async context manager that yields a MagicMock
+        fake_mc = MagicMock()
+
+        class FakeRadioOp:
+            async def __aenter__(self):
+                return fake_mc
+
+            async def __aexit__(self, *args):
+                pass
+
+        fake_radio_manager.radio_operation.return_value = FakeRadioOp()
+
+        with (
+            patch(
+                "app.radio_sync.AppSettingsRepository.get",
+                new_callable=AsyncMock,
+                return_value=settings,
+            ),
+            patch(
+                "app.radio_sync.ContactRepository.get_by_key",
+                new_callable=AsyncMock,
+                side_effect=fake_get_by_key,
+            ),
+            patch("app.radio_sync._collect_repeater_telemetry", new=fake_collect),
+            patch("app.radio_sync.radio_manager", fake_radio_manager),
+        ):
+            await _run_telemetry_cycle(routed_only=True)
+
+        # Flood contact should be skipped; direct and override should be collected
+        assert flood_key not in collected_keys
+        assert direct_key in collected_keys
+        assert override_key in collected_keys
+
+    @pytest.mark.asyncio
+    async def test_routed_only_skips_forced_flood_override(self):
+        """A contact with a forced-flood override (path_len=-1) should be
+        treated as flood even though effective_route_source is 'override'."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from app.models import AppSettings, Contact
+        from app.radio_sync import _run_telemetry_cycle
+
+        forced_flood_key = "aa" * 32
+        direct_key = "bb" * 32
+
+        forced_flood_contact = Contact(
+            public_key=forced_flood_key,
+            name="ForcedFlood",
+            type=2,
+            direct_path=None,
+            direct_path_len=-1,
+            direct_path_hash_mode=-1,
+            route_override_path="",
+            route_override_len=-1,
+            route_override_hash_mode=-1,
+        )
+        direct_contact = Contact(
+            public_key=direct_key,
+            name="Direct",
+            type=2,
+            direct_path="aabb",
+            direct_path_len=1,
+            direct_path_hash_mode=1,
+        )
+
+        # Verify the forced-flood contact reports "override" source
+        assert forced_flood_contact.effective_route_source == "override"
+
+        settings = AppSettings(
+            tracked_telemetry_repeaters=[forced_flood_key, direct_key],
+        )
+
+        contact_map = {forced_flood_key: forced_flood_contact, direct_key: direct_contact}
+        collected_keys: list[str] = []
+
+        async def fake_get_by_key(key):
+            return contact_map.get(key)
+
+        async def fake_collect(mc, contact):
+            collected_keys.append(contact.public_key)
+            return True
+
+        fake_radio_manager = MagicMock()
+        fake_radio_manager.is_connected = True
+
+        fake_mc = MagicMock()
+
+        class FakeRadioOp:
+            async def __aenter__(self):
+                return fake_mc
+
+            async def __aexit__(self, *args):
+                pass
+
+        fake_radio_manager.radio_operation.return_value = FakeRadioOp()
+
+        with (
+            patch(
+                "app.radio_sync.AppSettingsRepository.get",
+                new_callable=AsyncMock,
+                return_value=settings,
+            ),
+            patch(
+                "app.radio_sync.ContactRepository.get_by_key",
+                new_callable=AsyncMock,
+                side_effect=fake_get_by_key,
+            ),
+            patch("app.radio_sync._collect_repeater_telemetry", new=fake_collect),
+            patch("app.radio_sync.radio_manager", fake_radio_manager),
+        ):
+            await _run_telemetry_cycle(routed_only=True)
+
+        # Forced-flood override should be excluded; direct should be collected
+        assert forced_flood_key not in collected_keys
+        assert direct_key in collected_keys
+
+    @pytest.mark.asyncio
+    async def test_full_cycle_includes_all_contacts(self):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from app.models import AppSettings, Contact
+        from app.radio_sync import _run_telemetry_cycle
+
+        flood_key = "aa" * 32
+        direct_key = "bb" * 32
+
+        flood_contact = Contact(
+            public_key=flood_key,
+            name="Flood",
+            type=2,
+            direct_path=None,
+            direct_path_len=-1,
+            direct_path_hash_mode=-1,
+        )
+        direct_contact = Contact(
+            public_key=direct_key,
+            name="Direct",
+            type=2,
+            direct_path="aabb",
+            direct_path_len=1,
+            direct_path_hash_mode=1,
+        )
+
+        settings = AppSettings(
+            tracked_telemetry_repeaters=[flood_key, direct_key],
+        )
+
+        contact_map = {flood_key: flood_contact, direct_key: direct_contact}
+        collected_keys: list[str] = []
+
+        async def fake_get_by_key(key):
+            return contact_map.get(key)
+
+        async def fake_collect(mc, contact):
+            collected_keys.append(contact.public_key)
+            return True
+
+        fake_radio_manager = MagicMock()
+        fake_radio_manager.is_connected = True
+
+        fake_mc = MagicMock()
+
+        class FakeRadioOp:
+            async def __aenter__(self):
+                return fake_mc
+
+            async def __aexit__(self, *args):
+                pass
+
+        fake_radio_manager.radio_operation.return_value = FakeRadioOp()
+
+        with (
+            patch(
+                "app.radio_sync.AppSettingsRepository.get",
+                new_callable=AsyncMock,
+                return_value=settings,
+            ),
+            patch(
+                "app.radio_sync.ContactRepository.get_by_key",
+                new_callable=AsyncMock,
+                side_effect=fake_get_by_key,
+            ),
+            patch("app.radio_sync._collect_repeater_telemetry", new=fake_collect),
+            patch("app.radio_sync.radio_manager", fake_radio_manager),
+        ):
+            await _run_telemetry_cycle(routed_only=False)
+
+        # Full cycle collects both
+        assert flood_key in collected_keys
+        assert direct_key in collected_keys
+
+
 # ---------------------------------------------------------------------------
 # _telemetry_collect_loop — UTC modulo scheduler
 # ---------------------------------------------------------------------------
@@ -2516,6 +2772,113 @@ class TestTelemetryCollectSchedulerDecision:
         assert ran is False, (
             "Clamping to 6h must prevent the 02:00 run that 1h cadence would've triggered"
         )
+
+
+class TestRoutedHourlySchedulerDecision:
+    """Verify the routed_hourly feature in _maybe_run_scheduled_cycle."""
+
+    @pytest.mark.asyncio
+    async def test_routed_hourly_fires_on_non_modulo_hour(self):
+        """At 09:00 UTC with 8h interval and routed_hourly=True, the scheduler
+        should call _run_telemetry_cycle(routed_only=True)."""
+        import datetime as real_datetime
+        from unittest.mock import AsyncMock, patch
+
+        from app import radio_sync
+        from app.models import AppSettings
+
+        settings = AppSettings(
+            tracked_telemetry_repeaters=["aa" * 32],
+            telemetry_interval_hours=8,
+            telemetry_routed_hourly=True,
+        )
+        calls = []
+
+        async def fake_cycle(*, routed_only=False):
+            calls.append({"routed_only": routed_only})
+
+        now = real_datetime.datetime(2026, 4, 16, 9, 0, 0, tzinfo=real_datetime.UTC)
+
+        with (
+            patch(
+                "app.radio_sync.AppSettingsRepository.get",
+                new_callable=AsyncMock,
+                return_value=settings,
+            ),
+            patch("app.radio_sync._run_telemetry_cycle", new=fake_cycle),
+        ):
+            await radio_sync._maybe_run_scheduled_cycle(now)
+
+        assert len(calls) == 1
+        assert calls[0]["routed_only"] is True
+
+    @pytest.mark.asyncio
+    async def test_routed_hourly_disabled_skips_non_modulo_hour(self):
+        """At 09:00 UTC with 8h interval and routed_hourly=False, nothing runs."""
+        import datetime as real_datetime
+        from unittest.mock import AsyncMock, patch
+
+        from app import radio_sync
+        from app.models import AppSettings
+
+        settings = AppSettings(
+            tracked_telemetry_repeaters=["aa" * 32],
+            telemetry_interval_hours=8,
+            telemetry_routed_hourly=False,
+        )
+        calls = []
+
+        async def fake_cycle(*, routed_only=False):
+            calls.append({"routed_only": routed_only})
+
+        now = real_datetime.datetime(2026, 4, 16, 9, 0, 0, tzinfo=real_datetime.UTC)
+
+        with (
+            patch(
+                "app.radio_sync.AppSettingsRepository.get",
+                new_callable=AsyncMock,
+                return_value=settings,
+            ),
+            patch("app.radio_sync._run_telemetry_cycle", new=fake_cycle),
+        ):
+            await radio_sync._maybe_run_scheduled_cycle(now)
+
+        assert len(calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_modulo_hour_runs_full_cycle_even_with_routed_hourly(self):
+        """At 16:00 UTC with 8h interval, a normal full cycle runs regardless
+        of whether routed_hourly is enabled — it covers all repeaters."""
+        import datetime as real_datetime
+        from unittest.mock import AsyncMock, patch
+
+        from app import radio_sync
+        from app.models import AppSettings
+
+        settings = AppSettings(
+            tracked_telemetry_repeaters=["aa" * 32],
+            telemetry_interval_hours=8,
+            telemetry_routed_hourly=True,
+        )
+        calls = []
+
+        async def fake_cycle(*, routed_only=False):
+            calls.append({"routed_only": routed_only})
+
+        now = real_datetime.datetime(2026, 4, 16, 16, 0, 0, tzinfo=real_datetime.UTC)
+
+        with (
+            patch(
+                "app.radio_sync.AppSettingsRepository.get",
+                new_callable=AsyncMock,
+                return_value=settings,
+            ),
+            patch("app.radio_sync._run_telemetry_cycle", new=fake_cycle),
+        ):
+            await radio_sync._maybe_run_scheduled_cycle(now)
+
+        assert len(calls) == 1
+        assert calls[0]["routed_only"] is False
 
 
 # ---------------------------------------------------------------------------

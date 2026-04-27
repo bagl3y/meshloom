@@ -42,7 +42,7 @@ class AppSettingsRepository:
                    advert_interval, last_advert_time, flood_scope,
                    blocked_keys, blocked_names, discovery_blocked_types,
                    tracked_telemetry_repeaters, auto_resend_channel,
-                   telemetry_interval_hours
+                   telemetry_interval_hours, telemetry_routed_hourly
             FROM app_settings WHERE id = 1
             """
         ) as cursor:
@@ -113,6 +113,12 @@ class AppSettingsRepository:
         except (KeyError, TypeError, ValueError):
             telemetry_interval_hours = DEFAULT_TELEMETRY_INTERVAL_HOURS
 
+        # Parse telemetry_routed_hourly boolean
+        try:
+            telemetry_routed_hourly = bool(row["telemetry_routed_hourly"])
+        except (KeyError, TypeError):
+            telemetry_routed_hourly = False
+
         return AppSettings(
             max_radio_contacts=row["max_radio_contacts"],
             auto_decrypt_dm_on_advert=bool(row["auto_decrypt_dm_on_advert"]),
@@ -126,6 +132,7 @@ class AppSettingsRepository:
             tracked_telemetry_repeaters=tracked_telemetry_repeaters,
             auto_resend_channel=auto_resend_channel,
             telemetry_interval_hours=telemetry_interval_hours,
+            telemetry_routed_hourly=telemetry_routed_hourly,
         )
 
     @staticmethod
@@ -144,6 +151,7 @@ class AppSettingsRepository:
         tracked_telemetry_repeaters: list[str] | None = None,
         auto_resend_channel: bool | None = None,
         telemetry_interval_hours: int | None = None,
+        telemetry_routed_hourly: bool | None = None,
     ) -> None:
         """Apply field updates using an already-acquired connection.
 
@@ -201,6 +209,10 @@ class AppSettingsRepository:
             updates.append("telemetry_interval_hours = ?")
             params.append(telemetry_interval_hours)
 
+        if telemetry_routed_hourly is not None:
+            updates.append("telemetry_routed_hourly = ?")
+            params.append(1 if telemetry_routed_hourly else 0)
+
         if updates:
             query = f"UPDATE app_settings SET {', '.join(updates)} WHERE id = 1"
             async with conn.execute(query, params):
@@ -229,6 +241,7 @@ class AppSettingsRepository:
         tracked_telemetry_repeaters: list[str] | None = None,
         auto_resend_channel: bool | None = None,
         telemetry_interval_hours: int | None = None,
+        telemetry_routed_hourly: bool | None = None,
     ) -> AppSettings:
         """Update app settings. Only provided fields are updated."""
         async with db.tx() as conn:
@@ -246,6 +259,7 @@ class AppSettingsRepository:
                 tracked_telemetry_repeaters=tracked_telemetry_repeaters,
                 auto_resend_channel=auto_resend_channel,
                 telemetry_interval_hours=telemetry_interval_hours,
+                telemetry_routed_hourly=telemetry_routed_hourly,
             )
             return await AppSettingsRepository._get_in_conn(conn)
 

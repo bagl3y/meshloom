@@ -330,3 +330,66 @@ class TestTelemetryScheduleEndpoint:
         assert schedule.tracked_count == 5
         assert schedule.options == [6, 8, 12, 24]
         assert schedule.next_run_at is not None
+
+
+class TestRoutedHourlySetting:
+    """Tests for the telemetry_routed_hourly setting."""
+
+    @pytest.mark.asyncio
+    async def test_defaults_to_false(self, test_db):
+        settings = await AppSettingsRepository.get()
+        assert settings.telemetry_routed_hourly is False
+
+    @pytest.mark.asyncio
+    async def test_round_trip_via_patch(self, test_db):
+        result = await update_settings(AppSettingsUpdate(telemetry_routed_hourly=True))
+        assert result.telemetry_routed_hourly is True
+
+        result = await update_settings(AppSettingsUpdate(telemetry_routed_hourly=False))
+        assert result.telemetry_routed_hourly is False
+
+    @pytest.mark.asyncio
+    async def test_schedule_includes_routed_fields_when_enabled(self, test_db):
+        key = "aa" * 32
+        await ContactRepository.upsert(
+            ContactUpsert(public_key=key, name="R1", type=CONTACT_TYPE_REPEATER)
+        )
+        await AppSettingsRepository.update(
+            tracked_telemetry_repeaters=[key],
+            telemetry_routed_hourly=True,
+        )
+
+        schedule = await get_telemetry_schedule()
+
+        assert schedule.routed_hourly is True
+        assert schedule.next_routed_run_at is not None
+        assert schedule.next_run_at is not None
+
+    @pytest.mark.asyncio
+    async def test_schedule_omits_routed_run_when_disabled(self, test_db):
+        key = "aa" * 32
+        await ContactRepository.upsert(
+            ContactUpsert(public_key=key, name="R1", type=CONTACT_TYPE_REPEATER)
+        )
+        await AppSettingsRepository.update(
+            tracked_telemetry_repeaters=[key],
+            telemetry_routed_hourly=False,
+        )
+
+        schedule = await get_telemetry_schedule()
+
+        assert schedule.routed_hourly is False
+        assert schedule.next_routed_run_at is None
+
+    @pytest.mark.asyncio
+    async def test_toggle_response_carries_routed_hourly(self, test_db):
+        key = "bb" * 32
+        await ContactRepository.upsert(
+            ContactUpsert(public_key=key, name="R2", type=CONTACT_TYPE_REPEATER)
+        )
+        await AppSettingsRepository.update(telemetry_routed_hourly=True)
+
+        result = await toggle_tracked_telemetry(TrackedTelemetryRequest(public_key=key))
+
+        assert result.schedule.routed_hourly is True
+        assert result.schedule.next_routed_run_at is not None

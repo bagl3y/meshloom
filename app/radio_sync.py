@@ -1890,8 +1890,13 @@ async def _collect_repeater_telemetry(mc: MeshCore, contact: Contact) -> bool:
         return False
 
 
-async def _run_telemetry_cycle() -> None:
-    """Collect one telemetry sample from every tracked repeater."""
+async def _run_telemetry_cycle(*, routed_only: bool = False) -> None:
+    """Collect one telemetry sample from tracked repeaters.
+
+    When *routed_only* is True, only repeaters whose effective route is
+    ``"direct"`` or ``"override"`` (i.e. not ``"flood"``) are collected.
+    This is used by the hourly routed-path fast-poll feature.
+    """
     if not radio_manager.is_connected:
         logger.debug("Telemetry collect: radio not connected, skipping cycle")
         return
@@ -1901,9 +1906,7 @@ async def _run_telemetry_cycle() -> None:
     if not tracked:
         return
 
-    logger.info("Telemetry collect: starting cycle for %d repeater(s)", len(tracked))
-    collected = 0
-
+    candidates: list[tuple[str, Contact]] = []
     for pub_key in tracked:
         contact = await ContactRepository.get_by_key(pub_key)
         if not contact or contact.type != 2:
@@ -1912,7 +1915,24 @@ async def _run_telemetry_cycle() -> None:
                 pub_key[:12],
             )
             continue
+        if routed_only and (not contact.effective_route or contact.effective_route.path_len < 0):
+            continue
+        candidates.append((pub_key, contact))
 
+    if not candidates:
+        if routed_only:
+            logger.debug("Telemetry collect: no routed repeaters to poll this hour")
+        return
+
+    label = "routed" if routed_only else "full"
+    logger.info(
+        "Telemetry collect: starting %s cycle for %d repeater(s)",
+        label,
+        len(candidates),
+    )
+    collected = 0
+
+    for _pub_key, contact in candidates:
         try:
             async with radio_manager.radio_operation(
                 "telemetry_collect",
@@ -1924,13 +1944,14 @@ async def _run_telemetry_cycle() -> None:
         except RadioOperationBusyError:
             logger.debug(
                 "Telemetry collect: radio busy, skipping %s",
-                pub_key[:12],
+                contact.public_key[:12],
             )
 
     logger.info(
-        "Telemetry collect: cycle complete, %d/%d successful",
+        "Telemetry collect: %s cycle complete, %d/%d successful",
+        label,
         collected,
-        len(tracked),
+        len(candidates),
     )
 
 
@@ -1960,9 +1981,15 @@ async def _maybe_run_scheduled_cycle(now: datetime) -> None:
     effective_hours = clamp_telemetry_interval(app_settings.telemetry_interval_hours, tracked_count)
     if effective_hours <= 0:
         return
-    if now.hour % effective_hours != 0:
-        return
-    await _run_telemetry_cycle()
+
+    is_normal_cycle = now.hour % effective_hours == 0
+
+    if is_normal_cycle:
+        # Normal scheduled boundary: collect ALL tracked repeaters.
+        await _run_telemetry_cycle()
+    elif app_settings.telemetry_routed_hourly:
+        # Hourly routed-path fast-poll: only repeaters with a non-flood route.
+        await _run_telemetry_cycle(routed_only=True)
 
 
 async def _telemetry_collect_loop() -> None:
