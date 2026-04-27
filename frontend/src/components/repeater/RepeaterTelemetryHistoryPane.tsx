@@ -154,13 +154,19 @@ export function TelemetryHistoryPane({
   const chartData = useMemo(() => {
     return entries.map((e) => {
       const d = e.data;
+      const recvErrors = d.recv_errors ?? undefined;
+      const packetsReceived = d.packets_received;
       const point: Record<string, number | undefined> = {
         timestamp: e.timestamp,
         battery_volts: d.battery_volts,
         noise_floor_dbm: d.noise_floor_dbm,
-        packets_received: d.packets_received,
+        packets_received: packetsReceived,
         packets_sent: d.packets_sent,
-        recv_errors: d.recv_errors ?? undefined,
+        recv_errors: recvErrors,
+        recv_error_pct:
+          recvErrors != null && packetsReceived != null && packetsReceived + recvErrors > 0
+            ? +((recvErrors / (packetsReceived + recvErrors)) * 100).toFixed(2)
+            : undefined,
         uptime_seconds: d.uptime_seconds,
       };
       // Flatten LPP sensors into the point, converting units as needed
@@ -174,7 +180,11 @@ export function TelemetryHistoryPane({
   }, [entries, distanceUnit]);
 
   const dataKeys =
-    activeMetric === 'packets' ? ['packets_received', 'packets_sent'] : [activeMetric];
+    activeMetric === 'packets'
+      ? ['packets_received', 'packets_sent']
+      : activeMetric === 'recv_errors'
+        ? ['recv_errors', 'recv_error_pct']
+        : [activeMetric];
 
   const yDomain = useMemo<[number, number] | undefined>(() => {
     if (activeMetric !== 'battery_volts' || chartData.length === 0) return undefined;
@@ -184,6 +194,20 @@ export function TelemetryHistoryPane({
     const hi = Math.max(...values);
     return [Math.min(3, Math.floor(lo) - 1), Math.max(5, Math.ceil(hi) + 1)];
   }, [activeMetric, chartData]);
+
+  const yDomainPct = useMemo<[number, number]>(() => {
+    const MIN_SPAN = 5;
+    const values = chartData.map((d) => d.recv_error_pct).filter((v) => v != null) as number[];
+    if (values.length === 0) return [0, MIN_SPAN];
+    const lo = Math.min(...values);
+    const hi = Math.max(...values);
+    const span = hi - lo;
+    if (span >= MIN_SPAN)
+      return [Math.max(0, Math.floor(lo - span * 0.1)), Math.ceil(hi + span * 0.1)];
+    const pad = (MIN_SPAN - span) / 2;
+    const bottom = Math.max(0, Math.floor(lo - pad));
+    return [bottom, Math.ceil(bottom + MIN_SPAN)];
+  }, [chartData]);
 
   const handleToggle = async () => {
     setToggling(true);
@@ -306,7 +330,15 @@ export function TelemetryHistoryPane({
           </p>
         ) : (
           <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
+            <AreaChart
+              data={chartData}
+              margin={{
+                top: 4,
+                right: activeMetric === 'recv_errors' ? 8 : 4,
+                bottom: 0,
+                left: -8,
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
               <XAxis
                 dataKey="timestamp"
@@ -318,6 +350,7 @@ export function TelemetryHistoryPane({
                 tickFormatter={formatTime}
               />
               <YAxis
+                yAxisId="left"
                 domain={yDomain}
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                 tickLine={false}
@@ -326,6 +359,17 @@ export function TelemetryHistoryPane({
                   activeMetric === 'uptime_seconds' ? formatUptime(v) : `${v}`
                 }
               />
+              {activeMetric === 'recv_errors' && (
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  domain={yDomainPct}
+                  tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) => `${v}%`}
+                />
+              )}
               <RechartsTooltip
                 {...TOOLTIP_STYLE}
                 cursor={{
@@ -337,6 +381,10 @@ export function TelemetryHistoryPane({
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 formatter={(value: any, name: any) => {
                   const numVal = typeof value === 'number' ? value : Number(value);
+                  if (activeMetric === 'recv_errors') {
+                    if (name === 'recv_error_pct') return [`${numVal}%`, 'Error Rate'];
+                    return [`${value}`, 'RX Errors'];
+                  }
                   const display =
                     activeMetric === 'uptime_seconds' ? formatUptime(numVal) : `${value}`;
                   const suffix =
@@ -354,51 +402,44 @@ export function TelemetryHistoryPane({
                   return [`${display}${suffix}`, label];
                 }}
               />
-              {dataKeys.map((key, i) => (
-                <Area
-                  key={key}
-                  type="linear"
-                  dataKey={key}
-                  stroke={
-                    activeMetric === 'packets'
+              {dataKeys.map((key, i) => {
+                const color =
+                  activeMetric === 'packets'
+                    ? i === 0
+                      ? '#0ea5e9'
+                      : '#f43f5e'
+                    : activeMetric === 'recv_errors'
                       ? i === 0
-                        ? '#0ea5e9'
-                        : '#f43f5e'
-                      : activeConfig.color
-                  }
-                  fill={
-                    activeMetric === 'packets'
-                      ? i === 0
-                        ? '#0ea5e9'
-                        : '#f43f5e'
-                      : activeConfig.color
-                  }
-                  fillOpacity={0.15}
-                  strokeWidth={1.5}
-                  dot={{
-                    r: 4,
-                    fill:
-                      activeMetric === 'packets'
-                        ? i === 0
-                          ? '#0ea5e9'
-                          : '#f43f5e'
-                        : activeConfig.color,
-                    strokeWidth: 1.5,
-                    stroke: 'hsl(var(--popover))',
-                  }}
-                  activeDot={{
-                    r: 6,
-                    fill:
-                      activeMetric === 'packets'
-                        ? i === 0
-                          ? '#0ea5e9'
-                          : '#f43f5e'
-                        : activeConfig.color,
-                    strokeWidth: 2,
-                    stroke: 'hsl(var(--popover))',
-                  }}
-                />
-              ))}
+                        ? '#ef4444'
+                        : '#f59e0b'
+                      : activeConfig.color;
+                return (
+                  <Area
+                    key={key}
+                    type="linear"
+                    dataKey={key}
+                    yAxisId={
+                      activeMetric === 'recv_errors' && key === 'recv_error_pct' ? 'right' : 'left'
+                    }
+                    stroke={color}
+                    fill={color}
+                    fillOpacity={0.15}
+                    strokeWidth={1.5}
+                    dot={{
+                      r: 4,
+                      fill: color,
+                      strokeWidth: 1.5,
+                      stroke: 'hsl(var(--popover))',
+                    }}
+                    activeDot={{
+                      r: 6,
+                      fill: color,
+                      strokeWidth: 2,
+                      stroke: 'hsl(var(--popover))',
+                    }}
+                  />
+                );
+              })}
             </AreaChart>
           </ResponsiveContainer>
         )}
