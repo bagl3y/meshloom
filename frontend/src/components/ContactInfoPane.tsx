@@ -81,6 +81,8 @@ interface ContactInfoPaneProps {
   blockedNames?: string[];
   onToggleBlockedKey?: (key: string) => void;
   onToggleBlockedName?: (name: string) => void;
+  trackedTelemetryContacts?: string[];
+  onToggleTrackedTelemetryContact?: (publicKey: string) => Promise<void>;
 }
 
 export function ContactInfoPane({
@@ -97,6 +99,8 @@ export function ContactInfoPane({
   blockedNames = [],
   onToggleBlockedKey,
   onToggleBlockedName,
+  trackedTelemetryContacts = [],
+  onToggleTrackedTelemetryContact,
 }: ContactInfoPaneProps) {
   const { distanceUnit } = useDistanceUnit();
   const isNameOnly = contactKey?.startsWith('name:') ?? false;
@@ -422,6 +426,8 @@ export function ContactInfoPane({
               loading={telemetryLoading}
               onFetch={handleFetchTelemetry}
               telemetryHistory={telemetryHistory}
+              isTracked={trackedTelemetryContacts.includes(contact.public_key)}
+              onToggleTracked={onToggleTrackedTelemetryContact}
             />
 
             {/* Favorite toggle */}
@@ -971,16 +977,21 @@ function ContactTelemetrySection({
   loading,
   onFetch,
   telemetryHistory,
+  isTracked,
+  onToggleTracked,
 }: {
   contact: Contact;
   loading: boolean;
   onFetch: () => void;
   telemetryHistory: TelemetryHistoryEntry[];
+  isTracked: boolean;
+  onToggleTracked?: (publicKey: string) => Promise<void>;
 }) {
   const { distanceUnit } = useDistanceUnit();
   const [expanded, setExpanded] = useState(true);
   const [mapExpanded, setMapExpanded] = useState(false);
   const [chartExpanded, setChartExpanded] = useState(false);
+  const [toggling, setToggling] = useState(false);
 
   // Latest telemetry snapshot from history
   const latestEntry =
@@ -1228,6 +1239,35 @@ function ContactTelemetrySection({
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Tracking toggle */}
+          {onToggleTracked && (
+            <div className="mt-2 pt-2 border-t border-border/50">
+              <button
+                type="button"
+                disabled={toggling}
+                onClick={async () => {
+                  setToggling(true);
+                  try {
+                    await onToggleTracked(contact.public_key);
+                  } finally {
+                    setToggling(false);
+                  }
+                }}
+                className={`text-xs px-2 py-1 rounded border transition-colors w-full ${
+                  isTracked
+                    ? 'border-destructive/50 text-destructive hover:bg-destructive/10'
+                    : 'border-green-600/50 text-green-600 hover:bg-green-600/10'
+                } disabled:opacity-50`}
+              >
+                {toggling
+                  ? 'Updating...'
+                  : isTracked
+                    ? 'Stop Tracking Telemetry'
+                    : 'Track Telemetry on Interval'}
+              </button>
             </div>
           )}
         </div>

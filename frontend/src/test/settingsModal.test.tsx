@@ -178,7 +178,7 @@ function setMatchMedia(matches: boolean) {
 }
 
 function openRadioSection() {
-  const radioToggle = screen.getByRole('button', { name: /Radio/i });
+  const radioToggle = screen.getByRole('button', { name: /^Radio$/i });
   fireEvent.click(radioToggle);
 }
 
@@ -251,7 +251,7 @@ describe('SettingsModal', () => {
   it('shows radio-unavailable message when config is null', () => {
     renderModal({ config: null });
 
-    const radioToggle = screen.getByRole('button', { name: /Radio/i });
+    const radioToggle = screen.getByRole('button', { name: /^Radio$/i });
     expect(radioToggle).not.toBeDisabled();
 
     fireEvent.click(radioToggle);
@@ -500,7 +500,7 @@ describe('SettingsModal', () => {
 
     renderModal({
       externalSidebarNav: true,
-      desktopSection: 'database',
+      desktopSection: 'radio-app',
       onSaveAppSettings,
     });
 
@@ -807,7 +807,7 @@ describe('SettingsModal', () => {
 
     renderModal({
       externalSidebarNav: true,
-      desktopSection: 'database',
+      desktopSection: 'radio-app',
       onSaveAppSettings,
     });
 
@@ -832,7 +832,7 @@ describe('SettingsModal', () => {
 
     renderModal({
       externalSidebarNav: true,
-      desktopSection: 'database',
+      desktopSection: 'radio-app',
       appSettings: {
         ...baseSettings,
         tracked_telemetry_repeaters: [directKey],

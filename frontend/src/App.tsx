@@ -751,6 +751,8 @@ export function App() {
     onToggleBlockedName: handleBlockName,
     blockedKeys: appSettings?.blocked_keys ?? [],
     blockedNames: appSettings?.blocked_names ?? [],
+    trackedTelemetryContacts: appSettings?.tracked_telemetry_contacts ?? [],
+    onToggleTrackedTelemetryContact: handleToggleTrackedTelemetryContact,
   };
   const channelInfoPaneProps = {
     channelKey: infoPaneChannelKey,

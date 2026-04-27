@@ -20,6 +20,7 @@ import {
 
 import { SettingsRadioSection } from './settings/SettingsRadioSection';
 import { SettingsLocalSection } from './settings/SettingsLocalSection';
+import { SettingsRadioAppSection } from './settings/SettingsRadioAppSection';
 import { SettingsFanoutSection } from './settings/SettingsFanoutSection';
 import { SettingsDatabaseSection } from './settings/SettingsDatabaseSection';
 import { SettingsStatisticsSection } from './settings/SettingsStatisticsSection';
@@ -110,6 +111,7 @@ export function SettingsModal(props: SettingsModalProps) {
   const [expandedSections, setExpandedSections] = useState<Record<SettingsSection, boolean>>({
     radio: false,
     local: false,
+    'radio-app': false,
     fanout: false,
     database: false,
     statistics: false,
@@ -243,16 +245,14 @@ export function SettingsModal(props: SettingsModalProps) {
         </section>
       )}
 
-      {shouldRenderSection('database') && (
+      {shouldRenderSection('radio-app') && (
         <section className={sectionWrapperClass}>
-          {renderSectionHeader('database')}
-          {isSectionVisible('database') &&
+          {renderSectionHeader('radio-app')}
+          {isSectionVisible('radio-app') &&
             (appSettings ? (
-              <SettingsDatabaseSection
+              <SettingsRadioAppSection
                 appSettings={appSettings}
-                health={health}
                 onSaveAppSettings={onSaveAppSettings}
-                onHealthRefresh={onHealthRefresh}
                 blockedKeys={blockedKeys}
                 blockedNames={blockedNames}
                 onToggleBlockedKey={onToggleBlockedKey}
@@ -263,6 +263,28 @@ export function SettingsModal(props: SettingsModalProps) {
                 onToggleTrackedTelemetry={onToggleTrackedTelemetry}
                 trackedTelemetryContacts={trackedTelemetryContacts}
                 onToggleTrackedTelemetryContact={onToggleTrackedTelemetryContact}
+                className={sectionContentClass}
+              />
+            ) : (
+              <div className={sectionContentClass}>
+                <div className="rounded-md border border-input bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                  Loading app settings...
+                </div>
+              </div>
+            ))}
+        </section>
+      )}
+
+      {shouldRenderSection('database') && (
+        <section className={sectionWrapperClass}>
+          {renderSectionHeader('database')}
+          {isSectionVisible('database') &&
+            (appSettings ? (
+              <SettingsDatabaseSection
+                appSettings={appSettings}
+                health={health}
+                onSaveAppSettings={onSaveAppSettings}
+                onHealthRefresh={onHealthRefresh}
                 className={sectionContentClass}
               />
             ) : (
