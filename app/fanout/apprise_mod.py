@@ -11,6 +11,9 @@ from app.path_utils import split_path_hex
 
 logger = logging.getLogger(__name__)
 
+_MAX_SEND_ATTEMPTS = 3
+_RETRY_DELAY_S = 2
+
 DEFAULT_BODY_FORMAT_DM = "**DM:** {sender_name}: {text} **via:** [{hops_backticked}]"
 DEFAULT_BODY_FORMAT_CHANNEL = (
     "**{channel_name}:** {sender_name}: {text} **via:** [{hops_backticked}]"
@@ -200,16 +203,38 @@ class AppriseModule(FanoutModule):
             data, body_format_dm=body_format_dm, body_format_channel=body_format_channel
         )
 
-        try:
-            success = await asyncio.to_thread(
-                _send_sync, urls, body, preserve_identity=preserve_identity
-            )
-            self._set_last_error(None if success else "Apprise notify returned failure")
-            if not success:
-                logger.warning("Apprise notification failed for module %s", self.config_id)
-        except Exception as exc:
-            self._set_last_error(str(exc))
-            logger.exception("Apprise send error for module %s", self.config_id)
+        last_exc: Exception | None = None
+        for attempt in range(_MAX_SEND_ATTEMPTS):
+            try:
+                success = await asyncio.to_thread(
+                    _send_sync, urls, body, preserve_identity=preserve_identity
+                )
+                if success:
+                    self._set_last_error(None)
+                    return
+                logger.warning(
+                    "Apprise notification failed for module %s (attempt %d/%d)",
+                    self.config_id,
+                    attempt + 1,
+                    _MAX_SEND_ATTEMPTS,
+                )
+            except Exception as exc:
+                last_exc = exc
+                logger.warning(
+                    "Apprise send error for module %s (attempt %d/%d): %s",
+                    self.config_id,
+                    attempt + 1,
+                    _MAX_SEND_ATTEMPTS,
+                    exc,
+                )
+            if attempt < _MAX_SEND_ATTEMPTS - 1:
+                await asyncio.sleep(_RETRY_DELAY_S)
+
+        # All attempts exhausted
+        if last_exc is not None:
+            self._set_last_error(str(last_exc))
+        else:
+            self._set_last_error("Apprise notify returned failure")
 
     @property
     def status(self) -> str:
