@@ -245,7 +245,7 @@ def _get_client_version() -> str:
 class CommunityMqttPublisher(BaseMqttPublisher):
     """Manages the community MQTT connection and publishes raw packets."""
 
-    _backoff_max = 60
+    _backoff_max = 3600
     _log_prefix = "Community MQTT"
     _not_configured_timeout: float | None = 30
 

@@ -316,7 +316,7 @@ def _device_payload(
 class _HaMqttPublisher(BaseMqttPublisher):
     """Thin MQTT lifecycle wrapper for the HA discovery module."""
 
-    _backoff_max = 30
+    _backoff_max = 3600
     _log_prefix = "HA-MQTT"
 
     def __init__(self) -> None:

@@ -65,6 +65,7 @@ class BaseMqttPublisher(ABC):
         self.connected: bool = False
         self.integration_name: str = ""
         self._last_error: str | None = None
+        self._error_notified: bool = False
 
     def set_integration_name(self, name: str) -> None:
         """Attach the configured fanout-module name for operator-facing logs."""
@@ -104,6 +105,7 @@ class BaseMqttPublisher(ABC):
         self._client = None
         self.connected = False
         self._last_error = None
+        self._error_notified = False
 
     async def restart(self, settings: object) -> None:
         """Called when settings change — stop + start."""
@@ -217,6 +219,7 @@ class BaseMqttPublisher(ABC):
                     self._client = client
                     self.connected = True
                     self._last_error = None
+                    self._error_notified = False
                     backoff = _BACKOFF_MIN
 
                     title, detail = self._on_connected(settings)
@@ -281,9 +284,11 @@ class BaseMqttPublisher(ABC):
                     )
                     return
 
-                title, detail = self._on_error()
-                broadcast_error(title, detail)
-                _broadcast_health()
+                if not self._error_notified:
+                    title, detail = self._on_error()
+                    broadcast_error(title, detail)
+                    _broadcast_health()
+                    self._error_notified = True
                 logger.warning(
                     "%s connection error. This is usually transient network noise; "
                     "if it self-resolves, it is generally not a concern: %s "
