@@ -699,7 +699,7 @@ class TestTracePath:
         assert "not a repeater" in exc.value.detail
 
     @pytest.mark.asyncio
-    async def test_returns_504_when_no_trace_response_is_heard(self):
+    async def test_returns_422_when_no_trace_response_is_heard(self):
         mc = _mock_meshcore_with_info()
         repeater = Contact(
             public_key="44" * 32,
@@ -741,7 +741,7 @@ class TestTracePath:
                     )
                 )
 
-        assert exc.value.status_code == 504
+        assert exc.value.status_code == 422
         assert "No trace response heard" in exc.value.detail
 
     @pytest.mark.asyncio

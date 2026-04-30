@@ -462,7 +462,7 @@ async def request_trace(public_key: str) -> TraceResponse:
         )
 
     if event is None:
-        raise HTTPException(status_code=504, detail="No trace response heard")
+        raise HTTPException(status_code=422, detail="No trace response heard")
 
     trace = event.payload
     path = trace.get("path", [])
