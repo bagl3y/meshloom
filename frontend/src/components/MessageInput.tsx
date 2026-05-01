@@ -4,12 +4,12 @@ import {
   useImperativeHandle,
   forwardRef,
   useRef,
+  useEffect,
   useMemo,
   type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { toast } from './ui/sonner';
 import { cn } from '@/lib/utils';
@@ -59,18 +59,31 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
 ) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  /** Resize textarea to fit content, clamped between 1 row and ~6 rows. */
+  const autoResize = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    // Clamp: min 40px (≈1 row), max 160px (≈6 rows)
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, []);
 
   useImperativeHandle(ref, () => ({
     appendText: (appendedText: string) => {
       setText((prev) => prev + appendedText);
-      // Focus the input after appending
-      inputRef.current?.focus();
+      textareaRef.current?.focus();
     },
     focus: () => {
-      inputRef.current?.focus();
+      textareaRef.current?.focus();
     },
   }));
+
+  // Re-measure height whenever text changes (covers programmatic updates like appendText)
+  useEffect(() => {
+    autoResize();
+  }, [text, autoResize]);
 
   // Calculate character limits based on conversation type
   const limits = useMemo(() => {
@@ -139,13 +152,13 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
       } finally {
         setSending(false);
       }
-      // Refocus after React re-enables the input
-      setTimeout(() => inputRef.current?.focus(), 0);
+      // Refocus after React re-enables the textarea
+      setTimeout(() => textareaRef.current?.focus(), 0);
     },
     [text, sending, disabled, onSend]
   );
 
-  const handleChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+  const handleChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
     const input = e.target;
     const raw = input.value;
     // Skip replacement during IME / dead-key composition to avoid garbling interim input
@@ -171,11 +184,12 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
   }, []);
 
   const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSubmit(e as unknown as FormEvent);
       }
+      // Shift+Enter falls through naturally and inserts a newline
     },
     [handleSubmit]
   );
@@ -193,22 +207,28 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
       onSubmit={handleSubmit}
       autoComplete="off"
     >
-      <div className="flex gap-2">
-        <Input
-          ref={inputRef}
-          type="text"
+      <div className="flex gap-2 items-end">
+        <textarea
+          ref={textareaRef}
           autoComplete="off"
           name="chat-message-input"
           aria-label={placeholder || 'Type a message'}
           data-lpignore="true"
           data-1p-ignore="true"
           data-bwignore="true"
+          rows={1}
           value={text}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder={placeholder || 'Type a message...'}
           disabled={disabled || sending}
-          className="flex-1 min-w-0"
+          className={cn(
+            'flex-1 min-w-0 resize-none overflow-y-auto',
+            'rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background',
+            'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+            'disabled:cursor-not-allowed disabled:opacity-50 md:text-sm'
+          )}
+          style={{ minHeight: '40px', maxHeight: '160px' }}
         />
         <Button
           type="submit"

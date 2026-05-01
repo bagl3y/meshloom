@@ -51,7 +51,7 @@ describe('MessageInput', () => {
   }
 
   function getInput() {
-    return screen.getByPlaceholderText('Type a message...') as HTMLInputElement;
+    return screen.getByPlaceholderText('Type a message...') as HTMLTextAreaElement;
   }
 
   function getSendButton() {
