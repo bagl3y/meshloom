@@ -274,6 +274,10 @@ def _validate_apprise_config(config: dict) -> None:
                     status_code=400, detail=f"Invalid format string in {field}"
                 ) from None
 
+    markdown_format = config.get("markdown_format")
+    if markdown_format is not None:
+        config["markdown_format"] = bool(markdown_format)
+
 
 def _validate_webhook_config(config: dict) -> None:
     """Validate webhook config blob."""

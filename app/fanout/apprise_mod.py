@@ -21,6 +21,12 @@ DEFAULT_BODY_FORMAT_CHANNEL = (
 _DEFAULT_BODY_FORMAT_DM_NO_PATH = "**DM:** {sender_name}: {text}"
 _DEFAULT_BODY_FORMAT_CHANNEL_NO_PATH = "**{channel_name}:** {sender_name}: {text}"
 
+# Plain-text variants (no markdown formatting)
+DEFAULT_BODY_FORMAT_DM_PLAIN = "DM: {sender_name}: {text} via: [{hops}]"
+DEFAULT_BODY_FORMAT_CHANNEL_PLAIN = "{channel_name}: {sender_name}: {text} via: [{hops}]"
+_DEFAULT_BODY_FORMAT_DM_NO_PATH_PLAIN = "DM: {sender_name}: {text}"
+_DEFAULT_BODY_FORMAT_CHANNEL_NO_PATH_PLAIN = "{channel_name}: {sender_name}: {text}"
+
 # Variables available for user format strings
 FORMAT_VARIABLES = (
     "type",
@@ -133,10 +139,17 @@ def _apply_format(fmt: str, variables: dict[str, str]) -> str:
 def _format_body(
     data: dict,
     *,
-    body_format_dm: str = DEFAULT_BODY_FORMAT_DM,
-    body_format_channel: str = DEFAULT_BODY_FORMAT_CHANNEL,
+    body_format_dm: str | None = None,
+    body_format_channel: str | None = None,
+    markdown: bool = True,
 ) -> str:
     """Build a notification body from message data using format strings."""
+    if body_format_dm is None:
+        body_format_dm = DEFAULT_BODY_FORMAT_DM if markdown else DEFAULT_BODY_FORMAT_DM_PLAIN
+    if body_format_channel is None:
+        body_format_channel = (
+            DEFAULT_BODY_FORMAT_CHANNEL if markdown else DEFAULT_BODY_FORMAT_CHANNEL_PLAIN
+        )
     variables = _build_template_vars(data)
     msg_type = data.get("type", "")
     fmt = body_format_dm if msg_type == "PRIV" else body_format_channel
@@ -144,13 +157,21 @@ def _format_body(
         return _apply_format(fmt, variables)
     except Exception:
         logger.warning("Apprise format string error, falling back to default")
-        default = DEFAULT_BODY_FORMAT_DM if msg_type == "PRIV" else DEFAULT_BODY_FORMAT_CHANNEL
+        if markdown:
+            default = DEFAULT_BODY_FORMAT_DM if msg_type == "PRIV" else DEFAULT_BODY_FORMAT_CHANNEL
+        else:
+            default = (
+                DEFAULT_BODY_FORMAT_DM_PLAIN
+                if msg_type == "PRIV"
+                else DEFAULT_BODY_FORMAT_CHANNEL_PLAIN
+            )
         return _apply_format(default, variables)
 
 
-def _send_sync(urls_raw: str, body: str, *, preserve_identity: bool) -> bool:
+def _send_sync(urls_raw: str, body: str, *, preserve_identity: bool, markdown: bool = True) -> bool:
     """Send notification synchronously via Apprise. Returns True on success."""
     import apprise as apprise_lib
+    from apprise import NotifyFormat
 
     urls = _parse_urls(urls_raw)
     if not urls:
@@ -162,7 +183,8 @@ def _send_sync(urls_raw: str, body: str, *, preserve_identity: bool) -> bool:
             url = _normalize_discord_url(url)
         notifier.add(url)
 
-    return bool(notifier.notify(title="", body=body))
+    body_fmt = NotifyFormat.MARKDOWN if markdown else NotifyFormat.TEXT
+    return bool(notifier.notify(title="", body=body, body_format=body_fmt))
 
 
 class AppriseModule(FanoutModule):
@@ -181,6 +203,7 @@ class AppriseModule(FanoutModule):
             return
 
         preserve_identity = self.config.get("preserve_identity", True)
+        markdown = self.config.get("markdown_format", True)
 
         # Read format strings; treat empty/whitespace as unset (use default).
         # Fall back to legacy include_path for pre-migration configs.
@@ -189,25 +212,46 @@ class AppriseModule(FanoutModule):
         if body_format_dm is None or body_format_channel is None:
             include_path = self.config.get("include_path", True)
             if body_format_dm is None:
-                body_format_dm = (
-                    DEFAULT_BODY_FORMAT_DM if include_path else _DEFAULT_BODY_FORMAT_DM_NO_PATH
-                )
+                if markdown:
+                    body_format_dm = (
+                        DEFAULT_BODY_FORMAT_DM if include_path else _DEFAULT_BODY_FORMAT_DM_NO_PATH
+                    )
+                else:
+                    body_format_dm = (
+                        DEFAULT_BODY_FORMAT_DM_PLAIN
+                        if include_path
+                        else _DEFAULT_BODY_FORMAT_DM_NO_PATH_PLAIN
+                    )
             if body_format_channel is None:
-                body_format_channel = (
-                    DEFAULT_BODY_FORMAT_CHANNEL
-                    if include_path
-                    else _DEFAULT_BODY_FORMAT_CHANNEL_NO_PATH
-                )
+                if markdown:
+                    body_format_channel = (
+                        DEFAULT_BODY_FORMAT_CHANNEL
+                        if include_path
+                        else _DEFAULT_BODY_FORMAT_CHANNEL_NO_PATH
+                    )
+                else:
+                    body_format_channel = (
+                        DEFAULT_BODY_FORMAT_CHANNEL_PLAIN
+                        if include_path
+                        else _DEFAULT_BODY_FORMAT_CHANNEL_NO_PATH_PLAIN
+                    )
 
         body = _format_body(
-            data, body_format_dm=body_format_dm, body_format_channel=body_format_channel
+            data,
+            body_format_dm=body_format_dm,
+            body_format_channel=body_format_channel,
+            markdown=markdown,
         )
 
         last_exc: Exception | None = None
         for attempt in range(_MAX_SEND_ATTEMPTS):
             try:
                 success = await asyncio.to_thread(
-                    _send_sync, urls, body, preserve_identity=preserve_identity
+                    _send_sync,
+                    urls,
+                    body,
+                    preserve_identity=preserve_identity,
+                    markdown=markdown,
                 )
                 if success:
                     self._set_last_error(None)

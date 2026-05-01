@@ -1580,6 +1580,46 @@ class TestFanoutAppriseIntegration:
         assert "Eve" in body_text
         assert "routed msg" in body_text
 
+    @pytest.mark.asyncio
+    async def test_apprise_markdown_false_delivers_plain_text(
+        self, apprise_capture_server, integration_db
+    ):
+        """Apprise with markdown_format=False delivers without markdown formatting."""
+        cfg = await FanoutConfigRepository.create(
+            config_type="apprise",
+            name="Plain Apprise",
+            config={
+                "urls": f"json://127.0.0.1:{apprise_capture_server.port}",
+                "markdown_format": False,
+            },
+            scope={"messages": "all", "raw_packets": "none"},
+            enabled=True,
+        )
+
+        manager = FanoutManager()
+        try:
+            await manager.load_from_db()
+            assert cfg["id"] in manager._modules
+
+            await manager.broadcast_message(
+                {
+                    "type": "PRIV",
+                    "conversation_key": "pk1",
+                    "text": "hello",
+                    "sender_name": "S_Borkin",
+                }
+            )
+
+            results = await apprise_capture_server.wait_for(1)
+        finally:
+            await manager.stop_all()
+
+        assert len(results) >= 1
+        body_text = str(results[0])
+        assert "S_Borkin" in body_text
+        assert "hello" in body_text
+        assert "**" not in body_text
+
 
 # ---------------------------------------------------------------------------
 # Bot lifecycle tests

@@ -287,6 +287,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
       config: {
         urls: '',
         preserve_identity: true,
+        markdown_format: true,
         body_format_dm: '**DM:** {sender_name}: {text} **via:** [{hops_backticked}]',
         body_format_channel:
           '**{channel_name}:** {sender_name}: {text} **via:** [{hops_backticked}]',
@@ -2390,6 +2391,8 @@ function ScopeSelector({
 const APPRISE_DEFAULT_DM = '**DM:** {sender_name}: {text} **via:** [{hops_backticked}]';
 const APPRISE_DEFAULT_CHANNEL =
   '**{channel_name}:** {sender_name}: {text} **via:** [{hops_backticked}]';
+const APPRISE_DEFAULT_DM_PLAIN = 'DM: {sender_name}: {text} via: [{hops}]';
+const APPRISE_DEFAULT_CHANNEL_PLAIN = '{channel_name}: {sender_name}: {text} via: [{hops}]';
 
 const APPRISE_SAMPLE_VARS: Record<string, string> = {
   type: 'CHAN',
@@ -2420,18 +2423,31 @@ function appriseApplyFormat(fmt: string, vars: Record<string, string>): string {
   return result;
 }
 
-/** Render a markdown-ish string into inline React elements (bold + code spans). */
+/** Render a markdown-ish string into inline React elements (bold, italic, code). */
 function appriseRenderMarkdown(s: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   let key = 0;
-  // Split on **bold** and `code` spans
-  const parts = s.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  // Split on **bold**, __bold__, *italic*, _italic_, and `code` spans.
+  // Longer delimiters first so ** and __ match before * and _.
+  const parts = s.split(/(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*]+\*|_[^_]+_)/g);
   for (const part of parts) {
-    if (part.startsWith('**') && part.endsWith('**')) {
+    if (
+      (part.startsWith('**') && part.endsWith('**')) ||
+      (part.startsWith('__') && part.endsWith('__'))
+    ) {
       nodes.push(
         <strong key={key++} className="font-bold">
           {part.slice(2, -2)}
         </strong>
+      );
+    } else if (
+      (part.startsWith('*') && part.endsWith('*')) ||
+      (part.startsWith('_') && part.endsWith('_'))
+    ) {
+      nodes.push(
+        <em key={key++} className="italic">
+          {part.slice(1, -1)}
+        </em>
       );
     } else if (part.startsWith('`') && part.endsWith('`')) {
       nodes.push(
@@ -2446,19 +2462,29 @@ function appriseRenderMarkdown(s: string): ReactNode[] {
   return nodes;
 }
 
-function AppriseFormatPreview({ format, vars }: { format: string; vars: Record<string, string> }) {
+function AppriseFormatPreview({
+  format,
+  vars,
+  markdown = true,
+}: {
+  format: string;
+  vars: Record<string, string>;
+  markdown?: boolean;
+}) {
   const raw = appriseApplyFormat(format, vars);
   return (
     <div className="rounded-md border border-border bg-muted/30 p-2 space-y-1.5">
+      {markdown && (
+        <div>
+          <span className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
+            Rendered (Discord, Slack, Telegram)
+          </span>
+          <p className="text-xs break-all">{appriseRenderMarkdown(raw)}</p>
+        </div>
+      )}
       <div>
         <span className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
-          Rendered (Discord, Slack)
-        </span>
-        <p className="text-xs break-all">{appriseRenderMarkdown(raw)}</p>
-      </div>
-      <div>
-        <span className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
-          Raw (Telegram, email)
+          {markdown ? 'Raw (email, SMS)' : 'Preview'}
         </span>
         <p className="text-xs font-mono break-all text-muted-foreground">{raw}</p>
       </div>
@@ -2483,9 +2509,11 @@ function AppriseConfigEditor({
   onChange: (config: Record<string, unknown>) => void;
   onScopeChange: (scope: Record<string, unknown>) => void;
 }) {
-  const dmFormat = ((config.body_format_dm as string) || '').trim() || APPRISE_DEFAULT_DM;
-  const chanFormat =
-    ((config.body_format_channel as string) || '').trim() || APPRISE_DEFAULT_CHANNEL;
+  const markdown = config.markdown_format !== false;
+  const defaultDm = markdown ? APPRISE_DEFAULT_DM : APPRISE_DEFAULT_DM_PLAIN;
+  const defaultChan = markdown ? APPRISE_DEFAULT_CHANNEL : APPRISE_DEFAULT_CHANNEL_PLAIN;
+  const dmFormat = ((config.body_format_dm as string) || '').trim() || defaultDm;
+  const chanFormat = ((config.body_format_channel as string) || '').trim() || defaultChan;
 
   return (
     <div className="space-y-3">
@@ -2549,6 +2577,39 @@ function AppriseConfigEditor({
 
       <h3 className="text-base font-semibold tracking-tight">Message Format</h3>
 
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={markdown}
+          onChange={(e) => {
+            const md = e.target.checked;
+            const updates: Record<string, unknown> = { ...config, markdown_format: md };
+            const curDm = ((config.body_format_dm as string) || '').trim();
+            const curChan = ((config.body_format_channel as string) || '').trim();
+            if (md) {
+              if (!curDm || curDm === APPRISE_DEFAULT_DM_PLAIN)
+                updates.body_format_dm = APPRISE_DEFAULT_DM;
+              if (!curChan || curChan === APPRISE_DEFAULT_CHANNEL_PLAIN)
+                updates.body_format_channel = APPRISE_DEFAULT_CHANNEL;
+            } else {
+              if (!curDm || curDm === APPRISE_DEFAULT_DM)
+                updates.body_format_dm = APPRISE_DEFAULT_DM_PLAIN;
+              if (!curChan || curChan === APPRISE_DEFAULT_CHANNEL)
+                updates.body_format_channel = APPRISE_DEFAULT_CHANNEL_PLAIN;
+            }
+            onChange(updates);
+          }}
+          className="h-4 w-4 rounded border-border"
+        />
+        <div>
+          <span className="text-sm">Markdown formatting</span>
+          <p className="text-[0.8125rem] text-muted-foreground">
+            If notifications fail on services like Telegram due to special characters in sender
+            names, disable this option.
+          </p>
+        </div>
+      </label>
+
       <details className="group">
         <summary className="text-sm font-medium text-foreground cursor-pointer select-none flex items-center gap-1">
           <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-0 -rotate-90" />
@@ -2604,12 +2665,12 @@ function AppriseConfigEditor({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label htmlFor="fanout-apprise-fmt-dm">DM format</Label>
-          {!appriseIsDefault(config.body_format_dm, APPRISE_DEFAULT_DM) && (
+          {!appriseIsDefault(config.body_format_dm, defaultDm) && (
             <button
               type="button"
               aria-label="Reset DM format to default"
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => onChange({ ...config, body_format_dm: APPRISE_DEFAULT_DM })}
+              onClick={() => onChange({ ...config, body_format_dm: defaultDm })}
             >
               Reset to default
             </button>
@@ -2618,23 +2679,23 @@ function AppriseConfigEditor({
         <textarea
           id="fanout-apprise-fmt-dm"
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono min-h-[56px]"
-          placeholder={APPRISE_DEFAULT_DM}
+          placeholder={defaultDm}
           value={(config.body_format_dm as string) ?? ''}
           onChange={(e) => onChange({ ...config, body_format_dm: e.target.value })}
           rows={2}
         />
-        <AppriseFormatPreview format={dmFormat} vars={APPRISE_SAMPLE_VARS_DM} />
+        <AppriseFormatPreview format={dmFormat} vars={APPRISE_SAMPLE_VARS_DM} markdown={markdown} />
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label htmlFor="fanout-apprise-fmt-chan">Channel format</Label>
-          {!appriseIsDefault(config.body_format_channel, APPRISE_DEFAULT_CHANNEL) && (
+          {!appriseIsDefault(config.body_format_channel, defaultChan) && (
             <button
               type="button"
               aria-label="Reset channel format to default"
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => onChange({ ...config, body_format_channel: APPRISE_DEFAULT_CHANNEL })}
+              onClick={() => onChange({ ...config, body_format_channel: defaultChan })}
             >
               Reset to default
             </button>
@@ -2643,12 +2704,12 @@ function AppriseConfigEditor({
         <textarea
           id="fanout-apprise-fmt-chan"
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono min-h-[56px]"
-          placeholder={APPRISE_DEFAULT_CHANNEL}
+          placeholder={defaultChan}
           value={(config.body_format_channel as string) ?? ''}
           onChange={(e) => onChange({ ...config, body_format_channel: e.target.value })}
           rows={2}
         />
-        <AppriseFormatPreview format={chanFormat} vars={APPRISE_SAMPLE_VARS} />
+        <AppriseFormatPreview format={chanFormat} vars={APPRISE_SAMPLE_VARS} markdown={markdown} />
       </div>
 
       <Separator />

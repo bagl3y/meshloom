@@ -1367,6 +1367,134 @@ class TestAppriseValidation:
         assert scope["raw_packets"] == "none"
         assert scope["messages"] == "all"
 
+    def test_validate_apprise_config_accepts_markdown_format_bool(self):
+        from app.routers.fanout import _validate_apprise_config
+
+        _validate_apprise_config({"urls": "discord://123/abc", "markdown_format": False})
+
+    def test_validate_apprise_config_normalizes_markdown_format(self):
+        from app.routers.fanout import _validate_apprise_config
+
+        config: dict = {"urls": "discord://123/abc", "markdown_format": 0}
+        _validate_apprise_config(config)
+        assert config["markdown_format"] is False
+
+    def test_validate_apprise_config_works_without_markdown_format(self):
+        from app.routers.fanout import _validate_apprise_config
+
+        _validate_apprise_config({"urls": "discord://123/abc"})
+
+
+class TestAppriseMarkdownFormat:
+    def test_format_body_markdown_true_uses_markdown_fallback(self):
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {"type": "PRIV", "text": "hi", "sender_name": "Alice"},
+            markdown=True,
+        )
+        assert "**DM:**" in body
+
+    def test_format_body_markdown_false_uses_plain_fallback(self):
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {"type": "PRIV", "text": "hi", "sender_name": "Alice"},
+            markdown=False,
+        )
+        assert "**" not in body
+        assert "DM:" in body
+        assert "Alice" in body
+
+    def test_format_body_markdown_false_channel(self):
+        from app.fanout.apprise_mod import _format_body
+
+        body = _format_body(
+            {"type": "CHAN", "text": "hi", "sender_name": "Bob", "channel_name": "#gen"},
+            markdown=False,
+        )
+        assert "**" not in body
+        assert "#gen:" in body
+
+    def test_send_sync_passes_markdown_body_format(self):
+        from unittest.mock import MagicMock, patch
+
+        with patch("app.fanout.apprise_mod.apprise_lib", create=True) as mock_lib:
+            mock_notifier = MagicMock()
+            mock_notifier.notify.return_value = True
+            mock_lib.Apprise.return_value = mock_notifier
+
+            with patch.dict("sys.modules", {"apprise": mock_lib}):
+                from app.fanout.apprise_mod import _send_sync
+
+                _send_sync("json://localhost", "test", preserve_identity=False, markdown=True)
+                call_kwargs = mock_notifier.notify.call_args
+                assert call_kwargs.kwargs.get("body_format") or call_kwargs[1].get("body_format")
+
+    def test_send_sync_passes_text_body_format_when_markdown_false(self):
+        from unittest.mock import MagicMock, patch
+
+        with patch("app.fanout.apprise_mod.apprise_lib", create=True) as mock_lib:
+            mock_notifier = MagicMock()
+            mock_notifier.notify.return_value = True
+            mock_lib.Apprise.return_value = mock_notifier
+
+            with patch.dict("sys.modules", {"apprise": mock_lib}):
+                from app.fanout.apprise_mod import _send_sync
+
+                _send_sync("json://localhost", "test", preserve_identity=False, markdown=False)
+                call_kwargs = mock_notifier.notify.call_args
+                assert call_kwargs.kwargs.get("body_format") or call_kwargs[1].get("body_format")
+
+    @pytest.mark.asyncio
+    async def test_on_message_reads_markdown_format_config(self):
+        from unittest.mock import patch as _patch
+
+        from app.fanout.apprise_mod import AppriseModule
+
+        mod = AppriseModule("test", {"urls": "json://localhost", "markdown_format": False})
+        with _patch("app.fanout.apprise_mod._send_sync", return_value=True) as mock_send:
+            await mod.on_message(
+                {"type": "PRIV", "text": "hello", "outgoing": False, "sender_name": "S_Borkin"}
+            )
+            mock_send.assert_called_once()
+            assert mock_send.call_args.kwargs.get("markdown") is False
+
+    @pytest.mark.asyncio
+    async def test_on_message_defaults_markdown_true(self):
+        from unittest.mock import patch as _patch
+
+        from app.fanout.apprise_mod import AppriseModule
+
+        mod = AppriseModule("test", {"urls": "json://localhost"})
+        with _patch("app.fanout.apprise_mod._send_sync", return_value=True) as mock_send:
+            await mod.on_message(
+                {"type": "PRIV", "text": "hello", "outgoing": False, "sender_name": "Alice"}
+            )
+            mock_send.assert_called_once()
+            assert mock_send.call_args.kwargs.get("markdown") is True
+
+    @pytest.mark.asyncio
+    async def test_on_message_markdown_false_uses_plain_default_format(self):
+        from unittest.mock import patch as _patch
+
+        from app.fanout.apprise_mod import AppriseModule
+
+        mod = AppriseModule("test", {"urls": "json://localhost", "markdown_format": False})
+        with _patch("app.fanout.apprise_mod._send_sync", return_value=True) as mock_send:
+            await mod.on_message(
+                {
+                    "type": "CHAN",
+                    "text": "hi",
+                    "outgoing": False,
+                    "sender_name": "Bob",
+                    "channel_name": "#general",
+                }
+            )
+            body = mock_send.call_args[0][1]
+            assert "**" not in body
+            assert "#general:" in body
+
 
 # ---------------------------------------------------------------------------
 # Comprehensive scope/filter selection logic tests
