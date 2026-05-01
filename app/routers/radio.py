@@ -338,7 +338,7 @@ async def get_radio_config() -> RadioConfigResponse:
 
     info = mc.self_info
     if not info:
-        raise HTTPException(status_code=503, detail="Radio info not available")
+        raise HTTPException(status_code=423, detail="Radio info not available")
 
     adv_loc_policy = info.get("adv_loc_policy", 1)
     advert_location_source: AdvertLocationSource = "off" if adv_loc_policy == 0 else "current"
@@ -380,7 +380,7 @@ async def update_radio_config(update: RadioConfigUpdate) -> RadioConfigResponse:
         except PathHashModeUnsupportedError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except RadioCommandRejectedError as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return await get_radio_config()
 
@@ -430,7 +430,7 @@ async def set_private_key(update: PrivateKeyUpdate) -> dict:
                 export_and_store_private_key_fn=export_and_store_private_key,
             )
         except (RadioCommandRejectedError, KeystoreRefreshError) as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return {"status": "ok"}
 
@@ -454,7 +454,7 @@ async def send_advertisement(request: RadioAdvertiseRequest | None = None) -> di
         success = await do_send_advertisement(mc, force=True, mode=mode)
 
     if not success:
-        raise HTTPException(status_code=500, detail=f"Failed to send {mode} advertisement")
+        raise HTTPException(status_code=422, detail=f"Failed to send {mode} advertisement")
 
     return {"status": "ok"}
 
@@ -486,7 +486,7 @@ async def discover_mesh(request: RadioDiscoveryRequest) -> RadioDiscoveryRespons
                 tag=tag,
             )
             if send_result is None or send_result.type == EventType.ERROR:
-                raise HTTPException(status_code=500, detail="Failed to start mesh discovery")
+                raise HTTPException(status_code=422, detail="Failed to start mesh discovery")
 
             deadline = _monotonic() + DISCOVERY_WINDOW_SECONDS
             results_by_key: dict[str, RadioDiscoveryResult] = {}
@@ -538,7 +538,7 @@ async def trace_path(request: RadioTraceRequest) -> RadioTraceResponse:
     async with radio_manager.radio_operation("radio_trace", pause_polling=True) as mc:
         local_public_key = str((mc.self_info or {}).get("public_key") or "").lower()
         if len(local_public_key) != 64:
-            raise HTTPException(status_code=503, detail="Local radio public key is unavailable")
+            raise HTTPException(status_code=423, detail="Local radio public key is unavailable")
         local_name = (mc.self_info or {}).get("name")
 
         response_task = asyncio.create_task(
@@ -555,13 +555,13 @@ async def trace_path(request: RadioTraceRequest) -> RadioTraceResponse:
                 flags=trace_flags,
             )
             if send_result is None or send_result.type == EventType.ERROR:
-                raise HTTPException(status_code=500, detail="Failed to send trace")
+                raise HTTPException(status_code=422, detail="Failed to send trace")
 
             timeout_seconds = _trace_timeout_seconds(send_result)
             try:
                 event = await asyncio.wait_for(response_task, timeout=timeout_seconds)
             except TimeoutError as exc:
-                raise HTTPException(status_code=422, detail="No trace response heard") from exc
+                raise HTTPException(status_code=408, detail="No trace response heard") from exc
         finally:
             if not response_task.done():
                 response_task.cancel()
@@ -569,12 +569,12 @@ async def trace_path(request: RadioTraceRequest) -> RadioTraceResponse:
                 await response_task
 
     if event is None:
-        raise HTTPException(status_code=422, detail="No trace response heard")
+        raise HTTPException(status_code=408, detail="No trace response heard")
 
     payload = event.payload if isinstance(event.payload, dict) else {}
     path_len = payload.get("path_len")
     if not isinstance(path_len, int):
-        raise HTTPException(status_code=500, detail="Trace response was malformed")
+        raise HTTPException(status_code=422, detail="Trace response was malformed")
 
     raw_path = payload.get("path")
     path_nodes = raw_path if isinstance(raw_path, list) else []
@@ -588,7 +588,7 @@ async def trace_path(request: RadioTraceRequest) -> RadioTraceResponse:
     hashed_nodes = path_nodes[:-1] if final_local_node is not None else path_nodes
 
     if len(hashed_nodes) < len(trace_nodes):
-        raise HTTPException(status_code=500, detail="Trace response was incomplete")
+        raise HTTPException(status_code=422, detail="Trace response was incomplete")
 
     nodes: list[RadioTraceNode] = []
     for index, trace_node in enumerate(trace_nodes):
@@ -641,13 +641,13 @@ async def _attempt_reconnect() -> dict:
     except Exception as e:
         logger.exception("Post-connect setup failed after reconnect")
         raise HTTPException(
-            status_code=503,
+            status_code=423,
             detail=f"Radio connected but setup failed: {e}",
         ) from e
 
     if not success:
         raise HTTPException(
-            status_code=503, detail="Failed to reconnect. Check radio connection and power."
+            status_code=423, detail="Failed to reconnect. Check radio connection and power."
         )
 
     return {"status": "ok", "message": "Reconnected successfully", "connected": True}
@@ -702,14 +702,14 @@ async def reconnect_radio() -> dict:
         logger.info("Radio connected but setup incomplete, retrying setup")
         try:
             if not await _prepare_connected(broadcast_on_success=True):
-                raise HTTPException(status_code=503, detail="Radio connection is paused")
+                raise HTTPException(status_code=423, detail="Radio connection is paused")
             return {"status": "ok", "message": "Setup completed", "connected": True}
         except HTTPException:
             raise
         except Exception as e:
             logger.exception("Post-connect setup failed")
             raise HTTPException(
-                status_code=503,
+                status_code=423,
                 detail=f"Radio connected but setup failed: {e}",
             ) from e
 

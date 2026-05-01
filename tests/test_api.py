@@ -50,7 +50,7 @@ def _patch_require_connected(mc=None, *, detail="Radio not connected"):
     if mc is None:
         return patch(
             "app.services.radio_runtime.radio_runtime.require_connected",
-            side_effect=HTTPException(status_code=503, detail=detail),
+            side_effect=HTTPException(status_code=423, detail=detail),
         )
     return patch("app.services.radio_runtime.radio_runtime.require_connected", return_value=mc)
 
@@ -422,11 +422,11 @@ class TestDebugEndpoint:
 
 
 class TestRadioDisconnectedHandler:
-    """Test that RadioDisconnectedError maps to 503."""
+    """Test that RadioDisconnectedError maps to 423."""
 
     @pytest.mark.asyncio
-    async def test_disconnect_race_returns_503(self, test_db, client):
-        """If radio disconnects between require_connected() and lock acquisition, return 503."""
+    async def test_disconnect_race_returns_423(self, test_db, client):
+        """If radio disconnects between require_connected() and lock acquisition, return 423."""
         pub_key = "ab" * 32
         await _insert_contact(pub_key, "Alice")
 
@@ -437,7 +437,7 @@ class TestRadioDisconnectedHandler:
                 "/api/messages/direct", json={"destination": pub_key, "text": "Hi"}
             )
 
-        assert response.status_code == 503
+        assert response.status_code == 423
         assert "not connected" in response.json()["detail"].lower()
 
 
@@ -500,25 +500,25 @@ class TestMessagesEndpoint:
 
     @pytest.mark.asyncio
     async def test_send_direct_message_requires_connection(self, test_db, client):
-        """Sending message when disconnected returns 503."""
+        """Sending message when disconnected returns 423."""
         with _patch_require_connected():
             response = await client.post(
                 "/api/messages/direct", json={"destination": "abc123", "text": "Hello"}
             )
 
-            assert response.status_code == 503
+            assert response.status_code == 423
             assert "not connected" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_send_channel_message_requires_connection(self, test_db, client):
-        """Sending channel message when disconnected returns 503."""
+        """Sending channel message when disconnected returns 423."""
         with _patch_require_connected():
             response = await client.post(
                 "/api/messages/channel",
                 json={"channel_key": "0123456789ABCDEF0123456789ABCDEF", "text": "Hello"},
             )
 
-            assert response.status_code == 503
+            assert response.status_code == 423
 
     @pytest.mark.asyncio
     async def test_send_direct_message_emits_websocket_message_event(self, test_db, client):
@@ -603,8 +603,8 @@ class TestMessagesEndpoint:
             assert "not found" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_send_direct_message_duplicate_returns_500(self, test_db):
-        """If MessageRepository.create returns None (duplicate), returns 500."""
+    async def test_send_direct_message_duplicate_returns_422(self, test_db):
+        """If MessageRepository.create returns None (duplicate), returns 422."""
         from app.models import SendDirectMessageRequest
         from app.routers.messages import send_direct_message
 
@@ -636,12 +636,12 @@ class TestMessagesEndpoint:
                     SendDirectMessageRequest(destination=pub_key, text="Hello")
                 )
 
-            assert exc_info.value.status_code == 500
+            assert exc_info.value.status_code == 422
             assert "unexpected duplicate" in exc_info.value.detail.lower()
 
     @pytest.mark.asyncio
-    async def test_send_channel_message_duplicate_returns_500(self, test_db):
-        """If MessageRepository.create returns None (duplicate), returns 500."""
+    async def test_send_channel_message_duplicate_returns_422(self, test_db):
+        """If MessageRepository.create returns None (duplicate), returns 422."""
         from app.models import SendChannelMessageRequest
         from app.routers.messages import send_channel_message
 
@@ -672,16 +672,16 @@ class TestMessagesEndpoint:
                     SendChannelMessageRequest(channel_key=chan_key, text="Hello")
                 )
 
-            assert exc_info.value.status_code == 500
+            assert exc_info.value.status_code == 422
             assert "unexpected duplicate" in exc_info.value.detail.lower()
 
     @pytest.mark.asyncio
     async def test_resend_channel_message_requires_connection(self, test_db, client):
-        """Resend endpoint returns 503 when radio is disconnected."""
+        """Resend endpoint returns 423 when radio is disconnected."""
         with _patch_require_connected():
             response = await client.post("/api/messages/channel/1/resend")
 
-            assert response.status_code == 503
+            assert response.status_code == 423
             assert "not connected" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio

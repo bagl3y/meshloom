@@ -66,11 +66,11 @@ async def _resolve_contact_or_404(
 
 
 async def _ensure_on_radio(mc, contact: Contact) -> None:
-    """Add a contact to the radio for routing, raising 500 on failure."""
+    """Add a contact to the radio for routing, raising 422 on failure."""
     add_result = await mc.commands.add_contact(contact.to_radio_dict())
     if add_result is not None and add_result.type == EventType.ERROR:
         raise HTTPException(
-            status_code=500, detail=f"Failed to add contact to radio: {add_result.payload}"
+            status_code=422, detail=f"Failed to add contact to radio: {add_result.payload}"
         )
 
 
@@ -452,7 +452,7 @@ async def request_trace(public_key: str) -> TraceResponse:
         )
 
         if result.type == EventType.ERROR:
-            raise HTTPException(status_code=500, detail=f"Failed to send trace: {result.payload}")
+            raise HTTPException(status_code=422, detail=f"Failed to send trace: {result.payload}")
 
         # Wait for the matching TRACE_DATA event
         event = await mc.wait_for_event(
@@ -462,7 +462,7 @@ async def request_trace(public_key: str) -> TraceResponse:
         )
 
     if event is None:
-        raise HTTPException(status_code=422, detail="No trace response heard")
+        raise HTTPException(status_code=408, detail="No trace response heard")
 
     trace = event.payload
     path = trace.get("path", [])
@@ -506,7 +506,7 @@ async def request_path_discovery(public_key: str) -> PathDiscoveryResponse:
             result = await mc.commands.send_path_discovery(contact.public_key)
             if result.type == EventType.ERROR:
                 raise HTTPException(
-                    status_code=500,
+                    status_code=422,
                     detail=f"Failed to send path discovery: {result.payload}",
                 )
 
@@ -518,7 +518,7 @@ async def request_path_discovery(public_key: str) -> PathDiscoveryResponse:
                 await response_task
 
         if event is None:
-            raise HTTPException(status_code=504, detail="No path discovery response heard")
+            raise HTTPException(status_code=408, detail="No path discovery response heard")
 
         payload = event.payload
         forward_path = str(payload.get("out_path") or "")

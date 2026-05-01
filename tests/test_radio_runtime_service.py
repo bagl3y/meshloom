@@ -57,12 +57,12 @@ def test_require_connected_preserves_http_semantics():
     )
     with pytest.raises(HTTPException, match="Radio is initializing") as exc:
         runtime.require_connected()
-    assert exc.value.status_code == 503
+    assert exc.value.status_code == 423
 
     runtime = RadioRuntime(_Manager(meshcore=None, is_connected=False, is_setup_in_progress=False))
     with pytest.raises(HTTPException, match="Radio not connected") as exc:
         runtime.require_connected()
-    assert exc.value.status_code == 503
+    assert exc.value.status_code == 423
 
 
 def test_require_connected_returns_fresh_meshcore_after_connectivity_check():

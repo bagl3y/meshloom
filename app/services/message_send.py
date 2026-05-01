@@ -159,7 +159,7 @@ async def send_channel_message_with_effective_scope(
                 override_result.payload,
             )
             raise HTTPException(
-                status_code=500,
+                status_code=422,
                 detail=(
                     f"Failed to apply regional override {override_scope!r} before {action_label}: "
                     f"{override_result.payload}"
@@ -189,7 +189,7 @@ async def send_channel_message_with_effective_scope(
                 phm_result.payload,
             )
             raise HTTPException(
-                status_code=500,
+                status_code=422,
                 detail=(
                     f"Failed to apply path hash mode override before {action_label}: "
                     f"{phm_result.payload}"
@@ -233,7 +233,7 @@ async def send_channel_message_with_effective_scope(
                     set_result.payload,
                 )
                 raise HTTPException(
-                    status_code=500,
+                    status_code=422,
                     detail=f"Failed to configure channel on radio before {action_label}",
                 )
             radio_manager.note_channel_slot_loaded(channel_key, channel_slot)
@@ -256,7 +256,7 @@ async def send_channel_message_with_effective_scope(
                 action_label,
                 channel.name,
             )
-            raise HTTPException(status_code=504, detail=NO_RADIO_RESPONSE_AFTER_SEND_DETAIL)
+            raise HTTPException(status_code=408, detail=NO_RADIO_RESPONSE_AFTER_SEND_DETAIL)
         if send_result.type == EventType.ERROR:
             logger.error(
                 "Radio returned error during %s for channel %s: %s",
@@ -598,10 +598,10 @@ async def send_direct_message_to_contact(
                 "No response from radio after direct send to %s; send outcome is unknown",
                 contact.public_key[:12],
             )
-            raise HTTPException(status_code=504, detail=NO_RADIO_RESPONSE_AFTER_SEND_DETAIL)
+            raise HTTPException(status_code=408, detail=NO_RADIO_RESPONSE_AFTER_SEND_DETAIL)
 
         if result.type == EventType.ERROR:
-            raise HTTPException(status_code=500, detail=f"Failed to send message: {result.payload}")
+            raise HTTPException(status_code=422, detail=f"Failed to send message: {result.payload}")
 
         message = await create_outgoing_direct_message(
             conversation_key=contact.public_key.lower(),
@@ -613,7 +613,7 @@ async def send_direct_message_to_contact(
         )
         if message is None:
             raise HTTPException(
-                status_code=500,
+                status_code=422,
                 detail="Failed to store outgoing message - unexpected duplicate",
             )
     finally:
@@ -626,7 +626,7 @@ async def send_direct_message_to_contact(
             )
 
     if sent_at is None or sender_timestamp is None or message is None or result is None:
-        raise HTTPException(status_code=500, detail="Failed to store outgoing message")
+        raise HTTPException(status_code=422, detail="Failed to store outgoing message")
 
     await contact_repository.update_last_contacted(contact.public_key.lower(), sent_at)
 
@@ -791,7 +791,7 @@ async def send_channel_message_to_channel(
             )
             if outgoing_message is None:
                 raise HTTPException(
-                    status_code=500,
+                    status_code=422,
                     detail="Failed to store outgoing message - unexpected duplicate",
                 )
 
@@ -813,11 +813,11 @@ async def send_channel_message_to_channel(
                     "No response from radio after channel send to %s; send outcome is unknown",
                     channel.name,
                 )
-                raise HTTPException(status_code=504, detail=NO_RADIO_RESPONSE_AFTER_SEND_DETAIL)
+                raise HTTPException(status_code=408, detail=NO_RADIO_RESPONSE_AFTER_SEND_DETAIL)
 
             if result.type == EventType.ERROR:
                 raise HTTPException(
-                    status_code=500, detail=f"Failed to send message: {result.payload}"
+                    status_code=422, detail=f"Failed to send message: {result.payload}"
                 )
     except Exception:
         if outgoing_message is not None:
@@ -834,7 +834,7 @@ async def send_channel_message_to_channel(
             )
 
     if sent_at is None or sender_timestamp is None or outgoing_message is None:
-        raise HTTPException(status_code=500, detail="Failed to store outgoing message")
+        raise HTTPException(status_code=422, detail="Failed to store outgoing message")
 
     outgoing_message = await build_stored_outgoing_channel_message(
         message_id=outgoing_message.id,
@@ -928,7 +928,7 @@ async def resend_channel_message_record(
                 )
                 if new_message is None:
                     raise HTTPException(
-                        status_code=500,
+                        status_code=422,
                         detail="Failed to store resent message - unexpected duplicate",
                     )
 
@@ -949,10 +949,10 @@ async def resend_channel_message_record(
                     "No response from radio after channel resend to %s; send outcome is unknown",
                     channel.name,
                 )
-                raise HTTPException(status_code=504, detail=NO_RADIO_RESPONSE_AFTER_SEND_DETAIL)
+                raise HTTPException(status_code=408, detail=NO_RADIO_RESPONSE_AFTER_SEND_DETAIL)
             if result.type == EventType.ERROR:
                 raise HTTPException(
-                    status_code=500,
+                    status_code=422,
                     detail=f"Failed to resend message: {result.payload}",
                 )
     except Exception:
@@ -971,7 +971,7 @@ async def resend_channel_message_record(
 
     if new_timestamp:
         if sent_at is None or new_message is None:
-            raise HTTPException(status_code=500, detail="Failed to assign resend timestamp")
+            raise HTTPException(status_code=422, detail="Failed to assign resend timestamp")
 
         new_message = await build_stored_outgoing_channel_message(
             message_id=new_message.id,

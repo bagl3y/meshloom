@@ -176,8 +176,8 @@ app.add_middleware(
 
 @app.exception_handler(RadioDisconnectedError)
 async def radio_disconnected_handler(request: Request, exc: RadioDisconnectedError):
-    """Return 503 when a radio disconnect race occurs during an operation."""
-    return JSONResponse(status_code=503, content={"detail": "Radio not connected"})
+    """Return 423 when a radio disconnect race occurs during an operation."""
+    return JSONResponse(status_code=423, content={"detail": "Radio not connected"})
 
 
 @app.middleware("http")

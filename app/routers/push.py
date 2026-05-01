@@ -48,7 +48,7 @@ async def vapid_public_key() -> VapidPublicKeyResponse:
     """Return the VAPID public key for browser PushManager.subscribe()."""
     key = get_vapid_public_key()
     if not key:
-        raise HTTPException(status_code=503, detail="VAPID keys not initialized")
+        raise HTTPException(status_code=423, detail="VAPID keys not initialized")
     return VapidPublicKeyResponse(public_key=key)
 
 
@@ -103,7 +103,7 @@ async def test_push(subscription_id: str) -> dict:
 
     vapid_key = get_vapid_private_key()
     if not vapid_key:
-        raise HTTPException(status_code=503, detail="VAPID keys not initialized")
+        raise HTTPException(status_code=423, detail="VAPID keys not initialized")
 
     payload = json.dumps(
         {
@@ -127,7 +127,7 @@ async def test_push(subscription_id: str) -> dict:
             )
         return {"status": "sent"}
     except TimeoutError:
-        raise HTTPException(status_code=504, detail="Push delivery timed out") from None
+        raise HTTPException(status_code=408, detail="Push delivery timed out") from None
     except WebPushException as e:
         status_code = getattr(getattr(e, "response", None), "status_code", 0)
         if status_code in (403, 404, 410):
@@ -143,10 +143,10 @@ async def test_push(subscription_id: str) -> dict:
                 "Re-enable push from a conversation header.",
             ) from None
         logger.warning("Test push failed: %s", e)
-        raise HTTPException(status_code=502, detail=f"Push delivery failed: {e}") from None
+        raise HTTPException(status_code=422, detail=f"Push delivery failed: {e}") from None
     except Exception as e:
         logger.warning("Test push failed: %s", e)
-        raise HTTPException(status_code=502, detail=f"Push delivery failed: {e}") from None
+        raise HTTPException(status_code=422, detail=f"Push delivery failed: {e}") from None
 
 
 # ── Global push conversation management ──────────────────────────────────

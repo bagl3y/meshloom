@@ -131,14 +131,14 @@ class TestGetRadioConfig:
         assert response.advert_location_source == "current"
 
     @pytest.mark.asyncio
-    async def test_returns_503_when_self_info_missing(self):
+    async def test_returns_423_when_self_info_missing(self):
         mc = MagicMock()
         mc.self_info = None
         with patch("app.routers.radio.radio_manager.require_connected", return_value=mc):
             with pytest.raises(HTTPException) as exc:
                 await get_radio_config()
 
-        assert exc.value.status_code == 503
+        assert exc.value.status_code == 423
 
 
 class TestUpdateRadioConfig:
@@ -278,7 +278,7 @@ class TestUpdateRadioConfig:
             with pytest.raises(HTTPException) as exc:
                 await update_radio_config(RadioConfigUpdate(path_hash_mode=1))
 
-        assert exc.value.status_code == 500
+        assert exc.value.status_code == 422
         assert "Failed to set path hash mode" in str(exc.value.detail)
         assert radio_manager.path_hash_mode == 0
         mc.commands.send_appstart.assert_not_awaited()
@@ -339,7 +339,7 @@ class TestPrivateKeyImport:
             with pytest.raises(HTTPException) as exc:
                 await set_private_key(PrivateKeyUpdate(private_key="aa" * 64))
 
-        assert exc.value.status_code == 500
+        assert exc.value.status_code == 422
 
 
 class TestDiscoverMesh:
@@ -699,7 +699,7 @@ class TestTracePath:
         assert "not a repeater" in exc.value.detail
 
     @pytest.mark.asyncio
-    async def test_returns_422_when_no_trace_response_is_heard(self):
+    async def test_returns_408_when_no_trace_response_is_heard(self):
         mc = _mock_meshcore_with_info()
         repeater = Contact(
             public_key="44" * 32,
@@ -741,7 +741,7 @@ class TestTracePath:
                     )
                 )
 
-        assert exc.value.status_code == 422
+        assert exc.value.status_code == 408
         assert "No trace response heard" in exc.value.detail
 
     @pytest.mark.asyncio
@@ -850,7 +850,7 @@ class TestTracePath:
             with pytest.raises(HTTPException) as exc:
                 await discover_mesh(RadioDiscoveryRequest(target="sensors"))
 
-        assert exc.value.status_code == 500
+        assert exc.value.status_code == 422
         assert exc.value.detail == "Failed to start mesh discovery"
 
     @pytest.mark.asyncio
@@ -887,7 +887,7 @@ class TestTracePath:
             with pytest.raises(HTTPException) as exc:
                 await set_private_key(PrivateKeyUpdate(private_key="aa" * 64))
 
-        assert exc.value.status_code == 500
+        assert exc.value.status_code == 422
         assert "keystore" in exc.value.detail.lower()
         # Called twice: initial attempt + one retry
         assert mock_export.await_count == 2
@@ -926,7 +926,7 @@ class TestAdvertise:
             with pytest.raises(HTTPException) as exc:
                 await send_advertisement()
 
-        assert exc.value.status_code == 500
+        assert exc.value.status_code == 422
 
     @pytest.mark.asyncio
     async def test_defaults_to_flood_mode(self):
@@ -1059,7 +1059,7 @@ class TestRebootAndReconnect:
         assert result["connected"] is True
 
     @pytest.mark.asyncio
-    async def test_reconnect_raises_503_on_failure(self):
+    async def test_reconnect_raises_423_on_failure(self):
         mock_rm = MagicMock()
         mock_rm.is_connected = False
         mock_rm.is_reconnecting = False
@@ -1070,7 +1070,7 @@ class TestRebootAndReconnect:
             with pytest.raises(HTTPException) as exc:
                 await reconnect_radio()
 
-        assert exc.value.status_code == 503
+        assert exc.value.status_code == 423
 
     @pytest.mark.asyncio
     async def test_disconnect_pauses_connection_attempts_and_broadcasts_health(self):

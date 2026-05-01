@@ -646,7 +646,7 @@ class TestOutgoingChannelBroadcast:
             request = SendChannelMessageRequest(channel_key=chan_key, text="hello")
             await send_channel_message(request)
 
-        assert exc_info.value.status_code == 500
+        assert exc_info.value.status_code == 422
         assert "regional override" in exc_info.value.detail.lower()
         mc.commands.set_channel.assert_not_awaited()
         mc.commands.send_chan_msg.assert_not_awaited()
@@ -790,7 +790,7 @@ class TestOutgoingChannelBroadcast:
                 SendChannelMessageRequest(channel_key=chan_key, text="this will fail")
             )
 
-        assert exc_info.value.status_code == 500
+        assert exc_info.value.status_code == 422
         assert radio_manager.get_cached_channel_slot(chan_key) is None
 
 
@@ -969,7 +969,7 @@ class TestResendChannelMessage:
         assert sent_timestamp == now + 1
 
     @pytest.mark.asyncio
-    async def test_resend_no_radio_response_returns_504_and_creates_no_new_row(self, test_db):
+    async def test_resend_no_radio_response_returns_408_and_creates_no_new_row(self, test_db):
         """When resend returns None, report unknown outcome and create no new message row."""
         mc = _make_mc(name="MyNode")
         chan_key = "c1" * 16
@@ -995,7 +995,7 @@ class TestResendChannelMessage:
         ):
             await resend_channel_message(msg_id, new_timestamp=True)
 
-        assert exc_info.value.status_code == 504
+        assert exc_info.value.status_code == 408
         assert exc_info.value.detail == NO_RADIO_RESPONSE_AFTER_SEND_DETAIL
 
         messages = await MessageRepository.get_all(
@@ -1317,7 +1317,7 @@ class TestPathHashModeOverride:
                 SendChannelMessageRequest(channel_key=chan_key, text="hello")
             )
 
-        assert exc_info.value.status_code == 500
+        assert exc_info.value.status_code == 422
         assert "path hash mode" in exc_info.value.detail.lower()
         mc.commands.send_chan_msg.assert_not_awaited()
 
@@ -1567,7 +1567,7 @@ class TestRadioExceptionMidSend:
         assert len(messages) == 0
 
     @pytest.mark.asyncio
-    async def test_dm_send_no_radio_response_returns_504_without_storing_message(self, test_db):
+    async def test_dm_send_no_radio_response_returns_408_without_storing_message(self, test_db):
         """When mc.commands.send_msg() returns None, report unknown outcome and store nothing."""
         mc = _make_mc()
         pub_key = "ac" * 32
@@ -1584,7 +1584,7 @@ class TestRadioExceptionMidSend:
                 SendDirectMessageRequest(destination=pub_key, text="Did this send?")
             )
 
-        assert exc_info.value.status_code == 504
+        assert exc_info.value.status_code == 408
         assert exc_info.value.detail == NO_RADIO_RESPONSE_AFTER_SEND_DETAIL
 
         messages = await MessageRepository.get_all(
@@ -1593,7 +1593,7 @@ class TestRadioExceptionMidSend:
         assert len(messages) == 0
 
     @pytest.mark.asyncio
-    async def test_channel_send_no_radio_response_returns_504_without_storing_message(
+    async def test_channel_send_no_radio_response_returns_408_without_storing_message(
         self, test_db
     ):
         """When mc.commands.send_chan_msg() returns None, report unknown outcome and store nothing."""
@@ -1612,7 +1612,7 @@ class TestRadioExceptionMidSend:
                 SendChannelMessageRequest(channel_key=chan_key, text="Did this send?")
             )
 
-        assert exc_info.value.status_code == 504
+        assert exc_info.value.status_code == 408
         assert exc_info.value.detail == NO_RADIO_RESPONSE_AFTER_SEND_DETAIL
 
         messages = await MessageRepository.get_all(
@@ -1733,7 +1733,7 @@ class TestRadioExceptionMidSend:
                 SendChannelMessageRequest(channel_key=chan_key_b, text="Never sent")
             )
 
-        assert exc_info.value.status_code == 500
+        assert exc_info.value.status_code == 422
         assert radio_manager.get_cached_channel_slot(chan_key_a) is None
         assert radio_manager.get_cached_channel_slot(chan_key_b) is None
         mc.commands.send_chan_msg.assert_not_called()
