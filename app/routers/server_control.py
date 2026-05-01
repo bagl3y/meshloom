@@ -291,7 +291,7 @@ async def send_contact_cli_command(
 
         if send_result.type == EventType.ERROR:
             raise HTTPException(
-                status_code=500, detail=f"Failed to send command: {send_result.payload}"
+                status_code=422, detail=f"Failed to send command: {send_result.payload}"
             )
 
         response_event = await fetch_contact_cli_response(mc, contact.public_key[:12])

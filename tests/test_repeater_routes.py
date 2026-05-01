@@ -302,7 +302,7 @@ class TestRepeaterCommandRoute:
             with pytest.raises(HTTPException) as exc:
                 await send_repeater_command(KEY_A, CommandRequest(command="ver"))
 
-        assert exc.value.status_code == 500
+        assert exc.value.status_code == 422
         mc.start_auto_message_fetching.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -502,7 +502,7 @@ class TestTraceRoute:
             with pytest.raises(HTTPException) as exc:
                 await request_trace(KEY_A)
 
-        assert exc.value.status_code == 500
+        assert exc.value.status_code == 422
         mc.commands.send_trace.assert_awaited_once_with(
             path=KEY_A[:8],
             tag=1234,
@@ -510,7 +510,7 @@ class TestTraceRoute:
         )
 
     @pytest.mark.asyncio
-    async def test_wait_timeout_returns_504(self, test_db):
+    async def test_wait_timeout_returns_408(self, test_db):
         mc = _mock_mc()
         await _insert_contact(KEY_A, name="Client", contact_type=1)
         mc.commands.send_trace = AsyncMock(return_value=_radio_result(EventType.OK))
@@ -524,7 +524,7 @@ class TestTraceRoute:
             with pytest.raises(HTTPException) as exc:
                 await request_trace(KEY_A)
 
-        assert exc.value.status_code == 504
+        assert exc.value.status_code == 408
         mc.commands.send_trace.assert_awaited_once_with(
             path=KEY_A[:8],
             tag=1234,
@@ -745,7 +745,7 @@ class TestRepeaterStatus:
         assert response.recv_errors == 42
 
     @pytest.mark.asyncio
-    async def test_504_on_timeout(self, test_db):
+    async def test_408_on_timeout(self, test_db):
         mc = _mock_mc()
         await _insert_contact(KEY_A, name="Repeater", contact_type=2)
         mc.commands.req_status_sync = AsyncMock(return_value=None)
@@ -756,7 +756,7 @@ class TestRepeaterStatus:
         ):
             with pytest.raises(HTTPException) as exc:
                 await repeater_status(KEY_A)
-        assert exc.value.status_code == 504
+        assert exc.value.status_code == 408
 
     @pytest.mark.asyncio
     async def test_400_not_repeater(self, test_db):
@@ -819,7 +819,7 @@ class TestRepeaterLppTelemetry:
         assert response.sensors == []
 
     @pytest.mark.asyncio
-    async def test_504_on_timeout(self, test_db):
+    async def test_408_on_timeout(self, test_db):
         mc = _mock_mc()
         await _insert_contact(KEY_A, name="Repeater", contact_type=2)
         mc.commands.req_telemetry_sync = AsyncMock(return_value=None)
@@ -830,7 +830,7 @@ class TestRepeaterLppTelemetry:
         ):
             with pytest.raises(HTTPException) as exc:
                 await repeater_lpp_telemetry(KEY_A)
-        assert exc.value.status_code == 504
+        assert exc.value.status_code == 408
 
     @pytest.mark.asyncio
     async def test_400_not_repeater(self, test_db):
@@ -1234,7 +1234,7 @@ class TestBatchCliFetch:
             with pytest.raises(HTTPException) as exc:
                 await _batch_cli_fetch(contact, "test_op", [("ver", "firmware_version")])
 
-        assert exc.value.status_code == 500
+        assert exc.value.status_code == 422
         assert "Failed to add contact to radio" in exc.value.detail
 
     @pytest.mark.asyncio
@@ -1307,7 +1307,7 @@ class TestRepeaterAddContactError:
             with pytest.raises(HTTPException) as exc:
                 await repeater_status(KEY_A)
 
-        assert exc.value.status_code == 500
+        assert exc.value.status_code == 422
         assert "Failed to add contact to radio" in exc.value.detail
 
     @pytest.mark.asyncio
@@ -1325,7 +1325,7 @@ class TestRepeaterAddContactError:
             with pytest.raises(HTTPException) as exc:
                 await repeater_lpp_telemetry(KEY_A)
 
-        assert exc.value.status_code == 500
+        assert exc.value.status_code == 422
         assert "Failed to add contact to radio" in exc.value.detail
 
     @pytest.mark.asyncio
@@ -1343,7 +1343,7 @@ class TestRepeaterAddContactError:
             with pytest.raises(HTTPException) as exc:
                 await repeater_neighbors(KEY_A)
 
-        assert exc.value.status_code == 500
+        assert exc.value.status_code == 422
         assert "Failed to add contact to radio" in exc.value.detail
 
     @pytest.mark.asyncio
@@ -1361,5 +1361,5 @@ class TestRepeaterAddContactError:
             with pytest.raises(HTTPException) as exc:
                 await repeater_acl(KEY_A)
 
-        assert exc.value.status_code == 500
+        assert exc.value.status_code == 422
         assert "Failed to add contact to radio" in exc.value.detail

@@ -174,8 +174,8 @@ class TestRadioOperationYield:
 class TestRequireConnected:
     """Test the require_connected() FastAPI dependency."""
 
-    def test_raises_503_when_setup_in_progress(self):
-        """HTTPException 503 is raised when radio is connected but setup is still in progress."""
+    def test_raises_423_when_setup_in_progress(self):
+        """HTTPException 423 is raised when radio is connected but setup is still in progress."""
         from fastapi import HTTPException
 
         from app.services.radio_runtime import radio_runtime
@@ -188,11 +188,11 @@ class TestRequireConnected:
             with pytest.raises(HTTPException) as exc_info:
                 radio_runtime.require_connected()
 
-            assert exc_info.value.status_code == 503
+            assert exc_info.value.status_code == 423
             assert "initializing" in exc_info.value.detail.lower()
 
-    def test_raises_503_when_not_connected(self):
-        """HTTPException 503 is raised when radio is not connected."""
+    def test_raises_423_when_not_connected(self):
+        """HTTPException 423 is raised when radio is not connected."""
         from fastapi import HTTPException
 
         from app.services.radio_runtime import radio_runtime
@@ -205,7 +205,7 @@ class TestRequireConnected:
             with pytest.raises(HTTPException) as exc_info:
                 radio_runtime.require_connected()
 
-            assert exc_info.value.status_code == 503
+            assert exc_info.value.status_code == 423
 
     def test_returns_meshcore_when_connected_and_setup_complete(self):
         """Returns meshcore instance when radio is connected and setup is complete."""

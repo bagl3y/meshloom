@@ -52,12 +52,12 @@ class RadioRuntime:
     def require_connected(self):
         """Return MeshCore when available, mirroring existing HTTP semantics."""
         if self.is_setup_in_progress:
-            raise HTTPException(status_code=503, detail="Radio is initializing")
+            raise HTTPException(status_code=423, detail="Radio is initializing")
         if not self.is_connected:
-            raise HTTPException(status_code=503, detail="Radio not connected")
+            raise HTTPException(status_code=423, detail="Radio not connected")
         mc = self.meshcore
         if mc is None:
-            raise HTTPException(status_code=503, detail="Radio not connected")
+            raise HTTPException(status_code=423, detail="Radio not connected")
         return mc
 
     @asynccontextmanager
