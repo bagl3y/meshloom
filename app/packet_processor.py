@@ -366,6 +366,8 @@ async def process_raw_packet(
             sender=result["sender"],
             channel_key=result.get("channel_key"),
             contact_key=result.get("contact_key"),
+            sender_timestamp=result.get("sender_timestamp"),
+            message=result.get("message"),
         )
         if result["decrypted"]
         else None,
@@ -428,6 +430,8 @@ async def _process_group_text(
             "sender": decrypted.sender,
             "message_id": msg_id,  # None if duplicate, msg_id if new
             "channel_key": channel.key,
+            "sender_timestamp": decrypted.timestamp,
+            "message": decrypted.message,
         }
 
     # Couldn't decrypt with any known key
@@ -694,6 +698,8 @@ async def _process_direct_message(
                 "sender": contact.name or contact.public_key[:12],
                 "message_id": msg_id,
                 "contact_key": contact.public_key,
+                "sender_timestamp": result.timestamp,
+                "message": result.message,
             }
 
     # Couldn't decrypt with any known contact

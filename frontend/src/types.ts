@@ -343,6 +343,8 @@ export interface RawPacket {
     sender: string | null;
     channel_key: string | null;
     contact_key: string | null;
+    sender_timestamp: number | null;
+    message: string | null;
   } | null;
 }
 

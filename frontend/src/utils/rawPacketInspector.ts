@@ -324,51 +324,56 @@ export function inspectRawPacketWithOptions(
           createPacketField('payload', `payload-${index}`, segment, structure.payload.startByte)
         );
 
-  const enrichedPayloadFields =
-    decoded?.isValid && decoded.payloadType === PayloadType.GroupText && decoded.payload.decoded
-      ? payloadFields.map((field) => {
-          if (field.name !== 'Ciphertext') {
-            return field;
-          }
-          const payload = decoded.payload.decoded as {
-            decrypted?: { timestamp?: number; flags?: number; sender?: string; message?: string };
-          };
-          if (!payload.decrypted?.message) {
-            return field;
-          }
-          const detailLines = [
-            payload.decrypted.timestamp != null
-              ? `Timestamp: ${formatUnixTimestamp(payload.decrypted.timestamp)}`
-              : null,
-            payload.decrypted.flags != null
-              ? `Flags: 0x${payload.decrypted.flags.toString(16).padStart(2, '0')}`
-              : null,
-            payload.decrypted.sender ? `Sender: ${payload.decrypted.sender}` : null,
-            `Message: ${payload.decrypted.message}`,
-          ].filter((line): line is string => line !== null);
-          return {
-            ...field,
-            description: describeCiphertextStructure(
-              decoded.payloadType,
-              field.endByte - field.startByte + 1,
-              field.description
-            ),
-            decryptedMessage: detailLines.join('\n'),
-          };
-        })
-      : payloadFields.map((field) => {
-          if (!decoded?.isValid || field.name !== 'Ciphertext') {
-            return field;
-          }
-          return {
-            ...field,
-            description: describeCiphertextStructure(
-              decoded.payloadType,
-              field.endByte - field.startByte + 1,
-              field.description
-            ),
-          };
-        });
+  const enrichedPayloadFields = payloadFields.map((field) => {
+    if (!decoded?.isValid || field.name !== 'Ciphertext') {
+      return field;
+    }
+
+    const withStructure = {
+      ...field,
+      description: describeCiphertextStructure(
+        decoded.payloadType,
+        field.endByte - field.startByte + 1,
+        field.description
+      ),
+    };
+
+    // GroupText: client-side decoder has the decrypted content
+    if (decoded.payloadType === PayloadType.GroupText && decoded.payload.decoded) {
+      const payload = decoded.payload.decoded as {
+        decrypted?: { timestamp?: number; flags?: number; sender?: string; message?: string };
+      };
+      if (!payload.decrypted?.message) {
+        return withStructure;
+      }
+      const detailLines = [
+        payload.decrypted.timestamp != null
+          ? `Sent (packet): ${formatUnixTimestamp(payload.decrypted.timestamp)}`
+          : null,
+        payload.decrypted.flags != null
+          ? `Flags: 0x${payload.decrypted.flags.toString(16).padStart(2, '0')}`
+          : null,
+        payload.decrypted.sender ? `Sender: ${payload.decrypted.sender}` : null,
+        `Message: ${payload.decrypted.message}`,
+      ].filter((line): line is string => line !== null);
+      return { ...withStructure, decryptedMessage: detailLines.join('\n') };
+    }
+
+    // TextMessage (DM): server-side decryption via decrypted_info
+    if (decoded.payloadType === PayloadType.TextMessage && packet.decrypted_info?.message) {
+      const info = packet.decrypted_info;
+      const detailLines = [
+        info.sender_timestamp != null
+          ? `Sent (packet): ${formatUnixTimestamp(info.sender_timestamp)}`
+          : null,
+        info.sender ? `Sender: ${info.sender}` : null,
+        `Message: ${info.message}`,
+      ].filter((line): line is string => line !== null);
+      return { ...withStructure, decryptedMessage: detailLines.join('\n') };
+    }
+
+    return withStructure;
+  });
 
   return {
     decoded,

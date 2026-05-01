@@ -95,6 +95,8 @@ class TestGetRawPacket:
             "sender": "Alice",
             "channel_key": channel_key,
             "contact_key": None,
+            "sender_timestamp": 1700000000,
+            "message": "Alice: hello",
         }
 
 

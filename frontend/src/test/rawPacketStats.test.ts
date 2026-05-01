@@ -94,6 +94,8 @@ describe('buildRawPacketStatsSnapshot', () => {
         sender: 'Alpha',
         channel_key: null,
         contact_key: '0a'.repeat(32),
+        sender_timestamp: null,
+        message: null,
       },
     };
 

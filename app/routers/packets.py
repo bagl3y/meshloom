@@ -128,11 +128,15 @@ async def get_raw_packet(packet_id: int) -> RawPacketDetail:
                     sender=message.sender_name,
                     channel_key=message.conversation_key,
                     contact_key=message.sender_key,
+                    sender_timestamp=message.sender_timestamp,
+                    message=message.text,
                 )
             else:
                 decrypted_info = RawPacketDecryptedInfo(
                     sender=message.sender_name,
                     contact_key=message.conversation_key,
+                    sender_timestamp=message.sender_timestamp,
+                    message=message.text,
                 )
 
     return RawPacketDetail(
