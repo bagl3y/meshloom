@@ -1,3 +1,18 @@
+## [3.13.0] - 2026-04-30
+
+* Feature: Error counts included in repeater telemetry
+* Feature: RX error rate + percentage surfaced and tracked for repeaters
+* Feature: Dynamic as-you-type text replacement for Cyrillic byte optimization
+* Feature: Permit hourly checks for direct/routed repeaters
+* Feature: Allow newlines in input
+* Feature: Packet-send radio time added to packet analyzer
+* Feature: Enable forced plaintext for Apprise
+* Bugfix: Less annoying MQTT failure notifications with backoff
+* Bugfis: Don't obscure input; use dvh everywhere
+* Bugfix: Clearer save button for advert interval
+* Misc: Library updates
+* Misc: Rewrite 5xx to 4xx to avoid issues with proxies that don't react well to 503/504
+
 ## [3.12.3] - 2026-04-24
 
 * Feature: Customizable Apprise strings

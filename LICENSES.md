@@ -330,7 +330,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 </details>
 
-### meshcore (2.3.2) — MIT
+### meshcore (2.3.7) — MIT
 
 <details>
 <summary>Full license text</summary>
