@@ -322,7 +322,13 @@ function getHopProfileBucket(pathTokenCount: number): string {
   if (pathTokenCount <= 15) {
     return '11-15';
   }
-  return '16+';
+  if (pathTokenCount <= 20) {
+    return '16-20';
+  }
+  if (pathTokenCount <= 31) {
+    return '21-31';
+  }
+  return '32+';
 }
 
 export function buildRawPacketStatsSnapshot(
@@ -354,7 +360,9 @@ export function buildRawPacketStatsSnapshot(
     ['2-5', 0],
     ['6-10', 0],
     ['11-15', 0],
-    ['16+', 0],
+    ['16-20', 0],
+    ['21-31', 0],
+    ['32+', 0],
   ]);
   const hopByteWidthCounts = new Map<string, number>([
     ['No path', 0],

@@ -147,7 +147,9 @@ describe('buildRawPacketStatsSnapshot', () => {
       '2-5',
       '6-10',
       '11-15',
-      '16+',
+      '16-20',
+      '21-31',
+      '32+',
     ]);
     expect(stats.hopProfile).toEqual(
       expect.arrayContaining([
@@ -156,7 +158,9 @@ describe('buildRawPacketStatsSnapshot', () => {
         expect.objectContaining({ label: '2-5', count: 1 }),
         expect.objectContaining({ label: '6-10', count: 0 }),
         expect.objectContaining({ label: '11-15', count: 0 }),
-        expect.objectContaining({ label: '16+', count: 0 }),
+        expect.objectContaining({ label: '16-20', count: 0 }),
+        expect.objectContaining({ label: '21-31', count: 0 }),
+        expect.objectContaining({ label: '32+', count: 0 }),
       ])
     );
     expect(stats.hopByteWidthProfile).toEqual(
