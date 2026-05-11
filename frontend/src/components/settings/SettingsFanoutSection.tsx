@@ -1548,6 +1548,24 @@ function MqttCommunityConfigEditor({
         </div>
       </div>
 
+      {((config.transport as string) || DEFAULT_COMMUNITY_TRANSPORT) === 'websockets' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="fanout-comm-ws-path">WebSocket Path</Label>
+            <Input
+              id="fanout-comm-ws-path"
+              type="text"
+              placeholder="/"
+              value={(config.websocket_path as string | undefined) ?? ''}
+              onChange={(e) => onChange({ ...config, websocket_path: e.target.value })}
+            />
+            <p className="text-[0.8125rem] text-muted-foreground">
+              Defaults to <code>/</code> — use <code>/mqtt</code> for brokers that require a path
+            </p>
+          </div>
+        </div>
+      )}
+
       <p className="text-[0.8125rem] text-muted-foreground">
         LetsMesh uses <code>token</code> auth. MeshRank uses <code>none</code>.
       </p>
