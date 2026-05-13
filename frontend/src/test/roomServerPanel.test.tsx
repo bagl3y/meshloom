@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-import { RoomServerPanel } from '../components/RoomServerPanel';
+import { RoomServerPanel, resetRoomCacheForTests } from '../components/RoomServerPanel';
 import type { Contact } from '../types';
 
 vi.mock('../api', () => ({
@@ -50,6 +50,7 @@ describe('RoomServerPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    resetRoomCacheForTests();
   });
 
   it('keeps room controls available when login is not confirmed', async () => {

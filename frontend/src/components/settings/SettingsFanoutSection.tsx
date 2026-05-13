@@ -1545,6 +1545,9 @@ function MqttCommunityConfigEditor({
             <option value="none">None</option>
             <option value="password">Username / Password</option>
           </select>
+          <p className="text-[0.8125rem] text-muted-foreground">
+            LetsMesh uses <code>token</code> auth. MeshRank uses <code>none</code>.
+          </p>
         </div>
       </div>
 
@@ -1565,10 +1568,6 @@ function MqttCommunityConfigEditor({
           </div>
         </div>
       )}
-
-      <p className="text-[0.8125rem] text-muted-foreground">
-        LetsMesh uses <code>token</code> auth. MeshRank uses <code>none</code>.
-      </p>
 
       {authMode === 'token' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

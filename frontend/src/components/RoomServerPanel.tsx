@@ -61,38 +61,107 @@ function createInitialPaneStates(): RoomPaneStates {
   };
 }
 
+function createInitialPaneData(): RoomPaneData {
+  return { status: null, acl: null, lppTelemetry: null };
+}
+
+// ---------------------------------------------------------------------------
+// In-memory LRU cache so room login state survives conversation switches
+// ---------------------------------------------------------------------------
+
+interface RoomCacheEntry {
+  authenticated: boolean;
+  loginError: string | null;
+  lastLoginAttempt: ServerLoginAttemptState | null;
+  paneData: RoomPaneData;
+  paneStates: RoomPaneStates;
+  consoleHistory: ConsoleEntry[];
+}
+
+const MAX_CACHED_ROOMS = 8;
+const roomCache = new Map<string, RoomCacheEntry>();
+
+function getCachedRoom(publicKey: string): RoomCacheEntry | null {
+  const cached = roomCache.get(publicKey);
+  if (!cached) return null;
+  // Touch for LRU
+  roomCache.delete(publicKey);
+  roomCache.set(publicKey, cached);
+  return {
+    ...cached,
+    paneData: { ...cached.paneData },
+    paneStates: {
+      status: { ...cached.paneStates.status, loading: false },
+      acl: { ...cached.paneStates.acl, loading: false },
+      lppTelemetry: { ...cached.paneStates.lppTelemetry, loading: false },
+    },
+    consoleHistory: cached.consoleHistory.map((e) => ({ ...e })),
+  };
+}
+
+function setCachedRoom(publicKey: string, entry: RoomCacheEntry) {
+  roomCache.delete(publicKey);
+  roomCache.set(publicKey, {
+    ...entry,
+    paneData: { ...entry.paneData },
+    paneStates: {
+      status: { ...entry.paneStates.status, loading: false },
+      acl: { ...entry.paneStates.acl, loading: false },
+      lppTelemetry: { ...entry.paneStates.lppTelemetry, loading: false },
+    },
+    consoleHistory: entry.consoleHistory.map((e) => ({ ...e })),
+  });
+  if (roomCache.size > MAX_CACHED_ROOMS) {
+    const lruKey = roomCache.keys().next().value as string | undefined;
+    if (lruKey) roomCache.delete(lruKey);
+  }
+}
+
+export function resetRoomCacheForTests() {
+  roomCache.clear();
+}
+
 export function RoomServerPanel({ contact, onAuthenticatedChange }: RoomServerPanelProps) {
   const { password, setPassword, rememberPassword, setRememberPassword, persistAfterLogin } =
     useRememberedServerPassword('room', contact.public_key);
+
+  const cached = useMemo(() => getCachedRoom(contact.public_key), [contact.public_key]);
+
   const [loginLoading, setLoginLoading] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [authenticated, setAuthenticated] = useState(false);
-  const [lastLoginAttempt, setLastLoginAttempt] = useState<ServerLoginAttemptState | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(cached?.loginError ?? null);
+  const [authenticated, setAuthenticated] = useState(cached?.authenticated ?? false);
+  const [lastLoginAttempt, setLastLoginAttempt] = useState<ServerLoginAttemptState | null>(
+    cached?.lastLoginAttempt ?? null
+  );
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [paneData, setPaneData] = useState<RoomPaneData>({
-    status: null,
-    acl: null,
-    lppTelemetry: null,
-  });
-  const [paneStates, setPaneStates] = useState<RoomPaneStates>(createInitialPaneStates);
-  const [consoleHistory, setConsoleHistory] = useState<ConsoleEntry[]>([]);
+  const [paneData, setPaneData] = useState<RoomPaneData>(cached?.paneData ?? createInitialPaneData);
+  const [paneStates, setPaneStates] = useState<RoomPaneStates>(
+    cached?.paneStates ?? createInitialPaneStates
+  );
+  const [consoleHistory, setConsoleHistory] = useState<ConsoleEntry[]>(
+    cached?.consoleHistory ?? []
+  );
   const [consoleLoading, setConsoleLoading] = useState(false);
 
+  // Persist to cache on every state change
   useEffect(() => {
-    setLoginLoading(false);
-    setLoginError(null);
-    setAuthenticated(false);
-    setLastLoginAttempt(null);
-    setAdvancedOpen(false);
-    setPaneData({
-      status: null,
-      acl: null,
-      lppTelemetry: null,
+    setCachedRoom(contact.public_key, {
+      authenticated,
+      loginError,
+      lastLoginAttempt,
+      paneData,
+      paneStates,
+      consoleHistory,
     });
-    setPaneStates(createInitialPaneStates());
-    setConsoleHistory([]);
-    setConsoleLoading(false);
-  }, [contact.public_key]);
+  }, [
+    contact.public_key,
+    authenticated,
+    loginError,
+    lastLoginAttempt,
+    paneData,
+    paneStates,
+    consoleHistory,
+  ]);
 
   useEffect(() => {
     onAuthenticatedChange?.(authenticated);
