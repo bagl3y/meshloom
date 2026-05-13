@@ -1182,3 +1182,62 @@ class TestOnNewContact:
 
             contacts = await ContactRepository.get_all()
             assert len(contacts) == 0
+
+    @pytest.mark.asyncio
+    async def test_blocks_new_contact_with_discovery_blocked_type(self, test_db):
+        """NEW_CONTACT for a blocked type should not create a contact."""
+        from app.event_handlers import on_new_contact
+        from app.repository import AppSettingsRepository
+
+        # Block clients (type 1) and rooms (type 3)
+        await AppSettingsRepository.update(discovery_blocked_types=[1, 3])
+
+        with (
+            patch("app.event_handlers.broadcast_event") as mock_broadcast,
+            patch("app.event_handlers.time") as mock_time,
+        ):
+            mock_time.time.return_value = 1700000000
+
+            class MockEvent:
+                payload = {
+                    "public_key": "dd" * 32,
+                    "adv_name": "BlockedClient",
+                    "type": 1,
+                    "flags": 0,
+                }
+
+            await on_new_contact(MockEvent())
+
+            contact = await ContactRepository.get_by_key("dd" * 32)
+            assert contact is None
+            mock_broadcast.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_allows_new_contact_with_non_blocked_type(self, test_db):
+        """NEW_CONTACT for a non-blocked type should still be created."""
+        from app.event_handlers import on_new_contact
+        from app.repository import AppSettingsRepository
+
+        # Block only clients (type 1)
+        await AppSettingsRepository.update(discovery_blocked_types=[1])
+
+        with (
+            patch("app.event_handlers.broadcast_event") as mock_broadcast,
+            patch("app.event_handlers.time") as mock_time,
+        ):
+            mock_time.time.return_value = 1700000000
+
+            class MockEvent:
+                payload = {
+                    "public_key": "ee" * 32,
+                    "adv_name": "AllowedRepeater",
+                    "type": 2,
+                    "flags": 0,
+                }
+
+            await on_new_contact(MockEvent())
+
+            contact = await ContactRepository.get_by_key("ee" * 32)
+            assert contact is not None
+            assert contact.name == "AllowedRepeater"
+            mock_broadcast.assert_called_once()

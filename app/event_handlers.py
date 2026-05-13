@@ -237,6 +237,24 @@ async def on_new_contact(event: "Event") -> None:
     logger.debug("New contact: %s", public_key[:12])
 
     contact_upsert = ContactUpsert.from_radio_dict(public_key.lower(), payload, on_radio=False)
+
+    # Block new contacts whose type is in discovery_blocked_types, matching
+    # the same guard in _process_advertisement.  Existing contacts (already
+    # in the DB) are always updated.
+    existing = await ContactRepository.get_by_key(public_key.lower())
+    contact_type = contact_upsert.type or 0
+    if existing is None and contact_type > 0:
+        from app.repository import AppSettingsRepository
+
+        settings = await AppSettingsRepository.get()
+        if contact_type in settings.discovery_blocked_types:
+            logger.debug(
+                "Skipping new contact %s: type %d is in discovery_blocked_types",
+                public_key[:12],
+                contact_type,
+            )
+            return
+
     # Intentionally do not set first_seen or last_seen here: NEW_CONTACT
     # fires from the radio's stored contact DB, not an RF observation.
     # Both first_seen and last_seen are RF-only timestamps — they track
