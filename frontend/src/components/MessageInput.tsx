@@ -210,7 +210,6 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
       <div className="flex gap-2 items-end">
         <textarea
           ref={textareaRef}
-          autoComplete="off"
           name="chat-message-input"
           aria-label={placeholder || 'Type a message'}
           data-lpignore="true"
