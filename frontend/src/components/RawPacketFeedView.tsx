@@ -31,7 +31,29 @@ import { createDecoderOptions } from '../utils/rawPacketInspector';
 import { getContactDisplayName } from '../utils/pubkey';
 import { cn } from '@/lib/utils';
 
+const TIMELINE_FILL_COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'];
+
+/**
+ * Build a stable name→color mapping so the same type always gets the same
+ * color regardless of sort order or appearance order.
+ */
+function buildColorMap(names: readonly string[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (let i = 0; i < names.length; i++) {
+    map.set(names[i], TIMELINE_FILL_COLORS[i % TIMELINE_FILL_COLORS.length]);
+  }
+  return map;
+}
+
+function colorForIndex(index: number, colorMap?: Map<string, string>, name?: string): string {
+  if (colorMap && name && colorMap.has(name)) {
+    return colorMap.get(name)!;
+  }
+  return TIMELINE_FILL_COLORS[index % TIMELINE_FILL_COLORS.length];
+}
+
 const KNOWN_PAYLOAD_TYPE_SET = new Set<string>(KNOWN_PAYLOAD_TYPES);
+const PAYLOAD_TYPE_COLOR_MAP = buildColorMap(KNOWN_PAYLOAD_TYPES);
 
 function getPacketTypeName(
   packet: RawPacket,
@@ -73,8 +95,6 @@ const WINDOW_LABELS: Record<RawPacketStatsWindow, string> = {
   '30m': '30 min',
   session: 'Session',
 };
-
-const TIMELINE_FILL_COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'];
 
 function formatTimestamp(timestampMs: number): string {
   return new Date(timestampMs).toLocaleString([], {
@@ -245,11 +265,13 @@ function RankedBars({
   items,
   emptyLabel,
   formatter,
+  colorMap,
 }: {
   title: string;
   items: RankedPacketStat[];
   emptyLabel: string;
   formatter?: (item: RankedPacketStat) => string;
+  colorMap?: Map<string, string>;
 }) {
   const data = items.map((item) => ({
     name: item.label,
@@ -289,8 +311,8 @@ function RankedBars({
                 formatter={(_v: any, _n: any, props: any) => [props.payload.detail, null]}
               />
               <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={16}>
-                {data.map((_, i) => (
-                  <Cell key={i} fill={TIMELINE_FILL_COLORS[i % TIMELINE_FILL_COLORS.length]} />
+                {data.map((entry, i) => (
+                  <Cell key={i} fill={colorForIndex(i, colorMap, entry.name)} />
                 ))}
               </Bar>
             </BarChart>
@@ -367,7 +389,13 @@ function NeighborList({
   );
 }
 
-function TimelineChart({ bins }: { bins: PacketTimelineBin[] }) {
+function TimelineChart({
+  bins,
+  colorMap,
+}: {
+  bins: PacketTimelineBin[];
+  colorMap: Map<string, string>;
+}) {
   const typeOrder = Array.from(new Set(bins.flatMap((bin) => Object.keys(bin.countsByType)))).slice(
     0,
     TIMELINE_FILL_COLORS.length
@@ -386,11 +414,11 @@ function TimelineChart({ bins }: { bins: PacketTimelineBin[] }) {
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-foreground">Traffic Timeline</h3>
         <div className="flex flex-wrap justify-end gap-2 text-[0.6875rem] text-muted-foreground">
-          {typeOrder.map((type, i) => (
+          {typeOrder.map((type) => (
             <span key={type} className="inline-flex items-center gap-1">
               <span
                 className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: TIMELINE_FILL_COLORS[i] }}
+                style={{ backgroundColor: colorMap.get(type) ?? TIMELINE_FILL_COLORS[0] }}
               />
               <span>{type}</span>
             </span>
@@ -422,7 +450,7 @@ function TimelineChart({ bins }: { bins: PacketTimelineBin[] }) {
                 key={type}
                 dataKey={type}
                 stackId="packets"
-                fill={TIMELINE_FILL_COLORS[i]}
+                fill={colorMap.get(type) ?? TIMELINE_FILL_COLORS[0]}
                 radius={i === typeOrder.length - 1 ? [2, 2, 0, 0] : undefined}
               />
             ))}
@@ -747,7 +775,7 @@ export function RawPacketFeedView({
               </div>
 
               <div className="mt-4">
-                <TimelineChart bins={stats.timeline} />
+                <TimelineChart bins={stats.timeline} colorMap={PAYLOAD_TYPE_COLOR_MAP} />
               </div>
 
               <div className="md:columns-2 md:gap-4">
@@ -755,6 +783,7 @@ export function RawPacketFeedView({
                   title="Packet Types"
                   items={stats.payloadBreakdown}
                   emptyLabel="No packets in this window yet."
+                  colorMap={PAYLOAD_TYPE_COLOR_MAP}
                 />
 
                 <RankedBars
