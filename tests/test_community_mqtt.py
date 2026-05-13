@@ -70,6 +70,7 @@ def _make_community_settings(**overrides) -> SimpleNamespace:
         "community_mqtt_iata": "",
         "community_mqtt_email": "",
         "community_mqtt_token_audience": "mqtt-us-v1.letsmesh.net",
+        "community_mqtt_websocket_path": "/",
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -737,6 +738,44 @@ class TestLwtAndStatusPublish:
         assert kwargs["websocket_path"] == "/"
         assert kwargs["tls_context"] is not None
         assert kwargs["username"] == f"v1_{pubkey_hex}"
+
+    def test_build_client_kwargs_custom_websocket_path(self):
+        pub = CommunityMqttPublisher()
+        private_key, public_key = _make_test_keys()
+        settings = _make_community_settings(
+            community_mqtt_iata="MTL",
+            community_mqtt_websocket_path="/mqtt",
+        )
+
+        with (
+            patch("app.keystore.get_private_key", return_value=private_key),
+            patch("app.keystore.get_public_key", return_value=public_key),
+            patch("app.radio.radio_manager") as mock_radio,
+        ):
+            mock_radio.meshcore = None
+            kwargs = pub._build_client_kwargs(settings)
+
+        assert kwargs["websocket_path"] == "/mqtt"
+
+    def test_build_client_kwargs_empty_websocket_path_defaults_to_root(self):
+        pub = CommunityMqttPublisher()
+        private_key, public_key = _make_test_keys()
+
+        for empty_value in ("", "   ", None):
+            settings = _make_community_settings(
+                community_mqtt_iata="MTL",
+                community_mqtt_websocket_path=empty_value,
+            )
+
+            with (
+                patch("app.keystore.get_private_key", return_value=private_key),
+                patch("app.keystore.get_public_key", return_value=public_key),
+                patch("app.radio.radio_manager") as mock_radio,
+            ):
+                mock_radio.meshcore = None
+                kwargs = pub._build_client_kwargs(settings)
+
+            assert kwargs["websocket_path"] == "/", f"Failed for {empty_value!r}"
 
     def test_build_client_kwargs_supports_tcp_transport_and_custom_audience(self):
         pub = CommunityMqttPublisher()

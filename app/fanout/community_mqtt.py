@@ -61,6 +61,7 @@ class CommunityMqttSettings(Protocol):
     community_mqtt_iata: str
     community_mqtt_email: str
     community_mqtt_token_audience: str
+    community_mqtt_websocket_path: str
 
 
 def _base64url_encode(data: bytes) -> str:
@@ -363,7 +364,7 @@ class CommunityMqttPublisher(BaseMqttPublisher):
             kwargs["username"] = s.community_mqtt_username or None
             kwargs["password"] = s.community_mqtt_password or None
         if transport == "websockets":
-            kwargs["websocket_path"] = "/"
+            kwargs["websocket_path"] = (s.community_mqtt_websocket_path or "").strip() or "/"
         return kwargs
 
     def _on_connected(self, settings: object) -> tuple[str, str]:
