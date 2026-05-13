@@ -32,9 +32,11 @@ _DEFAULT_BROKER = "mqtt-us-v1.letsmesh.net"
 _DEFAULT_PORT = 443  # Community protocol uses WSS on port 443 by default
 _CLIENT_ID = "RemoteTerm"
 
-# Proactive JWT renewal: reconnect 1 hour before the 24h token expires
-_TOKEN_LIFETIME = 86400  # 24 hours (must match _generate_jwt_token exp)
-_TOKEN_RENEWAL_THRESHOLD = _TOKEN_LIFETIME - 3600  # 23 hours
+# JWT lifetime kept under 1 hour for compatibility with services that reject
+# tokens with exp > 3600s from iat (e.g. Waev.app).  Proactive renewal
+# reconnects 5 minutes before expiry.
+_TOKEN_LIFETIME = 3300  # 55 minutes
+_TOKEN_RENEWAL_THRESHOLD = _TOKEN_LIFETIME - 300  # 50 minutes
 
 # Periodic status republish interval (matches meshcore-packet-capture reference)
 _STATS_REFRESH_INTERVAL = 300  # 5 minutes

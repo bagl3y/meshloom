@@ -121,7 +121,7 @@ class TestJwtGeneration:
             assert payload["publicKey"] == public_key.hex().upper()
             assert "iat" in payload
             assert "exp" in payload
-            assert payload["exp"] - payload["iat"] == 86400
+            assert payload["exp"] - payload["iat"] == 3300
             assert payload["aud"] == _DEFAULT_BROKER
             assert payload["owner"] == public_key.hex().upper()
             assert payload["client"] == f"{_CLIENT_ID}/1.2.3-abcdef"
