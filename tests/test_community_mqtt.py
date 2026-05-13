@@ -195,11 +195,12 @@ class TestEddsaSignExpanded:
 
 class TestPacketFormatConversion:
     def test_basic_field_mapping(self):
+        # FLOOD packet: header 0x01, path_len 0x00, payload 0xAA
         data = {
             "id": 1,
             "observation_id": 100,
             "timestamp": 1700000000,
-            "data": "0a1b2c3d",
+            "data": "0100AA",
             "payload_type": "ADVERT",
             "snr": 5.5,
             "rssi": -90,
@@ -208,24 +209,27 @@ class TestPacketFormatConversion:
         }
         result = _format_raw_packet(data, "TestNode", "AABBCCDD" * 8)
 
+        assert result is not None
         assert result["origin"] == "TestNode"
         assert result["origin_id"] == "AABBCCDD" * 8
-        assert result["raw"] == "0A1B2C3D"
+        assert result["raw"] == "0100AA"
         assert result["SNR"] == 5.5
         assert result["RSSI"] == -90
         assert result["type"] == "PACKET"
         assert result["direction"] == "rx"
-        assert result["len"] == "4"
+        assert result["len"] == "3"
 
     def test_timestamp_is_iso8601(self):
-        data = {"timestamp": 1700000000, "data": "00", "snr": None, "rssi": None}
+        data = {"timestamp": 1700000000, "data": "0100AA", "snr": None, "rssi": None}
         result = _format_raw_packet(data, "Node", "AA" * 32)
+        assert result is not None
         assert result["timestamp"]
         assert "T" in result["timestamp"]
 
     def test_snr_rssi_unknown_when_none(self):
-        data = {"timestamp": 0, "data": "00", "snr": None, "rssi": None}
+        data = {"timestamp": 0, "data": "0100AA", "snr": None, "rssi": None}
         result = _format_raw_packet(data, "Node", "AA" * 32)
+        assert result is not None
         assert result["SNR"] == "Unknown"
         assert result["RSSI"] == "Unknown"
 
@@ -251,18 +255,18 @@ class TestPacketFormatConversion:
             assert result["route"] == expected
 
     def test_hash_is_16_uppercase_hex_chars(self):
-        data = {"timestamp": 0, "data": "aabb", "snr": None, "rssi": None}
+        # FLOOD packet: header 0x01, path_len 0x00, payload AA
+        data = {"timestamp": 0, "data": "0100AA", "snr": None, "rssi": None}
         result = _format_raw_packet(data, "Node", "AA" * 32)
+        assert result is not None
         assert len(result["hash"]) == 16
         assert result["hash"] == result["hash"].upper()
 
-    def test_empty_data_handled(self):
-        data = {"timestamp": 0, "data": "", "snr": None, "rssi": None}
-        result = _format_raw_packet(data, "Node", "AA" * 32)
-        assert result["raw"] == ""
-        assert result["len"] == "0"
-        assert result["packet_type"] == "0"
-        assert result["route"] == "U"
+    def test_unparseable_packet_returns_none(self):
+        for raw_hex in ("", "aabb"):
+            data = {"timestamp": 0, "data": raw_hex, "snr": None, "rssi": None}
+            result = _format_raw_packet(data, "Node", "AA" * 32)
+            assert result is None, f"Expected None for {raw_hex!r}"
 
     def test_includes_reference_time_fields(self):
         data = {"timestamp": 0, "data": "0100aabb", "snr": 1.0, "rssi": -70}
@@ -300,14 +304,12 @@ class TestPacketFormatConversion:
         assert result["route"] == "F"
         assert "path" not in result
 
-    def test_unknown_version_uses_defaults(self):
+    def test_unknown_version_returns_none(self):
         # version=1 in high bits, type=5, route=1
         header = (1 << 6) | (5 << 2) | 1
         data = {"timestamp": 0, "data": f"{header:02x}00", "snr": 1.0, "rssi": -70}
         result = _format_raw_packet(data, "Node", "AA" * 32)
-        assert result["packet_type"] == "0"
-        assert result["route"] == "U"
-        assert result["payload_len"] == "0"
+        assert result is None
 
 
 class TestCalculatePacketHash:
@@ -1046,7 +1048,7 @@ class TestCommunityPacketPublishTopic:
             "id": 1,
             "observation_id": 1,
             "timestamp": 1700000000,
-            "data": "0100",
+            "data": "0100AA",
             "payload_type": "GROUP_TEXT",
             "snr": None,
             "rssi": None,

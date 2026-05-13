@@ -167,12 +167,19 @@ def _decode_packet_fields(raw_bytes: bytes) -> tuple[str, str, str, list[str], i
         return route, packet_type, payload_len, path_values, payload_type
 
 
-def _format_raw_packet(data: dict[str, Any], device_name: str, public_key_hex: str) -> dict:
-    """Convert a RawPacketBroadcast dict to meshcore-packet-capture format."""
+def _format_raw_packet(data: dict[str, Any], device_name: str, public_key_hex: str) -> dict | None:
+    """Convert a RawPacketBroadcast dict to meshcore-packet-capture format.
+
+    Returns ``None`` when the packet cannot be decoded — callers should skip
+    publishing rather than forwarding malformed data.
+    """
     raw_hex = data.get("data", "")
     raw_bytes = bytes.fromhex(raw_hex) if raw_hex else b""
 
     route, packet_type, payload_len, path_values, _payload_type = _decode_packet_fields(raw_bytes)
+
+    if route == "U":
+        return None
 
     # Reference format uses local "now" timestamp and derived time/date fields.
     current_time = datetime.now()
