@@ -362,8 +362,7 @@ class CommunityMqttPublisher(BaseMqttPublisher):
             kwargs["username"] = s.community_mqtt_username or None
             kwargs["password"] = s.community_mqtt_password or None
         if transport == "websockets":
-            ws_path = getattr(s, "community_mqtt_websocket_path", None)
-            kwargs["websocket_path"] = ws_path.strip() if ws_path and ws_path.strip() else "/"
+            kwargs["websocket_path"] = (s.community_mqtt_websocket_path or "").strip() or "/"
         return kwargs
 
     def _on_connected(self, settings: object) -> tuple[str, str]:

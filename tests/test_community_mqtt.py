@@ -757,6 +757,26 @@ class TestLwtAndStatusPublish:
 
         assert kwargs["websocket_path"] == "/mqtt"
 
+    def test_build_client_kwargs_empty_websocket_path_defaults_to_root(self):
+        pub = CommunityMqttPublisher()
+        private_key, public_key = _make_test_keys()
+
+        for empty_value in ("", "   ", None):
+            settings = _make_community_settings(
+                community_mqtt_iata="MTL",
+                community_mqtt_websocket_path=empty_value,
+            )
+
+            with (
+                patch("app.keystore.get_private_key", return_value=private_key),
+                patch("app.keystore.get_public_key", return_value=public_key),
+                patch("app.radio.radio_manager") as mock_radio,
+            ):
+                mock_radio.meshcore = None
+                kwargs = pub._build_client_kwargs(settings)
+
+            assert kwargs["websocket_path"] == "/", f"Failed for {empty_value!r}"
+
     def test_build_client_kwargs_supports_tcp_transport_and_custom_audience(self):
         pub = CommunityMqttPublisher()
         private_key, public_key = _make_test_keys()
