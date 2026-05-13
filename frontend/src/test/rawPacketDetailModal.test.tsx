@@ -39,6 +39,19 @@ const BOT_PACKET: RawPacket = {
   decrypted_info: null,
 };
 
+// TransportFlood ACK: header 0C (route=0 TransportFlood, type=3 ACK, ver=0),
+// transport codes 3412 7856 (LE: 0x1234, 0x5678), path_len 00, ACK checksum AABBCCDD
+const SCOPED_PACKET: RawPacket = {
+  id: 2,
+  timestamp: 1_700_000_000,
+  data: '0C3412785600AABBCCDD',
+  decrypted: false,
+  payload_type: 'Ack',
+  rssi: -80,
+  snr: 3.0,
+  decrypted_info: null,
+};
+
 describe('RawPacketDetailModal', () => {
   it('copies the full packet hex to the clipboard', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
@@ -76,5 +89,19 @@ describe('RawPacketDetailModal', () => {
 
     fireEvent.mouseLeave(pathFieldBox as HTMLElement);
     expect(pathRun.className).toBe(idleClassName);
+  });
+
+  it('shows scope card with transport codes for scoped packets', () => {
+    render(<RawPacketDetailModal packet={SCOPED_PACKET} channels={[]} onClose={vi.fn()} />);
+
+    expect(screen.getByText('Scope')).toBeInTheDocument();
+    expect(screen.getByText('Regional')).toBeInTheDocument();
+    expect(screen.getByText('0x1234, 0x5678')).toBeInTheDocument();
+  });
+
+  it('does not show scope card for non-transport packets', () => {
+    render(<RawPacketDetailModal packet={BOT_PACKET} channels={[BOT_CHANNEL]} onClose={vi.fn()} />);
+
+    expect(screen.queryByText('Scope')).not.toBeInTheDocument();
   });
 });

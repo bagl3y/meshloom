@@ -166,6 +166,10 @@ function formatPathMode(hashSize: number | undefined, hopCount: number): string 
   return `${hopCount} hop${hopCount === 1 ? '' : 's'} · ${hashSize} byte hash${hashSize === 1 ? '' : 'es'}`;
 }
 
+function formatTransportCodes(codes: [number, number]): string {
+  return codes.map((c) => `0x${c.toString(16).padStart(4, '0')}`).join(', ');
+}
+
 function buildGroupTextResolutionCandidates(channels: Channel[]): GroupTextResolutionCandidate[] {
   return channels.map((channel) => ({
     key: channel.key,
@@ -647,7 +651,14 @@ export function RawPacketInspectionPanel({
           ) : null}
         </section>
 
-        <section className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+        <section
+          className={cn(
+            'grid gap-2 lg:grid-cols-1',
+            inspection.decoded?.transportCodes
+              ? 'sm:grid-cols-2 xl:grid-cols-4'
+              : 'sm:grid-cols-3 xl:grid-cols-3'
+          )}
+        >
           <CompactMetaCard
             label="Packet"
             primary={`${packet.data.length / 2} bytes · ${packetIsDecrypted ? 'Decrypted' : 'Encrypted'}`}
@@ -658,6 +669,13 @@ export function RawPacketInspectionPanel({
             primary={`${inspection.routeTypeName} · ${inspection.payloadTypeName}`}
             secondary={`${inspection.payloadVersionName} · ${formatPathMode(inspection.decoded?.pathHashSize, inspection.pathTokens.length)}`}
           />
+          {inspection.decoded?.transportCodes ? (
+            <CompactMetaCard
+              label="Scope"
+              primary="Regional"
+              secondary={formatTransportCodes(inspection.decoded.transportCodes)}
+            />
+          ) : null}
           {(() => {
             const sig = formatSignal(packet, signalOverride);
             return (
