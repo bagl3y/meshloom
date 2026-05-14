@@ -1,3 +1,17 @@
+## [3.14.0] - 2026-05-13
+
+* Feature: Support active/intervalized contact telemetry gathering + HA forwarding
+* Feature: Stable packet analyzer chart coloring
+* Feature: Add packet scope to inscpection
+* Feature: Support websocket path config for community mqtt
+* Bugfix: Drop token renewal time to 1hr for more sensitive services
+* Bugfix: Don't forward unparseable packets to communitya ggregators
+* Bugfix: Persist login status for rooms
+* Bugfix: Fix gap in repeater/contact/sensor non-ingest logic
+* Misc: Revise hop-length buckets to reflect path bit width
+* Misc: Remove autocomplete from textarea
+* Misc: Test & Dependency updates
+
 ## [3.13.0] - 2026-04-30
 
 * Feature: Error counts included in repeater telemetry
