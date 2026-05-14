@@ -44,6 +44,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api_docs import API_DESCRIPTION, API_TAGS_METADATA, register_api_docs_routes
 from app.config import settings as server_settings
 from app.config import setup_logging
 from app.database import db
@@ -158,11 +159,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="RemoteTerm for MeshCore API",
-    description="API for interacting with MeshCore mesh radio networks",
+    description=API_DESCRIPTION,
     version=get_app_build_info().version,
+    openapi_tags=API_TAGS_METADATA,
+    docs_url=None,
     lifespan=lifespan,
 )
 
+register_api_docs_routes(app)
 add_optional_basic_auth_middleware(app, server_settings)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(

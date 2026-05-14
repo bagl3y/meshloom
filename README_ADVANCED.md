@@ -1,5 +1,7 @@
 # Advanced Setup And Troubleshooting
 
+Once the backend is running, FastAPI serves interactive API docs at `/docs` on the same host and port as the web UI. For a default local launch, that is http://localhost:8000/docs.
+
 ## Remediation & Advanced Environment Variables
 
 These are intended for diagnosing or working around radios that behave oddly, or enabling advanced functionality.

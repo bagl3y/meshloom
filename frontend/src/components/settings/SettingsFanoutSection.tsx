@@ -3329,9 +3329,11 @@ export function SettingsFanoutSection({
         </div>
       )}
 
-      <Button type="button" size="sm" onClick={() => setCreateDialogOpen(true)}>
-        Add Integration
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" onClick={() => setCreateDialogOpen(true)}>
+          Add Integration
+        </Button>
+      </div>
 
       <CreateIntegrationDialog
         open={createDialogOpen}
