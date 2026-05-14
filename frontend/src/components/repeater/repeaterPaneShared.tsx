@@ -212,7 +212,7 @@ export const LPP_UNIT_MAP: Record<string, string> = {
   humidity: '%',
   barometer: 'hPa',
   voltage: 'V',
-  current: 'mA',
+  current: 'A',
   luminosity: 'lux',
   altitude: 'm',
   power: 'W',
@@ -234,6 +234,9 @@ export function lppDisplayUnit(
 ): { unit: string; value: number } {
   if (typeName === 'temperature' && unitPref === 'imperial') {
     return { unit: '°F', value: (value * 9) / 5 + 32 };
+  }
+  if (typeName === 'current') {
+    if (value <= 1) return { unit: 'mA', value: value * 1000 };
   }
   return { unit: LPP_UNIT_MAP[typeName] ?? '', value };
 }
