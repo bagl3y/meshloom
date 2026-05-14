@@ -236,8 +236,7 @@ export function lppDisplayUnit(
     return { unit: '°F', value: (value * 9) / 5 + 32 };
   }
   if (typeName === 'current') {
-    if (value <= 1)
-	    return { unit: 'mA', value: value * 1000 };
+    if (value <= 1) return { unit: 'mA', value: value * 1000 };
   }
   return { unit: LPP_UNIT_MAP[typeName] ?? '', value };
 }
