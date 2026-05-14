@@ -2504,7 +2504,7 @@ class TestTelemetryCollectSchedulerDecision:
         )
         ran = False
 
-        async def fake_cycle():
+        async def fake_cycle(**_kwargs):
             nonlocal ran
             ran = True
 
@@ -2560,7 +2560,7 @@ class TestTelemetryCollectSchedulerDecision:
         )
         ran = False
 
-        async def fake_cycle():
+        async def fake_cycle(**_kwargs):
             nonlocal ran
             ran = True
 
@@ -2609,7 +2609,7 @@ class TestTelemetryCollectSchedulerDecision:
         settings = AppSettings(tracked_telemetry_repeaters=[], telemetry_interval_hours=8)
         ran = False
 
-        async def fake_cycle():
+        async def fake_cycle(**_kwargs):
             nonlocal ran
             ran = True
 
@@ -2670,7 +2670,7 @@ class TestTelemetryCollectSchedulerDecision:
         )
         ran = False
 
-        async def fake_cycle():
+        async def fake_cycle(**_kwargs):
             nonlocal ran
             ran = True
 
@@ -2733,7 +2733,7 @@ class TestTelemetryCollectSchedulerDecision:
         )
         ran = False
 
-        async def fake_cycle():
+        async def fake_cycle(**_kwargs):
             nonlocal ran
             ran = True
 
@@ -2794,7 +2794,7 @@ class TestRoutedHourlySchedulerDecision:
         )
         calls = []
 
-        async def fake_cycle(*, routed_only=False):
+        async def fake_cycle(*, routed_only=False, **_kwargs):
             calls.append({"routed_only": routed_only})
 
         now = real_datetime.datetime(2026, 4, 16, 9, 0, 0, tzinfo=real_datetime.UTC)
@@ -2828,7 +2828,7 @@ class TestRoutedHourlySchedulerDecision:
         )
         calls = []
 
-        async def fake_cycle(*, routed_only=False):
+        async def fake_cycle(*, routed_only=False, **_kwargs):
             calls.append({"routed_only": routed_only})
 
         now = real_datetime.datetime(2026, 4, 16, 9, 0, 0, tzinfo=real_datetime.UTC)
@@ -2862,7 +2862,7 @@ class TestRoutedHourlySchedulerDecision:
         )
         calls = []
 
-        async def fake_cycle(*, routed_only=False):
+        async def fake_cycle(*, routed_only=False, **_kwargs):
             calls.append({"routed_only": routed_only})
 
         now = real_datetime.datetime(2026, 4, 16, 16, 0, 0, tzinfo=real_datetime.UTC)

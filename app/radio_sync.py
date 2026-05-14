@@ -1968,20 +1968,28 @@ async def _collect_contact_telemetry(mc: MeshCore, contact: Contact) -> bool:
         return False
 
 
-async def _run_telemetry_cycle(*, routed_only: bool = False) -> None:
-    """Collect one telemetry sample from tracked repeaters and contacts.
+async def _run_telemetry_cycle(
+    *,
+    routed_only: bool = False,
+    collect_repeaters: bool = True,
+    collect_contacts: bool = True,
+) -> None:
+    """Collect one telemetry sample from tracked repeaters and/or contacts.
 
     When *routed_only* is True, only targets whose effective route is
     ``"direct"`` or ``"override"`` (i.e. not ``"flood"``) are collected.
     This is used by the hourly routed-path fast-poll feature.
+
+    *collect_repeaters* and *collect_contacts* allow the scheduler to
+    selectively skip one list when its interval hasn't elapsed yet.
     """
     if not radio_manager.is_connected:
         logger.debug("Telemetry collect: radio not connected, skipping cycle")
         return
 
     app_settings = await AppSettingsRepository.get()
-    tracked_repeaters = app_settings.tracked_telemetry_repeaters
-    tracked_contacts = app_settings.tracked_telemetry_contacts
+    tracked_repeaters = app_settings.tracked_telemetry_repeaters if collect_repeaters else []
+    tracked_contacts = app_settings.tracked_telemetry_contacts if collect_contacts else []
     if not tracked_repeaters and not tracked_contacts:
         return
 
@@ -2072,22 +2080,35 @@ async def _maybe_run_scheduled_cycle(now: datetime) -> None:
     telemetry).
     """
     app_settings = await AppSettingsRepository.get()
-    tracked_count = len(app_settings.tracked_telemetry_repeaters) + len(
-        app_settings.tracked_telemetry_contacts
-    )
-    if tracked_count == 0:
-        return
-    effective_hours = clamp_telemetry_interval(app_settings.telemetry_interval_hours, tracked_count)
-    if effective_hours <= 0:
+    n_repeaters = len(app_settings.tracked_telemetry_repeaters)
+    n_contacts = len(app_settings.tracked_telemetry_contacts)
+    if n_repeaters == 0 and n_contacts == 0:
         return
 
-    is_normal_cycle = now.hour % effective_hours == 0
+    pref = app_settings.telemetry_interval_hours
+    routed_hourly = app_settings.telemetry_routed_hourly
 
-    if is_normal_cycle:
-        # Normal scheduled boundary: collect ALL tracked targets.
-        await _run_telemetry_cycle()
-    elif app_settings.telemetry_routed_hourly:
-        # Hourly routed-path fast-poll: only targets with a non-flood route.
+    # Each list has its own 24/day ceiling.  Check eligibility independently
+    # so 8 repeaters on an 8h interval don't drag 1 contact to 8h too.
+    repeaters_due = False
+    contacts_due = False
+
+    if n_repeaters > 0:
+        eff_rep = clamp_telemetry_interval(pref, n_repeaters)
+        if now.hour % eff_rep == 0:
+            repeaters_due = True
+
+    if n_contacts > 0:
+        eff_ct = clamp_telemetry_interval(pref, n_contacts)
+        if now.hour % eff_ct == 0:
+            contacts_due = True
+
+    if repeaters_due or contacts_due:
+        await _run_telemetry_cycle(
+            collect_repeaters=repeaters_due,
+            collect_contacts=contacts_due,
+        )
+    elif routed_hourly:
         await _run_telemetry_cycle(routed_only=True)
 
 

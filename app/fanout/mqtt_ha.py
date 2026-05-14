@@ -154,6 +154,18 @@ def _repeater_telemetry_payload(data: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _contact_telemetry_payload(data: dict[str, Any]) -> dict[str, Any]:
+    """Build the flat HA state payload for a contact LPP telemetry snapshot.
+
+    Unlike repeaters, contacts only have LPP sensor data — no battery_volts,
+    noise_floor_dbm, packets_received, etc.
+    """
+    payload: dict[str, Any] = {}
+    for sensor, key, _ in _assign_lpp_keys(data.get("lpp_sensors", []) or []):
+        payload[key] = sensor.get("value")
+    return payload
+
+
 def _lpp_discovery_configs(
     prefix: str,
     pub_key: str,
@@ -596,7 +608,7 @@ class MqttHaModule(FanoutModule):
                     )
                 )
             if latest_ct_data:
-                ct_payload = _repeater_telemetry_payload(latest_ct_data)
+                ct_payload = _contact_telemetry_payload(latest_ct_data)
                 cached_repeater_states.append(
                     (f"{self._prefix}/{_node_id(pub_key)}/telemetry", ct_payload)
                 )
@@ -782,9 +794,10 @@ class MqttHaModule(FanoutModule):
             return
 
         nid = _node_id(pub_key)
-        # Publish the full telemetry dict — HA sensors use value_template
-        # to extract individual fields
-        payload = _repeater_telemetry_payload(data)
+        is_repeater = pub_key in self._tracked_repeaters
+        payload = (
+            _repeater_telemetry_payload(data) if is_repeater else _contact_telemetry_payload(data)
+        )
         lpp_sensors: list[dict] = data.get("lpp_sensors", [])
         rediscover = False
         for _, key, _ in _assign_lpp_keys(lpp_sensors):

@@ -351,8 +351,6 @@ async def toggle_tracked_telemetry(request: TrackedTelemetryRequest) -> TrackedT
             names[k] = contact.name if contact and contact.name else k[:12]
         return names
 
-    n_contacts = len(settings.tracked_telemetry_contacts)
-
     if key in current:
         # Remove
         new_list = [k for k in current if k != key]
@@ -362,7 +360,7 @@ async def toggle_tracked_telemetry(request: TrackedTelemetryRequest) -> TrackedT
             tracked_telemetry_repeaters=new_list,
             names=await _resolve_names(new_list),
             schedule=_build_schedule(
-                len(new_list) + n_contacts,
+                len(new_list),
                 settings.telemetry_interval_hours,
                 settings.telemetry_routed_hourly,
             ),
@@ -393,7 +391,7 @@ async def toggle_tracked_telemetry(request: TrackedTelemetryRequest) -> TrackedT
         tracked_telemetry_repeaters=new_list,
         names=await _resolve_names(new_list),
         schedule=_build_schedule(
-            len(new_list) + n_contacts,
+            len(new_list),
             settings.telemetry_interval_hours,
             settings.telemetry_routed_hourly,
         ),
@@ -408,15 +406,10 @@ async def get_telemetry_schedule() -> TelemetrySchedule:
     surface saved-vs-effective when they differ, and show the next-run-at
     timestamp so users know when the next cycle will fire.
 
-    The tracked count includes both repeaters and contacts for ceiling
-    enforcement.
     """
     app_settings = await AppSettingsRepository.get()
-    combined_count = len(app_settings.tracked_telemetry_repeaters) + len(
-        app_settings.tracked_telemetry_contacts
-    )
     return _build_schedule(
-        combined_count,
+        len(app_settings.tracked_telemetry_repeaters),
         app_settings.telemetry_interval_hours,
         app_settings.telemetry_routed_hourly,
     )
@@ -457,9 +450,6 @@ async def toggle_tracked_telemetry_contact(
             names[k] = contact.name if contact and contact.name else k[:12]
         return names
 
-    def combined_count(lst: list[str]) -> int:
-        return len(settings.tracked_telemetry_repeaters) + len(lst)
-
     if key in current:
         # Remove
         new_list = [k for k in current if k != key]
@@ -469,7 +459,7 @@ async def toggle_tracked_telemetry_contact(
             tracked_telemetry_contacts=new_list,
             names=await _resolve_names(new_list),
             schedule=_build_schedule(
-                combined_count(new_list),
+                len(new_list),
                 settings.telemetry_interval_hours,
                 settings.telemetry_routed_hourly,
             ),
@@ -503,7 +493,7 @@ async def toggle_tracked_telemetry_contact(
         tracked_telemetry_contacts=new_list,
         names=await _resolve_names(new_list),
         schedule=_build_schedule(
-            combined_count(new_list),
+            len(new_list),
             settings.telemetry_interval_hours,
             settings.telemetry_routed_hourly,
         ),
@@ -512,17 +502,10 @@ async def toggle_tracked_telemetry_contact(
 
 @router.get("/tracked-telemetry-contacts/schedule", response_model=TelemetrySchedule)
 async def get_contact_telemetry_schedule() -> TelemetrySchedule:
-    """Return the current telemetry scheduling derivation for contacts.
-
-    Uses the combined tracked count (repeaters + contacts) for ceiling
-    enforcement since they share one collection loop.
-    """
+    """Return the current telemetry scheduling derivation for contacts."""
     app_settings = await AppSettingsRepository.get()
-    combined_count = len(app_settings.tracked_telemetry_repeaters) + len(
-        app_settings.tracked_telemetry_contacts
-    )
     return _build_schedule(
-        combined_count,
+        len(app_settings.tracked_telemetry_contacts),
         app_settings.telemetry_interval_hours,
         app_settings.telemetry_routed_hourly,
     )
