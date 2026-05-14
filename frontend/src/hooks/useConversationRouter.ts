@@ -280,21 +280,21 @@ export function useConversationRouter({
   // Keep ref in sync and update URL hash
   useEffect(() => {
     activeConversationRef.current = activeConversation;
-    if (activeConversation) {
+    if (isHandlingPopstateRef.current) {
+      // URL is already correct from the browser's popstate — no update needed
+      isHandlingPopstateRef.current = false;
+    } else if (activeConversation) {
       if (hashSyncEnabledRef.current && !suspendHashSync) {
-        if (isHandlingPopstateRef.current) {
-          // URL is already correct from the browser's popstate — no update needed
-          isHandlingPopstateRef.current = false;
-        } else if (shouldPushHistoryRef.current) {
+        if (shouldPushHistoryRef.current) {
           shouldPushHistoryRef.current = false;
           pushUrlHash(activeConversation);
         } else {
           updateUrlHash(activeConversation);
         }
       }
-      if (activeConversation.type !== 'search') {
-        saveLastViewedConversation(activeConversation);
-      }
+    }
+    if (activeConversation && activeConversation.type !== 'search') {
+      saveLastViewedConversation(activeConversation);
     }
   }, [activeConversation, suspendHashSync]);
 
@@ -305,11 +305,9 @@ export function useConversationRouter({
       if (parseHashSettingsSection() !== null) return;
 
       const conv = resolveConversationFromHash(channelsRef.current, contactsRef.current);
-      if (conv) {
-        hashSyncEnabledRef.current = true;
-        isHandlingPopstateRef.current = true;
-        setActiveConversationState(conv);
-      }
+      hashSyncEnabledRef.current = true;
+      isHandlingPopstateRef.current = true;
+      setActiveConversationState(conv);
     };
 
     window.addEventListener('popstate', handlePopstate);
