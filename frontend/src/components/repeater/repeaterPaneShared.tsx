@@ -216,7 +216,7 @@ export const LPP_UNIT_MAP: Record<string, string> = {
   luminosity: 'lux',
   altitude: 'm',
   power: 'W',
-  distance: 'mm',
+  distance: 'm',
   energy: 'kWh',
   direction: '°',
   concentration: 'ppm',
