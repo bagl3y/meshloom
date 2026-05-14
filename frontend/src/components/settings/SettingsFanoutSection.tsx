@@ -8,7 +8,7 @@ import {
   Suspense,
   type ReactNode,
 } from 'react';
-import { BookOpen, ChevronDown, Info } from 'lucide-react';
+import { ChevronDown, Info } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
@@ -3315,12 +3315,6 @@ export function SettingsFanoutSection({
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" onClick={() => setCreateDialogOpen(true)}>
           Add Integration
-        </Button>
-        <Button asChild size="sm" variant="secondary">
-          <a href="./docs" target="_blank" rel="noopener noreferrer">
-            <BookOpen className="mr-1.5 h-4 w-4" aria-hidden="true" />
-            API Docs
-          </a>
         </Button>
       </div>
 

@@ -127,18 +127,6 @@ beforeEach(() => {
 });
 
 describe('SettingsFanoutSection', () => {
-  it('shows an API docs link beside the add integration button', async () => {
-    renderSection();
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument();
-    });
-    const apiDocsLink = screen.getByRole('link', { name: 'API Docs' });
-
-    expect(apiDocsLink).toHaveAttribute('href', './docs');
-    expect(apiDocsLink).toHaveAttribute('target', '_blank');
-  });
-
   it('shows add integration dialog with all integration types', async () => {
     renderSection();
     const dialog = await openCreateIntegrationDialog();

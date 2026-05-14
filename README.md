@@ -80,7 +80,7 @@ cd frontend && npm install && npm run build && cd ..
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Access the app at http://localhost:8000.
+Access the app at http://localhost:8000. Once the backend is running, the interactive API docs are available at http://localhost:8000/docs.
 
 Source checkouts expect a normal frontend build in `frontend/dist`.
 
