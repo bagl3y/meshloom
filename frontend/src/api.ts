@@ -8,6 +8,7 @@ import type {
   Contact,
   ContactAnalytics,
   ContactAdvertPathSummary,
+  ContactTelemetryResponse,
   FanoutConfig,
   HealthStatus,
   MaintenanceResult,
@@ -35,6 +36,7 @@ import type {
   RepeaterStatusResponse,
   TelemetryHistoryEntry,
   TelemetrySchedule,
+  TrackedTelemetryContactsResponse,
   TrackedTelemetryResponse,
   StatisticsResponse,
   TraceResponse,
@@ -337,6 +339,16 @@ export const api = {
 
   getTelemetrySchedule: () => fetchJson<TelemetrySchedule>('/settings/tracked-telemetry/schedule'),
 
+  // Tracked contact telemetry
+  toggleTrackedTelemetryContact: (publicKey: string) =>
+    fetchJson<TrackedTelemetryContactsResponse>('/settings/tracked-telemetry-contacts/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ public_key: publicKey }),
+    }),
+
+  getContactTelemetrySchedule: () =>
+    fetchJson<TelemetrySchedule>('/settings/tracked-telemetry-contacts/schedule'),
+
   // Favorites
   toggleFavorite: (type: 'channel' | 'contact', id: string) =>
     fetchJson<{ type: string; id: string; favorite: boolean }>('/settings/favorites/toggle', {
@@ -432,6 +444,13 @@ export const api = {
     }),
   repeaterTelemetryHistory: (publicKey: string) =>
     fetchJson<TelemetryHistoryEntry[]>(`/contacts/${publicKey}/repeater/telemetry-history`),
+  // Contact telemetry (universal, any contact type)
+  requestContactTelemetry: (publicKey: string) =>
+    fetchJson<ContactTelemetryResponse>(`/contacts/${publicKey}/telemetry`, {
+      method: 'POST',
+    }),
+  contactTelemetryHistory: (publicKey: string) =>
+    fetchJson<TelemetryHistoryEntry[]>(`/contacts/${publicKey}/telemetry-history`),
   roomLogin: (publicKey: string, password: string) =>
     fetchJson<RepeaterLoginResponse>(`/contacts/${publicKey}/room/login`, {
       method: 'POST',

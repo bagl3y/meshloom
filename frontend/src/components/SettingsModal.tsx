@@ -20,6 +20,7 @@ import {
 
 import { SettingsRadioSection } from './settings/SettingsRadioSection';
 import { SettingsLocalSection } from './settings/SettingsLocalSection';
+import { SettingsRadioAppSection } from './settings/SettingsRadioAppSection';
 import { SettingsFanoutSection } from './settings/SettingsFanoutSection';
 import { SettingsDatabaseSection } from './settings/SettingsDatabaseSection';
 import { SettingsStatisticsSection } from './settings/SettingsStatisticsSection';
@@ -54,6 +55,8 @@ interface SettingsModalBaseProps {
   onBulkDeleteContacts?: (deletedKeys: string[]) => void;
   trackedTelemetryRepeaters?: string[];
   onToggleTrackedTelemetry?: (publicKey: string) => Promise<void>;
+  trackedTelemetryContacts?: string[];
+  onToggleTrackedTelemetryContact?: (publicKey: string) => Promise<void>;
 }
 
 export type SettingsModalProps = SettingsModalBaseProps &
@@ -92,6 +95,8 @@ export function SettingsModal(props: SettingsModalProps) {
     onBulkDeleteContacts,
     trackedTelemetryRepeaters,
     onToggleTrackedTelemetry,
+    trackedTelemetryContacts,
+    onToggleTrackedTelemetryContact,
   } = props;
   const externalSidebarNav = props.externalSidebarNav === true;
   const desktopSection = props.externalSidebarNav ? props.desktopSection : undefined;
@@ -106,6 +111,7 @@ export function SettingsModal(props: SettingsModalProps) {
   const [expandedSections, setExpandedSections] = useState<Record<SettingsSection, boolean>>({
     radio: false,
     local: false,
+    'radio-app': false,
     fanout: false,
     database: false,
     statistics: false,
@@ -239,6 +245,36 @@ export function SettingsModal(props: SettingsModalProps) {
         </section>
       )}
 
+      {shouldRenderSection('radio-app') && (
+        <section className={sectionWrapperClass}>
+          {renderSectionHeader('radio-app')}
+          {isSectionVisible('radio-app') &&
+            (appSettings ? (
+              <SettingsRadioAppSection
+                appSettings={appSettings}
+                onSaveAppSettings={onSaveAppSettings}
+                blockedKeys={blockedKeys}
+                blockedNames={blockedNames}
+                onToggleBlockedKey={onToggleBlockedKey}
+                onToggleBlockedName={onToggleBlockedName}
+                contacts={contacts}
+                onBulkDeleteContacts={onBulkDeleteContacts}
+                trackedTelemetryRepeaters={trackedTelemetryRepeaters}
+                onToggleTrackedTelemetry={onToggleTrackedTelemetry}
+                trackedTelemetryContacts={trackedTelemetryContacts}
+                onToggleTrackedTelemetryContact={onToggleTrackedTelemetryContact}
+                className={sectionContentClass}
+              />
+            ) : (
+              <div className={sectionContentClass}>
+                <div className="rounded-md border border-input bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                  Loading app settings...
+                </div>
+              </div>
+            ))}
+        </section>
+      )}
+
       {shouldRenderSection('database') && (
         <section className={sectionWrapperClass}>
           {renderSectionHeader('database')}
@@ -249,14 +285,6 @@ export function SettingsModal(props: SettingsModalProps) {
                 health={health}
                 onSaveAppSettings={onSaveAppSettings}
                 onHealthRefresh={onHealthRefresh}
-                blockedKeys={blockedKeys}
-                blockedNames={blockedNames}
-                onToggleBlockedKey={onToggleBlockedKey}
-                onToggleBlockedName={onToggleBlockedName}
-                contacts={contacts}
-                onBulkDeleteContacts={onBulkDeleteContacts}
-                trackedTelemetryRepeaters={trackedTelemetryRepeaters}
-                onToggleTrackedTelemetry={onToggleTrackedTelemetry}
                 className={sectionContentClass}
               />
             ) : (

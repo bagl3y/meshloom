@@ -247,10 +247,10 @@ export function TelemetryHistoryPane({
             ), or when the repeater is opted into interval telemetry polling, in which case the
             repeater will be polled for metrics automatically. Fetch frequency can be configured in{' '}
             <a
-              href="#settings/database"
+              href="#settings/radio-app"
               className="underline text-primary hover:text-primary/80 transition-colors"
             >
-              Settings &rarr; Database &amp; Messaging
+              Settings &rarr; Radio-App Management
             </a>
             , where you can also see which repeaters are currently opted in. A maximum of{' '}
             {MAX_TRACKED} repeaters may be opted into this for the sake of keeping mesh congestion

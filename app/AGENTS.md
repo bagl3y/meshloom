@@ -169,7 +169,8 @@ app/
 - Configs stored in `fanout_configs` table, managed via `GET/POST/PATCH/DELETE /api/fanout`.
 - `broadcast_event()` in `websocket.py` dispatches to the fanout manager for `message`, `raw_packet`, and `contact` events.
 - `on_message` and `on_raw` are scope-gated. `on_contact`, `on_telemetry`, and `on_health` are dispatched to all modules unconditionally (modules filter internally).
-- Repeater telemetry broadcasts are emitted after `RepeaterTelemetryRepository.record()` in both `radio_sync.py` (auto-collect) and `routers/repeaters.py` (manual fetch).
+- Repeater telemetry broadcasts are emitted after `RepeaterTelemetryRepository.record()` in both `radio_sync.py` (auto-collect) and `routers/repeaters.py` (manual fetch). Contact LPP telemetry is similarly recorded to `ContactTelemetryRepository` and dispatched to fanout.
+- The telemetry collection loop in `radio_sync.py` is unified: it iterates over both `tracked_telemetry_repeaters` and `tracked_telemetry_contacts`, dispatching to `_collect_repeater_telemetry` (type 2) or `_collect_contact_telemetry` (others). The daily check ceiling uses the combined count.
 - The 60-second radio stats sampling loop in `radio_stats.py` dispatches an enriched health snapshot (radio identity + full stats) to all fanout modules after each sample.
 - Community MQTT publishes raw packets only, but its derived `path` field for direct packets is emitted as comma-separated hop identifiers, not flat path bytes.
 - See `app/fanout/AGENTS_fanout.md` for full architecture details and event payload shapes.
@@ -227,6 +228,8 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 - `POST /contacts/{public_key}/repeater/advert-intervals`
 - `POST /contacts/{public_key}/repeater/owner-info`
 - `GET /contacts/{public_key}/repeater/telemetry-history` — stored telemetry history for a repeater (read-only, no radio access)
+- `POST /contacts/{public_key}/telemetry` — on-demand CayenneLPP telemetry from any contact (persists in `contact_telemetry_history`)
+- `GET /contacts/{public_key}/telemetry-history` — stored LPP telemetry history for a contact (read-only)
 - `POST /contacts/{public_key}/room/login`
 - `POST /contacts/{public_key}/room/status`
 - `POST /contacts/{public_key}/room/lpp-telemetry`
@@ -267,6 +270,8 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 - `POST /settings/blocked-names/toggle`
 - `POST /settings/tracked-telemetry/toggle`
 - `GET /settings/tracked-telemetry/schedule` — current telemetry scheduling derivation, interval options, and next-run-at timestamp
+- `POST /settings/tracked-telemetry-contacts/toggle` — toggle tracked LPP telemetry for any contact (max 8)
+- `GET /settings/tracked-telemetry-contacts/schedule` — contact telemetry scheduling (shared ceiling with repeaters)
 - `POST /settings/muted-channels/toggle`
 
 ### Fanout
@@ -320,6 +325,7 @@ Main tables:
 - `contact_advert_paths` (recent unique advertisement paths per contact, keyed by contact + path bytes + hop count)
 - `contact_name_history` (tracks name changes over time)
 - `repeater_telemetry_history` (time-series telemetry snapshots for tracked repeaters)
+- `contact_telemetry_history` (time-series LPP telemetry snapshots for tracked contacts; same schema as repeater table)
 - `fanout_configs` (MQTT, bot, webhook, Apprise, SQS integration configs)
 - `push_subscriptions` (Web Push browser subscriptions with delivery metadata; UNIQUE on endpoint)
 - `app_settings` (includes `vapid_private_key` and `vapid_public_key` for Web Push VAPID signing)
@@ -343,7 +349,7 @@ Repository writes should prefer typed models such as `ContactUpsert` over ad hoc
 - `last_advert_time`
 - `flood_scope`
 - `blocked_keys`, `blocked_names`, `discovery_blocked_types`
-- `tracked_telemetry_repeaters`
+- `tracked_telemetry_repeaters`, `tracked_telemetry_contacts`
 - `auto_resend_channel`
 - `telemetry_interval_hours`
 

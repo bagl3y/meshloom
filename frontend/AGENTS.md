@@ -141,7 +141,8 @@ frontend/src/
 │   │   ├── SettingsRadioSection.tsx      # Name, keys, advert interval, max contacts, radio preset, freq/bw/sf/cr, txPower, lat/lon, reboot, mesh discovery
 │   │   ├── SettingsLocalSection.tsx      # Browser-local settings: theme, relative font scale, local label, reopen last conversation
 │   │   ├── SettingsFanoutSection.tsx     # Fanout integrations: MQTT, bots, config CRUD
-│   │   ├── SettingsDatabaseSection.tsx   # DB size, cleanup, auto-decrypt, local label
+│   │   ├── SettingsRadioAppSection.tsx    # Radio-App Management: tracked telemetry, contact management, blocked lists
+│   │   ├── SettingsDatabaseSection.tsx   # Database: DB size, storage cleanup, auto-decrypt
 │   │   ├── SettingsStatisticsSection.tsx # Read-only mesh network stats
 │   │   ├── SettingsAboutSection.tsx     # Version, author, license, links
 │   │   ├── ThemeSelector.tsx           # Color theme picker
@@ -323,7 +324,7 @@ Supported routes:
 - `#contact/{publicKey}`
 - `#contact/{publicKey}/{label}`
 
-Where `{section}` is one of `radio`, `local`, `fanout`, `database`, `statistics`, or `about`.
+Where `{section}` is one of `radio`, `local`, `radio-app`, `database`, `fanout`, `statistics`, or `about`.
 
 Legacy name-based channel/contact hashes are still accepted for compatibility.
 
@@ -361,7 +362,7 @@ Distance/validation helpers used by path + map UI.
 - `last_advert_time`
 - `flood_scope`
 - `blocked_keys`, `blocked_names`, `discovery_blocked_types`
-- `tracked_telemetry_repeaters`
+- `tracked_telemetry_repeaters`, `tracked_telemetry_contacts`
 - `auto_resend_channel`
 - `telemetry_interval_hours`
 
@@ -382,6 +383,7 @@ Clicking a contact's avatar in `ChatHeader` or `MessageList` opens a `ContactInf
 - Header: avatar, name, public key, type badge, on-radio badge
 - Info grid: last seen, first heard, last contacted, distance, hops
 - GPS location (clickable → map)
+- On-demand LPP telemetry: "Request" button fetches `POST /contacts/{key}/telemetry`, displays sensor readings via `LppSensorRow`, optional GPS mini-map (Leaflet), and history chart (Recharts). Opt-in tracking toggle uses `POST /settings/tracked-telemetry-contacts/toggle`.
 - Favorite toggle
 - Name history ("Also Known As") — shown only when the contact has used multiple names
 - Message stats: DM count, channel message count

@@ -16,6 +16,7 @@ interface ParsedHashConversation {
 const SETTINGS_SECTIONS: SettingsSection[] = [
   'radio',
   'local',
+  'radio-app',
   'fanout',
   'database',
   'statistics',

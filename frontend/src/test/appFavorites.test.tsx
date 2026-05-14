@@ -149,11 +149,12 @@ vi.mock('../components/SettingsModal', () => ({
   SettingsModal: ({ desktopSection }: { desktopSection?: string }) => (
     <div data-testid="settings-modal-section">{desktopSection ?? 'none'}</div>
   ),
-  SETTINGS_SECTION_ORDER: ['radio', 'local', 'database', 'bot'],
+  SETTINGS_SECTION_ORDER: ['radio', 'local', 'radio-app', 'database', 'bot'],
   SETTINGS_SECTION_LABELS: {
     radio: '📻 Radio',
     local: '🖥️ Local Configuration',
-    database: '🗄️ Database & Messaging',
+    'radio-app': '🗄️ Radio-App Management',
+    database: '🗄️ Database',
     bot: '🤖 Bot',
   },
 }));

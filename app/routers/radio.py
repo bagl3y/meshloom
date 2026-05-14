@@ -101,6 +101,18 @@ class RadioConfigResponse(BaseModel):
         default=False,
         description="Whether the radio sends an extra direct ACK transmission",
     )
+    telemetry_mode_base: int = Field(
+        default=0,
+        description="Base telemetry sharing mode (0=deny, 1=per-contact, 2=allow-all)",
+    )
+    telemetry_mode_loc: int = Field(
+        default=0,
+        description="Location telemetry sharing mode (0=deny, 1=per-contact, 2=allow-all)",
+    )
+    telemetry_mode_env: int = Field(
+        default=0,
+        description="Environment sensor sharing mode (0=deny, 1=per-contact, 2=allow-all)",
+    )
 
 
 class RadioConfigUpdate(BaseModel):
@@ -122,6 +134,15 @@ class RadioConfigUpdate(BaseModel):
     multi_acks_enabled: bool | None = Field(
         default=None,
         description="Whether the radio sends an extra direct ACK transmission",
+    )
+    telemetry_mode_base: int | None = Field(
+        default=None, ge=0, le=2, description="Base telemetry sharing mode"
+    )
+    telemetry_mode_loc: int | None = Field(
+        default=None, ge=0, le=2, description="Location telemetry sharing mode"
+    )
+    telemetry_mode_env: int | None = Field(
+        default=None, ge=0, le=2, description="Environment sensor sharing mode"
     )
 
 
@@ -360,6 +381,9 @@ async def get_radio_config() -> RadioConfigResponse:
         path_hash_mode_supported=radio_manager.path_hash_mode_supported,
         advert_location_source=advert_location_source,
         multi_acks_enabled=bool(info.get("multi_acks", 0)),
+        telemetry_mode_base=info.get("telemetry_mode_base", 0),
+        telemetry_mode_loc=info.get("telemetry_mode_loc", 0),
+        telemetry_mode_env=info.get("telemetry_mode_env", 0),
     )
 
 

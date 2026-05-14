@@ -675,3 +675,89 @@ class TestRoutingOverride:
 
         assert response.status_code == 400
         assert "same width" in response.json()["detail"].lower()
+
+
+class TestContactTelemetry:
+    """Tests for on-demand contact telemetry endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_telemetry_happy_path(self, test_db, client):
+        """Successful telemetry request returns sensors and persists history."""
+        await _insert_contact(KEY_A, name="Alice")
+
+        mock_mc = MagicMock()
+        mock_mc.commands.add_contact = AsyncMock(return_value=_radio_result())
+        mock_mc.commands.req_telemetry_sync = AsyncMock(
+            return_value=[
+                {"channel": 1, "type": "voltage", "value": 3.7},
+                {"channel": 1, "type": "temperature", "value": 22.5},
+            ]
+        )
+
+        with (
+            patch("app.routers.contacts.radio_manager") as mock_rm,
+            patch("app.websocket.broadcast_event"),
+        ):
+            mock_rm.is_connected = True
+            mock_rm.require_connected = MagicMock()
+            mock_rm.radio_operation = _noop_radio_operation(mock_mc)
+
+            response = await client.post(f"/api/contacts/{KEY_A}/telemetry")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["sensors"]) == 2
+        assert data["sensors"][0]["type_name"] == "voltage"
+        assert data["sensors"][0]["value"] == 3.7
+        assert data["fetched_at"] > 0
+        assert len(data["telemetry_history"]) >= 1
+
+    @pytest.mark.asyncio
+    async def test_telemetry_timeout_returns_504(self, test_db, client):
+        """No response from contact returns 504."""
+        await _insert_contact(KEY_A)
+
+        mock_mc = MagicMock()
+        mock_mc.commands.add_contact = AsyncMock(return_value=_radio_result())
+        mock_mc.commands.req_telemetry_sync = AsyncMock(return_value=None)
+
+        with (
+            patch("app.routers.contacts.radio_manager") as mock_rm,
+        ):
+            mock_rm.is_connected = True
+            mock_rm.require_connected = MagicMock()
+            mock_rm.radio_operation = _noop_radio_operation(mock_mc)
+
+            response = await client.post(f"/api/contacts/{KEY_A}/telemetry")
+
+        assert response.status_code == 504
+
+    @pytest.mark.asyncio
+    async def test_telemetry_history_endpoint(self, test_db, client):
+        """History endpoint returns stored telemetry snapshots."""
+        import time
+
+        from app.repository.contact_telemetry import ContactTelemetryRepository
+
+        await _insert_contact(KEY_A)
+        now = int(time.time())
+        await ContactTelemetryRepository.record(
+            KEY_A, now, {"lpp_sensors": [{"channel": 1, "type_name": "voltage", "value": 3.6}]}
+        )
+
+        response = await client.get(f"/api/contacts/{KEY_A}/telemetry-history")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["data"]["lpp_sensors"][0]["value"] == 3.6
+
+    @pytest.mark.asyncio
+    async def test_telemetry_contact_not_found(self, test_db, client):
+        """Telemetry for non-existent contact returns 404."""
+        with patch("app.routers.contacts.radio_manager") as mock_rm:
+            mock_rm.is_connected = True
+            mock_rm.require_connected = MagicMock()
+
+            response = await client.post(f"/api/contacts/{KEY_A}/telemetry")
+
+        assert response.status_code == 404

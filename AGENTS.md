@@ -350,6 +350,8 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | POST | `/api/contacts/{public_key}/repeater/advert-intervals` | Fetch advert intervals |
 | POST | `/api/contacts/{public_key}/repeater/owner-info` | Fetch owner info |
 | GET | `/api/contacts/{public_key}/repeater/telemetry-history` | Stored telemetry history for a repeater (read-only, no radio access) |
+| POST | `/api/contacts/{public_key}/telemetry` | Fetch CayenneLPP telemetry from any contact (single attempt, 10s timeout) |
+| GET | `/api/contacts/{public_key}/telemetry-history` | Stored LPP telemetry history for a contact (read-only, no radio access) |
 | POST | `/api/contacts/{public_key}/room/login` | Log in to a room server |
 | POST | `/api/contacts/{public_key}/room/status` | Fetch room-server status telemetry |
 | POST | `/api/contacts/{public_key}/room/lpp-telemetry` | Fetch room-server CayenneLPP sensor data |
@@ -380,6 +382,8 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | POST | `/api/settings/blocked-names/toggle` | Toggle blocked name |
 | POST | `/api/settings/tracked-telemetry/toggle` | Toggle tracked telemetry repeater |
 | GET | `/api/settings/tracked-telemetry/schedule` | Current telemetry scheduling derivation and next-run-at timestamp |
+| POST | `/api/settings/tracked-telemetry-contacts/toggle` | Toggle tracked LPP telemetry for any contact |
+| GET | `/api/settings/tracked-telemetry-contacts/schedule` | Contact telemetry scheduling derivation (shared ceiling with repeaters) |
 | POST | `/api/settings/muted-channels/toggle` | Toggle muted status for a channel |
 | GET | `/api/fanout` | List all fanout configs |
 | POST | `/api/fanout` | Create new fanout config |
@@ -508,7 +512,7 @@ mc.subscribe(EventType.ACK, handler)
 | `MESHCORE_LOAD_WITH_AUTOEVICT` | `false` | Enable autoevict contact loading: sets `AUTO_ADD_OVERWRITE_OLDEST` on the radio so adds never fail with TABLE_FULL, skips the removal phase during reconcile, and allows blind loading when `get_contacts` fails. Loaded contacts are not radio-favorited and may be evicted by new adverts when the table is full. |
 | `MESHCORE_ENABLE_LOCAL_PRIVATE_KEY_EXPORT` | `false` | Enable `GET /api/radio/private-key` to return the in-memory private key as hex. Disabled by default; only enable on a trusted network where you need to retrieve the key (e.g. for backup or migration). |
 
-**Note:** Runtime app settings are stored in the database (`app_settings` table), not environment variables. These include `max_radio_contacts`, `auto_decrypt_dm_on_advert`, `advert_interval`, `last_advert_time`, `last_message_times`, `flood_scope`, `blocked_keys`, `blocked_names`, `discovery_blocked_types`, `tracked_telemetry_repeaters`, `auto_resend_channel`, and `telemetry_interval_hours`. `max_radio_contacts` is the configured radio contact capacity baseline used by background maintenance: favorites reload first, non-favorite fill targets about 80% of that value, and full offload/reload triggers around 95% occupancy. They are configured via `GET/PATCH /api/settings`. MQTT, bot, webhook, Apprise, and SQS configs are stored in the `fanout_configs` table, managed via `/api/fanout`. If the radio's channel slots appear unstable or another client is mutating them underneath this app, operators can force the old always-reconfigure send path with `MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE=true`.
+**Note:** Runtime app settings are stored in the database (`app_settings` table), not environment variables. These include `max_radio_contacts`, `auto_decrypt_dm_on_advert`, `advert_interval`, `last_advert_time`, `last_message_times`, `flood_scope`, `blocked_keys`, `blocked_names`, `discovery_blocked_types`, `tracked_telemetry_repeaters`, `tracked_telemetry_contacts`, `auto_resend_channel`, and `telemetry_interval_hours`. `max_radio_contacts` is the configured radio contact capacity baseline used by background maintenance: favorites reload first, non-favorite fill targets about 80% of that value, and full offload/reload triggers around 95% occupancy. They are configured via `GET/PATCH /api/settings`. MQTT, bot, webhook, Apprise, and SQS configs are stored in the `fanout_configs` table, managed via `/api/fanout`. If the radio's channel slots appear unstable or another client is mutating them underneath this app, operators can force the old always-reconfigure send path with `MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE=true`.
 
 Byte-perfect channel retries are user-triggered via `POST /api/messages/channel/{message_id}/resend` and are allowed for 30 seconds after the original send.
 

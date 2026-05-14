@@ -31,6 +31,7 @@ from app.repository import (
     ContactRepository,
     RepeaterTelemetryRepository,
 )
+from app.repository.contact_telemetry import ContactTelemetryRepository
 from app.services.contact_reconciliation import (
     promote_prefix_contacts_for_contact,
     reconcile_contact_messages,
@@ -1890,24 +1891,111 @@ async def _collect_repeater_telemetry(mc: MeshCore, contact: Contact) -> bool:
         return False
 
 
-async def _run_telemetry_cycle(*, routed_only: bool = False) -> None:
-    """Collect one telemetry sample from tracked repeaters.
+async def _collect_contact_telemetry(mc: MeshCore, contact: Contact) -> bool:
+    """Fetch LPP telemetry from a non-repeater contact and record it.
 
-    When *routed_only* is True, only repeaters whose effective route is
+    Unlike repeaters, companions/rooms/sensors only respond to
+    req_telemetry_sync (LPP), not req_status_sync (repeater status struct).
+    All sensor values including multi-value (GPS, accel) are stored.
+
+    Returns True on success, False on failure (logged, not raised).
+    """
+    try:
+        await mc.commands.add_contact(contact.to_radio_dict())
+        lpp_raw = await mc.commands.req_telemetry_sync(
+            contact.public_key, timeout=10, min_timeout=5
+        )
+    except Exception as e:
+        logger.debug(
+            "Contact telemetry collect: radio command failed for %s: %s",
+            contact.public_key[:12],
+            e,
+        )
+        return False
+
+    if lpp_raw is None:
+        logger.debug("Contact telemetry collect: no response from %s", contact.public_key[:12])
+        return False
+
+    lpp_sensors = []
+    for entry in lpp_raw:
+        lpp_sensors.append(
+            {
+                "channel": entry.get("channel", 0),
+                "type_name": str(entry.get("type", "unknown")),
+                "value": entry.get("value", 0),
+            }
+        )
+
+    data: dict = {}
+    if lpp_sensors:
+        data["lpp_sensors"] = lpp_sensors
+
+    try:
+        timestamp = int(time.time())
+        await ContactTelemetryRepository.record(
+            public_key=contact.public_key,
+            timestamp=timestamp,
+            data=data,
+        )
+        logger.info(
+            "Contact telemetry collect: recorded snapshot for %s (%s)",
+            contact.name or contact.public_key[:12],
+            contact.public_key[:12],
+        )
+
+        # Dispatch to fanout modules
+        from app.fanout.manager import fanout_manager
+
+        asyncio.create_task(
+            fanout_manager.broadcast_telemetry(
+                {
+                    "public_key": contact.public_key,
+                    "name": contact.name or contact.public_key[:12],
+                    "timestamp": timestamp,
+                    **data,
+                }
+            )
+        )
+
+        return True
+    except Exception as e:
+        logger.warning(
+            "Contact telemetry collect: failed to record for %s: %s",
+            contact.public_key[:12],
+            e,
+        )
+        return False
+
+
+async def _run_telemetry_cycle(
+    *,
+    routed_only: bool = False,
+    collect_repeaters: bool = True,
+    collect_contacts: bool = True,
+) -> None:
+    """Collect one telemetry sample from tracked repeaters and/or contacts.
+
+    When *routed_only* is True, only targets whose effective route is
     ``"direct"`` or ``"override"`` (i.e. not ``"flood"``) are collected.
     This is used by the hourly routed-path fast-poll feature.
+
+    *collect_repeaters* and *collect_contacts* allow the scheduler to
+    selectively skip one list when its interval hasn't elapsed yet.
     """
     if not radio_manager.is_connected:
         logger.debug("Telemetry collect: radio not connected, skipping cycle")
         return
 
     app_settings = await AppSettingsRepository.get()
-    tracked = app_settings.tracked_telemetry_repeaters
-    if not tracked:
+    tracked_repeaters = app_settings.tracked_telemetry_repeaters if collect_repeaters else []
+    tracked_contacts = app_settings.tracked_telemetry_contacts if collect_contacts else []
+    if not tracked_repeaters and not tracked_contacts:
         return
 
-    candidates: list[tuple[str, Contact]] = []
-    for pub_key in tracked:
+    # Build repeater candidates
+    candidates: list[tuple[str, Contact, bool]] = []  # (key, contact, is_repeater)
+    for pub_key in tracked_repeaters:
         contact = await ContactRepository.get_by_key(pub_key)
         if not contact or contact.type != 2:
             logger.debug(
@@ -1917,29 +2005,46 @@ async def _run_telemetry_cycle(*, routed_only: bool = False) -> None:
             continue
         if routed_only and (not contact.effective_route or contact.effective_route.path_len < 0):
             continue
-        candidates.append((pub_key, contact))
+        candidates.append((pub_key, contact, True))
+
+    # Build contact (non-repeater) candidates
+    for pub_key in tracked_contacts:
+        contact = await ContactRepository.get_by_key(pub_key)
+        if not contact:
+            logger.debug(
+                "Telemetry collect: skipping contact %s (not found)",
+                pub_key[:12],
+            )
+            continue
+        if routed_only and (not contact.effective_route or contact.effective_route.path_len < 0):
+            continue
+        candidates.append((pub_key, contact, False))
 
     if not candidates:
         if routed_only:
-            logger.debug("Telemetry collect: no routed repeaters to poll this hour")
+            logger.debug("Telemetry collect: no routed targets to poll this hour")
         return
 
     label = "routed" if routed_only else "full"
     logger.info(
-        "Telemetry collect: starting %s cycle for %d repeater(s)",
+        "Telemetry collect: starting %s cycle for %d target(s)",
         label,
         len(candidates),
     )
     collected = 0
 
-    for _pub_key, contact in candidates:
+    for _pub_key, contact, is_repeater in candidates:
         try:
             async with radio_manager.radio_operation(
                 "telemetry_collect",
                 blocking=False,
                 suspend_auto_fetch=True,
             ) as mc:
-                if await _collect_repeater_telemetry(mc, contact):
+                if is_repeater:
+                    success = await _collect_repeater_telemetry(mc, contact)
+                else:
+                    success = await _collect_contact_telemetry(mc, contact)
+                if success:
                     collected += 1
         except RadioOperationBusyError:
             logger.debug(
@@ -1975,20 +2080,35 @@ async def _maybe_run_scheduled_cycle(now: datetime) -> None:
     telemetry).
     """
     app_settings = await AppSettingsRepository.get()
-    tracked_count = len(app_settings.tracked_telemetry_repeaters)
-    if tracked_count == 0:
-        return
-    effective_hours = clamp_telemetry_interval(app_settings.telemetry_interval_hours, tracked_count)
-    if effective_hours <= 0:
+    n_repeaters = len(app_settings.tracked_telemetry_repeaters)
+    n_contacts = len(app_settings.tracked_telemetry_contacts)
+    if n_repeaters == 0 and n_contacts == 0:
         return
 
-    is_normal_cycle = now.hour % effective_hours == 0
+    pref = app_settings.telemetry_interval_hours
+    routed_hourly = app_settings.telemetry_routed_hourly
 
-    if is_normal_cycle:
-        # Normal scheduled boundary: collect ALL tracked repeaters.
-        await _run_telemetry_cycle()
-    elif app_settings.telemetry_routed_hourly:
-        # Hourly routed-path fast-poll: only repeaters with a non-flood route.
+    # Each list has its own 24/day ceiling.  Check eligibility independently
+    # so 8 repeaters on an 8h interval don't drag 1 contact to 8h too.
+    repeaters_due = False
+    contacts_due = False
+
+    if n_repeaters > 0:
+        eff_rep = clamp_telemetry_interval(pref, n_repeaters)
+        if now.hour % eff_rep == 0:
+            repeaters_due = True
+
+    if n_contacts > 0:
+        eff_ct = clamp_telemetry_interval(pref, n_contacts)
+        if now.hour % eff_ct == 0:
+            contacts_due = True
+
+    if repeaters_due or contacts_due:
+        await _run_telemetry_cycle(
+            collect_repeaters=repeaters_due,
+            collect_contacts=contacts_due,
+        )
+    elif routed_hourly:
         await _run_telemetry_cycle(routed_only=True)
 
 
