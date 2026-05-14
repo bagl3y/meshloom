@@ -344,6 +344,7 @@ describe('App startup hash resolution', () => {
       flags: 0,
       direct_path: null,
       direct_path_len: -1,
+      direct_path_hash_mode: 0,
       last_advert: null,
       lat: null,
       lon: null,
