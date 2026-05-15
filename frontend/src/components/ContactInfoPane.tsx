@@ -1206,24 +1206,30 @@ function ContactTelemetrySection({
                   {chartData.length > 1 && activeSeries && (
                     <ResponsiveContainer width="100%" height={120}>
                       <AreaChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="hsl(var(--border))"
+                          vertical={false}
+                        />
                         <XAxis
                           dataKey="time"
                           tickFormatter={(t: number) => {
                             const d = new Date(t * 1000);
                             return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`;
                           }}
-                          fontSize={9}
-                          tick={{ fill: 'var(--muted-foreground)' }}
+                          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                          tickLine={false}
+                          axisLine={false}
                         />
-                        <YAxis fontSize={9} tick={{ fill: 'var(--muted-foreground)' }} width={40} />
+                        <YAxis
+                          tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                          tickLine={false}
+                          axisLine={false}
+                          width={40}
+                        />
                         <RechartsTooltip
+                          {...TOOLTIP_STYLE}
                           labelFormatter={(t) => new Date(Number(t) * 1000).toLocaleString()}
-                          contentStyle={{
-                            backgroundColor: 'var(--popover)',
-                            border: '1px solid var(--border)',
-                            fontSize: '0.75rem',
-                          }}
                         />
                         <Area
                           type="monotone"
