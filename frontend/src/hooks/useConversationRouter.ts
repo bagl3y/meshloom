@@ -3,6 +3,7 @@ import {
   parseHashConversation,
   parseHashSettingsSection,
   updateUrlHash,
+  pushUrlHash,
   resolveChannelFromHashToken,
   resolveContactFromHashToken,
 } from '../utils/urlHash';
@@ -15,6 +16,43 @@ import { findPublicChannel } from '../utils/publicChannel';
 import { getContactDisplayName } from '../utils/pubkey';
 import { toast } from '../components/ui/sonner';
 import type { Channel, Contact, Conversation } from '../types';
+
+function resolveConversationFromHash(
+  channels: Channel[],
+  contacts: Contact[]
+): Conversation | null {
+  const hashConv = parseHashConversation();
+  if (!hashConv) return null;
+
+  switch (hashConv.type) {
+    case 'raw':
+      return { type: 'raw', id: 'raw', name: 'Raw Packet Feed' };
+    case 'map':
+      return { type: 'map', id: 'map', name: 'Node Map', mapFocusKey: hashConv.mapFocusKey };
+    case 'visualizer':
+      return { type: 'visualizer', id: 'visualizer', name: 'Mesh Visualizer' };
+    case 'search':
+      return { type: 'search', id: 'search', name: 'Message Search' };
+    case 'trace':
+      return { type: 'trace', id: 'trace', name: 'Trace' };
+    case 'channel': {
+      const channel = resolveChannelFromHashToken(hashConv.name, channels);
+      return channel ? { type: 'channel', id: channel.key, name: channel.name } : null;
+    }
+    case 'contact': {
+      const contact = resolveContactFromHashToken(hashConv.name, contacts);
+      return contact
+        ? {
+            type: 'contact',
+            id: contact.public_key,
+            name: getContactDisplayName(contact.name, contact.public_key, contact.last_advert),
+          }
+        : null;
+    }
+    default:
+      return null;
+  }
+}
 
 interface UseConversationRouterArgs {
   channels: Channel[];
@@ -42,9 +80,21 @@ export function useConversationRouter({
       ? window.location.hash.length > 0 && parseHashSettingsSection() === null
       : false
   );
+  const shouldPushHistoryRef = useRef(false);
+  const isHandlingPopstateRef = useRef(false);
+  const channelsRef = useRef(channels);
+  const contactsRef = useRef(contacts);
+
+  useEffect(() => {
+    channelsRef.current = channels;
+  }, [channels]);
+  useEffect(() => {
+    contactsRef.current = contacts;
+  }, [contacts]);
 
   const setActiveConversation = useCallback((conv: Conversation | null) => {
     hashSyncEnabledRef.current = true;
+    shouldPushHistoryRef.current = true;
     setActiveConversationState(conv);
   }, []);
 
@@ -230,15 +280,39 @@ export function useConversationRouter({
   // Keep ref in sync and update URL hash
   useEffect(() => {
     activeConversationRef.current = activeConversation;
-    if (activeConversation) {
+    if (isHandlingPopstateRef.current) {
+      // URL is already correct from the browser's popstate — no update needed
+      isHandlingPopstateRef.current = false;
+    } else if (activeConversation) {
       if (hashSyncEnabledRef.current && !suspendHashSync) {
-        updateUrlHash(activeConversation);
-      }
-      if (activeConversation.type !== 'search') {
-        saveLastViewedConversation(activeConversation);
+        if (shouldPushHistoryRef.current) {
+          shouldPushHistoryRef.current = false;
+          pushUrlHash(activeConversation);
+        } else {
+          updateUrlHash(activeConversation);
+        }
       }
     }
+    if (activeConversation && activeConversation.type !== 'search') {
+      saveLastViewedConversation(activeConversation);
+    }
   }, [activeConversation, suspendHashSync]);
+
+  // Respond to browser back/forward by updating the active conversation
+  useEffect(() => {
+    const handlePopstate = () => {
+      // Settings hash transitions are handled by useAppShell
+      if (parseHashSettingsSection() !== null) return;
+
+      const conv = resolveConversationFromHash(channelsRef.current, contactsRef.current);
+      hashSyncEnabledRef.current = true;
+      isHandlingPopstateRef.current = true;
+      setActiveConversationState(conv);
+    };
+
+    window.addEventListener('popstate', handlePopstate);
+    return () => window.removeEventListener('popstate', handlePopstate);
+  }, []);
 
   // If a delete action left us without an active conversation, recover to Public
   useEffect(() => {

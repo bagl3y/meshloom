@@ -3,7 +3,7 @@ import { startTransition, useCallback, useEffect, useRef, useState } from 'react
 import { getLocalLabel, type LocalLabel } from '../utils/localLabel';
 import { getSavedDistanceUnit, type DistanceUnit } from '../utils/distanceUnits';
 import type { SettingsSection } from '../components/settings/settingsConstants';
-import { parseHashSettingsSection, updateSettingsHash } from '../utils/urlHash';
+import { parseHashSettingsSection, updateSettingsHash, pushSettingsHash } from '../utils/urlHash';
 
 interface UseAppShellResult {
   showNewMessage: boolean;
@@ -39,19 +39,31 @@ export function useAppShell(): UseAppShellResult {
   const [localLabel, setLocalLabel] = useState(getLocalLabel);
   const [distanceUnit, setDistanceUnit] = useState(getSavedDistanceUnit);
   const previousHashRef = useRef('');
+  const isOpeningSettingsRef = useRef(false);
+  const pushedSettingsEntryRef = useRef(false);
 
   useEffect(() => {
     if (showSettings) {
-      updateSettingsHash(settingsSection);
+      if (isOpeningSettingsRef.current) {
+        pushSettingsHash(settingsSection);
+        isOpeningSettingsRef.current = false;
+      } else {
+        updateSettingsHash(settingsSection);
+      }
     }
   }, [settingsSection, showSettings]);
 
   const handleCloseSettingsView = useCallback(() => {
-    if (typeof window !== 'undefined' && parseHashSettingsSection() !== null) {
-      window.history.replaceState(null, '', previousHashRef.current || window.location.pathname);
-    }
     startTransition(() => setShowSettings(false));
     setSidebarOpen(false);
+    if (typeof window !== 'undefined') {
+      if (pushedSettingsEntryRef.current) {
+        pushedSettingsEntryRef.current = false;
+        window.history.back();
+      } else if (parseHashSettingsSection() !== null) {
+        window.history.replaceState(null, '', previousHashRef.current || window.location.pathname);
+      }
+    }
   }, []);
 
   const handleToggleSettingsView = useCallback(() => {
@@ -64,11 +76,34 @@ export function useAppShell(): UseAppShellResult {
       previousHashRef.current =
         parseHashSettingsSection() === null ? window.location.hash : previousHashRef.current;
     }
+    isOpeningSettingsRef.current = true;
+    pushedSettingsEntryRef.current = true;
     startTransition(() => {
       setShowSettings(true);
     });
     setSidebarOpen(false);
   }, [handleCloseSettingsView, showSettings]);
+
+  // Respond to browser back/forward navigating into or out of settings
+  useEffect(() => {
+    const handlePopstate = () => {
+      const section = parseHashSettingsSection();
+      if (section !== null) {
+        // Don't set pushedSettingsEntryRef here — the user arrived via
+        // back/forward, not by opening settings.  Closing settings should
+        // replaceState, not history.back(), to avoid popping an unrelated entry.
+        startTransition(() => {
+          setShowSettings(true);
+          setSettingsSection(section);
+        });
+      } else {
+        startTransition(() => setShowSettings(false));
+      }
+    };
+
+    window.addEventListener('popstate', handlePopstate);
+    return () => window.removeEventListener('popstate', handlePopstate);
+  }, []);
 
   const handleOpenNewMessage = useCallback(() => {
     setShowNewMessage(true);

@@ -90,7 +90,41 @@ describe('useAppShell', () => {
       result.current.handleCloseSettingsView();
     });
 
-    expect(window.location.hash).toBe('#channel/test/Public');
+    await waitFor(() => {
+      expect(window.location.hash).toBe('#channel/test/Public');
+    });
+  });
+
+  it('pushes a new history entry when opening settings', async () => {
+    const { result } = renderHook(() => useAppShell());
+    const lengthBefore = window.history.length;
+
+    act(() => {
+      result.current.handleToggleSettingsView();
+    });
+
+    await waitFor(() => {
+      expect(window.location.hash).toBe('#settings/radio');
+    });
+
+    expect(window.history.length).toBe(lengthBefore + 1);
+  });
+
+  it('closes settings when popstate fires with a non-settings hash', async () => {
+    window.location.hash = '#settings/radio';
+
+    const { result } = renderHook(() => useAppShell());
+
+    expect(result.current.showSettings).toBe(true);
+
+    act(() => {
+      window.location.hash = '#channel/abc/Public';
+      window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
+    });
+
+    await waitFor(() => {
+      expect(result.current.showSettings).toBe(false);
+    });
   });
 
   it('toggles the cracker shell without affecting sidebar state', () => {
