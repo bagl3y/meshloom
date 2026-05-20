@@ -181,7 +181,10 @@ describe('App startup hash resolution', () => {
   });
 
   afterEach(() => {
-    window.location.hash = '';
+    // window.location.hash is intentionally NOT reset here: setting it fires a hashchange
+    // event while the component is still mounted (RTL cleanup runs after this describe-level
+    // hook), which queues a stale state update that races the next test's setup. beforeEach
+    // sets a known hash before each render, so this reset is redundant.
     localStorage.clear();
   });
 
@@ -442,6 +445,12 @@ describe('App startup hash resolution', () => {
           expect(node).toHaveTextContent(`channel:${publicChannel.key}:Public`);
         }
       });
+
+      // Flush any pending React work (contacts render + its effects) so that
+      // contactsRef.current is populated before the popstate handler reads it.
+      // waitFor may resolve after the channels render commits but before the
+      // contacts render commits, leaving contactsRef.current=[].
+      await act(async () => {});
 
       act(() => {
         window.location.hash = `#contact/${aliceContact.public_key}/Alice`;

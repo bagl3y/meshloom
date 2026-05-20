@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const PUBLIC_CHANNEL_KEY = '8B3387E9C5CDEA6AC9E5EDBAA115CD72';
@@ -236,7 +236,9 @@ describe('App search jump target handling', () => {
   });
 
   it('clears jump target when user selects a non-search conversation', async () => {
-    render(<App />);
+    await act(async () => {
+      render(<App />);
+    });
 
     await waitFor(() => {
       expect(screen.getAllByText('Open Search').length).toBeGreaterThan(0);
@@ -267,7 +269,9 @@ describe('App search jump target handling', () => {
   });
 
   it('opens search with a prefilled query from the contact pane', async () => {
-    render(<App />);
+    await act(async () => {
+      render(<App />);
+    });
 
     await waitFor(() => {
       expect(screen.getByText('Search Contact By Key')).toBeInTheDocument();
