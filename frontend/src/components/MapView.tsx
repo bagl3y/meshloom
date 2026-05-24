@@ -30,6 +30,8 @@ interface MapViewProps {
   focusedKey?: string | null;
   rawPackets?: RawPacket[];
   config?: RadioConfig | null;
+  blockedKeys?: string[];
+  blockedNames?: string[];
   /** When provided, the contact name in each popup becomes a clickable link
    *  that opens the conversation for that contact (DM, repeater, or room). */
   onSelectContact?: (contact: Contact) => void;
@@ -496,6 +498,8 @@ export function MapView({
   focusedKey,
   rawPackets,
   config,
+  blockedKeys,
+  blockedNames,
   onSelectContact,
 }: MapViewProps) {
   const [sevenDaysAgo] = useState(() => Date.now() / 1000 - 7 * 24 * 60 * 60);
@@ -563,10 +567,14 @@ export function MapView({
 
   // Filter contacts for map display
   const mappableContacts = useMemo(() => {
+    const isBlocked = (c: Contact) =>
+      (blockedKeys?.length && blockedKeys.includes(c.public_key.toLowerCase())) ||
+      (blockedNames?.length && c.name != null && blockedNames.includes(c.name));
+
     if (showPackets && discoveryMode) {
       // Discovery mode: only show nodes that have appeared in resolved packets
       return contacts.filter(
-        (c) => isValidLocation(c.lat, c.lon) && discoveredKeys.has(c.public_key)
+        (c) => isValidLocation(c.lat, c.lon) && discoveredKeys.has(c.public_key) && !isBlocked(c)
       );
     }
     if (showPackets) {
@@ -574,12 +582,14 @@ export function MapView({
       return contacts.filter(
         (c) =>
           isValidLocation(c.lat, c.lon) &&
+          !isBlocked(c) &&
           (c.public_key === focusedKey || (c.last_seen != null && c.last_seen > threeDaysAgoSec))
       );
     }
     return contacts.filter(
       (c) =>
         isValidLocation(c.lat, c.lon) &&
+        !isBlocked(c) &&
         (c.public_key === focusedKey || (c.last_seen != null && c.last_seen > sevenDaysAgo))
     );
   }, [
@@ -590,6 +600,8 @@ export function MapView({
     showPackets,
     discoveryMode,
     discoveredKeys,
+    blockedKeys,
+    blockedNames,
   ]);
 
   // Resolve a path of hop tokens to geographic waypoints (only unambiguous + has GPS)
