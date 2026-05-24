@@ -172,4 +172,104 @@ describe('MapView', () => {
       vi.useRealTimers();
     }
   });
+
+  it('excludes contacts whose public key is in blockedKeys', () => {
+    const visible: Contact = {
+      public_key: 'aa'.repeat(32),
+      name: 'Visible',
+      type: 1,
+      flags: 0,
+      direct_path: null,
+      direct_path_len: -1,
+      direct_path_hash_mode: -1,
+      route_override_path: null,
+      route_override_len: null,
+      route_override_hash_mode: null,
+      last_advert: null,
+      lat: 40,
+      lon: -74,
+      last_seen: Math.floor(Date.now() / 1000),
+      on_radio: false,
+      favorite: false,
+      last_contacted: null,
+      last_read_at: null,
+      first_seen: null,
+    };
+    const blocked: Contact = {
+      public_key: 'bb'.repeat(32),
+      name: 'Blocked',
+      type: 2,
+      flags: 0,
+      direct_path: null,
+      direct_path_len: -1,
+      direct_path_hash_mode: -1,
+      route_override_path: null,
+      route_override_len: null,
+      route_override_hash_mode: null,
+      last_advert: null,
+      lat: 41,
+      lon: -73,
+      last_seen: Math.floor(Date.now() / 1000),
+      on_radio: false,
+      favorite: false,
+      last_contacted: null,
+      last_read_at: null,
+      first_seen: null,
+    };
+
+    render(<MapView contacts={[visible, blocked]} blockedKeys={['bb'.repeat(32)]} />);
+
+    expect(screen.getByText('Visible')).toBeInTheDocument();
+    expect(screen.queryByText('Blocked')).toBeNull();
+  });
+
+  it('excludes contacts whose name is in blockedNames', () => {
+    const visible: Contact = {
+      public_key: 'aa'.repeat(32),
+      name: 'Visible',
+      type: 1,
+      flags: 0,
+      direct_path: null,
+      direct_path_len: -1,
+      direct_path_hash_mode: -1,
+      route_override_path: null,
+      route_override_len: null,
+      route_override_hash_mode: null,
+      last_advert: null,
+      lat: 40,
+      lon: -74,
+      last_seen: Math.floor(Date.now() / 1000),
+      on_radio: false,
+      favorite: false,
+      last_contacted: null,
+      last_read_at: null,
+      first_seen: null,
+    };
+    const blocked: Contact = {
+      public_key: 'cc'.repeat(32),
+      name: 'BadActor',
+      type: 2,
+      flags: 0,
+      direct_path: null,
+      direct_path_len: -1,
+      direct_path_hash_mode: -1,
+      route_override_path: null,
+      route_override_len: null,
+      route_override_hash_mode: null,
+      last_advert: null,
+      lat: 41,
+      lon: -73,
+      last_seen: Math.floor(Date.now() / 1000),
+      on_radio: false,
+      favorite: false,
+      last_contacted: null,
+      last_read_at: null,
+      first_seen: null,
+    };
+
+    render(<MapView contacts={[visible, blocked]} blockedNames={['BadActor']} />);
+
+    expect(screen.getByText('Visible')).toBeInTheDocument();
+    expect(screen.queryByText('BadActor')).toBeNull();
+  });
 });
