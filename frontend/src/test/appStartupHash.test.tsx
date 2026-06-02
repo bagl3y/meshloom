@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { configure, render, screen, waitFor } from '@testing-library/react';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   api: {
@@ -151,6 +151,24 @@ const publicChannel = {
 };
 
 describe('App startup hash resolution', () => {
+  // App startup fans out several async fetches (config, settings, channels,
+  // contacts, unreads) that must all settle before conversation selection
+  // renders. This suite passes 20/20 in isolation, but under the full parallel
+  // suite (~69 files) CPU contention can stretch that startup well past RTL's
+  // 1000ms default — and even past vitest's 5000ms test timeout — for any
+  // waitFor in this file. It's starvation, not a hang, so give this suite
+  // generous headroom on both timeouts: a healthy render still settles in
+  // ~100ms (nothing is slowed), only a starved run waits longer. Scoped to this
+  // file and restored afterward so other test files are unaffected.
+  beforeAll(() => {
+    vi.setConfig({ testTimeout: 15000 });
+    configure({ asyncUtilTimeout: 10000 });
+  });
+  afterAll(() => {
+    vi.resetConfig();
+    configure({ asyncUtilTimeout: 1000 });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
@@ -331,17 +349,11 @@ describe('App startup hash resolution', () => {
 
     render(<App />);
 
-    // App startup triggers multiple async fetches (config, settings, channels,
-    // contacts, unreads) that must all resolve before conversation selection
-    // renders.  CI runners are slower than local, so bump the default timeout.
-    await waitFor(
-      () => {
-        for (const node of screen.getAllByTestId('active-conversation')) {
-          expect(node).toHaveTextContent(`channel:${publicChannel.key}:Public`);
-        }
-      },
-      { timeout: 3000 }
-    );
+    await waitFor(() => {
+      for (const node of screen.getAllByTestId('active-conversation')) {
+        expect(node).toHaveTextContent(`channel:${publicChannel.key}:Public`);
+      }
+    });
 
     expect(localStorage.getItem(LAST_VIEWED_CONVERSATION_KEY)).toContain(publicChannel.key);
   });
