@@ -331,11 +331,17 @@ describe('App startup hash resolution', () => {
 
     render(<App />);
 
-    await waitFor(() => {
-      for (const node of screen.getAllByTestId('active-conversation')) {
-        expect(node).toHaveTextContent(`channel:${publicChannel.key}:Public`);
-      }
-    });
+    // App startup triggers multiple async fetches (config, settings, channels,
+    // contacts, unreads) that must all resolve before conversation selection
+    // renders.  CI runners are slower than local, so bump the default timeout.
+    await waitFor(
+      () => {
+        for (const node of screen.getAllByTestId('active-conversation')) {
+          expect(node).toHaveTextContent(`channel:${publicChannel.key}:Public`);
+        }
+      },
+      { timeout: 3000 }
+    );
 
     expect(localStorage.getItem(LAST_VIEWED_CONVERSATION_KEY)).toContain(publicChannel.key);
   });
