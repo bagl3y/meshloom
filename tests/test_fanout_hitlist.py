@@ -37,6 +37,7 @@ class TestBotModuleParameterExtraction:
             path,
             is_outgoing,
             path_bytes_per_hop,
+            packet_hash,
         ):
             captured["is_outgoing"] = is_outgoing
             captured["is_dm"] = is_dm
@@ -86,6 +87,7 @@ class TestBotModuleParameterExtraction:
             path,
             is_outgoing,
             path_bytes_per_hop,
+            packet_hash,
         ):
             captured["is_outgoing"] = is_outgoing
             return None
@@ -132,6 +134,7 @@ class TestBotModuleParameterExtraction:
             path,
             is_outgoing,
             path_bytes_per_hop,
+            packet_hash,
         ):
             captured["path"] = path
             captured["path_bytes_per_hop"] = path_bytes_per_hop
@@ -180,6 +183,7 @@ class TestBotModuleParameterExtraction:
             path,
             is_outgoing,
             path_bytes_per_hop,
+            packet_hash,
         ):
             captured["message_text"] = message_text
             captured["sender_name"] = sender_name
@@ -228,6 +232,7 @@ class TestBotModuleParameterExtraction:
             path,
             is_outgoing,
             path_bytes_per_hop,
+            packet_hash,
         ):
             captured["channel_name"] = channel_name
             return None
@@ -275,6 +280,7 @@ class TestBotModuleParameterExtraction:
             path,
             is_outgoing,
             path_bytes_per_hop,
+            packet_hash,
         ):
             captured["sender_name"] = sender_name
             captured["sender_key"] = sender_key

@@ -35,6 +35,7 @@ from app.models import (
     RawPacketBroadcast,
     RawPacketDecryptedInfo,
 )
+from app.path_utils import calculate_packet_hash
 from app.repository import (
     ChannelRepository,
     ContactAdvertPathRepository,
@@ -73,6 +74,7 @@ async def create_message_from_decrypted(
     snr: float | None = None,
     channel_name: str | None = None,
     realtime: bool = True,
+    packet_hash: str | None = None,
 ) -> int | None:
     """Store a decrypted channel message via the shared message service."""
     return await _create_message_from_decrypted(
@@ -89,6 +91,7 @@ async def create_message_from_decrypted(
         channel_name=channel_name,
         realtime=realtime,
         broadcast_fn=broadcast_event,
+        packet_hash=packet_hash,
     )
 
 
@@ -104,6 +107,7 @@ async def create_dm_message_from_decrypted(
     snr: float | None = None,
     outgoing: bool = False,
     realtime: bool = True,
+    packet_hash: str | None = None,
 ) -> int | None:
     """Store a decrypted direct message via the shared message service."""
     return await _create_dm_message_from_decrypted(
@@ -119,6 +123,7 @@ async def create_dm_message_from_decrypted(
         outgoing=outgoing,
         realtime=realtime,
         broadcast_fn=broadcast_event,
+        packet_hash=packet_hash,
     )
 
 
@@ -323,13 +328,16 @@ async def process_raw_packet(
         "sender": None,
     }
 
+    # Compute packet hash once for threading into message broadcasts (used by bot fanout).
+    pkt_hash = calculate_packet_hash(raw_bytes)
+
     # Process packets based on payload type
     # For GROUP_TEXT, we always try to decrypt even for duplicate packets - the message
     # deduplication in create_message_from_decrypted handles adding paths to existing messages.
     # This is more reliable than trying to look up the message via raw packet linking.
     if payload_type == PayloadType.GROUP_TEXT:
         decrypt_result = await _process_group_text(
-            raw_bytes, packet_id, ts, packet_info, rssi=rssi, snr=snr
+            raw_bytes, packet_id, ts, packet_info, rssi=rssi, snr=snr, packet_hash=pkt_hash
         )
         if decrypt_result:
             result.update(decrypt_result)
@@ -342,7 +350,7 @@ async def process_raw_packet(
     elif payload_type == PayloadType.TEXT_MESSAGE:
         # Try to decrypt direct messages using stored private key and known contacts
         decrypt_result = await _process_direct_message(
-            raw_bytes, packet_id, ts, packet_info, rssi=rssi, snr=snr
+            raw_bytes, packet_id, ts, packet_info, rssi=rssi, snr=snr, packet_hash=pkt_hash
         )
         if decrypt_result:
             result.update(decrypt_result)
@@ -384,6 +392,7 @@ async def _process_group_text(
     packet_info: PacketInfo | None,
     rssi: int | None = None,
     snr: float | None = None,
+    packet_hash: str | None = None,
 ) -> dict | None:
     """
     Process a GroupText (channel message) packet.
@@ -422,6 +431,7 @@ async def _process_group_text(
             path_len=packet_info.path_length if packet_info else None,
             rssi=rssi,
             snr=snr,
+            packet_hash=packet_hash,
         )
 
         return {
@@ -567,6 +577,7 @@ async def _process_direct_message(
     packet_info: PacketInfo | None,
     rssi: int | None = None,
     snr: float | None = None,
+    packet_hash: str | None = None,
 ) -> dict | None:
     """
     Process a TEXT_MESSAGE (direct message) packet.
@@ -690,6 +701,7 @@ async def _process_direct_message(
                 rssi=rssi,
                 snr=snr,
                 outgoing=effective_outgoing,
+                packet_hash=packet_hash,
             )
 
             return {

@@ -17,7 +17,6 @@ from app.fanout.community_mqtt import (
     _base64url_encode,
     _build_radio_info,
     _build_status_topic,
-    _calculate_packet_hash,
     _decode_packet_fields,
     _format_raw_packet,
     _generate_jwt_token,
@@ -29,6 +28,7 @@ from app.fanout.mqtt_community import (
     _render_packet_topic,
 )
 from app.keystore import ed25519_sign_expanded
+from app.path_utils import calculate_packet_hash as _calculate_packet_hash
 
 
 def _make_test_keys() -> tuple[bytes, bytes]:
