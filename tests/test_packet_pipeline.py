@@ -74,6 +74,12 @@ def _build_path_packet(
     return header + payload
 
 
+def _build_ack_packet(code: bytes, *, route_type: RouteType = RouteType.DIRECT) -> bytes:
+    """Build a standalone ACK packet whose cleartext payload is the 4-byte code."""
+    header = bytes([(PayloadType.ACK << 2) | route_type, 0x00])
+    return header + code
+
+
 class TestChannelMessagePipeline:
     """Test channel message flow: packet → decrypt → store → broadcast."""
 
@@ -762,6 +768,93 @@ class TestAckPipeline:
         assert "message_id" in broadcast["data"]
         assert "ack_count" in broadcast["data"]
         assert broadcast["data"]["ack_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_standalone_ack_packet_marks_message_acked(self, test_db, captured_broadcasts):
+        """A standalone ACK RF packet satisfies a pending DM ACK from the raw feed.
+
+        Direct-routed DMs are answered with a standalone PAYLOAD_TYPE_ACK packet
+        (vs. the PATH-embedded ACK used for flood). We must match it straight from
+        the raw packet so delivery confirmation does not depend on the radio also
+        emitting a separate EventType.ACK host control frame.
+        """
+        from app.packet_processor import process_raw_packet
+        from app.services import dm_ack_tracker
+
+        code = bytes.fromhex("01020304")
+        raw_packet = _build_ack_packet(code)
+
+        message_id = await MessageRepository.create(
+            msg_type="PRIV",
+            text="waiting for direct ack",
+            conversation_key=PATH_TEST_CONTACT_PUB.hex(),
+            sender_timestamp=1700000000,
+            received_at=1700000000,
+            outgoing=True,
+        )
+
+        prev_pending = dm_ack_tracker._pending_acks.copy()
+        prev_buffered = dm_ack_tracker._buffered_acks.copy()
+        dm_ack_tracker._pending_acks.clear()
+        dm_ack_tracker._buffered_acks.clear()
+        dm_ack_tracker.track_pending_ack(code.hex(), message_id, 30000)
+
+        broadcasts, mock_broadcast = captured_broadcasts
+        try:
+            with patch("app.packet_processor.broadcast_event", mock_broadcast):
+                result = await process_raw_packet(raw_packet, timestamp=1700000300)
+        finally:
+            dm_ack_tracker._pending_acks.clear()
+            dm_ack_tracker._pending_acks.update(prev_pending)
+            dm_ack_tracker._buffered_acks.clear()
+            dm_ack_tracker._buffered_acks.update(prev_buffered)
+
+        assert result["payload_type"] == "ACK"
+
+        messages = await MessageRepository.get_all(
+            msg_type="PRIV",
+            conversation_key=PATH_TEST_CONTACT_PUB.hex(),
+            limit=10,
+        )
+        assert len(messages) == 1
+        assert messages[0].acked == 1
+
+        ack_broadcasts = [b for b in broadcasts if b["type"] == "message_acked"]
+        assert len(ack_broadcasts) == 1
+        assert ack_broadcasts[0]["data"] == {"message_id": message_id, "ack_count": 1}
+
+    @pytest.mark.asyncio
+    async def test_standalone_ack_packet_with_no_pending_is_buffered(
+        self, test_db, captured_broadcasts
+    ):
+        """An unmatched standalone ACK is buffered (for late registration), not dropped."""
+        from app.packet_processor import process_raw_packet
+        from app.services import dm_ack_tracker
+
+        code = bytes.fromhex("aabbccdd")
+        raw_packet = _build_ack_packet(code)
+
+        prev_pending = dm_ack_tracker._pending_acks.copy()
+        prev_buffered = dm_ack_tracker._buffered_acks.copy()
+        dm_ack_tracker._pending_acks.clear()
+        dm_ack_tracker._buffered_acks.clear()
+
+        broadcasts, mock_broadcast = captured_broadcasts
+        try:
+            with patch("app.packet_processor.broadcast_event", mock_broadcast):
+                await process_raw_packet(raw_packet, timestamp=1700000300)
+            buffered_after = dm_ack_tracker._buffered_acks.copy()
+        finally:
+            dm_ack_tracker._pending_acks.clear()
+            dm_ack_tracker._pending_acks.update(prev_pending)
+            dm_ack_tracker._buffered_acks.clear()
+            dm_ack_tracker._buffered_acks.update(prev_buffered)
+
+        # Code is buffered so a slightly-later send registration still matches it.
+        assert code.hex() in buffered_after
+        # No message exists, so nothing should be marked acked / broadcast.
+        ack_broadcasts = [b for b in broadcasts if b["type"] == "message_acked"]
+        assert ack_broadcasts == []
 
 
 class TestCreateMessageFromDecrypted:
