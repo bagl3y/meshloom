@@ -149,7 +149,14 @@ export function NeighborsPane({
                     n.snr >= 6 ? 'text-success' : n.snr >= 0 ? 'text-warning' : 'text-destructive';
                   return (
                     <tr key={i} className="border-t border-border/50">
-                      <td className="py-1">{n.name || n.pubkey_prefix}</td>
+                      <td className="py-1">
+                        {n.name || n.pubkey_prefix}
+                        {n.name && (
+                          <span className="ml-1 text-muted-foreground font-mono text-[0.6875rem]">
+                            {n.pubkey_prefix.substring(0, 6)}
+                          </span>
+                        )}
+                      </td>
                       <td className={cn('py-1 text-right font-mono', snrColor)}>{snrStr} dB</td>
                       {hasDistances && (
                         <td className="py-1 text-right text-muted-foreground font-mono">
