@@ -15,7 +15,7 @@ import json
 import logging
 import ssl
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import aiomqtt
@@ -43,6 +43,12 @@ _STATS_MIN_CACHE_SECS = 60  # Don't re-fetch stats within 60s
 
 # Route type mapping: bottom 2 bits of first byte
 _ROUTE_MAP = {0: "F", 1: "F", 2: "D", 3: "T"}
+
+
+def _format_utc_timestamp(dt: datetime | None = None) -> str:
+    """Return an ISO-8601 UTC timestamp accepted by community observers."""
+    current = dt.astimezone(UTC) if dt is not None else datetime.now(UTC)
+    return current.isoformat().replace("+00:00", "Z")
 
 
 class CommunityMqttSettings(Protocol):
@@ -152,9 +158,9 @@ def _format_raw_packet(data: dict[str, Any], device_name: str, public_key_hex: s
     if route == "U":
         return None
 
-    # Reference format uses local "now" timestamp and derived time/date fields.
-    current_time = datetime.now()
-    ts_str = current_time.isoformat()
+    # Community observers clamp zone-less local timestamps; publish explicit UTC.
+    current_time = datetime.now(UTC)
+    ts_str = _format_utc_timestamp(current_time)
 
     # Keep numeric telemetry numeric so downstream analyzers can ingest it.
     # Preserve the existing "Unknown" fallback for missing values.
@@ -314,7 +320,7 @@ class CommunityMqttPublisher(BaseMqttPublisher):
         offline_payload = json.dumps(
             {
                 "status": "offline",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": _format_utc_timestamp(),
                 "origin": device_name or "MeshCore Device",
                 "origin_id": pubkey_hex,
             }
@@ -478,7 +484,7 @@ class CommunityMqttPublisher(BaseMqttPublisher):
         status_topic = _build_status_topic(settings, pubkey_hex)
         payload: dict[str, Any] = {
             "status": "online",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": _format_utc_timestamp(),
             "origin": device_name or "MeshCore Device",
             "origin_id": pubkey_hex,
             "model": device_info.get("model", "unknown"),
