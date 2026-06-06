@@ -338,6 +338,56 @@ export function TelemetryHistoryPane({
     }
   };
 
+  const formatSeriesValue = (key: string, value: number): string => {
+    if (key === 'recv_error_pct') return `${value}%`;
+    if (activeMetric === 'uptime_seconds') return formatUptime(value);
+    const suffix =
+      activeConfig.unit && activeMetric !== 'packets' && activeMetric !== 'recv_errors'
+        ? ` ${activeConfig.unit}`
+        : '';
+    return `${value}${suffix}`;
+  };
+
+  // Custom tooltip so each row carries a color swatch matching its line —
+  // essential for the multi-series packets view where four values overlap.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderTooltip = ({ active, payload, label }: any) => {
+    if (!active || !Array.isArray(payload) || payload.length === 0) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = (payload as any[]).filter((p) => p.value != null);
+    if (rows.length === 0) return null;
+    return (
+      <div style={{ ...TOOLTIP_STYLE.contentStyle, padding: '6px 9px' }}>
+        <div style={{ ...TOOLTIP_STYLE.labelStyle, marginBottom: 4 }}>
+          {formatTime(Number(label))}
+        </div>
+        {rows.map((p) => {
+          const key = String(p.dataKey ?? p.name);
+          const s = series.find((x) => x.key === key);
+          const color = s?.color ?? (p.color as string);
+          const numVal = typeof p.value === 'number' ? p.value : Number(p.value);
+          return (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 2,
+                  backgroundColor: color,
+                  flexShrink: 0,
+                }}
+              />
+              <span style={TOOLTIP_STYLE.labelStyle}>{s?.label ?? key}:</span>
+              <span style={{ color: 'hsl(var(--popover-foreground))' }}>
+                {formatSeriesValue(key, numVal)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const handleToggle = async () => {
     setToggling(true);
     try {
@@ -500,28 +550,12 @@ export function TelemetryHistoryPane({
                 />
               )}
               <RechartsTooltip
-                {...TOOLTIP_STYLE}
                 cursor={{
                   stroke: 'hsl(var(--muted-foreground))',
                   strokeWidth: 1,
                   strokeDasharray: '3 3',
                 }}
-                labelFormatter={(ts) => formatTime(Number(ts))}
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                formatter={(value: any, name: any) => {
-                  const s = series.find((x) => x.key === name);
-                  const label = s?.label ?? String(name);
-                  const numVal = typeof value === 'number' ? value : Number(value);
-                  if (name === 'recv_error_pct') return [`${numVal}%`, label];
-                  if (activeMetric === 'uptime_seconds') return [formatUptime(numVal), label];
-                  const suffix =
-                    activeConfig.unit &&
-                    activeMetric !== 'packets' &&
-                    activeMetric !== 'recv_errors'
-                      ? ` ${activeConfig.unit}`
-                      : '';
-                  return [`${value}${suffix}`, label];
-                }}
+                content={renderTooltip}
               />
               {series.map((s) => (
                 <Area
