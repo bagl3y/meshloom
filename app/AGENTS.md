@@ -137,6 +137,7 @@ app/
 - Non-final DM attempts use the contact's effective route (`override > direct > flood`). The final retry is intentionally sent as flood even when a routing override exists.
 - DM ACK state is terminal on first ACK. Retry attempts may register multiple expected ACK codes for the same message, but sibling pending codes are cleared once one ACK wins so a DM should not accrue multiple delivery confirmations from retries.
 - ACKs are delivery state, not routing state. Bundled ACKs inside PATH packets still satisfy pending DM sends, but ACK history does not feed contact route learning.
+- DM ACKs are matched from two independent radio emissions, so confirmation does not depend on the radio surfacing a host control frame: (1) the `EventType.ACK`/`SEND_CONFIRMED` host frame via `event_handlers.on_ack`, and (2) the raw RF packet itself via `packet_processor.process_raw_packet`. The packet processor extracts ACK codes both from PATH-return packets (flood replies, ACK embedded in `extra`) and from standalone `PayloadType.ACK` packets (direct replies, 4-byte cleartext payload), feeding both into `apply_dm_ack_code`. This matters for companion firmwares (e.g. pyMC over TCP) that do not reliably emit a separate host ACK frame for direct-routed replies.
 
 ### Echo/repeat dedup
 

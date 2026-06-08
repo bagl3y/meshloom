@@ -3,6 +3,7 @@
 import json
 import time
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -17,7 +18,6 @@ from app.fanout.community_mqtt import (
     _base64url_encode,
     _build_radio_info,
     _build_status_topic,
-    _calculate_packet_hash,
     _decode_packet_fields,
     _format_raw_packet,
     _generate_jwt_token,
@@ -29,6 +29,7 @@ from app.fanout.mqtt_community import (
     _render_packet_topic,
 )
 from app.keystore import ed25519_sign_expanded
+from app.path_utils import calculate_packet_hash as _calculate_packet_hash
 
 
 def _make_test_keys() -> tuple[bytes, bytes]:
@@ -74,6 +75,13 @@ def _make_community_settings(**overrides) -> SimpleNamespace:
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
+
+
+def _assert_utc_z_timestamp(value: str) -> None:
+    assert value.endswith("Z")
+    assert "+00:00" not in value
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    assert parsed.tzinfo == UTC
 
 
 class TestBase64UrlEncode:
@@ -219,12 +227,11 @@ class TestPacketFormatConversion:
         assert result["direction"] == "rx"
         assert result["len"] == "3"
 
-    def test_timestamp_is_iso8601(self):
+    def test_timestamp_is_utc_z_iso8601(self):
         data = {"timestamp": 1700000000, "data": "0100AA", "snr": None, "rssi": None}
         result = _format_raw_packet(data, "Node", "AA" * 32)
         assert result is not None
-        assert result["timestamp"]
-        assert "T" in result["timestamp"]
+        _assert_utc_z_timestamp(result["timestamp"])
 
     def test_snr_rssi_unknown_when_none(self):
         data = {"timestamp": 0, "data": "0100AA", "snr": None, "rssi": None}
@@ -734,7 +741,7 @@ class TestLwtAndStatusPublish:
         assert payload["status"] == "offline"
         assert payload["origin"] == "TestNode"
         assert payload["origin_id"] == pubkey_hex
-        assert "timestamp" in payload
+        _assert_utc_z_timestamp(payload["timestamp"])
         assert "client" not in payload
         assert kwargs["transport"] == "websockets"
         assert kwargs["websocket_path"] == "/"
@@ -884,7 +891,7 @@ class TestLwtAndStatusPublish:
         assert payload["origin"] == "TestNode"
         assert payload["origin_id"] == pubkey_hex
         assert "client" not in payload
-        assert "timestamp" in payload
+        _assert_utc_z_timestamp(payload["timestamp"])
         assert payload["model"] == "T-Deck"
         assert payload["firmware_version"] == "v2.2.2 (Build: 2025-01-15)"
         assert payload["radio"] == "915.0,250.0,10,8"
@@ -1393,6 +1400,7 @@ class TestPublishStatus:
         assert payload["origin"] == "TestNode"
         assert payload["origin_id"] == pubkey_hex
         assert "client" not in payload
+        _assert_utc_z_timestamp(payload["timestamp"])
         assert payload["model"] == "T-Deck"
         assert payload["firmware_version"] == "v2.2.2 (Build: 2025-01-15)"
         assert payload["radio"] == "915.0,250.0,10,8"

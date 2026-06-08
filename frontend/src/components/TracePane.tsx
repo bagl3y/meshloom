@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus, X } from 'lucide-react';
 
 import type {
   Contact,
@@ -199,6 +199,7 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
   const [customHopHexDraft, setCustomHopHexDraft] = useState('');
   const [customHopError, setCustomHopError] = useState<string | null>(null);
   const [recentTraces, setRecentTraces] = useState<SavedTrace[]>(loadRecentTraces);
+  const [recentTracesOpen, setRecentTracesOpen] = useState(false);
   const activeRunTokenRef = useRef(0);
 
   const repeaters = useMemo(() => {
@@ -562,7 +563,7 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
         </section>
 
         <section className="flex flex-1 flex-col gap-4 lg:min-h-0 lg:overflow-hidden">
-          <div className="flex flex-col rounded-lg border border-border bg-card lg:min-h-0 lg:max-h-[50%]">
+          <div className="flex flex-col rounded-lg border border-border bg-card lg:min-h-0 lg:flex-1 lg:overflow-hidden">
             <div className="shrink-0 flex items-start justify-between gap-3 border-b border-border px-4 py-3">
               <div>
                 <h3 className="text-sm font-semibold">Trace Path</h3>
@@ -571,35 +572,46 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
                 </p>
                 {recentTraces.length > 0 && (
                   <div className="mt-2">
-                    <div className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium mb-1">
-                      Rerun a recent trace:
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {recentTraces.map((trace, i) => {
-                        const label = trace.hops
-                          .map((h) => {
-                            if (h.kind === 'repeater' && h.publicKey) {
-                              const shortKey = h.publicKey.slice(0, 12);
-                              return h.displayName !== shortKey
-                                ? `${h.displayName} (${shortKey})`
-                                : shortKey;
-                            }
-                            return h.displayName;
-                          })
-                          .join(' → ');
-                        return (
-                          <button
-                            key={i}
-                            type="button"
-                            className="rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-accent transition-colors truncate max-w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                            disabled={loading}
-                            onClick={() => handleLoadRecentTrace(trace)}
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium hover:text-foreground transition-colors"
+                      onClick={() => setRecentTracesOpen((o) => !o)}
+                    >
+                      {recentTracesOpen ? (
+                        <ChevronDown className="h-3 w-3" />
+                      ) : (
+                        <ChevronRight className="h-3 w-3" />
+                      )}
+                      Recent traces ({recentTraces.length})
+                    </button>
+                    {recentTracesOpen && (
+                      <div className="mt-1.5 flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
+                        {recentTraces.map((trace, i) => {
+                          const label = trace.hops
+                            .map((h) => {
+                              if (h.kind === 'repeater' && h.publicKey) {
+                                const shortKey = h.publicKey.slice(0, 12);
+                                return h.displayName !== shortKey
+                                  ? `${h.displayName} (${shortKey})`
+                                  : shortKey;
+                              }
+                              return h.displayName;
+                            })
+                            .join(' → ');
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              className="rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-accent transition-colors truncate max-w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                              disabled={loading}
+                              onClick={() => handleLoadRecentTrace(trace)}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

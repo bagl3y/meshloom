@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   AreaChart,
   Area,
@@ -7,6 +7,7 @@ import {
   CartesianGrid,
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
+  Brush,
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import { Button } from '../ui/button';
@@ -84,6 +85,31 @@ function formatUptime(seconds: number): string {
   return `${(seconds / 86400).toFixed(1)}d`;
 }
 
+/** Collect all numeric values for the given keys across a set of chart points. */
+function collectValues(data: Array<Record<string, number | undefined>>, keys: string[]): number[] {
+  const out: number[] = [];
+  for (const d of data) {
+    for (const k of keys) {
+      const v = d[k];
+      if (typeof v === 'number' && Number.isFinite(v)) out.push(v);
+    }
+  }
+  return out;
+}
+
+/** Bound a Y axis to the data range padded by 10% on each side.
+ *  Returns undefined (recharts auto-domain) when there is nothing to plot. */
+function paddedDomain(values: number[]): [number, number] | undefined {
+  if (values.length === 0) return undefined;
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  const span = hi - lo;
+  // Flat series (single value / no spread): pad relative to magnitude so the
+  // line doesn't sit on a degenerate zero-height axis.
+  const pad = span === 0 ? Math.abs(lo) * 0.1 || 1 : span * 0.1;
+  return [lo - pad, hi + pad];
+}
+
 interface TelemetryHistoryPaneProps {
   entries: TelemetryHistoryEntry[];
   publicKey: string;
@@ -102,6 +128,12 @@ export function TelemetryHistoryPane({
   const { distanceUnit } = useDistanceUnit();
   const [metric, setMetric] = useState<string>('battery_volts');
   const [toggling, setToggling] = useState(false);
+  const [brushRange, setBrushRange] = useState<{ start: number; end: number } | null>(null);
+
+  // Reset the zoom window when switching to a different repeater.
+  useEffect(() => {
+    setBrushRange(null);
+  }, [publicKey]);
 
   const isTracked = trackedTelemetryRepeaters.includes(publicKey);
   const slotsFull = trackedTelemetryRepeaters.length >= MAX_TRACKED && !isTracked;
@@ -143,25 +175,51 @@ export function TelemetryHistoryPane({
   const activeMetric = allMetricKeys.includes(metric) ? metric : 'battery_volts';
 
   const isBuiltin = BUILTIN_METRICS.includes(activeMetric as BuiltinMetric);
-  const activeConfig: MetricConfig = isBuiltin
-    ? BUILTIN_METRIC_CONFIG[activeMetric as BuiltinMetric]
-    : (lppMetrics.find((m) => m.key === activeMetric)?.config ?? {
-        label: activeMetric,
-        unit: '',
-        color: '#888',
-      });
+  const activeConfig: MetricConfig = useMemo(
+    () =>
+      isBuiltin
+        ? BUILTIN_METRIC_CONFIG[activeMetric as BuiltinMetric]
+        : (lppMetrics.find((m) => m.key === activeMetric)?.config ?? {
+            label: activeMetric,
+            unit: '',
+            color: '#888',
+          }),
+    [isBuiltin, activeMetric, lppMetrics]
+  );
 
   const chartData = useMemo(() => {
-    return entries.map((e) => {
+    // Sort chronologically so per-sample deltas compare against the true
+    // predecessor (entries are not guaranteed ordered by the API).
+    const ordered = [...entries].sort((a, b) => a.timestamp - b.timestamp);
+    let prevRecv: number | undefined;
+    let prevSent: number | undefined;
+    return ordered.map((e) => {
       const d = e.data;
       const recvErrors = d.recv_errors ?? undefined;
       const packetsReceived = d.packets_received;
+      const packetsSent = d.packets_sent;
+      // Per-sample deltas off the cumulative lifetime counters. A drop
+      // (counter < previous) means the repeater rebooted and reset its
+      // counters, so we emit no delta for that sample rather than a large
+      // negative spike. The first sample has no predecessor, so no delta.
+      const recvDelta =
+        prevRecv != null && packetsReceived != null && packetsReceived >= prevRecv
+          ? packetsReceived - prevRecv
+          : undefined;
+      const sentDelta =
+        prevSent != null && packetsSent != null && packetsSent >= prevSent
+          ? packetsSent - prevSent
+          : undefined;
+      if (packetsReceived != null) prevRecv = packetsReceived;
+      if (packetsSent != null) prevSent = packetsSent;
       const point: Record<string, number | undefined> = {
         timestamp: e.timestamp,
         battery_volts: d.battery_volts,
         noise_floor_dbm: d.noise_floor_dbm,
         packets_received: packetsReceived,
-        packets_sent: d.packets_sent,
+        packets_sent: packetsSent,
+        packets_received_delta: recvDelta,
+        packets_sent_delta: sentDelta,
         recv_errors: recvErrors,
         recv_error_pct:
           recvErrors != null && packetsReceived != null && packetsReceived + recvErrors > 0
@@ -179,35 +237,156 @@ export function TelemetryHistoryPane({
     });
   }, [entries, distanceUnit]);
 
-  const dataKeys =
-    activeMetric === 'packets'
-      ? ['packets_received', 'packets_sent']
-      : activeMetric === 'recv_errors'
-        ? ['recv_errors', 'recv_error_pct']
-        : [activeMetric];
+  // Series descriptors drive axes, colors, labels, and tooltip formatting.
+  // Cumulative counters render as filled areas on the left axis; derived
+  // per-sample deltas render as gapped lines on a secondary right axis.
+  const series = useMemo(() => {
+    if (activeMetric === 'packets') {
+      return [
+        {
+          key: 'packets_received',
+          color: '#0ea5e9',
+          axis: 'left' as const,
+          line: false,
+          label: 'Received',
+        },
+        {
+          key: 'packets_sent',
+          color: '#f43f5e',
+          axis: 'left' as const,
+          line: false,
+          label: 'Sent',
+        },
+        {
+          key: 'packets_received_delta',
+          color: '#14b8a6',
+          axis: 'right' as const,
+          line: true,
+          label: 'Received Δ',
+        },
+        {
+          key: 'packets_sent_delta',
+          color: '#f59e0b',
+          axis: 'right' as const,
+          line: true,
+          label: 'Sent Δ',
+        },
+      ];
+    }
+    if (activeMetric === 'recv_errors') {
+      return [
+        {
+          key: 'recv_errors',
+          color: '#ef4444',
+          axis: 'left' as const,
+          line: false,
+          label: 'RX Errors',
+        },
+        {
+          key: 'recv_error_pct',
+          color: '#f59e0b',
+          axis: 'right' as const,
+          line: false,
+          label: 'Error Rate',
+        },
+      ];
+    }
+    return [
+      {
+        key: activeMetric,
+        color: activeConfig.color,
+        axis: 'left' as const,
+        line: false,
+        label: activeConfig.label,
+      },
+    ];
+  }, [activeMetric, activeConfig]);
 
-  const yDomain = useMemo<[number, number] | undefined>(() => {
-    if (activeMetric !== 'battery_volts' || chartData.length === 0) return undefined;
-    const values = chartData.map((d) => d.battery_volts).filter((v) => v != null) as number[];
-    if (values.length === 0) return [3, 5];
-    const lo = Math.min(...values);
-    const hi = Math.max(...values);
-    return [Math.min(3, Math.floor(lo) - 1), Math.max(5, Math.ceil(hi) + 1)];
-  }, [activeMetric, chartData]);
+  const leftKeys = useMemo(
+    () => series.filter((s) => s.axis === 'left').map((s) => s.key),
+    [series]
+  );
+  const rightKeys = useMemo(
+    () => series.filter((s) => s.axis === 'right').map((s) => s.key),
+    [series]
+  );
 
-  const yDomainPct = useMemo<[number, number]>(() => {
-    const MIN_SPAN = 5;
-    const values = chartData.map((d) => d.recv_error_pct).filter((v) => v != null) as number[];
-    if (values.length === 0) return [0, MIN_SPAN];
-    const lo = Math.min(...values);
-    const hi = Math.max(...values);
-    const span = hi - lo;
-    if (span >= MIN_SPAN)
-      return [Math.max(0, Math.floor(lo - span * 0.1)), Math.ceil(hi + span * 0.1)];
-    const pad = (MIN_SPAN - span) / 2;
-    const bottom = Math.max(0, Math.floor(lo - pad));
-    return [bottom, Math.ceil(bottom + MIN_SPAN)];
-  }, [chartData]);
+  // Brush-controlled viewport. Indices are clamped to the current data length
+  // so a stale range from a previous repeater can never index out of bounds.
+  const lastIndex = Math.max(0, chartData.length - 1);
+  const brushStart = brushRange ? Math.min(brushRange.start, lastIndex) : 0;
+  const brushEnd = brushRange ? Math.min(brushRange.end, lastIndex) : lastIndex;
+
+  const visibleData = useMemo(
+    () => chartData.slice(brushStart, brushEnd + 1),
+    [chartData, brushStart, brushEnd]
+  );
+
+  // Y extents bound to the visible window so zooming re-tightens the axis.
+  const leftDomain = useMemo(
+    () => paddedDomain(collectValues(visibleData, leftKeys)),
+    [visibleData, leftKeys]
+  );
+  const rightDomain = useMemo(
+    () => (rightKeys.length ? paddedDomain(collectValues(visibleData, rightKeys)) : undefined),
+    [visibleData, rightKeys]
+  );
+
+  const handleBrushChange = (range: { startIndex?: number; endIndex?: number }) => {
+    if (typeof range.startIndex === 'number' && typeof range.endIndex === 'number') {
+      setBrushRange({ start: range.startIndex, end: range.endIndex });
+    }
+  };
+
+  const formatSeriesValue = (key: string, value: number): string => {
+    if (key === 'recv_error_pct') return `${value}%`;
+    if (activeMetric === 'uptime_seconds') return formatUptime(value);
+    const suffix =
+      activeConfig.unit && activeMetric !== 'packets' && activeMetric !== 'recv_errors'
+        ? ` ${activeConfig.unit}`
+        : '';
+    return `${value}${suffix}`;
+  };
+
+  // Custom tooltip so each row carries a color swatch matching its line —
+  // essential for the multi-series packets view where four values overlap.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderTooltip = ({ active, payload, label }: any) => {
+    if (!active || !Array.isArray(payload) || payload.length === 0) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = (payload as any[]).filter((p) => p.value != null);
+    if (rows.length === 0) return null;
+    return (
+      <div style={{ ...TOOLTIP_STYLE.contentStyle, padding: '6px 9px' }}>
+        <div style={{ ...TOOLTIP_STYLE.labelStyle, marginBottom: 4 }}>
+          {formatTime(Number(label))}
+        </div>
+        {rows.map((p) => {
+          const key = String(p.dataKey ?? p.name);
+          const s = series.find((x) => x.key === key);
+          const color = s?.color ?? (p.color as string);
+          const numVal = typeof p.value === 'number' ? p.value : Number(p.value);
+          return (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 2,
+                  backgroundColor: color,
+                  flexShrink: 0,
+                }}
+              />
+              <span style={TOOLTIP_STYLE.labelStyle}>{s?.label ?? key}:</span>
+              <span style={{ color: 'hsl(var(--popover-foreground))' }}>
+                {formatSeriesValue(key, numVal)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   const handleToggle = async () => {
     setToggling(true);
@@ -329,12 +508,12 @@ export function TelemetryHistoryPane({
             No history yet. Fetch status above to record data points.
           </p>
         ) : (
-          <ResponsiveContainer width="100%" height={180}>
+          <ResponsiveContainer width="100%" height={210}>
             <AreaChart
               data={chartData}
               margin={{
                 top: 4,
-                right: activeMetric === 'recv_errors' ? 8 : 4,
+                right: rightKeys.length ? 8 : 4,
                 bottom: 0,
                 left: -8,
               }}
@@ -351,7 +530,7 @@ export function TelemetryHistoryPane({
               />
               <YAxis
                 yAxisId="left"
-                domain={yDomain}
+                domain={leftDomain}
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                 tickLine={false}
                 axisLine={false}
@@ -359,87 +538,63 @@ export function TelemetryHistoryPane({
                   activeMetric === 'uptime_seconds' ? formatUptime(v) : `${v}`
                 }
               />
-              {activeMetric === 'recv_errors' && (
+              {rightKeys.length > 0 && (
                 <YAxis
                   yAxisId="right"
                   orientation="right"
-                  domain={yDomainPct}
+                  domain={rightDomain}
                   tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(v) => `${v}%`}
+                  tickFormatter={(v) => (activeMetric === 'recv_errors' ? `${v}%` : `${v}`)}
                 />
               )}
               <RechartsTooltip
-                {...TOOLTIP_STYLE}
                 cursor={{
                   stroke: 'hsl(var(--muted-foreground))',
                   strokeWidth: 1,
                   strokeDasharray: '3 3',
                 }}
-                labelFormatter={(ts) => formatTime(Number(ts))}
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                formatter={(value: any, name: any) => {
-                  const numVal = typeof value === 'number' ? value : Number(value);
-                  if (activeMetric === 'recv_errors') {
-                    if (name === 'recv_error_pct') return [`${numVal}%`, 'Error Rate'];
-                    return [`${value}`, 'RX Errors'];
-                  }
-                  const display =
-                    activeMetric === 'uptime_seconds' ? formatUptime(numVal) : `${value}`;
-                  const suffix =
-                    activeMetric === 'uptime_seconds'
-                      ? ''
-                      : activeConfig.unit
-                        ? ` ${activeConfig.unit}`
-                        : '';
-                  const label =
-                    activeMetric === 'packets'
-                      ? name === 'packets_received'
-                        ? 'Received'
-                        : 'Sent'
-                      : activeConfig.label;
-                  return [`${display}${suffix}`, label];
-                }}
+                content={renderTooltip}
               />
-              {dataKeys.map((key, i) => {
-                const color =
-                  activeMetric === 'packets'
-                    ? i === 0
-                      ? '#0ea5e9'
-                      : '#f43f5e'
-                    : activeMetric === 'recv_errors'
-                      ? i === 0
-                        ? '#ef4444'
-                        : '#f59e0b'
-                      : activeConfig.color;
-                return (
-                  <Area
-                    key={key}
-                    type="linear"
-                    dataKey={key}
-                    yAxisId={
-                      activeMetric === 'recv_errors' && key === 'recv_error_pct' ? 'right' : 'left'
-                    }
-                    stroke={color}
-                    fill={color}
-                    fillOpacity={0.15}
-                    strokeWidth={1.5}
-                    dot={{
-                      r: 4,
-                      fill: color,
-                      strokeWidth: 1.5,
-                      stroke: 'hsl(var(--popover))',
-                    }}
-                    activeDot={{
-                      r: 6,
-                      fill: color,
-                      strokeWidth: 2,
-                      stroke: 'hsl(var(--popover))',
-                    }}
-                  />
-                );
-              })}
+              {series.map((s) => (
+                <Area
+                  key={s.key}
+                  type="linear"
+                  dataKey={s.key}
+                  yAxisId={s.axis}
+                  connectNulls={false}
+                  stroke={s.color}
+                  fill={s.color}
+                  fillOpacity={s.line ? 0 : 0.15}
+                  strokeWidth={1.5}
+                  dot={{
+                    r: 4,
+                    fill: s.color,
+                    strokeWidth: 1.5,
+                    stroke: 'hsl(var(--popover))',
+                  }}
+                  activeDot={{
+                    r: 6,
+                    fill: s.color,
+                    strokeWidth: 2,
+                    stroke: 'hsl(var(--popover))',
+                  }}
+                />
+              ))}
+              {chartData.length > 2 && (
+                <Brush
+                  dataKey="timestamp"
+                  height={22}
+                  travellerWidth={8}
+                  stroke="hsl(var(--muted-foreground))"
+                  fill="hsl(var(--muted))"
+                  tickFormatter={(ts) => formatTime(Number(ts))}
+                  startIndex={brushStart}
+                  endIndex={brushEnd}
+                  onChange={handleBrushChange}
+                />
+              )}
             </AreaChart>
           </ResponsiveContainer>
         )}

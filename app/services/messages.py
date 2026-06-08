@@ -95,9 +95,12 @@ def broadcast_message(
     message: Message,
     broadcast_fn: BroadcastFn,
     realtime: bool | None = None,
+    packet_hash: str | None = None,
 ) -> None:
     """Broadcast a message payload, preserving the caller's broadcast signature."""
     payload = message.model_dump()
+    if packet_hash is not None:
+        payload["packet_hash"] = packet_hash
     if realtime is None:
         broadcast_fn("message", payload)
     else:
@@ -272,6 +275,7 @@ async def create_message_from_decrypted(
     channel_name: str | None = None,
     realtime: bool = True,
     broadcast_fn: BroadcastFn,
+    packet_hash: str | None = None,
 ) -> int | None:
     """Store and broadcast a decrypted channel message."""
     received = received_at or int(time.time())
@@ -340,6 +344,7 @@ async def create_message_from_decrypted(
         ),
         broadcast_fn=broadcast_fn,
         realtime=realtime,
+        packet_hash=packet_hash,
     )
 
     return msg_id
@@ -359,6 +364,7 @@ async def create_dm_message_from_decrypted(
     outgoing: bool = False,
     realtime: bool = True,
     broadcast_fn: BroadcastFn,
+    packet_hash: str | None = None,
 ) -> int | None:
     """Store and broadcast a decrypted direct message."""
     from app.services.dm_ingest import ingest_decrypted_direct_message
@@ -375,6 +381,7 @@ async def create_dm_message_from_decrypted(
         outgoing=outgoing,
         realtime=realtime,
         broadcast_fn=broadcast_fn,
+        packet_hash=packet_hash,
     )
     return message.id if message is not None else None
 

@@ -1,3 +1,14 @@
+## [3.14.1] - 2026-06-01
+
+* Feature: Enhance online documentation
+* Feature: Chain nav to browser history state
+* Feature: Add packet_hash to bot kwargs
+* Bug: Fix amp/ma units for HA integration of LPP sensors
+* Bug: Don't display blocked contacts on the map
+* Bug: Don't trim trailing space from repeater console commands
+* Bug: Make the trace pane not unusable with a bunch of hops or a bunch of recents
+* Misc: Dependency bumps + test updates
+
 ## [3.14.0] - 2026-05-13
 
 * Feature: Support active/intervalized contact telemetry gathering + HA forwarding
