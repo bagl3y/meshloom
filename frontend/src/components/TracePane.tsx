@@ -318,6 +318,26 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
     clearPendingResult();
   };
 
+  // Append the reversed hop chain (minus the current endpoint) to build a return
+  // path, e.g. [R1, R2, R3] -> [R1, R2, R3, R2, R1]. A single hop is left as-is.
+  // See issue #287. Reverses every queued hop, including custom prefixes.
+  const handleReverseLink = () => {
+    setDraftHops((current) => {
+      if (current.length < 2) return current;
+      const returnHops = [...current]
+        .reverse()
+        .slice(1)
+        .map(
+          (hop, i): TraceDraftHop => ({
+            ...hop,
+            id: nextDraftHopId(hop.kind, current.length + i),
+          })
+        );
+      return [...current, ...returnHops];
+    });
+    clearPendingResult();
+  };
+
   const handleLoadRecentTrace = async (trace: SavedTrace) => {
     const hops: TraceDraftHop[] = trace.hops.map((h, i) => {
       if (h.kind === 'repeater' && h.publicKey) {
@@ -616,18 +636,31 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
                 )}
               </div>
               {draftHops.length > 0 ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="shrink-0 text-muted-foreground"
-                  onClick={() => {
-                    setDraftHops([]);
-                    clearPendingResult();
-                  }}
-                >
-                  Clear
-                </Button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground"
+                    onClick={handleReverseLink}
+                    disabled={draftHops.length < 2}
+                    title="Append the reversed hop chain to build a return path"
+                  >
+                    Reverse link
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground"
+                    onClick={() => {
+                      setDraftHops([]);
+                      clearPendingResult();
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </div>
               ) : null}
             </div>
             <div className="space-y-2 p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">

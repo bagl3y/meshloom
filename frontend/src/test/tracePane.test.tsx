@@ -134,6 +134,49 @@ describe('TracePane', () => {
     expect(screen.getByText('No hops selected')).toBeInTheDocument();
   });
 
+  it('reverse link appends the reversed hop chain to build a return path (issue #287)', async () => {
+    const relayA = makeContact('11'.repeat(32), 'Relay Alpha');
+    const relayB = makeContact('22'.repeat(32), 'Relay Beta');
+    const relayC = makeContact('33'.repeat(32), 'Relay Charlie');
+    const onRunTracePath = vi.fn(
+      async (): Promise<RadioTraceResponse> => ({
+        path_len: 0,
+        timeout_seconds: 6,
+        nodes: [],
+      })
+    );
+
+    render(
+      <TracePane
+        config={config}
+        onRunTracePath={onRunTracePath}
+        contacts={[relayA, relayB, relayC]}
+      />
+    );
+
+    // Single hop: Reverse link is a no-op (and disabled).
+    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay alpha/i }));
+    expect(screen.getByRole('button', { name: /reverse link/i })).toBeDisabled();
+
+    // R1, R2, R3 -> append R2, R1 => R1, R2, R3, R2, R1.
+    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay beta/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay charlie/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reverse link/i }));
+
+    expect(screen.getByText('5 hops selected · 4-byte trace')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /send trace/i }));
+    await waitFor(() => {
+      expect(onRunTracePath).toHaveBeenCalledWith(4, [
+        { public_key: relayA.public_key },
+        { public_key: relayB.public_key },
+        { public_key: relayC.public_key },
+        { public_key: relayB.public_key },
+        { public_key: relayA.public_key },
+      ]);
+    });
+  });
+
   it('allows adding the same repeater multiple times from the picker row', () => {
     const relayA = makeContact('11'.repeat(32), 'Relay Alpha');
 
