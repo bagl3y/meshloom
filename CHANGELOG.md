@@ -1,3 +1,16 @@
+## [3.15.0] - 2026-06-11
+
+* Feature: Enhanced repeater telemetry with scrubbing and better extents
+* Feature: Outbound message opt-in for Apprise
+* Feature: Reverse-link button on trace pane
+* Feature: Add recently traced contacts as own category in repeater pane
+* Feature: More compact trace pane display
+* Bugfix: Scavenge ACK codes for standalone acks, resolving issues with DM ack detection
+* Bugfix: Proper timestamps for community MQTT
+* Bugfix: Clearer packet history legend in packet view
+* Misc: Add pubkey suffix to repeater neighbors
+* Misc: Dependency bumps & test fixes
+
 ## [3.14.1] - 2026-06-01
 
 * Feature: Enhance online documentation
