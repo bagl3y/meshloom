@@ -277,7 +277,7 @@ Apache License
 
 </details>
 
-### fastapi (0.128.0) — MIT
+### fastapi (0.136.3) — MIT
 
 <details>
 <summary>Full license text</summary>

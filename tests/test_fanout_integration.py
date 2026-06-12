@@ -1247,8 +1247,8 @@ class TestFanoutAppriseIntegration:
         assert "#general" in body_text
 
     @pytest.mark.asyncio
-    async def test_apprise_skips_outgoing(self, apprise_capture_server, integration_db):
-        """Apprise should NOT deliver outgoing messages."""
+    async def test_apprise_skips_outgoing_by_default(self, apprise_capture_server, integration_db):
+        """Apprise should NOT deliver outgoing messages unless explicitly enabled."""
         cfg = await FanoutConfigRepository.create(
             config_type="apprise",
             name="No Outgoing",
@@ -1279,6 +1279,45 @@ class TestFanoutAppriseIntegration:
             await manager.stop_all()
 
         assert len(apprise_capture_server.received) == 0
+
+    @pytest.mark.asyncio
+    async def test_apprise_delivers_outgoing_when_enabled(
+        self, apprise_capture_server, integration_db
+    ):
+        """Apprise can opt in to delivering RemoteTerm-originated messages."""
+        cfg = await FanoutConfigRepository.create(
+            config_type="apprise",
+            name="Include Outgoing",
+            config={
+                "urls": f"json://127.0.0.1:{apprise_capture_server.port}",
+                "include_outgoing": True,
+            },
+            scope={"messages": "all", "raw_packets": "none"},
+            enabled=True,
+        )
+
+        manager = FanoutManager()
+        try:
+            await manager.load_from_db()
+            assert cfg["id"] in manager._modules
+
+            await manager.broadcast_message(
+                {
+                    "type": "PRIV",
+                    "conversation_key": "pk1",
+                    "text": "my outgoing",
+                    "sender_name": "Me",
+                    "outgoing": True,
+                }
+            )
+
+            results = await apprise_capture_server.wait_for(1)
+        finally:
+            await manager.stop_all()
+
+        assert len(results) >= 1
+        body_text = str(results[0])
+        assert "my outgoing" in body_text
 
     @pytest.mark.asyncio
     async def test_apprise_disabled_no_delivery(self, apprise_capture_server, integration_db):
