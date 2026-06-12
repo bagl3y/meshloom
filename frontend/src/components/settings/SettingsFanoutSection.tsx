@@ -287,6 +287,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
       config: {
         urls: '',
         preserve_identity: true,
+        include_outgoing: false,
         markdown_format: true,
         body_format_dm: '**DM:** {sender_name}: {text} **via:** [{hops_backticked}]',
         body_format_channel:
@@ -2586,6 +2587,23 @@ function AppriseConfigEditor({
           <p className="text-[0.8125rem] text-muted-foreground">
             When enabled, Discord webhooks will use their configured name/avatar instead of
             overriding with MeshCore sender info.
+          </p>
+        </div>
+      </label>
+
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={config.include_outgoing === true}
+          onChange={(e) => onChange({ ...config, include_outgoing: e.target.checked })}
+          className="h-4 w-4 rounded border-border"
+        />
+        <div>
+          <span className="text-sm">Forward RemoteTerm-sent messages</span>
+          <p className="text-[0.8125rem] text-muted-foreground">
+            Include DMs and channel messages sent by this RemoteTerm instance, including manual
+            sends and bot replies. Outgoing messages carry no routing path or signal data, so
+            path-related format fields render as direct and RSSI/SNR are empty.
           </p>
         </div>
       </label>

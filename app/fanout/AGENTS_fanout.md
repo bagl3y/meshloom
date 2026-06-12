@@ -132,6 +132,7 @@ HTTP webhook delivery. Config blob:
 Push notifications via Apprise library. Config blob:
 - `urls` — newline-separated Apprise notification service URLs
 - `preserve_identity` — suppress Discord webhook name/avatar override
+- `include_outgoing` — when true, RemoteTerm-originated manual and bot-sent messages are forwarded to Apprise; missing/false preserves the legacy incoming-only behavior
 - `include_path` — include routing path in notification body
 - Channel notifications normalize stored message text by stripping a leading `"{sender_name}: "` prefix when it matches the payload sender so alerts do not duplicate the name.
 
