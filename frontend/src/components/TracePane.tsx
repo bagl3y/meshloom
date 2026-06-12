@@ -26,11 +26,14 @@ import {
 import { Input } from './ui/input';
 import { cn } from '@/lib/utils';
 
-type TraceSortMode = 'alpha' | 'recent' | 'distance';
+type TraceSortMode = 'alpha' | 'recent' | 'distance' | 'traced';
 type CustomHopBytes = 1 | 2 | 4;
 
 const RECENT_TRACES_KEY = 'remoteterm-recent-traces';
 const MAX_RECENT_TRACES = 5;
+const RECENT_NODES_KEY = 'remoteterm-recent-trace-nodes';
+const MAX_RECENT_NODES = 30;
+const MAX_RENDERED_REPEATERS = 60;
 
 interface SavedTraceHop {
   kind: 'repeater' | 'custom';
@@ -66,6 +69,57 @@ function saveRecentTrace(trace: SavedTrace): void {
     );
     const updated = [trace, ...deduped].slice(0, MAX_RECENT_TRACES);
     localStorage.setItem(RECENT_TRACES_KEY, JSON.stringify(updated));
+  } catch {
+    // localStorage may be disabled
+  }
+}
+
+function repeaterKeysFromHops(hops: SavedTraceHop[]): string[] {
+  return [
+    ...new Set(
+      hops
+        .filter((hop) => hop.kind === 'repeater' && hop.publicKey)
+        .map((hop) => hop.publicKey as string)
+    ),
+  ];
+}
+
+function loadRecentNodeKeys(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_NODES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return [
+        ...new Set(
+          parsed
+            .map((entry) =>
+              typeof entry === 'string' ? entry : ((entry?.publicKey as string) ?? null)
+            )
+            .filter((key): key is string => typeof key === 'string' && key.length > 0)
+        ),
+      ].slice(0, MAX_RECENT_NODES);
+    }
+    // No usage history yet: seed from already-stored recent traces so the
+    // Recent Traced sort works immediately for users with existing history.
+    return repeaterKeysFromHops(loadRecentTraces().flatMap((trace) => trace.hops)).slice(
+      0,
+      MAX_RECENT_NODES
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentNodeKeys(hops: SavedTraceHop[]): void {
+  try {
+    // MRU order: repeaters from this trace first, then prior history.
+    const fresh = repeaterKeysFromHops(hops);
+    const rest = loadRecentNodeKeys().filter((key) => !fresh.includes(key));
+    localStorage.setItem(
+      RECENT_NODES_KEY,
+      JSON.stringify([...fresh, ...rest].slice(0, MAX_RECENT_NODES))
+    );
   } catch {
     // localStorage may be disabled
   }
@@ -200,6 +254,7 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
   const [customHopError, setCustomHopError] = useState<string | null>(null);
   const [recentTraces, setRecentTraces] = useState<SavedTrace[]>(loadRecentTraces);
   const [recentTracesOpen, setRecentTracesOpen] = useState(false);
+  const [recentNodeKeys, setRecentNodeKeys] = useState<string[]>(loadRecentNodeKeys);
   const activeRunTokenRef = useRef(0);
 
   const repeaters = useMemo(() => {
@@ -220,9 +275,16 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
     [repeaters]
   );
 
+  const tracedIndexByKey = useMemo(
+    () => new Map(recentNodeKeys.map((key, index) => [key, index])),
+    [recentNodeKeys]
+  );
+
+  const canSortByDistance = !!config && isValidLocation(config.lat, config.lon);
+
   const filteredRepeaters = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    const matching = query
+    let matching = query
       ? repeaters.filter(
           (contact) =>
             (contact.name ?? '').toLowerCase().includes(query) ||
@@ -230,7 +292,27 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
         )
       : repeaters;
 
+    // Traced shows only repeaters actually used in traces; Dist. shows only
+    // repeaters with a computable distance (when the local radio has one).
+    if (sortMode === 'traced') {
+      matching = matching.filter((contact) => tracedIndexByKey.has(contact.public_key));
+    }
+    const distanceByKey =
+      sortMode === 'distance'
+        ? new Map(matching.map((contact) => [contact.public_key, getDistanceKm(contact, config)]))
+        : null;
+    if (distanceByKey && canSortByDistance) {
+      matching = matching.filter((contact) => distanceByKey.get(contact.public_key) !== null);
+    }
+
     return [...matching].sort((left, right) => {
+      if (sortMode === 'traced') {
+        const leftIndex = tracedIndexByKey.get(left.public_key) ?? Infinity;
+        const rightIndex = tracedIndexByKey.get(right.public_key) ?? Infinity;
+        if (leftIndex !== rightIndex) {
+          return leftIndex - rightIndex;
+        }
+      }
       if (sortMode === 'recent') {
         const leftTs = getHeardTimestamp(left);
         const rightTs = getHeardTimestamp(right);
@@ -238,9 +320,9 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
           return rightTs - leftTs;
         }
       }
-      if (sortMode === 'distance') {
-        const leftDistance = getDistanceKm(left, config);
-        const rightDistance = getDistanceKm(right, config);
+      if (distanceByKey) {
+        const leftDistance = distanceByKey.get(left.public_key) ?? null;
+        const rightDistance = distanceByKey.get(right.public_key) ?? null;
         if (leftDistance !== null && rightDistance !== null && leftDistance !== rightDistance) {
           return leftDistance - rightDistance;
         }
@@ -251,11 +333,15 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
         getContactDisplayName(right.name, right.public_key, right.last_advert)
       );
     });
-  }, [config, repeaters, searchQuery, sortMode]);
+  }, [canSortByDistance, config, repeaters, searchQuery, sortMode, tracedIndexByKey]);
+
+  const visibleRepeaters = useMemo(
+    () => filteredRepeaters.slice(0, MAX_RENDERED_REPEATERS),
+    [filteredRepeaters]
+  );
 
   const localRadioName = config?.name || 'Local radio';
   const localRadioKey = config?.public_key ?? null;
-  const canSortByDistance = !!config && isValidLocation(config.lat, config.lon);
   const customHopBytesLocked = useMemo(
     () => draftHops.find((hop) => hop.kind === 'custom')?.hopBytes ?? null,
     [draftHops]
@@ -338,6 +424,13 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
     clearPendingResult();
   };
 
+  const recordTraceRun = (hops: SavedTraceHop[]) => {
+    saveRecentTrace({ hops, ranAt: Date.now() });
+    setRecentTraces(loadRecentTraces());
+    saveRecentNodeKeys(hops);
+    setRecentNodeKeys(loadRecentNodeKeys());
+  };
+
   const handleLoadRecentTrace = async (trace: SavedTrace) => {
     const hops: TraceDraftHop[] = trace.hops.map((h, i) => {
       if (h.kind === 'repeater' && h.publicKey) {
@@ -376,10 +469,8 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
       if (activeRunTokenRef.current !== runToken) return;
       setResult(traceResult);
 
-      // Re-save to bump this trace to the top of recents
-      const savedTrace: SavedTrace = { hops: trace.hops, ranAt: Date.now() };
-      saveRecentTrace(savedTrace);
-      setRecentTraces(loadRecentTraces());
+      // Re-save to bump this trace and its nodes to the top of recents
+      recordTraceRun(trace.hops);
     } catch (err) {
       if (activeRunTokenRef.current !== runToken) return;
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -426,9 +517,7 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
           displayName: `${hop.hopHex.toUpperCase()} (${hop.hopBytes}B)`,
         };
       });
-      const trace: SavedTrace = { hops: savedHops, ranAt: Date.now() };
-      saveRecentTrace(trace);
-      setRecentTraces(loadRecentTraces());
+      recordTraceRun(savedHops);
     } catch (err) {
       if (activeRunTokenRef.current !== runToken) {
         return;
@@ -490,16 +579,18 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
             <div className="mt-3 flex flex-wrap gap-2">
               {(
                 [
-                  ['alpha', 'Alpha'],
-                  ['recent', 'Recent Heard'],
-                  ['distance', 'Distance'],
+                  ['alpha', 'A/Z', 'Sort alphabetically'],
+                  ['recent', 'Heard', 'Most recently heard first'],
+                  ['traced', 'Traced', 'Most recently used in traces first'],
+                  ['distance', 'Dist.', 'Closest first'],
                 ] as const
-              ).map(([value, label]) => (
+              ).map(([value, label, description]) => (
                 <Button
                   key={value}
                   type="button"
                   size="sm"
                   variant={sortMode === value ? 'default' : 'outline'}
+                  title={description}
                   onClick={() => setSortMode(value)}
                 >
                   {label}
@@ -517,11 +608,17 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
           <div className="max-h-[40vh] overflow-y-auto p-2 lg:min-h-0 lg:max-h-none lg:flex-1">
             {filteredRepeaters.length === 0 ? (
               <div className="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
-                No repeaters matched this search.
+                {sortMode === 'traced' && recentNodeKeys.length === 0
+                  ? 'No repeaters have been used in traces yet. Run a trace and its repeaters will show up here.'
+                  : sortMode === 'traced'
+                    ? 'No known repeaters match your recent trace history.'
+                    : sortMode === 'distance' && canSortByDistance
+                      ? 'No repeaters with a known distance matched this search.'
+                      : 'No repeaters matched this search.'}
               </div>
             ) : (
               <div className="space-y-2">
-                {filteredRepeaters.map((contact) => {
+                {visibleRepeaters.map((contact) => {
                   const displayName = getContactDisplayName(
                     contact.name,
                     contact.public_key,
@@ -577,6 +674,12 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
                     </div>
                   );
                 })}
+                {filteredRepeaters.length > MAX_RENDERED_REPEATERS ? (
+                  <p className="px-1 pt-1 text-center text-[0.6875rem] text-muted-foreground">
+                    Showing the first {MAX_RENDERED_REPEATERS} of {filteredRepeaters.length}{' '}
+                    repeaters. Search to narrow the list.
+                  </p>
+                ) : null}
               </div>
             )}
           </div>
