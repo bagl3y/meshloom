@@ -190,49 +190,45 @@ function nextDraftHopId(prefix: string, currentLength: number): string {
 function TraceNodeRow({
   title,
   subtitle,
+  badge,
   meta,
-  note,
   fixed = false,
-  compact = false,
   actions,
   snr,
 }: {
   title: string;
   subtitle: string;
+  badge?: string;
   meta?: string | null;
-  note?: string | null;
   fixed?: boolean;
-  compact?: boolean;
   actions?: ReactNode;
   snr?: string | null;
 }) {
   return (
-    <div
-      className={cn(
-        'flex items-center rounded-md border border-border bg-background',
-        compact ? 'gap-2 px-2.5 py-2' : 'gap-3 px-3 py-3'
-      )}
-    >
+    <div className="flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-2">
       <div
         className={cn(
-          'flex h-9 w-9 items-center justify-center rounded-full border text-[0.6875rem] font-semibold uppercase tracking-wide',
+          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[0.625rem] font-semibold uppercase tracking-wide',
           fixed
             ? 'border-primary/30 bg-primary/10 text-primary'
             : 'border-border bg-muted text-muted-foreground'
         )}
       >
-        {fixed ? 'Self' : 'Hop'}
+        {fixed ? 'Self' : (badge ?? 'Hop')}
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{title}</div>
-        <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
-        {meta ? <div className="mt-1 text-[0.6875rem] text-muted-foreground">{meta}</div> : null}
-        {note ? <div className="mt-1 text-[0.6875rem] text-muted-foreground">{note}</div> : null}
+      <div className="flex min-w-0 flex-1 items-baseline gap-2">
+        <span className="truncate text-sm font-medium">{title}</span>
+        <span className="truncate text-xs text-muted-foreground">{subtitle}</span>
+        {meta ? (
+          <span className="shrink-0 text-[0.6875rem] uppercase tracking-wide text-muted-foreground">
+            {meta}
+          </span>
+        ) : null}
       </div>
       {snr ? (
-        <div className="shrink-0 text-right">
-          <div className="text-[0.6875rem] text-muted-foreground">SNR</div>
-          <div className="font-mono text-sm">{snr}</div>
+        <div className="flex shrink-0 items-baseline gap-1">
+          <span className="text-[0.6875rem] text-muted-foreground">SNR</span>
+          <span className="font-mono text-sm">{snr}</span>
         </div>
       ) : null}
       {actions ? <div className="ml-1 flex items-center gap-1">{actions}</div> : null}
@@ -772,7 +768,6 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
                 subtitle={getShortKey(localRadioKey)}
                 meta="Origin"
                 fixed
-                compact
               />
               {draftHops.length === 0 ? (
                 <div className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
@@ -799,13 +794,7 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
                       <TraceNodeRow
                         title={displayName}
                         subtitle={subtitle}
-                        meta={`Hop ${index + 1}`}
-                        note={
-                          index === draftHops.length - 1
-                            ? 'Note: you must be able to hear the final repeater in the trace for trace success.'
-                            : null
-                        }
-                        compact
+                        badge={String(index + 1)}
                         actions={
                           <>
                             <Button
@@ -852,14 +841,13 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
                 subtitle={getShortKey(localRadioKey)}
                 meta="Terminal"
                 fixed
-                compact
               />
             </div>
             <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
-              <div className="text-xs text-muted-foreground">
+              <div className="min-w-0 flex-1 text-xs text-muted-foreground">
                 {draftHops.length === 0
                   ? 'No hops selected'
-                  : `${draftHops.length} hop${draftHops.length === 1 ? '' : 's'} selected · ${effectiveHopHashBytes}-byte trace`}
+                  : `${draftHops.length} hop${draftHops.length === 1 ? '' : 's'} selected · ${effectiveHopHashBytes}-byte trace · you must be able to hear the final repeater for trace success`}
               </div>
               <Button onClick={handleRunTrace} disabled={loading || draftHops.length === 0}>
                 {loading ? 'Tracing...' : 'Send trace'}
@@ -867,12 +855,12 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
             </div>
           </div>
 
-          <div className="flex flex-col rounded-lg border border-border bg-card lg:min-h-0 lg:flex-1">
-            <div className="shrink-0 flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <h3 className="text-sm font-semibold">
-                Results{result ? ` (${result.timeout_seconds.toFixed(1)}s)` : ''}
-              </h3>
-              {result || error ? (
+          {result || error ? (
+            <div className="flex flex-col rounded-lg border border-border bg-card lg:min-h-0 lg:flex-1">
+              <div className="shrink-0 flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+                <h3 className="text-sm font-semibold">
+                  Results{result ? ` (${result.timeout_seconds.toFixed(1)}s)` : ''}
+                </h3>
                 <Button
                   type="button"
                   size="sm"
@@ -885,60 +873,52 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
                 >
                   Clear
                 </Button>
-              ) : null}
+              </div>
+              <div className="min-h-0 flex-1 space-y-2 p-4 lg:overflow-y-auto">
+                {error ? (
+                  <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {error}
+                  </div>
+                ) : null}
+                {result
+                  ? resultNodes.map((node, index) => {
+                      const title =
+                        node.name ||
+                        (node.role === 'custom'
+                          ? 'Custom hop'
+                          : node.role === 'local'
+                            ? localRadioName
+                            : getShortKey(node.public_key));
+                      const subtitle =
+                        node.role === 'custom'
+                          ? `Key prefix ${node.observed_hash?.toUpperCase() ?? 'unknown'}`
+                          : node.observed_hash &&
+                              node.public_key &&
+                              node.observed_hash.toLowerCase() !==
+                                getShortKey(node.public_key).toLowerCase()
+                            ? `${getShortKey(node.public_key)} · key prefix ${node.observed_hash.toUpperCase()}`
+                            : getShortKey(node.public_key);
+                      return (
+                        <div
+                          key={`${node.role}-${node.public_key ?? node.observed_hash ?? 'local'}-${index}`}
+                        >
+                          <TraceNodeRow
+                            title={title}
+                            subtitle={subtitle}
+                            badge={String(index)}
+                            meta={
+                              index === 0 ? 'Origin' : node.role === 'local' ? 'Terminal' : null
+                            }
+                            fixed={node.role === 'local'}
+                            snr={index === 0 ? null : formatSNR(node.snr)}
+                          />
+                        </div>
+                      );
+                    })
+                  : null}
+              </div>
             </div>
-            <div className="min-h-0 flex-1 space-y-3 p-4 lg:overflow-y-auto">
-              {error ? (
-                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {error}
-                </div>
-              ) : null}
-              {!error && !result ? (
-                <div className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-                  Send a trace to see the returned hop-by-hop SNR values.
-                </div>
-              ) : null}
-              {result
-                ? resultNodes.map((node, index) => {
-                    const title =
-                      node.name ||
-                      (node.role === 'custom'
-                        ? 'Custom hop'
-                        : node.role === 'local'
-                          ? localRadioName
-                          : getShortKey(node.public_key));
-                    const subtitle =
-                      node.role === 'custom'
-                        ? `Key prefix ${node.observed_hash?.toUpperCase() ?? 'unknown'}`
-                        : node.observed_hash &&
-                            node.public_key &&
-                            node.observed_hash.toLowerCase() !==
-                              getShortKey(node.public_key).toLowerCase()
-                          ? `${getShortKey(node.public_key)} · key prefix ${node.observed_hash.toUpperCase()}`
-                          : getShortKey(node.public_key);
-                    return (
-                      <div
-                        key={`${node.role}-${node.public_key ?? node.observed_hash ?? 'local'}-${index}`}
-                      >
-                        <TraceNodeRow
-                          title={title}
-                          subtitle={subtitle}
-                          meta={
-                            index === 0
-                              ? 'Origin'
-                              : node.role === 'local'
-                                ? 'Terminal'
-                                : `Hop ${index}`
-                          }
-                          fixed={node.role === 'local'}
-                          snr={index === 0 ? null : formatSNR(node.snr)}
-                        />
-                      </div>
-                    );
-                  })
-                : null}
-            </div>
-          </div>
+          ) : null}
         </section>
       </div>
 

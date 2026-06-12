@@ -116,7 +116,7 @@ describe('TracePane', () => {
     fireEvent.click(screen.getByRole('button', { name: /^add repeater relay alpha/i }));
     fireEvent.click(screen.getByRole('button', { name: /^add repeater relay beta/i }));
 
-    expect(screen.getByText('2 hops selected · 4-byte trace')).toBeInTheDocument();
+    expect(screen.getByText(/2 hops selected · 4-byte trace/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /move relay beta up/i }));
     fireEvent.click(screen.getByRole('button', { name: /send trace/i }));
@@ -133,7 +133,7 @@ describe('TracePane', () => {
     expect(screen.getByText('+5.0 dB')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /remove relay alpha/i }));
-    expect(screen.getByText('1 hop selected · 4-byte trace')).toBeInTheDocument();
+    expect(screen.getByText(/1 hop selected · 4-byte trace/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /remove relay beta/i }));
     expect(screen.getByText('No hops selected')).toBeInTheDocument();
   });
@@ -167,7 +167,7 @@ describe('TracePane', () => {
     fireEvent.click(screen.getByRole('button', { name: /^add repeater relay charlie/i }));
     fireEvent.click(screen.getByRole('button', { name: /reverse link/i }));
 
-    expect(screen.getByText('5 hops selected · 4-byte trace')).toBeInTheDocument();
+    expect(screen.getByText(/5 hops selected · 4-byte trace/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /send trace/i }));
     await waitFor(() => {
@@ -189,7 +189,7 @@ describe('TracePane', () => {
     fireEvent.click(screen.getByRole('button', { name: /^add repeater relay alpha/i }));
     fireEvent.click(screen.getByRole('button', { name: /^add repeater relay alpha/i }));
 
-    expect(screen.getByText('2 hops selected · 4-byte trace')).toBeInTheDocument();
+    expect(screen.getByText(/2 hops selected · 4-byte trace/)).toBeInTheDocument();
     expect(screen.getByText('Added 2 times')).toBeInTheDocument();
   });
 
@@ -232,7 +232,7 @@ describe('TracePane', () => {
     fireEvent.change(screen.getByLabelText('Repeater prefix'), { target: { value: 'ae' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add custom hop' }));
 
-    expect(screen.getByText('1 hop selected · 1-byte trace')).toBeInTheDocument();
+    expect(screen.getByText(/1 hop selected · 1-byte trace/)).toBeInTheDocument();
     expect(screen.getByText('AE (1-byte)')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^add repeater relay alpha/i }));
@@ -397,7 +397,7 @@ describe('TracePane', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^add repeater relay beta/i }));
 
-    expect(screen.getByText('2 hops selected · 4-byte trace')).toBeInTheDocument();
+    expect(screen.getByText(/2 hops selected · 4-byte trace/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /send trace/i })).toBeEnabled();
 
     await act(async () => {
@@ -425,8 +425,7 @@ describe('TracePane', () => {
 
     expect(screen.queryByRole('heading', { name: 'Results (6.0s)' })).not.toBeInTheDocument();
     expect(screen.queryByText('+7.5 dB')).not.toBeInTheDocument();
-    expect(
-      screen.getByText('Send a trace to see the returned hop-by-hop SNR values.')
-    ).toBeInTheDocument();
+    // The Results section stays hidden entirely until a result or error lands.
+    expect(screen.queryByRole('heading', { name: /^results/i })).not.toBeInTheDocument();
   });
 });
