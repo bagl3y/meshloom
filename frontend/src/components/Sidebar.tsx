@@ -197,7 +197,13 @@ export function Sidebar({
   );
 
   const getContactHeardTime = useCallback((contact: Contact): number => {
-    return Math.max(contact.last_seen ?? 0, contact.last_advert ?? 0);
+    // Prefer last_seen (server receive wall clock — the value the UI shows as
+    // "Last heard") so the recency sort matches the displayed date. Fall back to
+    // last_advert only for repeaters known purely from radio sync, which have no
+    // independent last_seen. Using Math.max here let a radio-reported (sender
+    // clock, skew-prone) last_advert pin a repeater to the top even when its
+    // displayed last_seen was older. See ContactStatusInfo "Last heard".
+    return contact.last_seen || contact.last_advert || 0;
   }, []);
 
   const getContactRecentTime = useCallback(

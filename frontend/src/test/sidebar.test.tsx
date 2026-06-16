@@ -597,6 +597,49 @@ describe('Sidebar section summaries', () => {
     expect(repeaterRows).toEqual(['Fresh Advert Relay', 'Stale Message Relay']);
   });
 
+  it('sorts a favorite repeater by its displayed last_seen, not an inflated last_advert', () => {
+    const publicChannel = makeChannel(PUBLIC_CHANNEL_KEY, 'Public');
+    // Radio contact sync overwrites last_advert with the radio's sender-clock
+    // value, which can land far ahead of (or in the future relative to) the
+    // server's last_seen. The sidebar shows last_seen as "Last heard", so the
+    // recency sort must follow last_seen rather than the skewed last_advert.
+    const skewedRelay = makeContact('44'.repeat(32), 'Skewed Relay', CONTACT_TYPE_REPEATER, {
+      last_seen: 100,
+      last_advert: 9_999_999,
+      favorite: true,
+    });
+    const recentRelay = makeContact('55'.repeat(32), 'Recent Relay', CONTACT_TYPE_REPEATER, {
+      last_seen: 500,
+      favorite: true,
+    });
+
+    render(
+      <Sidebar
+        contacts={[skewedRelay, recentRelay]}
+        channels={[publicChannel]}
+        activeConversation={null}
+        onSelectConversation={vi.fn()}
+        onNewMessage={vi.fn()}
+        lastMessageTimes={{}}
+        unreadCounts={{}}
+        mentions={{}}
+        showCracker={false}
+        crackerRunning={false}
+        onToggleCracker={vi.fn()}
+        onMarkAllRead={vi.fn()}
+      />
+    );
+
+    const repeaterRows = screen
+      .getAllByText(/Relay$/)
+      .map((node) => node.textContent)
+      .filter((text): text is string => Boolean(text));
+
+    // Recent Relay was actually heard more recently (last_seen 500 > 100), so it
+    // sorts above the relay with the inflated last_advert.
+    expect(repeaterRows).toEqual(['Recent Relay', 'Skewed Relay']);
+  });
+
   it('pins only the canonical Public channel to the top of channel sorting', () => {
     const publicChannel = makeChannel(PUBLIC_CHANNEL_KEY, 'Public');
     const fakePublic = makeChannel('DD'.repeat(16), 'Public');
