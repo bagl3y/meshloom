@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     skip_post_connect_sync: bool = False
     basic_auth_username: str = ""
     basic_auth_password: str = ""
+    vapid_subject: str = "mailto:noreply@meshcore.local"
 
     @model_validator(mode="after")
     def validate_transport_exclusivity(self) -> "Settings":

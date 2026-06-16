@@ -46,6 +46,10 @@ services:
       # MESHCORE_BASIC_AUTH_PASSWORD: changeme
       # MESHCORE_ENABLE_LOCAL_PRIVATE_KEY_EXPORT: "false"
 
+      # Web Push
+      # Set a real mailto for iOS/Safari push; Apple's APNs rejects the default .local domain.
+      # MESHCORE_VAPID_SUBJECT: "mailto:you@example.com"
+
       # Logging
       # MESHCORE_LOG_LEVEL: INFO
     restart: unless-stopped
