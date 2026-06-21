@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { RepeaterDashboard } from '../components/RepeaterDashboard';
 import type { UseRepeaterDashboardResult } from '../hooks/useRepeaterDashboard';
 import type { Contact, Conversation } from '../types';
@@ -407,6 +407,49 @@ describe('RepeaterDashboard', () => {
 
     expect(screen.getByText('Dist')).toBeInTheDocument();
     expect(screen.getByText('Using advert position')).toBeInTheDocument();
+  });
+
+  it('sorts the neighbors table when column headers are clicked', () => {
+    mockHook.loggedIn = true;
+    mockHook.paneData.neighbors = {
+      neighbors: [
+        { pubkey_prefix: 'cccccccccccc', name: 'Mike', snr: 5.0, last_heard_seconds: 20 },
+        { pubkey_prefix: 'dddddddddddd', name: 'Zeta', snr: 9.0, last_heard_seconds: 30 },
+        { pubkey_prefix: 'eeeeeeeeeeee', name: 'Alpha', snr: 1.0, last_heard_seconds: 10 },
+      ],
+    };
+    mockHook.paneStates.neighbors = {
+      loading: false,
+      attempt: 1,
+      error: null,
+      fetched_at: Date.now(),
+    };
+
+    render(<RepeaterDashboard {...defaultProps} />);
+
+    // Scope to the Neighbors table; the dashboard renders multiple panes at once.
+    const table = screen.getByRole('columnheader', { name: /last heard/i }).closest('table')!;
+    // The first child of each name cell is the bare name text node (the prefix
+    // lives in a nested span), so this reads exactly the neighbor name.
+    const names = () =>
+      within(table)
+        .getAllByRole('row')
+        .slice(1)
+        .map((r) => r.querySelector('td')?.firstChild?.textContent ?? '');
+    const header = (re: RegExp) => within(table).getByRole('columnheader', { name: re });
+
+    // Default order is SNR descending (preserves the pre-sorting behavior).
+    expect(names()).toEqual(['Zeta', 'Mike', 'Alpha']);
+
+    // Name ascending, then toggle to descending on a second click.
+    fireEvent.click(header(/name/i));
+    expect(names()).toEqual(['Alpha', 'Mike', 'Zeta']);
+    fireEvent.click(header(/name/i));
+    expect(names()).toEqual(['Zeta', 'Mike', 'Alpha']);
+
+    // Last Heard ascending surfaces the most recently heard neighbor first.
+    fireEvent.click(header(/last heard/i));
+    expect(names()).toEqual(['Alpha', 'Mike', 'Zeta']);
   });
 
   it('shows fetching state with attempt counter', () => {
