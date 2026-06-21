@@ -40,7 +40,8 @@ _bot_send_lock = asyncio.Lock()
 _last_bot_send_time: float = 0.0
 
 # global container for persistent data storage between bot executions, will be added to execution namespace
-_bot_globals: dict[str,Any] = {}
+_bot_globals: dict[str, Any] = {}
+
 
 @dataclass(frozen=True)
 class BotCallPlan:
