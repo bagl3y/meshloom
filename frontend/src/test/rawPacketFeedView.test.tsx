@@ -138,6 +138,16 @@ describe('RawPacketFeedView', () => {
     expect(screen.getByText('Traffic Timeline')).toBeInTheDocument();
   });
 
+  it('shows an Autoscroll toggle that is ticked by default and can be unchecked', () => {
+    renderView();
+
+    const autoscroll = screen.getByLabelText('Autoscroll') as HTMLInputElement;
+    expect(autoscroll.checked).toBe(true);
+
+    fireEvent.click(autoscroll);
+    expect((screen.getByLabelText('Autoscroll') as HTMLInputElement).checked).toBe(false);
+  });
+
   it('analyzes a pasted raw packet without adding it to the live feed', () => {
     renderView({ channels: [TEST_CHANNEL] });
 

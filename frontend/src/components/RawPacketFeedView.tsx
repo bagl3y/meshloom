@@ -478,6 +478,8 @@ export function RawPacketFeedView({
   const [analyzeModalOpen, setAnalyzeModalOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [enabledTypes, setEnabledTypes] = useState<Set<string>>(() => new Set(KNOWN_PAYLOAD_TYPES));
+  // Autoscroll defaults on; intentionally not persisted across refreshes.
+  const [autoScroll, setAutoScroll] = useState(true);
 
   const decoderOptions = useMemo(() => createDecoderOptions(channels), [channels]);
 
@@ -638,6 +640,15 @@ export function RawPacketFeedView({
                 </button>
               </span>
             ))}
+            <label className="ml-auto flex items-center gap-1 text-xs text-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoScroll}
+                onChange={(e) => setAutoScroll(e.target.checked)}
+                className="rounded"
+              />
+              Autoscroll
+            </label>
           </div>
         )}
 
@@ -671,6 +682,15 @@ export function RawPacketFeedView({
               </button>
             </span>
           ))}
+          <label className="ml-auto flex items-center gap-1 text-xs text-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoScroll}
+              onChange={(e) => setAutoScroll(e.target.checked)}
+              className="rounded"
+            />
+            Autoscroll
+          </label>
         </div>
       </div>
 
@@ -680,6 +700,7 @@ export function RawPacketFeedView({
             packets={filteredPackets}
             channels={channels}
             onPacketClick={setSelectedPacket}
+            autoScroll={autoScroll}
           />
         </div>
 

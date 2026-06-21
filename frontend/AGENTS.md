@@ -507,9 +507,9 @@ PYTHONPATH=. uv run pytest tests/ -v
 
 This is intentional. In the sidebar, unread direct messages for actual contact conversations are treated as mention-equivalent for badge styling. That means both the Contacts section header and contact unread badges themselves use the highlighted mention-style colors for unread DMs, including when those contacts appear in Favorites. Repeaters do not inherit this rule, and channel badges still use mention styling only for real `@[name]` mentions.
 
-### RawPacketList always scrolls to bottom
+### RawPacketList autoscroll
 
-`RawPacketList` unconditionally scrolls to the latest packet on every update. This is intentional — the packet feed is a live status display, not an interactive log meant for lingering or long-term analysis. Users watching it want to see the newest packet, not hold a scroll position.
+`RawPacketList` sticks to the latest packet on every update when its `autoScroll` prop is true (the default). `RawPacketFeedView` exposes an "Autoscroll" checkbox next to the type filters (default ticked, session-only — intentionally not persisted) so users can pause scrolling to correlate older packets. Toggling it back on jumps to the bottom immediately (`autoScroll` is an effect dependency).
 
 ## Editing Checklist
 
