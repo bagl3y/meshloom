@@ -16,6 +16,8 @@ import {
   formatTime,
   parseSenderFromText,
 } from '../utils/messageParser';
+import { giphyUrlForId, parseGif, parseReaction } from '../utils/meshcoreOpenPayloads';
+import { useRichPayloads } from '../contexts/RichPayloadContext';
 import { formatHopCounts, type SenderInfo } from '../utils/pathUtils';
 import { getDirectContactRoute } from '../utils/pathUtils';
 import { ContactAvatar } from './ContactAvatar';
@@ -48,6 +50,57 @@ interface MessageListProps {
   onLoadNewer?: () => void;
   onJumpToBottom?: () => void;
   preSorted?: boolean;
+}
+
+// Renders a MeshCore Open GIF payload, falling back to the raw text on load error.
+function GifPayload({ gifId, rawText }: { gifId: string; rawText: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return <>{rawText}</>;
+  }
+  const url = giphyUrlForId(gifId);
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-block"
+      title="Open GIF on Giphy"
+    >
+      <img
+        src={url}
+        alt="GIF"
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className="max-w-[240px] max-h-[240px] rounded-md"
+      />
+    </a>
+  );
+}
+
+// Renders a MeshCore Open reaction generically (emoji + "reacted"); the target
+// message is not resolved (see issue #291).
+function ReactionPayload({ emoji }: { emoji: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="text-xl leading-none">{emoji}</span>
+      <span className="text-xs text-muted-foreground italic">reacted</span>
+    </span>
+  );
+}
+
+// Recognize a whole-message MeshCore Open payload and render it. Returns null
+// when the content is not a recognized payload, so the caller renders normally.
+function renderMeshcoreOpenPayload(content: string): ReactNode | null {
+  const gifId = parseGif(content);
+  if (gifId) {
+    return <GifPayload gifId={gifId} rawText={content} />;
+  }
+  const reaction = parseReaction(content);
+  if (reaction) {
+    return <ReactionPayload emoji={reaction.emoji} />;
+  }
+  return null;
 }
 
 // URL regex for linkifying plain text
@@ -241,6 +294,18 @@ function HopCountBadge({ paths, onClick, variant }: HopCountBadgeProps) {
   );
 }
 
+// Region scope badge for messages that arrived via a transport-routed (region-scoped) packet.
+function RegionBadge({ region }: { region: string }) {
+  return (
+    <span
+      className="ml-1.5 align-middle text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
+      title={`Regional scope: ${region}`}
+    >
+      {region}
+    </span>
+  );
+}
+
 const RESEND_WINDOW_SECONDS = 30;
 const CORRUPT_SENDER_LABEL = '<No name -- corrupt packet?>';
 const ANALYZE_PACKET_NOTICE =
@@ -286,6 +351,7 @@ export function MessageList({
   onJumpToBottom,
   preSorted = false,
 }: MessageListProps) {
+  const { renderRichPayloads } = useRichPayloads();
   const listRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef<number>(0);
   const isInitialLoadRef = useRef<boolean>(true);
@@ -1009,15 +1075,17 @@ export function MessageList({
                           }
                         />
                       )}
+                      {msg.region && <RegionBadge region={msg.region} />}
                     </div>
                   )}
                   <div className="break-words whitespace-pre-wrap">
-                    {content.split('\n').map((line, i, arr) => (
-                      <span key={i}>
-                        {renderTextWithMentions(line, radioName, onChannelReferenceClick)}
-                        {i < arr.length - 1 && <br />}
-                      </span>
-                    ))}
+                    {(renderRichPayloads && renderMeshcoreOpenPayload(content)) ||
+                      content.split('\n').map((line, i, arr) => (
+                        <span key={i}>
+                          {renderTextWithMentions(line, radioName, onChannelReferenceClick)}
+                          {i < arr.length - 1 && <br />}
+                        </span>
+                      ))}
                     {!showAvatar && (
                       <>
                         <span className="text-[0.625rem] text-muted-foreground ml-2">
@@ -1037,6 +1105,7 @@ export function MessageList({
                             }
                           />
                         )}
+                        {msg.region && <RegionBadge region={msg.region} />}
                       </>
                     )}
                     {msg.outgoing &&

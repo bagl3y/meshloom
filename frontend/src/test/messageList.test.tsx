@@ -62,6 +62,31 @@ describe('MessageList channel sender rendering', () => {
     expect(screen.getByTestId('corrupt-avatar')).toBeInTheDocument();
   });
 
+  it('renders a region badge for region-scoped channel messages', () => {
+    render(
+      <MessageList
+        messages={[createMessage({ sender_name: 'Alice', region: 'nl-gr' })]}
+        contacts={[]}
+        loading={false}
+      />
+    );
+
+    expect(screen.getByText('nl-gr')).toBeInTheDocument();
+    expect(screen.getByTitle('Regional scope: nl-gr')).toBeInTheDocument();
+  });
+
+  it('does not render a region badge for unscoped messages', () => {
+    render(
+      <MessageList
+        messages={[createMessage({ sender_name: 'Alice', region: null })]}
+        contacts={[]}
+        loading={false}
+      />
+    );
+
+    expect(screen.queryByText('nl-gr')).not.toBeInTheDocument();
+  });
+
   it('prefers stored sender_name for channel messages even when text is not sender-prefixed', () => {
     render(
       <MessageList

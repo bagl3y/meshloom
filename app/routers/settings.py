@@ -46,6 +46,13 @@ class AppSettingsUpdate(BaseModel):
         default=None,
         description="Outbound flood scope / region name (empty = disabled)",
     )
+    known_regions: list[str] | None = Field(
+        default=None,
+        description=(
+            "Region scope names used to decode incoming transport-scoped packets "
+            "(stored without a leading '#')"
+        ),
+    )
     blocked_keys: list[str] | None = Field(
         default=None,
         description="Public keys whose messages are hidden from the UI",
@@ -211,6 +218,20 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
             interval = 3600
         logger.info("Updating advert_interval to %d", interval)
         kwargs["advert_interval"] = interval
+
+    # Known regions for scope decoding. Normalize to user-facing form (no leading
+    # '#'), trim blanks, and dedupe case-insensitively while preserving order.
+    if update.known_regions is not None:
+        cleaned_regions: list[str] = []
+        seen_regions: set[str] = set()
+        for raw_name in update.known_regions:
+            name = (raw_name or "").strip()
+            if name.startswith("#"):
+                name = name[1:].strip()
+            if name and name.lower() not in seen_regions:
+                seen_regions.add(name.lower())
+                cleaned_regions.append(name)
+        kwargs["known_regions"] = cleaned_regions
 
     # Block lists
     if update.blocked_keys is not None:

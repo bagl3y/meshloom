@@ -429,6 +429,17 @@ class Message(BaseModel):
         default=None,
         description="Representative raw packet row ID when archival raw bytes exist",
     )
+    transport_code: int | None = Field(
+        default=None,
+        description=(
+            "Region scope transport code (uint16) when the message arrived via a "
+            "TransportFlood/TransportDirect packet; None for unscoped (plain flood) messages"
+        ),
+    )
+    region: str | None = Field(
+        default=None,
+        description="Resolved region name for the transport code, if it matched a known region",
+    )
 
 
 class MessagesAroundResponse(BaseModel):
@@ -474,6 +485,14 @@ class RawPacketBroadcast(BaseModel):
     rssi: int | None = Field(default=None, description="Received signal strength in dBm")
     decrypted: bool = False
     decrypted_info: RawPacketDecryptedInfo | None = None
+    transport_code: int | None = Field(
+        default=None,
+        description="Region scope transport code (uint16) for TransportFlood/TransportDirect packets",
+    )
+    region: str | None = Field(
+        default=None,
+        description="Resolved region name for the transport code, if it matched a known region",
+    )
 
 
 class RawPacketDetail(BaseModel):
@@ -489,6 +508,14 @@ class RawPacketDetail(BaseModel):
     )
     decrypted: bool = False
     decrypted_info: RawPacketDecryptedInfo | None = None
+    transport_code: int | None = Field(
+        default=None,
+        description="Region scope transport code (uint16) for TransportFlood/TransportDirect packets",
+    )
+    region: str | None = Field(
+        default=None,
+        description="Resolved region name for the transport code, if it matched a known region",
+    )
 
 
 class SendMessageRequest(BaseModel):
@@ -841,6 +868,13 @@ class AppSettings(BaseModel):
     flood_scope: str = Field(
         default="",
         description="Outbound flood scope / region name (empty = disabled, no tagging)",
+    )
+    known_regions: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Region scope names used to resolve incoming TransportFlood/TransportDirect "
+            "packets back to a readable region label (packet inspector + channel decoration)"
+        ),
     )
     blocked_keys: list[str] = Field(
         default_factory=list,

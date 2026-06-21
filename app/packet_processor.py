@@ -36,7 +36,9 @@ from app.models import (
     RawPacketDecryptedInfo,
 )
 from app.path_utils import calculate_packet_hash
+from app.region_resolver import resolve_region
 from app.repository import (
+    AppSettingsRepository,
     ChannelRepository,
     ContactAdvertPathRepository,
     ContactRepository,
@@ -75,6 +77,8 @@ async def create_message_from_decrypted(
     channel_name: str | None = None,
     realtime: bool = True,
     packet_hash: str | None = None,
+    transport_code: int | None = None,
+    region: str | None = None,
 ) -> int | None:
     """Store a decrypted channel message via the shared message service."""
     return await _create_message_from_decrypted(
@@ -92,6 +96,8 @@ async def create_message_from_decrypted(
         realtime=realtime,
         broadcast_fn=broadcast_event,
         packet_hash=packet_hash,
+        transport_code=transport_code,
+        region=region,
     )
 
 
@@ -338,13 +344,40 @@ async def process_raw_packet(
     # Compute packet hash once for threading into message broadcasts (used by bot fanout).
     pkt_hash = calculate_packet_hash(raw_bytes)
 
+    # Resolve regional flood-scope for transport-routed packets. The transport code
+    # is a keyed MAC over the payload, so we recompute it for each known region name
+    # and keep the first match. Only transport-routed packets carry codes, so this is
+    # skipped for the common (unscoped) flood/direct case.
+    transport_code: int | None = None
+    region: str | None = None
+    if packet_info is not None and packet_info.transport_codes is not None:
+        transport_code = packet_info.transport_codes[0]
+        try:
+            settings = await AppSettingsRepository.get()
+            region = resolve_region(
+                int(packet_info.payload_type),
+                packet_info.payload,
+                transport_code,
+                settings.known_regions,
+            )
+        except Exception:
+            logger.debug("Region resolution failed for packet %d", packet_id, exc_info=True)
+
     # Process packets based on payload type
     # For GROUP_TEXT, we always try to decrypt even for duplicate packets - the message
     # deduplication in create_message_from_decrypted handles adding paths to existing messages.
     # This is more reliable than trying to look up the message via raw packet linking.
     if payload_type == PayloadType.GROUP_TEXT:
         decrypt_result = await _process_group_text(
-            raw_bytes, packet_id, ts, packet_info, rssi=rssi, snr=snr, packet_hash=pkt_hash
+            raw_bytes,
+            packet_id,
+            ts,
+            packet_info,
+            rssi=rssi,
+            snr=snr,
+            packet_hash=pkt_hash,
+            transport_code=transport_code,
+            region=region,
         )
         if decrypt_result:
             result.update(decrypt_result)
@@ -403,6 +436,8 @@ async def process_raw_packet(
         )
         if result["decrypted"]
         else None,
+        transport_code=transport_code,
+        region=region,
     )
     broadcast_event("raw_packet", broadcast_payload.model_dump())
 
@@ -417,6 +452,8 @@ async def _process_group_text(
     rssi: int | None = None,
     snr: float | None = None,
     packet_hash: str | None = None,
+    transport_code: int | None = None,
+    region: str | None = None,
 ) -> dict | None:
     """
     Process a GroupText (channel message) packet.
@@ -456,6 +493,8 @@ async def _process_group_text(
             rssi=rssi,
             snr=snr,
             packet_hash=packet_hash,
+            transport_code=transport_code,
+            region=region,
         )
 
         return {

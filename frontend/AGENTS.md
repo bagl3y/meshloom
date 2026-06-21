@@ -361,6 +361,7 @@ Distance/validation helpers used by path + map UI.
 - `advert_interval`
 - `last_advert_time`
 - `flood_scope`
+- `known_regions`
 - `blocked_keys`, `blocked_names`, `discovery_blocked_types`
 - `tracked_telemetry_repeaters`, `tracked_telemetry_contacts`
 - `auto_resend_channel`

@@ -64,6 +64,8 @@ class MessageRepository:
         outgoing: bool = False,
         sender_name: str | None = None,
         sender_key: str | None = None,
+        transport_code: int | None = None,
+        region: str | None = None,
     ) -> int | None:
         """Create a message, returning the ID or None if duplicate.
 
@@ -94,8 +96,8 @@ class MessageRepository:
                 """
                 INSERT OR IGNORE INTO messages (type, conversation_key, text, sender_timestamp,
                                                 received_at, paths, txt_type, signature, outgoing,
-                                                sender_name, sender_key)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                sender_name, sender_key, transport_code, region)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     msg_type,
@@ -109,6 +111,8 @@ class MessageRepository:
                     outgoing,
                     sender_name,
                     normalized_sender_key,
+                    transport_code,
+                    region,
                 ),
             ) as cursor:
                 rowcount = cursor.rowcount
@@ -357,10 +361,16 @@ class MessageRepository:
     def _row_to_message(row: Any) -> Message:
         """Convert a database row to a Message model."""
         packet_id = None
+        transport_code = None
+        region = None
         if hasattr(row, "keys"):
             row_keys = row.keys()
             if "packet_id" in row_keys:
                 packet_id = row["packet_id"]
+            if "transport_code" in row_keys:
+                transport_code = row["transport_code"]
+            if "region" in row_keys:
+                region = row["region"]
 
         return Message(
             id=row["id"],
@@ -377,6 +387,8 @@ class MessageRepository:
             acked=row["acked"],
             sender_name=row["sender_name"],
             packet_id=packet_id,
+            transport_code=transport_code,
+            region=region,
         )
 
     @staticmethod

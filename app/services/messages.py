@@ -69,6 +69,8 @@ def build_message_model(
     sender_name: str | None = None,
     channel_name: str | None = None,
     packet_id: int | None = None,
+    transport_code: int | None = None,
+    region: str | None = None,
 ) -> Message:
     """Build a Message model with the canonical backend payload shape."""
     return Message(
@@ -87,6 +89,8 @@ def build_message_model(
         sender_name=sender_name,
         channel_name=channel_name,
         packet_id=packet_id,
+        transport_code=transport_code,
+        region=region,
     )
 
 
@@ -276,6 +280,8 @@ async def create_message_from_decrypted(
     realtime: bool = True,
     broadcast_fn: BroadcastFn,
     packet_hash: str | None = None,
+    transport_code: int | None = None,
+    region: str | None = None,
 ) -> int | None:
     """Store and broadcast a decrypted channel message."""
     received = received_at or int(time.time())
@@ -300,6 +306,8 @@ async def create_message_from_decrypted(
         snr=snr,
         sender_name=sender,
         sender_key=resolved_sender_key,
+        transport_code=transport_code,
+        region=region,
     )
 
     if msg_id is None:
@@ -341,6 +349,8 @@ async def create_message_from_decrypted(
             sender_key=resolved_sender_key,
             channel_name=channel_name,
             packet_id=packet_id,
+            transport_code=transport_code,
+            region=region,
         ),
         broadcast_fn=broadcast_fn,
         realtime=realtime,

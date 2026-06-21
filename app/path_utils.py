@@ -31,6 +31,12 @@ class ParsedPacketEnvelope:
     path: bytes
     payload: bytes
     payload_offset: int
+    transport_codes: tuple[int, int] | None = None
+    """Region transport codes (code_1, code_2) for TRANSPORT_* routes, else None.
+
+    Each is a little-endian uint16 read from the 4-byte transport-code block.
+    ``code_1`` is the region-scope code; ``code_2`` is currently reserved (0).
+    """
 
 
 def decode_path_byte(path_byte: int) -> tuple[int, int]:
@@ -91,9 +97,14 @@ def parse_packet_envelope(raw_packet: bytes) -> ParsedPacketEnvelope | None:
         payload_version = (header >> 6) & 0x03
 
         offset = 1
+        transport_codes: tuple[int, int] | None = None
         if route_type in (0x00, 0x03):
             if len(raw_packet) < offset + 4:
                 return None
+            transport_codes = (
+                int.from_bytes(raw_packet[offset : offset + 2], "little"),
+                int.from_bytes(raw_packet[offset + 2 : offset + 4], "little"),
+            )
             offset += 4
 
         if len(raw_packet) < offset + 1:
@@ -123,6 +134,7 @@ def parse_packet_envelope(raw_packet: bytes) -> ParsedPacketEnvelope | None:
             path=path,
             payload=raw_packet[offset:],
             payload_offset=offset,
+            transport_codes=transport_codes,
         )
     except (IndexError, ValueError):
         return None

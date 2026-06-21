@@ -105,6 +105,7 @@ class PacketInfo:
     path: bytes  # The routing path bytes (empty if path_length is 0)
     payload: bytes
     path_hash_size: int = 1  # Bytes per hop: 1, 2, or 3
+    transport_codes: tuple[int, int] | None = None  # (code_1, code_2) for TRANSPORT_* routes
 
 
 def _is_valid_advert_location(lat: float, lon: float) -> bool:
@@ -146,6 +147,7 @@ def parse_packet(raw_packet: bytes) -> PacketInfo | None:
             path_hash_size=envelope.hash_size,
             path=envelope.path,
             payload=envelope.payload,
+            transport_codes=envelope.transport_codes,
         )
     except ValueError:
         return None

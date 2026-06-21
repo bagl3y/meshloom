@@ -200,6 +200,7 @@ export function SettingsRadioSection({
   // Flood & advert control state
   const [advertIntervalHours, setAdvertIntervalHours] = useState('0');
   const [floodScope, setFloodScope] = useState('');
+  const [knownRegions, setKnownRegions] = useState('');
   const [maxRadioContacts, setMaxRadioContacts] = useState('');
   const [floodBusy, setFloodBusy] = useState(false);
   const [floodError, setFloodError] = useState<string | null>(null);
@@ -229,6 +230,7 @@ export function SettingsRadioSection({
   useEffect(() => {
     setAdvertIntervalHours(String(Math.round(appSettings.advert_interval / 3600)));
     setFloodScope(stripRegionScopePrefix(appSettings.flood_scope));
+    setKnownRegions((appSettings.known_regions ?? []).join('\n'));
     setMaxRadioContacts(String(appSettings.max_radio_contacts));
   }, [appSettings]);
 
@@ -413,6 +415,14 @@ export function SettingsRadioSection({
       const update: AppSettingsUpdate = {};
       if (floodScope !== stripRegionScopePrefix(appSettings.flood_scope)) {
         update.flood_scope = floodScope;
+      }
+      // Known regions: one per line (commas also accepted), trimmed, blanks dropped.
+      const parsedRegions = knownRegions
+        .split(/[\n,]/)
+        .map((r) => r.trim())
+        .filter((r) => r.length > 0);
+      if (JSON.stringify(parsedRegions) !== JSON.stringify(appSettings.known_regions ?? [])) {
+        update.known_regions = parsedRegions;
       }
       const newMaxRadioContacts = parseInt(maxRadioContacts, 10);
       if (!isNaN(newMaxRadioContacts) && newMaxRadioContacts !== appSettings.max_radio_contacts) {
@@ -1154,6 +1164,25 @@ export function SettingsRadioSection({
           Tag outgoing messages with a region name (e.g. MyRegion). Repeaters configured for that
           region can forward the traffic, while repeaters configured to deny other regions may drop
           it. Leave empty to disable.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="known-regions">Known Regions (for decoding)</Label>
+        <textarea
+          id="known-regions"
+          value={knownRegions}
+          onChange={(e) => setKnownRegions(e.target.value)}
+          rows={4}
+          placeholder={'nl-gr\nde-by\nMyRegion'}
+          spellCheck={false}
+          className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        />
+        <p className="text-[0.8125rem] text-muted-foreground">
+          One region name per line. Incoming region-scoped (TransportFlood/TransportDirect) packets
+          are matched against this list so messages and the packet inspector show a readable region
+          label instead of a raw transport code. The list is seeded from your channels' regions and
+          can be edited freely.
         </p>
       </div>
 

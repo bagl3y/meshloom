@@ -672,8 +672,12 @@ export function RawPacketInspectionPanel({
           {inspection.decoded?.transportCodes ? (
             <CompactMetaCard
               label="Scope"
-              primary="Regional"
-              secondary={formatTransportCodes(inspection.decoded.transportCodes)}
+              primary={packet.region ? packet.region : 'Regional'}
+              secondary={
+                packet.region
+                  ? formatTransportCodes(inspection.decoded.transportCodes)
+                  : `${formatTransportCodes(inspection.decoded.transportCodes)} · unknown region`
+              }
             />
           ) : null}
           {(() => {

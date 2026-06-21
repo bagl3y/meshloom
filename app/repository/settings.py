@@ -39,7 +39,7 @@ class AppSettingsRepository:
             """
             SELECT max_radio_contacts, auto_decrypt_dm_on_advert,
                    last_message_times,
-                   advert_interval, last_advert_time, flood_scope,
+                   advert_interval, last_advert_time, flood_scope, known_regions,
                    blocked_keys, blocked_names, discovery_blocked_types,
                    tracked_telemetry_repeaters, tracked_telemetry_contacts,
                    auto_resend_channel,
@@ -80,6 +80,15 @@ class AppSettingsRepository:
                 blocked_names = json.loads(row["blocked_names"])
             except (json.JSONDecodeError, TypeError):
                 blocked_names = []
+
+        # Parse known_regions JSON
+        known_regions: list[str] = []
+        try:
+            raw_regions = row["known_regions"]
+            if raw_regions:
+                known_regions = json.loads(raw_regions)
+        except (json.JSONDecodeError, TypeError, KeyError):
+            known_regions = []
 
         # Parse discovery_blocked_types JSON
         discovery_blocked_types: list[int] = []
@@ -136,6 +145,7 @@ class AppSettingsRepository:
             advert_interval=row["advert_interval"] or 0,
             last_advert_time=row["last_advert_time"] or 0,
             flood_scope=row["flood_scope"] or "",
+            known_regions=known_regions,
             blocked_keys=blocked_keys,
             blocked_names=blocked_names,
             discovery_blocked_types=discovery_blocked_types,
@@ -156,6 +166,7 @@ class AppSettingsRepository:
         advert_interval: int | None = None,
         last_advert_time: int | None = None,
         flood_scope: str | None = None,
+        known_regions: list[str] | None = None,
         blocked_keys: list[str] | None = None,
         blocked_names: list[str] | None = None,
         discovery_blocked_types: list[int] | None = None,
@@ -196,6 +207,10 @@ class AppSettingsRepository:
         if flood_scope is not None:
             updates.append("flood_scope = ?")
             params.append(flood_scope)
+
+        if known_regions is not None:
+            updates.append("known_regions = ?")
+            params.append(json.dumps(known_regions))
 
         if blocked_keys is not None:
             updates.append("blocked_keys = ?")
@@ -251,6 +266,7 @@ class AppSettingsRepository:
         advert_interval: int | None = None,
         last_advert_time: int | None = None,
         flood_scope: str | None = None,
+        known_regions: list[str] | None = None,
         blocked_keys: list[str] | None = None,
         blocked_names: list[str] | None = None,
         discovery_blocked_types: list[int] | None = None,
@@ -270,6 +286,7 @@ class AppSettingsRepository:
                 advert_interval=advert_interval,
                 last_advert_time=last_advert_time,
                 flood_scope=flood_scope,
+                known_regions=known_regions,
                 blocked_keys=blocked_keys,
                 blocked_names=blocked_names,
                 discovery_blocked_types=discovery_blocked_types,

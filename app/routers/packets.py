@@ -10,7 +10,13 @@ from app.database import db
 from app.decoder import parse_packet, try_decrypt_packet_with_channel_key
 from app.models import RawPacketDecryptedInfo, RawPacketDetail
 from app.packet_processor import create_message_from_decrypted, run_historical_dm_decryption
-from app.repository import ChannelRepository, MessageRepository, RawPacketRepository
+from app.region_resolver import resolve_region
+from app.repository import (
+    AppSettingsRepository,
+    ChannelRepository,
+    MessageRepository,
+    RawPacketRepository,
+)
 from app.websocket import broadcast_success
 
 logger = logging.getLogger(__name__)
@@ -58,6 +64,8 @@ async def _run_historical_channel_decryption(
 
     logger.info("Starting historical channel decryption of %d packets", total)
 
+    known_regions = (await AppSettingsRepository.get()).known_regions
+
     async for (
         packet_id,
         packet_data,
@@ -70,6 +78,18 @@ async def _run_historical_channel_decryption(
             packet_info = parse_packet(packet_data)
             path_hex = packet_info.path.hex() if packet_info else None
 
+            # Resolve regional flood-scope if this is a transport-routed packet.
+            transport_code: int | None = None
+            region: str | None = None
+            if packet_info is not None and packet_info.transport_codes is not None:
+                transport_code = packet_info.transport_codes[0]
+                region = resolve_region(
+                    int(packet_info.payload_type),
+                    packet_info.payload,
+                    transport_code,
+                    known_regions,
+                )
+
             msg_id = await create_message_from_decrypted(
                 packet_id=packet_id,
                 channel_key=channel_key_hex,
@@ -81,6 +101,8 @@ async def _run_historical_channel_decryption(
                 path=path_hex,
                 path_len=packet_info.path_length if packet_info else None,
                 realtime=False,  # Historical decryption should not trigger fanout
+                transport_code=transport_code,
+                region=region,
             )
 
             if msg_id is not None:
@@ -117,6 +139,21 @@ async def get_raw_packet(packet_id: int) -> RawPacketDetail:
     packet_info = parse_packet(packet_data)
     payload_type_name = packet_info.payload_type.name if packet_info else "Unknown"
 
+    # Resolve regional flood-scope for transport-routed packets against the
+    # current known-region list (we have the raw payload here, so this stays
+    # accurate even if the stored message predates a region-list change).
+    transport_code: int | None = None
+    region: str | None = None
+    if packet_info is not None and packet_info.transport_codes is not None:
+        transport_code = packet_info.transport_codes[0]
+        settings = await AppSettingsRepository.get()
+        region = resolve_region(
+            int(packet_info.payload_type),
+            packet_info.payload,
+            transport_code,
+            settings.known_regions,
+        )
+
     decrypted_info: RawPacketDecryptedInfo | None = None
     if message_id is not None:
         message = await MessageRepository.get_by_id(message_id)
@@ -146,6 +183,8 @@ async def get_raw_packet(packet_id: int) -> RawPacketDetail:
         payload_type=payload_type_name,
         decrypted=message_id is not None,
         decrypted_info=decrypted_info,
+        transport_code=transport_code,
+        region=region,
     )
 
 

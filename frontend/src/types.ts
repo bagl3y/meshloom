@@ -309,6 +309,10 @@ export interface Message {
   sender_name: string | null;
   channel_name?: string | null;
   packet_id?: number | null;
+  /** Region scope transport code (uint16) when this arrived via a transport-routed packet. */
+  transport_code?: number | null;
+  /** Resolved region name for the transport code, if it matched a known region. */
+  region?: string | null;
 }
 
 export interface MessagesAroundResponse {
@@ -352,6 +356,10 @@ export interface RawPacket {
     sender_timestamp: number | null;
     message: string | null;
   } | null;
+  /** Region scope transport code (uint16) for TransportFlood/TransportDirect packets. */
+  transport_code?: number | null;
+  /** Resolved region name for the transport code, if it matched a known region. */
+  region?: string | null;
 }
 
 export interface AppSettings {
@@ -361,6 +369,7 @@ export interface AppSettings {
   advert_interval: number;
   last_advert_time: number;
   flood_scope: string;
+  known_regions: string[];
   blocked_keys: string[];
   blocked_names: string[];
   discovery_blocked_types: number[];
@@ -377,6 +386,7 @@ export interface AppSettingsUpdate {
   advert_interval?: number;
   auto_resend_channel?: boolean;
   flood_scope?: string;
+  known_regions?: string[];
   blocked_keys?: string[];
   blocked_names?: string[];
   discovery_blocked_types?: number[];
