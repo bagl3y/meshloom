@@ -1,6 +1,6 @@
 import React from 'react';
 import { configure, render, screen, waitFor } from '@testing-library/react';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   api: {
@@ -150,25 +150,27 @@ const publicChannel = {
   favorite: false,
 };
 
-describe('App startup hash resolution', () => {
-  // App startup fans out several async fetches (config, settings, channels,
-  // contacts, unreads) that must all settle before conversation selection
-  // renders. This suite passes 20/20 in isolation, but under the full parallel
-  // suite (~69 files) CPU contention can stretch that startup well past RTL's
-  // 1000ms default — and even past vitest's 5000ms test timeout — for any
-  // waitFor in this file. It's starvation, not a hang, so give this suite
-  // generous headroom on both timeouts: a healthy render still settles in
-  // ~100ms (nothing is slowed), only a starved run waits longer. Scoped to this
-  // file and restored afterward so other test files are unaffected.
-  beforeAll(() => {
-    vi.setConfig({ testTimeout: 15000 });
-    configure({ asyncUtilTimeout: 10000 });
-  });
-  afterAll(() => {
-    vi.resetConfig();
-    configure({ asyncUtilTimeout: 1000 });
-  });
+// App startup fans out several async fetches (config, settings, channels,
+// contacts, unreads) that must all settle before conversation selection
+// renders. This suite passes in isolation, but under the full parallel suite
+// (~70 files) CPU contention can stretch that startup well past RTL's 1000ms
+// default — and even past vitest's 5000ms test timeout — for any waitFor in
+// this file. It's starvation, not a hang, so give this file generous headroom
+// on both timeouts: a healthy render still settles in ~100ms (nothing is
+// slowed), only a starved run waits longer.
+//
+// These MUST run at module scope, not in beforeAll: vitest bakes each test's
+// timeout in when it() registers the test (during collection, before any
+// beforeAll runs), so a beforeAll setConfig is too late and the test keeps the
+// 5000ms default. configure() worked from beforeAll only because waitFor reads
+// asyncUtilTimeout dynamically — which left an inverted pair (waitFor allowed
+// 10s but the test killed at 5s) that flaked under load. vi.setConfig is scoped
+// to this file (each file runs in its own isolated worker), so other files are
+// unaffected.
+vi.setConfig({ testTimeout: 15000 });
+configure({ asyncUtilTimeout: 10000 });
 
+describe('App startup hash resolution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
