@@ -1,3 +1,14 @@
+## [3.15.1] - 2026-06-20
+
+* Feature: Per-message + analyzer region tag support
+* Feature: Sortable neighbor list in repeater pane
+* Feature: Option to disable autoscroll on packet feed
+* Feature: Bot globals
+* Feature: Add draft support for Open gifs + reactions
+* Bugfix: Use correct last-heard time for repeater recency
+* Bugfix: Configurable VAPID subject for iOS web push
+* Misc: Library updates, logging, test
+
 ## [3.15.0] - 2026-06-11
 
 * Feature: Enhanced repeater telemetry with scrubbing and better extents
