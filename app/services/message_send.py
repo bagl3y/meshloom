@@ -266,6 +266,12 @@ async def send_channel_message_with_effective_scope(
             )
             radio_manager.invalidate_cached_channel_slot(channel_key)
         else:
+            logger.debug(
+                "Radio send result for %s (%s): %r",
+                channel.name,
+                action_label,
+                send_result.payload,
+            )
             radio_manager.note_channel_slot_used(channel_key)
         return send_result
     finally:
@@ -602,6 +608,12 @@ async def send_direct_message_to_contact(
 
         if result.type == EventType.ERROR:
             raise HTTPException(status_code=422, detail=f"Failed to send message: {result.payload}")
+
+        logger.debug(
+            "Radio send result for direct message to %s: %r",
+            contact.public_key[:12],
+            result.payload,
+        )
 
         message = await create_outgoing_direct_message(
             conversation_key=contact.public_key.lower(),

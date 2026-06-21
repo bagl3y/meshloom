@@ -307,9 +307,16 @@ async def process_raw_packet(
 
     # Log packet arrival at debug level
     path_hex = packet_info.path.hex() if packet_info and packet_info.path else ""
+    route_type_name = (
+        getattr(packet_info.route_type, "name", packet_info.route_type)
+        if packet_info
+        else "Unknown"
+    )
     logger.debug(
-        "Packet received: type=%s, is_new=%s, packet_id=%d, path='%s'",
+        "Packet received: type=%s, route=%s, hops=%s, is_new=%s, packet_id=%d, path='%s'",
         payload_type_name,
+        route_type_name,
+        packet_info.path_length if packet_info else "?",
         is_new_packet,
         packet_id,
         path_hex[:8] if path_hex else "(direct)",
