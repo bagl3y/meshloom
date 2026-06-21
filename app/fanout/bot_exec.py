@@ -39,6 +39,9 @@ BOT_MESSAGE_SPACING = 2.0
 _bot_send_lock = asyncio.Lock()
 _last_bot_send_time: float = 0.0
 
+# global container for persistent data storage between bot executions, will be added to execution namespace
+_bot_globals: dict[str, Any] = {}
+
 
 @dataclass(frozen=True)
 class BotCallPlan:
@@ -194,6 +197,7 @@ def execute_bot_code(
     # Build execution namespace with allowed imports
     namespace: dict[str, Any] = {
         "__builtins__": __builtins__,
+        "_bot_globals": _bot_globals,
     }
 
     try:
