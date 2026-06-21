@@ -1,6 +1,7 @@
 import json
 import re
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -630,6 +631,50 @@ class MessageRepository:
             ):
                 pass
             async with conn.execute("DELETE FROM messages WHERE id = ?", (message_id,)):
+                pass
+
+    @staticmethod
+    async def stream_chan_messages_with_raw(
+        batch_size: int = 500,
+    ) -> "AsyncIterator[tuple[int, bytes]]":
+        """Yield (message_id, raw_packet_bytes) for CHAN messages that still have a
+        retained raw packet, in ascending id batches.
+
+        Used by the region backfill: region is a property of the on-air payload, so
+        any retained raw packet for the message yields the same transport code.
+        """
+        last_id = 0
+        while True:
+            async with db.readonly() as conn:
+                async with conn.execute(
+                    """
+                    SELECT m.id AS mid, rp.data AS data
+                    FROM messages m
+                    JOIN raw_packets rp ON rp.message_id = m.id
+                    WHERE m.type = 'CHAN' AND m.id > ?
+                    GROUP BY m.id
+                    ORDER BY m.id ASC
+                    LIMIT ?
+                    """,
+                    (last_id, batch_size),
+                ) as cursor:
+                    rows = await cursor.fetchall()
+            if not rows:
+                return
+            for row in rows:
+                yield row["mid"], bytes(row["data"])
+                last_id = row["mid"]
+
+    @staticmethod
+    async def set_transport_scope(
+        message_id: int, transport_code: int | None, region: str | None
+    ) -> None:
+        """Set the resolved transport code / region on a stored message."""
+        async with db.tx() as conn:
+            async with conn.execute(
+                "UPDATE messages SET transport_code = ?, region = ? WHERE id = ?",
+                (transport_code, region, message_id),
+            ):
                 pass
 
     @staticmethod

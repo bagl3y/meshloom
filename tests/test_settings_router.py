@@ -105,6 +105,33 @@ class TestUpdateSettings:
         assert result.known_regions == ["nl-gr", "DE-BY"]
 
     @pytest.mark.asyncio
+    async def test_known_regions_change_triggers_backfill(self, test_db):
+        """Changing the region list schedules a background message re-tag."""
+        import asyncio
+
+        with patch(
+            "app.services.messages.backfill_message_regions", new_callable=AsyncMock
+        ) as mock_backfill:
+            await update_settings(AppSettingsUpdate(known_regions=["nl-gr", "de-by"]))
+            await asyncio.sleep(0)  # let the scheduled task run
+
+        mock_backfill.assert_awaited_once_with(["nl-gr", "de-by"])
+
+    @pytest.mark.asyncio
+    async def test_known_regions_unchanged_skips_backfill(self, test_db):
+        """Saving the same region list does not re-run the backfill."""
+        import asyncio
+
+        await update_settings(AppSettingsUpdate(known_regions=["nl-gr"]))
+        with patch(
+            "app.services.messages.backfill_message_regions", new_callable=AsyncMock
+        ) as mock_backfill:
+            await update_settings(AppSettingsUpdate(known_regions=["#nl-gr"]))  # same after cleanup
+            await asyncio.sleep(0)
+
+        mock_backfill.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_flood_scope_applies_to_radio(self, test_db):
         """When radio is connected, setting flood_scope calls set_flood_scope on radio."""
         mock_mc = AsyncMock()

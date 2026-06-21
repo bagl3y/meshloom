@@ -263,6 +263,7 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 
 ### Packets
 - `GET /packets/undecrypted/count`
+- `POST /packets/region-backfill` — re-resolve region scope for stored channel messages that still have a retained raw packet (region is otherwise only tagged at ingest); returns `{scanned, scoped, named}`
 - `GET /packets/{packet_id}` — fetch one stored raw packet by row ID for on-demand inspection
 - `POST /packets/decrypt/historical`
 - `POST /packets/maintenance`

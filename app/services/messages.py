@@ -360,6 +360,39 @@ async def create_message_from_decrypted(
     return msg_id
 
 
+async def backfill_message_regions(known_regions: list[str]) -> dict[str, int]:
+    """Re-resolve region scope for stored channel messages that still have a raw packet.
+
+    Region is normally resolved at ingest, so messages stored before the feature
+    existed (or before a region was added to the list) carry no region. This walks
+    every CHAN message that still has a retained raw packet, recomputes its
+    transport code, and persists the resolved region.
+
+    Messages whose raw packet has been purged cannot be re-evaluated.
+
+    Returns counts: ``scanned`` (messages examined), ``scoped`` (transport-routed),
+    and ``named`` (matched a known region).
+    """
+    from app.path_utils import parse_packet_envelope
+    from app.region_resolver import resolve_region
+
+    scanned = scoped = named = 0
+    async for message_id, raw_bytes in MessageRepository.stream_chan_messages_with_raw():
+        scanned += 1
+        env = parse_packet_envelope(raw_bytes)
+        if env is None or env.transport_codes is None:
+            continue
+        scoped += 1
+        transport_code = env.transport_codes[0]
+        region = resolve_region(int(env.payload_type), env.payload, transport_code, known_regions)
+        if region:
+            named += 1
+        await MessageRepository.set_transport_scope(message_id, transport_code, region)
+
+    logger.info("Region backfill complete: scanned=%d scoped=%d named=%d", scanned, scoped, named)
+    return {"scanned": scanned, "scoped": scoped, "named": named}
+
+
 async def create_dm_message_from_decrypted(
     *,
     packet_id: int,

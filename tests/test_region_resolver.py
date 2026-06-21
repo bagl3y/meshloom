@@ -175,6 +175,43 @@ class TestRegionPersistedOnChannelMessage:
         assert messages[0].region is None
 
     @pytest.mark.asyncio
+    async def test_backfill_tags_messages_ingested_before_region_was_known(
+        self, test_db, captured_broadcasts
+    ):
+        from app.packet_processor import process_raw_packet
+        from app.repository import AppSettingsRepository, ChannelRepository, MessageRepository
+        from app.services.messages import backfill_message_regions
+
+        fixture = FIXTURES["channel_message"]
+        await ChannelRepository.upsert(
+            key=fixture["channel_key_hex"].upper(), name=fixture["channel_name"], is_hashtag=True
+        )
+        # Ingest a region-scoped message while the region is NOT yet in the list.
+        await AppSettingsRepository.update(known_regions=[])
+        packet_bytes, code = _build_transport_channel_packet("nl-gr")
+        _, mock_broadcast = captured_broadcasts
+        with patch("app.packet_processor.broadcast_event", mock_broadcast):
+            await process_raw_packet(packet_bytes, timestamp=1700000000)
+
+        messages = await MessageRepository.get_all(
+            msg_type="CHAN", conversation_key=fixture["channel_key_hex"].upper(), limit=10
+        )
+        assert len(messages) == 1
+        # transport_code is set at ingest, but region is unresolved (empty list).
+        assert messages[0].transport_code == code
+        assert messages[0].region is None
+
+        # Operator adds the region and runs the backfill.
+        result = await backfill_message_regions(["nl-gr"])
+        assert result["named"] == 1
+
+        refreshed = await MessageRepository.get_all(
+            msg_type="CHAN", conversation_key=fixture["channel_key_hex"].upper(), limit=10
+        )
+        assert refreshed[0].region == "nl-gr"
+        assert refreshed[0].transport_code == code
+
+    @pytest.mark.asyncio
     async def test_plain_flood_message_is_unscoped(self, test_db, captured_broadcasts):
         from app.packet_processor import process_raw_packet
         from app.repository import AppSettingsRepository, ChannelRepository, MessageRepository

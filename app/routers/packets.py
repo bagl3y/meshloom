@@ -17,6 +17,7 @@ from app.repository import (
     MessageRepository,
     RawPacketRepository,
 )
+from app.services.messages import backfill_message_regions
 from app.websocket import broadcast_success
 
 logger = logging.getLogger(__name__)
@@ -126,6 +127,19 @@ async def get_undecrypted_count() -> dict:
     """Get the count of undecrypted packets."""
     count = await RawPacketRepository.get_undecrypted_count()
     return {"count": count}
+
+
+@router.post("/region-backfill")
+async def backfill_regions() -> dict:
+    """Re-resolve region scope for stored channel messages that still have a raw packet.
+
+    Region tagging normally happens at ingest, so messages stored before the feature
+    (or before a region name was added to ``known_regions``) have no region. This
+    recomputes them. Messages whose raw packet was already purged cannot be
+    re-evaluated. Clients should refetch the conversation to see updated badges.
+    """
+    known_regions = (await AppSettingsRepository.get()).known_regions
+    return await backfill_message_regions(known_regions)
 
 
 @router.get("/{packet_id}", response_model=RawPacketDetail)

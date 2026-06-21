@@ -1181,8 +1181,8 @@ export function SettingsRadioSection({
         <p className="text-[0.8125rem] text-muted-foreground">
           One region name per line. Incoming region-scoped (TransportFlood/TransportDirect) packets
           are matched against this list so messages and the packet inspector show a readable region
-          label instead of a raw transport code. The list is seeded from your channels' regions and
-          can be edited freely.
+          label instead of a raw transport code. Saving a change re-tags existing messages whose
+          original packet is still stored.
         </p>
       </div>
 

@@ -221,6 +221,7 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
 
     # Known regions for scope decoding. Normalize to user-facing form (no leading
     # '#'), trim blanks, and dedupe case-insensitively while preserving order.
+    known_regions_changed = False
     if update.known_regions is not None:
         cleaned_regions: list[str] = []
         seen_regions: set[str] = set()
@@ -231,6 +232,8 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
             if name and name.lower() not in seen_regions:
                 seen_regions.add(name.lower())
                 cleaned_regions.append(name)
+        current = await AppSettingsRepository.get()
+        known_regions_changed = cleaned_regions != current.known_regions
         kwargs["known_regions"] = cleaned_regions
 
     # Block lists
@@ -289,6 +292,15 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
                         logger.info("Applied flood_scope=%r to radio", scope or "(disabled)")
                 except Exception as e:
                     logger.warning("Failed to apply flood_scope to radio: %s", e)
+
+        # Retroactively tag stored messages when the region list changed. Runs in
+        # the background since it walks every channel message with a retained raw
+        # packet; clients refetch conversations to see updated badges.
+        if known_regions_changed:
+            from app.services.messages import backfill_message_regions
+
+            logger.info("known_regions changed; scheduling region backfill")
+            asyncio.create_task(backfill_message_regions(result.known_regions))
 
         return result
 
