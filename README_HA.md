@@ -68,13 +68,21 @@ Repeaters must first be added to the auto-telemetry tracking list in RemoteTerm'
 
 If RemoteTerm already has a cached telemetry snapshot for that repeater, it republishes it on startup so HA can populate the sensors immediately instead of waiting for the next collection cycle.
 
-### Contact Device Trackers
+### Contact Devices
 
-One `device_tracker` per tracked contact. Updates passively whenever RemoteTerm hears an advertisement with GPS coordinates from that contact. No radio commands are sent -- it piggybacks on normal mesh traffic.
+One HA device per tracked contact, which can expose two kinds of entities.
+
+**GPS tracker** -- one `device_tracker`, populated from two sources:
+
+- **Advertisements** -- updates passively whenever RemoteTerm hears an advert carrying GPS coordinates from that contact. No radio commands are sent; it piggybacks on normal mesh traffic.
+- **CayenneLPP telemetry** -- if the contact also reports a GPS reading in its LPP telemetry (and is tracked for contact telemetry collection), that reading updates the tracker too. GPS is routed to the tracker, not exposed as a numeric sensor.
+
+**CayenneLPP sensors** -- if the contact is tracked for telemetry collection and reports LPP readings, a numeric sensor is created per reading, auto-detected from the data (e.g. `sensor.<contact_name>_lpp_temperature_ch1`, `_lpp_voltage_ch1`).
 
 | Entity | Description |
 |--------|-------------|
-| `device_tracker.<contact_name>` | GPS position (latitude/longitude) |
+| `device_tracker.<contact_name>` | GPS position (`latitude`/`longitude` attributes, plus `altitude` when a telemetry reading includes it) |
+| `sensor.<contact_name>_lpp_<type>_ch<n>` | CayenneLPP sensor reading (auto-detected; GPS excluded -- see tracker above) |
 
 ### Message Event Entity
 
@@ -106,7 +114,7 @@ MQTT topic paths use the 12-character node ID (first 12 hex characters of the pu
 
 - Always created: the local radio device and its entities
 - Created when selected in the HA integration: tracked repeater devices and tracked contact device trackers
-- Populated only after data exists: contact GPS trackers need an advert with GPS; repeater sensors need telemetry, although cached repeater telemetry is replayed on startup when available
+- Populated only after data exists: contact GPS trackers need an advert with GPS or a GPS reading in collected LPP telemetry; repeater sensors need telemetry, although cached repeater telemetry is replayed on startup when available
 - Message event entity: always created once the HA integration is enabled for a connected radio
 
 ## Common Automations

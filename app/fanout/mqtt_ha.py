@@ -124,15 +124,65 @@ def _lpp_sensor_key(type_name: str, channel: int) -> str:
     return f"lpp_{type_name}_ch{channel}"
 
 
+def _is_geo_sensor(sensor: dict) -> bool:
+    """True for multi-value GPS/location readings whose value is a lat/lon dict.
+
+    These cannot be represented as a single numeric HA sensor (HA rejects the
+    nested object on a ``state_class: measurement`` entity). They are routed to
+    the contact ``device_tracker`` instead, so they are excluded from the flat
+    numeric-sensor key assignment below.
+    """
+    if sensor.get("type_name") == "gps":
+        return True
+    value = sensor.get("value")
+    return isinstance(value, dict) and "latitude" in value and "longitude" in value
+
+
+def _extract_gps_reading(lpp_sensors: list[dict]) -> dict | None:
+    """Return the first usable GPS reading as a device_tracker attributes payload.
+
+    Mirrors the ``on_contact`` advert-sourced GPS shape (``latitude``,
+    ``longitude``, ``gps_accuracy``, ``source_type``) and adds ``altitude`` when
+    the reading carries it. Returns ``None`` when there is no GPS sensor or the
+    coordinates are the ``(0, 0)`` "no fix" sentinel.
+    """
+    for sensor in lpp_sensors or []:
+        if not _is_geo_sensor(sensor):
+            continue
+        value = sensor.get("value")
+        if not isinstance(value, dict):
+            continue
+        lat = value.get("latitude")
+        lon = value.get("longitude")
+        if lat is None or lon is None or (lat == 0.0 and lon == 0.0):
+            continue
+        attrs: dict[str, Any] = {
+            "latitude": lat,
+            "longitude": lon,
+            "gps_accuracy": 0,
+            "source_type": "gps",
+        }
+        alt = value.get("altitude")
+        if alt is not None:
+            attrs["altitude"] = alt
+        return attrs
+    return None
+
+
 def _assign_lpp_keys(lpp_sensors: list[dict]) -> list[tuple[dict, str, int]]:
     """Pair each LPP sensor dict with a disambiguated flat key and occurrence.
 
     First occurrence keeps the base key (``lpp_temperature_ch1``), occurrence=1;
     subsequent duplicates of the same (type_name, channel) get ``_2``, ``_3``, etc.
+
+    Multi-value GPS/location sensors are skipped here: they are surfaced through
+    the device_tracker (see ``_extract_gps_reading``), not as numeric sensors.
     """
     counts: dict[str, int] = {}
     result: list[tuple[dict, str, int]] = []
     for sensor in lpp_sensors:
+        if _is_geo_sensor(sensor):
+            continue
         base = _lpp_sensor_key(sensor.get("type_name", "unknown"), sensor.get("channel", 0))
         n = counts.get(base, 0) + 1
         counts[base] = n
@@ -616,7 +666,15 @@ class MqttHaModule(FanoutModule):
         # Message event entity (namespaced to this radio)
         configs.append(_message_event_discovery_config(self._prefix, self._radio_key, radio_name))
 
-        self._discovery_topics = [topic for topic, _ in configs]
+        # Clear any retained discovery configs we previously published but no
+        # longer generate (e.g. the legacy broken GPS numeric sensor, now routed
+        # to the device_tracker, or sensors from an untracked node). Without this
+        # the broker's retained config would keep recreating the dead entity.
+        new_topics = [topic for topic, _ in configs]
+        stale = [t for t in self._discovery_topics if t not in new_topics]
+        if stale:
+            await self._clear_retained_topics(stale)
+        self._discovery_topics = new_topics
 
         for topic, payload in configs:
             await self._publisher.publish(topic, payload, retain=True)
@@ -811,6 +869,14 @@ class MqttHaModule(FanoutModule):
             await self._publish_discovery()
 
         await self._publisher.publish(f"{self._prefix}/{nid}/telemetry", payload)
+
+        # Route any GPS/location reading to the contact device_tracker instead of
+        # a numeric sensor. Only tracked contacts have a device_tracker entity;
+        # repeaters expose no tracker, so their GPS readings are simply dropped.
+        if not is_repeater:
+            gps_attrs = _extract_gps_reading(lpp_sensors)
+            if gps_attrs is not None:
+                await self._publisher.publish(f"{self._prefix}/{nid}/gps", gps_attrs)
 
     async def on_message(self, data: dict) -> None:
         if not self._publisher.connected or not self._radio_key:

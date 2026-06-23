@@ -415,7 +415,7 @@ tests/
 ├── test_message_prefix_claim.py # Message prefix claim logic
 ├── test_mqtt.py                # MQTT publisher topic routing and lifecycle
 ├── test_messages_search.py     # Message search, around, forward pagination
-├── test_mqtt_ha.py             # MQTT HA (high-availability) behavior
+├── test_mqtt_ha.py             # Home Assistant MQTT Discovery fanout module
 ├── test_packet_pipeline.py     # End-to-end packet processing
 ├── test_packets_router.py      # Packets router endpoints (decrypt, maintenance)
 ├── test_path_utils.py          # Path hex rendering helpers
