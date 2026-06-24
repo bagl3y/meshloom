@@ -1,3 +1,7 @@
+## [3.15.2] - 2026-06-23
+
+* Bugfix: filter out geo from non-geo sensors, and publish gps for device tracking
+
 ## [3.15.1] - 2026-06-20
 
 * Feature: Per-message + analyzer region tag support

@@ -1180,8 +1180,8 @@ function MqttHaConfigEditor({
           <div>
             <span className="font-medium text-foreground">Per tracked contact</span> &mdash; updates
             passively when advertisements with GPS are heard, and from any GPS reading in the
-            contact&apos;s CayenneLPP telemetry. Shown for one contact; a tracker is created for each
-            selected contact.
+            contact&apos;s CayenneLPP telemetry. Shown for one contact; a tracker is created for
+            each selected contact.
             <ul className="mt-0.5 ml-4 list-disc space-y-0.5">
               <li>
                 <code className="text-[0.6875rem]">
