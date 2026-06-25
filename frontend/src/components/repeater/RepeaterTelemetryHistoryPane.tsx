@@ -110,6 +110,24 @@ function paddedDomain(values: number[]): [number, number] | undefined {
   return [lo - pad, hi + pad];
 }
 
+/** Decimal places to render axis ticks at, derived from the axis span so a
+ *  tightly-zoomed range (e.g. battery voltage varying in the 5th decimal)
+ *  shows distinct, clean labels instead of raw floating-point tick values
+ *  like "4.0487999999999996". Aims for ~5 ticks across the span. */
+function tickDecimals(span: number | undefined): number {
+  if (span == null || !isFinite(span) || span <= 0) return 2;
+  const step = span / 5;
+  return Math.min(8, Math.max(0, Math.ceil(-Math.log10(step))));
+}
+
+/** Round away floating-point noise, then drop trailing zeros so a real data
+ *  value reads as e.g. "4.0488" rather than "4.0487999999999996". Integers
+ *  pass through unchanged. */
+function cleanNumber(value: number): string {
+  if (Number.isInteger(value)) return `${value}`;
+  return `${Number(value.toFixed(4))}`;
+}
+
 interface TelemetryHistoryPaneProps {
   entries: TelemetryHistoryEntry[];
   publicKey: string;
@@ -332,6 +350,18 @@ export function TelemetryHistoryPane({
     [visibleData, rightKeys]
   );
 
+  // Tick precision tracks each axis's current span so zooming into a flat
+  // series (e.g. battery voltage) keeps labels clean instead of leaking
+  // floating-point noise into the rendered tick text.
+  const leftTickDecimals = useMemo(
+    () => tickDecimals(leftDomain ? leftDomain[1] - leftDomain[0] : undefined),
+    [leftDomain]
+  );
+  const rightTickDecimals = useMemo(
+    () => tickDecimals(rightDomain ? rightDomain[1] - rightDomain[0] : undefined),
+    [rightDomain]
+  );
+
   const handleBrushChange = (range: { startIndex?: number; endIndex?: number }) => {
     if (typeof range.startIndex === 'number' && typeof range.endIndex === 'number') {
       setBrushRange({ start: range.startIndex, end: range.endIndex });
@@ -339,13 +369,13 @@ export function TelemetryHistoryPane({
   };
 
   const formatSeriesValue = (key: string, value: number): string => {
-    if (key === 'recv_error_pct') return `${value}%`;
+    if (key === 'recv_error_pct') return `${cleanNumber(value)}%`;
     if (activeMetric === 'uptime_seconds') return formatUptime(value);
     const suffix =
       activeConfig.unit && activeMetric !== 'packets' && activeMetric !== 'recv_errors'
         ? ` ${activeConfig.unit}`
         : '';
-    return `${value}${suffix}`;
+    return `${cleanNumber(value)}${suffix}`;
   };
 
   // Custom tooltip so each row carries a color swatch matching its line —
@@ -535,7 +565,7 @@ export function TelemetryHistoryPane({
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) =>
-                  activeMetric === 'uptime_seconds' ? formatUptime(v) : `${v}`
+                  activeMetric === 'uptime_seconds' ? formatUptime(v) : v.toFixed(leftTickDecimals)
                 }
               />
               {rightKeys.length > 0 && (
@@ -546,7 +576,11 @@ export function TelemetryHistoryPane({
                   tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(v) => (activeMetric === 'recv_errors' ? `${v}%` : `${v}`)}
+                  tickFormatter={(v) =>
+                    activeMetric === 'recv_errors'
+                      ? `${v.toFixed(rightTickDecimals)}%`
+                      : v.toFixed(rightTickDecimals)
+                  }
                 />
               )}
               <RechartsTooltip
