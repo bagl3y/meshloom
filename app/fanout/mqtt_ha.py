@@ -169,6 +169,30 @@ def _extract_gps_reading(lpp_sensors: list[dict]) -> dict | None:
     return None
 
 
+def _legacy_geo_sensor_topics(nid: str, lpp_sensors: list[dict]) -> list[str]:
+    """Discovery topics for GPS/location readings that older versions published
+    as numeric sensors before GPS was routed to the device_tracker.
+
+    These configs were published ``retain=True``, so after an upgrade they linger
+    in the broker and HA keeps recreating a dead ``sensor.*_gps_ch*`` entity whose
+    ``{{ value_json.lpp_gps_ch* }}`` template no longer resolves. We recompute the
+    topics from current telemetry — replicating the pre-filter ``_assign_lpp_keys``
+    numbering for geo sensors only — so they can be cleared even across a restart,
+    when the in-memory ``_discovery_topics`` history no longer remembers them.
+    """
+    counts: dict[str, int] = {}
+    topics: list[str] = []
+    for sensor in lpp_sensors or []:
+        if not _is_geo_sensor(sensor):
+            continue
+        base = _lpp_sensor_key(sensor.get("type_name", "unknown"), sensor.get("channel", 0))
+        n = counts.get(base, 0) + 1
+        counts[base] = n
+        key = base if n == 1 else f"{base}_{n}"
+        topics.append(f"homeassistant/sensor/meshcore_{nid}/{key}/config")
+    return topics
+
+
 def _assign_lpp_keys(lpp_sensors: list[dict]) -> list[tuple[dict, str, int]]:
     """Pair each LPP sensor dict with a disambiguated flat key and occurrence.
 
@@ -609,6 +633,8 @@ class MqttHaModule(FanoutModule):
 
         configs: list[tuple[str, dict]] = []
         cached_repeater_states: list[tuple[str, dict[str, Any]]] = []
+        # Retained GPS-sensor configs published by older versions, to be cleared.
+        legacy_geo_topics: list[str] = []
 
         radio_name = self._radio_name or "MeshCore Radio"
         configs.extend(_radio_discovery_configs(self._prefix, self._radio_key, radio_name))
@@ -630,6 +656,7 @@ class MqttHaModule(FanoutModule):
                 configs.extend(
                     _lpp_discovery_configs(self._prefix, pub_key, device, lpp_sensors, state_topic)
                 )
+                legacy_geo_topics.extend(_legacy_geo_sensor_topics(nid, lpp_sensors))
             if latest_data:
                 cached_repeater_states.append(
                     (
@@ -657,6 +684,7 @@ class MqttHaModule(FanoutModule):
                         self._prefix, pub_key, ct_device, ct_lpp_sensors, ct_state_topic
                     )
                 )
+                legacy_geo_topics.extend(_legacy_geo_sensor_topics(ct_nid, ct_lpp_sensors))
             if latest_ct_data:
                 ct_payload = _contact_telemetry_payload(latest_ct_data)
                 cached_repeater_states.append(
@@ -670,8 +698,16 @@ class MqttHaModule(FanoutModule):
         # longer generate (e.g. the legacy broken GPS numeric sensor, now routed
         # to the device_tracker, or sensors from an untracked node). Without this
         # the broker's retained config would keep recreating the dead entity.
+        #
+        # `_discovery_topics` only covers configs this process published, so it
+        # cannot reach a stale GPS sensor config left retained by an older
+        # version before the upgrade+restart. `legacy_geo_topics` recomputes
+        # those deterministically from current telemetry to close that gap.
         new_topics = [topic for topic, _ in configs]
-        stale = [t for t in self._discovery_topics if t not in new_topics]
+        new_topic_set = set(new_topics)
+        stale_set = {t for t in self._discovery_topics if t not in new_topic_set}
+        stale_set.update(t for t in legacy_geo_topics if t not in new_topic_set)
+        stale = sorted(stale_set)
         if stale:
             await self._clear_retained_topics(stale)
         self._discovery_topics = new_topics

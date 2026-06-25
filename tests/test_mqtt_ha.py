@@ -13,6 +13,7 @@ from app.fanout.mqtt_ha import (
     _device_payload,
     _extract_gps_reading,
     _is_geo_sensor,
+    _legacy_geo_sensor_topics,
     _lpp_discovery_configs,
     _lpp_sensor_key,
     _message_event_discovery_config,
@@ -397,6 +398,66 @@ class TestStaleDiscoveryCleanup:
         cleared = mod._clear_retained_topics.call_args[0][0]
         assert stale_topic in cleared
         assert stale_topic not in mod._discovery_topics
+
+    def test_legacy_geo_sensor_topics_for_gps(self):
+        nid = "ccdd11223344"
+        topics = _legacy_geo_sensor_topics(
+            nid,
+            [
+                {"channel": 1, "type_name": "gps", "value": {"latitude": 1.0, "longitude": 2.0}},
+                {"channel": 2, "type_name": "temperature", "value": 23.5},
+            ],
+        )
+        assert topics == [f"homeassistant/sensor/meshcore_{nid}/lpp_gps_ch1/config"]
+
+    def test_legacy_geo_sensor_topics_disambiguates_duplicates(self):
+        nid = "ccdd11223344"
+        gps = {"channel": 1, "type_name": "gps", "value": {"latitude": 1.0, "longitude": 2.0}}
+        topics = _legacy_geo_sensor_topics(nid, [gps, gps])
+        assert topics == [
+            f"homeassistant/sensor/meshcore_{nid}/lpp_gps_ch1/config",
+            f"homeassistant/sensor/meshcore_{nid}/lpp_gps_ch1_2/config",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_publish_discovery_clears_legacy_gps_sensor_after_restart(self):
+        """A retained GPS sensor config from an older version must be cleared even
+        when this process never published it (in-memory history is empty)."""
+        contact_key = "ccdd11223344"
+        mod = MqttHaModule("test", _base_config(tracked_contacts=[contact_key]))
+        mod._radio_key = "aabbccddeeff"
+        mod._radio_name = "MyRadio"
+        mod._publisher = MagicMock()
+        mod._publisher.connected = True
+        mod._publisher.publish = AsyncMock()
+        mod._clear_retained_topics = AsyncMock()
+        # Fresh process after upgrade: nothing remembered from a prior run.
+        mod._discovery_topics = []
+        mod._resolve_contact_name = AsyncMock(return_value="MCRadio2")
+        mod._resolve_latest_contact_telemetry = AsyncMock(
+            return_value={
+                "timestamp": 1234,
+                "data": {
+                    "lpp_sensors": [
+                        {
+                            "channel": 1,
+                            "type_name": "gps",
+                            "value": {"latitude": 21.0, "longitude": -21.0},
+                        },
+                    ],
+                },
+            }
+        )
+
+        await mod._publish_discovery()
+
+        nid = _node_id(contact_key)
+        legacy_topic = f"homeassistant/sensor/meshcore_{nid}/lpp_gps_ch1/config"
+        cleared = mod._clear_retained_topics.call_args[0][0]
+        assert legacy_topic in cleared
+        # The dead GPS sensor config must not be re-published.
+        published = [c.args[0] for c in mod._publisher.publish.call_args_list]
+        assert legacy_topic not in published
 
 
 class TestMqttHaHealth:
