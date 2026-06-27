@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
+from meshcore import EventType
 
 from app.models import CONTACT_TYPE_REPEATER, AppSettings, ContactUpsert
 from app.repository import AppSettingsRepository, ContactRepository
@@ -16,6 +17,7 @@ from app.routers.settings import (
     toggle_tracked_telemetry,
     update_settings,
 )
+from app.services.flood_scope import FORCE_UNSCOPED_FRAME
 
 
 class TestUpdateSettings:
@@ -178,7 +180,10 @@ class TestUpdateSettings:
         with patch("app.radio.radio_manager", mock_rm):
             await update_settings(AppSettingsUpdate(flood_scope=""))
 
-        mock_mc.commands.set_flood_scope.assert_awaited_once_with("")
+        mock_mc.commands.send.assert_awaited_once_with(
+            FORCE_UNSCOPED_FRAME, [EventType.OK, EventType.ERROR]
+        )
+        mock_mc.commands.set_flood_scope.assert_not_awaited()
 
 
 class TestToggleFavorite:

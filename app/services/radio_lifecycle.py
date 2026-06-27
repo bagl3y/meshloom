@@ -71,11 +71,12 @@ async def run_post_connect_setup(radio_manager) -> None:
                 # may not support set_flood_scope)
                 from app.region_scope import normalize_region_scope
                 from app.repository import AppSettingsRepository
+                from app.services.flood_scope import set_radio_flood_scope
 
                 app_settings = await AppSettingsRepository.get()
                 scope = normalize_region_scope(app_settings.flood_scope)
                 try:
-                    await mc.commands.set_flood_scope(scope if scope else "")
+                    await set_radio_flood_scope(mc, scope)
                     logger.info("Applied flood_scope=%r", scope or "(disabled)")
                 except Exception as exc:
                     logger.warning("set_flood_scope failed (firmware may not support it): %s", exc)

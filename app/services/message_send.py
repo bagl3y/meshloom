@@ -19,6 +19,7 @@ from app.repository import (
     MessageRepository,
 )
 from app.services import dm_ack_tracker
+from app.services.flood_scope import set_radio_flood_scope
 from app.services.messages import (
     BroadcastFn,
     broadcast_message,
@@ -184,7 +185,7 @@ async def send_channel_message_with_effective_scope(
             desired_scope or "(unscoped)",
             channel.name,
         )
-        override_result = await mc.commands.set_flood_scope(desired_scope)
+        override_result = await set_radio_flood_scope(mc, desired_scope)
         if override_result is not None and override_result.type == EventType.ERROR:
             logger.warning(
                 "Failed to apply flood_scope %r for %s: %s",
@@ -313,9 +314,7 @@ async def send_channel_message_with_effective_scope(
             restored = False
             for attempt in range(3):
                 try:
-                    restore_result = await mc.commands.set_flood_scope(
-                        baseline_scope if baseline_scope else ""
-                    )
+                    restore_result = await set_radio_flood_scope(mc, baseline_scope)
                     if restore_result is not None and restore_result.type == EventType.ERROR:
                         logger.warning(
                             "Attempt %d/3: failed to restore flood_scope after sending to %s: %s",

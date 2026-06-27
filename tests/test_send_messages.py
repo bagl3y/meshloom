@@ -26,6 +26,7 @@ from app.routers.messages import (
     send_direct_message,
 )
 from app.services import dm_ack_tracker
+from app.services.flood_scope import FORCE_UNSCOPED_FRAME
 from app.services.message_send import NO_RADIO_RESPONSE_AFTER_SEND_DETAIL
 
 
@@ -67,6 +68,7 @@ def _make_mc(name="TestNode"):
     mc.self_info = {"name": name}
     mc.commands = MagicMock()
     mc.commands.set_flood_scope = AsyncMock(return_value=_make_radio_result())
+    mc.commands.send = AsyncMock(return_value=_make_radio_result())
     mc.commands.send_msg = AsyncMock(return_value=_make_radio_result())
     mc.commands.send_chan_msg = AsyncMock(return_value=_make_radio_result())
     mc.commands.add_contact = AsyncMock(return_value=_make_radio_result())
@@ -669,10 +671,10 @@ class TestOutgoingChannelBroadcast:
             )
             await send_channel_message(request)
 
-        # Apply the region, then restore the (empty) baseline.
-        assert mc.commands.set_flood_scope.await_args_list == [
-            call("#Region"),
-            call(""),
+        # Apply the region, then restore the empty baseline via explicit unscoped mode.
+        assert mc.commands.set_flood_scope.await_args_list == [call("#Region")]
+        assert mc.commands.send.await_args_list == [
+            call(FORCE_UNSCOPED_FRAME, [EventType.OK, EventType.ERROR])
         ]
 
     @pytest.mark.asyncio
@@ -694,11 +696,11 @@ class TestOutgoingChannelBroadcast:
             )
             await send_channel_message(request)
 
-        # Explicit unscoped: set empty scope, then restore the global baseline.
-        assert mc.commands.set_flood_scope.await_args_list == [
-            call(""),
-            call("#Baseline"),
+        # Explicit unscoped uses firmware mode 1, then restores the global baseline.
+        assert mc.commands.send.await_args_list == [
+            call(FORCE_UNSCOPED_FRAME, [EventType.OK, EventType.ERROR])
         ]
+        assert mc.commands.set_flood_scope.await_args_list == [call("#Baseline")]
 
     @pytest.mark.asyncio
     async def test_send_channel_msg_aborts_when_override_apply_fails(self, test_db):
