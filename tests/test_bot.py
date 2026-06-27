@@ -397,6 +397,106 @@ def bot(**kwargs):
         )
         assert result == "Alice|Hi|True|2"
 
+    def test_kwargs_bot_receives_region(self):
+        """Bots using **kwargs receive the region of a scoped channel message (#300)."""
+        code = """
+def bot(sender_name, sender_key, message_text, is_dm, channel_key, channel_name, sender_timestamp, path, **kwargs):
+    return f"region={kwargs.get('region', 'missing')}"
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Someone",
+            sender_key=None,
+            message_text="Hi",
+            is_dm=False,
+            channel_key="AABBCCDD",
+            channel_name="#general",
+            sender_timestamp=None,
+            path=None,
+            region="EU",
+        )
+        assert result == "region=EU"
+
+    def test_named_region_param_bot_receives_region(self):
+        """Bots may opt into region by naming the parameter (with a default)."""
+        code = """
+def bot(sender_name, sender_key, message_text, is_dm, channel_key, channel_name, sender_timestamp, path, region=None):
+    return f"region={region}"
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Someone",
+            sender_key=None,
+            message_text="Hi",
+            is_dm=False,
+            channel_key="AABBCCDD",
+            channel_name="#general",
+            sender_timestamp=None,
+            path=None,
+            region="US",
+        )
+        assert result == "region=US"
+
+    def test_required_keyword_only_region_param_is_supported(self):
+        """A required keyword-only `region` parameter is accepted (allow-set parity)."""
+        code = """
+def bot(sender_name, sender_key, message_text, is_dm, channel_key, channel_name, sender_timestamp, path, *, region):
+    return f"region={region}"
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Someone",
+            sender_key=None,
+            message_text="Hi",
+            is_dm=False,
+            channel_key="AABBCCDD",
+            channel_name="#general",
+            sender_timestamp=None,
+            path=None,
+            region="EU",
+        )
+        assert result == "region=EU"
+
+    def test_kwargs_bot_receives_none_region_for_unscoped_message(self):
+        """region is delivered as None (not absent) for DMs / unscoped flood."""
+        code = """
+def bot(**kwargs):
+    return f"region={kwargs.get('region', 'missing')}"
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Alice",
+            sender_key="abc123",
+            message_text="Hi",
+            is_dm=True,
+            channel_key=None,
+            channel_name=None,
+            sender_timestamp=None,
+            path=None,
+        )
+        assert result == "region=None"
+
+    def test_legacy_positional_bot_unaffected_by_region(self):
+        """Historical positional bots keep binding unchanged; region is never passed positionally."""
+        code = """
+def bot(sender_name, sender_key, message_text, is_dm, channel_key, channel_name, sender_timestamp, path, is_outgoing):
+    return f"ok:{message_text}"
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Alice",
+            sender_key="abc123",
+            message_text="Hi",
+            is_dm=True,
+            channel_key=None,
+            channel_name=None,
+            sender_timestamp=None,
+            path=None,
+            is_outgoing=False,
+            region="EU",
+        )
+        assert result == "ok:Hi"
+
     def test_channel_message_with_none_sender_key(self):
         """Channel messages correctly pass None for sender_key."""
         code = """

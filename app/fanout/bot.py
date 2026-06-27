@@ -137,6 +137,9 @@ class BotModule(FanoutModule):
             path_value = paths[0].get("path") if isinstance(paths[0], dict) else None
         path_bytes_per_hop = _derive_path_bytes_per_hop(paths, path_value)
         packet_hash = data.get("packet_hash")
+        # Resolved region name for region-scoped channel messages (None for DMs,
+        # unscoped flood, or when the transport code matched no known region).
+        region = data.get("region")
 
         # Wait for message to settle (allows retransmissions to be deduped)
         await asyncio.sleep(2)
@@ -163,6 +166,7 @@ class BotModule(FanoutModule):
                         is_outgoing,
                         path_bytes_per_hop,
                         packet_hash,
+                        region,
                     ),
                     timeout=BOT_EXECUTION_TIMEOUT,
                 )

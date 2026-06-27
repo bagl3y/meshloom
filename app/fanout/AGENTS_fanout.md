@@ -120,6 +120,7 @@ Wraps bot code execution via `app/fanout/bot_exec.py`. Config blob:
 - Executes in a thread pool with timeout and semaphore concurrency control
 - Rate-limits outgoing messages for repeater compatibility
 - Channel `message_text` passed to bot code is normalized for human readability by stripping a leading `"{sender_name}: "` prefix when it matches the payload sender.
+- The `bot(...)` function receives, in order: `sender_name`, `sender_key`, `message_text`, `is_dm`, `channel_key`, `channel_name`, `sender_timestamp`, `path`, then optionally `is_outgoing`, `path_bytes_per_hop`, `packet_hash`. `region` (resolved region name for region-scoped channel messages; `None` otherwise) is delivered **only** to bots that use `**kwargs` or explicitly name the `region` parameter — it is intentionally not added to the positional call styles so existing bot signatures keep binding unchanged. `_analyze_bot_signature` in `bot_exec.py` picks the call style from the bot's actual signature.
 
 ### webhook (webhook.py)
 HTTP webhook delivery. Config blob:

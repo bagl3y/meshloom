@@ -89,6 +89,8 @@ const DEFAULT_BOT_CODE = `def bot(**kwargs) -> str | list[str] | None:
             path: Hex-encoded routing path (may be None)
             is_outgoing: True if this is our own outgoing message
             path_bytes_per_hop: Bytes per hop in path (1, 2, or 3) when known
+            region: Resolved region name for a region-scoped channel
+                message (None for DMs, unscoped flood, or no match)
 
     Returns:
         None for no reply, a string for a single reply,

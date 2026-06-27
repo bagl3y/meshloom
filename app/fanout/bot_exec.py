@@ -72,14 +72,16 @@ def _analyze_bot_signature(bot_func_or_sig) -> BotCallPlan:
     has_varargs = any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in param_values)
     has_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in param_values)
     explicit_optional_names = tuple(
-        name for name in ("is_outgoing", "path_bytes_per_hop", "packet_hash") if name in params
+        name
+        for name in ("is_outgoing", "path_bytes_per_hop", "packet_hash", "region")
+        if name in params
     )
     unsupported_required_kwonly = [
         p.name
         for p in param_values
         if p.kind == inspect.Parameter.KEYWORD_ONLY
         and p.default is inspect.Parameter.empty
-        and p.name not in {"is_outgoing", "path_bytes_per_hop", "packet_hash"}
+        and p.name not in {"is_outgoing", "path_bytes_per_hop", "packet_hash", "region"}
     ]
     if unsupported_required_kwonly:
         raise ValueError(
@@ -107,6 +109,8 @@ def _analyze_bot_signature(bot_func_or_sig) -> BotCallPlan:
         keyword_args["path_bytes_per_hop"] = 1
     if has_kwargs or "packet_hash" in params:
         keyword_args["packet_hash"] = ""
+    if has_kwargs or "region" in params:
+        keyword_args["region"] = None
     candidate_specs.append(("keyword", [], keyword_args))
 
     if not has_kwargs and explicit_optional_names:
@@ -117,6 +121,8 @@ def _analyze_bot_signature(bot_func_or_sig) -> BotCallPlan:
             kwargs["path_bytes_per_hop"] = 1
         if has_kwargs or "packet_hash" in params:
             kwargs["packet_hash"] = ""
+        if has_kwargs or "region" in params:
+            kwargs["region"] = None
         candidate_specs.append(("mixed_keyword", base_args, kwargs))
 
     if has_varargs or positional_capacity >= 11:
@@ -142,7 +148,7 @@ def _analyze_bot_signature(bot_func_or_sig) -> BotCallPlan:
         "Supported trailing parameters are: path; path + is_outgoing; "
         "path + path_bytes_per_hop; path + is_outgoing + path_bytes_per_hop; "
         "path + is_outgoing + path_bytes_per_hop + packet_hash; "
-        "or use **kwargs for forward compatibility."
+        "or use **kwargs for forward compatibility (which also receives region)."
     )
 
 
@@ -159,6 +165,7 @@ def execute_bot_code(
     is_outgoing: bool = False,
     path_bytes_per_hop: int | None = None,
     packet_hash: str | None = None,
+    region: str | None = None,
 ) -> str | list[str] | None:
     """
     Execute user-provided bot code with message context.
@@ -166,6 +173,10 @@ def execute_bot_code(
     The code should define a function:
     `bot(sender_name, sender_key, message_text, is_dm, channel_key, channel_name, sender_timestamp, path, is_outgoing, path_bytes_per_hop, packet_hash)`
     or use named parameters / `**kwargs`.
+
+    `region` is only delivered to bots that opt in via `**kwargs` or by naming
+    the parameter (`region`); the positional call styles are unchanged for
+    backward compatibility.
     that returns either None (no response), a string (single response message),
     or a list of strings (multiple messages sent in order).
 
@@ -185,6 +196,8 @@ def execute_bot_code(
         is_outgoing: True if this is our own outgoing message
         path_bytes_per_hop: Number of bytes per routing hop (1, 2, or 3), if known
         packet_hash: MeshCore packet hash (first 16 hex chars of SHA256, uppercase), if known
+        region: Resolved region name for a region-scoped channel message, or None
+            for DMs, unscoped flood, or a transport code matching no known region
 
     Returns:
         Response string, list of strings, or None.
@@ -284,6 +297,8 @@ def execute_bot_code(
                 keyword_args["path_bytes_per_hop"] = path_bytes_per_hop
             if "packet_hash" in call_plan.keyword_args:
                 keyword_args["packet_hash"] = packet_hash
+            if "region" in call_plan.keyword_args:
+                keyword_args["region"] = region
             result = bot_func(**keyword_args)
         else:
             result = bot_func(

@@ -1749,6 +1749,45 @@ class TestBotModuleLifecycle:
         assert mod._active is False
         assert len(mod._tasks) == 0
 
+    @pytest.mark.asyncio
+    async def test_channel_message_region_reaches_bot_kwargs(self):
+        """A scoped channel message's resolved region flows to bot **kwargs (#300)."""
+        from unittest.mock import AsyncMock, patch
+
+        from app.fanout.bot import BotModule
+
+        mod = BotModule(
+            "bot1",
+            {"code": "def bot(**k): return f\"region={k.get('region')}\""},
+            name="Test Bot",
+        )
+        mod._active = True
+
+        captured: dict = {}
+
+        async def capture(response, is_dm, sender_key, channel_key):
+            captured["response"] = response
+
+        with (
+            patch("app.fanout.bot.asyncio.sleep", new_callable=AsyncMock),
+            patch("app.fanout.bot_exec.process_bot_response", side_effect=capture),
+        ):
+            await mod.on_message(
+                {
+                    "type": "CHAN",
+                    "conversation_key": "AABBCCDD",
+                    "text": "Alice: hi",
+                    "sender_name": "Alice",
+                    "channel_name": "#general",
+                    "outgoing": False,
+                    "region": "EU",
+                }
+            )
+            if mod._tasks:
+                await asyncio.gather(*mod._tasks, return_exceptions=True)
+
+        assert captured.get("response") == "region=EU"
+
 
 # ---------------------------------------------------------------------------
 # Manager restart failure tests
