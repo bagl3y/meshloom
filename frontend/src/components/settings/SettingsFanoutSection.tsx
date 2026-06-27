@@ -94,7 +94,10 @@ const DEFAULT_BOT_CODE = `def bot(**kwargs) -> str | list[str] | None:
 
     Returns:
         None for no reply, a string for a single reply,
-        or a list of strings to send multiple messages in order
+        a list of strings to send multiple messages in order, or a dict
+        {"region": <name or None>, "message": <str or list[str]>} to scope a
+        channel reply to a region for that send only (None/"" = unscoped flood;
+        region is ignored for DM replies).
     """
     sender_name = kwargs.get("sender_name")
     message_text = kwargs.get("message_text", "")

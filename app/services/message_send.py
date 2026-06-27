@@ -30,6 +30,20 @@ from app.services.messages import (
 
 logger = logging.getLogger(__name__)
 
+
+class _ScopeUnset:
+    """Sentinel for "no per-send flood-scope override supplied".
+
+    Distinguishes "caller did not request a per-send scope, so use the channel's
+    persisted ``flood_scope_override``" from "caller explicitly requested unscoped
+    flood (empty string)". A bare ``None``/``""`` cannot express both states.
+    """
+
+    __slots__ = ()
+
+
+SCOPE_UNSET = _ScopeUnset()
+
 NO_RADIO_RESPONSE_AFTER_SEND_DETAIL = (
     "Send command was issued to the radio, but no response was heard back. "
     "The message may or may not have sent successfully."
@@ -135,33 +149,53 @@ async def send_channel_message_with_effective_scope(
     radio_manager,
     temp_radio_slot: int,
     error_broadcast_fn: BroadcastFn,
+    flood_scope_override: str | _ScopeUnset = SCOPE_UNSET,
     app_settings_repository=AppSettingsRepository,
 ) -> Any:
-    """Send a channel message, temporarily overriding flood scope and/or path hash mode."""
-    override_scope = normalize_region_scope(channel.flood_scope_override)
-    baseline_scope = ""
+    """Send a channel message, temporarily overriding flood scope and/or path hash mode.
 
-    if override_scope:
+    ``flood_scope_override`` lets a single send override the channel's persisted
+    ``flood_scope_override``: pass a region name to scope this send, an empty
+    string to force unscoped/plain flood, or leave it ``SCOPE_UNSET`` to fall
+    back to the channel's persisted override.
+    """
+    if isinstance(flood_scope_override, _ScopeUnset):
+        desired_scope = normalize_region_scope(channel.flood_scope_override)
+        scope_explicit = False
+    else:
+        desired_scope = normalize_region_scope(flood_scope_override)
+        scope_explicit = True
+
+    # Fetch the radio's standing scope as the restore target whenever we might
+    # change it: a non-empty desired scope, or an explicit request to go unscoped.
+    baseline_scope = ""
+    if desired_scope or scope_explicit:
         settings = await app_settings_repository.get()
         baseline_scope = normalize_region_scope(settings.flood_scope)
 
-    if override_scope and override_scope != baseline_scope:
+    # Apply only when the desired scope differs from the radio's baseline. A blank
+    # desired scope forces unscoped only when explicitly requested; the implicit
+    # (channel-default) path leaves the radio untouched when no override is set.
+    apply_scope = desired_scope != baseline_scope and (bool(desired_scope) or scope_explicit)
+
+    if apply_scope:
         logger.info(
-            "Temporarily applying channel flood_scope override for %s: %r",
+            "Temporarily applying flood_scope %s for %s",
+            desired_scope or "(unscoped)",
             channel.name,
-            override_scope,
         )
-        override_result = await mc.commands.set_flood_scope(override_scope)
+        override_result = await mc.commands.set_flood_scope(desired_scope)
         if override_result is not None and override_result.type == EventType.ERROR:
             logger.warning(
-                "Failed to apply channel flood_scope override for %s: %s",
+                "Failed to apply flood_scope %r for %s: %s",
+                desired_scope,
                 channel.name,
                 override_result.payload,
             )
             raise HTTPException(
                 status_code=422,
                 detail=(
-                    f"Failed to apply regional override {override_scope!r} before {action_label}: "
+                    f"Failed to apply regional override {desired_scope!r} before {action_label}: "
                     f"{override_result.payload}"
                 ),
             )
@@ -275,7 +309,7 @@ async def send_channel_message_with_effective_scope(
             radio_manager.note_channel_slot_used(channel_key)
         return send_result
     finally:
-        if override_scope and override_scope != baseline_scope:
+        if apply_scope:
             restored = False
             for attempt in range(3):
                 try:
@@ -763,9 +797,15 @@ async def send_channel_message_to_channel(
     error_broadcast_fn: BroadcastFn,
     now_fn: NowFn,
     temp_radio_slot: int,
+    flood_scope_override: str | _ScopeUnset = SCOPE_UNSET,
     message_repository=MessageRepository,
 ) -> Any:
-    """Send a channel message and persist/broadcast the outgoing row."""
+    """Send a channel message and persist/broadcast the outgoing row.
+
+    ``flood_scope_override`` is forwarded to the scoped send: a region name
+    scopes this send, an empty string forces unscoped flood, and ``SCOPE_UNSET``
+    falls back to the channel's persisted override.
+    """
     sent_at: int | None = None
     sender_timestamp: int | None = None
     radio_name = ""
@@ -818,6 +858,7 @@ async def send_channel_message_to_channel(
                 radio_manager=radio_manager,
                 temp_radio_slot=temp_radio_slot,
                 error_broadcast_fn=error_broadcast_fn,
+                flood_scope_override=flood_scope_override,
             )
 
             if result is None:

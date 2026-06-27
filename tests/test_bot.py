@@ -497,6 +497,134 @@ def bot(sender_name, sender_key, message_text, is_dm, channel_key, channel_name,
         )
         assert result == "ok:Hi"
 
+    def test_dict_return_with_region_produces_bot_reply(self):
+        """A {"region", "message"} return becomes a BotReply with a normalized scope (#300)."""
+        from app.fanout.bot_exec import BotReply
+
+        code = """
+def bot(**kwargs):
+    return {"region": "EU", "message": "scoped hi"}
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Someone",
+            sender_key=None,
+            message_text="Hi",
+            is_dm=False,
+            channel_key="AABBCCDD",
+            channel_name="#general",
+            sender_timestamp=None,
+            path=None,
+        )
+        assert isinstance(result, BotReply)
+        assert result.messages == ["scoped hi"]
+        assert result.flood_scope_override == "#EU"
+
+    def test_dict_return_with_message_list_drops_empties(self):
+        """The dict 'message' may be a list; blank entries are dropped."""
+        from app.fanout.bot_exec import BotReply
+
+        code = """
+def bot(**kwargs):
+    return {"region": "EU", "message": ["a", "  ", "b"]}
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Someone",
+            sender_key=None,
+            message_text="Hi",
+            is_dm=False,
+            channel_key="AABBCCDD",
+            channel_name="#general",
+            sender_timestamp=None,
+            path=None,
+        )
+        assert isinstance(result, BotReply)
+        assert result.messages == ["a", "b"]
+        assert result.flood_scope_override == "#EU"
+
+    def test_dict_return_region_none_is_explicit_unscoped(self):
+        """region=None means 'send unscoped' (empty override), distinct from 'use default'."""
+        from app.fanout.bot_exec import BotReply
+
+        code = """
+def bot(**kwargs):
+    return {"region": None, "message": "hi"}
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Someone",
+            sender_key=None,
+            message_text="Hi",
+            is_dm=False,
+            channel_key="AABBCCDD",
+            channel_name="#general",
+            sender_timestamp=None,
+            path=None,
+        )
+        assert isinstance(result, BotReply)
+        assert result.flood_scope_override == ""
+
+    def test_dict_return_without_region_uses_channel_default(self):
+        """A dict with no 'region' key defers to the channel's persisted override (None)."""
+        from app.fanout.bot_exec import BotReply
+
+        code = """
+def bot(**kwargs):
+    return {"message": "hi"}
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Someone",
+            sender_key=None,
+            message_text="Hi",
+            is_dm=False,
+            channel_key="AABBCCDD",
+            channel_name="#general",
+            sender_timestamp=None,
+            path=None,
+        )
+        assert isinstance(result, BotReply)
+        assert result.flood_scope_override is None
+
+    def test_dict_return_invalid_message_returns_none(self):
+        """A dict whose 'message' is not str/list is rejected (no reply)."""
+        code = """
+def bot(**kwargs):
+    return {"region": "EU", "message": 123}
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Someone",
+            sender_key=None,
+            message_text="Hi",
+            is_dm=False,
+            channel_key="AABBCCDD",
+            channel_name="#general",
+            sender_timestamp=None,
+            path=None,
+        )
+        assert result is None
+
+    def test_dict_return_empty_message_returns_none(self):
+        """A dict with no usable message text yields no reply."""
+        code = """
+def bot(**kwargs):
+    return {"region": "EU", "message": "   "}
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Someone",
+            sender_key=None,
+            message_text="Hi",
+            is_dm=False,
+            channel_key="AABBCCDD",
+            channel_name="#general",
+            sender_timestamp=None,
+            path=None,
+        )
+        assert result is None
+
     def test_channel_message_with_none_sender_key(self):
         """Channel messages correctly pass None for sender_key."""
         code = """
@@ -1008,3 +1136,94 @@ class TestBotListResponses:
             )
 
             assert sent_messages == ["Just one message"]
+
+
+class TestBotReplyRouting:
+    """A BotReply's region scopes channel replies and is ignored for DMs (#300)."""
+
+    @pytest.mark.asyncio
+    async def test_bot_reply_region_scopes_channel_send(self):
+        from app.fanout.bot_exec import BotReply
+
+        sent = {}
+
+        async def mock_send(request):
+            sent["request"] = request
+            mock_message = MagicMock()
+            mock_message.model_dump.return_value = {}
+            return mock_message
+
+        with (
+            patch("app.fanout.bot_exec.time.monotonic", return_value=100.0),
+            patch("app.fanout.bot_exec.asyncio.sleep", new_callable=AsyncMock),
+            patch("app.routers.messages.send_channel_message", side_effect=mock_send),
+            patch("app.websocket.broadcast_event"),
+        ):
+            await process_bot_response(
+                response=BotReply(messages=["scoped hi"], flood_scope_override="#EU"),
+                is_dm=False,
+                sender_key="",
+                channel_key="AABBCCDD",
+            )
+
+        request = sent["request"]
+        assert request.channel_key == "AABBCCDD"
+        assert request.text == "scoped hi"
+        assert request.flood_scope_override == "#EU"
+
+    @pytest.mark.asyncio
+    async def test_bot_reply_all_messages_share_region(self):
+        from app.fanout.bot_exec import BotReply
+
+        overrides = []
+
+        async def mock_send(request):
+            overrides.append(request.flood_scope_override)
+            mock_message = MagicMock()
+            mock_message.model_dump.return_value = {}
+            return mock_message
+
+        with (
+            patch("app.fanout.bot_exec.time.monotonic", return_value=100.0),
+            patch("app.fanout.bot_exec.asyncio.sleep", new_callable=AsyncMock),
+            patch("app.routers.messages.send_channel_message", side_effect=mock_send),
+            patch("app.websocket.broadcast_event"),
+        ):
+            await process_bot_response(
+                response=BotReply(messages=["a", "b"], flood_scope_override="#EU"),
+                is_dm=False,
+                sender_key="",
+                channel_key="AABBCCDD",
+            )
+
+        assert overrides == ["#EU", "#EU"]
+
+    @pytest.mark.asyncio
+    async def test_bot_reply_region_ignored_for_dm(self):
+        from app.fanout.bot_exec import BotReply
+
+        sent = {}
+
+        async def mock_send(request):
+            sent["request"] = request
+            mock_message = MagicMock()
+            mock_message.model_dump.return_value = {}
+            return mock_message
+
+        with (
+            patch("app.fanout.bot_exec.time.monotonic", return_value=100.0),
+            patch("app.fanout.bot_exec.asyncio.sleep", new_callable=AsyncMock),
+            patch("app.routers.messages.send_direct_message", side_effect=mock_send),
+            patch("app.websocket.broadcast_event"),
+        ):
+            await process_bot_response(
+                response=BotReply(messages=["hi"], flood_scope_override="#EU"),
+                is_dm=True,
+                sender_key="a" * 64,
+                channel_key=None,
+            )
+
+        request = sent["request"]
+        assert request.text == "hi"
+        # SendDirectMessageRequest has no scope field; region is simply ignored.
+        assert not hasattr(request, "flood_scope_override")

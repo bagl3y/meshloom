@@ -530,6 +530,15 @@ class SendDirectMessageRequest(SendMessageRequest):
 
 class SendChannelMessageRequest(SendMessageRequest):
     channel_key: str = Field(description="Channel key (32-char hex)")
+    flood_scope_override: str | None = Field(
+        default=None,
+        description=(
+            "Per-send regional flood-scope override. None = use the channel's persisted "
+            "override (or none); empty string = force unscoped/plain flood; a region name "
+            "scopes this single send to that region. Takes precedence over the channel's "
+            "persisted flood_scope_override for this send only."
+        ),
+    )
 
 
 class RepeaterLoginRequest(BaseModel):

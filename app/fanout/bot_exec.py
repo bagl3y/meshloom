@@ -51,6 +51,59 @@ class BotCallPlan:
     keyword_args: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class BotReply:
+    """A structured bot response that may scope its outgoing message(s).
+
+    Produced when a bot returns ``{"region": ..., "message": ...}``. The plain
+    ``str``/``list[str]`` return shapes are unaffected and never produce a BotReply.
+
+    ``flood_scope_override`` carries the per-send region decision for the reply:
+      - ``None``  → no region specified; use the channel's persisted override
+      - ``""``    → region explicitly cleared; send unscoped/plain flood
+      - region    → scope the reply send to that region name
+    """
+
+    messages: list[str]
+    flood_scope_override: str | None = None
+
+
+def _coerce_bot_dict_reply(result: dict) -> "BotReply | None":
+    """Normalize a ``{"region", "message"}`` bot return into a BotReply, or None.
+
+    ``message`` may be a string or a list of strings (empties dropped). A missing
+    ``message`` (or no valid messages) yields None. ``region`` is optional: absent
+    means "use the channel default", ``None`` means "send unscoped", and a string
+    is normalized to the radio's region form.
+    """
+    from app.region_scope import normalize_region_scope
+
+    raw = result.get("message")
+    if isinstance(raw, str):
+        messages = [raw] if raw.strip() else []
+    elif isinstance(raw, list):
+        messages = [m for m in raw if isinstance(m, str) and m.strip()]
+    else:
+        logger.debug("Bot dict response 'message' must be a string or list of strings")
+        return None
+    if not messages:
+        return None
+
+    if "region" in result:
+        region_value = result.get("region")
+        if region_value is None:
+            flood_scope_override: str | None = ""  # explicit: send unscoped
+        elif isinstance(region_value, str):
+            flood_scope_override = normalize_region_scope(region_value)
+        else:
+            logger.debug("Bot dict response 'region' must be a string or None")
+            return None
+    else:
+        flood_scope_override = None  # no region specified: use channel default
+
+    return BotReply(messages=messages, flood_scope_override=flood_scope_override)
+
+
 def _analyze_bot_signature(bot_func_or_sig) -> BotCallPlan:
     """Validate bot() signature and return a supported call plan."""
     try:
@@ -166,7 +219,7 @@ def execute_bot_code(
     path_bytes_per_hop: int | None = None,
     packet_hash: str | None = None,
     region: str | None = None,
-) -> str | list[str] | None:
+) -> str | list[str] | BotReply | None:
     """
     Execute user-provided bot code with message context.
 
@@ -177,8 +230,12 @@ def execute_bot_code(
     `region` is only delivered to bots that opt in via `**kwargs` or by naming
     the parameter (`region`); the positional call styles are unchanged for
     backward compatibility.
-    that returns either None (no response), a string (single response message),
-    or a list of strings (multiple messages sent in order).
+
+    The bot returns either None (no response), a string (single response message),
+    a list of strings (multiple messages sent in order), or a dict
+    `{"region": <name|None>, "message": <str|list[str]>}` to scope the reply to a
+    region for this send only (`None`/empty region = unscoped flood). The dict
+    form only affects channel replies; `region` is ignored for DM replies.
 
     Legacy bot functions with older signatures are detected via inspect and
     called without the newer parameters for backward compatibility.
@@ -315,6 +372,9 @@ def execute_bot_code(
         # Validate result
         if result is None:
             return None
+        if isinstance(result, dict):
+            # Structured reply: {"region": ..., "message": str | list[str]}
+            return _coerce_bot_dict_reply(result)
         if isinstance(result, str):
             return result if result.strip() else None
         if isinstance(result, list):
@@ -331,7 +391,7 @@ def execute_bot_code(
 
 
 async def process_bot_response(
-    response: str | list[str],
+    response: str | list[str] | BotReply,
     is_dm: bool,
     sender_key: str,
     channel_key: str | None,
@@ -346,16 +406,27 @@ async def process_bot_response(
     between sends, giving repeaters time to return to listening mode.
 
     Args:
-        response: The response text to send, or a list of messages to send in order
+        response: The response to send — a string, a list of messages to send in
+            order, or a BotReply carrying a per-send region scope
         is_dm: Whether the original message was a DM
         sender_key: Public key of the original sender (for DM replies)
         channel_key: Channel key for channel message replies
     """
-    # Normalize to list for uniform processing
-    messages = [response] if isinstance(response, str) else response
+    # Normalize to (messages, flood_scope_override) for uniform processing.
+    if isinstance(response, BotReply):
+        messages = response.messages
+        flood_scope_override = response.flood_scope_override
+    elif isinstance(response, str):
+        messages = [response]
+        flood_scope_override = None
+    else:
+        messages = response
+        flood_scope_override = None
 
     for message_text in messages:
-        await _send_single_bot_message(message_text, is_dm, sender_key, channel_key)
+        await _send_single_bot_message(
+            message_text, is_dm, sender_key, channel_key, flood_scope_override
+        )
 
 
 async def _send_single_bot_message(
@@ -363,6 +434,7 @@ async def _send_single_bot_message(
     is_dm: bool,
     sender_key: str,
     channel_key: str | None,
+    flood_scope_override: str | None = None,
 ) -> None:
     """
     Send a single bot message with rate limiting.
@@ -372,6 +444,9 @@ async def _send_single_bot_message(
         is_dm: Whether the original message was a DM
         sender_key: Public key of the original sender (for DM replies)
         channel_key: Channel key for channel message replies
+        flood_scope_override: Per-send region scope for channel replies (None =
+            channel default, "" = unscoped, region name = scope to that region).
+            Ignored for DMs, which are not region-scoped.
     """
     global _last_bot_send_time
 
@@ -391,12 +466,21 @@ async def _send_single_bot_message(
 
         try:
             if is_dm:
+                if flood_scope_override is not None:
+                    logger.debug(
+                        "Ignoring bot region scope %r on DM reply (DMs are not region-scoped)",
+                        flood_scope_override,
+                    )
                 logger.info("Bot sending DM reply to %s", sender_key[:12])
                 request = SendDirectMessageRequest(destination=sender_key, text=message_text)
                 await send_direct_message(request)
             elif channel_key:
                 logger.info("Bot sending channel reply to %s", channel_key[:8])
-                request = SendChannelMessageRequest(channel_key=channel_key, text=message_text)
+                request = SendChannelMessageRequest(
+                    channel_key=channel_key,
+                    text=message_text,
+                    flood_scope_override=flood_scope_override,
+                )
                 await send_channel_message(request)
             else:
                 logger.warning("Cannot send bot response: no destination")

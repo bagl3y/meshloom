@@ -627,6 +627,80 @@ class TestOutgoingChannelBroadcast:
         mc.commands.set_flood_scope.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_send_channel_msg_request_override_beats_channel_override(self, test_db):
+        """A per-send flood_scope_override wins over the channel's persisted override."""
+        mc = _make_mc(name="MyNode")
+        chan_key = "d0" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#flightless")
+        await ChannelRepository.update_flood_scope_override(chan_key, "Esperance")
+        await AppSettingsRepository.update(flood_scope="Baseline")
+
+        with (
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event"),
+        ):
+            request = SendChannelMessageRequest(
+                channel_key=chan_key, text="hello", flood_scope_override="Override"
+            )
+            await send_channel_message(request)
+
+        # Per-send "Override" applied (not the channel's "Esperance"); baseline restored.
+        assert mc.commands.set_flood_scope.await_args_list == [
+            call("#Override"),
+            call("#Baseline"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_send_channel_msg_request_override_scopes_unscoped_channel(self, test_db):
+        """A per-send override scopes a channel that has no persisted override."""
+        mc = _make_mc(name="MyNode")
+        chan_key = "d1" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#plain")
+        await AppSettingsRepository.update(flood_scope="")
+
+        with (
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event"),
+        ):
+            request = SendChannelMessageRequest(
+                channel_key=chan_key, text="hello", flood_scope_override="Region"
+            )
+            await send_channel_message(request)
+
+        # Apply the region, then restore the (empty) baseline.
+        assert mc.commands.set_flood_scope.await_args_list == [
+            call("#Region"),
+            call(""),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_send_channel_msg_explicit_unscoped_override_forces_plain_flood(self, test_db):
+        """An explicit empty override forces unscoped flood even over a scoped baseline."""
+        mc = _make_mc(name="MyNode")
+        chan_key = "d2" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#flightless")
+        await ChannelRepository.update_flood_scope_override(chan_key, "Esperance")
+        await AppSettingsRepository.update(flood_scope="Baseline")
+
+        with (
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event"),
+        ):
+            request = SendChannelMessageRequest(
+                channel_key=chan_key, text="hello", flood_scope_override=""
+            )
+            await send_channel_message(request)
+
+        # Explicit unscoped: set empty scope, then restore the global baseline.
+        assert mc.commands.set_flood_scope.await_args_list == [
+            call(""),
+            call("#Baseline"),
+        ]
+
+    @pytest.mark.asyncio
     async def test_send_channel_msg_aborts_when_override_apply_fails(self, test_db):
         mc = _make_mc(name="MyNode")
         chan_key = "a1" * 16
