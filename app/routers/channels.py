@@ -1,5 +1,4 @@
 import logging
-import re
 from hashlib import sha256
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
@@ -121,9 +120,13 @@ def _normalize_bulk_hashtag_name(name: str) -> str | None:
     normalized = trimmed.lstrip("#").strip()
     if not normalized:
         return None
-    if len(normalized) > 31:
-        return None
-    if not re.fullmatch(r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*", normalized):
+    # Hashtag channel names are hashed verbatim (matching meshcore_py / meshcore-cli /
+    # meshcore.js), so any character is permitted — '&', capitals, accents, etc. all map
+    # to a valid SHA256-derived key. Character normalization (lowercasing / charset
+    # restriction) is a client-side display choice, applied by the caller before submit.
+    # The on-radio name field holds 32 UTF-8 bytes including the leading '#', so cap there
+    # to keep the stored label and the derived key in sync across clients.
+    if len(f"#{normalized}".encode()) > 32:
         return None
     return f"#{normalized}"
 

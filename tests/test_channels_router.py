@@ -83,10 +83,19 @@ class TestCreateChannel:
         ops_key = sha256(b"#ops").digest()[:16].hex().upper()
         await ChannelRepository.upsert(key=ops_key, name="#ops", is_hashtag=True)
 
+        # Names are hashed verbatim, so extended characters (e.g. '&') and underscores are
+        # valid; only empty/whitespace-only or over-long names are rejected server-side.
         response = await client.post(
             "/api/channels/bulk-hashtag",
             json={
-                "channel_names": ["#ops", "mesh-room", "bad_room", "mesh-room", "another-room"],
+                "channel_names": [
+                    "#ops",
+                    "mesh-room",
+                    "cats&dogs",
+                    "mesh-room",
+                    "   ",
+                    "another-room",
+                ],
                 "try_historical": False,
             },
         )
@@ -95,10 +104,11 @@ class TestCreateChannel:
         data = response.json()
         assert [channel["name"] for channel in data["created_channels"]] == [
             "#mesh-room",
+            "#cats&dogs",
             "#another-room",
         ]
         assert data["existing_count"] == 2
-        assert data["invalid_names"] == ["bad_room"]
+        assert data["invalid_names"] == ["   "]
         assert data["decrypt_started"] is False
 
     @pytest.mark.asyncio
