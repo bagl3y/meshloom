@@ -68,7 +68,7 @@ async def run_post_connect_setup(radio_manager) -> None:
                 await sync_radio_time(mc)
 
                 # Apply flood scope from settings (best-effort; older firmware
-                # may not support set_flood_scope)
+                # may not support the relevant flood-scope command)
                 from app.region_scope import normalize_region_scope
                 from app.repository import AppSettingsRepository
                 from app.services.flood_scope import set_radio_flood_scope
@@ -79,7 +79,7 @@ async def run_post_connect_setup(radio_manager) -> None:
                     await set_radio_flood_scope(mc, scope)
                     logger.info("Applied flood_scope=%r", scope or "(disabled)")
                 except Exception as exc:
-                    logger.warning("set_flood_scope failed (firmware may not support it): %s", exc)
+                    logger.warning("Failed to apply configured flood scope to radio: %s", exc)
 
                 # Query path hash mode support (best-effort; older firmware won't report it).
                 # If the library's parsed payload is missing path_hash_mode (e.g. stale
