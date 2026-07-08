@@ -489,6 +489,9 @@ export interface RepeaterRadioSettingsResponse {
   radio: string | null;
   tx_power: string | null;
   airtime_factor: string | null;
+  // Configured duty-cycle limit (e.g. "25.0%"), firmware-derived from airtime_factor.
+  // Only present on firmware >= 1.15; null on older nodes.
+  duty_cycle_limit: string | null;
   repeat_enabled: string | null;
   flood_max: string | null;
 }

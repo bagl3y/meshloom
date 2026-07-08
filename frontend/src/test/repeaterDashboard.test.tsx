@@ -499,6 +499,7 @@ describe('RepeaterDashboard', () => {
       radio: '910.5250244,62.5,7,5',
       tx_power: '20',
       airtime_factor: '0',
+      duty_cycle_limit: '100.0%',
       repeat_enabled: '1',
       flood_max: '3',
     };

@@ -994,12 +994,13 @@ class TestRepeaterRadioSettings:
         mc = _mock_mc()
         await _insert_contact(KEY_A, name="Repeater", contact_type=2)
 
-        # Build responses for all 6 commands
+        # Build responses for all 7 commands
         responses = [
             "v2.1.0",  # ver
             "915.0,250,7,5",  # get radio
             "20",  # get tx
             "0",  # get af
+            "100.0%",  # get dutycycle (af=0 -> 100/(0+1) = 100.0%)
             "1",  # get repeat
             "3",  # get flood.max
         ]
@@ -1023,8 +1024,43 @@ class TestRepeaterRadioSettings:
         assert response.radio == "915.0,250,7,5"
         assert response.tx_power == "20"
         assert response.airtime_factor == "0"
+        assert response.duty_cycle_limit == "100.0%"
         assert response.repeat_enabled == "1"
         assert response.flood_max == "3"
+
+    @pytest.mark.asyncio
+    async def test_dutycycle_unsupported_on_old_firmware(self, test_db):
+        """Pre-1.15 nodes reply with the unknown-config sentinel; treat as None."""
+        mc = _mock_mc()
+        await _insert_contact(KEY_A, name="Repeater", contact_type=2)
+
+        responses = [
+            "v1.14.0",  # ver
+            "915.0,250,7,5",  # get radio
+            "20",  # get tx
+            "3",  # get af
+            "??: dutycycle",  # get dutycycle — unknown-config fallthrough on old fw
+            "1",  # get repeat
+            "3",  # get flood.max
+        ]
+        get_msg_results = [
+            _radio_result(
+                EventType.CONTACT_MSG_RECV,
+                {"pubkey_prefix": KEY_A[:12], "text": text, "txt_type": 1},
+            )
+            for text in responses
+        ]
+        mc.commands.get_msg = AsyncMock(side_effect=get_msg_results)
+
+        with (
+            patch("app.routers.repeaters.radio_manager.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch(_MONOTONIC, side_effect=_advancing_clock()),
+        ):
+            response = await repeater_radio_settings(KEY_A)
+
+        assert response.airtime_factor == "3"
+        assert response.duty_cycle_limit is None
 
     @pytest.mark.asyncio
     async def test_partial_failure(self, test_db):
@@ -1039,9 +1075,10 @@ class TestRepeaterRadioSettings:
         no_msgs = _radio_result(EventType.NO_MORE_MSGS)
         mc.commands.get_msg = AsyncMock(side_effect=[first_response] + [no_msgs] * 50)
 
-        # Provide clock ticks: first command succeeds quickly, others expire
+        # Provide clock ticks: first command succeeds quickly, others expire.
+        # 6 commands follow the initial success (ver), so 6 expiry windows.
         clock_ticks = [0.0, 0.1]  # First fetch succeeds
-        for i in range(5):
+        for i in range(6):
             base = 100.0 * (i + 1)
             clock_ticks.extend([base, base + 5.0, base + 11.0])
 

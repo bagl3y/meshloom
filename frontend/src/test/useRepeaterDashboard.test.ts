@@ -336,6 +336,7 @@ describe('useRepeaterDashboard', () => {
       radio: null,
       tx_power: null,
       airtime_factor: null,
+      duty_cycle_limit: null,
       repeat_enabled: null,
       flood_max: null,
     });

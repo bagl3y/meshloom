@@ -345,10 +345,20 @@ async def repeater_radio_settings(public_key: str) -> RepeaterRadioSettingsRespo
             ("get radio", "radio"),
             ("get tx", "tx_power"),
             ("get af", "airtime_factor"),
+            ("get dutycycle", "duty_cycle_limit"),
             ("get repeat", "repeat_enabled"),
             ("get flood.max", "flood_max"),
         ],
     )
+    # `get dutycycle` only exists on firmware >= 1.15. Older nodes fall through to
+    # the generic unknown-config handler and reply "??: dutycycle" (or an ERROR
+    # string), which extract_response_text passes back verbatim. Drop those so the
+    # field reads as unsupported rather than surfacing the sentinel to the UI.
+    dc = results.get("duty_cycle_limit")
+    if dc is not None:
+        dc = dc.strip()
+        if dc.startswith("??") or dc.lower().startswith("error"):
+            results["duty_cycle_limit"] = None
     return RepeaterRadioSettingsResponse(**results)
 
 

@@ -602,6 +602,15 @@ class RepeaterRadioSettingsResponse(BaseModel):
     radio: str | None = Field(default=None, description="Radio settings (freq,bw,sf,cr)")
     tx_power: str | None = Field(default=None, description="TX power in dBm")
     airtime_factor: str | None = Field(default=None, description="Airtime factor")
+    duty_cycle_limit: str | None = Field(
+        default=None,
+        description=(
+            "Configured duty-cycle limit as a percentage string (e.g. '25.0%'), derived "
+            "by firmware from airtime_factor (100/(af+1)). This is the configured ceiling, "
+            "not the current measured duty cycle. Only available on firmware >= 1.15; None "
+            "on older nodes that don't support 'get dutycycle'."
+        ),
+    )
     repeat_enabled: str | None = Field(default=None, description="Repeat mode enabled")
     flood_max: str | None = Field(default=None, description="Max flood hops")
 
