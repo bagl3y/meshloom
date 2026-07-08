@@ -203,7 +203,13 @@ export function NeighborsPane({
 
   return (
     <RepeaterPane
-      title="Neighbors"
+      title={
+        !data
+          ? 'Neighbors'
+          : data.reported_count != null && data.reported_count !== data.neighbors.length
+            ? `Neighbors (${data.neighbors.length} of ${data.reported_count})`
+            : `Neighbors (${data.reported_count ?? data.neighbors.length})`
+      }
       headerNote={headerNote}
       state={state}
       onRefresh={onRefresh}

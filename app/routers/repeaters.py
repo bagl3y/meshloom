@@ -265,7 +265,8 @@ async def repeater_neighbors(public_key: str) -> RepeaterNeighborsResponse:
                 )
             )
 
-    return RepeaterNeighborsResponse(neighbors=neighbors)
+    reported_count = neighbors_data.get("neighbours_count") if neighbors_data else None
+    return RepeaterNeighborsResponse(neighbors=neighbors, reported_count=reported_count)
 
 
 @router.post("/{public_key}/repeater/acl", response_model=RepeaterAclResponse)

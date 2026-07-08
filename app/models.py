@@ -672,6 +672,14 @@ class RepeaterNeighborsResponse(BaseModel):
     neighbors: list[NeighborInfo] = Field(
         default_factory=list, description="List of neighbors seen by repeater"
     )
+    reported_count: int | None = Field(
+        default=None,
+        description=(
+            "Total neighbor count reported by the repeater firmware, independent of "
+            "how many entries were actually returned. May exceed len(neighbors) when a "
+            "multi-chunk fetch is incomplete (dropped follow-up query / duty-cycle throttle)."
+        ),
+    )
 
 
 class RepeaterAclResponse(BaseModel):

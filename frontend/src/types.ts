@@ -467,6 +467,10 @@ export interface RepeaterStatusResponse {
 
 export interface RepeaterNeighborsResponse {
   neighbors: NeighborInfo[];
+  // Total neighbor count reported by the repeater firmware, independent of how many
+  // entries were actually returned. Exceeds neighbors.length when a multi-chunk fetch
+  // is incomplete. Null on older firmware / failed fetches.
+  reported_count?: number | null;
 }
 
 export interface RepeaterAclResponse {

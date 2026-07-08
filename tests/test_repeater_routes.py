@@ -873,6 +873,35 @@ class TestRepeaterNeighbors:
         assert response.neighbors[0].snr == 9.0
         assert response.neighbors[1].name is None
         assert response.neighbors[1].last_heard_seconds == 120
+        # No firmware-reported total in this payload → reported_count stays None.
+        assert response.reported_count is None
+
+    @pytest.mark.asyncio
+    async def test_reported_count_captured_on_partial_fetch(self, test_db):
+        """Firmware neighbours_count is surfaced even when fewer entries return."""
+        mc = _mock_mc()
+        await _insert_contact(KEY_A, name="Repeater", contact_type=2)
+        # Repeater claims 30 neighbours but only 2 came back this fetch (dropped
+        # multi-chunk follow-up); reported_count must reflect the true total.
+        mc.commands.fetch_all_neighbours = AsyncMock(
+            return_value={
+                "neighbours_count": 30,
+                "results_count": 2,
+                "neighbours": [
+                    {"pubkey": "aaaaaaaaaaaa", "snr": 9.0, "secs_ago": 5},
+                    {"pubkey": "cccccccccccc", "snr": 3.0, "secs_ago": 120},
+                ],
+            }
+        )
+
+        with (
+            patch("app.routers.repeaters.radio_manager.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+        ):
+            response = await repeater_neighbors(KEY_A)
+
+        assert len(response.neighbors) == 2
+        assert response.reported_count == 30
 
     @pytest.mark.asyncio
     async def test_empty_neighbors(self, test_db):
