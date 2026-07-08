@@ -1163,7 +1163,9 @@ export function SettingsRadioSection({
         <p className="text-[0.8125rem] text-muted-foreground">
           Tag outgoing messages with a region name (e.g. MyRegion). Repeaters configured for that
           region can forward the traffic, while repeaters configured to deny other regions may drop
-          it. Leave empty to disable.
+          it. Leave empty to send unscoped (plain flood). Forcing unscoped when a default scope is
+          configured on the radio requires firmware v12 or newer. Individual channels can override
+          this with their own region or an "always unscoped" setting.
         </p>
       </div>
 

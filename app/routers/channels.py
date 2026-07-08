@@ -13,7 +13,7 @@ from app.channel_constants import (
 from app.decoder import parse_packet, try_decrypt_packet_with_channel_key
 from app.models import Channel, ChannelDetail, ChannelMessageCounts, ChannelTopSender
 from app.packet_processor import create_message_from_decrypted
-from app.region_scope import normalize_region_scope
+from app.region_scope import UNSCOPED_OVERRIDE_MARKER, is_unscoped, normalize_region_scope
 from app.repository import ChannelRepository, MessageRepository, RawPacketRepository
 from app.websocket import broadcast_event, broadcast_success
 
@@ -55,7 +55,13 @@ class BulkCreateHashtagChannelsResponse(BaseModel):
 
 class ChannelFloodScopeOverrideRequest(BaseModel):
     flood_scope_override: str = Field(
-        description="Blank clears the override; non-empty values temporarily override flood scope"
+        description=(
+            "Tri-state channel override. Blank clears the override (inherit the global "
+            "scope); '*' forces unscoped/plain flood even when a global region is set; "
+            "any other value scopes the channel to that region. Note the deliberate "
+            "asymmetry vs. the send layer: here blank means 'inherit', so an explicit "
+            "unscoped request must use '*'."
+        )
     )
 
 
@@ -348,7 +354,19 @@ async def set_channel_flood_scope_override(
     if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")
 
-    override = normalize_region_scope(request.flood_scope_override) or None
+    # Tri-state persisted override:
+    #   blank        -> None: clear the override, inherit the global scope
+    #   "*" / "0"    -> canonical unscoped marker: force unscoped even over a global
+    #   region name  -> "#Region": scope this channel
+    # NOTE: at this (channel-override) layer blank means "clear/inherit", so we must
+    # check for blank *before* is_unscoped() (which also treats "" as unscoped).
+    raw_override = (request.flood_scope_override or "").strip()
+    if raw_override == "":
+        override: str | None = None
+    elif is_unscoped(raw_override):
+        override = UNSCOPED_OVERRIDE_MARKER
+    else:
+        override = normalize_region_scope(raw_override)
     updated = await ChannelRepository.update_flood_scope_override(channel.key, override)
     if not updated:
         raise HTTPException(status_code=500, detail="Failed to update flood-scope override")
