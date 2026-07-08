@@ -67,20 +67,6 @@ async def run_post_connect_setup(radio_manager) -> None:
                 # Sync radio clock with system time
                 await sync_radio_time(mc)
 
-                # Apply flood scope from settings (best-effort; older firmware
-                # may not support the relevant flood-scope command)
-                from app.region_scope import normalize_region_scope
-                from app.repository import AppSettingsRepository
-                from app.services.flood_scope import set_radio_flood_scope
-
-                app_settings = await AppSettingsRepository.get()
-                scope = normalize_region_scope(app_settings.flood_scope)
-                try:
-                    await set_radio_flood_scope(mc, scope)
-                    logger.info("Applied flood_scope=%r", scope or "(disabled)")
-                except Exception as exc:
-                    logger.warning("Failed to apply configured flood scope to radio: %s", exc)
-
                 # Query path hash mode support (best-effort; older firmware won't report it).
                 # If the library's parsed payload is missing path_hash_mode (e.g. stale
                 # .pyc on WSL2 Windows mounts), fall back to raw-frame extraction.
@@ -101,6 +87,7 @@ async def run_post_connect_setup(radio_manager) -> None:
                 radio_manager.device_model = None
                 radio_manager.firmware_build = None
                 radio_manager.firmware_version = None
+                radio_manager.firmware_ver_code = None
                 radio_manager.max_channels = 40
                 radio_manager.path_hash_mode = 0
                 radio_manager.path_hash_mode_supported = False
@@ -128,6 +115,7 @@ async def run_post_connect_setup(radio_manager) -> None:
                     payload_reports_device_info = isinstance(fw_ver, int) and fw_ver >= 3
                     if payload_reports_device_info:
                         radio_manager.device_info_loaded = True
+                        radio_manager.firmware_ver_code = fw_ver
 
                     if "path_hash_mode" in payload and isinstance(payload["path_hash_mode"], int):
                         radio_manager.path_hash_mode = payload["path_hash_mode"]
@@ -141,6 +129,7 @@ async def run_post_connect_setup(radio_manager) -> None:
                         fw_ver = raw[1] if len(raw) > 1 else 0
                         if fw_ver >= 3:
                             radio_manager.device_info_loaded = True
+                            radio_manager.firmware_ver_code = fw_ver
                             if radio_manager.max_contacts is None and len(raw) >= 3:
                                 radio_manager.max_contacts = max(1, raw[2] * 2)
                             if len(raw) >= 4 and not isinstance(payload_max_channels, int):
@@ -205,6 +194,22 @@ async def run_post_connect_setup(radio_manager) -> None:
                     logger.debug("Failed to query device info capabilities: %s", exc)
                 finally:
                     reader.handle_rx = _original_handle_rx
+
+                # Apply flood scope from settings (best-effort; older firmware may
+                # not support the mode-1 unscoped command). Done after the device
+                # query so radio_manager.firmware_ver_code is known and the unscoped
+                # path can pick the correct firmware command.
+                from app.region_scope import normalize_region_scope
+                from app.repository import AppSettingsRepository
+                from app.services.flood_scope import set_radio_flood_scope
+
+                app_settings = await AppSettingsRepository.get()
+                scope = normalize_region_scope(app_settings.flood_scope)
+                try:
+                    await set_radio_flood_scope(mc, scope, fw_ver=radio_manager.firmware_ver_code)
+                    logger.info("Applied flood_scope=%r", scope or "(disabled)")
+                except Exception as exc:
+                    logger.warning("Failed to apply configured flood scope to radio: %s", exc)
 
                 from app.config import settings as app_settings_config
 

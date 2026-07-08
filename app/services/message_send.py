@@ -11,7 +11,7 @@ from meshcore import EventType
 
 from app.models import ResendChannelMessageResponse
 from app.radio import RadioOperationBusyError
-from app.region_scope import normalize_region_scope
+from app.region_scope import is_unscoped, normalize_region_scope
 from app.repository import (
     AppSettingsRepository,
     ChannelRepository,
@@ -161,8 +161,20 @@ async def send_channel_message_with_effective_scope(
     back to the channel's persisted override.
     """
     if isinstance(flood_scope_override, _ScopeUnset):
-        desired_scope = normalize_region_scope(channel.flood_scope_override)
-        scope_explicit = False
+        # Fall back to the channel's persisted override, which is tri-state:
+        #   None -> inherit the global scope (leave radio untouched)
+        #   unscoped marker ("*") -> force unscoped even over a scoped global
+        #   region name -> scope this channel
+        channel_override = channel.flood_scope_override
+        if channel_override is None:
+            desired_scope = ""
+            scope_explicit = False
+        elif is_unscoped(channel_override):
+            desired_scope = ""
+            scope_explicit = True
+        else:
+            desired_scope = normalize_region_scope(channel_override)
+            scope_explicit = True
     else:
         desired_scope = normalize_region_scope(flood_scope_override)
         scope_explicit = True
@@ -185,7 +197,9 @@ async def send_channel_message_with_effective_scope(
             desired_scope or "(unscoped)",
             channel.name,
         )
-        override_result = await set_radio_flood_scope(mc, desired_scope)
+        override_result = await set_radio_flood_scope(
+            mc, desired_scope, fw_ver=radio_manager.firmware_ver_code
+        )
         if override_result is not None and override_result.type == EventType.ERROR:
             logger.warning(
                 "Failed to apply flood_scope %r for %s: %s",
@@ -314,7 +328,9 @@ async def send_channel_message_with_effective_scope(
             restored = False
             for attempt in range(3):
                 try:
-                    restore_result = await set_radio_flood_scope(mc, baseline_scope)
+                    restore_result = await set_radio_flood_scope(
+                        mc, baseline_scope, fw_ver=radio_manager.firmware_ver_code
+                    )
                     if restore_result is not None and restore_result.type == EventType.ERROR:
                         logger.warning(
                             "Attempt %d/3: failed to restore flood_scope after sending to %s: %s",

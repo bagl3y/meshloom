@@ -32,6 +32,26 @@ class TestChannelFloodScopeOverride:
         mock_broadcast.assert_called_once()
         assert mock_broadcast.call_args.args[0] == "channel"
 
+    @pytest.mark.asyncio
+    async def test_unscoped_marker_forces_channel_unscoped(self, test_db, client):
+        """'*' persists as the canonical unscoped marker (issue #303), distinct
+        from blank (which clears the override / inherits the global scope)."""
+        key = "DD" * 16
+        await ChannelRepository.upsert(key=key, name="#flightless", is_hashtag=True)
+
+        with patch("app.routers.channels.broadcast_event"):
+            response = await client.post(
+                f"/api/channels/{key}/flood-scope-override",
+                json={"flood_scope_override": "*"},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["flood_scope_override"] == "*"
+
+        channel = await ChannelRepository.get_by_key(key)
+        assert channel is not None
+        assert channel.flood_scope_override == "*"
+
 
 class TestCreateChannel:
     @pytest.mark.asyncio

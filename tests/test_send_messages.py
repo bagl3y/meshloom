@@ -664,6 +664,7 @@ class TestOutgoingChannelBroadcast:
         with (
             patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
+            patch.object(radio_manager, "firmware_ver_code", 13),
             patch("app.routers.messages.broadcast_event"),
         ):
             request = SendChannelMessageRequest(
@@ -689,6 +690,7 @@ class TestOutgoingChannelBroadcast:
         with (
             patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
+            patch.object(radio_manager, "firmware_ver_code", 13),
             patch("app.routers.messages.broadcast_event"),
         ):
             request = SendChannelMessageRequest(
@@ -697,6 +699,33 @@ class TestOutgoingChannelBroadcast:
             await send_channel_message(request)
 
         # Explicit unscoped uses firmware mode 1, then restores the global baseline.
+        assert mc.commands.send.await_args_list == [
+            call(FORCE_UNSCOPED_FRAME, [EventType.OK, EventType.ERROR])
+        ]
+        assert mc.commands.set_flood_scope.await_args_list == [call("#Baseline")]
+
+    @pytest.mark.asyncio
+    async def test_persisted_unscoped_channel_forces_plain_flood_over_scoped_global(self, test_db):
+        """A channel persistently marked unscoped ('*') sends unscoped even when the
+        companion has a global region set — the core of issue #303. No per-send
+        override is supplied, so this exercises the persisted-override path."""
+        mc = _make_mc(name="MyNode")
+        chan_key = "d3" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#plain")
+        await ChannelRepository.update_flood_scope_override(chan_key, "*")
+        await AppSettingsRepository.update(flood_scope="Baseline")
+
+        with (
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch.object(radio_manager, "firmware_ver_code", 13),
+            patch("app.routers.messages.broadcast_event"),
+        ):
+            # No per-send flood_scope_override: fall back to the channel's persisted "*".
+            request = SendChannelMessageRequest(channel_key=chan_key, text="hello")
+            await send_channel_message(request)
+
+        # Force unscoped via mode 1, then restore the global region baseline.
         assert mc.commands.send.await_args_list == [
             call(FORCE_UNSCOPED_FRAME, [EventType.OK, EventType.ERROR])
         ]

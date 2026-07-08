@@ -343,7 +343,12 @@ class Channel(BaseModel):
     on_radio: bool = False
     flood_scope_override: str | None = Field(
         default=None,
-        description="Per-channel outbound flood scope override (null = use global app setting)",
+        description=(
+            "Per-channel outbound flood scope override, tri-state: null = inherit the "
+            "global app setting; '*' (UNSCOPED_OVERRIDE_MARKER) = force unscoped/plain "
+            "flood even over a scoped global; a region name (e.g. '#Esperance') = scope "
+            "this channel."
+        ),
     )
     path_hash_mode_override: int | None = Field(
         default=None,

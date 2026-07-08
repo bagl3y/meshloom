@@ -142,6 +142,7 @@ class TestUpdateSettings:
         mock_rm = AsyncMock()
         mock_rm.is_connected = True
         mock_rm.meshcore = mock_mc
+        mock_rm.firmware_ver_code = 13  # supports mode-1 unscoped
 
         from contextlib import asynccontextmanager
 
@@ -168,6 +169,7 @@ class TestUpdateSettings:
         mock_rm = AsyncMock()
         mock_rm.is_connected = True
         mock_rm.meshcore = mock_mc
+        mock_rm.firmware_ver_code = 13  # supports mode-1 unscoped
 
         from contextlib import asynccontextmanager
 

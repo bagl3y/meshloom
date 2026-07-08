@@ -981,6 +981,11 @@ class TestPostConnectSetupOrdering:
         mock_mc.start_auto_message_fetching = AsyncMock()
         mock_mc.commands.set_flood_scope = AsyncMock()
         mock_mc.commands.send = AsyncMock()
+        # Flood scope is applied after the device query, so report a protocol
+        # version that supports the mode-1 unscoped command (>= 12).
+        device_query = MagicMock()
+        device_query.payload = {"fw ver": 13}
+        mock_mc.commands.send_device_query = AsyncMock(return_value=device_query)
         rm._meshcore = mock_mc
 
         mock_settings = AppSettings(flood_scope="")

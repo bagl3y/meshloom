@@ -1,6 +1,22 @@
 """Helpers for normalizing MeshCore flood-scope / region names."""
 
-_UNSCOPED_SENTINELS = {"", "0", "*"}
+# Canonical persisted marker for "force unscoped/plain flood". Stored verbatim in
+# the per-channel ``flood_scope_override`` column to mean "this channel is unscoped
+# even if a global region is set" — distinct from NULL, which means "inherit global".
+UNSCOPED_OVERRIDE_MARKER = "*"
+
+# All values that denote explicit unscoped/plain flood, matching firmware parity.
+_UNSCOPED_SENTINELS = {"", "0", UNSCOPED_OVERRIDE_MARKER}
+
+
+def is_unscoped(scope: str | None) -> bool:
+    """True if ``scope`` denotes an explicit unscoped/plain-flood request.
+
+    Note: an empty string counts as unscoped here. Callers that need to treat
+    blank as "no opinion / inherit" (e.g. the channel-override API) must check for
+    blank *before* calling this.
+    """
+    return (scope or "").strip() in _UNSCOPED_SENTINELS
 
 
 def normalize_region_scope(scope: str | None) -> str:
