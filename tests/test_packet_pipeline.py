@@ -369,7 +369,10 @@ class TestAdvertisementPipeline:
         short_packet_info.payload = b""
 
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
-            with patch("app.packet_processor.parse_advertisement") as mock_parse:
+            with (
+                patch("app.packet_processor.parse_advertisement") as mock_parse,
+                patch("app.packet_processor.verify_advert_signature", return_value=True),
+            ):
                 mock_parse.return_value = ParsedAdvertisement(
                     public_key=test_pubkey,
                     name="TestNode",
@@ -387,7 +390,10 @@ class TestAdvertisementPipeline:
         long_packet_info.payload = b""
 
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
-            with patch("app.packet_processor.parse_advertisement") as mock_parse:
+            with (
+                patch("app.packet_processor.parse_advertisement") as mock_parse,
+                patch("app.packet_processor.verify_advert_signature", return_value=True),
+            ):
                 mock_parse.return_value = ParsedAdvertisement(
                     public_key=test_pubkey,
                     name="TestNode",
@@ -439,7 +445,10 @@ class TestAdvertisementPipeline:
         skewed_shorter_packet_info.payload = b""
 
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
-            with patch("app.packet_processor.parse_advertisement") as mock_parse:
+            with (
+                patch("app.packet_processor.parse_advertisement") as mock_parse,
+                patch("app.packet_processor.verify_advert_signature", return_value=True),
+            ):
                 mock_parse.return_value = ParsedAdvertisement(
                     public_key=test_pubkey,
                     name="TestNode",
@@ -453,7 +462,10 @@ class TestAdvertisementPipeline:
                 )
 
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
-            with patch("app.packet_processor.parse_advertisement") as mock_parse:
+            with (
+                patch("app.packet_processor.parse_advertisement") as mock_parse,
+                patch("app.packet_processor.verify_advert_signature", return_value=True),
+            ):
                 mock_parse.return_value = ParsedAdvertisement(
                     public_key=test_pubkey,
                     name="TestNode",
@@ -501,7 +513,10 @@ class TestAdvertisementPipeline:
         packet_info.path_hash_size = 1
 
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
-            with patch("app.packet_processor.parse_advertisement") as mock_parse:
+            with (
+                patch("app.packet_processor.parse_advertisement") as mock_parse,
+                patch("app.packet_processor.verify_advert_signature", return_value=True),
+            ):
                 mock_parse.return_value = ParsedAdvertisement(
                     public_key=test_pubkey,
                     name="TestNode",
@@ -552,7 +567,10 @@ class TestAdvertisementPipeline:
         long_packet_info.payload = b""
 
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
-            with patch("app.packet_processor.parse_advertisement") as mock_parse:
+            with (
+                patch("app.packet_processor.parse_advertisement") as mock_parse,
+                patch("app.packet_processor.verify_advert_signature", return_value=True),
+            ):
                 mock_parse.return_value = ParsedAdvertisement(
                     public_key=test_pubkey,
                     name="TestNode",
@@ -571,6 +589,45 @@ class TestAdvertisementPipeline:
             ("aabbccdd", 4),
             ("aa", 1),
         ]
+
+    @pytest.mark.asyncio
+    async def test_advertisement_with_forged_signature_creates_no_contact(
+        self, test_db, captured_broadcasts
+    ):
+        """A corrupted/forged advert must not be ingested as a phantom contact (#315).
+
+        The raw packet is still stored (so the debug feed sees it), but no contact
+        row is created and no `contact` event is broadcast — mirroring firmware,
+        which drops adverts that fail signature verification.
+        """
+        from app.decoder import parse_packet
+        from app.packet_processor import process_raw_packet
+
+        fixture = FIXTURES["advertisement_chat_node"]
+        packet_bytes = bytearray(bytes.fromhex(fixture["raw_packet_hex"]))
+        expected_pubkey = fixture["expected_ws_event"]["data"]["public_key"]
+
+        # Flip a bit inside the public key (payload byte 5) to simulate an
+        # over-the-air corrupted advert. Parsing still succeeds structurally, but
+        # the signature no longer matches the (now-mangled) key.
+        payload_start = len(packet_bytes) - len(parse_packet(bytes(packet_bytes)).payload)
+        packet_bytes[payload_start + 5] ^= 0x01
+
+        broadcasts, mock_broadcast = captured_broadcasts
+
+        with patch("app.packet_processor.broadcast_event", mock_broadcast):
+            result = await process_raw_packet(bytes(packet_bytes), timestamp=1700000000)
+
+        # No contact created — neither under the original key nor the mangled one.
+        assert await ContactRepository.get_by_key_prefix(expected_pubkey[:12]) is None
+        all_contacts = await ContactRepository.get_all()
+        assert all_contacts == []
+
+        # No contact broadcast emitted.
+        assert [b for b in broadcasts if b["type"] == "contact"] == []
+
+        # The raw packet is still stored for the debug feed.
+        assert result["packet_id"] is not None
 
 
 class TestPathPacketPipeline:
@@ -2010,7 +2067,10 @@ class TestProcessRawPacketIntegration:
         raw = b"\x11\x00" + b"\xee" * 30
 
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
-            with patch("app.packet_processor.parse_advertisement", return_value=advert):
+            with (
+                patch("app.packet_processor.parse_advertisement", return_value=advert),
+                patch("app.packet_processor.verify_advert_signature", return_value=True),
+            ):
                 # First arrival: long path
                 with patch("app.packet_processor.parse_packet", return_value=long_path_info):
                     await process_raw_packet(raw, timestamp=5000)

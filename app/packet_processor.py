@@ -27,6 +27,7 @@ from app.decoder import (
     try_decrypt_dm,
     try_decrypt_packet_with_channel_key,
     try_decrypt_path,
+    verify_advert_signature,
 )
 from app.keystore import get_private_key, get_public_key, has_private_key
 from app.models import (
@@ -531,6 +532,20 @@ async def _process_advertisement(
     advert = parse_advertisement(packet_info.payload, raw_packet=raw_bytes)
     if not advert:
         logger.debug("Failed to parse advertisement payload")
+        return
+
+    # Reject adverts whose Ed25519 signature does not verify against the embedded
+    # public key. MeshCore firmware (Mesh.cpp onRecvPacket) drops forged/corrupted
+    # adverts at exactly this check; without it a bit-flipped advert would be
+    # ingested as a phantom contact with a mangled public key (issue #315). The raw
+    # packet is already stored (see process_raw_packet) and still surfaces in the
+    # debug feed — only contact creation/update is gated here, matching firmware.
+    if not verify_advert_signature(packet_info.payload):
+        logger.warning(
+            "Dropping advertisement with invalid signature from %s (packet %s)",
+            advert.public_key[:12],
+            raw_bytes.hex().upper(),
+        )
         return
 
     new_path_len = packet_info.path_length
