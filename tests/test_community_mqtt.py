@@ -24,6 +24,7 @@ from app.fanout.community_mqtt import (
     _get_client_version,
 )
 from app.fanout.mqtt_community import (
+    MqttCommunityModule,
     _config_to_settings,
     _publish_community_packet,
     _render_packet_topic,
@@ -657,6 +658,85 @@ class TestPublishFailureSetsDisconnected:
         assert pub.connected is False
         assert "LetsMesh West" in caplog.text
         assert "if it self-resolves" in caplog.text
+
+
+class TestCommunityModuleKeyUnavailable:
+    """The module should explain a silent 'disconnected' caused by a missing radio key.
+
+    Regression coverage for issue #321: connecting RemoteTerm through a proxy
+    (e.g. Meshmonitor) that doesn't forward the key-export command leaves the
+    keystore empty, so community MQTT is never configured. Previously that
+    showed a bare "Disconnected" with no reason.
+    """
+
+    @staticmethod
+    def _make_module() -> MqttCommunityModule:
+        return MqttCommunityModule("cfg-id", {"iata": "LAX"}, name="LetsMesh")
+
+    def test_reports_reason_when_connected_setup_complete_and_no_key(self):
+        module = self._make_module()
+        with (
+            patch("app.keystore.get_public_key", return_value=None),
+            patch(
+                "app.services.radio_runtime.radio_runtime",
+                SimpleNamespace(is_connected=True, is_setup_complete=True),
+            ),
+        ):
+            reason = module.last_error
+            assert reason is not None
+            assert "key export" in reason
+            assert "ENABLE_PRIVATE_KEY_EXPORT" in reason
+            assert "proxy" in reason
+            # A populated last_error promotes the status to "error" so the
+            # fanout card shows the actionable detail instead of "Disconnected".
+            assert module.status == "error"
+
+    def test_no_reason_when_key_available(self):
+        module = self._make_module()
+        with (
+            patch("app.keystore.get_public_key", return_value=b"x" * 32),
+            patch(
+                "app.services.radio_runtime.radio_runtime",
+                SimpleNamespace(is_connected=True, is_setup_complete=True),
+            ),
+        ):
+            assert module.last_error is None
+
+    def test_no_reason_when_radio_not_connected(self):
+        module = self._make_module()
+        with (
+            patch("app.keystore.get_public_key", return_value=None),
+            patch(
+                "app.services.radio_runtime.radio_runtime",
+                SimpleNamespace(is_connected=False, is_setup_complete=False),
+            ),
+        ):
+            assert module.last_error is None
+
+    def test_no_reason_during_setup_window(self):
+        # Connected but setup still running: the key export may not have happened
+        # yet, so we must not falsely accuse the radio.
+        module = self._make_module()
+        with (
+            patch("app.keystore.get_public_key", return_value=None),
+            patch(
+                "app.services.radio_runtime.radio_runtime",
+                SimpleNamespace(is_connected=True, is_setup_complete=False),
+            ),
+        ):
+            assert module.last_error is None
+
+    def test_real_publisher_error_takes_precedence(self):
+        module = self._make_module()
+        module._publisher._last_error = "broker gone"
+        with (
+            patch("app.keystore.get_public_key", return_value=None),
+            patch(
+                "app.services.radio_runtime.radio_runtime",
+                SimpleNamespace(is_connected=True, is_setup_complete=True),
+            ),
+        ):
+            assert module.last_error == "broker gone"
 
 
 class TestBuildStatusTopic:
