@@ -1,5 +1,5 @@
 # Stage 1: Build frontend
-FROM node:20-slim AS frontend-builder
+FROM node:24-slim AS frontend-builder
 
 ARG COMMIT_HASH=unknown
 
@@ -13,7 +13,7 @@ RUN VITE_COMMIT_HASH=${COMMIT_HASH} npm run build
 
 
 # Stage 2: Python runtime
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 ARG COMMIT_HASH=unknown
 
