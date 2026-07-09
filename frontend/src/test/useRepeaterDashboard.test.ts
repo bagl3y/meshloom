@@ -19,6 +19,7 @@ vi.mock('../api', () => ({
     repeaterAdvertIntervals: vi.fn(),
     repeaterOwnerInfo: vi.fn(),
     repeaterLppTelemetry: vi.fn(),
+    repeaterRegions: vi.fn(),
     sendRepeaterCommand: vi.fn(),
   },
 }));
@@ -351,6 +352,12 @@ describe('useRepeaterDashboard', () => {
       guest_password: null,
     });
     mockApi.repeaterLppTelemetry.mockResolvedValueOnce({ sensors: [] });
+    mockApi.repeaterRegions.mockResolvedValueOnce({
+      regions: [],
+      raw: null,
+      truncated: false,
+      source: 'cli',
+    });
 
     const { result } = renderHook(() => useRepeaterDashboard(repeaterConversation));
 
@@ -366,6 +373,7 @@ describe('useRepeaterDashboard', () => {
     expect(mockApi.repeaterAdvertIntervals).toHaveBeenCalledTimes(1);
     expect(mockApi.repeaterOwnerInfo).toHaveBeenCalledTimes(1);
     expect(mockApi.repeaterLppTelemetry).toHaveBeenCalledTimes(1);
+    expect(mockApi.repeaterRegions).toHaveBeenCalledTimes(1);
   });
 
   it('refreshing neighbors fetches node info first', async () => {

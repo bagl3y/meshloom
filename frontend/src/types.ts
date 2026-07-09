@@ -506,6 +506,21 @@ export interface RepeaterOwnerInfoResponse {
   guest_password: string | null;
 }
 
+export interface RepeaterRegionEntry {
+  name: string;
+  depth: number;
+  flood_allowed: boolean;
+  is_home: boolean;
+}
+
+export interface RepeaterRegionsResponse {
+  regions: RepeaterRegionEntry[];
+  raw: string | null;
+  truncated: boolean;
+  /** 'cli' = full admin hierarchy; 'anon' = guest flood-allowed names only. */
+  source: 'cli' | 'anon' | null;
+}
+
 export interface LppSensor {
   channel: number;
   type_name: string;
@@ -536,7 +551,8 @@ export type PaneName =
   | 'radioSettings'
   | 'advertIntervals'
   | 'ownerInfo'
-  | 'lppTelemetry';
+  | 'lppTelemetry'
+  | 'regions';
 
 export interface PaneState {
   loading: boolean;

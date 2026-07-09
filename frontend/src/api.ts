@@ -33,6 +33,7 @@ import type {
   RepeaterNodeInfoResponse,
   RepeaterOwnerInfoResponse,
   RepeaterRadioSettingsResponse,
+  RepeaterRegionsResponse,
   RepeaterStatusResponse,
   TelemetryHistoryEntry,
   TelemetrySchedule,
@@ -436,6 +437,10 @@ export const api = {
     }),
   repeaterOwnerInfo: (publicKey: string) =>
     fetchJson<RepeaterOwnerInfoResponse>(`/contacts/${publicKey}/repeater/owner-info`, {
+      method: 'POST',
+    }),
+  repeaterRegions: (publicKey: string) =>
+    fetchJson<RepeaterRegionsResponse>(`/contacts/${publicKey}/repeater/regions`, {
       method: 'POST',
     }),
   repeaterLppTelemetry: (publicKey: string) =>

@@ -20,8 +20,8 @@ const mockHook: {
     radioSettings: null,
     advertIntervals: null,
     ownerInfo: null,
-
     lppTelemetry: null,
+    regions: null,
   },
   paneStates: {
     status: { loading: false, attempt: 0, error: null },
@@ -31,8 +31,8 @@ const mockHook: {
     radioSettings: { loading: false, attempt: 0, error: null },
     advertIntervals: { loading: false, attempt: 0, error: null },
     ownerInfo: { loading: false, attempt: 0, error: null },
-
     lppTelemetry: { loading: false, attempt: 0, error: null },
+    regions: { loading: false, attempt: 0, error: null },
   },
   consoleHistory: [],
   consoleLoading: false,
@@ -151,8 +151,8 @@ describe('RepeaterDashboard', () => {
       radioSettings: null,
       advertIntervals: null,
       ownerInfo: null,
-
       lppTelemetry: null,
+      regions: null,
     };
     mockHook.paneStates = {
       status: { loading: false, attempt: 0, error: null },
@@ -162,8 +162,8 @@ describe('RepeaterDashboard', () => {
       radioSettings: { loading: false, attempt: 0, error: null },
       advertIntervals: { loading: false, attempt: 0, error: null },
       ownerInfo: { loading: false, attempt: 0, error: null },
-
       lppTelemetry: { loading: false, attempt: 0, error: null },
+      regions: { loading: false, attempt: 0, error: null },
     };
     mockHook.consoleHistory = [];
     mockHook.consoleLoading = false;

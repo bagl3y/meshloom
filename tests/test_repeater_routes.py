@@ -12,6 +12,8 @@ from app.repository import ContactRepository
 from app.routers.contacts import request_trace
 from app.routers.repeaters import (
     _batch_cli_fetch,
+    _parse_anon_region_names,
+    _parse_region_dump,
     prepare_repeater_connection,
     repeater_acl,
     repeater_advert_intervals,
@@ -21,6 +23,7 @@ from app.routers.repeaters import (
     repeater_node_info,
     repeater_owner_info,
     repeater_radio_settings,
+    repeater_regions,
     repeater_status,
     send_repeater_command,
 )
@@ -102,6 +105,7 @@ def _mock_mc():
     mc.commands.fetch_all_neighbours = AsyncMock()
     mc.commands.req_acl_sync = AsyncMock()
     mc.commands.req_telemetry_sync = AsyncMock()
+    mc.commands.req_regions_sync = AsyncMock(return_value=None)
     mc.commands.send_cmd = AsyncMock(return_value=_radio_result(EventType.OK))
     mc.commands.get_msg = AsyncMock()
     mc.commands.add_contact = AsyncMock(return_value=_radio_result(EventType.OK))
@@ -1388,6 +1392,163 @@ class TestRepeaterOwnerInfo:
 
         assert response.owner_info is None
         assert response.guest_password is None
+
+
+class TestParseRegionDump:
+    def test_parses_indented_hierarchy_with_flags(self):
+        # depth via indentation, ' F' = flood allowed, '^' = home region.
+        dump = "* F\n us^ F\n  ca F\n  ny\n eu\n"
+        entries, truncated = _parse_region_dump(dump)
+        assert [(e.name, e.depth, e.flood_allowed, e.is_home) for e in entries] == [
+            ("*", 0, True, False),
+            ("us", 1, True, True),
+            ("ca", 2, True, False),
+            ("ny", 2, False, False),
+            ("eu", 1, False, False),
+        ]
+        assert truncated is False
+
+    def test_empty_dump_returns_no_entries(self):
+        entries, truncated = _parse_region_dump("")
+        assert entries == []
+        assert truncated is False
+
+    def test_unsupported_firmware_reply_is_not_parsed_as_region(self):
+        # Firmware without region support replies "Unknown command" to `region`.
+        # The space makes it an invalid region name, so it must yield no entries
+        # (letting the endpoint fall back to anon / empty rather than show junk).
+        entries, _ = _parse_region_dump("Unknown command")
+        assert entries == []
+
+    def test_flags_truncation_when_no_trailing_newline(self):
+        # A complete dump ends every line with a newline; a mid-line cut does not.
+        entries, truncated = _parse_region_dump("* F\n us F\n  ca")
+        assert truncated is True
+        assert entries[-1].name == "ca"
+
+    def test_flags_truncation_when_near_buffer_cap(self):
+        dump = "* F\n" + "".join(f" region{i:02d} F\n" for i in range(14))
+        assert len(dump) >= 158
+        _, truncated = _parse_region_dump(dump)
+        assert truncated is True
+
+
+class TestParseAnonRegionNames:
+    def test_parses_comma_separated_flood_allowed_names(self):
+        entries = _parse_anon_region_names("*,us,ca,")
+        assert [(e.name, e.depth, e.flood_allowed, e.is_home) for e in entries] == [
+            ("*", 0, True, False),
+            ("us", 0, True, False),
+            ("ca", 0, True, False),
+        ]
+
+    def test_empty_and_whitespace_yield_no_entries(self):
+        assert _parse_anon_region_names("") == []
+        assert _parse_anon_region_names(",, ,\x00") == []
+
+
+class TestRepeaterRegions:
+    @pytest.mark.asyncio
+    async def test_success_parses_region_tree(self, test_db):
+        mc = _mock_mc()
+        await _insert_contact(KEY_A, name="Repeater", contact_type=2)
+        dump = "* F\n us^ F\n  ca F\n eu\n"
+        mc.commands.get_msg = AsyncMock(
+            side_effect=[
+                _radio_result(
+                    EventType.CONTACT_MSG_RECV,
+                    {"pubkey_prefix": KEY_A[:12], "text": dump, "txt_type": 1},
+                ),
+            ]
+        )
+
+        with (
+            patch("app.routers.repeaters.radio_manager.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch(_MONOTONIC, side_effect=_advancing_clock()),
+            patch("app.routers.server_control.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            response = await repeater_regions(KEY_A)
+
+        assert [(r.name, r.depth, r.flood_allowed, r.is_home) for r in response.regions] == [
+            ("*", 0, True, False),
+            ("us", 1, True, True),
+            ("ca", 2, True, False),
+            ("eu", 1, False, False),
+        ]
+        assert response.raw == dump
+        assert response.truncated is False
+        assert response.source == "cli"
+
+    @pytest.mark.asyncio
+    async def test_guest_falls_back_to_anon_flood_allowed_names(self, test_db):
+        # No CLI reply (guest) -> anon regions request returns flood-allowed names.
+        mc = _mock_mc()
+        await _insert_contact(KEY_A, name="Repeater", contact_type=2)
+        mc.commands.get_msg = AsyncMock(return_value=_radio_result(EventType.NO_MORE_MSGS))
+        mc.commands.req_regions_sync = AsyncMock(return_value="*,us,ca,")
+
+        with (
+            patch("app.routers.repeaters.radio_manager.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch(_MONOTONIC, side_effect=_advancing_clock(step=6.0)),
+            patch("app.routers.server_control.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            response = await repeater_regions(KEY_A)
+
+        assert response.source == "anon"
+        assert [(r.name, r.depth, r.flood_allowed, r.is_home) for r in response.regions] == [
+            ("*", 0, True, False),
+            ("us", 0, True, False),
+            ("ca", 0, True, False),
+        ]
+        mc.commands.req_regions_sync.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_no_response_and_no_anon_returns_empty_regions(self, test_db):
+        mc = _mock_mc()
+        await _insert_contact(KEY_A, name="Repeater", contact_type=2)
+        mc.commands.get_msg = AsyncMock(return_value=_radio_result(EventType.NO_MORE_MSGS))
+        mc.commands.req_regions_sync = AsyncMock(return_value=None)
+
+        with (
+            patch("app.routers.repeaters.radio_manager.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch(_MONOTONIC, side_effect=_advancing_clock(step=6.0)),
+            patch("app.routers.server_control.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            response = await repeater_regions(KEY_A)
+
+        assert response.regions == []
+        assert response.source == "cli"
+        assert response.truncated is False
+
+    @pytest.mark.asyncio
+    async def test_unsupported_firmware_reply_degrades_to_anon(self, test_db):
+        # Old firmware answers `region` with "Unknown command"; the endpoint must
+        # not surface that as a region and should fall back to the anon path.
+        mc = _mock_mc()
+        await _insert_contact(KEY_A, name="Repeater", contact_type=2)
+        mc.commands.get_msg = AsyncMock(
+            side_effect=[
+                _radio_result(
+                    EventType.CONTACT_MSG_RECV,
+                    {"pubkey_prefix": KEY_A[:12], "text": "Unknown command", "txt_type": 1},
+                ),
+            ]
+        )
+        mc.commands.req_regions_sync = AsyncMock(return_value="*,us,")
+
+        with (
+            patch("app.routers.repeaters.radio_manager.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch(_MONOTONIC, side_effect=_advancing_clock()),
+            patch("app.routers.server_control.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            response = await repeater_regions(KEY_A)
+
+        assert response.source == "anon"
+        assert [r.name for r in response.regions] == ["*", "us"]
 
 
 def _make_contact(

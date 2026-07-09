@@ -634,6 +634,35 @@ class RepeaterOwnerInfoResponse(BaseModel):
     guest_password: str | None = Field(default=None, description="Guest password")
 
 
+class RepeaterRegionEntry(BaseModel):
+    """One region from a repeater's region hierarchy dump."""
+
+    name: str = Field(description="Region name ('*' is the wildcard/global root)")
+    depth: int = Field(description="Indentation depth in the hierarchy (0 = root)")
+    flood_allowed: bool = Field(description="True if flood is allowed for this region")
+    is_home: bool = Field(description="True if this is the repeater's home region")
+
+
+class RepeaterRegionsResponse(BaseModel):
+    """Region hierarchy and flood permissions from a repeater.
+
+    Primary source is the admin `region` CLI dump — an indented tree capped at
+    ~160 chars, so large region sets can be truncated (``truncated`` flags this).
+    When the CLI is unavailable (e.g. guest access), ``source`` is ``"anon"`` and
+    ``regions`` is the guest-accessible anon request's flat list of flood-allowed
+    region names only — no hierarchy, no blocked regions, no home marker. See
+    issue #309.
+    """
+
+    regions: list[RepeaterRegionEntry] = Field(default_factory=list)
+    raw: str | None = Field(default=None, description="Raw CLI dump text as received")
+    truncated: bool = Field(default=False, description="True if the dump was likely truncated")
+    source: Literal["cli", "anon"] | None = Field(
+        default=None,
+        description="'cli' = full admin hierarchy; 'anon' = guest flood-allowed names only",
+    )
+
+
 class LppSensor(BaseModel):
     """A single CayenneLPP sensor reading from req_telemetry_sync."""
 
