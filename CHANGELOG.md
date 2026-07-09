@@ -1,3 +1,20 @@
+## [3.16.0] - 2026-07-08
+
+* Feature: Add incoming message region to bot kwargs
+* Feature: Allow bots to send region scoped messages
+* Feature: Show total neighbor count from repeater even if we don't successfully fetch all of them
+* Feature: Add duty cycle setting display to repeaters
+* Feature: Allow for empty-override regions
+* Feature: Use request-scoped subscriptions for console commands (should make repeater comms much more reliable!)
+* Bug: Clear out stale HA states
+* Bug: Fix floating point gnarliness on recharts
+* Bug: Be more forgiving around hashtag channel names
+* Bug: More aggressive packet validity checking
+* Bug: Defer chart render until node info drawer is done flying in
+* Bug: Fix issue in gif rendering with mentions
+* Misc: Suppress notification on expected JWT renewal community MQTT reconnect
+* Misc: Add issue template
+
 ## [3.15.2] - 2026-06-23
 
 * Bugfix: filter out geo from non-geo sensors, and publish gps for device tracking
