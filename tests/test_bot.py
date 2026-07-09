@@ -497,6 +497,109 @@ def bot(sender_name, sender_key, message_text, is_dm, channel_key, channel_name,
         )
         assert result == "ok:Hi"
 
+    def test_kwargs_bot_receives_scoped(self):
+        """Bots using **kwargs receive `scoped` for a region-scoped message (#300)."""
+        code = """
+def bot(sender_name, sender_key, message_text, is_dm, channel_key, channel_name, sender_timestamp, path, **kwargs):
+    return f"scoped={kwargs.get('scoped', 'missing')}"
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Someone",
+            sender_key=None,
+            message_text="Hi",
+            is_dm=False,
+            channel_key="AABBCCDD",
+            channel_name="#general",
+            sender_timestamp=None,
+            path=None,
+            region="EU",
+            scoped=True,
+        )
+        assert result == "scoped=True"
+
+    def test_named_scoped_param_bot_receives_scoped(self):
+        """Bots may opt into `scoped` by naming the parameter (with a default)."""
+        code = """
+def bot(sender_name, sender_key, message_text, is_dm, channel_key, channel_name, sender_timestamp, path, scoped=False):
+    return f"scoped={scoped}"
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Someone",
+            sender_key=None,
+            message_text="Hi",
+            is_dm=False,
+            channel_key="AABBCCDD",
+            channel_name="#general",
+            sender_timestamp=None,
+            path=None,
+            scoped=True,
+        )
+        assert result == "scoped=True"
+
+    def test_scoped_true_region_none_disambiguates_unknown_region(self):
+        """scoped=True with region=None means 'scoped but region unknown' (#300.1)."""
+        code = """
+def bot(**kwargs):
+    return f"scoped={kwargs.get('scoped')},region={kwargs.get('region')}"
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Someone",
+            sender_key=None,
+            message_text="Hi",
+            is_dm=False,
+            channel_key="AABBCCDD",
+            channel_name="#general",
+            sender_timestamp=None,
+            path=None,
+            region=None,
+            scoped=True,
+        )
+        assert result == "scoped=True,region=None"
+
+    def test_scoped_defaults_false_for_unscoped_message(self):
+        """scoped is delivered as False (not absent) for plain/unscoped flood."""
+        code = """
+def bot(**kwargs):
+    return f"scoped={kwargs.get('scoped', 'missing')}"
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Alice",
+            sender_key="abc123",
+            message_text="Hi",
+            is_dm=True,
+            channel_key=None,
+            channel_name=None,
+            sender_timestamp=None,
+            path=None,
+        )
+        assert result == "scoped=False"
+
+    def test_legacy_positional_bot_unaffected_by_scoped(self):
+        """Historical positional bots keep binding unchanged; scoped is never passed positionally."""
+        code = """
+def bot(sender_name, sender_key, message_text, is_dm, channel_key, channel_name, sender_timestamp, path, is_outgoing):
+    return f"ok:{message_text}"
+"""
+        result = execute_bot_code(
+            code=code,
+            sender_name="Alice",
+            sender_key="abc123",
+            message_text="Hi",
+            is_dm=True,
+            channel_key=None,
+            channel_name=None,
+            sender_timestamp=None,
+            path=None,
+            is_outgoing=False,
+            region="EU",
+            scoped=True,
+        )
+        assert result == "ok:Hi"
+
     def test_dict_return_with_region_produces_bot_reply(self):
         """A {"region", "message"} return becomes a BotReply with a normalized scope (#300)."""
         from app.fanout.bot_exec import BotReply

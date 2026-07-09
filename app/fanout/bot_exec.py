@@ -126,7 +126,7 @@ def _analyze_bot_signature(bot_func_or_sig) -> BotCallPlan:
     has_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in param_values)
     explicit_optional_names = tuple(
         name
-        for name in ("is_outgoing", "path_bytes_per_hop", "packet_hash", "region")
+        for name in ("is_outgoing", "path_bytes_per_hop", "packet_hash", "region", "scoped")
         if name in params
     )
     unsupported_required_kwonly = [
@@ -134,7 +134,7 @@ def _analyze_bot_signature(bot_func_or_sig) -> BotCallPlan:
         for p in param_values
         if p.kind == inspect.Parameter.KEYWORD_ONLY
         and p.default is inspect.Parameter.empty
-        and p.name not in {"is_outgoing", "path_bytes_per_hop", "packet_hash", "region"}
+        and p.name not in {"is_outgoing", "path_bytes_per_hop", "packet_hash", "region", "scoped"}
     ]
     if unsupported_required_kwonly:
         raise ValueError(
@@ -164,6 +164,8 @@ def _analyze_bot_signature(bot_func_or_sig) -> BotCallPlan:
         keyword_args["packet_hash"] = ""
     if has_kwargs or "region" in params:
         keyword_args["region"] = None
+    if has_kwargs or "scoped" in params:
+        keyword_args["scoped"] = False
     candidate_specs.append(("keyword", [], keyword_args))
 
     if not has_kwargs and explicit_optional_names:
@@ -176,6 +178,8 @@ def _analyze_bot_signature(bot_func_or_sig) -> BotCallPlan:
             kwargs["packet_hash"] = ""
         if has_kwargs or "region" in params:
             kwargs["region"] = None
+        if has_kwargs or "scoped" in params:
+            kwargs["scoped"] = False
         candidate_specs.append(("mixed_keyword", base_args, kwargs))
 
     if has_varargs or positional_capacity >= 11:
@@ -201,7 +205,7 @@ def _analyze_bot_signature(bot_func_or_sig) -> BotCallPlan:
         "Supported trailing parameters are: path; path + is_outgoing; "
         "path + path_bytes_per_hop; path + is_outgoing + path_bytes_per_hop; "
         "path + is_outgoing + path_bytes_per_hop + packet_hash; "
-        "or use **kwargs for forward compatibility (which also receives region)."
+        "or use **kwargs for forward compatibility (which also receives region and scoped)."
     )
 
 
@@ -219,6 +223,7 @@ def execute_bot_code(
     path_bytes_per_hop: int | None = None,
     packet_hash: str | None = None,
     region: str | None = None,
+    scoped: bool = False,
 ) -> str | list[str] | BotReply | None:
     """
     Execute user-provided bot code with message context.
@@ -227,8 +232,8 @@ def execute_bot_code(
     `bot(sender_name, sender_key, message_text, is_dm, channel_key, channel_name, sender_timestamp, path, is_outgoing, path_bytes_per_hop, packet_hash)`
     or use named parameters / `**kwargs`.
 
-    `region` is only delivered to bots that opt in via `**kwargs` or by naming
-    the parameter (`region`); the positional call styles are unchanged for
+    `region` and `scoped` are only delivered to bots that opt in via `**kwargs`
+    or by naming the parameter; the positional call styles are unchanged for
     backward compatibility.
 
     The bot returns either None (no response), a string (single response message),
@@ -253,8 +258,14 @@ def execute_bot_code(
         is_outgoing: True if this is our own outgoing message
         path_bytes_per_hop: Number of bytes per routing hop (1, 2, or 3), if known
         packet_hash: MeshCore packet hash (first 16 hex chars of SHA256, uppercase), if known
-        region: Resolved region name for a region-scoped channel message, or None
-            for DMs, unscoped flood, or a transport code matching no known region
+        scoped: True if the message carried a regional flood scope, False for
+            plain/unscoped flood. Check this first — it is the meaningful signal.
+            Set for scoped DMs too (flood-direct messages can carry a scope).
+        region: Only meaningful when scoped is True. When scoped is False, region
+            is always None and should be ignored. When scoped is True, region is
+            the decoded region name, or None if the scope matched none of your
+            known_regions (i.e. scoped, but region unrecognized). region is never
+            enough on its own to tell "unscoped" from "unrecognized" — use scoped.
 
     Returns:
         Response string, list of strings, or None.
@@ -356,6 +367,8 @@ def execute_bot_code(
                 keyword_args["packet_hash"] = packet_hash
             if "region" in call_plan.keyword_args:
                 keyword_args["region"] = region
+            if "scoped" in call_plan.keyword_args:
+                keyword_args["scoped"] = scoped
             result = bot_func(**keyword_args)
         else:
             result = bot_func(

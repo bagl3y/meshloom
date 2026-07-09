@@ -89,8 +89,13 @@ const DEFAULT_BOT_CODE = `def bot(**kwargs) -> str | list[str] | None:
             path: Hex-encoded routing path (may be None)
             is_outgoing: True if this is our own outgoing message
             path_bytes_per_hop: Bytes per hop in path (1, 2, or 3) when known
-            region: Resolved region name for a region-scoped channel
-                message (None for DMs, unscoped flood, or no match)
+            scoped: True if the message carried a regional flood scope,
+                False for plain/unscoped flood. Check this first. Set for
+                scoped DMs too.
+            region: Only meaningful when scoped is True (else always None).
+                When scoped, it's the decoded region name, or None if the
+                scope matched none of your known_regions. region alone can't
+                distinguish unscoped from unrecognized — use scoped.
 
     Returns:
         None for no reply, a string for a single reply,
