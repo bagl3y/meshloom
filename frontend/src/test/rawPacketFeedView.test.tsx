@@ -376,6 +376,70 @@ describe('RawPacketFeedView', () => {
     expect(screen.queryByText('Identity not resolvable')).not.toBeInTheDocument();
   });
 
+  describe('hex filter', () => {
+    function makePacket(id: number, data: string): RawPacket {
+      return {
+        id,
+        observation_id: id,
+        timestamp: 1_700_000_000 + id,
+        data,
+        decrypted: false,
+        payload_type: 'Unknown',
+        rssi: null,
+        snr: null,
+        decrypted_info: null,
+      };
+    }
+
+    const HEX_FILTER_LABEL = 'Filter loaded packets by hex substring';
+
+    it('filters the feed to packets whose raw hex contains the query', () => {
+      renderView({ packets: [makePacket(1, 'aa11bb22'), makePacket(2, 'cc33dd44')] });
+
+      expect(screen.getByText('AA11BB22')).toBeInTheDocument();
+      expect(screen.getByText('CC33DD44')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText(HEX_FILTER_LABEL), { target: { value: 'aa11' } });
+
+      expect(screen.getByText('AA11BB22')).toBeInTheDocument();
+      expect(screen.queryByText('CC33DD44')).not.toBeInTheDocument();
+      expect(screen.getByText(/1\s*\/\s*2/)).toBeInTheDocument();
+    });
+
+    it('normalizes 0x prefix, colons, whitespace, and case in the query', () => {
+      renderView({ packets: [makePacket(1, 'aabbcc'), makePacket(2, 'ddeeff')] });
+
+      fireEvent.change(screen.getByLabelText(HEX_FILTER_LABEL), {
+        target: { value: '0xAA:BB CC' },
+      });
+
+      expect(screen.getByText('AABBCC')).toBeInTheDocument();
+      expect(screen.queryByText('DDEEFF')).not.toBeInTheDocument();
+    });
+
+    it('shows a hint and matches nothing for a non-hex query', () => {
+      renderView({ packets: [makePacket(1, 'aabbcc')] });
+
+      fireEvent.change(screen.getByLabelText(HEX_FILTER_LABEL), { target: { value: 'zzz' } });
+
+      expect(screen.getByText('Enter hex only')).toBeInTheDocument();
+      expect(screen.queryByText('AABBCC')).not.toBeInTheDocument();
+      expect(screen.getByText(/No packets received yet/i)).toBeInTheDocument();
+    });
+
+    it('restores the full feed when the filter is cleared', () => {
+      renderView({ packets: [makePacket(1, 'aabbcc'), makePacket(2, 'ddeeff')] });
+
+      fireEvent.change(screen.getByLabelText(HEX_FILTER_LABEL), { target: { value: 'aa' } });
+      expect(screen.queryByText('DDEEFF')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Clear hex filter' }));
+
+      expect(screen.getByText('AABBCC')).toBeInTheDocument();
+      expect(screen.getByText('DDEEFF')).toBeInTheDocument();
+    });
+  });
+
   it('opens a packet detail modal from the raw feed and decrypts channel messages when a key is loaded', () => {
     renderView({
       packets: [

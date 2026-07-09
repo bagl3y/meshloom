@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -67,6 +67,133 @@ function getPacketTypeName(
   } catch {
     return 'Unknown';
   }
+}
+
+/**
+ * Normalize a raw-hex filter query. Lowercases, strips whitespace, `:`
+ * separators, and a leading `0x` so a pasted key prefix like `A1B2C3`,
+ * `a1:b2:c3`, or `0xa1b2` all match. Returns `invalid: true` when non-hex
+ * characters remain after cleaning so the UI can hint instead of silently
+ * showing zero results. Matches against `RawPacket.data` (stored lowercase hex).
+ */
+function normalizeHexQuery(raw: string): { query: string; invalid: boolean } {
+  const cleaned = raw
+    .trim()
+    .toLowerCase()
+    .replace(/^0x/, '')
+    .replace(/[\s:]+/g, '');
+  if (cleaned === '') return { query: '', invalid: false };
+  return { query: cleaned, invalid: !/^[0-9a-f]+$/.test(cleaned) };
+}
+
+interface FeedFilterControlsProps {
+  className?: string;
+  allTypesEnabled: boolean;
+  enabledTypes: Set<string>;
+  onToggleAll: () => void;
+  onToggleType: (type: string) => void;
+  onOnly: (type: string) => void;
+  autoScroll: boolean;
+  onAutoScrollChange: (checked: boolean) => void;
+  hexFilter: string;
+  onHexFilterChange: (value: string) => void;
+  hexInvalid: boolean;
+  matchCount: number;
+  totalCount: number;
+}
+
+/**
+ * The feed filter bar: hex substring filter, payload-type checkboxes, and the
+ * autoscroll toggle. Rendered twice (mobile + desktop) with only the display
+ * classes differing, so the control set lives here to stay in sync. Display is
+ * driven entirely by `className` (no base `flex`) to avoid a Tailwind
+ * `flex`/`hidden` conflict.
+ */
+function FeedFilterControls({
+  className,
+  allTypesEnabled,
+  enabledTypes,
+  onToggleAll,
+  onToggleType,
+  onOnly,
+  autoScroll,
+  onAutoScrollChange,
+  hexFilter,
+  onHexFilterChange,
+  hexInvalid,
+  matchCount,
+  totalCount,
+}: FeedFilterControlsProps) {
+  return (
+    <div className={cn('mt-1.5 flex-wrap items-center gap-x-3 gap-y-1', className)}>
+      <div className="relative">
+        <input
+          type="text"
+          value={hexFilter}
+          onChange={(event) => onHexFilterChange(event.target.value)}
+          placeholder="Filter by hex…"
+          aria-label="Filter loaded packets by hex substring"
+          className="w-44 rounded border border-input bg-background px-2 py-0.5 pr-6 text-xs"
+        />
+        {hexFilter !== '' && (
+          <button
+            type="button"
+            onClick={() => onHexFilterChange('')}
+            aria-label="Clear hex filter"
+            className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      {hexFilter.trim() !== '' &&
+        (hexInvalid ? (
+          <span className="text-[0.6875rem] text-warning">Enter hex only</span>
+        ) : (
+          <span className="text-[0.6875rem] text-muted-foreground tabular-nums">
+            {matchCount.toLocaleString()} / {totalCount.toLocaleString()}
+          </span>
+        ))}
+      <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
+        <input
+          type="checkbox"
+          checked={allTypesEnabled}
+          onChange={onToggleAll}
+          className="rounded"
+        />
+        All
+      </label>
+      {KNOWN_PAYLOAD_TYPES.map((type) => (
+        <span key={type} className="inline-flex items-center gap-1 text-xs">
+          <label className="flex items-center gap-1 text-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enabledTypes.has(type)}
+              onChange={() => onToggleType(type)}
+              className="rounded"
+            />
+            {type}
+          </label>
+          <button
+            type="button"
+            className="text-[0.625rem] text-muted-foreground hover:text-primary transition-colors"
+            onClick={() => onOnly(type)}
+          >
+            (only)
+          </button>
+        </span>
+      ))}
+      <label className="ml-auto flex items-center gap-1 text-xs text-foreground cursor-pointer">
+        <input
+          type="checkbox"
+          checked={autoScroll}
+          onChange={(event) => onAutoScrollChange(event.target.checked)}
+          className="rounded"
+        />
+        Autoscroll
+      </label>
+    </div>
+  );
 }
 
 interface RawPacketFeedViewProps {
@@ -480,6 +607,8 @@ export function RawPacketFeedView({
   const [enabledTypes, setEnabledTypes] = useState<Set<string>>(() => new Set(KNOWN_PAYLOAD_TYPES));
   // Autoscroll defaults on; intentionally not persisted across refreshes.
   const [autoScroll, setAutoScroll] = useState(true);
+  // Raw-hex substring filter over the in-memory feed buffer (session-only).
+  const [hexFilter, setHexFilter] = useState('');
 
   const decoderOptions = useMemo(() => createDecoderOptions(channels), [channels]);
 
@@ -494,12 +623,24 @@ export function RawPacketFeedView({
 
   const allTypesEnabled = enabledTypes.size === KNOWN_PAYLOAD_TYPES.length;
 
+  const { query: hexQuery, invalid: hexInvalid } = useMemo(
+    () => normalizeHexQuery(hexFilter),
+    [hexFilter]
+  );
+
   const filteredPackets = useMemo(() => {
-    if (allTypesEnabled) return packets;
+    // A non-hex query matches nothing; the input surfaces a hint instead.
+    if (hexInvalid) return [];
+    // Fast path: no filters active.
+    if (allTypesEnabled && hexQuery === '') return packets;
     return packetsWithTypes
-      .filter(({ payloadType }) => enabledTypes.has(payloadType))
+      .filter(
+        ({ packet, payloadType }) =>
+          (allTypesEnabled || enabledTypes.has(payloadType)) &&
+          (hexQuery === '' || packet.data.toLowerCase().includes(hexQuery))
+      )
       .map(({ packet }) => packet);
-  }, [packetsWithTypes, enabledTypes, packets, allTypesEnabled]);
+  }, [packetsWithTypes, enabledTypes, packets, allTypesEnabled, hexQuery, hexInvalid]);
 
   const handleToggleAll = () => {
     setEnabledTypes(allTypesEnabled ? new Set() : new Set(KNOWN_PAYLOAD_TYPES));
@@ -610,88 +751,38 @@ export function RawPacketFeedView({
         </p>
 
         {mobileFiltersOpen && (
-          <div className="mt-1.5 md:hidden flex flex-wrap items-center gap-x-3 gap-y-1">
-            <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
-              <input
-                type="checkbox"
-                checked={allTypesEnabled}
-                onChange={handleToggleAll}
-                className="rounded"
-              />
-              All
-            </label>
-            {KNOWN_PAYLOAD_TYPES.map((type) => (
-              <span key={type} className="inline-flex items-center gap-1 text-xs">
-                <label className="flex items-center gap-1 text-foreground cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={enabledTypes.has(type)}
-                    onChange={() => handleToggleType(type)}
-                    className="rounded"
-                  />
-                  {type}
-                </label>
-                <button
-                  type="button"
-                  className="text-[0.625rem] text-muted-foreground hover:text-primary transition-colors"
-                  onClick={() => handleOnly(type)}
-                >
-                  (only)
-                </button>
-              </span>
-            ))}
-            <label className="ml-auto flex items-center gap-1 text-xs text-foreground cursor-pointer">
-              <input
-                type="checkbox"
-                checked={autoScroll}
-                onChange={(e) => setAutoScroll(e.target.checked)}
-                className="rounded"
-              />
-              Autoscroll
-            </label>
-          </div>
+          <FeedFilterControls
+            className="flex md:hidden"
+            allTypesEnabled={allTypesEnabled}
+            enabledTypes={enabledTypes}
+            onToggleAll={handleToggleAll}
+            onToggleType={handleToggleType}
+            onOnly={handleOnly}
+            autoScroll={autoScroll}
+            onAutoScrollChange={setAutoScroll}
+            hexFilter={hexFilter}
+            onHexFilterChange={setHexFilter}
+            hexInvalid={hexInvalid}
+            matchCount={filteredPackets.length}
+            totalCount={packets.length}
+          />
         )}
 
-        <div className="mt-1.5 hidden md:flex flex-wrap items-center gap-x-3 gap-y-1">
-          <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
-            <input
-              type="checkbox"
-              checked={allTypesEnabled}
-              onChange={handleToggleAll}
-              className="rounded"
-            />
-            All
-          </label>
-          {KNOWN_PAYLOAD_TYPES.map((type) => (
-            <span key={type} className="inline-flex items-center gap-1 text-xs">
-              <label className="flex items-center gap-1 text-foreground cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={enabledTypes.has(type)}
-                  onChange={() => handleToggleType(type)}
-                  className="rounded"
-                />
-                {type}
-              </label>
-              <button
-                type="button"
-                className="text-[0.625rem] text-muted-foreground hover:text-primary transition-colors"
-                onClick={() => handleOnly(type)}
-              >
-                (only)
-              </button>
-            </span>
-          ))}
-          <label className="ml-auto flex items-center gap-1 text-xs text-foreground cursor-pointer">
-            <input
-              type="checkbox"
-              checked={autoScroll}
-              onChange={(e) => setAutoScroll(e.target.checked)}
-              className="rounded"
-            />
-            Autoscroll
-          </label>
-        </div>
+        <FeedFilterControls
+          className="hidden md:flex"
+          allTypesEnabled={allTypesEnabled}
+          enabledTypes={enabledTypes}
+          onToggleAll={handleToggleAll}
+          onToggleType={handleToggleType}
+          onOnly={handleOnly}
+          autoScroll={autoScroll}
+          onAutoScrollChange={setAutoScroll}
+          hexFilter={hexFilter}
+          onHexFilterChange={setHexFilter}
+          hexInvalid={hexInvalid}
+          matchCount={filteredPackets.length}
+          totalCount={packets.length}
+        />
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
