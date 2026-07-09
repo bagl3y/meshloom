@@ -408,6 +408,8 @@ async def create_dm_message_from_decrypted(
     realtime: bool = True,
     broadcast_fn: BroadcastFn,
     packet_hash: str | None = None,
+    transport_code: int | None = None,
+    region: str | None = None,
 ) -> int | None:
     """Store and broadcast a decrypted direct message."""
     from app.services.dm_ingest import ingest_decrypted_direct_message
@@ -425,6 +427,8 @@ async def create_dm_message_from_decrypted(
         realtime=realtime,
         broadcast_fn=broadcast_fn,
         packet_hash=packet_hash,
+        transport_code=transport_code,
+        region=region,
     )
     return message.id if message is not None else None
 

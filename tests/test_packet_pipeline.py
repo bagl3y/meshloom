@@ -1398,6 +1398,53 @@ class TestCreateDMMessageFromDecrypted:
         assert broadcast["paths"][0]["path"] == "aabbcc"
         assert broadcast["paths"][0]["received_at"] == 1700000001
 
+    @pytest.mark.asyncio
+    async def test_dm_includes_region_scope_in_broadcast(self, test_db, captured_broadcasts):
+        """A region-scoped (transport-routed) flood DM threads transport_code/region
+        into the stored row and the broadcast, so bots see `scoped`/`region` for DMs
+        (issue #300 DM half) and the UI can badge the scope."""
+        from app.decoder import DecryptedDirectMessage
+        from app.packet_processor import create_dm_message_from_decrypted
+
+        packet_id, _ = await RawPacketRepository.create(b"region_test_dm", 1700000000)
+
+        decrypted = DecryptedDirectMessage(
+            timestamp=1700000000,
+            flags=0,
+            message="Scoped DM",
+            dest_hash="fa",
+            src_hash="a1",
+        )
+
+        broadcasts, mock_broadcast = captured_broadcasts
+
+        with patch("app.packet_processor.broadcast_event", mock_broadcast):
+            msg_id = await create_dm_message_from_decrypted(
+                packet_id=packet_id,
+                decrypted=decrypted,
+                their_public_key=self.A1B2C3_PUB,
+                our_public_key=self.FACE12_PUB,
+                received_at=1700000001,
+                outgoing=False,
+                transport_code=0x1234,
+                region="#Esperance",
+            )
+
+        assert msg_id is not None
+
+        message_broadcasts = [b for b in broadcasts if b["type"] == "message"]
+        assert len(message_broadcasts) == 1
+        broadcast = message_broadcasts[0]["data"]
+        # Bots derive `scoped = transport_code is not None` and read `region`.
+        assert broadcast["transport_code"] == 0x1234
+        assert broadcast["region"] == "#Esperance"
+
+        # Persisted so the scope survives a raw-packet purge, mirroring channel msgs.
+        stored = await MessageRepository.get_by_id(msg_id)
+        assert stored is not None
+        assert stored.transport_code == 0x1234
+        assert stored.region == "#Esperance"
+
 
 class TestDMDecryptionFunction:
     """Test the DM decryption function with real crypto."""

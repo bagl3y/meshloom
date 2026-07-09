@@ -191,30 +191,6 @@ async def send_channel_message_with_effective_scope(
     # (channel-default) path leaves the radio untouched when no override is set.
     apply_scope = desired_scope != baseline_scope and (bool(desired_scope) or scope_explicit)
 
-    if apply_scope:
-        logger.info(
-            "Temporarily applying flood_scope %s for %s",
-            desired_scope or "(unscoped)",
-            channel.name,
-        )
-        override_result = await set_radio_flood_scope(
-            mc, desired_scope, fw_ver=radio_manager.firmware_ver_code
-        )
-        if override_result is not None and override_result.type == EventType.ERROR:
-            logger.warning(
-                "Failed to apply flood_scope %r for %s: %s",
-                desired_scope,
-                channel.name,
-                override_result.payload,
-            )
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"Failed to apply regional override {desired_scope!r} before {action_label}: "
-                    f"{override_result.payload}"
-                ),
-            )
-
     # Path hash mode per-channel override
     override_phm = channel.path_hash_mode_override
     baseline_phm = radio_manager.path_hash_mode
@@ -224,28 +200,59 @@ async def send_channel_message_with_effective_scope(
         and override_phm != baseline_phm
     )
 
-    if apply_phm:
-        logger.info(
-            "Temporarily applying channel path_hash_mode override for %s: %d",
-            channel.name,
-            override_phm,
-        )
-        phm_result = await mc.commands.set_path_hash_mode(override_phm)
-        if phm_result is not None and phm_result.type == EventType.ERROR:
-            logger.warning(
-                "Failed to apply channel path_hash_mode override for %s: %s",
-                channel.name,
-                phm_result.payload,
-            )
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"Failed to apply path hash mode override before {action_label}: "
-                    f"{phm_result.payload}"
-                ),
-            )
-
+    # Apply the temporary overrides and send inside the try so the finally below
+    # always restores the radio's baseline scope/hash-mode -- even when applying an
+    # override raises (e.g. the radio rejects the scope, or the path-hash-mode apply
+    # fails) or the send itself throws. ``apply_scope``/``apply_phm`` are computed
+    # above so the finally can reference them regardless of where we fail, and
+    # restoring to baseline is idempotent, so forcing baseline back after an apply
+    # whose effect on the radio is unknown is safe.
     try:
+        if apply_scope:
+            logger.info(
+                "Temporarily applying flood_scope %s for %s",
+                desired_scope or "(unscoped)",
+                channel.name,
+            )
+            override_result = await set_radio_flood_scope(
+                mc, desired_scope, fw_ver=radio_manager.firmware_ver_code
+            )
+            if override_result is not None and override_result.type == EventType.ERROR:
+                logger.warning(
+                    "Failed to apply flood_scope %r for %s: %s",
+                    desired_scope,
+                    channel.name,
+                    override_result.payload,
+                )
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Failed to apply regional override {desired_scope!r} before {action_label}: "
+                        f"{override_result.payload}"
+                    ),
+                )
+
+        if apply_phm:
+            logger.info(
+                "Temporarily applying channel path_hash_mode override for %s: %d",
+                channel.name,
+                override_phm,
+            )
+            phm_result = await mc.commands.set_path_hash_mode(override_phm)
+            if phm_result is not None and phm_result.type == EventType.ERROR:
+                logger.warning(
+                    "Failed to apply channel path_hash_mode override for %s: %s",
+                    channel.name,
+                    phm_result.payload,
+                )
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Failed to apply path hash mode override before {action_label}: "
+                        f"{phm_result.payload}"
+                    ),
+                )
+
         channel_slot, needs_configure, evicted_channel_key = radio_manager.plan_channel_send_slot(
             channel_key,
             preferred_slot=temp_radio_slot,

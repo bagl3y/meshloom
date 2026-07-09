@@ -1427,6 +1427,50 @@ class TestPathHashModeOverride:
         mc.commands.send_chan_msg.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_send_channel_msg_restores_scope_when_phm_apply_fails(self, test_db):
+        """A flood-scope override that was applied must still be restored when the
+        subsequent path-hash-mode apply fails. Regression: the scope apply and the
+        PHM apply used to sit outside the try/finally, so a PHM error left the radio
+        stuck on the temporary region scope for all later traffic."""
+        mc = _make_mc(name="MyNode")
+        # PHM apply (first call) errors -> raises; PHM restore (second call, in the
+        # finally) succeeds so this test isolates the scope-restore behavior.
+        mc.commands.set_path_hash_mode = AsyncMock(
+            side_effect=[
+                MagicMock(type=EventType.ERROR, payload="unsupported mode"),
+                _make_radio_result(),
+            ]
+        )
+        chan_key = "f6" * 16
+        await ChannelRepository.upsert(key=chan_key, name="#both")
+        await ChannelRepository.update_flood_scope_override(chan_key, "Esperance")
+        await ChannelRepository.update_path_hash_mode_override(chan_key, 2)
+        await AppSettingsRepository.update(flood_scope="Baseline")
+
+        radio_manager.path_hash_mode = 0
+        radio_manager.path_hash_mode_supported = True
+
+        with (
+            patch("app.routers.messages.radio_manager.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.routers.messages.broadcast_event"),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await send_channel_message(
+                SendChannelMessageRequest(channel_key=chan_key, text="hello")
+            )
+
+        assert exc_info.value.status_code == 422
+        assert "path hash mode" in exc_info.value.detail.lower()
+        # The send never happens...
+        mc.commands.send_chan_msg.assert_not_awaited()
+        # ...but the applied region scope is restored to the global baseline.
+        assert mc.commands.set_flood_scope.await_args_list == [
+            call("#Esperance"),
+            call("#Baseline"),
+        ]
+
+    @pytest.mark.asyncio
     async def test_send_channel_msg_phm_restore_failure_broadcasts_error(self, test_db):
         """Message sends OK but restore failure after 3 attempts broadcasts an error."""
         mc = _make_mc(name="MyNode")
