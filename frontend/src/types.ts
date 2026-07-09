@@ -503,6 +503,8 @@ export interface RepeaterAdvertIntervalsResponse {
 
 export interface RepeaterOwnerInfoResponse {
   owner_info: string | null;
+  firmware_version: string | null;
+  name: string | null;
   guest_password: string | null;
 }
 

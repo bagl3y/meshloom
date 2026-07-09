@@ -103,6 +103,9 @@ def _mock_mc():
     mc.commands.req_acl_sync = AsyncMock()
     mc.commands.req_telemetry_sync = AsyncMock()
     mc.commands.send_cmd = AsyncMock(return_value=_radio_result(EventType.OK))
+    mc.commands.send_binary_req = AsyncMock(
+        return_value=_radio_result(EventType.MSG_SENT, {"expected_ack": b"\xaa\xbb\xcc\xdd"})
+    )
     mc.commands.get_msg = AsyncMock()
     mc.commands.add_contact = AsyncMock(return_value=_radio_result(EventType.OK))
     mc.commands.send_trace = AsyncMock(return_value=_radio_result(EventType.OK))
@@ -1338,39 +1341,45 @@ class TestRepeaterAdvertIntervals:
 class TestRepeaterOwnerInfo:
     @pytest.mark.asyncio
     async def test_success(self, test_db):
+        # Owner info + firmware + name come from the guest-accessible binary
+        # request (0x07); the guest password still comes from the admin CLI.
         mc = _mock_mc()
         await _insert_contact(KEY_A, name="Repeater", contact_type=2)
 
-        responses = [
-            _radio_result(
-                EventType.CONTACT_MSG_RECV,
-                {
-                    "pubkey_prefix": KEY_A[:12],
-                    "text": "John Doe - Contact: john@example.com",
-                    "txt_type": 1,
-                },
-            ),
-            _radio_result(
-                EventType.CONTACT_MSG_RECV,
-                {"pubkey_prefix": KEY_A[:12], "text": "guestpw123", "txt_type": 1},
-            ),
-        ]
-        mc.commands.get_msg = AsyncMock(side_effect=responses)
+        owner_payload = "v1.15.0\nRepeater One\nJohn Doe - Contact: john@example.com"
+        mc.wait_for_event = AsyncMock(
+            return_value=_radio_result(
+                EventType.BINARY_RESPONSE, {"tag": "aabbccdd", "data": owner_payload.encode().hex()}
+            )
+        )
+        mc.commands.get_msg = AsyncMock(
+            side_effect=[
+                _radio_result(
+                    EventType.CONTACT_MSG_RECV,
+                    {"pubkey_prefix": KEY_A[:12], "text": "guestpw123", "txt_type": 1},
+                ),
+            ]
+        )
 
         with (
             patch("app.routers.repeaters.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
             patch(_MONOTONIC, side_effect=_advancing_clock()),
+            patch("app.routers.server_control.asyncio.sleep", new_callable=AsyncMock),
         ):
             response = await repeater_owner_info(KEY_A)
 
         assert response.owner_info == "John Doe - Contact: john@example.com"
+        assert response.firmware_version == "v1.15.0"
+        assert response.name == "Repeater One"
         assert response.guest_password == "guestpw123"
 
     @pytest.mark.asyncio
     async def test_timeout_returns_none_fields(self, test_db):
+        # Older firmware / out of range: no binary response and no CLI response.
         mc = _mock_mc()
         await _insert_contact(KEY_A, name="Repeater", contact_type=2)
+        mc.wait_for_event = AsyncMock(return_value=None)
         mc.commands.get_msg = AsyncMock(return_value=_radio_result(EventType.NO_MORE_MSGS))
 
         clock_ticks = []
@@ -1387,7 +1396,74 @@ class TestRepeaterOwnerInfo:
             response = await repeater_owner_info(KEY_A)
 
         assert response.owner_info is None
+        assert response.firmware_version is None
+        assert response.name is None
         assert response.guest_password is None
+
+    @pytest.mark.asyncio
+    async def test_binary_req_sends_owner_info_type_and_no_cli_owner_command(self, test_db):
+        # Regression guard for #306: owner info must NOT go through the admin-only
+        # CLI 'get owner.info'; it must use the binary 0x07 request instead.
+        mc = _mock_mc()
+        await _insert_contact(KEY_A, name="Repeater", contact_type=2)
+        mc.wait_for_event = AsyncMock(
+            return_value=_radio_result(
+                EventType.BINARY_RESPONSE,
+                {"tag": "aabbccdd", "data": b"v1.15.0\nRpt\nowner".hex()},
+            )
+        )
+        mc.commands.get_msg = AsyncMock(return_value=_radio_result(EventType.NO_MORE_MSGS))
+
+        with (
+            patch("app.routers.repeaters.radio_manager.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch(_MONOTONIC, side_effect=_advancing_clock()),
+            patch("app.routers.server_control.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            await repeater_owner_info(KEY_A)
+
+        # Binary request issued with the OWNER_INFO (0x07) request type.
+        assert mc.commands.send_binary_req.await_count == 1
+        req_type_arg = mc.commands.send_binary_req.await_args.args[1]
+        assert req_type_arg.value == 0x07
+        # Only the admin-only guest.password goes over CLI — never 'get owner.info'.
+        cli_cmds = [call.args[1] for call in mc.commands.send_cmd.await_args_list]
+        assert "get guest.password" in cli_cmds
+        assert "get owner.info" not in cli_cmds
+
+
+class TestParseOwnerInfoPayload:
+    def test_parses_firmware_name_owner(self):
+        from app.routers.server_control import _parse_owner_info_payload
+
+        result = _parse_owner_info_payload(b"v1.15.0\nMy Repeater\nJane Doe".hex())
+        assert result == {
+            "firmware_version": "v1.15.0",
+            "name": "My Repeater",
+            "owner_info": "Jane Doe",
+        }
+
+    def test_owner_info_keeps_internal_newlines(self):
+        from app.routers.server_control import _parse_owner_info_payload
+
+        result = _parse_owner_info_payload(b"v1.15.0\nRpt\nline1\nline2".hex())
+        assert result is not None
+        assert result["owner_info"] == "line1\nline2"
+
+    def test_empty_owner_info_is_none(self):
+        from app.routers.server_control import _parse_owner_info_payload
+
+        result = _parse_owner_info_payload(b"v1.15.0\nRpt\n".hex())
+        assert result is not None
+        assert result["firmware_version"] == "v1.15.0"
+        assert result["owner_info"] is None
+
+    def test_empty_and_bad_input_returns_none(self):
+        from app.routers.server_control import _parse_owner_info_payload
+
+        assert _parse_owner_info_payload("") is None
+        assert _parse_owner_info_payload("nothex!!") is None
+        assert _parse_owner_info_payload(b"\x00\x00".hex()) is None
 
 
 def _make_contact(

@@ -28,6 +28,7 @@ from app.repository import ContactRepository, RepeaterTelemetryRepository
 from app.routers.contacts import _ensure_on_radio, _resolve_contact_or_404
 from app.routers.server_control import (
     batch_cli_fetch,
+    fetch_repeater_owner_info_binary,
     prepare_authenticated_contact_connection,
     require_server_capable_contact,
     send_contact_cli_command,
@@ -384,20 +385,32 @@ async def repeater_advert_intervals(public_key: str) -> RepeaterAdvertIntervalsR
 
 @router.post("/{public_key}/repeater/owner-info", response_model=RepeaterOwnerInfoResponse)
 async def repeater_owner_info(public_key: str) -> RepeaterOwnerInfoResponse:
-    """Fetch owner info and guest password from a repeater via CLI commands."""
+    """Fetch owner info, firmware, and guest password from a repeater.
+
+    Owner info + firmware + name come from the guest-accessible binary request
+    (REQ_TYPE_GET_OWNER_INFO / 0x07), which the firmware serves to any logged-in
+    client. The guest password is admin-only and still comes from the CLI, so a
+    guest sees it blank. See issue #306.
+    """
     radio_manager.require_connected()
     contact = await _resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
-    results = await _batch_cli_fetch(
+    owner = await fetch_repeater_owner_info_binary(contact) or {}
+
+    # Guest password is admin-only; still fetched via CLI (guests get None).
+    cli = await _batch_cli_fetch(
         contact,
         "repeater_owner_info",
-        [
-            ("get owner.info", "owner_info"),
-            ("get guest.password", "guest_password"),
-        ],
+        [("get guest.password", "guest_password")],
     )
-    return RepeaterOwnerInfoResponse(**results)
+
+    return RepeaterOwnerInfoResponse(
+        owner_info=owner.get("owner_info"),
+        firmware_version=owner.get("firmware_version"),
+        name=owner.get("name"),
+        guest_password=cli.get("guest_password"),
+    )
 
 
 @router.post("/{public_key}/command", response_model=CommandResponse)
