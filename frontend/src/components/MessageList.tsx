@@ -16,7 +16,12 @@ import {
   formatTime,
   parseSenderFromText,
 } from '../utils/messageParser';
-import { giphyUrlForId, parseGif, parseReaction } from '../utils/meshcoreOpenPayloads';
+import {
+  giphyUrlForId,
+  parseGif,
+  parseReaction,
+  splitReplyMention,
+} from '../utils/meshcoreOpenPayloads';
 import { useRichPayloads } from '../contexts/RichPayloadContext';
 import { formatHopCounts, type SenderInfo } from '../utils/pathUtils';
 import { getDirectContactRoute } from '../utils/pathUtils';
@@ -89,16 +94,45 @@ function ReactionPayload({ emoji }: { emoji: string }) {
   );
 }
 
-// Recognize a whole-message MeshCore Open payload and render it. Returns null
-// when the content is not a recognized payload, so the caller renders normally.
-function renderMeshcoreOpenPayload(content: string): ReactNode | null {
-  const gifId = parseGif(content);
+// Render a bare payload body (no reply prefix) into its rich node, or null.
+function renderPayloadBody(body: string): ReactNode | null {
+  const gifId = parseGif(body);
   if (gifId) {
-    return <GifPayload gifId={gifId} rawText={content} />;
+    return <GifPayload gifId={gifId} rawText={body} />;
   }
-  const reaction = parseReaction(content);
+  const reaction = parseReaction(body);
   if (reaction) {
     return <ReactionPayload emoji={reaction.emoji} />;
+  }
+  return null;
+}
+
+// Recognize a MeshCore Open payload and render it. Handles both a whole-message
+// payload ("g:<id>") and a reply-prefixed one ("@[Name] g:<id>") — the form
+// meshcore-open sends when a GIF/reaction is a reply, which otherwise renders as
+// raw text (issue #291). Returns null when the content is not a recognized
+// payload, so the caller renders normally.
+function renderMeshcoreOpenPayload(
+  content: string,
+  radioName?: string,
+  onChannelReferenceClick?: (channelName: string) => void
+): ReactNode | null {
+  const whole = renderPayloadBody(content);
+  if (whole) return whole;
+
+  const split = splitReplyMention(content);
+  if (split) {
+    const body = renderPayloadBody(split.body);
+    if (body) {
+      // Preserve the reply mention (rendered as a normal @[Name] mention) so the
+      // GIF/reaction still reads as a reply to that person.
+      return (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          {renderTextWithMentions(split.mention, radioName, onChannelReferenceClick)}
+          {body}
+        </span>
+      );
+    }
   }
   return null;
 }
@@ -1079,7 +1113,8 @@ export function MessageList({
                     </div>
                   )}
                   <div className="break-words whitespace-pre-wrap">
-                    {(renderRichPayloads && renderMeshcoreOpenPayload(content)) ||
+                    {(renderRichPayloads &&
+                      renderMeshcoreOpenPayload(content, radioName, onChannelReferenceClick)) ||
                       content.split('\n').map((line, i, arr) => (
                         <span key={i}>
                           {renderTextWithMentions(line, radioName, onChannelReferenceClick)}

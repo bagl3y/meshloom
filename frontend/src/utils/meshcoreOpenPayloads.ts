@@ -111,3 +111,29 @@ export function parseReaction(text: string): ParsedReaction | null {
   }
   return { emoji: REACTION_EMOJIS[index], targetHash: match[1] };
 }
+
+// --- Reply-mention prefix (@[senderName] <payload>) ---
+
+// meshcore-open prefixes replies with "@[senderName] " before the message body
+// (see meshcore-open channels.md / BLE_PROTOCOL.md). Its own display code strips
+// that prefix before parsing rich payloads, so a GIF/reaction reply arrives on
+// the wire as "@[Name] g:<id>". parseGif/parseReaction stay strict (whole-body
+// only); this splits the reply prefix off so the remainder can be parsed.
+const REPLY_MENTION_PREFIX = /^(@\[[^\]]+\])\s+([\s\S]+)$/;
+
+export interface SplitReplyMention {
+  /** The leading "@[Name]" reply-mention token. */
+  mention: string;
+  /** The message remainder after the reply-mention prefix. */
+  body: string;
+}
+
+/**
+ * Split a leading meshcore-open reply mention ("@[Name] ") off the text, or
+ * return null when there is no such prefix.
+ */
+export function splitReplyMention(text: string): SplitReplyMention | null {
+  const match = REPLY_MENTION_PREFIX.exec(text.trim());
+  if (!match) return null;
+  return { mention: match[1], body: match[2] };
+}

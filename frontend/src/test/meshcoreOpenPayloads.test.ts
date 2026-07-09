@@ -10,6 +10,7 @@ import {
   giphyUrlForId,
   parseGif,
   parseReaction,
+  splitReplyMention,
 } from '../utils/meshcoreOpenPayloads';
 
 describe('parseGif', () => {
@@ -77,5 +78,43 @@ describe('parseReaction', () => {
       const hex = i.toString(16).padStart(2, '0');
       expect(parseReaction(`r:0000:${hex}`)?.emoji).toBe(REACTION_EMOJIS[i]);
     }
+  });
+});
+
+describe('splitReplyMention', () => {
+  it('splits a reply-prefixed gif into mention + body (issue #291)', () => {
+    // meshcore-open sends GIF replies as "@[senderName] g:<id>".
+    expect(splitReplyMention('@[Alice] g:abc123')).toEqual({
+      mention: '@[Alice]',
+      body: 'g:abc123',
+    });
+  });
+
+  it('the split body parses as a gif while the whole string does not', () => {
+    const whole = '@[Alice] g:abc123';
+    expect(parseGif(whole)).toBeNull(); // anchored regex rejects the prefix
+    const split = splitReplyMention(whole);
+    expect(split && parseGif(split.body)).toBe('abc123');
+  });
+
+  it('splits a reply-prefixed reaction', () => {
+    expect(splitReplyMention('@[Bob] r:1a2b:00')).toEqual({
+      mention: '@[Bob]',
+      body: 'r:1a2b:00',
+    });
+  });
+
+  it('trims surrounding whitespace and preserves names with spaces', () => {
+    expect(splitReplyMention('  @[Node One]   g:xy  ')).toEqual({
+      mention: '@[Node One]',
+      body: 'g:xy',
+    });
+  });
+
+  it('returns null without a leading reply mention', () => {
+    expect(splitReplyMention('g:abc123')).toBeNull();
+    expect(splitReplyMention('hello world')).toBeNull();
+    expect(splitReplyMention('@[Alice]')).toBeNull(); // mention only, no body
+    expect(splitReplyMention('text @[Alice] g:abc')).toBeNull(); // not a leading mention
   });
 });
