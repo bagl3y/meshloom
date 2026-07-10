@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
@@ -345,6 +346,105 @@ async def batch_cli_fetch(
                 logger.warning("No response for command '%s' (%s)", cmd, field)
 
     return results
+
+
+class _RepeaterBinaryReqType(Enum):
+    """Binary request types not (yet) wrapped by the installed meshcore library.
+
+    ``REQ_TYPE_GET_OWNER_INFO`` (0x07) was added at repeater ``FIRMWARE_VER_LEVEL >= 2``.
+    The firmware serves it from ``handleRequest`` with no admin gate, so any
+    logged-in client — including a guest — can fetch it, unlike the CLI
+    ``get owner.info`` / ``ver`` path which the firmware only routes for admins.
+    """
+
+    OWNER_INFO = 0x07
+
+
+def _parse_owner_info_payload(data_hex: str) -> dict[str, str | None] | None:
+    """Parse a REQ_TYPE_GET_OWNER_INFO (0x07) binary response payload.
+
+    The repeater replies with ``"{firmware}\\n{name}\\n{owner_info}"`` (the 4-byte
+    request tag is already stripped by the library's frame parser, so
+    ``payload["data"]`` starts at the firmware string). ``owner_info`` may itself
+    contain newlines, so only the first two separators are split.
+    """
+    if not data_hex:
+        return None
+    try:
+        raw = bytes.fromhex(data_hex)
+    except ValueError:
+        return None
+    text = raw.decode("utf-8", "ignore").strip("\x00")
+    if not text.strip():
+        return None
+    parts = text.split("\n", 2)
+    firmware = parts[0].strip() if len(parts) > 0 else ""
+    name = parts[1].strip() if len(parts) > 1 else ""
+    owner = parts[2].strip() if len(parts) > 2 else ""
+    return {
+        "firmware_version": firmware or None,
+        "name": name or None,
+        "owner_info": owner or None,
+    }
+
+
+async def fetch_repeater_owner_info_binary(
+    contact: Contact,
+    *,
+    operation_name: str = "repeater_owner_info_binary",
+    timeout: float = 10.0,
+    min_timeout: float = 5.0,
+) -> dict[str, str | None] | None:
+    """Fetch firmware/name/owner via the guest-accessible binary request (0x07).
+
+    This is the path Liam and other apps use to show owner info + firmware for a
+    guest: a binary ``REQ_TYPE_GET_OWNER_INFO`` request rather than an admin-only
+    CLI command. Returns ``None`` when the repeater does not answer — older
+    firmware (level < 2), not logged in, or out of range — so callers can fall
+    back or leave the fields blank. See issue #306.
+    """
+    async with radio_manager.radio_operation(
+        operation_name, pause_polling=True, suspend_auto_fetch=True
+    ) as mc:
+        # Ensure contact is on radio for reply routing.
+        await _ensure_on_radio(mc, contact)
+        await asyncio.sleep(1.0)  # settle after add_contact
+
+        send_result = await mc.commands.send_binary_req(
+            contact.public_key,
+            _RepeaterBinaryReqType.OWNER_INFO,
+            timeout=timeout,
+            min_timeout=min_timeout,
+        )
+        if send_result.type == EventType.ERROR:
+            logger.debug("owner-info binary req send error: %s", send_result.payload)
+            return None
+
+        expected_ack = send_result.payload.get("expected_ack")
+        if expected_ack is None:
+            logger.debug("owner-info binary req missing expected_ack: %s", send_result.payload)
+            return None
+        exp_tag = expected_ack.hex()
+
+        wait_timeout = (
+            timeout if timeout > 0 else send_result.payload.get("suggested_timeout", 4000) / 800
+        )
+        wait_timeout = max(wait_timeout, min_timeout)
+
+        response = await mc.wait_for_event(
+            EventType.BINARY_RESPONSE,
+            attribute_filters={"tag": exp_tag},
+            timeout=wait_timeout,
+        )
+        if response is None:
+            logger.info(
+                "No owner-info binary response from %s within %.1fs",
+                contact.public_key[:12],
+                wait_timeout,
+            )
+            return None
+
+    return _parse_owner_info_payload(response.payload.get("data", ""))
 
 
 async def send_contact_cli_command(

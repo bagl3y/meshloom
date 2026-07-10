@@ -349,6 +349,8 @@ describe('useRepeaterDashboard', () => {
     });
     mockApi.repeaterOwnerInfo.mockResolvedValueOnce({
       owner_info: null,
+      firmware_version: null,
+      name: null,
       guest_password: null,
     });
     mockApi.repeaterLppTelemetry.mockResolvedValueOnce({ sensors: [] });

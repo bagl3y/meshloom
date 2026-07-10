@@ -628,10 +628,22 @@ class RepeaterAdvertIntervalsResponse(BaseModel):
 
 
 class RepeaterOwnerInfoResponse(BaseModel):
-    """Owner info and guest password from a repeater."""
+    """Owner info, firmware, and guest password from a repeater.
+
+    ``owner_info``, ``firmware_version``, and ``name`` come from the
+    guest-accessible binary owner-info request (REQ_TYPE_GET_OWNER_INFO / 0x07).
+    ``guest_password`` is admin-only and still comes from the CLI, so guests see
+    ``None`` for it.
+    """
 
     owner_info: str | None = Field(default=None, description="Owner info string")
-    guest_password: str | None = Field(default=None, description="Guest password")
+    firmware_version: str | None = Field(
+        default=None, description="Firmware version string (from binary owner-info request)"
+    )
+    name: str | None = Field(
+        default=None, description="Repeater name (from binary owner-info request)"
+    )
+    guest_password: str | None = Field(default=None, description="Guest password (admin only)")
 
 
 class RepeaterRegionEntry(BaseModel):
