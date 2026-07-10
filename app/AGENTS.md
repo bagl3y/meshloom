@@ -210,6 +210,7 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 - `PUT /radio/private-key`
 - `POST /radio/advertise` — manual advert send; request body may set `mode` to `flood` or `zero_hop` (defaults to `flood`)
 - `POST /radio/discover` — short mesh discovery sweep for nearby repeaters/sensors
+- `POST /radio/discover-regions` — sweep nearby repeaters via the guest anon regions request; aggregates flood-allowed region names into a deduped union for merging into `known_regions` (direct-routed, so only in-range repeaters answer; optional `public_keys`, else recent repeaters)
 - `POST /radio/trace` — send a multi-hop trace loop through known repeaters and back to the local radio
 - `POST /radio/disconnect`
 - `POST /radio/reboot`

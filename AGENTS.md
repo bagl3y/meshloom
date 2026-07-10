@@ -325,6 +325,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | PUT | `/api/radio/private-key` | Import private key to radio |
 | POST | `/api/radio/advertise` | Send advertisement (`mode`: `flood` or `zero_hop`, default `flood`) |
 | POST | `/api/radio/discover` | Run a short mesh discovery sweep for nearby repeaters/sensors |
+| POST | `/api/radio/discover-regions` | Sweep nearby repeaters (anon regions request) for flood-allowed region names to merge into `known_regions` |
 | POST | `/api/radio/trace` | Send a multi-hop trace loop through known repeaters and back to the local radio |
 | POST | `/api/radio/reboot` | Reboot radio or reconnect if disconnected |
 | POST | `/api/radio/disconnect` | Disconnect from radio and pause automatic reconnect attempts |

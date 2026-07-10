@@ -159,6 +159,9 @@ export function App() {
     meshDiscovery,
     meshDiscoveryLoadingTarget,
     handleDiscoverMesh,
+    regionDiscovery,
+    regionDiscoveryLoading,
+    handleDiscoverRegions,
     handleHealthRefresh,
   } = useRadioControl();
 
@@ -707,6 +710,9 @@ export function App() {
     meshDiscovery,
     meshDiscoveryLoadingTarget,
     onDiscoverMesh: handleDiscoverMesh,
+    regionDiscovery,
+    regionDiscoveryLoading,
+    onDiscoverRegions: handleDiscoverRegions,
     onHealthRefresh: handleHealthRefresh,
     onRefreshAppSettings: fetchAppSettings,
     blockedKeys: appSettings?.blocked_keys,

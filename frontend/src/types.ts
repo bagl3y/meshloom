@@ -54,6 +54,21 @@ export interface RadioDiscoveryResponse {
   results: RadioDiscoveryResult[];
 }
 
+export interface RadioRegionDiscoveryRepeater {
+  public_key: string;
+  name: string | null;
+  answered: boolean;
+  regions: string[];
+}
+
+export interface RadioRegionDiscoveryResponse {
+  repeaters_queried: number;
+  repeaters_answered: number;
+  /** Deduplicated union of flood-allowed region names across all repeaters. */
+  regions: string[];
+  results: RadioRegionDiscoveryRepeater[];
+}
+
 export type RadioAdvertMode = 'flood' | 'zero_hop';
 
 export interface FanoutStatusEntry {

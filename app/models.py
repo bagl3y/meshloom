@@ -894,6 +894,60 @@ class RadioDiscoveryResponse(BaseModel):
     )
 
 
+class RadioRegionDiscoveryRequest(BaseModel):
+    """Request to sweep nearby repeaters for their flood-allowed region names.
+
+    Uses the guest-accessible anon regions request (direct-routed, so only
+    repeaters in range answer). When ``public_keys`` is omitted, the sweep
+    targets the most recently seen repeater contacts.
+    """
+
+    public_keys: list[str] | None = Field(
+        default=None,
+        description="Specific repeater public keys to query; None = most recent repeater contacts",
+    )
+    max_repeaters: int = Field(
+        default=8,
+        ge=1,
+        le=40,
+        description="Maximum number of repeaters to query in one sweep",
+    )
+
+
+class RadioRegionDiscoveryRepeater(BaseModel):
+    """One repeater's result from a region discovery sweep."""
+
+    public_key: str = Field(description="Repeater public key")
+    name: str | None = Field(default=None, description="Known contact name, if any")
+    answered: bool = Field(description="True if the repeater answered the anon regions request")
+    regions: list[str] = Field(
+        default_factory=list,
+        description="Flood-allowed region names reported by this repeater (wildcard excluded)",
+    )
+
+
+class RadioRegionDiscoveryResponse(BaseModel):
+    """Aggregated result of a region discovery sweep across nearby repeaters.
+
+    ``regions`` is the deduplicated union of every repeater's flood-allowed
+    region names — the list an operator can merge into ``known_regions``. The
+    anon request only reports flood-allowed names, so blocked regions and the
+    hierarchy are not visible here (use the per-repeater admin regions pane for
+    the full picture). See issue #309.
+    """
+
+    repeaters_queried: int = Field(description="How many repeaters were contacted")
+    repeaters_answered: int = Field(description="How many repeaters answered the request")
+    regions: list[str] = Field(
+        default_factory=list,
+        description="Deduplicated union of flood-allowed region names across all repeaters",
+    )
+    results: list[RadioRegionDiscoveryRepeater] = Field(
+        default_factory=list,
+        description="Per-repeater region results",
+    )
+
+
 class UnreadCounts(BaseModel):
     """Aggregated unread counts, mention flags, and last message times for all conversations."""
 

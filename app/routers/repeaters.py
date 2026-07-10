@@ -493,6 +493,28 @@ def _parse_anon_region_names(names: str) -> list[RepeaterRegionEntry]:
     return entries
 
 
+async def request_anon_region_names(mc, contact: Contact) -> list[str] | None:
+    """Send the guest anon regions request over an already-open radio session.
+
+    Ensures the contact is on the radio, settles, then requests its
+    flood-allowed region names. Returns the parsed names (wildcard ``*``
+    included), or ``None`` if the repeater did not answer (older firmware, out
+    of range, add failure). The caller must already hold ``radio_operation``.
+    This is the shared per-repeater primitive behind both the single-repeater
+    guest fallback and the radio-wide region discovery sweep.
+    """
+    try:
+        await _ensure_on_radio(mc, contact)
+        await asyncio.sleep(1.0)  # settle after add_contact
+        names = await mc.commands.req_regions_sync(contact.public_key, timeout=10, min_timeout=5)
+    except Exception as exc:
+        logger.debug("anon regions request failed for %s: %s", contact.public_key[:12], exc)
+        return None
+    if not names:
+        return None
+    return [entry.name for entry in _parse_anon_region_names(names)]
+
+
 async def _fetch_anon_flood_allowed_regions(contact: Contact) -> list[RepeaterRegionEntry] | None:
     """Guest-accessible fallback: fetch flood-allowed region names via anon request.
 
@@ -502,19 +524,13 @@ async def _fetch_anon_flood_allowed_regions(contact: Contact) -> list[RepeaterRe
     async with radio_manager.radio_operation(
         "repeater_regions_anon", pause_polling=True, suspend_auto_fetch=True
     ) as mc:
-        await _ensure_on_radio(mc, contact)
-        await asyncio.sleep(1.0)  # settle after add_contact
-        try:
-            names = await mc.commands.req_regions_sync(
-                contact.public_key, timeout=10, min_timeout=5
-            )
-        except Exception as exc:
-            logger.debug("anon regions request failed for %s: %s", contact.public_key[:12], exc)
-            return None
+        names = await request_anon_region_names(mc, contact)
 
-    if not names:
+    if names is None:
         return None
-    return _parse_anon_region_names(names)
+    return [
+        RepeaterRegionEntry(name=name, depth=0, flood_allowed=True, is_home=False) for name in names
+    ]
 
 
 @router.post("/{public_key}/repeater/regions", response_model=RepeaterRegionsResponse)
