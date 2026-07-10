@@ -1,3 +1,7 @@
+## [3.16.2] - 2026-07-10
+
+* Feature: Zero hop repeater region discover
+
 ## [3.16.1] - 2026-07-10
 
 * Feature: Try using direct admin-binary fetch for repeater owner
