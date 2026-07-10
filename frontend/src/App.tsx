@@ -22,6 +22,7 @@ import { toast } from './components/ui/sonner';
 import { AppShell } from './components/AppShell';
 import type { MessageInputHandle } from './components/MessageInput';
 import { DistanceUnitProvider } from './contexts/DistanceUnitContext';
+import { PathHopWidthProvider } from './contexts/PathHopWidthContext';
 import { RichPayloadProvider } from './contexts/RichPayloadContext';
 import { usePush } from './contexts/PushSubscriptionContext';
 import { messageContainsMention } from './utils/messageParser';
@@ -119,12 +120,14 @@ export function App() {
     localLabel,
     distanceUnit,
     renderRichPayloads,
+    showPathHopWidth,
     setSettingsSection,
     setSidebarOpen,
     setCrackerRunning,
     setLocalLabel,
     setDistanceUnit,
     setRenderRichPayloads,
+    setShowPathHopWidth,
     handleCloseSettingsView,
     handleToggleSettingsView,
     handleOpenNewMessage: openNewMessageModal,
@@ -807,34 +810,39 @@ export function App() {
         renderRichPayloads={renderRichPayloads}
         setRenderRichPayloads={setRenderRichPayloads}
       >
-        <AppShell
-          localLabel={localLabel}
-          showNewMessage={showNewMessage}
-          showBulkAddResults={bulkAddResult !== null}
-          showSettings={showSettings}
-          settingsSection={settingsSection}
-          sidebarOpen={sidebarOpen}
-          showCracker={showCracker}
-          onSettingsSectionChange={setSettingsSection}
-          onSidebarOpenChange={setSidebarOpen}
-          onCrackerRunningChange={setCrackerRunning}
-          onToggleSettingsView={handleToggleSettingsView}
-          onCloseSettingsView={handleCloseSettingsView}
-          onCloseNewMessage={handleCloseNewMessage}
-          onCloseBulkAddResults={handleCloseBulkAddResults}
-          onLocalLabelChange={setLocalLabel}
-          statusProps={statusProps}
-          sidebarProps={sidebarProps}
-          conversationPaneProps={conversationPaneProps}
-          searchProps={searchProps}
-          settingsProps={settingsProps}
-          crackerProps={crackerProps}
-          newMessageModalProps={newMessageModalProps}
-          bulkAddChannelResultModalProps={bulkAddChannelResultModalProps}
-          contactInfoPaneProps={contactInfoPaneProps}
-          channelInfoPaneProps={channelInfoPaneProps}
-          onRepeaterAutoLogin={handleRepeaterAutoLogin}
-        />
+        <PathHopWidthProvider
+          showPathHopWidth={showPathHopWidth}
+          setShowPathHopWidth={setShowPathHopWidth}
+        >
+          <AppShell
+            localLabel={localLabel}
+            showNewMessage={showNewMessage}
+            showBulkAddResults={bulkAddResult !== null}
+            showSettings={showSettings}
+            settingsSection={settingsSection}
+            sidebarOpen={sidebarOpen}
+            showCracker={showCracker}
+            onSettingsSectionChange={setSettingsSection}
+            onSidebarOpenChange={setSidebarOpen}
+            onCrackerRunningChange={setCrackerRunning}
+            onToggleSettingsView={handleToggleSettingsView}
+            onCloseSettingsView={handleCloseSettingsView}
+            onCloseNewMessage={handleCloseNewMessage}
+            onCloseBulkAddResults={handleCloseBulkAddResults}
+            onLocalLabelChange={setLocalLabel}
+            statusProps={statusProps}
+            sidebarProps={sidebarProps}
+            conversationPaneProps={conversationPaneProps}
+            searchProps={searchProps}
+            settingsProps={settingsProps}
+            crackerProps={crackerProps}
+            newMessageModalProps={newMessageModalProps}
+            bulkAddChannelResultModalProps={bulkAddChannelResultModalProps}
+            contactInfoPaneProps={contactInfoPaneProps}
+            channelInfoPaneProps={channelInfoPaneProps}
+            onRepeaterAutoLogin={handleRepeaterAutoLogin}
+          />
+        </PathHopWidthProvider>
       </RichPayloadProvider>
     </DistanceUnitProvider>
   );

@@ -22,6 +22,7 @@ import {
 } from '../utils/lastViewedConversation';
 import { api } from '../api';
 import { DISTANCE_UNIT_KEY } from '../utils/distanceUnits';
+import { SHOW_PATH_HOP_WIDTH_KEY } from '../utils/pathHopWidthPreference';
 import {
   DEFAULT_FONT_SCALE,
   FONT_SCALE_KEY,
@@ -654,6 +655,19 @@ describe('SettingsModal', () => {
 
     expect(localStorage.getItem(REOPEN_LAST_CONVERSATION_KEY)).toBeNull();
     expect(localStorage.getItem(LAST_VIEWED_CONVERSATION_KEY)).toBeNull();
+  });
+
+  it('defaults the path-hop-width toggle to off and persists enabling it', () => {
+    renderModal();
+    openLocalSection();
+
+    const checkbox = screen.getByLabelText('Show Path Hop Width');
+    expect(checkbox).not.toBeChecked();
+    expect(localStorage.getItem(SHOW_PATH_HOP_WIDTH_KEY)).toBeNull();
+
+    fireEvent.click(checkbox);
+
+    expect(localStorage.getItem(SHOW_PATH_HOP_WIDTH_KEY)).toBe('true');
   });
 
   it('defaults distance units to metric and stores local changes', () => {

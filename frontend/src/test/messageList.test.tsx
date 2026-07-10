@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageList } from '../components/MessageList';
+import { PathHopWidthProvider } from '../contexts/PathHopWidthContext';
 import { CONTACT_TYPE_ROOM, type Contact, type Message } from '../types';
 
 const scrollIntoViewMock = vi.fn();
@@ -85,6 +86,66 @@ describe('MessageList channel sender rendering', () => {
     );
 
     expect(screen.queryByText('nl-gr')).not.toBeInTheDocument();
+  });
+
+  it('shows per-hop byte width in the path badge when the toggle is on', () => {
+    render(
+      <PathHopWidthProvider showPathHopWidth setShowPathHopWidth={() => {}}>
+        <MessageList
+          messages={[
+            createMessage({
+              sender_name: 'Alice',
+              // 8 hex chars over 2 hops = 2 bytes/hop.
+              paths: [{ path: 'AABBCCDD', path_len: 2, received_at: 1700000001 }],
+            }),
+          ]}
+          contacts={[]}
+          loading={false}
+        />
+      </PathHopWidthProvider>
+    );
+
+    expect(screen.getByText('(2 · 2B)')).toBeInTheDocument();
+    expect(screen.getByTitle('View message path (2B per hop)')).toBeInTheDocument();
+  });
+
+  it('hides the width by default (toggle off) and shows only the hop count', () => {
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            sender_name: 'Alice',
+            paths: [{ path: 'AABBCCDD', path_len: 2, received_at: 1700000001 }],
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+      />
+    );
+
+    expect(screen.getByText('(2)')).toBeInTheDocument();
+    expect(screen.queryByText('(2 · 2B)')).not.toBeInTheDocument();
+    expect(screen.getByTitle('View message path')).toBeInTheDocument();
+  });
+
+  it('omits the width for direct (0-hop) paths even when the toggle is on', () => {
+    render(
+      <PathHopWidthProvider showPathHopWidth setShowPathHopWidth={() => {}}>
+        <MessageList
+          messages={[
+            createMessage({
+              sender_name: 'Alice',
+              paths: [{ path: '', path_len: 0, received_at: 1700000001 }],
+            }),
+          ]}
+          contacts={[]}
+          loading={false}
+        />
+      </PathHopWidthProvider>
+    );
+
+    expect(screen.getByText('(d)')).toBeInTheDocument();
+    expect(screen.getByTitle('View message path')).toBeInTheDocument();
   });
 
   it('prefers stored sender_name for channel messages even when text is not sender-prefixed', () => {

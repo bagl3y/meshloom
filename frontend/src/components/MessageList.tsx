@@ -23,7 +23,8 @@ import {
   splitReplyMention,
 } from '../utils/meshcoreOpenPayloads';
 import { useRichPayloads } from '../contexts/RichPayloadContext';
-import { formatHopCounts, type SenderInfo } from '../utils/pathUtils';
+import { usePathHopWidth } from '../contexts/PathHopWidthContext';
+import { formatHopCounts, formatPathHopWidths, type SenderInfo } from '../utils/pathUtils';
 import { getDirectContactRoute } from '../utils/pathUtils';
 import { ContactAvatar } from './ContactAvatar';
 import { PathModal } from './PathModal';
@@ -302,8 +303,10 @@ interface HopCountBadgeProps {
 }
 
 function HopCountBadge({ paths, onClick, variant }: HopCountBadgeProps) {
+  const { showPathHopWidth } = usePathHopWidth();
   const hopInfo = formatHopCounts(paths);
-  const label = `(${hopInfo.display})`;
+  const widthLabel = showPathHopWidth ? formatPathHopWidths(paths) : null;
+  const label = widthLabel ? `(${hopInfo.display} · ${widthLabel})` : `(${hopInfo.display})`;
 
   const className =
     variant === 'header'
@@ -320,8 +323,8 @@ function HopCountBadge({ paths, onClick, variant }: HopCountBadgeProps) {
         e.stopPropagation();
         onClick();
       }}
-      title="View message path"
-      aria-label={`${hopInfo.display}, view path`}
+      title={widthLabel ? `View message path (${widthLabel} per hop)` : 'View message path'}
+      aria-label={`${hopInfo.display}${widthLabel ? `, ${widthLabel} per hop` : ''}, view path`}
     >
       {label}
     </span>
