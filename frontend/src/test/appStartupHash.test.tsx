@@ -150,31 +150,28 @@ const publicChannel = {
   favorite: false,
 };
 
-// App startup fans out several async fetches (config, settings, channels,
-// contacts, unreads) that must all settle before conversation selection
-// renders. This suite passes in isolation, but under the full parallel suite
-// (~70 files) CPU contention can stretch that startup well past RTL's 1000ms
-// default — and occasionally past 10s on GitHub's shared runners — for any
-// waitFor in this file. It's starvation, not a hang, so give this file generous
-// headroom on both timeouts: a healthy render still settles in ~100ms (nothing
-// is slowed), only a starved run waits longer.
-//
-// These MUST run at module scope, not in beforeAll: vitest bakes each test's
-// timeout in when it() registers the test (during collection, before any
-// beforeAll runs), so a beforeAll setConfig is too late and the test keeps the
-// 5000ms default. configure() worked from beforeAll only because waitFor reads
-// asyncUtilTimeout dynamically — which left an inverted pair (waitFor allowed
-// 10s but the test killed at 5s) that flaked under load. vi.setConfig is scoped
-// to this file (each file runs in its own isolated worker), so other files are
-// unaffected.
-vi.setConfig({ testTimeout: 45000 });
-configure({ asyncUtilTimeout: 30000 });
+// Modest timeout headroom for genuine CPU contention under the full parallel
+// suite (a healthy render settles in ~100ms). Must run at module scope, not in
+// beforeAll: vitest bakes each test's timeout in when it() registers during
+// collection, before any beforeAll runs. vi.setConfig is scoped to this file.
+vi.setConfig({ testTimeout: 15000 });
+configure({ asyncUtilTimeout: 5000 });
+
+// Set the URL hash the way the app reads it, WITHOUT the jsdom side effect that
+// makes this suite flaky. Assigning `window.location.hash = ...` queues an
+// *asynchronous* popstate in jsdom (real browsers only fire hashchange); those
+// stray popstates drain during a later test and reset the App's resolved
+// conversation to null via the popstate handler, permanently stranding it.
+// history.replaceState updates the hash without ever queuing a popstate.
+function setHash(hash: string) {
+  window.history.replaceState(null, '', hash || window.location.pathname);
+}
 
 describe('App startup hash resolution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    window.location.hash = `#contact/${'a'.repeat(64)}/Alice`;
+    setHash(`#contact/${'a'.repeat(64)}/Alice`);
 
     mocks.api.getRadioConfig.mockResolvedValue({
       public_key: 'aa'.repeat(32),
@@ -201,10 +198,9 @@ describe('App startup hash resolution', () => {
   });
 
   afterEach(() => {
-    // window.location.hash is intentionally NOT reset here: setting it fires a hashchange
-    // event while the component is still mounted (RTL cleanup runs after this describe-level
-    // hook), which queues a stale state update that races the next test's setup. beforeEach
-    // sets a known hash before each render, so this reset is redundant.
+    // Reset via replaceState (never queues a popstate) so no hash state leaks
+    // into the next test. beforeEach also sets a known hash before each render.
+    setHash('');
     localStorage.clear();
   });
 
@@ -219,7 +215,7 @@ describe('App startup hash resolution', () => {
   });
 
   it('restores the trace tool from the URL hash', async () => {
-    window.location.hash = '#trace';
+    setHash('#trace');
 
     render(<App />);
 
@@ -231,7 +227,7 @@ describe('App startup hash resolution', () => {
   });
 
   it('restores the trace tool from the URL hash even when channels are unavailable', async () => {
-    window.location.hash = '#trace';
+    setHash('#trace');
     mocks.api.getChannels.mockResolvedValue([]);
 
     render(<App />);
@@ -244,7 +240,7 @@ describe('App startup hash resolution', () => {
   });
 
   it('reopens the last viewed trace tool even when channels are unavailable', async () => {
-    window.location.hash = '';
+    setHash('');
     localStorage.setItem(REOPEN_LAST_CONVERSATION_KEY, '1');
     localStorage.setItem(
       LAST_VIEWED_CONVERSATION_KEY,
@@ -275,7 +271,7 @@ describe('App startup hash resolution', () => {
       favorite: false,
     };
 
-    window.location.hash = '';
+    setHash('');
     localStorage.setItem(REOPEN_LAST_CONVERSATION_KEY, '1');
     localStorage.setItem(
       LAST_VIEWED_CONVERSATION_KEY,
@@ -307,7 +303,7 @@ describe('App startup hash resolution', () => {
       favorite: false,
     };
 
-    window.location.hash = '';
+    setHash('');
     localStorage.setItem(
       LAST_VIEWED_CONVERSATION_KEY,
       JSON.stringify({
@@ -338,7 +334,7 @@ describe('App startup hash resolution', () => {
       favorite: false,
     };
 
-    window.location.hash = '';
+    setHash('');
     mocks.api.getChannels.mockResolvedValue([publicChannel, chatChannel]);
     localStorage.setItem(
       LAST_VIEWED_CONVERSATION_KEY,
@@ -380,7 +376,7 @@ describe('App startup hash resolution', () => {
       first_seen: null,
     };
 
-    window.location.hash = '';
+    setHash('');
     localStorage.setItem(REOPEN_LAST_CONVERSATION_KEY, '1');
     localStorage.setItem(
       LAST_VIEWED_CONVERSATION_KEY,
@@ -413,7 +409,7 @@ describe('App startup hash resolution', () => {
         favorite: false,
       };
 
-      window.location.hash = `#channel/${opsChannel.key}/Ops`;
+      setHash(`#channel/${opsChannel.key}/Ops`);
       mocks.api.getChannels.mockResolvedValue([publicChannel, opsChannel]);
 
       render(<App />);
@@ -425,7 +421,7 @@ describe('App startup hash resolution', () => {
       });
 
       act(() => {
-        window.location.hash = `#channel/${publicChannel.key}/Public`;
+        setHash(`#channel/${publicChannel.key}/Public`);
         window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
       });
 
@@ -455,7 +451,7 @@ describe('App startup hash resolution', () => {
         first_seen: null,
       };
 
-      window.location.hash = '';
+      setHash('');
       mocks.api.getContacts.mockResolvedValue([aliceContact]);
 
       render(<App />);
@@ -473,7 +469,7 @@ describe('App startup hash resolution', () => {
       await act(async () => {});
 
       act(() => {
-        window.location.hash = `#contact/${aliceContact.public_key}/Alice`;
+        setHash(`#contact/${aliceContact.public_key}/Alice`);
         window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
       });
 
@@ -483,10 +479,36 @@ describe('App startup hash resolution', () => {
         }
       });
     });
+
+    it('recovers to Public when a popstate lands on an empty/unresolvable hash', async () => {
+      setHash('');
+      render(<App />);
+
+      await waitFor(() => {
+        for (const node of screen.getAllByTestId('active-conversation')) {
+          expect(node).toHaveTextContent(`channel:${publicChannel.key}:Public`);
+        }
+      });
+
+      // A back/forward navigation to the bare URL (empty hash) must not strand
+      // the app on a blank conversation: the initial-load phases are gated by
+      // hasSetDefaultConversation and won't re-resolve, so the popstate handler
+      // itself has to fall back to Public rather than clearing to null.
+      act(() => {
+        setHash('');
+        window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
+      });
+
+      await waitFor(() => {
+        for (const node of screen.getAllByTestId('active-conversation')) {
+          expect(node).toHaveTextContent(`channel:${publicChannel.key}:Public`);
+        }
+      });
+    });
   });
 
   it('stays on radio settings section even when radio is disconnected', async () => {
-    window.location.hash = '#settings/radio';
+    setHash('#settings/radio');
     mocks.api.getRadioConfig.mockRejectedValue(new Error('radio offline'));
 
     render(<App />);

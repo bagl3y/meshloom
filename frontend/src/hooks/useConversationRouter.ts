@@ -17,6 +17,13 @@ import { getContactDisplayName } from '../utils/pubkey';
 import { toast } from '../components/ui/sonner';
 import type { Channel, Contact, Conversation } from '../types';
 
+function resolvePublicFromChannels(channels: Channel[]): Conversation | null {
+  const publicChannel = findPublicChannel(channels);
+  return publicChannel
+    ? { type: 'channel', id: publicChannel.key, name: publicChannel.name }
+    : null;
+}
+
 function resolveConversationFromHash(
   channels: Channel[],
   contacts: Contact[]
@@ -98,15 +105,10 @@ export function useConversationRouter({
     setActiveConversationState(conv);
   }, []);
 
-  const getPublicChannelConversation = useCallback((): Conversation | null => {
-    const publicChannel = findPublicChannel(channels);
-    if (!publicChannel) return null;
-    return {
-      type: 'channel',
-      id: publicChannel.key,
-      name: publicChannel.name,
-    };
-  }, [channels]);
+  const getPublicChannelConversation = useCallback(
+    (): Conversation | null => resolvePublicFromChannels(channels),
+    [channels]
+  );
 
   // Phase 1: Set initial conversation from URL hash or default to Public channel
   // Only needs channels (fast path) - doesn't wait for contacts
@@ -304,7 +306,15 @@ export function useConversationRouter({
       // Settings hash transitions are handled by useAppShell
       if (parseHashSettingsSection() !== null) return;
 
-      const conv = resolveConversationFromHash(channelsRef.current, contactsRef.current);
+      // Resolve the target from the hash. When the hash is empty or doesn't
+      // resolve (e.g. back/forward to the bare URL), fall back to the Public
+      // channel rather than clearing to null: the initial-load phases are gated
+      // by hasSetDefaultConversation and won't re-resolve, so a null here would
+      // strand the app on an empty view with no recovery.
+      const conv =
+        resolveConversationFromHash(channelsRef.current, contactsRef.current) ??
+        resolvePublicFromChannels(channelsRef.current);
+      if (!conv) return;
       hashSyncEnabledRef.current = true;
       isHandlingPopstateRef.current = true;
       setActiveConversationState(conv);
