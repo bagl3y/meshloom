@@ -1,3 +1,12 @@
+## [3.16.1] - 2026-07-10
+
+* Feature: Try using direct admin-binary fetch for repeater owner
+* Feature: Add packet search to raw feed
+* Feature: Add repeater region display
+* Bug: Misc bugs around dm region scope + scope display, and flood-scope leak
+* Misc: Add clearer error on missing privkey export for community MQTT
+* Misc: Fix flaky test
+
 ## [3.16.0] - 2026-07-08
 
 * Feature: Add incoming message region to bot kwargs
