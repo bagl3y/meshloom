@@ -1,3 +1,11 @@
+## [3.17.0] - 2026-07-21
+
+* Feature: Add toggleable UI tweak for hop width display inline on channel messages
+* Feature: Launch packet analyzer from visualizer feed
+* Feature: Add customizable date binning on map view
+* Feature: Add repeater telemetry export as CSV
+* Misc: Tidy up Github issue templates
+
 ## [3.16.2] - 2026-07-10
 
 * Feature: Zero hop repeater region discover
