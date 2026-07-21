@@ -1,22 +1,21 @@
 ---
-name: Bug report / Feature request
-about: Report a problem or request a feature for RemoteTerm for MeshCore
+name: Bug report
+about: Report a problem with RemoteTerm for MeshCore
 title: ''
-labels: ''
+labels: 'bug to fix'
 assignees: ''
 ---
 
 ## 📝 Problem Description
-<!-- A clear description of the bug or the feature you'd like. -->
+<!-- A clear description of what's going wrong. -->
 
 ## 🚦 Current Behavior
-<!-- What actually happens today. For feature requests, describe the current limitation. -->
+<!-- What actually happens today. -->
 
 ## 🎯 Expected Behavior
 <!-- What you expected to happen instead. -->
 
 ## 📋 Steps to Reproduce
-<!-- If it's a bug, how can we reproduce it? -->
 1.
 2.
 3.
@@ -39,7 +38,7 @@ assignees: ''
 - **RemoteTerm Version:** <!-- e.g. v3.15.2, or "wrapped" HA add-on -->
 
 ## 📸 Screenshots / Debug Logs
-<!-- Screenshots are great. For bugs, a debug snapshot or debug-level logs help enormously. -->
+<!-- Screenshots are great. A debug snapshot or debug-level logs help enormously. -->
 
 <details>
 <summary><b>How to attach debug information</b> (please read — it speeds up diagnosis a lot)</summary>
