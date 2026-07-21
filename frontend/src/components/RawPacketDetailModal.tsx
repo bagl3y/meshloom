@@ -49,6 +49,8 @@ interface RawPacketInspectorDialogProps {
   description: string;
   notice?: ReactNode;
   signalOverride?: SignalOverride;
+  /** Portal target; see `DialogContent`. Needed when a host pane uses `requestFullscreen()`. */
+  container?: HTMLElement | null;
 }
 
 interface RawPacketInspectionPanelProps {
@@ -768,6 +770,7 @@ export function RawPacketInspectorDialog({
   description,
   notice,
   signalOverride,
+  container,
 }: RawPacketInspectorDialogProps) {
   const [packetInput, setPacketInput] = useState('');
 
@@ -847,7 +850,10 @@ export function RawPacketInspectorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[92dvh] max-w-[min(96vw,82rem)] flex-col gap-0 overflow-hidden p-0">
+      <DialogContent
+        container={container}
+        className="flex h-[92dvh] max-w-[min(96vw,82rem)] flex-col gap-0 overflow-hidden p-0"
+      >
         <DialogHeader className="border-b border-border px-5 py-3">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription className="sr-only">{description}</DialogDescription>

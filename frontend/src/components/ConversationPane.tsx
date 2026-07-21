@@ -242,7 +242,12 @@ export function ConversationPane({
   if (activeConversation.type === 'visualizer') {
     return (
       <Suspense fallback={<LoadingPane label="Loading visualizer..." />}>
-        <VisualizerView packets={rawPackets} contacts={contacts} config={config} />
+        <VisualizerView
+          packets={rawPackets}
+          contacts={contacts}
+          channels={channels}
+          config={config}
+        />
       </Suspense>
     );
   }
