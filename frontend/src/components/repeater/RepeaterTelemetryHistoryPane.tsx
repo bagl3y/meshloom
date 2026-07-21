@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
   Brush,
 } from 'recharts';
+import { Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
@@ -126,6 +127,108 @@ function tickDecimals(span: number | undefined): number {
 function cleanNumber(value: number): string {
   if (Number.isInteger(value)) return `${value}`;
   return `${Number(value.toFixed(4))}`;
+}
+
+// --- CSV export ---
+
+/** Strip float representation noise without clamping small magnitudes the way
+ *  a fixed decimal count would (`toFixed(4)` would flatten 0.000012 to 0). */
+function csvNumber(value: number): string {
+  if (Number.isInteger(value)) return `${value}`;
+  return `${Number(value.toPrecision(12))}`;
+}
+
+function escapeCsvValue(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** Local-time ISO 8601 with offset, so a sample's wall-clock time survives the
+ *  trip into a spreadsheet without the reader having to know our timezone. */
+export function toLocalIsoString(date: Date): string {
+  const offsetMin = -date.getTimezoneOffset();
+  const sign = offsetMin >= 0 ? '+' : '-';
+  const abs = Math.abs(offsetMin);
+  return (
+    `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}` +
+    `T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}` +
+    `${sign}${pad2(Math.floor(abs / 60))}:${pad2(abs % 60)}`
+  );
+}
+
+/** `<repeaterName>_data_YYYYMMDD_HHMMSS.csv`, reduced to filesystem-safe
+ *  characters. Falls back to "repeater" when a name sanitizes away entirely. */
+export function telemetryCsvFilename(repeaterName: string, at: Date): string {
+  const safeName =
+    repeaterName
+      .replace(/[^a-zA-Z0-9_-]+/g, '_')
+      .replace(/_{2,}/g, '_')
+      .replace(/^_|_$/g, '') || 'repeater';
+  const stamp =
+    `${at.getFullYear()}${pad2(at.getMonth() + 1)}${pad2(at.getDate())}` +
+    `_${pad2(at.getHours())}${pad2(at.getMinutes())}${pad2(at.getSeconds())}`;
+  return `${safeName}_data_${stamp}.csv`;
+}
+
+interface CsvColumn {
+  key: string;
+  header: string;
+}
+
+/** Columns mirror the flattened point shape built by `chartData` below, so every
+ *  metric the pane can plot — builtins, their derived series, and each
+ *  discovered LPP sensor — gets a column. Keep the two in step. */
+function buildCsvColumns(lppMetrics: { key: string; config: MetricConfig }[]): CsvColumn[] {
+  const withUnit = (label: string, unit: string) => (unit ? `${label} (${unit})` : label);
+  return [
+    { key: 'timestamp_iso', header: 'Timestamp (ISO 8601)' },
+    { key: 'timestamp', header: 'Unix Timestamp' },
+    { key: 'battery_volts', header: withUnit('Voltage', BUILTIN_METRIC_CONFIG.battery_volts.unit) },
+    {
+      key: 'noise_floor_dbm',
+      header: withUnit('Noise Floor', BUILTIN_METRIC_CONFIG.noise_floor_dbm.unit),
+    },
+    { key: 'packets_received', header: 'Packets Received' },
+    { key: 'packets_sent', header: 'Packets Sent' },
+    { key: 'packets_received_delta', header: 'Packets Received Delta' },
+    { key: 'packets_sent_delta', header: 'Packets Sent Delta' },
+    { key: 'recv_errors', header: 'RX Errors' },
+    { key: 'recv_error_pct', header: 'RX Error Rate (%)' },
+    {
+      key: 'uptime_seconds',
+      header: withUnit('Uptime', BUILTIN_METRIC_CONFIG.uptime_seconds.unit),
+    },
+    ...lppMetrics.map((m) => ({
+      key: m.key,
+      // Unit already reflects the active distance-unit preference, as the chart does.
+      header: withUnit(m.config.label, m.config.unit),
+    })),
+  ];
+}
+
+/** Serialize chart points to CSV. Missing samples become empty cells rather
+ *  than zeros, so gaps stay distinguishable from real readings. */
+export function buildTelemetryCsv(
+  rows: Array<Record<string, number | undefined>>,
+  columns: CsvColumn[]
+): string {
+  const lines = [columns.map((c) => escapeCsvValue(c.header)).join(',')];
+  for (const row of rows) {
+    lines.push(
+      columns
+        .map((c) => {
+          if (c.key === 'timestamp_iso') {
+            const ts = row.timestamp;
+            return ts == null ? '' : escapeCsvValue(toLocalIsoString(new Date(ts * 1000)));
+          }
+          const v = row[c.key];
+          return typeof v === 'number' && Number.isFinite(v) ? csvNumber(v) : '';
+        })
+        .join(',')
+    );
+  }
+  return lines.join('\r\n');
 }
 
 interface TelemetryHistoryPaneProps {
@@ -427,6 +530,26 @@ export function TelemetryHistoryPane({
     }
   };
 
+  const repeaterName = useMemo(
+    () => contacts.find((c) => c.public_key === publicKey)?.name ?? publicKey.slice(0, 12),
+    [contacts, publicKey]
+  );
+
+  // Exports the full stored history, not the brushed viewport — the button is
+  // about archiving the data, while the brush is a chart-reading aid.
+  const handleDownloadCsv = () => {
+    const csv = buildTelemetryCsv(chartData, buildCsvColumns(lppMetrics));
+    // Excel only detects UTF-8 in a CSV via the BOM, and LPP units include
+    // non-ASCII characters such as "°C".
+    const blob = new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = telemetryCsvFilename(repeaterName, new Date());
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const trackedNames = useMemo(() => {
     if (!slotsFull) return [];
     return trackedTelemetryRepeaters.map((key) => {
@@ -444,6 +567,17 @@ export function TelemetryHistoryPane({
             <span className="text-[0.625rem] text-muted-foreground">{entries.length} samples</span>
           )}
         </div>
+        {entries.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadCsv}
+            title="Download all telemetry history as CSV"
+          >
+            <Download className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+            Download CSV
+          </Button>
+        )}
       </div>
       <div className="p-3">
         {/* Explanation + tracking toggle */}
