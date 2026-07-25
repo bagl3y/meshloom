@@ -11,7 +11,7 @@ import { toast } from '../components/ui/sonner';
 import { getStateKey } from '../utils/conversationState';
 import { mergeContactIntoList } from '../utils/contactMerge';
 import { getContactDisplayName } from '../utils/pubkey';
-import { clearRawPackets, recordRawPacket } from '../stores/rawPacketStore';
+import { clearRawPackets, MAX_RAW_PACKETS, recordRawPacket } from '../stores/rawPacketStore';
 import { emitStatusDotPulse } from '../utils/statusDotPulse';
 import type {
   Channel,
@@ -57,6 +57,7 @@ interface UseRealtimeAppStateArgs {
     packetId?: number | null
   ) => void;
   notifyIncomingMessage?: (msg: Message) => void;
+  /** Buffer cap override. Defaults to the store's own cap; tests use it to force eviction. */
   maxRawPackets?: number;
 }
 
@@ -105,7 +106,7 @@ export function useRealtimeAppState({
   removeConversationMessages,
   receiveMessageAck,
   notifyIncomingMessage,
-  maxRawPackets = 500,
+  maxRawPackets = MAX_RAW_PACKETS,
 }: UseRealtimeAppStateArgs): UseWebSocketOptions {
   const mergeChannelIntoList = useCallback(
     (updated: Channel) => {

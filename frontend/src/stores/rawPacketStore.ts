@@ -118,11 +118,19 @@ export function seedRawPacketStore(next: {
   packets?: RawPacket[];
   statsSession?: RawPacketStatsSessionState;
 }): void {
+  // Copy rather than alias. The whole store rests on "a snapshot is immutable, and its
+  // identity changes only when its contents do". Holding the caller's array would let
+  // them mutate the live snapshot in place, and because useSyncExternalStore compares
+  // snapshots with Object.is, React would then bail out of every subsequent render —
+  // leaving the UI permanently disagreeing with getRawPackets() and no way to tell why.
   if (next.packets) {
-    packets = next.packets;
+    packets = [...next.packets];
   }
   if (next.statsSession) {
-    statsSession = next.statsSession;
+    statsSession = {
+      ...next.statsSession,
+      observations: [...next.statsSession.observations],
+    };
   }
   emit();
 }

@@ -8,8 +8,10 @@ import {
   getRawPackets,
   recordRawPacket,
   resetRawPacketStore,
+  seedRawPacketStore,
   useRawPackets,
 } from '../stores/rawPacketStore';
+import { MAX_RAW_PACKET_STATS_OBSERVATIONS } from '../utils/rawPacketStats';
 import type {
   Channel,
   Contact,
@@ -45,6 +47,28 @@ function createPacket(overrides: Partial<RawPacket> = {}): RawPacket {
     decrypted: false,
     decrypted_info: null,
     ...overrides,
+  };
+}
+
+/** A stats session already holding `count` distinct observations, for trim-boundary tests. */
+function sessionAtObservationCap(count: number): RawPacketStatsSessionState {
+  return {
+    sessionStartedAt: 1700000000000,
+    totalObservedPackets: count,
+    trimmedObservationCount: 0,
+    observations: Array.from({ length: count }, (_, i) => ({
+      observationKey: `seeded-${i}`,
+      timestamp: 1700000000 + i,
+      payloadType: 'GROUP_TEXT',
+      routeType: 'Flood',
+      decrypted: false,
+      rssi: null,
+      snr: null,
+      sourceKey: null,
+      sourceLabel: null,
+      pathTokenCount: 0,
+      pathSignature: null,
+    })),
   };
 }
 
@@ -202,6 +226,69 @@ describe('rawPacketStore', () => {
     act(() => recordRawPacket(createPacket({ id: 1, observation_id: 1 })));
 
     expect(screen.getByTestId('count').textContent).toBe('1');
+  });
+
+  /**
+   * Asserted through a mounted subscriber rather than getRawPackets(), because the
+   * failure mode is specifically a missing emit(): the module state would be correct
+   * while every view kept rendering packets that no longer exist. On a quiet mesh the
+   * next packet — and so the next repaint — can be minutes away.
+   */
+  it('notifies subscribed views when the buffer is cleared on reconnect', () => {
+    function PacketCount() {
+      return <span data-testid="count">{useRawPackets().length}</span>;
+    }
+    act(() => recordRawPacket(createPacket({ id: 1, observation_id: 1 })));
+    render(<PacketCount />);
+    expect(screen.getByTestId('count').textContent).toBe('1');
+
+    act(() => clearRawPackets());
+
+    expect(screen.getByTestId('count').textContent).toBe('0');
+  });
+
+  it('does not hand out a snapshot the seeding caller can still mutate', () => {
+    const fixture = [createPacket({ id: 1, observation_id: 1 })];
+    seedRawPacketStore({ packets: fixture });
+
+    fixture.push(createPacket({ id: 2, observation_id: 2 }));
+
+    // Aliasing the caller's array would mutate the live snapshot in place. Because
+    // useSyncExternalStore compares snapshots with Object.is, the identity would not
+    // change and React would bail out of every later render for good.
+    expect(getRawPackets()).toHaveLength(1);
+  });
+
+  /**
+   * MAX_RAW_PACKET_STATS_OBSERVATIONS is 20k, far past what a test can reach by
+   * recording, so the trim boundary is exercised by seeding a session that already
+   * sits on it. Without this, both the `<=` comparison and the trimmed-count
+   * arithmetic can be broken without any test noticing.
+   */
+  it('retains exactly the observation cap before trimming starts', () => {
+    seedRawPacketStore({
+      statsSession: sessionAtObservationCap(MAX_RAW_PACKET_STATS_OBSERVATIONS - 1),
+    });
+
+    recordRawPacket(createPacket({ id: 999999, observation_id: 999999 }));
+
+    const session = getRawPacketStatsSession();
+    expect(session.observations).toHaveLength(MAX_RAW_PACKET_STATS_OBSERVATIONS);
+    expect(session.trimmedObservationCount).toBe(0);
+  });
+
+  it('trims the oldest observation once the cap is exceeded', () => {
+    seedRawPacketStore({
+      statsSession: sessionAtObservationCap(MAX_RAW_PACKET_STATS_OBSERVATIONS),
+    });
+
+    recordRawPacket(createPacket({ id: 999999, observation_id: 999999 }));
+
+    const session = getRawPacketStatsSession();
+    expect(session.observations).toHaveLength(MAX_RAW_PACKET_STATS_OBSERVATIONS);
+    expect(session.trimmedObservationCount).toBe(1);
+    // The evicted entry is the oldest, not the newest
+    expect(session.observations[0].observationKey).not.toBe('seeded-0');
   });
 
   /**

@@ -44,6 +44,8 @@ frontend/src/
 │   └── PushSubscriptionContext.tsx # Push subscription state context/provider
 ├── lib/
 │   └── utils.ts            # cn() — clsx + tailwind-merge helper
+├── stores/
+│   └── rawPacketStore.ts   # Overheard packet stream + session stats, outside React
 ├── hooks/
 │   ├── index.ts            # Central re-export of all hooks
 │   ├── useConversationActions.ts   # Send/resend/trace/block conversation actions
@@ -60,7 +62,6 @@ frontend/src/
 │   ├── useBrowserNotifications.ts  # Per-conversation browser notification preferences + dispatch
 │   ├── usePushSubscription.ts      # Web Push subscription lifecycle, per-conversation filters
 │   ├── useFaviconBadge.ts          # Browser tab unread badge state
-│   ├── useRawPacketStatsSession.ts # Session-scoped packet-feed stats history
 │   └── useRememberedServerPassword.ts # Browser-local repeater/room password persistence
 ├── components/
 │   ├── AppShell.tsx            # App-shell layout: status, sidebar, search/settings panes, cracker, modals, security warning
@@ -248,6 +249,10 @@ High-level state is delegated to hooks:
 - `useRepeaterDashboard`: repeater dashboard state (login, pane data/retries, console, actions)
 
 `App.tsx` intentionally still does the final `AppShell` prop assembly. That composition layer is considered acceptable here because it keeps the shell contract visible in one place and avoids a prop-bundling hook with little original logic.
+
+**The overheard packet stream is the one piece of app state that deliberately does not live in React.** It is held in `stores/rawPacketStore.ts` and read through `useSyncExternalStore`, because it updates several times a second with every packet the node hears — far more often than anything else — and only four surfaces consume it (`MapView`, `VisualizerView`, `RawPacketFeedView`, `CrackerPanel`). Held in `App` state it re-rendered the entire tree, including `MessageList`, which is neither memoized nor cheap on a long history.
+
+That gives the store a load-bearing invariant: **no ancestor of `MessageList` may call `useRawPackets()` / `useRawPacketStatsSession()`.** Nothing about the prop signatures enforces it — an innocuous-looking subscription added to `App`, `AppShell`, or `ConversationPane` silently restores the original slowdown. `src/test/appPacketIsolation.test.tsx` pins it by mounting the real ancestor chain and asserting `MessageList` does not re-render when packets arrive; it carries a negative control so the assertion cannot pass vacuously. Reach for packets in a new view by subscribing in that view, never by lifting them up.
 
 `ConversationPane.tsx` owns the main active-conversation surface branching:
 - empty state
