@@ -674,6 +674,24 @@ interface PacketsPerHourBucket {
   count: number;
 }
 
+/**
+ * Regional flood-scope adoption over the last 24h. Two views with different
+ * denominators that will not agree — traffic spans all channels including
+ * undecryptable ones (so it carries a false-positive floor from corrupt RF
+ * captures), while senders requires decryption and is therefore noise-free but
+ * limited to channels we hold keys for.
+ */
+export interface RegionScopeStats {
+  total_messages: number;
+  scoped_messages: number;
+  scoped_pct: number;
+  /** Estimated false positives in scoped_messages. At or below this = not adoption. */
+  false_positive_floor: number;
+  total_senders: number;
+  scoped_senders: number;
+  scoped_senders_pct: number;
+}
+
 export interface StatisticsResponse {
   busiest_channels_24h: BusyChannel[];
   contact_count: number;
@@ -697,6 +715,7 @@ export interface StatisticsResponse {
     double_byte_pct: number;
     triple_byte_pct: number;
   };
+  region_scope_24h: RegionScopeStats;
   packets_per_hour_72h: PacketsPerHourBucket[];
   noise_floor_24h: NoiseFloorHistoryStats;
 }

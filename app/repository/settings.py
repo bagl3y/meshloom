@@ -7,7 +7,7 @@ import aiosqlite
 
 from app.database import db
 from app.models import AppSettings
-from app.path_utils import bucket_path_hash_widths
+from app.path_utils import bucket_path_hash_widths, bucket_region_scope, parse_packet_envelope
 from app.telemetry_interval import DEFAULT_TELEMETRY_INTERVAL_HOURS
 
 logger = logging.getLogger(__name__)
@@ -513,8 +513,12 @@ class StatisticsRepository:
         return [{"timestamp": row["hour_ts"], "count": row["count"]} for row in rows]
 
     @staticmethod
-    async def _path_hash_width_24h() -> dict[str, int | float]:
-        """Count parsed raw packets from the last 24h by hop hash width."""
+    async def _packet_shape_24h() -> tuple[dict[str, int | float], dict[str, int | float]]:
+        """Bucket the last 24h of raw packets by hop hash width and region scope.
+
+        Both buckets come from one fetch so the snapshot only scans the packet
+        table once. Returns ``(path_hash_width, region_scope)``.
+        """
         now = int(time.time())
         async with db.readonly() as conn:
             async with conn.execute(
@@ -522,7 +526,61 @@ class StatisticsRepository:
                 (now - SECONDS_24H,),
             ) as cursor:
                 rows = await cursor.fetchall()
-        return bucket_path_hash_widths(rows)
+        return bucket_path_hash_widths(rows), bucket_region_scope(rows)
+
+    @staticmethod
+    async def _region_scope_senders_24h() -> dict[str, int | float]:
+        """Count distinct channel-message senders who scoped at least one send.
+
+        Sender attribution requires having decrypted the message, so this only
+        covers channels we hold keys for — a narrower population than the
+        packet-level count, but a self-validating one: a message we decrypted is
+        provably not a corrupt capture, so this number needs no noise floor.
+
+        Scoping is read from ``messages.transport_code`` where present, falling
+        back to the linked raw packet for rows stored before region tagging
+        existed. Senders are keyed by ``sender_key`` where resolved, falling back
+        to ``sender_name`` — one physical operator may run several nodes, hence
+        "senders" rather than "users".
+        """
+        now = int(time.time())
+        async with db.readonly() as conn:
+            async with conn.execute(
+                """
+                SELECT m.id, m.sender_key, m.sender_name, m.transport_code, p.data
+                FROM messages m
+                LEFT JOIN raw_packets p ON p.message_id = m.id
+                WHERE m.type = 'CHAN' AND m.outgoing = 0 AND m.received_at >= ?
+                """,
+                (now - SECONDS_24H,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+
+        senders: set[str] = set()
+        scoped_senders: set[str] = set()
+        for row in rows:
+            identity = row["sender_key"] or row["sender_name"]
+            if not identity:
+                continue
+            senders.add(identity)
+
+            if row["transport_code"] is not None:
+                scoped_senders.add(identity)
+                continue
+            raw = row["data"]
+            if raw is None:
+                continue
+            envelope = parse_packet_envelope(bytes(raw))
+            if envelope is not None and envelope.transport_codes is not None:
+                scoped_senders.add(identity)
+
+        total = len(senders)
+        scoped = len(scoped_senders)
+        return {
+            "total_senders": total,
+            "scoped_senders": scoped,
+            "scoped_senders_pct": (scoped / total) * 100 if total else 0.0,
+        }
 
     @staticmethod
     async def get_all() -> dict:
@@ -600,7 +658,8 @@ class StatisticsRepository:
         contacts_heard = await StatisticsRepository._activity_counts(contact_type=2, exclude=True)
         repeaters_heard = await StatisticsRepository._activity_counts(contact_type=2)
         known_channels_active = await StatisticsRepository._known_channels_active()
-        path_hash_width_24h = await StatisticsRepository._path_hash_width_24h()
+        path_hash_width_24h, region_scope = await StatisticsRepository._packet_shape_24h()
+        region_scope.update(await StatisticsRepository._region_scope_senders_24h())
         packets_per_hour_72h = await StatisticsRepository._packets_per_hour_72h()
 
         return {
@@ -618,5 +677,6 @@ class StatisticsRepository:
             "repeaters_heard": repeaters_heard,
             "known_channels_active": known_channels_active,
             "path_hash_width_24h": path_hash_width_24h,
+            "region_scope_24h": region_scope,
             "packets_per_hour_72h": packets_per_hour_72h,
         }
