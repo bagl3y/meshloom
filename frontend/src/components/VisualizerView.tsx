@@ -7,15 +7,16 @@ import { RawPacketInspectorDialog } from './RawPacketDetailModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { cn } from '@/lib/utils';
 import { getVisualizerSettings, saveVisualizerSettings } from '../utils/visualizerSettings';
+import { useRawPackets } from '../stores/rawPacketStore';
 
 interface VisualizerViewProps {
-  packets: RawPacket[];
   contacts: Contact[];
   channels: Channel[];
   config: RadioConfig | null;
 }
 
-export function VisualizerView({ packets, contacts, channels, config }: VisualizerViewProps) {
+export function VisualizerView({ contacts, channels, config }: VisualizerViewProps) {
+  const packets = useRawPackets();
   const [fullScreen, setFullScreen] = useState(() => getVisualizerSettings().hidePacketFeed);
   const [paneFullScreen, setPaneFullScreen] = useState(false);
   const [selectedPacket, setSelectedPacket] = useState<RawPacket | null>(null);

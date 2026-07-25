@@ -16,7 +16,6 @@ import {
   useBrowserNotifications,
   useFaviconBadge,
   useUnreadTitle,
-  useRawPacketStatsSession,
 } from './hooks';
 import { toast } from './components/ui/sonner';
 import { AppShell } from './components/AppShell';
@@ -27,13 +26,7 @@ import { RichPayloadProvider } from './contexts/RichPayloadContext';
 import { usePush } from './contexts/PushSubscriptionContext';
 import { messageContainsMention } from './utils/messageParser';
 import { getStateKey } from './utils/conversationState';
-import type {
-  BulkCreateHashtagChannelsResult,
-  Channel,
-  Conversation,
-  Message,
-  RawPacket,
-} from './types';
+import type { BulkCreateHashtagChannelsResult, Channel, Conversation, Message } from './types';
 import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM } from './types';
 import { shouldAutoFocusInput } from './utils/autoFocusInput';
 
@@ -92,7 +85,6 @@ export function App() {
   }, []);
 
   const messageInputRef = useRef<MessageInputHandle>(null);
-  const [rawPackets, setRawPackets] = useState<RawPacket[]>([]);
   const [channelUnreadMarker, setChannelUnreadMarker] = useState<ChannelUnreadMarker | null>(null);
   const [newMessagePrefillRequest, setNewMessagePrefillRequest] =
     useState<NewMessagePrefillRequest | null>(null);
@@ -109,7 +101,6 @@ export function App() {
     notifyIncomingMessage,
   } = useBrowserNotifications();
   const pushSubscription = usePush();
-  const { rawPacketStatsSession, recordRawPacketObservation } = useRawPacketStatsSession();
   const {
     showNewMessage,
     showSettings,
@@ -436,7 +427,6 @@ export function App() {
     prevHealthRef,
     setHealth,
     fetchConfig,
-    setRawPackets,
     reconcileOnReconnect,
     refreshUnreads,
     setChannels,
@@ -457,7 +447,6 @@ export function App() {
     removeConversationMessages,
     receiveMessageAck,
     notifyIncomingMessage,
-    recordRawPacketObservation,
   });
   const handleVisibilityPolicyChanged = useCallback(() => {
     clearConversationMessages();
@@ -601,8 +590,6 @@ export function App() {
     activeConversation,
     contacts,
     channels,
-    rawPackets,
-    rawPacketStatsSession,
     config,
     health,
     messages: sortedMessages,
@@ -734,7 +721,6 @@ export function App() {
     onToggleTrackedTelemetryContact: handleToggleTrackedTelemetryContact,
   };
   const crackerProps = {
-    packets: rawPackets,
     channels,
     onChannelCreate: handleCreateCrackedChannel,
   };

@@ -12,7 +12,7 @@ import {
 import type { LatLngBoundsExpression, CircleMarker as LeafletCircleMarker } from 'leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { Contact, RadioConfig, RawPacket } from '../types';
+import type { Contact, RadioConfig } from '../types';
 import { formatTime } from '../utils/messageParser';
 import { isValidLocation } from '../utils/pathUtils';
 import { CONTACT_TYPE_REPEATER } from '../types';
@@ -23,13 +23,13 @@ import {
   dedupeConsecutive,
 } from '../utils/visualizerUtils';
 import { getRawPacketObservationKey } from '../utils/rawPacketIdentity';
+import { useRawPackets } from '../stores/rawPacketStore';
 import { cn } from '@/lib/utils';
 
 interface MapViewProps {
   contacts: Contact[];
   /** Public key of contact to focus on and open popup */
   focusedKey?: string | null;
-  rawPackets?: RawPacket[];
   config?: RadioConfig | null;
   blockedKeys?: string[];
   blockedNames?: string[];
@@ -541,12 +541,12 @@ function ParticleOverlay({ particles }: { particles: MapParticle[] }) {
 export function MapView({
   contacts,
   focusedKey,
-  rawPackets,
   config,
   blockedKeys,
   blockedNames,
   onSelectContact,
 }: MapViewProps) {
+  const rawPackets = useRawPackets();
   const [sinceId, setSinceId] = useState<MapSinceId>(getSavedSinceId);
   const [customSince, setCustomSince] = useState('');
   const [nowSec, setNowSec] = useState(() => Date.now() / 1000);

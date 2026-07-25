@@ -11,7 +11,7 @@ import { toast } from '../components/ui/sonner';
 import { getStateKey } from '../utils/conversationState';
 import { mergeContactIntoList } from '../utils/contactMerge';
 import { getContactDisplayName } from '../utils/pubkey';
-import { appendRawPacketUnique } from '../utils/rawPacketIdentity';
+import { clearRawPackets, recordRawPacket } from '../stores/rawPacketStore';
 import { emitStatusDotPulse } from '../utils/statusDotPulse';
 import type {
   Channel,
@@ -27,7 +27,6 @@ interface UseRealtimeAppStateArgs {
   prevHealthRef: MutableRefObject<HealthStatus | null>;
   setHealth: Dispatch<SetStateAction<HealthStatus | null>>;
   fetchConfig: () => void | Promise<void>;
-  setRawPackets: Dispatch<SetStateAction<RawPacket[]>>;
   reconcileOnReconnect: () => void;
   refreshUnreads: () => Promise<void>;
   setChannels: Dispatch<SetStateAction<Channel[]>>;
@@ -58,7 +57,6 @@ interface UseRealtimeAppStateArgs {
     packetId?: number | null
   ) => void;
   notifyIncomingMessage?: (msg: Message) => void;
-  recordRawPacketObservation?: (packet: RawPacket) => void;
   maxRawPackets?: number;
 }
 
@@ -87,7 +85,6 @@ export function useRealtimeAppState({
   prevHealthRef,
   setHealth,
   fetchConfig,
-  setRawPackets,
   reconcileOnReconnect,
   refreshUnreads,
   setChannels,
@@ -108,7 +105,6 @@ export function useRealtimeAppState({
   removeConversationMessages,
   receiveMessageAck,
   notifyIncomingMessage,
-  recordRawPacketObservation,
   maxRawPackets = 500,
 }: UseRealtimeAppStateArgs): UseWebSocketOptions {
   const mergeChannelIntoList = useCallback(
@@ -180,7 +176,7 @@ export function useRealtimeAppState({
         });
       },
       onReconnect: () => {
-        setRawPackets([]);
+        clearRawPackets();
         reconcileOnReconnect();
         refreshUnreads();
         api.getChannels().then(setChannels).catch(console.error);
@@ -263,9 +259,8 @@ export function useRealtimeAppState({
         }
       },
       onRawPacket: (packet: RawPacket) => {
-        recordRawPacketObservation?.(packet);
         emitStatusDotPulse(packet.payload_type);
-        setRawPackets((prev) => appendRawPacketUnique(prev, packet, maxRawPackets));
+        recordRawPacket(packet, maxRawPackets);
       },
       onMessageAcked: (
         messageId: number,
@@ -291,7 +286,6 @@ export function useRealtimeAppState({
       pendingDeleteFallbackRef,
       prevHealthRef,
       recordMessageEvent,
-      recordRawPacketObservation,
       receiveMessageAck,
       observeMessage,
       refreshUnreads,
@@ -301,7 +295,6 @@ export function useRealtimeAppState({
       setChannels,
       setContacts,
       setHealth,
-      setRawPackets,
       notifyIncomingMessage,
     ]
   );
