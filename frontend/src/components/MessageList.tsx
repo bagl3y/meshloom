@@ -1,5 +1,4 @@
 import {
-  Fragment,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -31,6 +30,7 @@ import { PathModal } from './PathModal';
 import { RawPacketInspectorDialog } from './RawPacketDetailModal';
 import { toast } from './ui/sonner';
 import { handleKeyboardActivate } from '../utils/a11y';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { cn } from '@/lib/utils';
 
 interface MessageListProps {
@@ -137,6 +137,15 @@ function renderMeshcoreOpenPayload(
   }
   return null;
 }
+
+/**
+ * Starting guess for an unmeasured row: a single-line message with its header.
+ * Rows are measured for real once they scroll into view.
+ */
+const ESTIMATED_MESSAGE_HEIGHT = 64;
+
+/** Stand-in viewport height for when the scroll container cannot be measured. */
+const FALLBACK_VIEWPORT_HEIGHT = 800;
 
 // URL regex for linkifying plain text
 const URL_PATTERN =
@@ -474,11 +483,65 @@ export function MessageList({
     }
   }, []);
 
+  // Sort messages by received_at ascending (oldest first)
+  // Note: Deduplication is handled by useConversationMessages.observeMessage()
+  // and the database UNIQUE constraint on (type, conversation_key, text, sender_timestamp)
+  const sortedMessages = useMemo(
+    () =>
+      preSorted
+        ? messages
+        : [...messages].sort((a, b) => a.received_at - b.received_at || a.id - b.id),
+    [messages, preSorted]
+  );
+  /**
+   * Only the visible window of messages is mounted. A long channel history otherwise
+   * costs a full render of every message on any update — hundreds of milliseconds once
+   * a conversation has a few thousand messages, which stalls everything else on the
+   * main thread, typing included.
+   *
+   * Heights are measured, not assumed: messages vary wildly (one line, a wrapped
+   * paragraph, path badges, the unread divider), so `estimateSize` is only the starting
+   * guess for rows that have not been on screen yet.
+   */
+  const virtualizer = useVirtualizer({
+    count: sortedMessages.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => ESTIMATED_MESSAGE_HEIGHT,
+    getItemKey: (index) => sortedMessages[index]?.id ?? index,
+    overscan: 8,
+    // A row that measures zero has not really been laid out yet (hidden pane, images
+    // still loading). Keep the estimate instead, or the window balloons to compensate.
+    measureElement: (element) => element.getBoundingClientRect().height || ESTIMATED_MESSAGE_HEIGHT,
+    // A viewport that measures zero (before first layout, a hidden tab, jsdom) would
+    // otherwise collapse the window to nothing and render an empty list. Fall back to a
+    // nominal height so we always mount a plausible screenful.
+    observeElementRect: (instance, cb) => {
+      const element = instance.scrollElement;
+      if (!element) return;
+      const report = () => {
+        const rect = element.getBoundingClientRect();
+        cb({ width: rect.width, height: rect.height || FALLBACK_VIEWPORT_HEIGHT });
+      };
+      report();
+      const observer = new ResizeObserver(report);
+      observer.observe(element);
+      return () => observer.disconnect();
+    },
+  });
+  const virtualRows = virtualizer.getVirtualItems();
+
+  const scrollToIndex = useCallback(
+    (index: number, align: 'start' | 'center' | 'end') => {
+      if (index < 0) return;
+      virtualizer.scrollToIndex(index, { align });
+    },
+    [virtualizer]
+  );
+
   // Handle scroll position AFTER render
   useLayoutEffect(() => {
     if (!listRef.current) return;
 
-    const list = listRef.current;
     const messagesAdded = messages.length - prevMessagesLengthRef.current;
 
     // Detect if messages are from a different conversation (handles the case where
@@ -489,40 +552,40 @@ export function MessageList({
     if (convKey !== null) prevConvKeyRef.current = convKey;
 
     if ((isInitialLoadRef.current || conversationChanged) && messages.length > 0) {
-      // Initial load or conversation switch - scroll to bottom
-      list.scrollTop = list.scrollHeight;
+      // Initial load or conversation switch - scroll to bottom.
+      // Anchored to the last row rather than scrollHeight: rows that have never been
+      // on screen still carry estimated heights, so the total is not yet exact.
+      scrollToIndex(sortedMessages.length - 1, 'end');
       isInitialLoadRef.current = false;
     } else if (messagesAdded > 0 && prevMessagesLengthRef.current > 0) {
-      // Messages were added - use scroll state captured before the update
-      const scrollHeightDiff = list.scrollHeight - scrollStateRef.current.scrollHeight;
-
-      if (scrollStateRef.current.wasNearTop && scrollHeightDiff > 0) {
-        // User was near top (loading older) - preserve position by adding the height diff
-        list.scrollTop = scrollStateRef.current.scrollTop + scrollHeightDiff;
+      if (scrollStateRef.current.wasNearTop) {
+        // User was near top (loading older) - keep the message that was on top in place.
+        // Prepended rows are unmeasured, so anchoring by index beats height arithmetic.
+        scrollToIndex(messagesAdded, 'start');
       } else if (scrollStateRef.current.wasNearBottom && !hasNewerMessagesRef.current) {
         // User was near bottom - scroll to bottom for new messages (including sent).
         // Skip when browsing mid-history (hasNewerMessages) so that forward-pagination
         // appends in place instead of chasing the bottom in an infinite load loop.
-        list.scrollTop = list.scrollHeight;
+        scrollToIndex(sortedMessages.length - 1, 'end');
       }
     }
 
     prevMessagesLengthRef.current = messages.length;
-  }, [messages]);
+  }, [messages, sortedMessages.length, scrollToIndex]);
 
   // Scroll to target message and highlight it
   useLayoutEffect(() => {
     if (!targetMessageId || targetScrolledRef.current || messages.length === 0) return;
-    const el = listRef.current?.querySelector(`[data-message-id="${targetMessageId}"]`);
-    if (!el) return;
+    const targetIndex = sortedMessages.findIndex((msg) => msg.id === targetMessageId);
+    if (targetIndex === -1) return;
 
     // Prevent the initial-load layout effect from overriding our scroll
     isInitialLoadRef.current = false;
-    el.scrollIntoView({ block: 'center' });
+    scrollToIndex(targetIndex, 'center');
     setHighlightedMessageId(targetMessageId);
     targetScrolledRef.current = true;
     onTargetReached?.();
-  }, [messages, targetMessageId, onTargetReached]);
+  }, [messages, sortedMessages, targetMessageId, onTargetReached, scrollToIndex]);
 
   // Reset target scroll tracking when targetMessageId changes
   useEffect(() => {
@@ -597,16 +660,6 @@ export function MessageList({
     };
   }, [messages, onResendChannelMessage]);
 
-  // Sort messages by received_at ascending (oldest first)
-  // Note: Deduplication is handled by useConversationMessages.observeMessage()
-  // and the database UNIQUE constraint on (type, conversation_key, text, sender_timestamp)
-  const sortedMessages = useMemo(
-    () =>
-      preSorted
-        ? messages
-        : [...messages].sort((a, b) => a.received_at - b.received_at || a.id - b.id),
-    [messages, preSorted]
-  );
   const unreadMarkerIndex = useMemo(() => {
     if (unreadMarkerLastReadAt === undefined) {
       return -1;
@@ -722,10 +775,8 @@ export function MessageList({
       onJumpToBottom();
       return;
     }
-    if (listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
-    }
-  }, [hasNewerMessages, onJumpToBottom]);
+    scrollToIndex(sortedMessages.length - 1, 'end');
+  }, [hasNewerMessages, onJumpToBottom, scrollToIndex, sortedMessages.length]);
 
   // Sender info for outgoing messages (used by path modal on own messages)
   const selfSenderInfo = useMemo<SenderInfo>(
@@ -894,7 +945,7 @@ export function MessageList({
   return (
     <div className="flex-1 overflow-hidden relative">
       <div
-        className="h-full overflow-y-auto p-4 flex flex-col gap-0.5"
+        className="h-full overflow-y-auto p-4 flex flex-col"
         ref={listRef}
         onScroll={handleScroll}
       >
@@ -908,231 +959,215 @@ export function MessageList({
             Scroll up for older messages
           </div>
         )}
-        {sortedMessages.map((msg, index) => {
-          // For DMs, look up contact; for channel messages, use parsed sender
-          const contact = msg.type === 'PRIV' ? getContact(msg.conversation_key) : null;
-          const isRoomServer = contact?.type === CONTACT_TYPE_ROOM;
+        <div
+          className="relative w-full flex-shrink-0"
+          style={{ height: virtualizer.getTotalSize() }}
+        >
+          {virtualRows.map((virtualRow) => {
+            const index = virtualRow.index;
+            const msg = sortedMessages[index];
+            // For DMs, look up contact; for channel messages, use parsed sender
+            const contact = msg.type === 'PRIV' ? getContact(msg.conversation_key) : null;
+            const isRoomServer = contact?.type === CONTACT_TYPE_ROOM;
 
-          // Only parse "sender: text" prefix for channel messages — DMs never carry
-          // an in-text sender prefix, so parsing them would incorrectly strip
-          // user text that happens to contain a colon (e.g. "TEST1: TEST2").
-          const { sender, content } =
-            msg.type === 'PRIV'
-              ? { sender: null, content: msg.text }
-              : parseSenderFromText(msg.text);
-          const directSenderName =
-            msg.type === 'PRIV' && isRoomServer ? msg.sender_name || null : null;
-          const channelSenderName = msg.type === 'CHAN' ? msg.sender_name || sender : null;
-          const channelSenderContact =
-            msg.type === 'CHAN' && channelSenderName ? getContactByName(channelSenderName) : null;
-          const isCorruptChannelMessage = isCorruptUnnamedChannelMessage(msg, sender);
-          const displaySender = msg.outgoing
-            ? 'You'
-            : directSenderName ||
-              (isRoomServer && msg.sender_key ? msg.sender_key.slice(0, 8) : null) ||
-              contact?.name ||
-              channelSenderName ||
-              (isCorruptChannelMessage
-                ? CORRUPT_SENDER_LABEL
-                : msg.conversation_key?.slice(0, 8) || 'Unknown');
+            // Only parse "sender: text" prefix for channel messages — DMs never carry
+            // an in-text sender prefix, so parsing them would incorrectly strip
+            // user text that happens to contain a colon (e.g. "TEST1: TEST2").
+            const { sender, content } =
+              msg.type === 'PRIV'
+                ? { sender: null, content: msg.text }
+                : parseSenderFromText(msg.text);
+            const directSenderName =
+              msg.type === 'PRIV' && isRoomServer ? msg.sender_name || null : null;
+            const channelSenderName = msg.type === 'CHAN' ? msg.sender_name || sender : null;
+            const channelSenderContact =
+              msg.type === 'CHAN' && channelSenderName ? getContactByName(channelSenderName) : null;
+            const isCorruptChannelMessage = isCorruptUnnamedChannelMessage(msg, sender);
+            const displaySender = msg.outgoing
+              ? 'You'
+              : directSenderName ||
+                (isRoomServer && msg.sender_key ? msg.sender_key.slice(0, 8) : null) ||
+                contact?.name ||
+                channelSenderName ||
+                (isCorruptChannelMessage
+                  ? CORRUPT_SENDER_LABEL
+                  : msg.conversation_key?.slice(0, 8) || 'Unknown');
 
-          const canClickSender =
-            !msg.outgoing &&
-            onSenderClick &&
-            displaySender !== 'Unknown' &&
-            displaySender !== CORRUPT_SENDER_LABEL;
+            const canClickSender =
+              !msg.outgoing &&
+              onSenderClick &&
+              displaySender !== 'Unknown' &&
+              displaySender !== CORRUPT_SENDER_LABEL;
 
-          // Determine if we should show avatar (first message in a chunk from same sender)
-          const currentSenderKey = getSenderKey(
-            msg,
-            directSenderName || channelSenderName,
-            isCorruptChannelMessage
-          );
-          const prevMsg = sortedMessages[index - 1];
-          const prevParsedSender =
-            prevMsg && prevMsg.type === 'CHAN' ? parseSenderFromText(prevMsg.text).sender : null;
-          const prevSenderKey = prevMsg
-            ? getSenderKey(
-                prevMsg,
-                prevMsg.type === 'PRIV' &&
-                  getContact(prevMsg.conversation_key)?.type === CONTACT_TYPE_ROOM
-                  ? prevMsg.sender_name
-                  : prevMsg.type === 'CHAN'
-                    ? prevMsg.sender_name || prevParsedSender
-                    : prevParsedSender,
-                isCorruptUnnamedChannelMessage(prevMsg, prevParsedSender)
-              )
-            : null;
-          const isFirstInGroup = currentSenderKey !== prevSenderKey;
-          const showAvatar = !msg.outgoing && isFirstInGroup;
-          const isFirstMessage = index === 0;
+            // Determine if we should show avatar (first message in a chunk from same sender)
+            const currentSenderKey = getSenderKey(
+              msg,
+              directSenderName || channelSenderName,
+              isCorruptChannelMessage
+            );
+            const prevMsg = sortedMessages[index - 1];
+            const prevParsedSender =
+              prevMsg && prevMsg.type === 'CHAN' ? parseSenderFromText(prevMsg.text).sender : null;
+            const prevSenderKey = prevMsg
+              ? getSenderKey(
+                  prevMsg,
+                  prevMsg.type === 'PRIV' &&
+                    getContact(prevMsg.conversation_key)?.type === CONTACT_TYPE_ROOM
+                    ? prevMsg.sender_name
+                    : prevMsg.type === 'CHAN'
+                      ? prevMsg.sender_name || prevParsedSender
+                      : prevParsedSender,
+                  isCorruptUnnamedChannelMessage(prevMsg, prevParsedSender)
+                )
+              : null;
+            const isFirstInGroup = currentSenderKey !== prevSenderKey;
+            const showAvatar = !msg.outgoing && isFirstInGroup;
+            const isFirstMessage = index === 0;
 
-          // Get avatar info for incoming messages
-          let avatarName: string | null = null;
-          let avatarKey: string = '';
-          let avatarVariant: 'default' | 'corrupt' = 'default';
-          if (!msg.outgoing) {
-            if (msg.type === 'PRIV' && msg.conversation_key) {
-              if (isRoomServer) {
-                avatarName = directSenderName;
-                avatarKey =
-                  msg.sender_key || (avatarName ? `name:${avatarName}` : msg.conversation_key);
+            // Get avatar info for incoming messages
+            let avatarName: string | null = null;
+            let avatarKey: string = '';
+            let avatarVariant: 'default' | 'corrupt' = 'default';
+            if (!msg.outgoing) {
+              if (msg.type === 'PRIV' && msg.conversation_key) {
+                if (isRoomServer) {
+                  avatarName = directSenderName;
+                  avatarKey =
+                    msg.sender_key || (avatarName ? `name:${avatarName}` : msg.conversation_key);
+                } else {
+                  avatarName = contact?.name || null;
+                  avatarKey = msg.conversation_key;
+                }
+              } else if (isCorruptChannelMessage) {
+                avatarName = CORRUPT_SENDER_LABEL;
+                avatarKey = `corrupt:${msg.id}`;
+                avatarVariant = 'corrupt';
               } else {
-                avatarName = contact?.name || null;
-                avatarKey = msg.conversation_key;
+                // Channel message: use stored sender identity first, then parsed/fallback display name
+                avatarName =
+                  channelSenderName || (displaySender !== 'Unknown' ? displaySender : null);
+                avatarKey =
+                  msg.sender_key ||
+                  channelSenderContact?.public_key ||
+                  (avatarName ? `name:${avatarName}` : `message:${msg.id}`);
               }
-            } else if (isCorruptChannelMessage) {
-              avatarName = CORRUPT_SENDER_LABEL;
-              avatarKey = `corrupt:${msg.id}`;
-              avatarVariant = 'corrupt';
-            } else {
-              // Channel message: use stored sender identity first, then parsed/fallback display name
-              avatarName =
-                channelSenderName || (displaySender !== 'Unknown' ? displaySender : null);
-              avatarKey =
-                msg.sender_key ||
-                channelSenderContact?.public_key ||
-                (avatarName ? `name:${avatarName}` : `message:${msg.id}`);
             }
-          }
-          const avatarActionLabel =
-            avatarName && avatarName !== 'Unknown'
-              ? `View info for ${avatarName}`
-              : `View info for ${avatarKey.slice(0, 12)}`;
+            const avatarActionLabel =
+              avatarName && avatarName !== 'Unknown'
+                ? `View info for ${avatarName}`
+                : `View info for ${avatarKey.slice(0, 12)}`;
 
-          return (
-            <Fragment key={msg.id}>
-              {unreadMarkerIndex === index &&
-                (onDismissUnreadMarker ? (
-                  <button
-                    ref={setUnreadMarkerElement}
-                    type="button"
-                    className="my-2 flex w-full items-center gap-3 text-left text-xs font-medium text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    onClick={onDismissUnreadMarker}
-                  >
-                    <span className="h-px flex-1 bg-border" />
-                    <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1">
-                      Unread messages
-                    </span>
-                    <span className="h-px flex-1 bg-border" />
-                  </button>
-                ) : (
-                  <div
-                    ref={setUnreadMarkerElement}
-                    className="my-2 flex w-full items-center gap-3 text-xs font-medium text-primary"
-                  >
-                    <span className="h-px flex-1 bg-border" />
-                    <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1">
-                      Unread messages
-                    </span>
-                    <span className="h-px flex-1 bg-border" />
-                  </div>
-                ))}
+            return (
+              // Absolutely positioned so the scroll container keeps a stable total height
+              // while only the visible window is mounted. `flex flex-col` matters: it makes
+              // child margins (group spacing, the unread divider) part of the measured height.
               <div
-                data-message-id={msg.id}
-                className={cn(
-                  'flex items-start max-w-[85%]',
-                  msg.outgoing && 'flex-row-reverse self-end',
-                  isFirstInGroup && !isFirstMessage && 'mt-3'
-                )}
+                key={msg.id}
+                data-index={index}
+                ref={virtualizer.measureElement}
+                className="absolute left-0 top-0 flex w-full flex-col pb-0.5"
+                style={{ transform: `translateY(${virtualRow.start}px)` }}
               >
-                {!msg.outgoing && (
-                  <div className="w-10 flex-shrink-0 flex items-start pt-0.5">
-                    {showAvatar &&
-                      avatarKey &&
-                      (onOpenContactInfo ? (
-                        <button
-                          type="button"
-                          className="avatar-action-button rounded-full border-none bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          aria-label={avatarActionLabel}
-                          onClick={() =>
-                            onOpenContactInfo(
-                              avatarKey,
-                              msg.type === 'CHAN' || (msg.type === 'PRIV' && isRoomServer)
-                            )
-                          }
-                        >
-                          <ContactAvatar
-                            name={avatarName}
-                            publicKey={avatarKey}
-                            size={32}
-                            clickable
-                            variant={avatarVariant}
-                          />
-                        </button>
-                      ) : (
-                        <span>
-                          <ContactAvatar
-                            name={avatarName}
-                            publicKey={avatarKey}
-                            size={32}
-                            variant={avatarVariant}
-                          />
-                        </span>
-                      ))}
-                  </div>
-                )}
+                {unreadMarkerIndex === index &&
+                  (onDismissUnreadMarker ? (
+                    <button
+                      ref={setUnreadMarkerElement}
+                      type="button"
+                      className="my-2 flex w-full items-center gap-3 text-left text-xs font-medium text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={onDismissUnreadMarker}
+                    >
+                      <span className="h-px flex-1 bg-border" />
+                      <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1">
+                        Unread messages
+                      </span>
+                      <span className="h-px flex-1 bg-border" />
+                    </button>
+                  ) : (
+                    <div
+                      ref={setUnreadMarkerElement}
+                      className="my-2 flex w-full items-center gap-3 text-xs font-medium text-primary"
+                    >
+                      <span className="h-px flex-1 bg-border" />
+                      <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1">
+                        Unread messages
+                      </span>
+                      <span className="h-px flex-1 bg-border" />
+                    </div>
+                  ))}
                 <div
+                  data-message-id={msg.id}
                   className={cn(
-                    'py-1.5 px-3 rounded-lg min-w-0',
-                    msg.outgoing ? 'bg-msg-outgoing' : 'bg-msg-incoming',
-                    highlightedMessageId === msg.id && 'message-highlight'
+                    'flex items-start max-w-[85%]',
+                    msg.outgoing && 'flex-row-reverse self-end',
+                    isFirstInGroup && !isFirstMessage && 'mt-3'
                   )}
                 >
-                  {showAvatar && (
-                    <div className="text-[0.8125rem] font-semibold text-foreground mb-0.5">
-                      {canClickSender ? (
-                        <span
-                          className="cursor-pointer hover:text-primary transition-colors"
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={handleKeyboardActivate}
-                          onClick={() => onSenderClick(displaySender)}
-                          title={`Mention ${displaySender}`}
-                        >
-                          {displaySender}
-                        </span>
-                      ) : (
-                        displaySender
-                      )}
-                      <span className="font-normal text-muted-foreground ml-2 text-[0.6875rem]">
-                        {formatTime(msg.received_at)}
-                      </span>
-                      {!msg.outgoing && msg.paths && msg.paths.length > 0 && (
-                        <HopCountBadge
-                          paths={msg.paths}
-                          variant="header"
-                          onClick={() =>
-                            setSelectedPath({
-                              paths: msg.paths!,
-                              senderInfo: getSenderInfo(msg, contact, directSenderName || sender),
-                              messageId: msg.id,
-                              packetId: msg.packet_id,
-                            })
-                          }
-                        />
-                      )}
-                      {msg.region && <RegionBadge region={msg.region} />}
+                  {!msg.outgoing && (
+                    <div className="w-10 flex-shrink-0 flex items-start pt-0.5">
+                      {showAvatar &&
+                        avatarKey &&
+                        (onOpenContactInfo ? (
+                          <button
+                            type="button"
+                            className="avatar-action-button rounded-full border-none bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-label={avatarActionLabel}
+                            onClick={() =>
+                              onOpenContactInfo(
+                                avatarKey,
+                                msg.type === 'CHAN' || (msg.type === 'PRIV' && isRoomServer)
+                              )
+                            }
+                          >
+                            <ContactAvatar
+                              name={avatarName}
+                              publicKey={avatarKey}
+                              size={32}
+                              clickable
+                              variant={avatarVariant}
+                            />
+                          </button>
+                        ) : (
+                          <span>
+                            <ContactAvatar
+                              name={avatarName}
+                              publicKey={avatarKey}
+                              size={32}
+                              variant={avatarVariant}
+                            />
+                          </span>
+                        ))}
                     </div>
                   )}
-                  <div className="break-words whitespace-pre-wrap">
-                    {(renderRichPayloads &&
-                      renderMeshcoreOpenPayload(content, radioName, onChannelReferenceClick)) ||
-                      content.split('\n').map((line, i, arr) => (
-                        <span key={i}>
-                          {renderTextWithMentions(line, radioName, onChannelReferenceClick)}
-                          {i < arr.length - 1 && <br />}
-                        </span>
-                      ))}
-                    {!showAvatar && (
-                      <>
-                        <span className="text-[0.625rem] text-muted-foreground ml-2">
+                  <div
+                    className={cn(
+                      'py-1.5 px-3 rounded-lg min-w-0',
+                      msg.outgoing ? 'bg-msg-outgoing' : 'bg-msg-incoming',
+                      highlightedMessageId === msg.id && 'message-highlight'
+                    )}
+                  >
+                    {showAvatar && (
+                      <div className="text-[0.8125rem] font-semibold text-foreground mb-0.5">
+                        {canClickSender ? (
+                          <span
+                            className="cursor-pointer hover:text-primary transition-colors"
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={handleKeyboardActivate}
+                            onClick={() => onSenderClick(displaySender)}
+                            title={`Mention ${displaySender}`}
+                          >
+                            {displaySender}
+                          </span>
+                        ) : (
+                          displaySender
+                        )}
+                        <span className="font-normal text-muted-foreground ml-2 text-[0.6875rem]">
                           {formatTime(msg.received_at)}
                         </span>
                         {!msg.outgoing && msg.paths && msg.paths.length > 0 && (
                           <HopCountBadge
                             paths={msg.paths}
-                            variant="inline"
+                            variant="header"
                             onClick={() =>
                               setSelectedPath({
                                 paths: msg.paths!,
@@ -1144,11 +1179,68 @@ export function MessageList({
                           />
                         )}
                         {msg.region && <RegionBadge region={msg.region} />}
-                      </>
+                      </div>
                     )}
-                    {msg.outgoing &&
-                      (msg.acked > 0 ? (
-                        msg.paths && msg.paths.length > 0 ? (
+                    <div className="break-words whitespace-pre-wrap">
+                      {(renderRichPayloads &&
+                        renderMeshcoreOpenPayload(content, radioName, onChannelReferenceClick)) ||
+                        content.split('\n').map((line, i, arr) => (
+                          <span key={i}>
+                            {renderTextWithMentions(line, radioName, onChannelReferenceClick)}
+                            {i < arr.length - 1 && <br />}
+                          </span>
+                        ))}
+                      {!showAvatar && (
+                        <>
+                          <span className="text-[0.625rem] text-muted-foreground ml-2">
+                            {formatTime(msg.received_at)}
+                          </span>
+                          {!msg.outgoing && msg.paths && msg.paths.length > 0 && (
+                            <HopCountBadge
+                              paths={msg.paths}
+                              variant="inline"
+                              onClick={() =>
+                                setSelectedPath({
+                                  paths: msg.paths!,
+                                  senderInfo: getSenderInfo(
+                                    msg,
+                                    contact,
+                                    directSenderName || sender
+                                  ),
+                                  messageId: msg.id,
+                                  packetId: msg.packet_id,
+                                })
+                              }
+                            />
+                          )}
+                          {msg.region && <RegionBadge region={msg.region} />}
+                        </>
+                      )}
+                      {msg.outgoing &&
+                        (msg.acked > 0 ? (
+                          msg.paths && msg.paths.length > 0 ? (
+                            <span
+                              className="text-muted-foreground cursor-pointer hover:text-primary"
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={handleKeyboardActivate}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedPath({
+                                  paths: msg.paths!,
+                                  senderInfo: selfSenderInfo,
+                                  messageId: msg.id,
+                                  packetId: msg.packet_id,
+                                  isOutgoingChan: msg.type === 'CHAN' && !!onResendChannelMessage,
+                                });
+                              }}
+                              title="View echo paths"
+                              aria-label={`Acknowledged, ${msg.acked} echo${msg.acked !== 1 ? 's' : ''} — view paths`}
+                            >{` ✓${msg.acked > 1 ? msg.acked : ''}`}</span>
+                          ) : (
+                            <span className="text-muted-foreground">{` ✓${msg.acked > 1 ? msg.acked : ''}`}</span>
+                          )
+                        ) : onResendChannelMessage && msg.type === 'CHAN' ? (
                           <span
                             className="text-muted-foreground cursor-pointer hover:text-primary"
                             role="button"
@@ -1157,53 +1249,32 @@ export function MessageList({
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedPath({
-                                paths: msg.paths!,
+                                paths: [],
                                 senderInfo: selfSenderInfo,
                                 messageId: msg.id,
                                 packetId: msg.packet_id,
-                                isOutgoingChan: msg.type === 'CHAN' && !!onResendChannelMessage,
+                                isOutgoingChan: true,
                               });
                             }}
-                            title="View echo paths"
-                            aria-label={`Acknowledged, ${msg.acked} echo${msg.acked !== 1 ? 's' : ''} — view paths`}
-                          >{` ✓${msg.acked > 1 ? msg.acked : ''}`}</span>
+                            title="Message status"
+                            aria-label="No echoes yet — view message status"
+                          >
+                            {' '}
+                            ?
+                          </span>
                         ) : (
-                          <span className="text-muted-foreground">{` ✓${msg.acked > 1 ? msg.acked : ''}`}</span>
-                        )
-                      ) : onResendChannelMessage && msg.type === 'CHAN' ? (
-                        <span
-                          className="text-muted-foreground cursor-pointer hover:text-primary"
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={handleKeyboardActivate}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedPath({
-                              paths: [],
-                              senderInfo: selfSenderInfo,
-                              messageId: msg.id,
-                              packetId: msg.packet_id,
-                              isOutgoingChan: true,
-                            });
-                          }}
-                          title="Message status"
-                          aria-label="No echoes yet — view message status"
-                        >
-                          {' '}
-                          ?
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground" title="No repeats heard yet">
-                          {' '}
-                          ?
-                        </span>
-                      ))}
+                          <span className="text-muted-foreground" title="No repeats heard yet">
+                            {' '}
+                            ?
+                          </span>
+                        ))}
+                    </div>
                   </div>
                 </div>
               </div>
-            </Fragment>
-          );
-        })}
+            );
+          })}
+        </div>
         {loadingNewer && (
           <div className="text-center py-2 text-muted-foreground text-sm" role="status">
             Loading newer messages...
@@ -1223,7 +1294,12 @@ export function MessageList({
             <button
               type="button"
               onClick={() => {
-                unreadMarkerRef.current?.scrollIntoView?.({ block: 'center' });
+                if (unreadMarkerRef.current?.scrollIntoView) {
+                  unreadMarkerRef.current.scrollIntoView({ block: 'center' });
+                } else {
+                  // The marker row is outside the rendered window — scroll by index.
+                  scrollToIndex(unreadMarkerIndex, 'center');
+                }
                 setJumpToUnreadDismissed(true);
                 setShowJumpToUnread(false);
               }}

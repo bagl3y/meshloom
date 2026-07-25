@@ -472,4 +472,22 @@ describe('MessageList channel sender rendering', () => {
     expect(screen.getByText('Unread messages')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Jump to unread' })).not.toBeInTheDocument();
   });
+  it('mounts only a window of rows for a long history', () => {
+    const messages = Array.from({ length: 500 }, (_, i) =>
+      createMessage({
+        id: i + 1,
+        text: `Alice: message ${i}`,
+        sender_timestamp: 1700000000 + i,
+        received_at: 1700000001 + i,
+      })
+    );
+
+    const { container } = render(<MessageList messages={messages} contacts={[]} loading={false} />);
+
+    // jsdom reports no layout, so the list falls back to a nominal viewport. The point
+    // is that the window is bounded: a 500-message history must not mount 500 rows.
+    const mounted = container.querySelectorAll('[data-message-id]').length;
+    expect(mounted).toBeGreaterThan(0);
+    expect(mounted).toBeLessThan(100);
+  });
 });
