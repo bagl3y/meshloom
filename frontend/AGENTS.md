@@ -41,9 +41,13 @@ frontend/src/
 ├── themes.css              # Color theme definitions
 ├── contexts/
 │   ├── DistanceUnitContext.tsx # Browser-local distance-unit context/provider
+│   ├── PathHopWidthContext.tsx # Browser-local path hop-width display preference
+│   ├── RichPayloadContext.tsx  # Browser-local rich MeshCore payload rendering preference
 │   └── PushSubscriptionContext.tsx # Push subscription state context/provider
 ├── lib/
 │   └── utils.ts            # cn() — clsx + tailwind-merge helper
+├── networkGraph/
+│   └── packetNetworkGraph.ts # Packet→network graph construction shared by visualizer surfaces
 ├── hooks/
 │   ├── index.ts            # Central re-export of all hooks
 │   ├── useConversationActions.ts   # Send/resend/trace/block conversation actions
@@ -61,6 +65,7 @@ frontend/src/
 │   ├── usePushSubscription.ts      # Web Push subscription lifecycle, per-conversation filters
 │   ├── useFaviconBadge.ts          # Browser tab unread badge state
 │   ├── useRawPacketStatsSession.ts # Session-scoped packet-feed stats history
+│   ├── useEntranceSettled.ts       # Defers entrance animation work until layout settles
 │   └── useRememberedServerPassword.ts # Browser-local repeater/room password persistence
 ├── components/
 │   ├── AppShell.tsx            # App-shell layout: status, sidebar, search/settings panes, cracker, modals, security warning
@@ -82,6 +87,10 @@ frontend/src/
 │   ├── rawPacketIdentity.ts    # observation_id vs id dedup helpers
 │   ├── rawPacketStats.ts       # Session packet stats windows, rankings, and coverage helpers
 │   ├── regionScope.ts          # Regional flood-scope label/normalization helpers
+│   ├── meshcoreOpenPayloads.ts # Rich MeshCore Open payload detection/rendering helpers
+│   ├── textReplace.ts          # Shared message text substitution helpers
+│   ├── pathHopWidthPreference.ts # LocalStorage persistence for hop-width display toggle
+│   ├── richPayloadPreference.ts  # LocalStorage persistence for rich payload rendering toggle
 │   ├── visualizerUtils.ts      # 3D visualizer node types, colors, particles
 │   ├── visualizerSettings.ts   # LocalStorage persistence for visualizer options
 │   ├── a11y.ts                 # Keyboard accessibility helper
@@ -154,6 +163,7 @@ frontend/src/
 │   │   ├── RepeaterAclPane.tsx          # Permission table
 │   │   ├── RepeaterNodeInfoPane.tsx      # Repeater name, coords, clock drift
 │   │   ├── RepeaterRadioSettingsPane.tsx # Radio config + advert intervals
+│   │   ├── RepeaterRegionsPane.tsx      # Region hierarchy / flood-allowed region names
 │   │   ├── RepeaterLppTelemetryPane.tsx # CayenneLPP sensor data
 │   │   ├── RepeaterOwnerInfoPane.tsx    # Owner info + guest password
 │   │   ├── RepeaterTelemetryHistoryPane.tsx # Historical telemetry chart/table
@@ -414,7 +424,7 @@ For repeater contacts (`type=2`), `ConversationPane.tsx` renders `RepeaterDashbo
 
 **Login**: `RepeaterLogin` component — password or guest login via `POST /api/contacts/{key}/repeater/login`.
 
-**Dashboard panes** (after login): Telemetry, Node Info, Neighbors, ACL, Radio Settings, Advert Intervals, Owner Info — each fetched via granular `POST /api/contacts/{key}/repeater/{pane}` endpoints. Panes retry up to 3 times client-side. `Neighbors` depends on the smaller `node-info` fetch for repeater GPS, not the heavier radio-settings batch. "Load All" fetches all panes serially (parallel would queue behind the radio lock).
+**Dashboard panes** (after login): Telemetry, Node Info, Neighbors, ACL, Radio Settings, Regions, Advert Intervals, Owner Info — each fetched via granular `POST /api/contacts/{key}/repeater/{pane}` endpoints. The Regions pane prefers the admin CLI hierarchy and falls back to the guest anon flood-allowed names, so its payload carries a `source` of `cli` or `anon`. Panes retry up to 3 times client-side. `Neighbors` depends on the smaller `node-info` fetch for repeater GPS, not the heavier radio-settings batch. "Load All" fetches all panes serially (parallel would queue behind the radio lock).
 
 **Actions pane**: Send Advert, Sync Clock, Reboot — all send CLI commands via `POST /api/contacts/{key}/command`.
 

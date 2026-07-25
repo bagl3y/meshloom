@@ -24,13 +24,14 @@ Keep it aligned with `app/` source files and router behavior.
 ```text
 app/
 ├── main.py              # App startup/lifespan, router registration, static frontend mounting
+├── api_docs.py          # OpenAPI description/tag metadata and docs route registration
 ├── config.py            # Env-driven runtime settings
 ├── channel_constants.py # Public/default channel constants shared across sync/send logic
 ├── database.py          # SQLite connection + base schema + migration runner
 ├── migrations/          # Schema migrations (SQLite user_version, per-version modules)
 ├── models.py            # Pydantic request/response models and typed write contracts (for example ContactUpsert)
 ├── version_info.py      # Unified version/build metadata resolution for debug + startup surfaces
-├── repository/          # Data access layer (contacts, channels, messages, raw_packets, settings, fanout, push_subscriptions, repeater_telemetry)
+├── repository/          # Data access layer (contacts, channels, messages, raw_packets, settings, fanout, push_subscriptions, repeater_telemetry, contact_telemetry)
 ├── services/            # Shared orchestration/domain services
 │   ├── messages.py              # Shared message creation, dedup, ACK application
 │   ├── message_send.py          # Direct send, channel send, resend workflows
@@ -38,6 +39,7 @@ app/
 │   ├── dm_ack_apply.py          # Shared DM ACK application over pending/buffered ACK state
 │   ├── dm_ack_tracker.py        # Pending DM ACK state
 │   ├── contact_reconciliation.py # Prefix-claim, sender-key backfill, name-history wiring
+│   ├── flood_scope.py           # Firmware-version-aware flood-scope set/clear command seam
 │   ├── radio_lifecycle.py       # Post-connect setup and reconnect/setup helpers
 │   ├── radio_commands.py        # Radio config/private-key command workflows
 │   ├── radio_stats.py           # In-memory local radio stats sampling and noise-floor history
@@ -58,6 +60,7 @@ app/
 ├── telemetry_interval.py # Shared telemetry interval math for tracked-repeater scheduler
 ├── path_utils.py        # Path hex rendering and hop-width helpers
 ├── region_scope.py      # Normalize/validate regional flood-scope values
+├── region_resolver.py   # Recompute transport codes per known region to name a packet's region
 ├── keystore.py          # Ephemeral private/public key storage for DM decryption
 ├── frontend_static.py   # Mount/serve built frontend (production)
 └── routers/
@@ -149,7 +152,7 @@ app/
 
 - `ROUTE_TYPE_TRANSPORT_FLOOD`/`ROUTE_TYPE_TRANSPORT_DIRECT` packets carry a 4-byte transport-code block; `parse_packet_envelope` exposes it as `transport_codes = (code_1, code_2)` (little-endian uint16s; `code_2` is reserved/0).
 - `code_1` is a keyed MAC over the payload, not a stable per-region id: `code = HMAC-SHA256(SHA256("#" + region_name)[:16], payload_type || payload)[:2]` (firmware `TransportKeyStore.cpp`; reserved values `0x0000`/`0xFFFF` are nudged to `0x0001`/`0xFFFE`). There is **no** reverse lookup table — to name a packet's region you recompute the code per candidate region and check for a match (`app/region_resolver.py`).
-- Candidate region names come from `app_settings.known_regions` (user-editable, seeded by migration 064 from `flood_scope` + channel `flood_scope_override`).
+- Candidate region names come from `app_settings.known_regions` (user-editable, seeded by migration 063 from `flood_scope` + channel `flood_scope_override`).
 - Channel messages persist `messages.transport_code` (uint16, NULL = unscoped plain flood) and `messages.region` (resolved name, NULL = scoped but no list match) at ingest, so the chat region badge survives raw-packet purge. The packet inspector (`GET /packets/{id}` and the `raw_packet` WS broadcast) resolves region on the fly against the current list since it still holds the raw payload.
 
 ### Raw packet dedup policy
@@ -235,6 +238,7 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 - `POST /contacts/{public_key}/repeater/acl`
 - `POST /contacts/{public_key}/repeater/node-info`
 - `POST /contacts/{public_key}/repeater/radio-settings`
+- `POST /contacts/{public_key}/repeater/regions` — CLI region hierarchy, falling back to the guest anon flood-allowed names (`source`: `cli` or `anon`)
 - `POST /contacts/{public_key}/repeater/advert-intervals`
 - `POST /contacts/{public_key}/repeater/owner-info`
 - `GET /contacts/{public_key}/repeater/telemetry-history` — stored telemetry history for a repeater (read-only, no radio access)

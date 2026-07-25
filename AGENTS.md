@@ -348,6 +348,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | POST | `/api/contacts/{public_key}/repeater/acl` | Fetch repeater ACL |
 | POST | `/api/contacts/{public_key}/repeater/node-info` | Fetch repeater name, location, and clock via CLI |
 | POST | `/api/contacts/{public_key}/repeater/radio-settings` | Fetch repeater radio config via CLI |
+| POST | `/api/contacts/{public_key}/repeater/regions` | Fetch repeater region hierarchy via CLI, falling back to the guest anon flood-allowed region names (`source`: `cli` or `anon`) |
 | POST | `/api/contacts/{public_key}/repeater/advert-intervals` | Fetch advert intervals |
 | POST | `/api/contacts/{public_key}/repeater/owner-info` | Fetch owner info |
 | GET | `/api/contacts/{public_key}/repeater/telemetry-history` | Stored telemetry history for a repeater (read-only, no radio access) |
@@ -513,6 +514,7 @@ mc.subscribe(EventType.ACK, handler)
 | `MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK` | `false` | Switch the always-on radio audit task from hourly checks to aggressive 10-second polling; the audit checks both missed message drift and channel-slot cache drift |
 | `MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE` | `false` | Disable channel-slot reuse and force `set_channel(...)` before every channel send, even on serial/BLE |
 | `MESHCORE_LOAD_WITH_AUTOEVICT` | `false` | Enable autoevict contact loading: sets `AUTO_ADD_OVERWRITE_OLDEST` on the radio so adds never fail with TABLE_FULL, skips the removal phase during reconcile, and allows blind loading when `get_contacts` fails. Loaded contacts are not radio-favorited and may be evicted by new adverts when the table is full. |
+| `MESHCORE_SKIP_POST_CONNECT_SYNC` | `false` | Debug/diagnostic escape hatch: skip the contact/channel sync-and-offload, startup advertisement, and pending-message drain during post-connect setup, and do not start the periodic sync/advert/message-poll/telemetry background loops. Handler registration, key export, time sync, flood-scope apply, and auto message fetching still run. Useful when the radio's contact/channel state must be left untouched; not for normal operation. |
 | `MESHCORE_ENABLE_LOCAL_PRIVATE_KEY_EXPORT` | `false` | Enable `GET /api/radio/private-key` to return the in-memory private key as hex. Disabled by default; only enable on a trusted network where you need to retrieve the key (e.g. for backup or migration). |
 | `MESHCORE_VAPID_SUBJECT` | `mailto:noreply@meshcore.local` | Subject (`sub`) claim for Web Push VAPID tokens; must be a `mailto:` or `https:` contact. Apple's push service (APNs) rejects the default `.local` domain with `403 BadJwtToken`, so iOS/Safari operators must set this to a real address. Google FCM (Chrome/Android) accepts the default. |
 
