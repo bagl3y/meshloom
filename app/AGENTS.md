@@ -155,6 +155,17 @@ app/
 - Candidate region names come from `app_settings.known_regions` (user-editable, seeded by migration 063 from `flood_scope` + channel `flood_scope_override`).
 - Channel messages persist `messages.transport_code` (uint16, NULL = unscoped plain flood) and `messages.region` (resolved name, NULL = scoped but no list match) at ingest, so the chat region badge survives raw-packet purge. The packet inspector (`GET /packets/{id}` and the `raw_packet` WS broadcast) resolves region on the fly against the current list since it still holds the raw payload.
 
+### Region-scope adoption stats (`region_scope_24h`)
+
+`GET /statistics` reports regional flood-scope uptake as two views with different denominators that intentionally will not agree:
+
+- **Traffic** (`bucket_region_scope` in `path_utils.py`) counts flood-routed (`route_type` 0/1) GroupText packets across all channels, including undecryptable ones. Zero-hop/direct sends are excluded because firmware reaches them through the non-transport `sendZeroHop`/`sendDirect` overloads and they can never carry transport codes.
+- **Senders** (`StatisticsRepository._region_scope_senders_24h`) counts distinct senders with at least one scoped message. Attribution requires decryption, so it only covers channels we hold keys for — narrower, but self-validating (a decrypted packet is provably not a corrupt capture) and immune to one chatty node skewing the result. Identity is `sender_key` falling back to `sender_name`; scoping reads `messages.transport_code`, falling back to the linked raw packet for rows stored before region tagging existed.
+
+`false_positive_floor` exists because corrupt RF captures land in `raw_packets` with effectively random headers and a share of them claim `TRANSPORT_FLOOD`. That garbage spreads near-uniformly across payload-type buckets, so it is measured directly from payload types the protocol does not define (`0x0C`/`0x0D`/`0x0E`) and averaged per bucket. **A `scoped_messages` count at or below the floor is not evidence of adoption**; surface the two together and never show the percentage alone. Do not "fix" the floor by removing it — without it the metric reads several times higher than reality.
+
+Both traffic buckets come from one 24h raw-packet scan (`_packet_shape_24h`) shared with `path_hash_width_24h`, so adding region stats costs no extra query or parse pass.
+
 ### Raw packet dedup policy
 
 - Raw packet storage deduplicates by payload hash (`RawPacketRepository.create`), excluding routing/path bytes.
@@ -297,7 +308,7 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 - `POST /fanout/bots/disable-until-restart` — stop bot modules and keep bots disabled until restart
 
 ### Statistics
-- `GET /statistics` — aggregated mesh network stats (entity counts, message/packet splits, activity windows, busiest channels)
+- `GET /statistics` — aggregated mesh network stats (entity counts, message/packet splits, activity windows, busiest channels, `region_scope_24h` regional adoption)
 
 ### Push
 - `GET /push/vapid-public-key` — VAPID public key for browser `PushManager.subscribe()`

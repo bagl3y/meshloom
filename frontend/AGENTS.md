@@ -152,7 +152,7 @@ frontend/src/
 │   │   ├── SettingsFanoutSection.tsx     # Fanout integrations: MQTT, bots, config CRUD
 │   │   ├── SettingsRadioAppSection.tsx    # Radio-App Management: tracked telemetry, contact management, blocked lists
 │   │   ├── SettingsDatabaseSection.tsx   # Database: DB size, storage cleanup, auto-decrypt
-│   │   ├── SettingsStatisticsSection.tsx # Read-only mesh network stats
+│   │   ├── SettingsStatisticsSection.tsx # Read-only mesh network stats (incl. region-scope adoption)
 │   │   ├── SettingsAboutSection.tsx     # Version, author, license, links
 │   │   ├── ThemeSelector.tsx           # Color theme picker
 │   │   └── BulkDeleteContactsModal.tsx # Bulk contact deletion dialog
@@ -478,6 +478,15 @@ Key conventions documented in the reference:
 - **Buttons** use the shadcn `<Button>` component. Semantic color overrides (danger, warning, success) use `variant="outline"` with `className="border-{color}/50 text-{color} hover:bg-{color}/10"`.
 - **Badges/tags** use `text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded` with `bg-muted` (neutral) or `bg-primary/10` (active).
 - **Clickable text** (copy-to-clipboard, navigational links) uses `role="button" tabIndex={0}` with `cursor-pointer hover:text-primary transition-colors`.
+
+### Region-scope adoption panel
+
+`SettingsStatisticsSection.tsx` renders `stats.region_scope_24h` via `RegionScopeStatsPanel`. Two presentation rules exist because regional adoption is currently very sparse, and both are deliberate:
+
+- **Fractions, not bare percentages.** "3 of 117" carries the sample size that "2.6%" hides.
+- **The traffic percentage is withheld** when the scoped count is at or below `false_positive_floor` (corrupt-capture noise) or when the share would round to `0.0%`. The floor caveat is always shown alongside a non-zero scoped count. The sender figure is never suppressed — it requires successful decryption and so carries no noise.
+
+Traffic and sender figures use different denominators (all channels vs. decryptable-only) and are not expected to match.
 
 ## Security Posture (intentional)
 

@@ -304,6 +304,69 @@ def bucket_path_hash_widths(rows: Iterable) -> dict[str, int | float]:
     }
 
 
+# Payload types with no meaning in the MeshCore protocol. Any packet claiming one
+# is corrupt by definition, which makes them a usable gauge for how much RF garbage
+# is sitting in a given route-type bucket. See bucket_region_scope().
+UNDEFINED_PAYLOAD_TYPES = (0x0C, 0x0D, 0x0E)
+
+_PAYLOAD_TYPE_GROUP_TEXT = 0x05
+_FLOOD_ROUTE_TYPES = (0x00, 0x01)  # TRANSPORT_FLOOD, FLOOD
+
+
+def bucket_region_scope(rows: Iterable) -> dict[str, int | float]:
+    """Count flood-routed channel messages carrying a regional transport code.
+
+    *rows* must be an already-fetched list whose elements have a ``data`` column
+    containing raw packet bytes.
+
+    Only flood-routed packets are counted. Zero-hop and direct sends can never
+    carry transport codes (firmware reaches them through the non-transport
+    ``sendZeroHop``/``sendDirect`` overloads), so including them would silently
+    dilute the percentage.
+
+    ``false_positive_floor`` exists because corrupt RF captures still land in
+    ``raw_packets`` with effectively random header bytes, and a share of them
+    claim TRANSPORT_FLOOD. That garbage spreads near-uniformly across payload-type
+    buckets, so we measure it directly: count transport-routed packets claiming a
+    payload type the protocol does not define, and average per bucket. A
+    ``scoped_messages`` count at or below ``false_positive_floor`` is not evidence
+    of regional adoption, and callers should present the two together.
+    """
+    total = 0
+    scoped = 0
+    undefined_scoped = 0
+
+    for row in rows:
+        envelope = parse_packet_envelope(bytes(row["data"]))
+        if envelope is None:
+            continue
+
+        if (
+            envelope.route_type == 0x00
+            and envelope.payload_type in UNDEFINED_PAYLOAD_TYPES
+            and envelope.transport_codes is not None
+        ):
+            undefined_scoped += 1
+            continue
+
+        if envelope.payload_type != _PAYLOAD_TYPE_GROUP_TEXT:
+            continue
+        if envelope.route_type not in _FLOOD_ROUTE_TYPES:
+            continue
+
+        total += 1
+        if envelope.transport_codes is not None:
+            scoped += 1
+
+    noise_floor = undefined_scoped / len(UNDEFINED_PAYLOAD_TYPES)
+    return {
+        "total_messages": total,
+        "scoped_messages": scoped,
+        "scoped_pct": (scoped / total) * 100 if total else 0.0,
+        "false_positive_floor": noise_floor,
+    }
+
+
 def calculate_packet_hash(raw_bytes: bytes) -> str:
     """Calculate packet hash matching MeshCore's Packet::calculatePacketHash().
 

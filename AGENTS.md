@@ -393,7 +393,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | PATCH | `/api/fanout/{id}` | Update fanout config (triggers module reload) |
 | DELETE | `/api/fanout/{id}` | Delete fanout config (stops module) |
 | POST | `/api/fanout/bots/disable-until-restart` | Stop bot fanout modules and keep bots disabled until the process restarts |
-| GET | `/api/statistics` | Aggregated mesh network statistics |
+| GET | `/api/statistics` | Aggregated mesh network statistics, including `region_scope_24h` regional flood-scope adoption |
 | GET | `/api/push/vapid-public-key` | VAPID public key for browser push subscription |
 | POST | `/api/push/subscribe` | Register/upsert a push subscription |
 | GET | `/api/push/subscriptions` | List all push subscriptions |
