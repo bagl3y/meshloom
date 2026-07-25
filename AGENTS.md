@@ -341,7 +341,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | POST | `/api/contacts/{public_key}/routing-override` | Set or clear a forced routing override |
 | POST | `/api/contacts/{public_key}/trace` | Trace route to contact |
 | POST | `/api/contacts/{public_key}/path-discovery` | Discover forward/return paths and persist the learned direct route |
-| POST | `/api/contacts/{public_key}/repeater/login` | Log in to a repeater |
+| POST | `/api/contacts/{public_key}/repeater/login` | Log in to a repeater (escalates to one flood retry if the first attempt draws no reply) |
 | POST | `/api/contacts/{public_key}/repeater/status` | Fetch repeater status telemetry |
 | POST | `/api/contacts/{public_key}/repeater/lpp-telemetry` | Fetch CayenneLPP sensor data |
 | POST | `/api/contacts/{public_key}/repeater/neighbors` | Fetch repeater neighbors |
@@ -354,7 +354,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | GET | `/api/contacts/{public_key}/repeater/telemetry-history` | Stored telemetry history for a repeater (read-only, no radio access) |
 | POST | `/api/contacts/{public_key}/telemetry` | Fetch CayenneLPP telemetry from any contact (single attempt, 10s timeout) |
 | GET | `/api/contacts/{public_key}/telemetry-history` | Stored LPP telemetry history for a contact (read-only, no radio access) |
-| POST | `/api/contacts/{public_key}/room/login` | Log in to a room server |
+| POST | `/api/contacts/{public_key}/room/login` | Log in to a room server (escalates to one flood retry if the first attempt draws no reply) |
 | POST | `/api/contacts/{public_key}/room/status` | Fetch room-server status telemetry |
 | POST | `/api/contacts/{public_key}/room/lpp-telemetry` | Fetch room-server CayenneLPP sensor data |
 | POST | `/api/contacts/{public_key}/room/acl` | Fetch room-server ACL entries |

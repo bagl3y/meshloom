@@ -80,6 +80,15 @@ def _login_timeout_message(label: str) -> str:
     )
 
 
+def _login_flood_retry_timeout_message(label: str) -> str:
+    return (
+        f"No login confirmation was heard from the {label}, including a retry sent as flood "
+        "in case the stored route was stale. That can mean the password was wrong, the "
+        f"{label} is out of range, or the reply was missed in transit. "
+        "You're free to attempt interaction; try logging in again if authenticated actions fail."
+    )
+
+
 def extract_response_text(event) -> str:
     """Extract text from a CLI response event, stripping the firmware '> ' prefix."""
     text = event.payload.get("text", str(event.payload))
@@ -214,17 +223,20 @@ async def fetch_contact_cli_response(
         subscription.unsubscribe()
 
 
-async def prepare_authenticated_contact_connection(
+async def _attempt_server_login(
     mc,
     contact: Contact,
     password: str,
     *,
-    label: str | None = None,
-    response_timeout: float = SERVER_LOGIN_RESPONSE_TIMEOUT_SECONDS,
+    contact_label: str,
+    response_timeout: float,
 ) -> RepeaterLoginResponse:
-    """Prepare connection to a server-capable contact by adding it to the radio and logging in."""
+    """Send one login and wait for the reply.
+
+    Subscriptions are per-attempt because the resolving future can only be
+    settled once — a retry needs a fresh pair.
+    """
     pubkey_prefix = contact.public_key[:12].lower()
-    contact_label = label or get_server_contact_label(contact)
     loop = asyncio.get_running_loop()
     login_future = loop.create_future()
 
@@ -254,9 +266,6 @@ async def prepare_authenticated_contact_connection(
     )
 
     try:
-        logger.info("Adding %s %s to radio", contact_label, contact.public_key[:12])
-        await _ensure_on_radio(mc, contact)
-
         logger.info("Sending login to %s %s", contact_label, contact.public_key[:12])
         login_result = await mc.commands.send_login(contact.public_key, password)
 
@@ -268,10 +277,7 @@ async def prepare_authenticated_contact_connection(
             )
 
         try:
-            return await asyncio.wait_for(
-                login_future,
-                timeout=response_timeout,
-            )
+            return await asyncio.wait_for(login_future, timeout=response_timeout)
         except TimeoutError:
             logger.warning(
                 "No login response from %s %s within %.1fs",
@@ -284,6 +290,105 @@ async def prepare_authenticated_contact_connection(
                 authenticated=False,
                 message=_login_timeout_message(contact_label),
             )
+    finally:
+        success_subscription.unsubscribe()
+        failed_subscription.unsubscribe()
+
+
+async def prepare_authenticated_contact_connection(
+    mc,
+    contact: Contact,
+    password: str,
+    *,
+    label: str | None = None,
+    response_timeout: float = SERVER_LOGIN_RESPONSE_TIMEOUT_SECONDS,
+) -> RepeaterLoginResponse:
+    """Prepare connection to a server-capable contact by adding it to the radio and logging in.
+
+    A login that draws no reply at all may mean the stored direct route has gone
+    stale, so it escalates to one flood retry — mirroring the DM send path, which
+    already resets the path before its final attempt. This is deliberately more
+    than the reference clients do: firmware ``sendLogin`` and ``send_login_sync``
+    are both single-shot, and firmware only clears a stale path when the *host*
+    asks it to (``CMD_RESET_PATH``). Escalating is still the right call because
+    the server side treats an inbound flood as its cue to relearn the return path
+    (``simple_repeater``/``simple_room_server``: ``if (is_flood)
+    client->out_path_len = OUT_PATH_UNKNOWN``), so a flood login is exactly what
+    repairs a broken route in both directions.
+
+    Escalation is bounded to a single extra attempt and only fires when:
+      - the first attempt timed out. An explicit ``LOGIN_FAILED`` means the
+        server heard us and refused, so the route is fine and retrying would
+        just hammer it with bad credentials. A send error is a local radio
+        problem that a different route will not fix.
+      - the first attempt actually used a route. If the contact was already on
+        flood, the retry would be byte-identical for no gain.
+
+    ``reset_path`` clears the route on the radio only; the stored contact route
+    is left alone, so the next ``add_contact`` re-stages it. That matches the DM
+    retry and keeps a single bad login from discarding a route that may be fine.
+    """
+    contact_label = label or get_server_contact_label(contact)
+
+    try:
+        logger.info("Adding %s %s to radio", contact_label, contact.public_key[:12])
+        await _ensure_on_radio(mc, contact)
+
+        response = await _attempt_server_login(
+            mc,
+            contact,
+            password,
+            contact_label=contact_label,
+            response_timeout=response_timeout,
+        )
+        if response.status != "timeout":
+            return response
+
+        if contact.effective_route_source == "flood":
+            logger.debug(
+                "Login to %s %s timed out on flood; no route to escalate from",
+                contact_label,
+                contact.public_key[:12],
+            )
+            return response
+
+        logger.info(
+            "Login to %s %s timed out on the %s route; resetting path and retrying as flood",
+            contact_label,
+            contact.public_key[:12],
+            contact.effective_route_source,
+        )
+        reset_result = await mc.commands.reset_path(contact.public_key)
+        if reset_result is None:
+            logger.warning(
+                "No response from radio for reset_path to %s before flood login retry",
+                contact.public_key[:12],
+            )
+            return response
+        if reset_result.type == EventType.ERROR:
+            logger.warning(
+                "Failed to reset path before flood login retry to %s: %s",
+                contact.public_key[:12],
+                reset_result.payload,
+            )
+            return response
+
+        # Deliberately no _ensure_on_radio here — re-adding the contact would
+        # restore the very route we just cleared, and the retry would go direct.
+        flood_response = await _attempt_server_login(
+            mc,
+            contact,
+            password,
+            contact_label=contact_label,
+            response_timeout=response_timeout,
+        )
+        if flood_response.status == "timeout":
+            return RepeaterLoginResponse(
+                status="timeout",
+                authenticated=False,
+                message=_login_flood_retry_timeout_message(contact_label),
+            )
+        return flood_response
     except HTTPException as exc:
         logger.warning(
             "%s login setup failed for %s: %s",
@@ -296,9 +401,6 @@ async def prepare_authenticated_contact_connection(
             authenticated=False,
             message=f"{_login_send_failed_message(contact_label)} ({exc.detail})",
         )
-    finally:
-        success_subscription.unsubscribe()
-        failed_subscription.unsubscribe()
 
 
 async def batch_cli_fetch(
