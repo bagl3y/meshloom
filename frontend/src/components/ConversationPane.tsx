@@ -13,12 +13,10 @@ import type {
   HealthStatus,
   Message,
   PathDiscoveryResponse,
-  RawPacket,
   RadioConfig,
   RadioTraceHopRequest,
   RadioTraceResponse,
 } from '../types';
-import type { RawPacketStatsSessionState } from '../utils/rawPacketStats';
 import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM } from '../types';
 import {
   getContactDisplayName,
@@ -38,8 +36,6 @@ interface ConversationPaneProps {
   activeConversation: Conversation | null;
   contacts: Contact[];
   channels: Channel[];
-  rawPackets: RawPacket[];
-  rawPacketStatsSession: RawPacketStatsSessionState;
   config: RadioConfig | null;
   health: HealthStatus | null;
   notificationsSupported: boolean;
@@ -125,8 +121,6 @@ export function ConversationPane({
   activeConversation,
   contacts,
   channels,
-  rawPackets,
-  rawPacketStatsSession,
   config,
   health,
   notificationsSupported,
@@ -217,7 +211,6 @@ export function ConversationPane({
             <MapView
               contacts={contacts}
               focusedKey={activeConversation.mapFocusKey}
-              rawPackets={rawPackets}
               config={config}
               blockedKeys={blockedKeys}
               blockedNames={blockedNames}
@@ -242,25 +235,13 @@ export function ConversationPane({
   if (activeConversation.type === 'visualizer') {
     return (
       <Suspense fallback={<LoadingPane label="Loading visualizer..." />}>
-        <VisualizerView
-          packets={rawPackets}
-          contacts={contacts}
-          channels={channels}
-          config={config}
-        />
+        <VisualizerView contacts={contacts} channels={channels} config={config} />
       </Suspense>
     );
   }
 
   if (activeConversation.type === 'raw') {
-    return (
-      <RawPacketFeedView
-        packets={rawPackets}
-        rawPacketStatsSession={rawPacketStatsSession}
-        contacts={contacts}
-        channels={channels}
-      />
-    );
+    return <RawPacketFeedView contacts={contacts} channels={channels} />;
   }
 
   if (activeConversation.type === 'search') {

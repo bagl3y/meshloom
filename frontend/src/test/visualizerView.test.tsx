@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { VisualizerView } from '../components/VisualizerView';
+import { resetRawPacketStore, seedRawPacketStore } from '../stores/rawPacketStore';
 import type { RawPacket } from '../types';
 
 // The 3D scene needs WebGL, which jsdom does not provide.
@@ -26,17 +27,12 @@ function createPacket(overrides: Partial<RawPacket> = {}): RawPacket {
 describe('VisualizerView packet feed', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    resetRawPacketStore();
   });
 
   it('opens the packet analyzer when a feed packet is clicked', () => {
-    render(
-      <VisualizerView
-        packets={[createPacket({ id: 7, observation_id: 21 })]}
-        contacts={[]}
-        channels={[]}
-        config={null}
-      />
-    );
+    seedRawPacketStore({ packets: [createPacket({ id: 7, observation_id: 21 })] });
+    render(<VisualizerView contacts={[]} channels={[]} config={null} />);
 
     expect(screen.queryByText('Packet Details')).not.toBeInTheDocument();
 
@@ -47,7 +43,7 @@ describe('VisualizerView packet feed', () => {
   });
 
   it('does not render the analyzer until a packet is selected', () => {
-    render(<VisualizerView packets={[]} contacts={[]} channels={[]} config={null} />);
+    render(<VisualizerView contacts={[]} channels={[]} config={null} />);
 
     expect(screen.queryByText('Packet Details')).not.toBeInTheDocument();
   });
