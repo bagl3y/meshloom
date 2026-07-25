@@ -146,6 +146,13 @@ const ESTIMATED_MESSAGE_HEIGHT = 64;
 
 /** Stand-in viewport height for when the scroll container cannot be measured. */
 const FALLBACK_VIEWPORT_HEIGHT = 800;
+/**
+ * Frames a pending bottom-pin may re-assert itself for. Row heights start as
+ * estimates and converge over the first few measurement passes, so the pin has to
+ * outlive them; the budget stops a list that can never reach the bottom (a
+ * container stuck at zero height) from re-scrolling forever.
+ */
+const BOTTOM_SCROLL_FRAME_BUDGET = 20;
 
 // URL regex for linkifying plain text
 const URL_PATTERN =
@@ -401,6 +408,16 @@ export function MessageList({
   const listRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef<number>(0);
   const isInitialLoadRef = useRef<boolean>(true);
+  // A pending request to pin the list to the newest message.
+  //
+  // Rows are measured lazily, so the total size at mount is a guess built from
+  // estimates. A single scrollToIndex against that guess gets undone by the
+  // measurement passes that follow — and under StrictMode's double-invoked
+  // effects it is undone completely, leaving the view stranded at the top. So
+  // the request is held open and re-asserted as measurements land, rather than
+  // fired once and marked done.
+  const pendingBottomScrollRef = useRef(false);
+  const [bottomScrollNonce, setBottomScrollNonce] = useState(0);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [selectedPath, setSelectedPath] = useState<{
     paths: MessagePath[];
@@ -538,6 +555,44 @@ export function MessageList({
     [virtualizer]
   );
 
+  const requestBottomScroll = useCallback(() => {
+    pendingBottomScrollRef.current = true;
+    setBottomScrollNonce((n) => n + 1);
+  }, []);
+
+  // Drives a pending bottom-pin across a bounded run of frames. Deliberately not
+  // keyed on the virtualizer's total size: that churns on every measurement pass,
+  // which would re-enter this effect continuously. A fixed frame budget converges
+  // as rows are measured and then stops on its own.
+  useEffect(() => {
+    if (!pendingBottomScrollRef.current) return;
+    if (sortedMessages.length === 0) return;
+
+    let frames = 0;
+    let raf = 0;
+    const step = () => {
+      const list = listRef.current;
+      if (!pendingBottomScrollRef.current || !list) return;
+
+      scrollToIndex(sortedMessages.length - 1, 'end');
+
+      const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight <= 1;
+      if (atBottom || (frames += 1) >= BOTTOM_SCROLL_FRAME_BUDGET) {
+        pendingBottomScrollRef.current = false;
+        return;
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [bottomScrollNonce, sortedMessages.length, scrollToIndex]);
+
+  // Any deliberate scroll gesture cancels the pending pin, so the retry loop can
+  // never fight a user who has started reading back through history.
+  const cancelBottomScroll = useCallback(() => {
+    pendingBottomScrollRef.current = false;
+  }, []);
+
   // Handle scroll position AFTER render
   useLayoutEffect(() => {
     if (!listRef.current) return;
@@ -552,10 +607,9 @@ export function MessageList({
     if (convKey !== null) prevConvKeyRef.current = convKey;
 
     if ((isInitialLoadRef.current || conversationChanged) && messages.length > 0) {
-      // Initial load or conversation switch - scroll to bottom.
-      // Anchored to the last row rather than scrollHeight: rows that have never been
-      // on screen still carry estimated heights, so the total is not yet exact.
-      scrollToIndex(sortedMessages.length - 1, 'end');
+      // Initial load or conversation switch - pin to the newest message. Requested
+      // rather than performed here; see pendingBottomScrollRef.
+      requestBottomScroll();
       isInitialLoadRef.current = false;
     } else if (messagesAdded > 0 && prevMessagesLengthRef.current > 0) {
       if (scrollStateRef.current.wasNearTop) {
@@ -563,15 +617,15 @@ export function MessageList({
         // Prepended rows are unmeasured, so anchoring by index beats height arithmetic.
         scrollToIndex(messagesAdded, 'start');
       } else if (scrollStateRef.current.wasNearBottom && !hasNewerMessagesRef.current) {
-        // User was near bottom - scroll to bottom for new messages (including sent).
+        // User was near bottom - follow new messages (including sent).
         // Skip when browsing mid-history (hasNewerMessages) so that forward-pagination
         // appends in place instead of chasing the bottom in an infinite load loop.
-        scrollToIndex(sortedMessages.length - 1, 'end');
+        requestBottomScroll();
       }
     }
 
     prevMessagesLengthRef.current = messages.length;
-  }, [messages, sortedMessages.length, scrollToIndex]);
+  }, [messages, sortedMessages.length, scrollToIndex, requestBottomScroll]);
 
   // Scroll to target message and highlight it
   useLayoutEffect(() => {
@@ -948,6 +1002,9 @@ export function MessageList({
         className="h-full overflow-y-auto p-4 flex flex-col"
         ref={listRef}
         onScroll={handleScroll}
+        onWheel={cancelBottomScroll}
+        onTouchStart={cancelBottomScroll}
+        onKeyDown={cancelBottomScroll}
       >
         {loadingOlder && (
           <div className="text-center py-2 text-muted-foreground text-sm" role="status">
@@ -966,6 +1023,10 @@ export function MessageList({
           {virtualRows.map((virtualRow) => {
             const index = virtualRow.index;
             const msg = sortedMessages[index];
+            // The virtualizer can briefly hold indices from a longer previous list
+            // (conversation switch, blocked-sender refilter). Rendering ahead of
+            // that would dereference undefined and blank the whole chat pane.
+            if (!msg) return null;
             // For DMs, look up contact; for channel messages, use parsed sender
             const contact = msg.type === 'PRIV' ? getContact(msg.conversation_key) : null;
             const isRoomServer = contact?.type === CONTACT_TYPE_ROOM;
