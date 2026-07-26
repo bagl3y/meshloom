@@ -960,6 +960,13 @@ class UnreadCounts(BaseModel):
     last_message_times: dict[str, int] = Field(
         default_factory=dict, description="Map of stateKey -> last message timestamp"
     )
+    first_unread_ids: dict[str, int | None] = Field(
+        default_factory=dict,
+        description=(
+            "Map of stateKey -> id of the oldest unread message. Lets the client place "
+            "the unread divider (and jump to it) without paging back through history."
+        ),
+    )
     last_read_ats: dict[str, int | None] = Field(
         default_factory=dict, description="Map of stateKey -> server-side last_read_at boundary"
     )

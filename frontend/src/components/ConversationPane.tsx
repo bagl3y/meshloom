@@ -46,7 +46,8 @@ interface ConversationPaneProps {
   messagesLoading: boolean;
   loadingOlder: boolean;
   hasOlderMessages: boolean;
-  unreadMarkerLastReadAt?: number | null;
+  unreadMarkerMessageId?: number | null;
+  onNavigateToUnread?: (messageId: number) => void;
   targetMessageId: number | null;
   hasNewerMessages: boolean;
   loadingNewer: boolean;
@@ -131,7 +132,8 @@ export function ConversationPane({
   messagesLoading,
   loadingOlder,
   hasOlderMessages,
-  unreadMarkerLastReadAt,
+  unreadMarkerMessageId,
+  onNavigateToUnread,
   targetMessageId,
   hasNewerMessages,
   loadingNewer,
@@ -329,8 +331,11 @@ export function ConversationPane({
           loading={messagesLoading}
           loadingOlder={loadingOlder}
           hasOlderMessages={hasOlderMessages}
-          unreadMarkerLastReadAt={
-            activeConversation.type === 'channel' ? unreadMarkerLastReadAt : undefined
+          unreadMarkerMessageId={
+            activeConversation.type === 'channel' ? unreadMarkerMessageId : undefined
+          }
+          onNavigateToUnread={
+            activeConversation.type === 'channel' ? onNavigateToUnread : undefined
           }
           onDismissUnreadMarker={
             activeConversation.type === 'channel' ? onDismissUnreadMarker : undefined

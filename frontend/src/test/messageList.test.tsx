@@ -324,6 +324,47 @@ describe('MessageList channel sender rendering', () => {
     expect(screen.getByText('TEST1: TEST2')).toBeInTheDocument();
   });
 
+  it('offers a jump instead of a divider when the unread boundary is not loaded', async () => {
+    const user = userEvent.setup();
+    const onNavigateToUnread = vi.fn();
+    // Boundary id 999 is not among the loaded messages: the real first-unread is
+    // further back than this window. The divider must not be invented at the top.
+    render(
+      <MessageList
+        messages={[
+          createMessage({ id: 1, received_at: 1700000001, text: 'Alice: older' }),
+          createMessage({ id: 2, received_at: 1700000010, text: 'Alice: newer' }),
+        ]}
+        contacts={[]}
+        loading={false}
+        unreadMarkerMessageId={999}
+        onNavigateToUnread={onNavigateToUnread}
+      />
+    );
+
+    expect(screen.queryByText('Unread messages')).not.toBeInTheDocument();
+
+    const jump = await screen.findByRole('button', { name: 'Jump to unread' });
+    await user.click(jump);
+
+    // Hands off to the jump-to-message path rather than scrolling to a wrong row.
+    expect(onNavigateToUnread).toHaveBeenCalledWith(999);
+  });
+
+  it('shows no unread affordance at all when nothing is unread', () => {
+    render(
+      <MessageList
+        messages={[createMessage({ id: 1, received_at: 1700000001, text: 'Alice: hi' })]}
+        contacts={[]}
+        loading={false}
+        unreadMarkerMessageId={null}
+      />
+    );
+
+    expect(screen.queryByText('Unread messages')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Jump to unread' })).not.toBeInTheDocument();
+  });
+
   it('renders and dismisses an unread marker at the first unread message boundary', async () => {
     const user = userEvent.setup();
     const messages = [
@@ -332,17 +373,15 @@ describe('MessageList channel sender rendering', () => {
     ];
 
     function DismissibleUnreadMarkerList() {
-      const [unreadMarkerLastReadAt, setUnreadMarkerLastReadAt] = useState<number | undefined>(
-        1700000005
-      );
+      const [unreadMarkerMessageId, setUnreadMarkerMessageId] = useState<number | undefined>(2);
 
       return (
         <MessageList
           messages={messages}
           contacts={[]}
           loading={false}
-          unreadMarkerLastReadAt={unreadMarkerLastReadAt}
-          onDismissUnreadMarker={() => setUnreadMarkerLastReadAt(undefined)}
+          unreadMarkerMessageId={unreadMarkerMessageId}
+          onDismissUnreadMarker={() => setUnreadMarkerMessageId(undefined)}
         />
       );
     }
@@ -367,12 +406,7 @@ describe('MessageList channel sender rendering', () => {
     ];
 
     render(
-      <MessageList
-        messages={messages}
-        contacts={[]}
-        loading={false}
-        unreadMarkerLastReadAt={1700000005}
-      />
+      <MessageList messages={messages} contacts={[]} loading={false} unreadMarkerMessageId={2} />
     );
 
     const jumpButton = screen.getByRole('button', { name: 'Jump to unread' });
@@ -394,12 +428,7 @@ describe('MessageList channel sender rendering', () => {
     ];
 
     render(
-      <MessageList
-        messages={messages}
-        contacts={[]}
-        loading={false}
-        unreadMarkerLastReadAt={1700000005}
-      />
+      <MessageList messages={messages} contacts={[]} loading={false} unreadMarkerMessageId={2} />
     );
 
     await user.click(screen.getByRole('button', { name: 'Dismiss jump to unread' }));
@@ -461,15 +490,28 @@ describe('MessageList channel sender rendering', () => {
     ];
 
     render(
-      <MessageList
-        messages={messages}
-        contacts={[]}
-        loading={false}
-        unreadMarkerLastReadAt={1700000005}
-      />
+      <MessageList messages={messages} contacts={[]} loading={false} unreadMarkerMessageId={2} />
     );
 
     expect(screen.getByText('Unread messages')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Jump to unread' })).not.toBeInTheDocument();
+  });
+  it('mounts only a window of rows for a long history', () => {
+    const messages = Array.from({ length: 500 }, (_, i) =>
+      createMessage({
+        id: i + 1,
+        text: `Alice: message ${i}`,
+        sender_timestamp: 1700000000 + i,
+        received_at: 1700000001 + i,
+      })
+    );
+
+    const { container } = render(<MessageList messages={messages} contacts={[]} loading={false} />);
+
+    // jsdom reports no layout, so the list falls back to a nominal viewport. The point
+    // is that the window is bounded: a 500-message history must not mount 500 rows.
+    const mounted = container.querySelectorAll('[data-message-id]').length;
+    expect(mounted).toBeGreaterThan(0);
+    expect(mounted).toBeLessThan(100);
   });
 });

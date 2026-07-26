@@ -32,7 +32,8 @@ import { shouldAutoFocusInput } from './utils/autoFocusInput';
 
 interface ChannelUnreadMarker {
   channelId: string;
-  lastReadAt: number | null;
+  /** Id of the oldest unread message, straight from the server. */
+  messageId: number | null;
 }
 
 interface NewMessagePrefillRequest {
@@ -41,42 +42,32 @@ interface NewMessagePrefillRequest {
   nonce: number;
 }
 
-interface UnreadBoundaryBackfillParams {
-  activeConversation: Conversation | null;
-  unreadMarker: ChannelUnreadMarker | null;
-  messages: Message[];
-  messagesLoading: boolean;
-  loadingOlder: boolean;
-  hasOlderMessages: boolean;
-}
+/**
+ * Which message the unread divider should sit on.
+ *
+ * Normally the server's first-unread id. The exception is a channel that has
+ * never been read: its true boundary is the first message ever sent there, so
+ * offering to jump would haul the reader to the start of history for no gain.
+ * Everything loaded is unread in that case, so the divider belongs at the top of
+ * the window — which is what the pre-id behaviour did, and it is genuinely the
+ * more useful answer.
+ */
+export function resolveUnreadMarkerId(
+  boundaryId: number | null,
+  lastReadAt: number | null,
+  messages: Message[]
+): number | null {
+  if (boundaryId === null) return null;
+  if (lastReadAt !== null) return boundaryId;
+  if (messages.length === 0) return boundaryId;
+  if (messages.some((msg) => msg.id === boundaryId)) return boundaryId;
 
-export function getUnreadBoundaryBackfillKey({
-  activeConversation,
-  unreadMarker,
-  messages,
-  messagesLoading,
-  loadingOlder,
-  hasOlderMessages,
-}: UnreadBoundaryBackfillParams): string | null {
-  if (activeConversation?.type !== 'channel') return null;
-  if (!unreadMarker || unreadMarker.channelId !== activeConversation.id) return null;
-  if (unreadMarker.lastReadAt === null) return null;
-  if (messagesLoading || loadingOlder || !hasOlderMessages || messages.length === 0) return null;
-
-  const oldestLoadedMessage = messages.reduce(
-    (oldest, msg) => {
-      if (!oldest) return msg;
-      if (msg.received_at < oldest.received_at) return msg;
-      if (msg.received_at === oldest.received_at && msg.id < oldest.id) return msg;
-      return oldest;
-    },
-    null as Message | null
-  );
-
-  if (!oldestLoadedMessage) return null;
-  if (oldestLoadedMessage.received_at <= unreadMarker.lastReadAt) return null;
-
-  return `${activeConversation.id}:${unreadMarker.lastReadAt}:${oldestLoadedMessage.id}`;
+  const oldestLoaded = messages.reduce((oldest, msg) => {
+    if (msg.received_at < oldest.received_at) return msg;
+    if (msg.received_at === oldest.received_at && msg.id < oldest.id) return msg;
+    return oldest;
+  }, messages[0]);
+  return oldestLoaded.id;
 }
 
 export function App() {
@@ -92,7 +83,6 @@ export function App() {
   const [bulkAddResult, setBulkAddResult] = useState<BulkCreateHashtagChannelsResult | null>(null);
   const [repeaterAutoLoginKey, setRepeaterAutoLoginKey] = useState<string | null>(null);
   const [visibilityVersion, setVisibilityVersion] = useState(0);
-  const lastUnreadBackfillAttemptRef = useRef<string | null>(null);
   const {
     notificationsSupported,
     notificationsPermission,
@@ -347,6 +337,7 @@ export function App() {
     mentions,
     lastMessageTimes,
     unreadLastReadAts,
+    firstUnreadIds,
     recordMessageEvent,
     renameConversationState,
     removeConversationState,
@@ -379,49 +370,25 @@ export function App() {
     const activeChannelId = activeConversation.id;
     const activeChannelUnreadCount = unreadCounts[getStateKey('channel', activeChannelId)] ?? 0;
 
+    const boundaryId = firstUnreadIds[getStateKey('channel', activeChannelId)] ?? null;
+
     setChannelUnreadMarker((prev) => {
       if (prev?.channelId === activeChannelId) {
+        // Same channel: hold the marker steady so it does not move under the
+        // reader, except to fill in a boundary we did not have yet. A marker
+        // created before /unreads resolved would otherwise stay blank for as long
+        // as the user stays put.
+        if (prev.messageId === null && boundaryId !== null) {
+          return { channelId: activeChannelId, messageId: boundaryId };
+        }
         return prev;
       }
       if (activeChannelUnreadCount <= 0) {
         return null;
       }
-      return {
-        channelId: activeChannelId,
-        lastReadAt: unreadLastReadAts[getStateKey('channel', activeChannelId)] ?? null,
-      };
+      return { channelId: activeChannelId, messageId: boundaryId };
     });
-  }, [activeConversation, unreadCounts, unreadLastReadAts]);
-
-  useEffect(() => {
-    lastUnreadBackfillAttemptRef.current = null;
-  }, [activeConversation?.id, channelUnreadMarker?.channelId, channelUnreadMarker?.lastReadAt]);
-
-  useEffect(() => {
-    const backfillKey = getUnreadBoundaryBackfillKey({
-      activeConversation,
-      unreadMarker: channelUnreadMarker,
-      messages,
-      messagesLoading,
-      loadingOlder,
-      hasOlderMessages,
-    });
-
-    if (!backfillKey || lastUnreadBackfillAttemptRef.current === backfillKey) {
-      return;
-    }
-
-    lastUnreadBackfillAttemptRef.current = backfillKey;
-    void fetchOlderMessages();
-  }, [
-    activeConversation,
-    channelUnreadMarker,
-    messages,
-    messagesLoading,
-    loadingOlder,
-    hasOlderMessages,
-    fetchOlderMessages,
-  ]);
+  }, [activeConversation, unreadCounts, firstUnreadIds]);
 
   const wsHandlers = useRealtimeAppState({
     prevHealthRef,
@@ -597,11 +564,16 @@ export function App() {
     messagesLoading,
     loadingOlder,
     hasOlderMessages,
-    unreadMarkerLastReadAt:
+    unreadMarkerMessageId:
       activeConversation?.type === 'channel' &&
       channelUnreadMarker?.channelId === activeConversation.id
-        ? channelUnreadMarker.lastReadAt
+        ? resolveUnreadMarkerId(
+            channelUnreadMarker.messageId,
+            unreadLastReadAts[getStateKey('channel', activeConversation.id)] ?? null,
+            messages
+          )
         : undefined,
+    onNavigateToUnread: (messageId: number) => setTargetMessageId(messageId),
     targetMessageId,
     hasNewerMessages,
     loadingNewer,

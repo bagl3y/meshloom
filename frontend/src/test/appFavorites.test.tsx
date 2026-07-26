@@ -104,6 +104,7 @@ vi.mock('../hooks', async (importOriginal) => {
       mentions: {},
       lastMessageTimes: {},
       unreadLastReadAts: {},
+      firstUnreadIds: {},
       recordMessageEvent: mocks.hookFns.recordMessageEvent,
       renameConversationState: vi.fn(),
       markAllRead: mocks.hookFns.markAllRead,
