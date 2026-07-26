@@ -422,6 +422,11 @@ export function MessageList({
   // fired once and marked done.
   const pendingBottomScrollRef = useRef(false);
   const [bottomScrollNonce, setBottomScrollNonce] = useState(0);
+  const virtualSpacerRef = useRef<HTMLDivElement>(null);
+  // Distance from the scroll container's content origin down to the first row.
+  // Non-zero because the container carries p-4 and can show a loading/older
+  // banner above the rows; see the scrollMargin note on the virtualizer.
+  const [scrollMargin, setScrollMargin] = useState(0);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [selectedPath, setSelectedPath] = useState<{
     paths: MessagePath[];
@@ -528,7 +533,16 @@ export function MessageList({
     count: sortedMessages.length,
     getScrollElement: () => listRef.current,
     estimateSize: () => ESTIMATED_MESSAGE_HEIGHT,
-    getItemKey: (index) => sortedMessages[index]?.id ?? index,
+    // Rows do not start at the scroll container's origin: the container has p-4
+    // padding and may render an "older messages" banner above them. Without this
+    // the virtualizer's offsets are short by that distance, so every
+    // scrollToIndex with 'start'/'center' lands high by 16-48px — and the error
+    // moves as the banner appears and disappears during pagination.
+    scrollMargin,
+    // String sentinel for the transient window past the end of a shrunken list:
+    // a bare index would share the keyspace with message ids and poison the
+    // measurement cache for whichever message happens to have that id.
+    getItemKey: (index) => sortedMessages[index]?.id ?? `__idx:${index}`,
     overscan: 8,
     // A row that measures zero has not really been laid out yet (hidden pane, images
     // still loading). Keep the estimate instead, or the window balloons to compensate.
@@ -550,6 +564,20 @@ export function MessageList({
     },
   });
   const virtualRows = virtualizer.getVirtualItems();
+
+  // Re-measured whenever something above the rows can change height.
+  useLayoutEffect(() => {
+    const spacer = virtualSpacerRef.current;
+    const list = listRef.current;
+    if (!spacer || !list) return;
+    // Relative to the scroll container's *content* origin, so it is independent
+    // of the current scroll position. offsetTop is not usable here: the two
+    // elements can resolve to different offsetParents.
+    const next = Math.round(
+      spacer.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop
+    );
+    setScrollMargin((prev) => (prev === next ? prev : next));
+  }, [loadingOlder, hasOlderMessages, messages.length]);
 
   const scrollToIndex = useCallback(
     (index: number, align: 'start' | 'center' | 'end') => {
@@ -613,7 +641,15 @@ export function MessageList({
     if ((isInitialLoadRef.current || conversationChanged) && messages.length > 0) {
       // Initial load or conversation switch - pin to the newest message. Requested
       // rather than performed here; see pendingBottomScrollRef.
-      requestBottomScroll();
+      //
+      // Unless we are loading *at* a specific message: jump-to-message and
+      // jump-to-unread clear the list before fetching a window around their
+      // target, which trips both the initial-load and conversation-changed
+      // branches. Pinning to the bottom here would then discard the target scroll
+      // a frame later, stranding the user at the newest message instead.
+      if (!targetMessageId) {
+        requestBottomScroll();
+      }
       isInitialLoadRef.current = false;
     } else if (messagesAdded > 0 && prevMessagesLengthRef.current > 0) {
       if (scrollStateRef.current.wasNearTop) {
@@ -629,7 +665,7 @@ export function MessageList({
     }
 
     prevMessagesLengthRef.current = messages.length;
-  }, [messages, sortedMessages.length, scrollToIndex, requestBottomScroll]);
+  }, [messages, sortedMessages.length, scrollToIndex, requestBottomScroll, targetMessageId]);
 
   // Scroll to target message and highlight it
   useLayoutEffect(() => {
@@ -637,8 +673,10 @@ export function MessageList({
     const targetIndex = sortedMessages.findIndex((msg) => msg.id === targetMessageId);
     if (targetIndex === -1) return;
 
-    // Prevent the initial-load layout effect from overriding our scroll
+    // Prevent the initial-load layout effect from overriding our scroll, and drop
+    // any bottom pin already queued by an earlier pass over the same commit.
     isInitialLoadRef.current = false;
+    pendingBottomScrollRef.current = false;
     scrollToIndex(targetIndex, 'center');
     setHighlightedMessageId(targetMessageId);
     targetScrolledRef.current = true;
@@ -1036,6 +1074,7 @@ export function MessageList({
           </div>
         )}
         <div
+          ref={virtualSpacerRef}
           className="relative w-full flex-shrink-0"
           style={{ height: virtualizer.getTotalSize() }}
         >
@@ -1146,7 +1185,10 @@ export function MessageList({
                 data-index={index}
                 ref={virtualizer.measureElement}
                 className="absolute left-0 top-0 flex w-full flex-col pb-0.5"
-                style={{ transform: `translateY(${virtualRow.start}px)` }}
+                // start is measured from the scroll container's origin, which
+                // scrollMargin accounts for; the spacer already sits that far
+                // down, so subtract it back out when positioning within it.
+                style={{ transform: `translateY(${virtualRow.start - scrollMargin}px)` }}
               >
                 {unreadMarkerIndex === index &&
                   (onDismissUnreadMarker ? (

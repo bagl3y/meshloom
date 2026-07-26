@@ -27,7 +27,13 @@ import { RichPayloadProvider } from './contexts/RichPayloadContext';
 import { usePush } from './contexts/PushSubscriptionContext';
 import { messageContainsMention } from './utils/messageParser';
 import { getStateKey } from './utils/conversationState';
-import type { BulkCreateHashtagChannelsResult, Channel, Conversation, RawPacket } from './types';
+import type {
+  BulkCreateHashtagChannelsResult,
+  Channel,
+  Conversation,
+  Message,
+  RawPacket,
+} from './types';
 import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM } from './types';
 import { shouldAutoFocusInput } from './utils/autoFocusInput';
 
@@ -41,6 +47,34 @@ interface NewMessagePrefillRequest {
   tab: 'hashtag';
   hashtagName: string;
   nonce: number;
+}
+
+/**
+ * Which message the unread divider should sit on.
+ *
+ * Normally the server's first-unread id. The exception is a channel that has
+ * never been read: its true boundary is the first message ever sent there, so
+ * offering to jump would haul the reader to the start of history for no gain.
+ * Everything loaded is unread in that case, so the divider belongs at the top of
+ * the window — which is what the pre-id behaviour did, and it is genuinely the
+ * more useful answer.
+ */
+export function resolveUnreadMarkerId(
+  boundaryId: number | null,
+  lastReadAt: number | null,
+  messages: Message[]
+): number | null {
+  if (boundaryId === null) return null;
+  if (lastReadAt !== null) return boundaryId;
+  if (messages.length === 0) return boundaryId;
+  if (messages.some((msg) => msg.id === boundaryId)) return boundaryId;
+
+  const oldestLoaded = messages.reduce((oldest, msg) => {
+    if (msg.received_at < oldest.received_at) return msg;
+    if (msg.received_at === oldest.received_at && msg.id < oldest.id) return msg;
+    return oldest;
+  }, messages[0]);
+  return oldestLoaded.id;
 }
 
 export function App() {
@@ -311,6 +345,7 @@ export function App() {
     unreadCounts,
     mentions,
     lastMessageTimes,
+    unreadLastReadAts,
     firstUnreadIds,
     recordMessageEvent,
     renameConversationState,
@@ -344,17 +379,23 @@ export function App() {
     const activeChannelId = activeConversation.id;
     const activeChannelUnreadCount = unreadCounts[getStateKey('channel', activeChannelId)] ?? 0;
 
+    const boundaryId = firstUnreadIds[getStateKey('channel', activeChannelId)] ?? null;
+
     setChannelUnreadMarker((prev) => {
       if (prev?.channelId === activeChannelId) {
+        // Same channel: hold the marker steady so it does not move under the
+        // reader, except to fill in a boundary we did not have yet. A marker
+        // created before /unreads resolved would otherwise stay blank for as long
+        // as the user stays put.
+        if (prev.messageId === null && boundaryId !== null) {
+          return { channelId: activeChannelId, messageId: boundaryId };
+        }
         return prev;
       }
       if (activeChannelUnreadCount <= 0) {
         return null;
       }
-      return {
-        channelId: activeChannelId,
-        messageId: firstUnreadIds[getStateKey('channel', activeChannelId)] ?? null,
-      };
+      return { channelId: activeChannelId, messageId: boundaryId };
     });
   }, [activeConversation, unreadCounts, firstUnreadIds]);
 
@@ -539,7 +580,11 @@ export function App() {
     unreadMarkerMessageId:
       activeConversation?.type === 'channel' &&
       channelUnreadMarker?.channelId === activeConversation.id
-        ? channelUnreadMarker.messageId
+        ? resolveUnreadMarkerId(
+            channelUnreadMarker.messageId,
+            unreadLastReadAts[getStateKey('channel', activeConversation.id)] ?? null,
+            messages
+          )
         : undefined,
     onNavigateToUnread: (messageId: number) => setTargetMessageId(messageId),
     targetMessageId,

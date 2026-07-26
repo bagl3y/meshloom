@@ -727,11 +727,7 @@ class MessageRepository:
         mention_flags: dict[str, bool] = {}
         last_message_times: dict[str, int] = {}
         last_read_ats: dict[str, int | None] = {}
-        # id of the oldest unread message per conversation. Rides the aggregate
-        # queries below via SQLite's bare-column rule: with exactly one MIN() in
-        # the query, bare columns come from the row that produced the minimum.
-        # Deliberately not MIN(id) — historical decryption inserts old messages
-        # with new ids, so id order and received_at order can disagree.
+        # id of the oldest unread message per conversation.
         first_unread_ids: dict[str, int | None] = {}
 
         mention_token = f"@[{name}]" if name else None
@@ -760,9 +756,7 @@ class MessageRepository:
                        SUM(CASE
                                WHEN ? <> '' AND INSTR(LOWER(m.text), LOWER(?)) > 0 THEN 1
                                ELSE 0
-                           END) > 0 as has_mention,
-                       MIN(m.received_at) as first_unread_at,
-                       m.id as first_unread_id
+                           END) > 0 as has_mention
                 FROM messages m
                 JOIN channels c ON m.conversation_key = c.key
                 WHERE m.type = 'CHAN' AND m.outgoing = 0
@@ -777,7 +771,6 @@ class MessageRepository:
             for row in rows:
                 state_key = f"channel-{row['conversation_key']}"
                 counts[state_key] = row["unread_count"]
-                first_unread_ids[state_key] = row["first_unread_id"]
                 if mention_token and row["has_mention"]:
                     mention_flags[state_key] = True
 
@@ -789,9 +782,7 @@ class MessageRepository:
                        SUM(CASE
                                WHEN ? <> '' AND INSTR(LOWER(m.text), LOWER(?)) > 0 THEN 1
                                ELSE 0
-                           END) > 0 as has_mention,
-                       MIN(m.received_at) as first_unread_at,
-                       m.id as first_unread_id
+                           END) > 0 as has_mention
                 FROM messages m
                 LEFT JOIN contacts ct ON m.conversation_key = ct.public_key
                 WHERE m.type = 'PRIV' AND m.outgoing = 0
@@ -805,7 +796,6 @@ class MessageRepository:
             for row in rows:
                 state_key = f"contact-{row['conversation_key']}"
                 counts[state_key] = row["unread_count"]
-                first_unread_ids[state_key] = row["first_unread_id"]
                 if mention_token and row["has_mention"]:
                     mention_flags[state_key] = True
 
@@ -828,6 +818,40 @@ class MessageRepository:
                 rows = await cursor.fetchall()
             for row in rows:
                 last_read_ats[f"contact-{row['public_key']}"] = row["last_read_at"]
+
+            # Oldest unread message per conversation. ROW_NUMBER rather than
+            # MIN(received_at) with a bare id: sender timestamps are whole seconds
+            # (a protocol constraint, see AGENTS.md), so several unread messages
+            # routinely share the oldest second and SQLite's bare-column rule only
+            # promises *a* row holding the minimum. Ordering by (received_at, id)
+            # picks the same message the client's own ordering does.
+            async with conn.execute(
+                f"""
+                WITH ranked AS (
+                    SELECT m.type, m.conversation_key, m.id,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY m.type, m.conversation_key
+                               ORDER BY m.received_at ASC, m.id ASC
+                           ) AS rn
+                    FROM messages m
+                    LEFT JOIN channels c ON m.type = 'CHAN' AND m.conversation_key = c.key
+                    LEFT JOIN contacts ct ON m.type = 'PRIV' AND m.conversation_key = ct.public_key
+                    WHERE m.outgoing = 0
+                      AND m.received_at > COALESCE(
+                              CASE WHEN m.type = 'CHAN' THEN c.last_read_at ELSE ct.last_read_at END,
+                              0
+                          )
+                      AND (m.type <> 'CHAN' OR COALESCE(c.muted, 0) = 0)
+                      {blocked_sql}
+                )
+                SELECT type, conversation_key, id FROM ranked WHERE rn = 1
+                """,
+                blocked_params,
+            ) as cursor:
+                rows = await cursor.fetchall()
+            for row in rows:
+                prefix = "channel" if row["type"] == "CHAN" else "contact"
+                first_unread_ids[f"{prefix}-{row['conversation_key']}"] = row["id"]
 
             async with conn.execute(
                 f"""

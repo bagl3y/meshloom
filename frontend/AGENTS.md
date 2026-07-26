@@ -243,7 +243,7 @@ High-level state is delegated to hooks:
 - `useConversationNavigation`: search target, conversation selection reset, and info-pane state
 - `useConversationActions`: send/resend/trace/path-discovery/block handlers and channel override updates
 - `useConversationMessages`: conversation switch loading, embedded conversation-scoped cache, jump-target loading, pagination, dedup/update helpers, reconnect reconciliation, and pending ACK buffering
-- `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps, and server `last_read_ats` boundaries
+- `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps, server `last_read_ats`, and `first_unread_ids` (the unread-divider anchor)
 - `useRealtimeAppState`: typed WS event application, reconnect recovery, cache/unread coordination
 - `useRepeaterDashboard`: repeater dashboard state (login, pane data/retries, console, actions)
 
@@ -291,6 +291,16 @@ High-level state is delegated to hooks:
   - `observation_id`: realtime per-arrival identity (session fidelity)
 - Packet feed/visualizer render keys and dedup logic should use `observation_id` (fallback to `id` only for older payloads).
 - The dedicated raw packet feed view now includes a frontend-only stats drawer. It tracks a separate lightweight per-observation session history for charts/rankings, so its windows are not limited by the visible packet list cap. Coverage messaging should stay honest when detailed in-memory stats history has been trimmed or the selected window predates the current browser session.
+
+### Virtualization (`MessageList`)
+
+The message list is windowed with `@tanstack/react-virtual`; only the visible rows are mounted, so render cost no longer scales with conversation length. Three details are load-bearing and easy to break:
+
+- **`scrollMargin`** is measured from the virtual spacer's offset within the scroll container, because the container carries `p-4` and can show an "older messages" banner above the rows. Without it every `scrollToIndex` with `start`/`center` lands 16–48px high, and the error shifts as the banner appears during pagination. Rows must subtract it back out in their `translateY`.
+- **The bottom-pin is deferred and re-asserted** across a bounded run of frames rather than performed once, because row heights start as estimates and a single `scrollToIndex` gets undone as they converge (completely so under StrictMode's double-invoked effects). It is cancelled by a pending `targetMessageId` and by any deliberate scroll gesture.
+- **`getItemKey` returns a string sentinel** for indices past the end of a shrunken list; a bare index would collide with the numeric message-id keyspace and poison the measurement cache.
+
+jsdom has no layout engine, so none of this is observable from the vitest suite — it needs a real browser.
 
 ### Radio settings behavior
 
@@ -375,7 +385,11 @@ Note: MQTT, bot, and community MQTT settings were migrated to the `fanout_config
 
 `RawPacket.decrypted_info` includes `channel_key` and `contact_key` for MQTT topic routing.
 
-`UnreadCounts` includes `counts`, `mentions`, `last_message_times`, and `last_read_ats`. The unread-boundary/jump-to-unread behavior uses the server-provided `last_read_ats` map keyed by `getStateKey(...)`.
+`UnreadCounts` includes `counts`, `mentions`, `last_message_times`, `last_read_ats`, and `first_unread_ids`.
+
+The unread divider is anchored to `first_unread_ids` — the id of the oldest unread message per conversation — not to a timestamp. `MessageList` locates it with `findIndex(msg.id === unreadMarkerMessageId)`, which returns `-1` when that message is not in the loaded window; that is the signal to offer "Jump to unread" (routed through the `targetMessageId`/`getMessagesAround` path) rather than render a divider. Locating by timestamp instead would return index 0 whenever the boundary sits further back than the loaded window, silently placing the divider on the wrong message.
+
+Counts are incremented live over WebSocket while `first_unread_ids` only arrives with a full `/read-state/unreads` fetch, so `useUnreadCounts.incrementUnread` seeds the boundary itself on the read→unread transition. A channel going unread while the app is open would otherwise have a count but no boundary, and no divider at all.
 
 ## Contact Info Pane
 
@@ -435,7 +449,7 @@ The `SearchView` component (`components/SearchView.tsx`) provides full-text sear
 - **State**: `targetMessageId` is shared between `useConversationNavigation` and `useConversationMessages`. When a search result is clicked, `handleNavigateToMessage` sets the target ID and switches to the target conversation.
 - **Same-conversation clear**: when `targetMessageId` is cleared after the target is reached, the hook preserves the around-loaded mid-history view instead of replacing it with the latest page.
 - **Persistence**: `SearchView` stays mounted after first open using the same `hidden` class pattern as `CrackerPanel`, preserving search state when navigating to results.
-- **Jump-to-message**: `useConversationMessages` handles optional `targetMessageId` by calling `api.getMessagesAround()` instead of the normal latest-page fetch, loading context around the target message. `MessageList` scrolls to the target via `data-message-id` attribute and applies a `message-highlight` CSS animation.
+- **Jump-to-message**: `useConversationMessages` handles optional `targetMessageId` by calling `api.getMessagesAround()` instead of the normal latest-page fetch, loading context around the target message. `MessageList` resolves the target to an index and calls `virtualizer.scrollToIndex(...)`, then applies a `message-highlight` CSS animation. A pending target suppresses the bottom-pin (see Virtualization below), since the around-load clears the list first and would otherwise be yanked to the newest message.
 - **Bidirectional pagination**: After jumping mid-history, `hasNewerMessages` enables forward pagination via `fetchNewerMessages`. The scroll-to-bottom button calls `jumpToBottom` (re-fetches latest page) instead of just scrolling.
 - **WS message suppression**: When `hasNewerMessages` is true, incoming WS messages for the active conversation are not added to the message list (the user is viewing historical context, not the latest page).
 

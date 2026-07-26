@@ -479,4 +479,74 @@ describe('useUnreadCounts', () => {
     expect(result.current.lastMessageTimes[getStateKey('contact', CONTACT_KEY)]).toBe(1700002000);
     expect(result.current.lastMessageTimes[getStateKey('channel', CHANNEL_KEY)]).toBe(1700002001);
   });
+
+  it('seeds the first-unread boundary when a conversation goes unread over the socket', async () => {
+    // Counts move live over WS but first_unread_ids only arrives with a full
+    // fetch. Without seeding here, a channel that goes unread while the app is
+    // open has a count but no boundary, so the divider never renders.
+    const mocks = await getMockedApi();
+    mocks.getUnreads.mockResolvedValue({
+      counts: {},
+      mentions: {},
+      last_message_times: {},
+      first_unread_ids: {},
+      last_read_ats: {},
+    });
+
+    const { result } = renderWith({ channels: [makeChannel(CHANNEL_KEY, 'Test')] });
+    await act(async () => {
+      await vi.waitFor(() => expect(mocks.getUnreads).toHaveBeenCalled());
+    });
+
+    const key = getStateKey('channel', CHANNEL_KEY);
+    act(() => {
+      result.current.recordMessageEvent({
+        msg: makeMessage({ id: 4711, type: 'CHAN', conversation_key: CHANNEL_KEY }),
+        activeConversation: false,
+        isNewMessage: true,
+      });
+    });
+    expect(result.current.firstUnreadIds[key]).toBe(4711);
+
+    // A later message must not move the boundary — it is not the *first* unread.
+    act(() => {
+      result.current.recordMessageEvent({
+        msg: makeMessage({ id: 4712, type: 'CHAN', conversation_key: CHANNEL_KEY }),
+        activeConversation: false,
+        isNewMessage: true,
+      });
+    });
+    expect(result.current.firstUnreadIds[key]).toBe(4711);
+    expect(result.current.unreadCounts[key]).toBe(2);
+  });
+
+  it('drops first-unread boundaries on mark-all-read', async () => {
+    const mocks = await getMockedApi();
+    mocks.getUnreads.mockResolvedValue({
+      counts: {},
+      mentions: {},
+      last_message_times: {},
+      first_unread_ids: {},
+      last_read_ats: {},
+    });
+
+    const { result } = renderWith({ channels: [makeChannel(CHANNEL_KEY, 'Test')] });
+    await act(async () => {
+      await vi.waitFor(() => expect(mocks.getUnreads).toHaveBeenCalled());
+    });
+
+    act(() => {
+      result.current.recordMessageEvent({
+        msg: makeMessage({ id: 99, type: 'CHAN', conversation_key: CHANNEL_KEY }),
+        activeConversation: false,
+        isNewMessage: true,
+      });
+    });
+    expect(result.current.firstUnreadIds[getStateKey('channel', CHANNEL_KEY)]).toBe(99);
+
+    await act(async () => {
+      await result.current.markAllRead();
+    });
+    expect(result.current.firstUnreadIds).toEqual({});
+  });
 });
