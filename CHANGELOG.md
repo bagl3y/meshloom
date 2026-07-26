@@ -1,3 +1,9 @@
+## [3.17.1] - 2026-07-26
+
+* Feature: Auto-retry with flood for no-response-heard repeater login
+* Misc: Optimize frontend data handling for improved performance
+* Misc: Doc drift, test improvements, and library updates
+
 ## [3.17.0] - 2026-07-21
 
 * Feature: Add toggleable UI tweak for hop width display inline on channel messages
