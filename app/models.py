@@ -1090,6 +1090,41 @@ class PacketsPerHourBucket(BaseModel):
     count: int = Field(description="Number of packets received in that hour")
 
 
+class RegionScopeStats(BaseModel):
+    """Regional flood-scope adoption over the last 24 hours.
+
+    Two independent views, deliberately not merged — they have different
+    denominators and will not agree:
+
+    - Traffic (``total_messages``/``scoped_messages``) counts flood-routed
+      channel-message packets across all channels, including ones we cannot
+      decrypt. Broad coverage, but corrupt RF captures contribute false
+      positives, hence ``false_positive_floor``.
+    - Senders (``total_senders``/``scoped_senders``) counts distinct message
+      senders, which requires decryption and so only covers channels we hold
+      keys for. Narrower, but noise-free and immune to one chatty node skewing
+      the result.
+    """
+
+    total_messages: int = Field(
+        description="Flood-routed channel-message packets heard in the last 24h (unique payloads)"
+    )
+    scoped_messages: int = Field(description="Of those, how many carried a regional transport code")
+    scoped_pct: float
+    false_positive_floor: float = Field(
+        description=(
+            "Estimated false positives in scoped_messages, measured from transport-routed "
+            "packets claiming a payload type the protocol does not define. A scoped_messages "
+            "value at or below this is not evidence of regional adoption."
+        )
+    )
+    total_senders: int = Field(
+        description="Distinct channel-message senders in the last 24h (decryptable channels only)"
+    )
+    scoped_senders: int = Field(description="Of those, how many sent at least one scoped message")
+    scoped_senders_pct: float
+
+
 class StatisticsResponse(BaseModel):
     busiest_channels_24h: list[BusyChannel]
     contact_count: int
@@ -1105,6 +1140,7 @@ class StatisticsResponse(BaseModel):
     repeaters_heard: ContactActivityCounts
     known_channels_active: ContactActivityCounts
     path_hash_width_24h: PathHashWidthStats
+    region_scope_24h: RegionScopeStats
     packets_per_hour_72h: list[PacketsPerHourBucket]
     noise_floor_24h: NoiseFloorHistoryStats
 

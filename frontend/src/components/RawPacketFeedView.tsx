@@ -28,6 +28,7 @@ import {
   type RawPacketStatsWindow,
 } from '../utils/rawPacketStats';
 import { createDecoderOptions } from '../utils/rawPacketInspector';
+import { useRawPacketStatsSession, useRawPackets } from '../stores/rawPacketStore';
 import { getContactDisplayName } from '../utils/pubkey';
 import { cn } from '@/lib/utils';
 
@@ -197,8 +198,6 @@ function FeedFilterControls({
 }
 
 interface RawPacketFeedViewProps {
-  packets: RawPacket[];
-  rawPacketStatsSession: RawPacketStatsSessionState;
   contacts: Contact[];
   channels: Channel[];
 }
@@ -588,12 +587,9 @@ function TimelineChart({
   );
 }
 
-export function RawPacketFeedView({
-  packets,
-  rawPacketStatsSession,
-  contacts,
-  channels,
-}: RawPacketFeedViewProps) {
+export function RawPacketFeedView({ contacts, channels }: RawPacketFeedViewProps) {
+  const packets = useRawPackets();
+  const rawPacketStatsSession = useRawPacketStatsSession();
   const [statsOpen, setStatsOpen] = useState(() =>
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       ? window.matchMedia('(min-width: 768px)').matches

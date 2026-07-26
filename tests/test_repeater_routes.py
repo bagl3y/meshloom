@@ -818,6 +818,162 @@ class TestPrepareRepeaterConnection:
         assert "No login confirmation was heard from the repeater" in (response.message or "")
 
 
+def _make_routed_contact() -> Contact:
+    """A repeater with a learned direct route, so a login goes out direct."""
+    contact = Contact(
+        public_key=KEY_A,
+        name="Repeater",
+        type=2,
+        direct_path="aabb",
+        direct_path_len=2,
+        direct_path_hash_mode=0,
+    )
+    assert contact.effective_route_source == "direct"
+    return contact
+
+
+class TestRepeaterLoginFloodEscalation:
+    """A login that draws no reply escalates to one flood retry.
+
+    Firmware's own ``sendLogin`` is single-shot, so this is RT going beyond the
+    reference clients. It works because the *server* treats an inbound flood as
+    its cue to relearn the return path.
+    """
+
+    @pytest.mark.asyncio
+    async def test_timeout_on_direct_route_resets_path_and_retries_as_flood(self):
+        mc = _mock_mc()
+        contact = _make_routed_contact()
+        subscriptions: dict[EventType, tuple[object, object]] = {}
+        attempts = 0
+
+        def _subscribe(event_type, callback, attribute_filters=None):
+            subscriptions[event_type] = (callback, attribute_filters)
+            return MagicMock(unsubscribe=MagicMock())
+
+        async def _send_login(*args, **kwargs):
+            nonlocal attempts
+            attempts += 1
+            # First attempt (direct) is never answered; the flood retry lands.
+            if attempts > 1:
+                callback, _filters = subscriptions[EventType.LOGIN_SUCCESS]
+                callback(_radio_result(EventType.LOGIN_SUCCESS, {"pubkey_prefix": KEY_A[:12]}))
+            return _radio_result(EventType.MSG_SENT)
+
+        mc.subscribe = MagicMock(side_effect=_subscribe)
+        mc.commands.send_login = AsyncMock(side_effect=_send_login)
+        mc.commands.reset_path = AsyncMock(return_value=_radio_result(EventType.OK))
+
+        with patch("app.routers.repeaters.REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS", 0):
+            response = await prepare_repeater_connection(mc, contact, "secret")
+
+        assert response.status == "ok"
+        assert response.authenticated is True
+        assert attempts == 2
+        mc.commands.reset_path.assert_awaited_once_with(KEY_A)
+        # The contact must not be re-added between attempts — that would restore
+        # the route we just cleared and send the retry direct again.
+        assert mc.commands.add_contact.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_flood_retry_timeout_reports_that_flood_was_tried(self):
+        mc = _mock_mc()
+        contact = _make_routed_contact()
+        mc.commands.reset_path = AsyncMock(return_value=_radio_result(EventType.OK))
+
+        with patch("app.routers.repeaters.REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS", 0):
+            response = await prepare_repeater_connection(mc, contact, "secret")
+
+        assert response.status == "timeout"
+        assert response.authenticated is False
+        assert "retry sent as flood" in (response.message or "")
+        assert mc.commands.send_login.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_no_escalation_when_contact_is_already_flood(self):
+        mc = _mock_mc()
+        contact = _make_contact()  # no direct route -> already flooding
+        mc.commands.reset_path = AsyncMock(return_value=_radio_result(EventType.OK))
+
+        with patch("app.routers.repeaters.REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS", 0):
+            response = await prepare_repeater_connection(mc, contact, "secret")
+
+        assert response.status == "timeout"
+        # A flood retry would be byte-identical, so don't bother the repeater
+        assert mc.commands.send_login.await_count == 1
+        mc.commands.reset_path.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_rejected_login_does_not_escalate(self):
+        """LOGIN_FAILED means the route works and the password doesn't."""
+        mc = _mock_mc()
+        contact = _make_routed_contact()
+        subscriptions: dict[EventType, tuple[object, object]] = {}
+
+        def _subscribe(event_type, callback, attribute_filters=None):
+            subscriptions[event_type] = (callback, attribute_filters)
+            return MagicMock(unsubscribe=MagicMock())
+
+        async def _send_login(*args, **kwargs):
+            callback, _filters = subscriptions[EventType.LOGIN_FAILED]
+            callback(_radio_result(EventType.LOGIN_FAILED, {"pubkey_prefix": KEY_A[:12]}))
+            return _radio_result(EventType.MSG_SENT)
+
+        mc.subscribe = MagicMock(side_effect=_subscribe)
+        mc.commands.send_login = AsyncMock(side_effect=_send_login)
+        mc.commands.reset_path = AsyncMock(return_value=_radio_result(EventType.OK))
+
+        response = await prepare_repeater_connection(mc, contact, "bad")
+
+        assert response.status == "error"
+        assert mc.commands.send_login.await_count == 1
+        mc.commands.reset_path.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_send_error_does_not_escalate(self):
+        """A local radio failure is not fixed by picking a different route."""
+        mc = _mock_mc()
+        contact = _make_routed_contact()
+        mc.commands.send_login = AsyncMock(
+            return_value=_radio_result(EventType.ERROR, {"err": "busy"})
+        )
+        mc.commands.reset_path = AsyncMock(return_value=_radio_result(EventType.OK))
+
+        response = await prepare_repeater_connection(mc, contact, "secret")
+
+        assert response.status == "error"
+        assert mc.commands.send_login.await_count == 1
+        mc.commands.reset_path.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_failed_reset_path_returns_original_timeout(self):
+        mc = _mock_mc()
+        contact = _make_routed_contact()
+        mc.commands.reset_path = AsyncMock(
+            return_value=_radio_result(EventType.ERROR, {"err": "nope"})
+        )
+
+        with patch("app.routers.repeaters.REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS", 0):
+            response = await prepare_repeater_connection(mc, contact, "secret")
+
+        assert response.status == "timeout"
+        # Without a cleared path the retry would just go direct again
+        assert mc.commands.send_login.await_count == 1
+        assert "retry sent as flood" not in (response.message or "")
+
+    @pytest.mark.asyncio
+    async def test_no_reset_path_response_returns_original_timeout(self):
+        mc = _mock_mc()
+        contact = _make_routed_contact()
+        mc.commands.reset_path = AsyncMock(return_value=None)
+
+        with patch("app.routers.repeaters.REPEATER_LOGIN_RESPONSE_TIMEOUT_SECONDS", 0):
+            response = await prepare_repeater_connection(mc, contact, "secret")
+
+        assert response.status == "timeout"
+        assert mc.commands.send_login.await_count == 1
+
+
 class TestRepeaterStatus:
     @pytest.mark.asyncio
     async def test_success_with_field_mapping(self, test_db):

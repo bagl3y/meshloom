@@ -24,13 +24,14 @@ Keep it aligned with `app/` source files and router behavior.
 ```text
 app/
 ├── main.py              # App startup/lifespan, router registration, static frontend mounting
+├── api_docs.py          # OpenAPI description/tag metadata and docs route registration
 ├── config.py            # Env-driven runtime settings
 ├── channel_constants.py # Public/default channel constants shared across sync/send logic
 ├── database.py          # SQLite connection + base schema + migration runner
 ├── migrations/          # Schema migrations (SQLite user_version, per-version modules)
 ├── models.py            # Pydantic request/response models and typed write contracts (for example ContactUpsert)
 ├── version_info.py      # Unified version/build metadata resolution for debug + startup surfaces
-├── repository/          # Data access layer (contacts, channels, messages, raw_packets, settings, fanout, push_subscriptions, repeater_telemetry)
+├── repository/          # Data access layer (contacts, channels, messages, raw_packets, settings, fanout, push_subscriptions, repeater_telemetry, contact_telemetry)
 ├── services/            # Shared orchestration/domain services
 │   ├── messages.py              # Shared message creation, dedup, ACK application
 │   ├── message_send.py          # Direct send, channel send, resend workflows
@@ -38,6 +39,7 @@ app/
 │   ├── dm_ack_apply.py          # Shared DM ACK application over pending/buffered ACK state
 │   ├── dm_ack_tracker.py        # Pending DM ACK state
 │   ├── contact_reconciliation.py # Prefix-claim, sender-key backfill, name-history wiring
+│   ├── flood_scope.py           # Firmware-version-aware flood-scope set/clear command seam
 │   ├── radio_lifecycle.py       # Post-connect setup and reconnect/setup helpers
 │   ├── radio_commands.py        # Radio config/private-key command workflows
 │   ├── radio_stats.py           # In-memory local radio stats sampling and noise-floor history
@@ -58,6 +60,7 @@ app/
 ├── telemetry_interval.py # Shared telemetry interval math for tracked-repeater scheduler
 ├── path_utils.py        # Path hex rendering and hop-width helpers
 ├── region_scope.py      # Normalize/validate regional flood-scope values
+├── region_resolver.py   # Recompute transport codes per known region to name a packet's region
 ├── keystore.py          # Ephemeral private/public key storage for DM decryption
 ├── frontend_static.py   # Mount/serve built frontend (production)
 └── routers/
@@ -140,6 +143,23 @@ app/
 - ACKs are delivery state, not routing state. Bundled ACKs inside PATH packets still satisfy pending DM sends, but ACK history does not feed contact route learning.
 - DM ACKs are matched from two independent radio emissions, so confirmation does not depend on the radio surfacing a host control frame: (1) the `EventType.ACK`/`SEND_CONFIRMED` host frame via `event_handlers.on_ack`, and (2) the raw RF packet itself via `packet_processor.process_raw_packet`. The packet processor extracts ACK codes both from PATH-return packets (flood replies, ACK embedded in `extra`) and from standalone `PayloadType.ACK` packets (direct replies, 4-byte cleartext payload), feeding both into `apply_dm_ack_code`. This matters for companion firmwares (e.g. pyMC over TCP) that do not reliably emit a separate host ACK frame for direct-routed replies.
 
+### Server login route escalation
+
+`prepare_authenticated_contact_connection` (`routers/server_control.py`, shared by repeater and room login) sends one login over the contact's effective route. If that draws **no reply at all**, it calls `reset_path(...)` and retries exactly once as flood.
+
+This is intentionally *more* than the reference implementations do — do not "correct" it back to single-shot:
+- Firmware `BaseChatMesh::sendLogin` picks flood only when `out_path_len == OUT_PATH_UNKNOWN` and never retries; `CMD_SEND_LOGIN` calls it once.
+- `meshcore_py` has `send_msg_with_retry` (with `flood_after` + `reset_path`) but no login equivalent — `send_login`/`send_login_sync` are single-shot.
+- Firmware only clears a stale path when the *host* asks (`CMD_RESET_PATH`); client-side path learning is otherwise passive via `onContactPathRecv`.
+
+Escalating is still correct because the **server** side treats an inbound flood as its cue to relearn the return path (`simple_repeater`/`simple_room_server`: `if (is_flood) client->out_path_len = OUT_PATH_UNKNOWN`). A flood login is therefore what repairs a broken route in both directions, and login gates the whole repeater dashboard.
+
+Escalation is bounded to one extra attempt and only fires when:
+- the first attempt **timed out**. `LOGIN_FAILED` means the server heard us and refused, so the route is fine and retrying only hammers it with bad credentials; a send error is a local radio problem a different route will not fix.
+- the contact was **not already on flood** (`effective_route_source != "flood"`), since the retry would otherwise be byte-identical.
+
+The retry deliberately does not re-run `_ensure_on_radio` — re-adding the contact would restore the route just cleared. `reset_path` clears the route on the radio only; the stored contact route is untouched, so the next `add_contact` re-stages it. That mirrors the DM retry and keeps one bad login from discarding a route that may be fine.
+
 ### Echo/repeat dedup
 
 - Channel message uniqueness (`idx_messages_dedup_null_safe`): `(type, conversation_key, text, COALESCE(sender_timestamp, 0))` where `type = 'CHAN'`.
@@ -150,8 +170,19 @@ app/
 
 - `ROUTE_TYPE_TRANSPORT_FLOOD`/`ROUTE_TYPE_TRANSPORT_DIRECT` packets carry a 4-byte transport-code block; `parse_packet_envelope` exposes it as `transport_codes = (code_1, code_2)` (little-endian uint16s; `code_2` is reserved/0).
 - `code_1` is a keyed MAC over the payload, not a stable per-region id: `code = HMAC-SHA256(SHA256("#" + region_name)[:16], payload_type || payload)[:2]` (firmware `TransportKeyStore.cpp`; reserved values `0x0000`/`0xFFFF` are nudged to `0x0001`/`0xFFFE`). There is **no** reverse lookup table — to name a packet's region you recompute the code per candidate region and check for a match (`app/region_resolver.py`).
-- Candidate region names come from `app_settings.known_regions` (user-editable, seeded by migration 064 from `flood_scope` + channel `flood_scope_override`).
+- Candidate region names come from `app_settings.known_regions` (user-editable, seeded by migration 063 from `flood_scope` + channel `flood_scope_override`).
 - Channel messages persist `messages.transport_code` (uint16, NULL = unscoped plain flood) and `messages.region` (resolved name, NULL = scoped but no list match) at ingest, so the chat region badge survives raw-packet purge. The packet inspector (`GET /packets/{id}` and the `raw_packet` WS broadcast) resolves region on the fly against the current list since it still holds the raw payload.
+
+### Region-scope adoption stats (`region_scope_24h`)
+
+`GET /statistics` reports regional flood-scope uptake as two views with different denominators that intentionally will not agree:
+
+- **Traffic** (`bucket_region_scope` in `path_utils.py`) counts flood-routed (`route_type` 0/1) GroupText packets across all channels, including undecryptable ones. Zero-hop/direct sends are excluded because firmware reaches them through the non-transport `sendZeroHop`/`sendDirect` overloads and they can never carry transport codes.
+- **Senders** (`StatisticsRepository._region_scope_senders_24h`) counts distinct senders with at least one scoped message. Attribution requires decryption, so it only covers channels we hold keys for — narrower, but self-validating (a decrypted packet is provably not a corrupt capture) and immune to one chatty node skewing the result. Identity is `sender_key` falling back to `sender_name`; scoping reads `messages.transport_code`, falling back to the linked raw packet for rows stored before region tagging existed.
+
+`false_positive_floor` exists because corrupt RF captures land in `raw_packets` with effectively random headers and a share of them claim `TRANSPORT_FLOOD`. That garbage spreads near-uniformly across payload-type buckets, so it is measured directly from payload types the protocol does not define (`0x0C`/`0x0D`/`0x0E`) and averaged per bucket. **A `scoped_messages` count at or below the floor is not evidence of adoption**; surface the two together and never show the percentage alone. Do not "fix" the floor by removing it — without it the metric reads several times higher than reality.
+
+Both traffic buckets come from one 24h raw-packet scan (`_packet_shape_24h`) shared with `path_hash_width_24h`, so adding region stats costs no extra query or parse pass.
 
 ### Raw packet dedup policy
 
@@ -229,19 +260,20 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 - `POST /contacts/{public_key}/routing-override`
 - `POST /contacts/{public_key}/trace`
 - `POST /contacts/{public_key}/path-discovery` — discover forward/return paths, persist the learned direct route, and sync it back to the radio best-effort
-- `POST /contacts/{public_key}/repeater/login`
+- `POST /contacts/{public_key}/repeater/login` — one attempt on the effective route, then one flood retry on timeout
 - `POST /contacts/{public_key}/repeater/status`
 - `POST /contacts/{public_key}/repeater/lpp-telemetry`
 - `POST /contacts/{public_key}/repeater/neighbors`
 - `POST /contacts/{public_key}/repeater/acl`
 - `POST /contacts/{public_key}/repeater/node-info`
 - `POST /contacts/{public_key}/repeater/radio-settings`
+- `POST /contacts/{public_key}/repeater/regions` — CLI region hierarchy, falling back to the guest anon flood-allowed names (`source`: `cli` or `anon`)
 - `POST /contacts/{public_key}/repeater/advert-intervals`
 - `POST /contacts/{public_key}/repeater/owner-info`
 - `GET /contacts/{public_key}/repeater/telemetry-history` — stored telemetry history for a repeater (read-only, no radio access)
 - `POST /contacts/{public_key}/telemetry` — on-demand CayenneLPP telemetry from any contact (persists in `contact_telemetry_history`)
 - `GET /contacts/{public_key}/telemetry-history` — stored LPP telemetry history for a contact (read-only)
-- `POST /contacts/{public_key}/room/login`
+- `POST /contacts/{public_key}/room/login` — one attempt on the effective route, then one flood retry on timeout
 - `POST /contacts/{public_key}/room/status`
 - `POST /contacts/{public_key}/room/lpp-telemetry`
 - `POST /contacts/{public_key}/room/acl`
@@ -294,7 +326,7 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 - `POST /fanout/bots/disable-until-restart` — stop bot modules and keep bots disabled until restart
 
 ### Statistics
-- `GET /statistics` — aggregated mesh network stats (entity counts, message/packet splits, activity windows, busiest channels)
+- `GET /statistics` — aggregated mesh network stats (entity counts, message/packet splits, activity windows, busiest channels, `region_scope_24h` regional adoption)
 
 ### Push
 - `GET /push/vapid-public-key` — VAPID public key for browser `PushManager.subscribe()`

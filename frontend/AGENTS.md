@@ -41,9 +41,15 @@ frontend/src/
 ├── themes.css              # Color theme definitions
 ├── contexts/
 │   ├── DistanceUnitContext.tsx # Browser-local distance-unit context/provider
+│   ├── PathHopWidthContext.tsx # Browser-local path hop-width display preference
+│   ├── RichPayloadContext.tsx  # Browser-local rich MeshCore payload rendering preference
 │   └── PushSubscriptionContext.tsx # Push subscription state context/provider
 ├── lib/
 │   └── utils.ts            # cn() — clsx + tailwind-merge helper
+├── networkGraph/
+│   └── packetNetworkGraph.ts # Packet→network graph construction shared by visualizer surfaces
+├── stores/
+│   └── rawPacketStore.ts   # Overheard packet stream + session stats, outside React
 ├── hooks/
 │   ├── index.ts            # Central re-export of all hooks
 │   ├── useConversationActions.ts   # Send/resend/trace/block conversation actions
@@ -60,7 +66,7 @@ frontend/src/
 │   ├── useBrowserNotifications.ts  # Per-conversation browser notification preferences + dispatch
 │   ├── usePushSubscription.ts      # Web Push subscription lifecycle, per-conversation filters
 │   ├── useFaviconBadge.ts          # Browser tab unread badge state
-│   ├── useRawPacketStatsSession.ts # Session-scoped packet-feed stats history
+│   ├── useEntranceSettled.ts       # Defers entrance animation work until layout settles
 │   └── useRememberedServerPassword.ts # Browser-local repeater/room password persistence
 ├── components/
 │   ├── AppShell.tsx            # App-shell layout: status, sidebar, search/settings panes, cracker, modals, security warning
@@ -82,6 +88,10 @@ frontend/src/
 │   ├── rawPacketIdentity.ts    # observation_id vs id dedup helpers
 │   ├── rawPacketStats.ts       # Session packet stats windows, rankings, and coverage helpers
 │   ├── regionScope.ts          # Regional flood-scope label/normalization helpers
+│   ├── meshcoreOpenPayloads.ts # Rich MeshCore Open payload detection/rendering helpers
+│   ├── textReplace.ts          # Shared message text substitution helpers
+│   ├── pathHopWidthPreference.ts # LocalStorage persistence for hop-width display toggle
+│   ├── richPayloadPreference.ts  # LocalStorage persistence for rich payload rendering toggle
 │   ├── visualizerUtils.ts      # 3D visualizer node types, colors, particles
 │   ├── visualizerSettings.ts   # LocalStorage persistence for visualizer options
 │   ├── a11y.ts                 # Keyboard accessibility helper
@@ -143,7 +153,7 @@ frontend/src/
 │   │   ├── SettingsFanoutSection.tsx     # Fanout integrations: MQTT, bots, config CRUD
 │   │   ├── SettingsRadioAppSection.tsx    # Radio-App Management: tracked telemetry, contact management, blocked lists
 │   │   ├── SettingsDatabaseSection.tsx   # Database: DB size, storage cleanup, auto-decrypt
-│   │   ├── SettingsStatisticsSection.tsx # Read-only mesh network stats
+│   │   ├── SettingsStatisticsSection.tsx # Read-only mesh network stats (incl. region-scope adoption)
 │   │   ├── SettingsAboutSection.tsx     # Version, author, license, links
 │   │   ├── ThemeSelector.tsx           # Color theme picker
 │   │   └── BulkDeleteContactsModal.tsx # Bulk contact deletion dialog
@@ -154,6 +164,7 @@ frontend/src/
 │   │   ├── RepeaterAclPane.tsx          # Permission table
 │   │   ├── RepeaterNodeInfoPane.tsx      # Repeater name, coords, clock drift
 │   │   ├── RepeaterRadioSettingsPane.tsx # Radio config + advert intervals
+│   │   ├── RepeaterRegionsPane.tsx      # Region hierarchy / flood-allowed region names
 │   │   ├── RepeaterLppTelemetryPane.tsx # CayenneLPP sensor data
 │   │   ├── RepeaterOwnerInfoPane.tsx    # Owner info + guest password
 │   │   ├── RepeaterTelemetryHistoryPane.tsx # Historical telemetry chart/table
@@ -248,6 +259,10 @@ High-level state is delegated to hooks:
 - `useRepeaterDashboard`: repeater dashboard state (login, pane data/retries, console, actions)
 
 `App.tsx` intentionally still does the final `AppShell` prop assembly. That composition layer is considered acceptable here because it keeps the shell contract visible in one place and avoids a prop-bundling hook with little original logic.
+
+**The overheard packet stream is the one piece of app state that deliberately does not live in React.** It is held in `stores/rawPacketStore.ts` and read through `useSyncExternalStore`, because it updates several times a second with every packet the node hears — far more often than anything else — and only four surfaces consume it (`MapView`, `VisualizerView`, `RawPacketFeedView`, `CrackerPanel`). Held in `App` state it re-rendered the entire tree, including `MessageList`, which is neither memoized nor cheap on a long history.
+
+That gives the store a load-bearing invariant: **no ancestor of `MessageList` may call `useRawPackets()` / `useRawPacketStatsSession()`.** Nothing about the prop signatures enforces it — an innocuous-looking subscription added to `App`, `AppShell`, or `ConversationPane` silently restores the original slowdown. `src/test/appPacketIsolation.test.tsx` pins it by mounting the real ancestor chain and asserting `MessageList` does not re-render when packets arrive; it carries a negative control so the assertion cannot pass vacuously. Reach for packets in a new view by subscribing in that view, never by lifting them up.
 
 `ConversationPane.tsx` owns the main active-conversation surface branching:
 - empty state
@@ -426,9 +441,9 @@ State: `useConversationNavigation` controls open/close via `infoPaneChannelKey`.
 
 For repeater contacts (`type=2`), `ConversationPane.tsx` renders `RepeaterDashboard` instead of the normal chat UI (ChatHeader + MessageList + MessageInput).
 
-**Login**: `RepeaterLogin` component — password or guest login via `POST /api/contacts/{key}/repeater/login`.
+**Login**: `RepeaterLogin` component — password or guest login via `POST /api/contacts/{key}/repeater/login`. The frontend sends exactly one request; the backend internally escalates a timed-out login to one flood retry (see `app/AGENTS.md` § "Server login route escalation"), so a single call may take up to two response windows. Do not add a client-side login retry loop on top — a `LOGIN_FAILED` result means the password was refused, not that the route needs another attempt.
 
-**Dashboard panes** (after login): Telemetry, Node Info, Neighbors, ACL, Radio Settings, Advert Intervals, Owner Info — each fetched via granular `POST /api/contacts/{key}/repeater/{pane}` endpoints. Panes retry up to 3 times client-side. `Neighbors` depends on the smaller `node-info` fetch for repeater GPS, not the heavier radio-settings batch. "Load All" fetches all panes serially (parallel would queue behind the radio lock).
+**Dashboard panes** (after login): Telemetry, Node Info, Neighbors, ACL, Radio Settings, Regions, Advert Intervals, Owner Info — each fetched via granular `POST /api/contacts/{key}/repeater/{pane}` endpoints. The Regions pane prefers the admin CLI hierarchy and falls back to the guest anon flood-allowed names, so its payload carries a `source` of `cli` or `anon`. Panes retry up to 3 times client-side. `Neighbors` depends on the smaller `node-info` fetch for repeater GPS, not the heavier radio-settings batch. "Load All" fetches all panes serially (parallel would queue behind the radio lock).
 
 **Actions pane**: Send Advert, Sync Clock, Reboot — all send CLI commands via `POST /api/contacts/{key}/command`.
 
@@ -482,6 +497,15 @@ Key conventions documented in the reference:
 - **Buttons** use the shadcn `<Button>` component. Semantic color overrides (danger, warning, success) use `variant="outline"` with `className="border-{color}/50 text-{color} hover:bg-{color}/10"`.
 - **Badges/tags** use `text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded` with `bg-muted` (neutral) or `bg-primary/10` (active).
 - **Clickable text** (copy-to-clipboard, navigational links) uses `role="button" tabIndex={0}` with `cursor-pointer hover:text-primary transition-colors`.
+
+### Region-scope adoption panel
+
+`SettingsStatisticsSection.tsx` renders `stats.region_scope_24h` via `RegionScopeStatsPanel`. Two presentation rules exist because regional adoption is currently very sparse, and both are deliberate:
+
+- **Fractions, not bare percentages.** "3 of 117" carries the sample size that "2.6%" hides.
+- **The traffic percentage is withheld** when the scoped count is at or below `false_positive_floor` (corrupt-capture noise) or when the share would round to `0.0%`. The floor caveat is always shown alongside a non-zero scoped count. The sender figure is never suppressed — it requires successful decryption and so carries no noise.
+
+Traffic and sender figures use different denominators (all channels vs. decryptable-only) and are not expected to match.
 
 ## Security Posture (intentional)
 

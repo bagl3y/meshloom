@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RawPacketFeedView } from '../components/RawPacketFeedView';
+import { resetRawPacketStore, seedRawPacketStore } from '../stores/rawPacketStore';
 import type { RawPacketStatsSessionState } from '../utils/rawPacketStats';
 import type { Channel, Contact, RawPacket } from '../types';
 
@@ -108,17 +109,15 @@ function renderView({
   channels?: Channel[];
   rawPacketStatsSession?: RawPacketStatsSessionState;
 } = {}) {
-  return render(
-    <RawPacketFeedView
-      packets={packets}
-      rawPacketStatsSession={rawPacketStatsSession}
-      contacts={contacts}
-      channels={channels}
-    />
-  );
+  seedRawPacketStore({ packets, statsSession: rawPacketStatsSession });
+  return render(<RawPacketFeedView contacts={contacts} channels={channels} />);
 }
 
 describe('RawPacketFeedView', () => {
+  beforeEach(() => {
+    resetRawPacketStore();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -225,7 +224,7 @@ describe('RawPacketFeedView', () => {
       ],
     });
 
-    const { rerender } = renderView({
+    renderView({
       packets: initialPackets,
       rawPacketStatsSession: initialSession,
       contacts: [],
@@ -236,14 +235,7 @@ describe('RawPacketFeedView', () => {
     expect(screen.getByText(/only covered for 10 sec/i)).toBeInTheDocument();
 
     vi.setSystemTime(new Date('2024-01-01T00:01:10Z'));
-    rerender(
-      <RawPacketFeedView
-        packets={nextPackets}
-        rawPacketStatsSession={initialSession}
-        contacts={[]}
-        channels={[]}
-      />
-    );
+    act(() => seedRawPacketStore({ packets: nextPackets, statsSession: initialSession }));
     expect(screen.getByText(/only covered for 50 sec/i)).toBeInTheDocument();
 
     vi.setSystemTime(new Date('2024-01-01T00:01:30Z'));
@@ -257,14 +249,7 @@ describe('RawPacketFeedView', () => {
         },
       ],
     };
-    rerender(
-      <RawPacketFeedView
-        packets={nextPackets}
-        rawPacketStatsSession={nextSession}
-        contacts={[]}
-        channels={[]}
-      />
-    );
+    act(() => seedRawPacketStore({ packets: nextPackets, statsSession: nextSession }));
     expect(screen.getByText(/only covered for 10 sec/i)).toBeInTheDocument();
 
     vi.useRealTimers();
