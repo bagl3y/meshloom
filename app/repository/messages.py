@@ -720,12 +720,19 @@ class MessageRepository:
             blocked_names: Display names whose messages should be excluded from counts.
 
         Returns:
-            Dict with 'counts', 'mentions', 'last_message_times', and 'last_read_ats' keys.
+            Dict with 'counts', 'mentions', 'last_message_times', 'last_read_ats',
+            and 'first_unread_ids' keys.
         """
         counts: dict[str, int] = {}
         mention_flags: dict[str, bool] = {}
         last_message_times: dict[str, int] = {}
         last_read_ats: dict[str, int | None] = {}
+        # id of the oldest unread message per conversation. Rides the aggregate
+        # queries below via SQLite's bare-column rule: with exactly one MIN() in
+        # the query, bare columns come from the row that produced the minimum.
+        # Deliberately not MIN(id) — historical decryption inserts old messages
+        # with new ids, so id order and received_at order can disagree.
+        first_unread_ids: dict[str, int | None] = {}
 
         mention_token = f"@[{name}]" if name else None
 
@@ -753,7 +760,9 @@ class MessageRepository:
                        SUM(CASE
                                WHEN ? <> '' AND INSTR(LOWER(m.text), LOWER(?)) > 0 THEN 1
                                ELSE 0
-                           END) > 0 as has_mention
+                           END) > 0 as has_mention,
+                       MIN(m.received_at) as first_unread_at,
+                       m.id as first_unread_id
                 FROM messages m
                 JOIN channels c ON m.conversation_key = c.key
                 WHERE m.type = 'CHAN' AND m.outgoing = 0
@@ -768,6 +777,7 @@ class MessageRepository:
             for row in rows:
                 state_key = f"channel-{row['conversation_key']}"
                 counts[state_key] = row["unread_count"]
+                first_unread_ids[state_key] = row["first_unread_id"]
                 if mention_token and row["has_mention"]:
                     mention_flags[state_key] = True
 
@@ -779,7 +789,9 @@ class MessageRepository:
                        SUM(CASE
                                WHEN ? <> '' AND INSTR(LOWER(m.text), LOWER(?)) > 0 THEN 1
                                ELSE 0
-                           END) > 0 as has_mention
+                           END) > 0 as has_mention,
+                       MIN(m.received_at) as first_unread_at,
+                       m.id as first_unread_id
                 FROM messages m
                 LEFT JOIN contacts ct ON m.conversation_key = ct.public_key
                 WHERE m.type = 'PRIV' AND m.outgoing = 0
@@ -793,6 +805,7 @@ class MessageRepository:
             for row in rows:
                 state_key = f"contact-{row['conversation_key']}"
                 counts[state_key] = row["unread_count"]
+                first_unread_ids[state_key] = row["first_unread_id"]
                 if mention_token and row["has_mention"]:
                     mention_flags[state_key] = True
 
@@ -841,6 +854,7 @@ class MessageRepository:
             "mentions": mention_flags,
             "last_message_times": last_message_times,
             "last_read_ats": last_read_ats,
+            "first_unread_ids": first_unread_ids,
         }
 
     @staticmethod

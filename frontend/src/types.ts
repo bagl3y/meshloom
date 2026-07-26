@@ -642,6 +642,8 @@ export interface UnreadCounts {
   mentions: Record<string, boolean>;
   last_message_times: Record<string, number>;
   last_read_ats: Record<string, number | null>;
+  /** stateKey -> id of the oldest unread message. Locates the unread divider. */
+  first_unread_ids: Record<string, number | null>;
 }
 
 interface BusyChannel {

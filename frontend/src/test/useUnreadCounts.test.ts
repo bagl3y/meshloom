@@ -103,6 +103,7 @@ describe('useUnreadCounts', () => {
       counts: {},
       mentions: {},
       last_message_times: {},
+      first_unread_ids: {},
       last_read_ats: {},
     });
     mocks.markChannelRead.mockResolvedValue({ status: 'ok', key: '' });
@@ -134,6 +135,7 @@ describe('useUnreadCounts', () => {
       counts: { [`channel-${CHANNEL_KEY}`]: 5 },
       mentions: { [`channel-${CHANNEL_KEY}`]: true },
       last_message_times: {},
+      first_unread_ids: {},
       last_read_ats: { [`channel-${CHANNEL_KEY}`]: 1234 },
     });
 
@@ -159,6 +161,7 @@ describe('useUnreadCounts', () => {
       counts: { [`contact-${CONTACT_KEY}`]: 3 },
       mentions: {},
       last_message_times: {},
+      first_unread_ids: {},
       last_read_ats: { [`contact-${CONTACT_KEY}`]: 2345 },
     });
 
@@ -185,6 +188,7 @@ describe('useUnreadCounts', () => {
       },
       mentions: {},
       last_message_times: {},
+      first_unread_ids: {},
       last_read_ats: {},
     });
 
@@ -235,6 +239,7 @@ describe('useUnreadCounts', () => {
         [getStateKey('channel', CHANNEL_KEY)]: true,
       },
       last_message_times: {},
+      first_unread_ids: {},
       last_read_ats: {},
     });
 
@@ -277,6 +282,7 @@ describe('useUnreadCounts', () => {
       counts: {},
       mentions: {},
       last_message_times: {},
+      first_unread_ids: {},
       last_read_ats: {},
     });
 
@@ -291,6 +297,7 @@ describe('useUnreadCounts', () => {
       counts: { [`channel-${CHANNEL_KEY}`]: 7 },
       mentions: {},
       last_message_times: {},
+      first_unread_ids: {},
       last_read_ats: { [`channel-${CHANNEL_KEY}`]: 3456 },
     });
 
@@ -318,6 +325,7 @@ describe('useUnreadCounts', () => {
       counts: { [`channel-${addedChannelKey}`]: 2 },
       mentions: {},
       last_message_times: {},
+      first_unread_ids: {},
       last_read_ats: {},
     });
 
@@ -347,6 +355,7 @@ describe('useUnreadCounts', () => {
       counts: { [`contact-${addedContactKey}`]: 1 },
       mentions: {},
       last_message_times: {},
+      first_unread_ids: {},
       last_read_ats: {},
     });
 
@@ -367,6 +376,7 @@ describe('useUnreadCounts', () => {
       counts: { [`channel-${CHANNEL_KEY}`]: 5 },
       mentions: {},
       last_message_times: {},
+      first_unread_ids: {},
       last_read_ats: {},
     });
 
@@ -385,6 +395,7 @@ describe('useUnreadCounts', () => {
       counts: { [`channel-${CHANNEL_KEY}`]: 5 },
       mentions: {},
       last_message_times: {},
+      first_unread_ids: {},
       last_read_ats: {},
     });
 

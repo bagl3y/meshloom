@@ -40,8 +40,11 @@ interface MessageListProps {
   loading: boolean;
   loadingOlder?: boolean;
   hasOlderMessages?: boolean;
-  unreadMarkerLastReadAt?: number | null;
+  /** Id of the oldest unread message, from the server. Null when nothing is unread. */
+  unreadMarkerMessageId?: number | null;
   onDismissUnreadMarker?: () => void;
+  /** Called when the unread boundary is not in loaded history and must be jumped to. */
+  onNavigateToUnread?: (messageId: number) => void;
   onSenderClick?: (sender: string) => void;
   onLoadOlder?: () => void;
   onResendChannelMessage?: (messageId: number, newTimestamp?: boolean) => void;
@@ -387,8 +390,9 @@ export function MessageList({
   loading,
   loadingOlder = false,
   hasOlderMessages = false,
-  unreadMarkerLastReadAt,
+  unreadMarkerMessageId,
   onDismissUnreadMarker,
+  onNavigateToUnread,
   onSenderClick,
   onLoadOlder,
   onResendChannelMessage,
@@ -714,17 +718,32 @@ export function MessageList({
     };
   }, [messages, onResendChannelMessage]);
 
+  /**
+   * Located by message id, not by timestamp. The previous `received_at > boundary`
+   * scan returned 0 — the top of the loaded window — whenever the real boundary was
+   * further back than anything loaded, so the divider silently pointed at the wrong
+   * message. Matching on identity returns -1 in that case, which is the truth: the
+   * boundary is elsewhere, and `boundaryOutsideWindow` below offers to go to it.
+   */
   const unreadMarkerIndex = useMemo(() => {
-    if (unreadMarkerLastReadAt === undefined) {
-      return -1;
-    }
+    if (unreadMarkerMessageId == null) return -1;
+    return sortedMessages.findIndex((msg) => msg.id === unreadMarkerMessageId);
+  }, [sortedMessages, unreadMarkerMessageId]);
 
-    const boundary = unreadMarkerLastReadAt ?? 0;
-    return sortedMessages.findIndex((msg) => !msg.outgoing && msg.received_at > boundary);
-  }, [sortedMessages, unreadMarkerLastReadAt]);
+  // Unread exists, but the message it starts at has not been loaded.
+  const boundaryOutsideWindow = unreadMarkerMessageId != null && unreadMarkerIndex === -1;
 
   const syncJumpToUnreadVisibility = useCallback(() => {
-    if (unreadMarkerIndex === -1 || jumpToUnreadDismissed) {
+    if (jumpToUnreadDismissed) {
+      setShowJumpToUnread(false);
+      return;
+    }
+    // Boundary is real but out of the loaded window: always offer the jump.
+    if (boundaryOutsideWindow) {
+      setShowJumpToUnread(true);
+      return;
+    }
+    if (unreadMarkerIndex === -1) {
       setShowJumpToUnread(false);
       return;
     }
@@ -756,7 +775,7 @@ export function MessageList({
       markerRect.right <= listRect.right;
 
     setShowJumpToUnread(!markerVisible);
-  }, [jumpToUnreadDismissed, unreadMarkerIndex]);
+  }, [jumpToUnreadDismissed, unreadMarkerIndex, boundaryOutsideWindow]);
 
   // Refs for scroll handler to read without causing callback recreation
   const onLoadOlderRef = useRef(onLoadOlder);
@@ -1355,7 +1374,12 @@ export function MessageList({
             <button
               type="button"
               onClick={() => {
-                if (unreadMarkerRef.current?.scrollIntoView) {
+                if (boundaryOutsideWindow && unreadMarkerMessageId != null) {
+                  // Not in loaded history: hand off to the jump-to-message path,
+                  // which loads a window around the boundary instead of paging
+                  // everything between here and there.
+                  onNavigateToUnread?.(unreadMarkerMessageId);
+                } else if (unreadMarkerRef.current?.scrollIntoView) {
                   unreadMarkerRef.current.scrollIntoView({ block: 'center' });
                 } else {
                   // The marker row is outside the rendered window — scroll by index.

@@ -24,6 +24,8 @@ interface UseUnreadCountsResult {
   mentions: Record<string, boolean>;
   lastMessageTimes: ConversationTimes;
   unreadLastReadAts: Record<string, number | null>;
+  /** stateKey -> id of the oldest unread message, for placing the unread divider. */
+  firstUnreadIds: Record<string, number | null>;
   recordMessageEvent: (args: {
     msg: Message;
     activeConversation: boolean;
@@ -45,6 +47,7 @@ export function useUnreadCounts(
   const [mentions, setMentions] = useState<Record<string, boolean>>({});
   const [lastMessageTimes, setLastMessageTimes] = useState<ConversationTimes>(getLastMessageTimes);
   const [unreadLastReadAts, setUnreadLastReadAts] = useState<Record<string, number | null>>({});
+  const [firstUnreadIds, setFirstUnreadIds] = useState<Record<string, number | null>>({});
 
   // Track active conversation via ref so applyUnreads can filter without
   // destabilizing the callback chain (avoids re-creating fetchUnreads on
@@ -71,6 +74,7 @@ export function useUnreadCounts(
     }
 
     setUnreadLastReadAts(data.last_read_ats);
+    setFirstUnreadIds(data.first_unread_ids ?? {});
 
     if (Object.keys(data.last_message_times).length > 0) {
       for (const [key, ts] of Object.entries(data.last_message_times)) {
@@ -269,6 +273,7 @@ export function useUnreadCounts(
     mentions,
     lastMessageTimes,
     unreadLastReadAts,
+    firstUnreadIds,
     recordMessageEvent,
     renameConversationState,
     removeConversationState,
