@@ -911,7 +911,15 @@ export function MapView({
         <span>{infoLabel}</span>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 md:justify-end">
           {!showPackets && (
-            <>
+            // Grouped and labelled like the "Since" filter below it. The colour
+            // dots are aria-hidden, so without this the legend is unlabelled to
+            // assistive tech — and its bucket names collide with the identically
+            // named filter chips for anything selecting by text.
+            <div
+              className="flex flex-wrap items-center gap-x-3 gap-y-1"
+              role="group"
+              aria-label="Marker recency legend"
+            >
               <span className="flex items-center gap-1">
                 <span
                   className="w-3 h-3 rounded-full"
@@ -944,7 +952,7 @@ export function MapView({
                 />{' '}
                 older
               </span>
-            </>
+            </div>
           )}
           {showPackets && (
             <>
