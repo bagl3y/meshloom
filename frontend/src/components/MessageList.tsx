@@ -602,11 +602,22 @@ export function MessageList({
 
     let frames = 0;
     let raf = 0;
+    let lastAppliedTop: number | null = null;
     const step = () => {
       const list = listRef.current;
       if (!pendingBottomScrollRef.current || !list) return;
 
+      // Something other than us moved the scroll (a programmatic scrollTop, a
+      // restored position, assistive tech). Gesture handlers only catch a human
+      // at the wheel, so also bail when the position we last set has been moved
+      // upward — the pin must never fight another writer.
+      if (lastAppliedTop !== null && list.scrollTop < lastAppliedTop - 1) {
+        pendingBottomScrollRef.current = false;
+        return;
+      }
+
       scrollToIndex(sortedMessages.length - 1, 'end');
+      lastAppliedTop = list.scrollTop;
 
       const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight <= 1;
       if (atBottom || (frames += 1) >= BOTTOM_SCROLL_FRAME_BUDGET) {
