@@ -244,6 +244,11 @@ class ContactRepository:
         return None
 
     @staticmethod
+    async def list_by_key_prefix(prefix: str, limit: int = 20) -> list[Contact]:
+        """List contacts matching a public-key prefix (not hop prefixes)."""
+        return await ContactRepository._get_prefix_matches(prefix, limit=limit)
+
+    @staticmethod
     async def get_by_name(name: str) -> list[Contact]:
         """Get all contacts with the given exact name."""
         async with db.readonly() as conn:

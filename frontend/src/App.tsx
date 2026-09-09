@@ -654,6 +654,10 @@ export function App() {
     blockedKeys: appSettings?.blocked_keys,
     blockedNames: appSettings?.blocked_names,
     directoryEnabled: appSettings?.directory_enabled ?? false,
+    onOpenDirectorySettings: () => {
+      setSettingsSection('radio-app');
+      if (!showSettings) handleToggleSettingsView();
+    },
   };
   const searchProps = {
     contacts,
@@ -722,6 +726,15 @@ export function App() {
     },
     onSearchMessagesByName: (name: string) => {
       handleOpenSearchWithQuery(`user:${quoteSearchOperatorValue(name)}`);
+    },
+    onLocateContact: (publicKey: string) => {
+      handleCloseContactInfo();
+      handleSelectConversationWithTargetReset({
+        type: 'locate',
+        id: 'locate',
+        name: 'RF Locate',
+        locateKey: publicKey,
+      });
     },
     onToggleBlockedKey: handleBlockKey,
     onToggleBlockedName: handleBlockName,

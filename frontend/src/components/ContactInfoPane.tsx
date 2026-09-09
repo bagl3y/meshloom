@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Activity, Ban, ChevronDown, ChevronRight, Search, Star } from 'lucide-react';
+import { Activity, Ban, ChevronDown, ChevronRight, Crosshair, Search, Star } from 'lucide-react';
 import {
   AreaChart,
   Area,
@@ -81,6 +81,7 @@ interface ContactInfoPaneProps {
   onNavigateToChannel?: (channelKey: string) => void;
   onSearchMessagesByKey?: (publicKey: string) => void;
   onSearchMessagesByName?: (name: string) => void;
+  onLocateContact?: (publicKey: string) => void;
   blockedKeys?: string[];
   blockedNames?: string[];
   onToggleBlockedKey?: (key: string) => void;
@@ -99,6 +100,7 @@ export function ContactInfoPane({
   onNavigateToChannel,
   onSearchMessagesByKey,
   onSearchMessagesByName,
+  onLocateContact,
   blockedKeys = [],
   blockedNames = [],
   onToggleBlockedKey,
@@ -412,6 +414,20 @@ export function ContactInfoPane({
                 {pathHashModeLabel && <InfoItem label="Hop Width" value={pathHashModeLabel} />}
               </div>
             </div>
+
+            {onLocateContact && !isNameOnly && contact && (
+              <div className="px-5 py-3 border-b border-border">
+                <button
+                  type="button"
+                  className="text-sm flex items-center gap-2 hover:text-primary transition-colors"
+                  onClick={() => onLocateContact(contact.public_key)}
+                  data-testid="locate-contact-cta"
+                >
+                  <Crosshair className="h-4.5 w-4.5 text-muted-foreground" aria-hidden="true" />
+                  <span>{t('locate.estimateZone')}</span>
+                </button>
+              </div>
+            )}
 
             {/* GPS */}
             {isValidLocation(contact.lat, contact.lon) && (

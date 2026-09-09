@@ -342,7 +342,15 @@ export interface ResendChannelMessageResponse {
   message?: Message;
 }
 
-type ConversationType = 'contact' | 'channel' | 'raw' | 'map' | 'visualizer' | 'search' | 'trace';
+type ConversationType =
+  | 'contact'
+  | 'channel'
+  | 'raw'
+  | 'map'
+  | 'visualizer'
+  | 'search'
+  | 'trace'
+  | 'locate';
 
 export interface Conversation {
   type: ConversationType;
@@ -351,6 +359,115 @@ export interface Conversation {
   name: string;
   /** For map view: public key prefix to focus on */
   mapFocusKey?: string;
+  /** For locate view: key, prefix, or search token */
+  locateKey?: string;
+}
+
+export type LocateSource = 'local' | 'corescope' | 'mixte';
+export type LocateAnchorKind = 'local_0hop' | 'first_hop' | 'corescope_0hop';
+export type LocateEmptyReason = 'insufficient_identity' | 'directory_off' | 'no_anchors';
+
+export interface LocateCandidate {
+  public_key: string;
+  name?: string | null;
+  type?: number | null;
+  last_seen?: number | null;
+  role?: string | null;
+}
+
+export interface LocateIdentity {
+  public_key: string;
+  name?: string | null;
+  contact_type?: number | null;
+  inferred: boolean;
+  last_seen?: number | null;
+}
+
+export interface LocateAnchor {
+  kind: LocateAnchorKind;
+  source: 'local' | 'corescope';
+  name: string;
+  public_key?: string | null;
+  hop_prefix?: string | null;
+  lat: number;
+  lon: number;
+  radius_km: number;
+  snr?: number | null;
+  heard_count?: number | null;
+  last_seen?: number | null;
+  calibratable: boolean;
+}
+
+export interface LocateUnresolvedHop {
+  prefix: string;
+  reason: 'ambiguous' | 'no_gps' | 'unmatched' | 'one_byte';
+  candidates: LocateCandidate[];
+}
+
+export interface LocateDeclaredGps {
+  lat: number;
+  lon: number;
+  source: 'advert' | 'corescope';
+}
+
+export interface LocateResponse {
+  query: string;
+  identity: LocateIdentity | null;
+  source: LocateSource | null;
+  directory_enabled: boolean;
+  default_radius_km: number;
+  anchors: LocateAnchor[];
+  unresolved_hops: LocateUnresolvedHop[];
+  declared_gps: LocateDeclaredGps | null;
+  heard_locally_0hop: boolean;
+  radio_has_gps: boolean;
+  empty_reason: LocateEmptyReason | null;
+}
+
+export interface DirectoryReachResponse {
+  node: {
+    public_key: string;
+    name?: string | null;
+    role?: string | null;
+    lat?: number | null;
+    lon?: number | null;
+  } | null;
+  observers: Array<{
+    public_key: string;
+    name: string;
+    count: number;
+    avg_snr?: number | null;
+    lat?: number | null;
+    lon?: number | null;
+  }>;
+  directory_enabled: boolean;
+}
+
+export interface DirectoryNeighborsResponse {
+  neighbors: Array<{
+    public_key?: string | null;
+    prefix?: string | null;
+    name?: string | null;
+    count: number;
+    score?: number | null;
+    avg_snr?: number | null;
+    lat?: number | null;
+    lon?: number | null;
+    ambiguous: boolean;
+  }>;
+  directory_enabled: boolean;
+}
+
+export interface DirectoryNodeSearchResponse {
+  nodes: Array<{
+    public_key: string;
+    name?: string | null;
+    role?: string | null;
+    lat?: number | null;
+    lon?: number | null;
+    last_seen?: string | null;
+  }>;
+  directory_enabled: boolean;
 }
 
 export interface RawPacket {

@@ -6,6 +6,7 @@ import { MessageInput, type MessageInputHandle } from './MessageInput';
 import { MessageList } from './MessageList';
 import { RawPacketFeedView } from './RawPacketFeedView';
 import { RoomServerPanel } from './RoomServerPanel';
+import { LocatePane, locateConversation } from './LocatePane';
 import { TracePane } from './TracePane';
 import type {
   Channel,
@@ -94,6 +95,7 @@ interface ConversationPaneProps {
   blockedKeys?: string[];
   blockedNames?: string[];
   directoryEnabled?: boolean;
+  onOpenDirectorySettings?: () => void;
 }
 
 function LoadingPane({ label }: { label: string }) {
@@ -176,6 +178,7 @@ export function ConversationPane({
   blockedKeys,
   blockedNames,
   directoryEnabled,
+  onOpenDirectorySettings,
 }: ConversationPaneProps) {
   const { t } = useTranslation();
   const [roomAuthenticated, setRoomAuthenticated] = useState(false);
@@ -259,6 +262,18 @@ export function ConversationPane({
 
   if (activeConversation.type === 'trace') {
     return <TracePane contacts={contacts} config={config} onRunTracePath={onRunTracePath} />;
+  }
+
+  if (activeConversation.type === 'locate') {
+    return (
+      <LocatePane
+        contacts={contacts}
+        locateKey={activeConversation.locateKey}
+        directoryEnabled={directoryEnabled}
+        onSelectLocate={(query) => onSelectConversation(locateConversation(query))}
+        onOpenDirectorySettings={onOpenDirectorySettings}
+      />
+    );
   }
 
   if (activeContactIsRepeater) {

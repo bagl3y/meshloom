@@ -12,9 +12,11 @@ from app.repository.directory import DirectoryHopCacheRepository
 from app.routers.directory import post_reset_directory_cache, post_resolve_hops
 from app.routers.settings import AppSettingsUpdate, update_settings
 from app.services.directory import (
+    get_directory_node_reach,
     list_directory_map_nodes,
     normalize_directory_origin,
     parse_corescope_map_nodes,
+    parse_corescope_reach,
     parse_corescope_resolved,
     reset_directory_nodes_cache,
     resolve_directory_hops,
@@ -90,7 +92,9 @@ class TestParseCorescopeResolved:
                     "A1B2": {
                         "name": "HillTop",
                         "pubkey": "ab" * 32,
-                        "candidates": [{"name": "HillTop", "pubkey": "ab" * 32, "lat": 48.1, "lon": 2.2}],
+                        "candidates": [
+                            {"name": "HillTop", "pubkey": "ab" * 32, "lat": 48.1, "lon": 2.2}
+                        ],
                         "conflicts": [],
                         "confidence": "unique",
                     }
@@ -328,3 +332,59 @@ class TestListDirectoryMapNodes:
         assert mock_client.get.call_count == 1
         assert mock_client.get.call_args.args[0] == "https://corescope.test/api/nodes"
         assert mock_client.get.call_args.kwargs["params"]["role"] == "repeater"
+
+
+class TestDirectoryReach:
+    def test_parse_keeps_gps_observers_only(self):
+        parsed = parse_corescope_reach(
+            {
+                "node": {"pubkey": "aa" * 32, "name": "Ghost", "lat": 0, "lon": 0},
+                "direct_observers": [
+                    {
+                        "pubkey": "bb" * 32,
+                        "name": "Obs",
+                        "count": 3,
+                        "avg_snr": 4.5,
+                        "lat": 48.1,
+                        "lon": 2.2,
+                    },
+                    {
+                        "pubkey": "cc" * 32,
+                        "name": "NoGps",
+                        "count": 1,
+                        "avg_snr": 1.0,
+                        "lat": None,
+                        "lon": None,
+                    },
+                ],
+            },
+            "aa" * 32,
+        )
+        assert parsed.node is not None
+        assert parsed.node.lat is None
+        assert [obs.public_key for obs in parsed.observers] == ["bb" * 32]
+        assert parsed.observers[0].avg_snr == 4.5
+
+    @pytest.mark.asyncio
+    async def test_reach_500_raises(self, test_db):
+        reset_directory_nodes_cache()
+        await AppSettingsRepository.update(
+            directory_enabled=True, directory_url="https://corescope.test"
+        )
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        with patch("app.services.directory.httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(HTTPException) as exc:
+                await get_directory_node_reach("aa" * 32)
+        assert exc.value.status_code == 500
+
+    @pytest.mark.asyncio
+    async def test_reach_disabled_is_empty_not_500(self, test_db):
+        reset_directory_nodes_cache()
+        result = await get_directory_node_reach("aa" * 32)
+        assert result.directory_enabled is False
+        assert result.observers == []

@@ -70,7 +70,8 @@ frontend/src/
 │   └── useRememberedServerPassword.ts # Browser-local repeater/room password persistence
 ├── components/
 │   ├── AppShell.tsx            # App-shell layout: status, sidebar, search/settings panes, cracker, modals, security warning
-│   ├── ConversationPane.tsx    # Active conversation surface selection (map/raw/trace/repeater/room/chat/empty)
+│   ├── ConversationPane.tsx    # Active conversation surface selection (map/raw/trace/locate/repeater/room/chat/empty)
+│   ├── LocatePane.tsx          # RF locate: 0-hop coverage zone for one node
 │   ├── visualizer/
 │   │   ├── useVisualizerData3D.ts   # Packet→graph data pipeline, repeat aggregation, simulation state
 │   │   ├── useVisualizer3DScene.ts  # Three.js scene lifecycle, buffers, hover/pin interaction
@@ -208,6 +209,8 @@ frontend/src/
     ├── tracePane.test.tsx
     ├── unreadCounts.test.ts
     ├── urlHash.test.ts
+    ├── locatePane.test.tsx
+    ├── locateZone.test.ts
     ├── appSearchJump.test.tsx
     ├── channelInfoKeyVisibility.test.tsx
     ├── chatHeaderKeyVisibility.test.tsx
@@ -270,6 +273,7 @@ That gives the store a load-bearing invariant: **no ancestor of `MessageList` ma
 - visualizer
 - raw packet feed
 - trace view
+- locate view (`#locate` / `#locate/{key_or_prefix}`)
 - repeater dashboard
 - room-server auth/status gate before room chat
 - normal chat chrome (`ChatHeader` + `MessageList` + `MessageInput`)
@@ -343,6 +347,8 @@ Supported routes:
 - `#visualizer`
 - `#search`
 - `#trace`
+- `#locate`
+- `#locate/{key_or_prefix}`
 - `#settings/{section}`
 - `#channel/{channelKey}`
 - `#channel/{channelKey}/{label}`

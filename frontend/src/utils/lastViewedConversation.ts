@@ -11,6 +11,7 @@ const SUPPORTED_TYPES: Conversation['type'][] = [
   'map',
   'visualizer',
   'trace',
+  'locate',
 ];
 
 function isSupportedType(value: unknown): value is Conversation['type'] {
@@ -61,19 +62,28 @@ export function getLastViewedConversation(): Conversation | null {
       return null;
     }
 
-    if (parsed.type !== 'map') {
+    if (parsed.type === 'map') {
       return {
-        type: parsed.type,
+        type: 'map',
         id: parsed.id,
         name: parsed.name,
+        ...(typeof parsed.mapFocusKey === 'string' && { mapFocusKey: parsed.mapFocusKey }),
+      };
+    }
+
+    if (parsed.type === 'locate') {
+      return {
+        type: 'locate',
+        id: parsed.id,
+        name: parsed.name,
+        ...(typeof parsed.locateKey === 'string' && { locateKey: parsed.locateKey }),
       };
     }
 
     return {
-      type: 'map',
+      type: parsed.type,
       id: parsed.id,
       name: parsed.name,
-      ...(typeof parsed.mapFocusKey === 'string' && { mapFocusKey: parsed.mapFocusKey }),
     };
   } catch {
     return null;
@@ -103,6 +113,15 @@ export function captureLastViewedConversationFromHash(): void {
   }
   if (hashConversation.type === 'trace') {
     saveLastViewedConversation({ type: 'trace', id: 'trace', name: 'Trace' });
+    return;
+  }
+  if (hashConversation.type === 'locate') {
+    saveLastViewedConversation({
+      type: 'locate',
+      id: 'locate',
+      name: 'RF Locate',
+      ...(hashConversation.locateKey && { locateKey: hashConversation.locateKey }),
+    });
     return;
   }
 

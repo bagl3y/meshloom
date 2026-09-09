@@ -66,7 +66,11 @@ API_TAGS_METADATA: list[dict[str, Any]] = [
     },
     {
         "name": "directory",
-        "description": "Opt-in CoreScope hop directory proxy, map nodes, and cache reset.",
+        "description": "Opt-in CoreScope hop directory proxy, map nodes, reach, neighbors, and cache reset.",
+    },
+    {
+        "name": "locate",
+        "description": "RF locate: conservative 0-hop coverage zone for one uniquely resolved node.",
     },
     {
         "name": "push",

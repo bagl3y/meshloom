@@ -6,6 +6,7 @@ import {
   Cable,
   ChartNetwork,
   CheckCheck,
+  Crosshair,
   ChevronDown,
   ChevronRight,
   LockOpen,
@@ -262,7 +263,7 @@ export function Sidebar({
   };
 
   const isActive = (
-    type: 'contact' | 'channel' | 'raw' | 'map' | 'visualizer' | 'search' | 'trace',
+    type: 'contact' | 'channel' | 'raw' | 'map' | 'visualizer' | 'search' | 'trace' | 'locate',
     id: string
   ) => activeConversation?.type === type && activeConversation?.id === id;
 
@@ -862,6 +863,19 @@ export function Sidebar({
               type: 'trace',
               id: 'trace',
               name: 'Trace',
+            }),
+        }),
+        renderSidebarActionRow({
+          key: 'tool-locate',
+          active: isActive('locate', 'locate'),
+          icon: <Crosshair className="h-4 w-4" />,
+          name: t('locate.title'),
+          label: t('locate.title'),
+          onClick: () =>
+            handleSelectConversation({
+              type: 'locate',
+              id: 'locate',
+              name: 'RF Locate',
             }),
         }),
         renderSidebarActionRow({

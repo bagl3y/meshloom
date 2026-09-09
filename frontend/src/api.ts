@@ -12,7 +12,11 @@ import type {
   ContactAnalytics,
   ContactAdvertPathSummary,
   DirectoryMapNodesResponse,
+  DirectoryNeighborsResponse,
+  DirectoryNodeSearchResponse,
+  DirectoryReachResponse,
   DirectoryResolveHopsResponse,
+  LocateResponse,
   ContactTelemetryResponse,
   FanoutConfig,
   HealthStatus,
@@ -57,7 +61,8 @@ const API_BASE = './api';
 export class ApiError extends Error {
   constructor(
     message: string,
-    public readonly status: number
+    public readonly status: number,
+    public readonly detail: unknown = undefined
   ) {
     super(message);
     this.name = 'ApiError';
@@ -77,15 +82,20 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     const errorText = await res.text();
     // FastAPI returns errors as {"detail": "message"}, extract the message
     let errorMessage = errorText || res.statusText;
+    let detail: unknown = errorText;
     try {
       const errorJson = JSON.parse(errorText);
-      if (errorJson.detail) {
-        errorMessage = errorJson.detail;
+      if (errorJson.detail !== undefined) {
+        detail = errorJson.detail;
+        errorMessage =
+          typeof errorJson.detail === 'string'
+            ? errorJson.detail
+            : errorJson.detail?.reason || errorText;
       }
     } catch {
       // Not JSON, use raw text
     }
-    throw new ApiError(errorMessage, res.status);
+    throw new ApiError(errorMessage, res.status, detail);
   }
   return res.json();
 }
@@ -371,6 +381,19 @@ export const api = {
       body: JSON.stringify({ hops }),
     }),
   getDirectoryMapNodes: () => fetchJson<DirectoryMapNodesResponse>('/directory/nodes'),
+  searchDirectoryNodes: (q: string) =>
+    fetchJson<DirectoryNodeSearchResponse>(`/directory/nodes/search?q=${encodeURIComponent(q)}`),
+  getDirectoryNodeReach: (pubkey: string) =>
+    fetchJson<DirectoryReachResponse>(`/directory/nodes/${encodeURIComponent(pubkey)}/reach`),
+  getDirectoryNodeNeighbors: (pubkey: string) =>
+    fetchJson<DirectoryNeighborsResponse>(
+      `/directory/nodes/${encodeURIComponent(pubkey)}/neighbors`
+    ),
+  locate: (q: string, radiusKm?: number) => {
+    const params = new URLSearchParams({ q });
+    if (radiusKm != null) params.set('radius_km', String(radiusKm));
+    return fetchJson<LocateResponse>(`/locate?${params.toString()}`);
+  },
   resetDirectoryCache: () =>
     fetchJson<{ deleted: number }>('/directory/cache/reset', {
       method: 'POST',

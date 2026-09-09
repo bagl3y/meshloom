@@ -43,7 +43,9 @@ app/
 │   ├── radio_lifecycle.py       # Post-connect setup and reconnect/setup helpers
 │   ├── radio_commands.py        # Radio config/private-key command workflows
 │   ├── radio_stats.py           # In-memory local radio stats sampling and noise-floor history
-│   └── radio_runtime.py         # Router/dependency seam over the global RadioManager
+│   ├── radio_runtime.py         # Router/dependency seam over the global RadioManager
+│   ├── directory.py             # CoreScope proxy (resolve-hops, nodes, reach, neighbors, search)
+│   └── rf_locate.py             # RF locate identity + 0-hop disk assembly
 ├── radio.py             # RadioManager transport/session state + lock management
 ├── radio_sync.py        # Polling, sync, periodic advertisement loop
 ├── decoder.py           # Packet parsing/decryption
@@ -78,6 +80,8 @@ app/
     ├── fanout.py
     ├── repeaters.py
     ├── statistics.py
+    ├── directory.py
+    ├── locate.py
     ├── push.py
     └── ws.py
 ```
@@ -328,6 +332,17 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 ### Statistics
 - `GET /statistics` — aggregated mesh network stats (entity counts, message/packet splits, activity windows, busiest channels, `region_scope_24h` regional adoption)
 
+### Locate
+- `GET /locate?q=` — unique identity then conservative 0-hop coverage disks (`local` / `corescope` / `mixte`). 409 if ambiguous. Never writes inferred lat/lon.
+
+### Directory
+- `POST /directory/resolve-hops` — 2/3-byte hop prefixes only; 1-byte is 400
+- `GET /directory/nodes`
+- `GET /directory/nodes/search?q=` — name/key search, not hop prefixes
+- `GET /directory/nodes/{pubkey}/reach` — 0-hop observers; HTTP 500 ≠ empty
+- `GET /directory/nodes/{pubkey}/neighbors`
+- `POST /directory/cache/reset`
+
 ### Push
 - `GET /push/vapid-public-key` — VAPID public key for browser `PushManager.subscribe()`
 - `POST /push/subscribe` — register/upsert push subscription (keyed by endpoint URL)
@@ -442,6 +457,7 @@ tests/
 ├── test_health_mqtt_status.py  # Health endpoint MQTT status field
 ├── test_http_quality.py        # Cache-control / gzip / basic-auth HTTP quality checks
 ├── test_key_normalization.py   # Public key normalization
+├── test_rf_locate.py           # RF locate identity, 0-hop extract, CoreScope merge
 ├── test_keystore.py            # Ephemeral keystore
 ├── test_main_startup.py        # App startup and lifespan
 ├── test_map_upload.py          # Map upload fanout module

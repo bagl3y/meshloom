@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Crosshair,
   Hash,
   Map,
   MessageSquare,
@@ -59,7 +60,7 @@ interface ToolItem extends Searchable {
   id: string;
   name: string;
   icon: React.ComponentType<{ className?: string }>;
-  type: 'raw' | 'map' | 'visualizer' | 'search' | 'trace';
+  type: 'raw' | 'map' | 'visualizer' | 'search' | 'trace' | 'locate';
 }
 
 interface SettingItem extends Searchable {
@@ -86,6 +87,13 @@ const TOOL_ITEMS: ToolItem[] = [
     searchText: 'message search',
   },
   { id: 'trace', name: 'Route Trace', icon: Route, type: 'trace', searchText: 'route trace' },
+  {
+    id: 'locate',
+    name: 'RF Locate',
+    icon: Crosshair,
+    type: 'locate',
+    searchText: 'rf locate zone corescope',
+  },
 ];
 
 const SETTING_ITEMS: SettingItem[] = SETTINGS_SECTION_ORDER.map((section) => ({

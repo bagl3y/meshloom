@@ -66,6 +66,16 @@ vi.mock('../components/TracePane', () => ({
   TracePane: () => <div data-testid="trace-pane" />,
 }));
 
+vi.mock('../components/LocatePane', () => ({
+  LocatePane: () => <div data-testid="locate-pane" />,
+  locateConversation: (query?: string) => ({
+    type: 'locate' as const,
+    id: 'locate',
+    name: 'RF Locate',
+    ...(query ? { locateKey: query } : {}),
+  }),
+}));
+
 const config: RadioConfig = {
   public_key: 'aa'.repeat(32),
   name: 'Radio',
@@ -240,6 +250,24 @@ describe('ConversationPane', () => {
       expect(screen.getByTestId('message-list')).toBeInTheDocument();
       expect(screen.getByTestId('message-input')).toBeInTheDocument();
     });
+  });
+
+  it('renders the locate tool pane for locate conversations', () => {
+    render(
+      <ConversationPane
+        {...createProps({
+          activeConversation: {
+            type: 'locate',
+            id: 'locate',
+            name: 'RF Locate',
+            locateKey: 'abcd',
+          },
+        })}
+      />
+    );
+
+    expect(screen.getByTestId('locate-pane')).toBeInTheDocument();
+    expect(screen.queryByTestId('message-list')).not.toBeInTheDocument();
   });
 
   it('renders the trace tool pane for trace conversations', () => {

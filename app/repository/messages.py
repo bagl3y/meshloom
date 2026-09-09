@@ -400,6 +400,25 @@ class MessageRepository:
         )
 
     @staticmethod
+    async def list_recent_paths_for_contact(public_key: str, limit: int = 200) -> list[MessagePath]:
+        """Recent stored paths for DMs to/from a contact and channel posts they sent."""
+        clause, params = MessageRepository._contact_activity_filter(public_key)
+        query = (
+            f"SELECT paths FROM messages WHERE {clause} AND paths IS NOT NULL "
+            "ORDER BY received_at DESC LIMIT ?"
+        )
+        params.append(max(1, min(limit, 500)))
+        async with db.readonly() as conn:
+            async with conn.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
+        paths: list[MessagePath] = []
+        for row in rows:
+            parsed = MessageRepository._parse_paths(row["paths"])
+            if parsed:
+                paths.extend(parsed)
+        return paths
+
+    @staticmethod
     async def get_all(
         limit: int = 100,
         offset: int = 0,

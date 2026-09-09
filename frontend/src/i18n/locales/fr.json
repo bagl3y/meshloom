@@ -149,5 +149,46 @@
   "repeater": {
     "help": "Aide",
     "cliDocs": "Docs CLI"
+  },
+  "locate": {
+    "title": "Localisation RF",
+    "help": "Trace une zone de couverture 0 saut conservative. Ce n’est pas un pin GPS et rien n’est écrit sur le contact.",
+    "searchPlaceholder": "Clé publique, préfixe unique ou nom",
+    "search": "Localiser",
+    "loading": "Résolution…",
+    "loadFailed": "Impossible de charger la localisation RF",
+    "pickIdentity": "Choisir une identité",
+    "ambiguousHelp": "Plusieurs nœuds correspondent. Choisissez-en un avant de tracer une zone.",
+    "insufficient": "Identité insuffisante. Utilisez une clé complète ou un préfixe unique.",
+    "directoryOff": "Jamais entendu en local. Activez CoreScope pour chercher des observateurs 0 saut.",
+    "enableDirectory": "Activer CoreScope",
+    "noObservers": "Aucun observateur GPS 0 saut. Pas de zone à tracer.",
+    "heardNoGps": "Entendu ici en 0 saut, mais cette radio n’a pas de GPS.",
+    "anchorCount_one": "{{count}} disque de couverture",
+    "anchorCount_other": "{{count}} disques de couverture",
+    "inferred": "Saut inféré",
+    "sourceLocal": "Local",
+    "sourceCorescope": "CoreScope",
+    "sourceMixte": "Mixte",
+    "sourceUnknown": "Inconnu",
+    "showDisks": "Afficher les disques de couverture",
+    "mapEmpty": "Pas encore de zone. Cherchez un nœud unique.",
+    "unresolved": "Premiers sauts non résolus",
+    "estimateZone": "Estimer la zone RF",
+    "calibrateDirectory": "Calibrer via voisins CoreScope",
+    "calibrateRadio": "Interroger les voisins radio",
+    "calibrateEmpty": "Aucun voisin GPS pour calibrer ce disque.",
+    "calibrateFailed": "Impossible de calibrer ce disque.",
+    "kind": {
+      "local_0hop": "Entendu ici en 0 saut",
+      "first_hop": "Répéteur premier saut",
+      "corescope_0hop": "Observateur CoreScope 0 saut"
+    },
+    "unresolvedReason": {
+      "ambiguous": "préfixe ambigu",
+      "no_gps": "pas de GPS",
+      "unmatched": "non résolu",
+      "one_byte": "saut 1 octet refusé"
+    }
   }
 }

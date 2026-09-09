@@ -1109,6 +1109,129 @@ class DirectoryMapNodesResponse(BaseModel):
     nodes: list[DirectoryMapNode] = Field(default_factory=list)
 
 
+class DirectoryReachObserver(BaseModel):
+    """A CoreScope 0-hop observer. Radius is never derived from SNR."""
+
+    public_key: str
+    name: str
+    count: int = 0
+    avg_snr: float | None = None
+    lat: float | None = None
+    lon: float | None = None
+
+
+class DirectoryReachNode(BaseModel):
+    public_key: str
+    name: str | None = None
+    role: str | None = None
+    lat: float | None = None
+    lon: float | None = None
+
+
+class DirectoryReachResponse(BaseModel):
+    node: DirectoryReachNode | None = None
+    observers: list[DirectoryReachObserver] = Field(default_factory=list)
+    directory_enabled: bool = False
+
+
+class DirectoryNeighbor(BaseModel):
+    """CoreScope neighbor-affinity entry. Distinct from firmware repeater neighbors."""
+
+    public_key: str | None = None
+    prefix: str | None = None
+    name: str | None = None
+    count: int = 0
+    score: float | None = None
+    avg_snr: float | None = None
+    lat: float | None = None
+    lon: float | None = None
+    ambiguous: bool = False
+
+
+class DirectoryNeighborsResponse(BaseModel):
+    neighbors: list[DirectoryNeighbor] = Field(default_factory=list)
+    directory_enabled: bool = False
+
+
+class DirectoryNodeSearchHit(BaseModel):
+    public_key: str
+    name: str | None = None
+    role: str | None = None
+    lat: float | None = None
+    lon: float | None = None
+    last_seen: str | None = None
+
+
+class DirectoryNodeSearchResponse(BaseModel):
+    nodes: list[DirectoryNodeSearchHit] = Field(default_factory=list)
+    directory_enabled: bool = False
+
+
+class LocateCandidate(BaseModel):
+    public_key: str
+    name: str | None = None
+    type: int | None = None
+    last_seen: int | None = None
+    role: str | None = None
+
+
+class LocateIdentity(BaseModel):
+    public_key: str
+    name: str | None = None
+    contact_type: int | None = None
+    inferred: bool = False
+    last_seen: int | None = None
+
+
+class LocateAnchor(BaseModel):
+    """One conservative RF disk. Radius is coverage, never RSSI-to-km."""
+
+    kind: Literal["local_0hop", "first_hop", "corescope_0hop"]
+    source: Literal["local", "corescope"]
+    name: str
+    public_key: str | None = None
+    hop_prefix: str | None = None
+    lat: float
+    lon: float
+    radius_km: float
+    snr: float | None = None
+    heard_count: int | None = None
+    last_seen: int | None = None
+    calibratable: bool = False
+
+
+class LocateUnresolvedHop(BaseModel):
+    prefix: str
+    reason: Literal["ambiguous", "no_gps", "unmatched", "one_byte"]
+    candidates: list[LocateCandidate] = Field(default_factory=list)
+
+
+class LocateDeclaredGps(BaseModel):
+    lat: float
+    lon: float
+    source: Literal["advert", "corescope"]
+
+
+class LocateResponse(BaseModel):
+    query: str
+    identity: LocateIdentity | None = None
+    source: Literal["local", "corescope", "mixte"] | None = None
+    directory_enabled: bool
+    default_radius_km: float
+    anchors: list[LocateAnchor] = Field(default_factory=list)
+    unresolved_hops: list[LocateUnresolvedHop] = Field(default_factory=list)
+    declared_gps: LocateDeclaredGps | None = None
+    heard_locally_0hop: bool = False
+    radio_has_gps: bool = False
+    empty_reason: Literal["insufficient_identity", "directory_off", "no_anchors"] | None = None
+
+
+class LocateAmbiguousDetail(BaseModel):
+    reason: Literal["ambiguous"] = "ambiguous"
+    query: str
+    candidates: list[LocateCandidate] = Field(default_factory=list)
+
+
 class ContactGroup(BaseModel):
     """Local-only contact group. Not synced to the radio."""
 

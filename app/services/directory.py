@@ -16,6 +16,13 @@ from app.models import (
     DirectoryHopHit,
     DirectoryMapNode,
     DirectoryMapNodesResponse,
+    DirectoryNeighbor,
+    DirectoryNeighborsResponse,
+    DirectoryNodeSearchHit,
+    DirectoryNodeSearchResponse,
+    DirectoryReachNode,
+    DirectoryReachObserver,
+    DirectoryReachResponse,
     DirectoryResolveHopsResponse,
 )
 from app.repository import AppSettingsRepository
@@ -34,11 +41,20 @@ NODES_TIMEOUT_SECONDS = 8.0
 NODES_PAGE_SIZE = 500
 NODES_MAX_PAGES = 8
 NODES_CACHE_TTL_SECONDS = 600
+REACH_TIMEOUT_SECONDS = 8.0
+REACH_CACHE_TTL_SECONDS = 300
+NEIGHBORS_TIMEOUT_SECONDS = 8.0
+NEIGHBORS_CACHE_TTL_SECONDS = 300
+SEARCH_TIMEOUT_SECONDS = 6.0
+SEARCH_CACHE_TTL_SECONDS = 60
 PUBKEY_HEX_LEN = 64
 MAX_HOPS = 64
 _HEX_RE = re.compile(r"^[0-9A-Fa-f]+$")
 _SKIP_CONFIDENCE = frozenset({"no_match", "conflict", "ambiguous"})
 _nodes_cache: tuple[float, str, list[DirectoryMapNode]] | None = None
+_reach_cache: dict[tuple[str, str], tuple[float, DirectoryReachResponse]] = {}
+_neighbors_cache: dict[tuple[str, str], tuple[float, DirectoryNeighborsResponse]] = {}
+_search_cache: dict[tuple[str, str], tuple[float, DirectoryNodeSearchResponse]] = {}
 
 
 def normalize_directory_origin(raw: str) -> str:
@@ -163,7 +179,8 @@ def parse_corescope_resolved_hits(payload: object) -> dict[str, ParsedDirectoryH
 def parse_corescope_resolved(payload: object) -> dict[str, str | None]:
     """Map prefix → name (or None for a conclusive no-match). Ignore undocumented keys."""
     return {
-        prefix: (hit.name if hit else None) for prefix, hit in parse_corescope_resolved_hits(payload).items()
+        prefix: (hit.name if hit else None)
+        for prefix, hit in parse_corescope_resolved_hits(payload).items()
     }
 
 
@@ -192,7 +209,9 @@ async def validate_corescope_spec(origin: str) -> None:
         raise HTTPException(status_code=400, detail="CoreScope spec is not OpenAPI")
 
 
-async def _fetch_corescope_hops(origin: str, prefixes: list[str]) -> dict[str, ParsedDirectoryHop | None]:
+async def _fetch_corescope_hops(
+    origin: str, prefixes: list[str]
+) -> dict[str, ParsedDirectoryHop | None]:
     url = f"{origin}/api/resolve-hops"
     try:
         async with httpx.AsyncClient(
@@ -285,6 +304,9 @@ async def resolve_directory_hops(hops: list[str]) -> DirectoryResolveHopsRespons
 async def reset_directory_cache() -> int:
     global _nodes_cache
     _nodes_cache = None
+    _reach_cache.clear()
+    _neighbors_cache.clear()
+    _search_cache.clear()
     return await DirectoryHopCacheRepository.wipe()
 
 
@@ -353,6 +375,9 @@ def parse_corescope_map_nodes(payload: object) -> tuple[list[DirectoryMapNode], 
 def reset_directory_nodes_cache() -> None:
     global _nodes_cache
     _nodes_cache = None
+    _reach_cache.clear()
+    _neighbors_cache.clear()
+    _search_cache.clear()
 
 
 async def _fetch_corescope_nodes_page(
@@ -394,11 +419,7 @@ async def list_directory_map_nodes() -> DirectoryMapNodesResponse:
         return DirectoryMapNodesResponse()
 
     now = time.time()
-    if (
-        _nodes_cache is not None
-        and _nodes_cache[0] > now
-        and _nodes_cache[1] == origin
-    ):
+    if _nodes_cache is not None and _nodes_cache[0] > now and _nodes_cache[1] == origin:
         return DirectoryMapNodesResponse(nodes=list(_nodes_cache[2]))
 
     merged: dict[str, DirectoryMapNode] = {}
@@ -423,3 +444,258 @@ async def list_directory_map_nodes() -> DirectoryMapNodesResponse:
     nodes = list(merged.values())
     _nodes_cache = (now + NODES_CACHE_TTL_SECONDS, origin, nodes)
     return DirectoryMapNodesResponse(nodes=nodes)
+
+
+def is_valid_map_location(lat: float, lon: float) -> bool:
+    return _is_valid_map_location(lat, lon)
+
+
+def validate_directory_pubkey(pubkey: str) -> str:
+    key = pubkey.strip().lower()
+    if len(key) != PUBKEY_HEX_LEN or not _HEX_RE.fullmatch(key):
+        raise HTTPException(status_code=400, detail="Public key must be 64 hex characters")
+    return key
+
+
+async def _require_directory_origin() -> str | None:
+    settings = await AppSettingsRepository.get()
+    origin = (settings.directory_url or "").strip()
+    if not settings.directory_enabled or not origin:
+        return None
+    return origin
+
+
+async def _corescope_get_json(
+    origin: str,
+    path: str,
+    *,
+    timeout: float,
+    params: dict[str, str | int] | None = None,
+    empty_on_404: bool = False,
+) -> object | None:
+    """GET JSON from the saved CoreScope origin. HTTP 5xx/network is 500, never empty."""
+    url = f"{origin}{path}"
+    try:
+        async with httpx.AsyncClient(follow_redirects=False, timeout=timeout) as client:
+            response = await client.get(url, params=params)
+    except httpx.RequestError as exc:
+        logger.warning("CoreScope %s failed: %s", path, exc)
+        raise HTTPException(status_code=500, detail="CoreScope request failed") from exc
+    if response.status_code == 404 and empty_on_404:
+        return None
+    if response.status_code == 400:
+        raise HTTPException(status_code=400, detail="CoreScope rejected the request")
+    if response.status_code != 200:
+        logger.warning("CoreScope %s HTTP %s", path, response.status_code)
+        raise HTTPException(
+            status_code=500,
+            detail=f"CoreScope request failed (HTTP {response.status_code})",
+        )
+    try:
+        return response.json()
+    except ValueError as exc:
+        logger.warning("CoreScope %s returned non-JSON", path)
+        raise HTTPException(status_code=500, detail="CoreScope returned non-JSON") from exc
+
+
+def parse_corescope_reach(payload: object, pubkey: str) -> DirectoryReachResponse:
+    """Keep documented reach fields: node GPS + 0-hop direct_observers."""
+    if not isinstance(payload, dict):
+        return DirectoryReachResponse(directory_enabled=True)
+    node_payload = payload.get("node")
+    node: DirectoryReachNode | None = None
+    if isinstance(node_payload, dict):
+        key = _normalize_pubkey(node_payload.get("pubkey") or node_payload.get("public_key"))
+        name = node_payload.get("name")
+        role = node_payload.get("role")
+        lat = _as_float(node_payload.get("lat"))
+        lon = _as_float(node_payload.get("lon"))
+        if lat is not None and lon is not None and not _is_valid_map_location(lat, lon):
+            lat, lon = None, None
+        node = DirectoryReachNode(
+            public_key=key or pubkey,
+            name=name.strip() if isinstance(name, str) and name.strip() else None,
+            role=role.strip() if isinstance(role, str) and role.strip() else None,
+            lat=lat,
+            lon=lon,
+        )
+    observers: list[DirectoryReachObserver] = []
+    seen: set[str] = set()
+    raw_observers = payload.get("direct_observers")
+    if isinstance(raw_observers, list):
+        for item in raw_observers:
+            if not isinstance(item, dict):
+                continue
+            key = _normalize_pubkey(item.get("pubkey") or item.get("public_key"))
+            if not key or key in seen:
+                continue
+            lat = _as_float(item.get("lat"))
+            lon = _as_float(item.get("lon"))
+            if lat is None or lon is None or not _is_valid_map_location(lat, lon):
+                continue
+            name = item.get("name")
+            label = name.strip() if isinstance(name, str) and name.strip() else key[:12]
+            count = item.get("count")
+            snr = _as_float(item.get("avg_snr"))
+            seen.add(key)
+            observers.append(
+                DirectoryReachObserver(
+                    public_key=key,
+                    name=label,
+                    count=count if isinstance(count, int) and count >= 0 else 0,
+                    avg_snr=snr,
+                    lat=lat,
+                    lon=lon,
+                )
+            )
+    return DirectoryReachResponse(node=node, observers=observers, directory_enabled=True)
+
+
+def parse_corescope_neighbors(payload: object) -> DirectoryNeighborsResponse:
+    if not isinstance(payload, dict):
+        return DirectoryNeighborsResponse(directory_enabled=True)
+    raw = payload.get("neighbors")
+    if not isinstance(raw, list):
+        return DirectoryNeighborsResponse(directory_enabled=True)
+    neighbors: list[DirectoryNeighbor] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        if item.get("unresolved") is True:
+            continue
+        ambiguous = bool(item.get("ambiguous"))
+        key = _normalize_pubkey(item.get("pubkey") or item.get("public_key"))
+        prefix_raw = item.get("prefix")
+        prefix = (
+            prefix_raw.strip().upper()
+            if isinstance(prefix_raw, str) and _HEX_RE.fullmatch(prefix_raw.strip())
+            else None
+        )
+        name = item.get("name")
+        lat = _as_float(item.get("lat"))
+        lon = _as_float(item.get("lon"))
+        if lat is not None and lon is not None and not _is_valid_map_location(lat, lon):
+            lat, lon = None, None
+        count = item.get("count")
+        score = _as_float(item.get("score"))
+        snr = _as_float(item.get("avg_snr"))
+        neighbors.append(
+            DirectoryNeighbor(
+                public_key=key,
+                prefix=prefix,
+                name=name.strip() if isinstance(name, str) and name.strip() else None,
+                count=count if isinstance(count, int) and count >= 0 else 0,
+                score=score,
+                avg_snr=snr,
+                lat=lat,
+                lon=lon,
+                ambiguous=ambiguous,
+            )
+        )
+    return DirectoryNeighborsResponse(neighbors=neighbors, directory_enabled=True)
+
+
+def parse_corescope_node_search(payload: object) -> DirectoryNodeSearchResponse:
+    if not isinstance(payload, dict):
+        return DirectoryNodeSearchResponse(directory_enabled=True)
+    raw = payload.get("nodes")
+    if not isinstance(raw, list):
+        return DirectoryNodeSearchResponse(directory_enabled=True)
+    nodes: list[DirectoryNodeSearchHit] = []
+    seen: set[str] = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        key = _normalize_pubkey(item.get("public_key") or item.get("pubkey"))
+        if not key or key in seen:
+            continue
+        lat = _as_float(item.get("lat"))
+        lon = _as_float(item.get("lon"))
+        if lat is not None and lon is not None and not _is_valid_map_location(lat, lon):
+            lat, lon = None, None
+        name = item.get("name")
+        role = item.get("role")
+        last_seen = item.get("last_seen")
+        seen.add(key)
+        nodes.append(
+            DirectoryNodeSearchHit(
+                public_key=key,
+                name=name.strip() if isinstance(name, str) and name.strip() else None,
+                role=role.strip() if isinstance(role, str) and role.strip() else None,
+                lat=lat,
+                lon=lon,
+                last_seen=last_seen if isinstance(last_seen, str) else None,
+            )
+        )
+    return DirectoryNodeSearchResponse(nodes=nodes, directory_enabled=True)
+
+
+async def get_directory_node_reach(pubkey: str) -> DirectoryReachResponse:
+    key = validate_directory_pubkey(pubkey)
+    origin = await _require_directory_origin()
+    if origin is None:
+        return DirectoryReachResponse()
+    now = time.time()
+    cached = _reach_cache.get((origin, key))
+    if cached is not None and cached[0] > now:
+        return cached[1]
+    payload = await _corescope_get_json(
+        origin,
+        f"/api/nodes/{key}/reach",
+        timeout=REACH_TIMEOUT_SECONDS,
+        empty_on_404=True,
+    )
+    result = (
+        DirectoryReachResponse(directory_enabled=True)
+        if payload is None
+        else parse_corescope_reach(payload, key)
+    )
+    _reach_cache[(origin, key)] = (now + REACH_CACHE_TTL_SECONDS, result)
+    return result
+
+
+async def get_directory_node_neighbors(pubkey: str) -> DirectoryNeighborsResponse:
+    key = validate_directory_pubkey(pubkey)
+    origin = await _require_directory_origin()
+    if origin is None:
+        return DirectoryNeighborsResponse()
+    now = time.time()
+    cached = _neighbors_cache.get((origin, key))
+    if cached is not None and cached[0] > now:
+        return cached[1]
+    payload = await _corescope_get_json(
+        origin,
+        f"/api/nodes/{key}/neighbors",
+        timeout=NEIGHBORS_TIMEOUT_SECONDS,
+        empty_on_404=True,
+    )
+    result = (
+        DirectoryNeighborsResponse(directory_enabled=True)
+        if payload is None
+        else parse_corescope_neighbors(payload)
+    )
+    _neighbors_cache[(origin, key)] = (now + NEIGHBORS_CACHE_TTL_SECONDS, result)
+    return result
+
+
+async def search_directory_nodes(query: str) -> DirectoryNodeSearchResponse:
+    q = query.strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="Search query is required")
+    origin = await _require_directory_origin()
+    if origin is None:
+        return DirectoryNodeSearchResponse()
+    now = time.time()
+    cache_key = (origin, q.lower())
+    cached = _search_cache.get(cache_key)
+    if cached is not None and cached[0] > now:
+        return cached[1]
+    payload = await _corescope_get_json(
+        origin,
+        "/api/nodes/search",
+        timeout=SEARCH_TIMEOUT_SECONDS,
+        params={"q": q},
+    )
+    result = parse_corescope_node_search(payload)
+    _search_cache[cache_key] = (now + SEARCH_CACHE_TTL_SECONDS, result)
+    return result

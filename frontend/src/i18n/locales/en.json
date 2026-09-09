@@ -149,5 +149,46 @@
   "repeater": {
     "help": "Help",
     "cliDocs": "CLI docs"
+  },
+  "locate": {
+    "title": "RF Locate",
+    "help": "Draws a conservative 0-hop coverage zone. This is not a GPS pin and is never written to the contact.",
+    "searchPlaceholder": "Public key, unique prefix, or name",
+    "search": "Locate",
+    "loading": "Resolving…",
+    "loadFailed": "Could not load RF locate",
+    "pickIdentity": "Choose one identity",
+    "ambiguousHelp": "Several nodes match. Pick one before a zone is drawn.",
+    "insufficient": "Not enough identity to locate. Use a full key or a unique prefix.",
+    "directoryOff": "Never heard locally. Enable CoreScope to look for 0-hop observers.",
+    "enableDirectory": "Enable CoreScope",
+    "noObservers": "No GPS 0-hop observers found. No zone to draw.",
+    "heardNoGps": "Heard locally at 0 hops, but this radio has no GPS.",
+    "anchorCount_one": "{{count}} coverage disk",
+    "anchorCount_other": "{{count}} coverage disks",
+    "inferred": "Inferred hop",
+    "sourceLocal": "Local",
+    "sourceCorescope": "CoreScope",
+    "sourceMixte": "Mixed",
+    "sourceUnknown": "Unknown",
+    "showDisks": "Show coverage disks",
+    "mapEmpty": "No zone yet. Search for a unique node.",
+    "unresolved": "Unresolved first hops",
+    "estimateZone": "Estimate RF zone",
+    "calibrateDirectory": "Calibrate from CoreScope neighbors",
+    "calibrateRadio": "Poll radio neighbors",
+    "calibrateEmpty": "No GPS neighbors to calibrate this disk.",
+    "calibrateFailed": "Could not calibrate this disk.",
+    "kind": {
+      "local_0hop": "Heard here at 0 hops",
+      "first_hop": "First-hop repeater",
+      "corescope_0hop": "CoreScope 0-hop observer"
+    },
+    "unresolvedReason": {
+      "ambiguous": "ambiguous prefix",
+      "no_gps": "no GPS",
+      "unmatched": "unmatched",
+      "one_byte": "1-byte hop refused"
+    }
   }
 }

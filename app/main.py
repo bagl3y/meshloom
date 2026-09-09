@@ -68,6 +68,7 @@ from app.routers import (
     directory,
     fanout,
     health,
+    locate,
     messages,
     packets,
     push,
@@ -216,6 +217,7 @@ app.include_router(radio.router, prefix="/api")
 app.include_router(contacts.router, prefix="/api")
 app.include_router(contact_groups.router, prefix="/api")
 app.include_router(directory.router, prefix="/api")
+app.include_router(locate.router, prefix="/api")
 app.include_router(repeaters.router, prefix="/api")
 app.include_router(rooms.router, prefix="/api")
 app.include_router(channels.router, prefix="/api")

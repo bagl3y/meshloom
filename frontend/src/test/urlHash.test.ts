@@ -11,6 +11,8 @@ import {
   parseHashSettingsSection,
   getSettingsHash,
   getMapFocusHash,
+  getLocateHash,
+  getConversationHash,
   resolveChannelFromHashToken,
   resolveContactFromHashToken,
 } from '../utils/urlHash';
@@ -58,6 +60,22 @@ describe('parseHashConversation', () => {
     const result = parseHashConversation();
 
     expect(result).toEqual({ type: 'trace', name: 'trace' });
+  });
+
+  it('parses #locate as locate type', () => {
+    window.location.hash = '#locate';
+
+    const result = parseHashConversation();
+
+    expect(result).toEqual({ type: 'locate', name: 'locate' });
+  });
+
+  it('parses #locate/{key} with locate key', () => {
+    window.location.hash = '#locate/abcd1234';
+
+    const result = parseHashConversation();
+
+    expect(result).toEqual({ type: 'locate', name: 'locate', locateKey: 'abcd1234' });
   });
 
   it('parses #map/focus/PUBKEY with focus key', () => {
@@ -312,6 +330,32 @@ describe('resolveContactFromHashToken', () => {
     expect(result?.public_key).toBe(
       'eeeeee111111222222333333444444555555666666777777888888999999aaaa'
     );
+  });
+});
+
+describe('getLocateHash', () => {
+  it('returns bare locate hash without a query', () => {
+    expect(getLocateHash()).toBe('#locate');
+  });
+
+  it('encodes the locate query', () => {
+    expect(getLocateHash('ab cd')).toBe('#locate/ab%20cd');
+  });
+});
+
+describe('getConversationHash', () => {
+  it('encodes locate conversations', () => {
+    expect(getConversationHash({ type: 'locate', id: 'locate', name: 'RF Locate' })).toBe(
+      '#locate'
+    );
+    expect(
+      getConversationHash({
+        type: 'locate',
+        id: 'locate',
+        name: 'RF Locate',
+        locateKey: 'abcd',
+      })
+    ).toBe('#locate/abcd');
   });
 });
 

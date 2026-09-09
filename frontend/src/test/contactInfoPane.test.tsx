@@ -252,6 +252,25 @@ describe('ContactInfoPane', () => {
     });
   });
 
+  it('shows the RF locate CTA even without a GPS section', async () => {
+    const contact = createContact({ lat: null, lon: null });
+    getContactAnalytics.mockResolvedValue(createAnalytics(contact));
+    const onLocateContact = vi.fn();
+
+    render(
+      <ContactInfoPane
+        {...baseProps}
+        contactKey={contact.public_key}
+        onLocateContact={onLocateContact}
+      />
+    );
+
+    const button = await screen.findByTestId('locate-contact-cta');
+    expect(screen.queryByText('Location')).not.toBeInTheDocument();
+    button.click();
+    expect(onLocateContact).toHaveBeenCalledWith(contact.public_key);
+  });
+
   it('fires the key search callback from the keyed pane', async () => {
     const contact = createContact();
     getContactAnalytics.mockResolvedValue(createAnalytics(contact));

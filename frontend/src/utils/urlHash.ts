@@ -4,13 +4,15 @@ import { getContactDisplayName } from './pubkey';
 import type { SettingsSection } from '../components/settings/settingsConstants';
 
 interface ParsedHashConversation {
-  type: 'channel' | 'contact' | 'raw' | 'map' | 'visualizer' | 'search' | 'trace';
+  type: 'channel' | 'contact' | 'raw' | 'map' | 'visualizer' | 'search' | 'trace' | 'locate';
   /** Conversation identity token (channel key or contact public key, or legacy name token) */
   name: string;
   /** Optional human-readable label segment (ignored for identity resolution) */
   label?: string;
   /** For map view: public key prefix to focus on */
   mapFocusKey?: string;
+  /** For locate view: key, prefix, or search token */
+  locateKey?: string;
 }
 
 const SETTINGS_SECTIONS: SettingsSection[] = [
@@ -47,6 +49,18 @@ export function parseHashConversation(): ParsedHashConversation | null {
 
   if (hash === 'trace') {
     return { type: 'trace', name: 'trace' };
+  }
+
+  if (hash === 'locate') {
+    return { type: 'locate', name: 'locate' };
+  }
+
+  if (hash.startsWith('locate/')) {
+    const locateKey = hash.slice('locate/'.length);
+    if (locateKey) {
+      return { type: 'locate', name: 'locate', locateKey: decodeURIComponent(locateKey) };
+    }
+    return { type: 'locate', name: 'locate' };
   }
 
   // Check for map with focus: #map/focus/{pubkey_prefix}
@@ -147,6 +161,11 @@ export function getMapFocusHash(publicKeyPrefix: string): string {
   return `#map/focus/${encodeURIComponent(publicKeyPrefix)}`;
 }
 
+export function getLocateHash(query?: string): string {
+  const trimmed = query?.trim() ?? '';
+  return trimmed ? `#locate/${encodeURIComponent(trimmed)}` : '#locate';
+}
+
 // Generate URL hash from conversation
 export function getConversationHash(conv: Conversation | null): string {
   if (!conv) return '';
@@ -155,6 +174,7 @@ export function getConversationHash(conv: Conversation | null): string {
   if (conv.type === 'visualizer') return '#visualizer';
   if (conv.type === 'search') return '#search';
   if (conv.type === 'trace') return '#trace';
+  if (conv.type === 'locate') return getLocateHash(conv.locateKey);
 
   // Use immutable IDs for identity, append readable label for UX.
   if (conv.type === 'channel') {
