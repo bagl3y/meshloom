@@ -3,6 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ChannelInfoPane } from '../components/ChannelInfoPane';
 import i18n from '../i18n';
+import sliceEn from '../i18n/locales/slices/b.en.json';
+import sliceFr from '../i18n/locales/slices/b.fr.json';
+
+i18n.addResourceBundle('en', 'translation', sliceEn, true, true);
+i18n.addResourceBundle('fr', 'translation', sliceFr, true, true);
 import type { Channel, ChannelDetail } from '../types';
 
 // Mock the api module
@@ -64,7 +69,7 @@ describe('ChannelInfoPane key visibility', () => {
     await waitFor(() => {
       expect(screen.getByText(key.toLowerCase())).toBeInTheDocument();
     });
-    expect(screen.queryByText('Show Key')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('channelInfo.showKey'))).not.toBeInTheDocument();
   });
 
   it('hides key behind "Show Key" button for private channels', async () => {
@@ -78,7 +83,7 @@ describe('ChannelInfoPane key visibility', () => {
       expect(screen.getByText('Secret')).toBeInTheDocument();
     });
     expect(screen.queryByText(key.toLowerCase())).not.toBeInTheDocument();
-    expect(screen.getByText('Show Key')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('channelInfo.showKey'))).toBeInTheDocument();
   });
 
   it('reveals key when "Show Key" is clicked', async () => {
@@ -89,13 +94,13 @@ describe('ChannelInfoPane key visibility', () => {
     render(<ChannelInfoPane {...baseProps} channelKey={key} channels={[channel]} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Show Key')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('channelInfo.showKey'))).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Show Key'));
+    fireEvent.click(screen.getByText(i18n.t('channelInfo.showKey')));
 
     expect(screen.getByText(key.toLowerCase())).toBeInTheDocument();
-    expect(screen.queryByText('Show Key')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('channelInfo.showKey'))).not.toBeInTheDocument();
   });
 
   it('resets key visibility when channel changes', async () => {
@@ -112,11 +117,11 @@ describe('ChannelInfoPane key visibility', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Show Key')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('channelInfo.showKey'))).toBeInTheDocument();
     });
 
     // Reveal key for first channel
-    fireEvent.click(screen.getByText('Show Key'));
+    fireEvent.click(screen.getByText(i18n.t('channelInfo.showKey')));
     expect(screen.getByText(key1.toLowerCase())).toBeInTheDocument();
 
     // Switch channel — key should be hidden again
@@ -126,7 +131,7 @@ describe('ChannelInfoPane key visibility', () => {
       expect(screen.getByText('Room2')).toBeInTheDocument();
     });
     expect(screen.queryByText(key2.toLowerCase())).not.toBeInTheDocument();
-    expect(screen.getByText('Show Key')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('channelInfo.showKey'))).toBeInTheDocument();
   });
 
   it('copies the official channel share URI, including region_scope', async () => {

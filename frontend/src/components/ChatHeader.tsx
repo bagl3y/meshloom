@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { Bell, BellOff, ChevronsLeftRight, Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
 import { toast } from './ui/sonner';
 import { DirectTraceIcon } from './DirectTraceIcon';
@@ -66,6 +67,7 @@ export function ChatHeader({
   onOpenContactInfo,
   onOpenChannelInfo,
 }: ChatHeaderProps) {
+  const { t } = useTranslation();
   const [showKey, setShowKey] = useState(false);
   const [pathDiscoveryOpen, setPathDiscoveryOpen] = useState(false);
   const [channelOverrideOpen, setChannelOverrideOpen] = useState(false);
@@ -133,11 +135,11 @@ export function ChatHeader({
   const favoriteTitle =
     conversation.type === 'contact'
       ? isFav
-        ? 'Remove from favorites. Favorite contacts stay loaded on the radio for ACK support.'
-        : 'Add to favorites. Favorite contacts stay loaded on the radio for ACK support.'
+        ? t('chatHeader.removeFavoriteContact')
+        : t('chatHeader.addFavoriteContact')
       : isFav
-        ? 'Remove from favorites'
-        : 'Add to favorites';
+        ? t('chatHeader.removeFavorite')
+        : t('chatHeader.addFavorite');
 
   const handleEditFloodScopeOverride = () => {
     if (conversation.type !== 'channel' || !onSetChannelFloodScopeOverride) return;
@@ -174,8 +176,8 @@ export function ChatHeader({
             type="button"
             className="avatar-action-button flex-shrink-0 cursor-pointer rounded-full border-none bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => onOpenContactInfo(conversation.id)}
-            title="View contact info"
-            aria-label={`View info for ${conversation.name}`}
+            title={t('chatHeader.viewContactInfo')}
+            aria-label={t('chatHeader.viewInfoFor', { name: conversation.name })}
           >
             <ContactAvatar
               name={conversation.name}
@@ -194,7 +196,7 @@ export function ChatHeader({
                   <button
                     type="button"
                     className="flex max-w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-sm text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={`View info for ${conversation.name}`}
+                    aria-label={t('chatHeader.viewInfoFor', { name: conversation.name })}
                     onClick={handleOpenConversationInfo}
                   >
                     <span className="truncate">
@@ -228,9 +230,9 @@ export function ChatHeader({
                     e.stopPropagation();
                     setShowKey(true);
                   }}
-                  title="Reveal channel key"
+                  title={t('chatHeader.revealKey')}
                 >
-                  Show Key
+                  {t('chatHeader.showKey')}
                 </button>
               ) : (
                 <span
@@ -243,13 +245,15 @@ export function ChatHeader({
                     navigator.clipboard.writeText(conversation.id);
                     toast.success(
                       conversation.type === 'channel'
-                        ? 'Channel key copied!'
-                        : 'Contact key copied!'
+                        ? t('chatHeader.channelKeyCopied')
+                        : t('chatHeader.contactKeyCopied')
                     );
                   }}
-                  title="Click to copy"
+                  title={t('chatHeader.clickToCopy')}
                   aria-label={
-                    conversation.type === 'channel' ? 'Copy channel key' : 'Copy contact key'
+                    conversation.type === 'channel'
+                      ? t('chatHeader.copyChannelKey')
+                      : t('chatHeader.copyContactKey')
                   }
                 >
                   {conversation.type === 'channel'
@@ -262,8 +266,8 @@ export function ChatHeader({
               <button
                 className="mt-0.5 flex basis-full items-center gap-1 text-left sm:hidden"
                 onClick={handleEditFloodScopeOverride}
-                title="Set regional override"
-                aria-label="Set regional override"
+                title={t('chatHeader.regionalOverride')}
+                aria-label={t('chatHeader.regionalOverride')}
               >
                 <Globe2
                   className="h-3.5 w-3.5 flex-shrink-0 text-[hsl(var(--region-override))]"
@@ -293,10 +297,10 @@ export function ChatHeader({
             onClick={() => setPathDiscoveryOpen(true)}
             title={
               activeContactIsPrefixOnly
-                ? 'Path Discovery unavailable until the full contact key is known'
-                : 'Path Discovery. Send a routed probe and inspect the forward and return paths'
+                ? t('chatHeader.pathDiscoveryUnavailable')
+                : t('chatHeader.pathDiscoveryTitle')
             }
-            aria-label="Path Discovery"
+            aria-label={t('chatHeader.pathDiscovery')}
             disabled={activeContactIsPrefixOnly}
           >
             <Route className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -308,10 +312,10 @@ export function ChatHeader({
             onClick={onTrace}
             title={
               activeContactIsPrefixOnly
-                ? 'Direct Trace unavailable until the full contact key is known'
-                : 'Direct Trace. Send a direct trace probe to this contact and display out and back SNR'
+                ? t('chatHeader.directTraceUnavailable')
+                : t('chatHeader.directTraceTitle')
             }
-            aria-label="Direct Trace"
+            aria-label={t('chatHeader.directTrace')}
             disabled={activeContactIsPrefixOnly}
           >
             <DirectTraceIcon className="h-4 w-4 text-muted-foreground" />
@@ -325,8 +329,8 @@ export function ChatHeader({
               <button
                 className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => setNotifDropdownOpen((v) => !v)}
-                title="Notification settings"
-                aria-label="Notification settings"
+                title={t('chatHeader.notifications')}
+                aria-label={t('chatHeader.notifications')}
                 aria-expanded={notifDropdownOpen}
               >
                 {activeChannel?.muted ? (
@@ -359,12 +363,12 @@ export function ChatHeader({
                       />
                       <div className="min-w-0">
                         <span className="text-sm font-medium text-foreground block leading-tight">
-                          Desktop notifications (legacy)
+                          {t('chatHeader.desktopNotif')}
                         </span>
                         <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
                           {notificationsPermission === 'denied'
-                            ? 'Blocked by browser — check site permissions'
-                            : 'Alerts while this tab is open'}
+                            ? t('chatHeader.desktopNotifBlocked')
+                            : t('chatHeader.desktopNotifHelp')}
                         </span>
                       </div>
                     </label>
@@ -380,33 +384,35 @@ export function ChatHeader({
                         />
                         <div className="min-w-0">
                           <span className="text-sm font-medium text-foreground block leading-tight">
-                            Web Push (beta testing)
+                            {t('chatHeader.webPush')}
                           </span>
                           <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
                             {pushSubscribed
-                              ? 'Alerts even when the browser is closed'
-                              : 'Alerts even when the browser is closed. Requires HTTPS.'}
+                              ? t('chatHeader.webPushHelp')
+                              : t('chatHeader.webPushHelpHttps')}
                           </span>
                         </div>
                       </label>
                       <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
-                        All notification types require a trusted HTTPS context. Depending on your
-                        browser, a snakeoil certificate may not be sufficient.
+                        {t('chatHeader.httpsNote')}
                       </span>
                       {onOpenPushSettings && (
                         <p className="text-xs text-muted-foreground leading-snug mt-1.5">
-                          Manage Web Push enabled devices in{' '}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setNotifDropdownOpen(false);
-                              onOpenPushSettings();
+                          <Trans
+                            i18nKey="chatHeader.pushManage"
+                            components={{
+                              settings: (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setNotifDropdownOpen(false);
+                                    onOpenPushSettings();
+                                  }}
+                                  className="text-primary hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                />
+                              ),
                             }}
-                            className="text-primary hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          >
-                            Settings &rarr; Local
-                          </button>
-                          .
+                          />
                         </p>
                       )}
                     </>
@@ -423,10 +429,10 @@ export function ChatHeader({
                         />
                         <div className="min-w-0">
                           <span className="text-sm font-medium text-foreground block leading-tight">
-                            Mute channel
+                            {t('chatHeader.muteChannel')}
                           </span>
                           <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
-                            Hide unread counts and suppress all notifications
+                            {t('chatHeader.muteChannelHelp')}
                           </span>
                         </div>
                       </label>
@@ -440,8 +446,8 @@ export function ChatHeader({
           <button
             className="flex shrink-0 items-center gap-1 rounded px-1 py-1 text-lg leading-none transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={handleEditFloodScopeOverride}
-            title="Set regional override"
-            aria-label="Set regional override"
+            title={t('chatHeader.regionalOverride')}
+            aria-label={t('chatHeader.regionalOverride')}
           >
             <Globe2
               className={`h-4 w-4 ${activeFloodScopeLabel ? 'text-[hsl(var(--region-override))]' : 'text-muted-foreground'}`}
@@ -458,8 +464,8 @@ export function ChatHeader({
           <button
             className="flex shrink-0 items-center gap-1 rounded px-1 py-1 text-lg leading-none transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={handleEditPathHashModeOverride}
-            title="Set path hop width override"
-            aria-label="Set path hop width override"
+            title={t('chatHeader.pathHashOverride')}
+            aria-label={t('chatHeader.pathHashOverride')}
           >
             <ChevronsLeftRight
               className={`h-4 w-4 ${activePathHashModeOverride != null ? 'text-status-connected' : 'text-muted-foreground'}`}
@@ -474,7 +480,7 @@ export function ChatHeader({
               onToggleFavorite(conversation.type as 'channel' | 'contact', conversation.id)
             }
             title={favoriteTitle}
-            aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+            aria-label={isFav ? t('chatHeader.removeFavorite') : t('chatHeader.addFavorite')}
           >
             {isFav ? (
               <Star className="h-4 w-4 fill-current text-favorite" aria-hidden="true" />
@@ -493,8 +499,8 @@ export function ChatHeader({
                 onDeleteContact(conversation.id);
               }
             }}
-            title="Delete"
-            aria-label="Delete"
+            title={t('chatHeader.delete')}
+            aria-label={t('chatHeader.delete')}
           >
             <Trash2 className="h-4 w-4" aria-hidden="true" />
           </button>

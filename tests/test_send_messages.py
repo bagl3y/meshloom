@@ -1735,6 +1735,8 @@ class TestRadioExceptionMidSend:
 
         assert exc_info.value.status_code == 422
         assert exc_info.value.detail == NO_RADIO_RESPONSE_AFTER_SEND_DETAIL
+        assert exc_info.value.detail["code"] == "radio_no_response_after_send"
+        assert "no response" in exc_info.value.detail["message"].lower()
 
         messages = await MessageRepository.get_all(
             msg_type="PRIV", conversation_key=pub_key, limit=10

@@ -1,7 +1,26 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Checkbox } from '../ui/checkbox';
 import { PACKET_LEGEND_ITEMS } from '../../utils/visualizerUtils';
 import { NODE_LEGEND_ITEMS } from './shared';
+
+const PACKET_DESC_KEYS: Record<string, string> = {
+  AD: 'visualizer.packetAd',
+  GT: 'visualizer.packetGt',
+  DM: 'visualizer.packetDm',
+  ACK: 'visualizer.packetAck',
+  TR: 'visualizer.packetTr',
+  RQ: 'visualizer.packetRq',
+  RS: 'visualizer.packetRs',
+  '?': 'visualizer.packetOther',
+};
+
+const NODE_LABEL_KEYS = [
+  'visualizer.legendYou',
+  'visualizer.legendRepeater',
+  'visualizer.legendNode',
+  'visualizer.legendAmbiguous',
+] as const;
 
 interface VisualizerControlsProps {
   showControls: boolean;
@@ -72,6 +91,7 @@ export function VisualizerControls({
   onExpandContract,
   onClearAndReset,
 }: VisualizerControlsProps) {
+  const { t } = useTranslation();
   const [observationWindowInput, setObservationWindowInput] = useState(
     String(observationWindowSec)
   );
@@ -91,7 +111,9 @@ export function VisualizerControls({
         <div className="absolute bottom-4 left-4 bg-background/80 backdrop-blur-sm rounded-lg p-3 text-xs border border-border z-10">
           <div className="flex gap-6">
             <div className="flex flex-col gap-1.5">
-              <div className="text-muted-foreground font-medium mb-1">Packets</div>
+              <div className="text-muted-foreground font-medium mb-1">
+                {t('visualizer.packets')}
+              </div>
               {PACKET_LEGEND_ITEMS.map((item) => (
                 <div key={item.label} className="flex items-center gap-2">
                   <div
@@ -100,13 +122,13 @@ export function VisualizerControls({
                   >
                     {item.label}
                   </div>
-                  <span>{item.description}</span>
+                  <span>{t(PACKET_DESC_KEYS[item.label] ?? 'visualizer.packetOther')}</span>
                 </div>
               ))}
             </div>
             <div className="flex flex-col gap-1.5">
-              <div className="text-muted-foreground font-medium mb-1">Nodes</div>
-              {NODE_LEGEND_ITEMS.map((item) => (
+              <div className="text-muted-foreground font-medium mb-1">{t('visualizer.nodes')}</div>
+              {NODE_LEGEND_ITEMS.map((item, index) => (
                 <div key={item.label} className="flex items-center gap-2">
                   <div
                     className="rounded-full"
@@ -116,7 +138,7 @@ export function VisualizerControls({
                       backgroundColor: item.color,
                     }}
                   />
-                  <span>{item.label}</span>
+                  <span>{t(NODE_LABEL_KEYS[index])}</span>
                 </div>
               ))}
             </div>
@@ -134,7 +156,7 @@ export function VisualizerControls({
                 checked={showControls}
                 onCheckedChange={(c) => setShowControls(c === true)}
               />
-              <span title="Toggle legends and controls visibility">Show controls</span>
+              <span title={t('visualizer.showControlsTitle')}>{t('visualizer.showControls')}</span>
             </label>
             {onFullScreenChange && (
               <label className="flex items-center gap-2 cursor-pointer">
@@ -142,7 +164,9 @@ export function VisualizerControls({
                   checked={!fullScreen}
                   onCheckedChange={(c) => onFullScreenChange(c !== true)}
                 />
-                <span title="Show or hide the packet feed sidebar">Show packet feed sidebar</span>
+                <span title={t('visualizer.showPacketFeedTitle')}>
+                  {t('visualizer.showPacketFeed')}
+                </span>
               </label>
             )}
           </div>
@@ -154,8 +178,8 @@ export function VisualizerControls({
                     checked={showAmbiguousPaths}
                     onCheckedChange={(c) => setShowAmbiguousPaths(c === true)}
                   />
-                  <span title="Show placeholder nodes for repeaters when the 1-byte prefix matches multiple contacts">
-                    Show ambiguous repeaters
+                  <span title={t('visualizer.showAmbiguousRepeatersTitle')}>
+                    {t('visualizer.showAmbiguousRepeaters')}
                   </span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -163,13 +187,13 @@ export function VisualizerControls({
                     checked={showAmbiguousNodes}
                     onCheckedChange={(c) => setShowAmbiguousNodes(c === true)}
                   />
-                  <span title="Show placeholder nodes for senders/recipients when only a 1-byte prefix is known">
-                    Show ambiguous sender/recipient
+                  <span title={t('visualizer.showAmbiguousNodesTitle')}>
+                    {t('visualizer.showAmbiguousNodes')}
                   </span>
                 </label>
                 <details className="rounded border border-border/60 px-2 py-1">
                   <summary className="cursor-pointer select-none text-muted-foreground">
-                    Advanced
+                    {t('visualizer.advanced')}
                   </summary>
                   <div className="mt-2 flex flex-col gap-2">
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -179,10 +203,10 @@ export function VisualizerControls({
                         disabled={!showAmbiguousPaths}
                       />
                       <span
-                        title="Use stored repeater advert paths to assign likely identity labels for ambiguous repeater nodes."
+                        title={t('visualizer.advertPathHintsTitle')}
                         className={!showAmbiguousPaths ? 'text-muted-foreground' : ''}
                       >
-                        Use repeater advert-path identity hints
+                        {t('visualizer.advertPathHints')}
                       </span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -192,12 +216,12 @@ export function VisualizerControls({
                         disabled={!showAmbiguousPaths || !useAdvertPathHints}
                       />
                       <span
-                        title="When an ambiguous repeater has a high-confidence likely-identity that matches a sibling definitely-known repeater, and they both connect to the same next hop, collapse them into the known repeater. This should resolve more ambiguity as the mesh navigates the 1.14 upgrade."
+                        title={t('visualizer.collapseSiblingsTitle')}
                         className={
                           !showAmbiguousPaths || !useAdvertPathHints ? 'text-muted-foreground' : ''
                         }
                       >
-                        Collapse likely sibling repeaters
+                        {t('visualizer.collapseSiblings')}
                       </span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -207,19 +231,19 @@ export function VisualizerControls({
                         disabled={!showAmbiguousPaths}
                       />
                       <span
-                        title="Split ambiguous repeaters into separate nodes based on traffic patterns (prev→next). Helps identify colliding prefixes representing different physical nodes, but requires enough traffic to disambiguate."
+                        title={t('visualizer.groupByTrafficTitle')}
                         className={!showAmbiguousPaths ? 'text-muted-foreground' : ''}
                       >
-                        Heuristically group repeaters by traffic pattern
+                        {t('visualizer.groupByTraffic')}
                       </span>
                     </label>
                     <div className="flex items-center gap-2">
                       <label
                         htmlFor="observation-window-3d"
                         className="text-muted-foreground"
-                        title="How long to wait for duplicate packets via different paths before animating"
+                        title={t('visualizer.ackWindowTitle')}
                       >
-                        Ack/echo listen window:
+                        {t('visualizer.ackWindow')}
                       </label>
                       <input
                         id="observation-window-3d"
@@ -247,7 +271,7 @@ export function VisualizerControls({
                         }}
                         className="w-12 px-1 py-0.5 bg-background border border-border rounded text-xs text-center"
                       />
-                      <span className="text-muted-foreground">sec</span>
+                      <span className="text-muted-foreground">{t('visualizer.sec')}</span>
                     </div>
                   </div>
                 </details>
@@ -257,8 +281,8 @@ export function VisualizerControls({
                       checked={pruneStaleNodes}
                       onCheckedChange={(c) => setPruneStaleNodes(c === true)}
                     />
-                    <span title="Automatically remove nodes with no traffic within the configured window to keep the mesh manageable">
-                      Only show recently heard/in-a-path nodes
+                    <span title={t('visualizer.onlyRecentTitle')}>
+                      {t('visualizer.onlyRecent')}
                     </span>
                   </label>
                   {pruneStaleNodes && (
@@ -267,7 +291,7 @@ export function VisualizerControls({
                         htmlFor="prune-window"
                         className="text-muted-foreground whitespace-nowrap"
                       >
-                        Window:
+                        {t('visualizer.window')}
                       </label>
                       <input
                         id="prune-window"
@@ -297,7 +321,7 @@ export function VisualizerControls({
                         className="w-14 rounded border border-border bg-background px-2 py-0.5 text-sm"
                       />
                       <span className="text-muted-foreground" aria-hidden="true">
-                        min
+                        {t('visualizer.min')}
                       </span>
                     </div>
                   )}
@@ -306,8 +330,8 @@ export function VisualizerControls({
                       checked={letEmDrift}
                       onCheckedChange={(c) => setLetEmDrift(c === true)}
                     />
-                    <span title="When enabled, the graph continuously reorganizes itself into a better layout">
-                      Let &apos;em drift
+                    <span title={t('visualizer.letEmDriftTitle')}>
+                      {t('visualizer.letEmDrift')}
                     </span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -315,17 +339,15 @@ export function VisualizerControls({
                       checked={autoOrbit}
                       onCheckedChange={(c) => setAutoOrbit(c === true)}
                     />
-                    <span title="Automatically orbit the camera around the scene">
-                      Orbit the mesh
-                    </span>
+                    <span title={t('visualizer.orbitTitle')}>{t('visualizer.orbit')}</span>
                   </label>
                   <div className="flex flex-col gap-1 mt-1">
                     <label
                       htmlFor="viz-repulsion"
                       className="text-muted-foreground"
-                      title="How strongly nodes repel each other. Higher values spread nodes out more."
+                      title={t('visualizer.repulsionTitle')}
                     >
-                      Repulsion: {Math.abs(chargeStrength)}
+                      {t('visualizer.repulsion', { value: Math.abs(chargeStrength) })}
                     </label>
                     <input
                       id="viz-repulsion"
@@ -341,9 +363,9 @@ export function VisualizerControls({
                     <label
                       htmlFor="viz-packet-speed"
                       className="text-muted-foreground"
-                      title="How fast particles travel along links. Higher values make packets move faster."
+                      title={t('visualizer.packetSpeedTitle')}
                     >
-                      Packet speed: {particleSpeedMultiplier}x
+                      {t('visualizer.packetSpeed', { value: particleSpeedMultiplier })}
                     </label>
                     <input
                       id="viz-packet-speed"
@@ -360,21 +382,21 @@ export function VisualizerControls({
                 <button
                   onClick={onExpandContract}
                   className="mt-1 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary rounded text-xs transition-colors"
-                  title="Expand nodes apart then contract back - can help untangle the graph"
+                  title={t('visualizer.bigStretchTitle')}
                 >
-                  Oooh Big Stretch!
+                  {t('visualizer.bigStretch')}
                 </button>
                 <button
                   onClick={onClearAndReset}
                   className="mt-1 rounded border border-warning/40 bg-warning/10 px-3 py-1.5 text-warning text-xs transition-colors hover:bg-warning/20"
-                  title="Clear all nodes and links from the visualization - packets are preserved"
+                  title={t('visualizer.clearResetTitle')}
                 >
-                  Clear &amp; Reset
+                  {t('visualizer.clearReset')}
                 </button>
               </div>
               <div className="border-t border-border pt-2 mt-1">
-                <div>Nodes: {nodeCount}</div>
-                <div>Links: {linkCount}</div>
+                <div>{t('visualizer.nodeCount', { count: nodeCount })}</div>
+                <div>{t('visualizer.linkCount', { count: linkCount })}</div>
               </div>
             </>
           )}

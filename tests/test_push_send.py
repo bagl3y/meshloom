@@ -1,5 +1,6 @@
 """Tests for Web Push delivery transport behavior."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -84,3 +85,84 @@ def test_get_vapid_claims_honors_configured_subject(monkeypatch):
     """MESHCORE_VAPID_SUBJECT overrides the outgoing subject (required for APNs/iOS)."""
     monkeypatch.setattr("app.config.settings.vapid_subject", "mailto:ops@example.net")
     assert get_vapid_claims() == {"sub": "mailto:ops@example.net"}
+
+
+def test_build_payload_defaults_to_french_titles():
+    from app.push.manager import _build_payload
+
+    dm = json.loads(
+        _build_payload(
+            {
+                "type": "PRIV",
+                "text": "hello",
+                "sender_name": "Alice",
+                "conversation_key": "aa" * 32,
+            }
+        )
+    )
+    assert dm["title"] == "Message de Alice"
+
+    unnamed = json.loads(
+        _build_payload({"type": "PRIV", "text": "hello", "conversation_key": "bb"})
+    )
+    assert unnamed["title"] == "Nouveau message privé"
+
+    channel = json.loads(
+        _build_payload({"type": "CHAN", "text": "hi", "conversation_key": "cc", "channel_name": ""})
+    )
+    assert channel["title"] == "Message de canal"
+
+
+def test_build_payload_english_titles():
+    from app.push.manager import _build_payload
+
+    dm = json.loads(
+        _build_payload(
+            {
+                "type": "PRIV",
+                "text": "hello",
+                "sender_name": "Alice",
+                "conversation_key": "aa" * 32,
+            },
+            language="en",
+        )
+    )
+    assert dm["title"] == "Message from Alice"
+
+    unnamed = json.loads(
+        _build_payload({"type": "PRIV", "text": "hello", "conversation_key": "bb"}, language="en")
+    )
+    assert unnamed["title"] == "New direct message"
+
+    channel = json.loads(
+        _build_payload(
+            {"type": "CHAN", "text": "hi", "conversation_key": "cc", "channel_name": ""},
+            language="en",
+        )
+    )
+    assert channel["title"] == "Channel message"
+
+
+@pytest.mark.asyncio
+async def test_push_subscription_persists_language(test_db):
+    from app.repository.push_subscriptions import PushSubscriptionRepository
+
+    created = await PushSubscriptionRepository.create(
+        endpoint="https://push.example.test/en",
+        p256dh="p256",
+        auth="auth",
+        label="Chrome",
+        language="en",
+    )
+    assert created["language"] == "en"
+
+    defaulted = await PushSubscriptionRepository.create(
+        endpoint="https://push.example.test/fr",
+        p256dh="p256",
+        auth="auth",
+    )
+    assert defaulted["language"] == "fr"
+
+    updated = await PushSubscriptionRepository.update(defaulted["id"], language="en")
+    assert updated is not None
+    assert updated["language"] == "en"

@@ -523,10 +523,11 @@ function renderTextWithMentions(
 
 // Region scope badge for messages that arrived via a transport-routed (region-scoped) packet.
 function RegionBadge({ region }: { region: string }) {
+  const { t } = useTranslation();
   return (
     <span
       className="ml-1.5 align-middle text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
-      title={`Regional scope: ${region}`}
+      title={t('messageList.regionalScope', { region })}
     >
       {region}
     </span>
@@ -534,9 +535,6 @@ function RegionBadge({ region }: { region: string }) {
 }
 
 const RESEND_WINDOW_SECONDS = 30;
-const CORRUPT_SENDER_LABEL = '<No name -- corrupt packet?>';
-const ANALYZE_PACKET_NOTICE =
-  'This analyzer shows one stored full packet copy only. When multiple receives have identical payloads, the backend deduplicates them to a single stored packet and appends any additional receive paths onto the message path history instead of storing multiple full packet copies.';
 
 function hasUnexpectedControlChars(text: string): boolean {
   for (const char of text) {
@@ -710,57 +708,59 @@ export function MessageList({
       try {
         await onSendMessage(wire);
       } catch (err) {
-        toast.error('Failed to send reaction', {
-          description: err instanceof Error ? err.message : 'Check radio connection',
+        toast.error(t('messageList.reactionFailed'), {
+          description: err instanceof Error ? err.message : t('chat.checkRadio'),
         });
       }
     },
-    [onSendMessage]
+    [onSendMessage, t]
   );
 
-  const handleAnalyzePacket = useCallback(async (message: Message) => {
-    // Extract signal from the first path if available
-    const firstPath = message.paths?.[0];
-    packetSignalOverrideRef.current =
-      firstPath && (firstPath.rssi != null || firstPath.snr != null)
-        ? { rssi: firstPath.rssi ?? null, snr: firstPath.snr ?? null }
-        : undefined;
+  const handleAnalyzePacket = useCallback(
+    async (message: Message) => {
+      // Extract signal from the first path if available
+      const firstPath = message.paths?.[0];
+      packetSignalOverrideRef.current =
+        firstPath && (firstPath.rssi != null || firstPath.snr != null)
+          ? { rssi: firstPath.rssi ?? null, snr: firstPath.snr ?? null }
+          : undefined;
 
-    if (message.packet_id == null) {
-      setPacketInspectorSource({
-        kind: 'unavailable',
-        message:
-          'No archival raw packet is available for this message, so packet analysis cannot be shown.',
-      });
-      return;
-    }
-
-    const cached = packetCacheRef.current.get(message.packet_id);
-    if (cached) {
-      setPacketInspectorSource({ kind: 'packet', packet: cached });
-      return;
-    }
-
-    setPacketInspectorSource({ kind: 'loading', message: 'Loading packet analysis...' });
-
-    try {
-      const packet = await api.getPacket(message.packet_id);
-      packetCacheRef.current.set(message.packet_id, packet);
-      setPacketInspectorSource({ kind: 'packet', packet });
-    } catch (error) {
-      const description = error instanceof Error ? error.message : 'Unknown error';
-      const isMissing = error instanceof Error && /not found/i.test(error.message);
-      if (!isMissing) {
-        toast.error('Failed to load raw packet', { description });
+      if (message.packet_id == null) {
+        setPacketInspectorSource({
+          kind: 'unavailable',
+          message: t('messageList.analyzeUnavailable'),
+        });
+        return;
       }
-      setPacketInspectorSource({
-        kind: 'unavailable',
-        message: isMissing
-          ? 'The archival raw packet for this message is no longer available. It may have been purged from Settings > Database, so only the stored message and merged route history remain.'
-          : `Could not load the archival raw packet for this message: ${description}`,
-      });
-    }
-  }, []);
+
+      const cached = packetCacheRef.current.get(message.packet_id);
+      if (cached) {
+        setPacketInspectorSource({ kind: 'packet', packet: cached });
+        return;
+      }
+
+      setPacketInspectorSource({ kind: 'loading', message: t('messageList.analyzeLoading') });
+
+      try {
+        const packet = await api.getPacket(message.packet_id);
+        packetCacheRef.current.set(message.packet_id, packet);
+        setPacketInspectorSource({ kind: 'packet', packet });
+      } catch (error) {
+        const description = error instanceof Error ? error.message : t('chat.unknownError');
+        const isMissing = error instanceof Error && /not found/i.test(error.message);
+        if (!isMissing) {
+          toast.error(t('messageList.packetLoadFailed'), { description });
+        }
+        setPacketInspectorSource({
+          kind: 'unavailable',
+          message: isMissing
+            ? t('messageList.analyzePurged')
+            : t('messageList.analyzeLoadFailed', { description }),
+        });
+      }
+    },
+    [t]
+  );
 
   // Sort messages by received_at ascending (oldest first)
   // Note: Deduplication is handled by useConversationMessages.observeMessage()
@@ -1155,13 +1155,13 @@ export function MessageList({
   // Sender info for outgoing messages (used by path modal on own messages)
   const selfSenderInfo = useMemo<SenderInfo>(
     () => ({
-      name: config?.name || 'Unknown',
+      name: config?.name || t('messageList.unknown'),
       publicKeyOrPrefix: config?.public_key || '',
       lat: config?.lat ?? null,
       lon: config?.lon ?? null,
       pathHashMode: config?.path_hash_mode ?? null,
     }),
-    [config?.name, config?.public_key, config?.lat, config?.lon, config?.path_hash_mode]
+    [config?.name, config?.public_key, config?.lat, config?.lon, config?.path_hash_mode, t]
   );
 
   // Look up contact by public key
@@ -1212,7 +1212,7 @@ export function MessageList({
         };
       }
       return {
-        name: msg.sender_name || msg.sender_key || 'Unknown',
+        name: msg.sender_name || msg.sender_key || t('messageList.unknown'),
         publicKeyOrPrefix: msg.sender_key || '',
         lat: null,
         lon: null,
@@ -1247,7 +1247,7 @@ export function MessageList({
       }
       if (senderName || msg.sender_key) {
         return {
-          name: senderName || msg.sender_key || 'Unknown',
+          name: senderName || msg.sender_key || t('messageList.unknown'),
           publicKeyOrPrefix: msg.sender_key || msg.conversation_key || '',
           lat: null,
           lon: null,
@@ -1272,7 +1272,7 @@ export function MessageList({
     }
     // Fallback: unknown sender
     return {
-      name: parsedSender || 'Unknown',
+      name: parsedSender || t('messageList.unknown'),
       publicKeyOrPrefix: msg.conversation_key || '',
       lat: null,
       lon: null,
@@ -1283,7 +1283,7 @@ export function MessageList({
   if (loading) {
     return (
       <div className="flex-1 overflow-y-auto p-5 text-center text-muted-foreground" role="status">
-        Loading messages...
+        {t('messageList.loading')}
       </div>
     );
   }
@@ -1291,7 +1291,7 @@ export function MessageList({
   if (messages.length === 0) {
     return (
       <div className="flex-1 overflow-y-auto p-5 text-center text-muted-foreground">
-        No messages yet
+        {t('messageList.empty')}
       </div>
     );
   }
@@ -1324,12 +1324,12 @@ export function MessageList({
       >
         {loadingOlder && (
           <div className="text-center py-2 text-muted-foreground text-sm" role="status">
-            Loading older messages...
+            {t('messageList.loadingOlder')}
           </div>
         )}
         {!loadingOlder && hasOlderMessages && (
           <div className="text-center py-2 text-muted-foreground text-xs">
-            Scroll up for older messages
+            {t('messageList.scrollOlder')}
           </div>
         )}
         <div
@@ -1361,24 +1361,26 @@ export function MessageList({
             const channelSenderContact =
               msg.type === 'CHAN' && channelSenderName ? getContactByName(channelSenderName) : null;
             const isCorruptChannelMessage = isCorruptUnnamedChannelMessage(msg, sender);
+            const unknownLabel = t('messageList.unknown');
+            const corruptLabel = t('messageList.corruptSender');
             const displaySender = msg.outgoing
-              ? 'You'
+              ? t('messageList.you')
               : directSenderName ||
                 (isRoomServer && msg.sender_key ? msg.sender_key.slice(0, 8) : null) ||
                 contact?.name ||
                 channelSenderName ||
                 (isCorruptChannelMessage
-                  ? CORRUPT_SENDER_LABEL
-                  : msg.conversation_key?.slice(0, 8) || 'Unknown');
+                  ? corruptLabel
+                  : msg.conversation_key?.slice(0, 8) || unknownLabel);
 
             const canClickSender =
               !msg.outgoing &&
               onSenderClick &&
-              displaySender !== 'Unknown' &&
-              displaySender !== CORRUPT_SENDER_LABEL;
+              displaySender !== unknownLabel &&
+              displaySender !== corruptLabel;
             const replyName = msg.outgoing
               ? radioName || msg.sender_name || null
-              : displaySender === 'Unknown' || displaySender === CORRUPT_SENDER_LABEL
+              : displaySender === unknownLabel || displaySender === corruptLabel
                 ? null
                 : displaySender;
             const canReply = Boolean(!msg.outgoing && onSenderClick && replyName);
@@ -1425,13 +1427,13 @@ export function MessageList({
                   avatarKey = msg.conversation_key;
                 }
               } else if (isCorruptChannelMessage) {
-                avatarName = CORRUPT_SENDER_LABEL;
+                avatarName = corruptLabel;
                 avatarKey = `corrupt:${msg.id}`;
                 avatarVariant = 'corrupt';
               } else {
                 // Channel message: use stored sender identity first, then parsed/fallback display name
                 avatarName =
-                  channelSenderName || (displaySender !== 'Unknown' ? displaySender : null);
+                  channelSenderName || (displaySender !== unknownLabel ? displaySender : null);
                 avatarKey =
                   msg.sender_key ||
                   channelSenderContact?.public_key ||
@@ -1439,9 +1441,9 @@ export function MessageList({
               }
             }
             const avatarActionLabel =
-              avatarName && avatarName !== 'Unknown'
-                ? `View info for ${avatarName}`
-                : `View info for ${avatarKey.slice(0, 12)}`;
+              avatarName && avatarName !== unknownLabel
+                ? t('messageList.viewInfoFor', { name: avatarName })
+                : t('messageList.viewInfoFor', { name: avatarKey.slice(0, 12) });
             const canOpenContact = Boolean(
               !msg.outgoing && onOpenContactInfo && avatarKey && avatarVariant !== 'corrupt'
             );
@@ -1473,7 +1475,7 @@ export function MessageList({
                     >
                       <span className="h-px flex-1 bg-border" />
                       <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1">
-                        Unread messages
+                        {t('messageList.unread')}
                       </span>
                       <span className="h-px flex-1 bg-border" />
                     </button>
@@ -1484,7 +1486,7 @@ export function MessageList({
                     >
                       <span className="h-px flex-1 bg-border" />
                       <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1">
-                        Unread messages
+                        {t('messageList.unread')}
                       </span>
                       <span className="h-px flex-1 bg-border" />
                     </div>
@@ -1651,8 +1653,8 @@ export function MessageList({
                                   isOutgoingChan: msg.type === 'CHAN' && !!onResendChannelMessage,
                                 });
                               }}
-                              title="View echo paths"
-                              aria-label={`Acknowledged, ${msg.acked} echo${msg.acked !== 1 ? 's' : ''} — view paths`}
+                              title={t('messageList.viewEchoPaths')}
+                              aria-label={t('messageList.ackedAria', { count: msg.acked })}
                             >{` ✓${msg.acked > 1 ? msg.acked : ''}`}</span>
                           ) : (
                             <span className="text-muted-foreground">{` ✓${msg.acked > 1 ? msg.acked : ''}`}</span>
@@ -1673,14 +1675,17 @@ export function MessageList({
                                 isOutgoingChan: true,
                               });
                             }}
-                            title="Message status"
-                            aria-label="No echoes yet — view message status"
+                            title={t('messageList.messageStatus')}
+                            aria-label={t('messageList.noEchoes')}
                           >
                             {' '}
                             ?
                           </span>
                         ) : (
-                          <span className="text-muted-foreground" title="No repeats heard yet">
+                          <span
+                            className="text-muted-foreground"
+                            title={t('messageList.noRepeats')}
+                          >
                             {' '}
                             ?
                           </span>
@@ -1798,12 +1803,12 @@ export function MessageList({
         </div>
         {loadingNewer && (
           <div className="text-center py-2 text-muted-foreground text-sm" role="status">
-            Loading newer messages...
+            {t('messageList.loadingNewer')}
           </div>
         )}
         {!loadingNewer && hasNewerMessages && (
           <div className="text-center py-2 text-muted-foreground text-xs">
-            Scroll down for newer messages
+            {t('messageList.scrollNewer')}
           </div>
         )}
       </div>
@@ -1831,7 +1836,7 @@ export function MessageList({
               }}
               className="h-full px-3 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Jump to unread
+              {t('messageList.jumpToUnread')}
             </button>
             <button
               type="button"
@@ -1840,8 +1845,8 @@ export function MessageList({
                 setShowJumpToUnread(false);
               }}
               className="flex h-full w-9 items-center justify-center border-l border-border text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Dismiss jump to unread"
-              title="Dismiss jump to unread"
+              aria-label={t('messageList.dismissJump')}
+              title={t('messageList.dismissJump')}
             >
               ×
             </button>
@@ -1852,8 +1857,8 @@ export function MessageList({
         <button
           onClick={scrollToBottom}
           className="absolute bottom-4 right-4 w-9 h-9 rounded-full bg-card hover:bg-accent border border-border flex items-center justify-center shadow-lg transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title="Scroll to bottom"
-          aria-label="Scroll to bottom"
+          title={t('messageList.scrollBottom')}
+          aria-label={t('messageList.scrollBottom')}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -1951,9 +1956,9 @@ export function MessageList({
           }}
           channels={channels}
           source={packetInspectorSource}
-          title="Analyze Packet"
-          description="On-demand raw packet analysis for a message-backed archival packet."
-          notice={ANALYZE_PACKET_NOTICE}
+          title={t('messageList.analyzeTitle')}
+          description={t('messageList.analyzeDescription')}
+          notice={t('messageList.analyzeNotice')}
           signalOverride={packetSignalOverrideRef.current}
         />
       )}

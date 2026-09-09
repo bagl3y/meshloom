@@ -10,6 +10,12 @@ import {
   useFaviconBadge,
   useUnreadTitle,
 } from '../hooks/useFaviconBadge';
+import i18n from '../i18n';
+import fEn from '../i18n/locales/slices/f.en.json';
+import fFr from '../i18n/locales/slices/f.fr.json';
+
+i18n.addResourceBundle('en', 'translation', fEn, true, true);
+i18n.addResourceBundle('fr', 'translation', fFr, true, true);
 import type { Channel, Contact } from '../types';
 import { getStateKey } from '../utils/conversationState';
 
@@ -67,7 +73,7 @@ describe('useFaviconBadge', () => {
       <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       <link rel="shortcut icon" href="/favicon.ico" />
     `;
-    document.title = 'Meshloom';
+    document.title = i18n.t('pwa.title');
     objectUrlCounter = 0;
     fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -161,7 +167,7 @@ describe('useFaviconBadge', () => {
         [makeChannel('fav-chan', true)]
       )
     ).toBe(10);
-    expect(getUnreadTitle({}, [], [])).toBe('Meshloom');
+    expect(getUnreadTitle({}, [], [])).toBe(i18n.t('pwa.title'));
     expect(
       getUnreadTitle(
         {
@@ -171,7 +177,7 @@ describe('useFaviconBadge', () => {
         [],
         [makeChannel('fav-chan', true)]
       )
-    ).toBe('(7) Meshloom');
+    ).toBe(i18n.t('pwa.unreadTitle', { count: '7' }));
     expect(
       getUnreadTitle(
         {
@@ -180,7 +186,7 @@ describe('useFaviconBadge', () => {
         [],
         [makeChannel('fav-chan', true)]
       )
-    ).toBe('(99+) Meshloom');
+    ).toBe(i18n.t('pwa.unreadTitle', { count: '99+' }));
   });
 
   it('switches between the base favicon and generated blob badges', async () => {
@@ -273,7 +279,7 @@ describe('useFaviconBadge', () => {
       }
     );
 
-    expect(document.title).toBe('Meshloom');
+    expect(document.title).toBe(i18n.t('pwa.title'));
 
     rerender({
       unreadCounts: {
@@ -284,10 +290,10 @@ describe('useFaviconBadge', () => {
       currentChannels: channels,
     });
 
-    expect(document.title).toBe('(4) Meshloom');
+    expect(document.title).toBe(i18n.t('pwa.unreadTitle', { count: '4' }));
 
     unmount();
 
-    expect(document.title).toBe('Meshloom');
+    expect(document.title).toBe(i18n.t('pwa.title'));
   });
 });

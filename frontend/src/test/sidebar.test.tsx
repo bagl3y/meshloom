@@ -102,6 +102,10 @@ function getSectionHeaderContainer(title: string): HTMLElement {
   return container;
 }
 
+function sortNextName(titleKey: string, orderKey: string): string {
+  return i18n.t('sidebar.sortNext', { title: i18n.t(titleKey), order: i18n.t(orderKey) });
+}
+
 describe('Sidebar section summaries', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -110,11 +114,21 @@ describe('Sidebar section summaries', () => {
   it('shows muted section unread totals in each visible section header', () => {
     renderSidebar();
 
-    expect(within(getSectionHeaderContainer('Favorites')).getByText('2')).toBeInTheDocument();
-    expect(within(getSectionHeaderContainer('Channels')).getByText('1')).toBeInTheDocument();
-    expect(within(getSectionHeaderContainer('Contacts')).getByText('3')).toBeInTheDocument();
-    expect(within(getSectionHeaderContainer('Room Servers')).getByText('5')).toBeInTheDocument();
-    expect(within(getSectionHeaderContainer('Repeaters')).getByText('4')).toBeInTheDocument();
+    expect(
+      within(getSectionHeaderContainer(i18n.t('sidebar.favorites'))).getByText('2')
+    ).toBeInTheDocument();
+    expect(
+      within(getSectionHeaderContainer(i18n.t('sidebar.channels'))).getByText('1')
+    ).toBeInTheDocument();
+    expect(
+      within(getSectionHeaderContainer(i18n.t('sidebar.contacts'))).getByText('3')
+    ).toBeInTheDocument();
+    expect(
+      within(getSectionHeaderContainer(i18n.t('sidebar.roomServers'))).getByText('5')
+    ).toBeInTheDocument();
+    expect(
+      within(getSectionHeaderContainer(i18n.t('sidebar.repeaters'))).getByText('4')
+    ).toBeInTheDocument();
   });
 
   it('renders a full add channel/contact button above search and calls onNewMessage', () => {
@@ -137,12 +151,12 @@ describe('Sidebar section summaries', () => {
       />
     );
 
-    const addButton = screen.getByRole('button', { name: 'Add channel or contact' });
-    const search = screen.getByLabelText('Search conversations');
-    const nav = screen.getByRole('navigation', { name: 'Conversations' });
-    const toolsButton = screen.getByRole('button', { name: 'Tools' });
+    const addButton = screen.getByRole('button', { name: i18n.t('sidebar.addAria') });
+    const search = screen.getByLabelText(i18n.t('sidebar.searchAria'));
+    const nav = screen.getByRole('navigation', { name: i18n.t('sidebar.conversations') });
+    const toolsButton = screen.getByRole('button', { name: i18n.t('sidebar.tools') });
 
-    expect(addButton).toHaveTextContent('Add Channel/Contact');
+    expect(addButton).toHaveTextContent(i18n.t('sidebar.add'));
     expect(
       addButton.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
@@ -163,23 +177,20 @@ describe('Sidebar section summaries', () => {
       },
     });
 
-    expect(within(getSectionHeaderContainer('Favorites')).getByText('2')).toHaveClass(
-      'bg-badge-mention',
-      'text-badge-mention-foreground'
-    );
-    expect(within(getSectionHeaderContainer('Channels')).getByText('1')).toHaveClass(
-      'bg-badge-mention',
-      'text-badge-mention-foreground'
-    );
+    expect(
+      within(getSectionHeaderContainer(i18n.t('sidebar.favorites'))).getByText('2')
+    ).toHaveClass('bg-badge-mention', 'text-badge-mention-foreground');
+    expect(
+      within(getSectionHeaderContainer(i18n.t('sidebar.channels'))).getByText('1')
+    ).toHaveClass('bg-badge-mention', 'text-badge-mention-foreground');
   });
 
   it('turns contact row badges red while the contacts rollup remains red', () => {
     const { aliceName } = renderSidebar();
 
-    expect(within(getSectionHeaderContainer('Contacts')).getByText('3')).toHaveClass(
-      'bg-badge-mention',
-      'text-badge-mention-foreground'
-    );
+    expect(
+      within(getSectionHeaderContainer(i18n.t('sidebar.contacts'))).getByText('3')
+    ).toHaveClass('bg-badge-mention', 'text-badge-mention-foreground');
 
     const aliceRow = screen.getByText(aliceName).closest('div');
     if (!aliceRow) throw new Error('Missing Alice row');
@@ -231,24 +242,24 @@ describe('Sidebar section summaries', () => {
   it('renders room servers in their own section', () => {
     const { roomName } = renderSidebar();
 
-    expect(screen.getByRole('button', { name: 'Room Servers' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: i18n.t('sidebar.roomServers') })).toBeInTheDocument();
     expect(screen.getByText(roomName)).toBeInTheDocument();
   });
 
   it('expands collapsed sections during search and restores collapse state after clearing search', async () => {
     const { opsChannel, aliceName, roomName } = renderSidebar();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Tools' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Channels' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Contacts' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Room Servers' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('sidebar.tools') }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('sidebar.channels') }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('sidebar.contacts') }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('sidebar.roomServers') }));
 
-    expect(screen.queryByText('Packet Feed')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('sidebar.packetFeed'))).not.toBeInTheDocument();
     expect(screen.queryByText(opsChannel.name)).not.toBeInTheDocument();
     expect(screen.queryByText(aliceName)).not.toBeInTheDocument();
     expect(screen.queryByText(roomName)).not.toBeInTheDocument();
 
-    const search = screen.getByLabelText('Search conversations');
+    const search = screen.getByLabelText(i18n.t('sidebar.searchAria'));
     fireEvent.change(search, { target: { value: 'alice' } });
 
     await waitFor(() => {
@@ -258,7 +269,7 @@ describe('Sidebar section summaries', () => {
     fireEvent.change(search, { target: { value: '' } });
 
     await waitFor(() => {
-      expect(screen.queryByText('Packet Feed')).not.toBeInTheDocument();
+      expect(screen.queryByText(i18n.t('sidebar.packetFeed'))).not.toBeInTheDocument();
       expect(screen.queryByText(opsChannel.name)).not.toBeInTheDocument();
       expect(screen.queryByText(aliceName)).not.toBeInTheDocument();
       expect(screen.queryByText(roomName)).not.toBeInTheDocument();
@@ -268,12 +279,12 @@ describe('Sidebar section summaries', () => {
   it('persists collapsed section state across unmount and remount', () => {
     const { opsChannel, aliceName, roomName, unmount } = renderSidebar();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Tools' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Channels' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Contacts' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Room Servers' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('sidebar.tools') }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('sidebar.channels') }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('sidebar.contacts') }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('sidebar.roomServers') }));
 
-    expect(screen.queryByText('Packet Feed')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('sidebar.packetFeed'))).not.toBeInTheDocument();
     expect(screen.queryByText(opsChannel.name)).not.toBeInTheDocument();
     expect(screen.queryByText(aliceName)).not.toBeInTheDocument();
     expect(screen.queryByText(roomName)).not.toBeInTheDocument();
@@ -281,7 +292,7 @@ describe('Sidebar section summaries', () => {
     unmount();
     renderSidebar();
 
-    expect(screen.queryByText('Packet Feed')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('sidebar.packetFeed'))).not.toBeInTheDocument();
     expect(screen.queryByText(opsChannel.name)).not.toBeInTheDocument();
     expect(screen.queryByText(aliceName)).not.toBeInTheDocument();
     expect(screen.queryByText(roomName)).not.toBeInTheDocument();
@@ -332,8 +343,12 @@ describe('Sidebar section summaries', () => {
     const flightRow = screen.getByText('#flight').closest('div');
     if (!aliceRow || !flightRow) throw new Error('Missing sidebar rows');
 
-    expect(within(aliceRow).getByLabelText('Notifications enabled')).toBeInTheDocument();
-    expect(within(flightRow).getByLabelText('Notifications enabled')).toBeInTheDocument();
+    expect(
+      within(aliceRow).getByLabelText(i18n.t('sidebar.notificationsEnabled'))
+    ).toBeInTheDocument();
+    expect(
+      within(flightRow).getByLabelText(i18n.t('sidebar.notificationsEnabled'))
+    ).toBeInTheDocument();
   });
 
   it('keeps the notification bell to the left of the unread pill when both are present', () => {
@@ -348,7 +363,7 @@ describe('Sidebar section summaries', () => {
     const aliceRow = screen.getByText(aliceName).closest('div');
     if (!aliceRow) throw new Error('Missing Alice row');
 
-    const bell = within(aliceRow).getByLabelText('Notifications enabled');
+    const bell = within(aliceRow).getByLabelText(i18n.t('sidebar.notificationsEnabled'));
     const unread = within(aliceRow).getByText('3');
     expect(bell.compareDocumentPosition(unread) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -356,12 +371,12 @@ describe('Sidebar section summaries', () => {
   it('shows the trace tool row and selects it', () => {
     const { onSelectConversation } = renderSidebar();
 
-    fireEvent.click(screen.getByText('Trace'));
+    fireEvent.click(screen.getByText(i18n.t('sidebar.trace')));
 
     expect(onSelectConversation).toHaveBeenCalledWith({
       type: 'trace',
       id: 'trace',
-      name: 'Trace',
+      name: i18n.t('sidebar.trace'),
     });
   });
 
@@ -428,9 +443,15 @@ describe('Sidebar section summaries', () => {
     expect(getRoomsOrder()).toEqual(['Zebra Room', 'Alpha Room']);
     expect(getRepeatersOrder()).toEqual(['Alpha Relay', 'Zulu Relay']);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sort Channels alphabetically' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Sort Contacts alphabetically' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Sort Room Servers alphabetically' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: sortNextName('sidebar.channels', 'sidebar.sortAlpha') })
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: sortNextName('sidebar.contacts', 'sidebar.sortAlpha') })
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: sortNextName('sidebar.roomServers', 'sidebar.sortAlpha') })
+    );
 
     expect(getChannelsOrder()).toEqual(['#alpha', '#zebra']);
     expect(getContactsOrder()).toEqual(['Amy', 'Zed']);
@@ -706,7 +727,9 @@ describe('Sidebar section summaries', () => {
 
     expect(getFavoritesOrder()).toEqual(['Zed', 'Amy']);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sort Favorites alphabetically' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: sortNextName('sidebar.favorites', 'sidebar.sortAlpha') })
+    );
 
     expect(getFavoritesOrder()).toEqual(['Amy', 'Zed']);
 
@@ -752,22 +775,32 @@ describe('Sidebar section summaries', () => {
     render(<Sidebar {...props} />);
 
     // recent -> alpha: pure name order regardless of type.
-    fireEvent.click(screen.getByRole('button', { name: 'Sort Favorites alphabetically' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: sortNextName('sidebar.favorites', 'sidebar.sortAlpha') })
+    );
     expect(getFavoritesOrder()).toEqual(['Alpha', 'Bravo', 'Yankee', 'Zulu']);
 
     // alpha -> type-recent: group by type (channel, clients, repeater); within the
     // client group, more-recent Bravo precedes Alpha.
-    fireEvent.click(screen.getByRole('button', { name: 'Sort Favorites by type, then recent' }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: sortNextName('sidebar.favorites', 'sidebar.sortTypeRecent'),
+      })
+    );
     expect(getFavoritesOrder()).toEqual(['Zulu', 'Bravo', 'Alpha', 'Yankee']);
 
     // type-recent -> type-alpha: same grouping, clients now A-Z (Alpha before Bravo).
     fireEvent.click(
-      screen.getByRole('button', { name: 'Sort Favorites by type, then alphabetically' })
+      screen.getByRole('button', {
+        name: sortNextName('sidebar.favorites', 'sidebar.sortTypeAlpha'),
+      })
     );
     expect(getFavoritesOrder()).toEqual(['Zulu', 'Alpha', 'Bravo', 'Yankee']);
 
     // type-alpha -> recent: cycle wraps back to the recency sort.
-    expect(screen.getByRole('button', { name: 'Sort Favorites by recent' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: sortNextName('sidebar.favorites', 'sidebar.sortRecent') })
+    ).toBeInTheDocument();
   });
 
   it('seeds favorites sort from the legacy global sort order when section prefs are missing', () => {
@@ -805,13 +838,15 @@ describe('Sidebar section summaries', () => {
     // Favorites now cycles recent -> alpha -> type-recent -> type-alpha, so the
     // next order after the seeded 'alpha' is the type-grouped recency sort.
     expect(
-      screen.getByRole('button', { name: 'Sort Favorites by type, then recent' })
+      screen.getByRole('button', {
+        name: sortNextName('sidebar.favorites', 'sidebar.sortTypeRecent'),
+      })
     ).toBeInTheDocument();
   });
 
   it('toggles the desktop icon rail and persists the preference', () => {
     const { unmount } = renderSidebar();
-    const nav = screen.getByRole('navigation', { name: 'Conversations' });
+    const nav = screen.getByRole('navigation', { name: i18n.t('sidebar.conversations') });
 
     expect(nav).not.toHaveAttribute('data-desktop-collapsed');
     expect(nav).toHaveClass('w-60');
@@ -826,10 +861,9 @@ describe('Sidebar section summaries', () => {
     unmount();
     renderSidebar();
 
-    expect(screen.getByRole('navigation', { name: 'Conversations' })).toHaveAttribute(
-      'data-desktop-collapsed',
-      'true'
-    );
+    expect(
+      screen.getByRole('navigation', { name: i18n.t('sidebar.conversations') })
+    ).toHaveAttribute('data-desktop-collapsed', 'true');
 
     const monograms = screen
       .getAllByTestId('channel-rail-monogram')

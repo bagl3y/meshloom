@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { api } from '../api';
+import { api, formatApiError } from '../api';
 import { takePrefetchOrFetch } from '../prefetch';
 import { toast } from '../components/ui/sonner';
+import i18n from '../i18n';
 import type {
   HealthStatus,
   RadioAdvertMode,
@@ -100,12 +101,15 @@ export function useRadioControl() {
   const handleAdvertise = useCallback(async (mode: RadioAdvertMode = 'flood') => {
     try {
       await api.sendAdvertisement(mode);
-      toast.success(mode === 'zero_hop' ? 'Zero-hop advertisement sent' : 'Advertisement sent');
+      toast.success(
+        mode === 'zero_hop' ? i18n.t('toast.advertZeroHopSent') : i18n.t('toast.advertSent')
+      );
     } catch (err) {
-      const label = mode === 'zero_hop' ? 'zero-hop advertisement' : 'advertisement';
+      const label =
+        mode === 'zero_hop' ? i18n.t('toast.advertZeroHopLabel') : i18n.t('toast.advertLabel');
       console.error(`Failed to send ${label}:`, err);
-      toast.error(`Failed to send ${label}`, {
-        description: err instanceof Error ? err.message : 'Check radio connection',
+      toast.error(i18n.t('toast.advertFailed', { label }), {
+        description: formatApiError(err, i18n.t) || i18n.t('chat.checkRadio'),
       });
     }
   }, []);
@@ -117,13 +121,13 @@ export function useRadioControl() {
       setMeshDiscovery(data);
       toast.success(
         data.results.length === 0
-          ? 'No nearby nodes responded'
-          : `Found ${data.results.length} nearby node${data.results.length === 1 ? '' : 's'}`
+          ? i18n.t('toast.discoverNone')
+          : i18n.t('toast.discoverFound', { count: data.results.length })
       );
     } catch (err) {
       console.error('Failed to discover nearby nodes:', err);
-      toast.error('Failed to run mesh discovery', {
-        description: err instanceof Error ? err.message : 'Check radio connection',
+      toast.error(i18n.t('toast.discoverFailed'), {
+        description: formatApiError(err, i18n.t) || i18n.t('chat.checkRadio'),
       });
     } finally {
       setMeshDiscoveryLoadingTarget(null);
@@ -136,20 +140,27 @@ export function useRadioControl() {
       const data = await api.discoverRegions(publicKeys);
       setRegionDiscovery(data);
       if (data.repeaters_queried === 0) {
-        toast.info('No repeaters available to query for regions');
+        toast.info(i18n.t('toast.regionsNoneAvailable'));
       } else if (data.regions.length === 0) {
         toast.info(
-          `No regions reported (${data.repeaters_answered}/${data.repeaters_queried} repeaters answered)`
+          i18n.t('toast.regionsNoneReported', {
+            answered: data.repeaters_answered,
+            queried: data.repeaters_queried,
+          })
         );
       } else {
         toast.success(
-          `Found ${data.regions.length} region${data.regions.length === 1 ? '' : 's'} from ${data.repeaters_answered}/${data.repeaters_queried} repeaters`
+          i18n.t('toast.regionsFound', {
+            count: data.regions.length,
+            answered: data.repeaters_answered,
+            queried: data.repeaters_queried,
+          })
         );
       }
     } catch (err) {
       console.error('Failed to discover regions:', err);
-      toast.error('Failed to discover regions', {
-        description: err instanceof Error ? err.message : 'Check radio connection',
+      toast.error(i18n.t('toast.regionsFailed'), {
+        description: formatApiError(err, i18n.t) || i18n.t('chat.checkRadio'),
       });
     } finally {
       setRegionDiscoveryLoading(false);

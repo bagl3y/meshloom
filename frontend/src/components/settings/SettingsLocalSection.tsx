@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { ChevronRight, Logs, MessageSquare, Send, Settings, X } from 'lucide-react';
 import { toast } from '../ui/sonner';
 import { usePush } from '../../contexts/PushSubscriptionContext';
@@ -105,6 +105,7 @@ function PushDeviceManagement({
     testPush,
     refreshSubscriptions,
   } = usePush();
+  const { t } = useTranslation();
 
   useEffect(() => {
     refreshSubscriptions();
@@ -113,11 +114,11 @@ function PushDeviceManagement({
   if (!isSupported) {
     return (
       <div className="space-y-3">
-        <h3 className="text-base font-semibold tracking-tight">Web Push Notifications</h3>
+        <h3 className="text-base font-semibold tracking-tight">{t('settings.local.push.title')}</h3>
         <p className="text-[0.8125rem] text-muted-foreground">
           {window.isSecureContext
-            ? 'Push notifications are not supported by this browser.'
-            : 'Web Push requires HTTPS. Access Meshloom over HTTPS (self-signed certificates work) to enable push notifications.'}
+            ? t('settings.local.push.unsupported')
+            : t('settings.local.push.needsHttps')}
         </p>
       </div>
     );
@@ -126,30 +127,23 @@ function PushDeviceManagement({
   return (
     <div className="space-y-4">
       <div className="space-y-1">
-        <h3 className="text-base font-semibold tracking-tight">Web Push Notifications</h3>
+        <h3 className="text-base font-semibold tracking-tight">{t('settings.local.push.title')}</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">{t('settings.local.push.help')}</p>
         <p className="text-[0.8125rem] text-muted-foreground">
-          Receive notifications even when the browser is closed. Use the bell icon in any
-          conversation header to enable push for that contact or channel, or subscribe this browser
-          to receive notifications for all push-enabled conversations.
-        </p>
-        <p className="text-[0.8125rem] text-muted-foreground">
-          The set of channels or DMs that trigger push notifications are global per-install (i.e.
-          all devices that register for Web Push will have the same set of channels/DMs that trigger
-          notifications). Subscribing or unsubscribing a particular browser only controls whether
-          that browser receives notifications for the configured set of channels/DMs.
+          {t('settings.local.push.globalHelp')}
         </p>
       </div>
 
       {!currentSubscriptionId && (
         <Button variant="outline" size="sm" onClick={() => void subscribe()} disabled={loading}>
-          {loading ? 'Subscribing...' : 'Subscribe This Browser'}
+          {loading ? t('settings.local.push.subscribing') : t('settings.local.push.subscribe')}
         </Button>
       )}
 
       {pushConversations.length > 0 && (
         <div className="space-y-2">
           <span className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
-            Push-enabled conversations
+            {t('settings.local.push.enabledConversations')}
           </span>
           <div className="flex flex-wrap gap-1.5">
             {pushConversations.map((key) => (
@@ -162,8 +156,10 @@ function PushDeviceManagement({
                   type="button"
                   onClick={() => void toggleConversation(key)}
                   className="rounded-full p-0.5 hover:bg-accent transition-colors"
-                  title="Remove"
-                  aria-label={`Remove ${resolveConversationName(key, contacts, channels)} from push`}
+                  title={t('settings.remove')}
+                  aria-label={t('settings.local.push.removeFromPush', {
+                    name: resolveConversationName(key, contacts, channels),
+                  })}
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -176,7 +172,7 @@ function PushDeviceManagement({
       {allSubscriptions.length > 0 && (
         <div className="space-y-2">
           <span className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
-            Registered Devices
+            {t('settings.local.push.devices')}
           </span>
           <div className="mt-2 space-y-2">
             {allSubscriptions.map((sub) => (
@@ -187,19 +183,22 @@ function PushDeviceManagement({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 overflow-hidden">
                     <span className="truncate text-sm font-medium">
-                      {sub.label || 'Unknown device'}
+                      {sub.label || t('settings.local.push.unknownDevice')}
                     </span>
                     {sub.id === currentSubscriptionId && (
                       <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[0.625rem] font-medium text-primary">
-                        Current device
+                        {t('settings.local.push.currentDevice')}
                       </span>
                     )}
                   </div>
                   <span className="text-xs text-muted-foreground">
                     {sub.last_success_at
-                      ? `Last push: ${new Date(sub.last_success_at * 1000).toLocaleDateString()}`
-                      : 'Never pushed'}
-                    {sub.failure_count > 0 && ` · ${sub.failure_count} failures`}
+                      ? t('settings.local.push.lastPush', {
+                          date: new Date(sub.last_success_at * 1000).toLocaleDateString(),
+                        })
+                      : t('settings.local.push.neverPushed')}
+                    {sub.failure_count > 0 &&
+                      t('settings.local.push.failures', { count: sub.failure_count })}
                   </span>
                 </div>
                 <div className="flex gap-1">
@@ -209,17 +208,19 @@ function PushDeviceManagement({
                     className="h-8 text-sm"
                     onClick={() => void testPush(sub.id)}
                   >
-                    Test
+                    {t('settings.local.push.test')}
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-8 text-sm text-destructive hover:text-destructive"
                     onClick={() => {
-                      void deleteSubscription(sub.id).then(() => toast.success('Device removed'));
+                      void deleteSubscription(sub.id).then(() =>
+                        toast.success(t('settings.local.push.deviceRemoved'))
+                      );
                     }}
                   >
-                    Unsubscribe this device
+                    {t('settings.local.push.unsubscribeDevice')}
                   </Button>
                 </div>
               </div>
@@ -294,9 +295,7 @@ export function SettingsLocalSection({
 
   return (
     <div className={className}>
-      <p className="text-[0.8125rem] text-muted-foreground">
-        These settings apply only to this device/browser.
-      </p>
+      <p className="text-[0.8125rem] text-muted-foreground">{t('settings.local.deviceOnly')}</p>
 
       <div className="space-y-3">
         <Label htmlFor="ui-language">{t('language.label')}</Label>
@@ -323,7 +322,9 @@ export function SettingsLocalSection({
       <Separator />
 
       <div className="space-y-1">
-        <h3 className="text-base font-semibold tracking-tight">Color Scheme</h3>
+        <h3 className="text-base font-semibold tracking-tight">
+          {t('settings.local.colorScheme')}
+        </h3>
         <ThemeSelector />
         <ThemePreview className="mt-6" />
       </div>
@@ -331,7 +332,7 @@ export function SettingsLocalSection({
       <Separator />
 
       <div className="space-y-3">
-        <h3 className="text-base font-semibold tracking-tight">Local Label</h3>
+        <h3 className="text-base font-semibold tracking-tight">{t('settings.local.localLabel')}</h3>
         <div className="flex items-center gap-2">
           <Input
             value={localLabelText}
@@ -341,8 +342,8 @@ export function SettingsLocalSection({
               setLocalLabel(text, localLabelColor);
               onLocalLabelChange?.({ text, color: localLabelColor });
             }}
-            placeholder="e.g. Home Base, Field Radio 2"
-            aria-label="Local label text"
+            placeholder={t('settings.local.localLabelPlaceholder')}
+            aria-label={t('settings.local.localLabelText')}
             className="flex-1"
           />
           <input
@@ -354,19 +355,19 @@ export function SettingsLocalSection({
               setLocalLabel(localLabelText, color);
               onLocalLabelChange?.({ text: localLabelText, color });
             }}
-            aria-label="Local label color"
+            aria-label={t('settings.local.localLabelColor')}
             className="w-10 h-9 rounded border border-input cursor-pointer bg-transparent p-0.5"
           />
         </div>
         <p className="text-[0.8125rem] text-muted-foreground">
-          Display a colored banner at the top of the page to identify this instance.
+          {t('settings.local.localLabelHelp')}
         </p>
       </div>
 
       <Separator />
 
       <div className="space-y-3">
-        <Label htmlFor="distance-units">Distance Units</Label>
+        <Label htmlFor="distance-units">{t('settings.local.distanceUnits')}</Label>
         <select
           id="distance-units"
           value={distanceUnit}
@@ -379,19 +380,19 @@ export function SettingsLocalSection({
         >
           {DISTANCE_UNITS.map((unit) => (
             <option key={unit} value={unit}>
-              {DISTANCE_UNIT_LABELS[unit]}
+              {t(`settings.local.units.${unit}`, { defaultValue: DISTANCE_UNIT_LABELS[unit] })}
             </option>
           ))}
         </select>
         <p className="text-[0.8125rem] text-muted-foreground">
-          Controls how distances are shown throughout the app.
+          {t('settings.local.distanceUnitsHelp')}
         </p>
       </div>
 
       <Separator />
 
       <div className="space-y-3">
-        <h3 className="text-base font-semibold tracking-tight">UI Tweaks</h3>
+        <h3 className="text-base font-semibold tracking-tight">{t('settings.local.uiTweaks')}</h3>
 
         <div className="space-y-2">
           <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
@@ -402,10 +403,9 @@ export function SettingsLocalSection({
               className="mt-0.5"
             />
             <div className="space-y-1">
-              <Label htmlFor="reopen-last">Reopen Last Conversation</Label>
+              <Label htmlFor="reopen-last">{t('settings.local.reopenLast')}</Label>
               <p className="text-[0.8125rem] text-muted-foreground">
-                Automatically reopen to the last-open channel or contact when the app loads to the
-                bare URL.
+                {t('settings.local.reopenLastHelp')}
               </p>
             </div>
           </div>
@@ -422,9 +422,9 @@ export function SettingsLocalSection({
               className="mt-0.5"
             />
             <div className="space-y-1">
-              <Label htmlFor="auto-focus-input">Auto-Focus Message Input</Label>
+              <Label htmlFor="auto-focus-input">{t('settings.local.autoFocus')}</Label>
               <p className="text-[0.8125rem] text-muted-foreground">
-                Place the cursor in the message input when switching conversations. Desktop only.
+                {t('settings.local.autoFocusHelp')}
               </p>
             </div>
           </div>
@@ -442,10 +442,9 @@ export function SettingsLocalSection({
               className="mt-0.5"
             />
             <div className="space-y-1">
-              <Label htmlFor="battery-percent">Show Battery Percentage</Label>
+              <Label htmlFor="battery-percent">{t('settings.local.batteryPercent')}</Label>
               <p className="text-[0.8125rem] text-muted-foreground">
-                Display the radio&apos;s battery percentage in the status bar. Data updates every 60
-                seconds and may take up to a minute to appear after connecting.
+                {t('settings.local.batteryPercentHelp')}
               </p>
             </div>
           </div>
@@ -463,10 +462,9 @@ export function SettingsLocalSection({
               className="mt-0.5"
             />
             <div className="space-y-1">
-              <Label htmlFor="battery-voltage">Show Battery Voltage</Label>
+              <Label htmlFor="battery-voltage">{t('settings.local.batteryVoltage')}</Label>
               <p className="text-[0.8125rem] text-muted-foreground">
-                Display the radio&apos;s battery voltage in the status bar (in mV). Data updates
-                every 60 seconds and may take up to a minute to appear after connecting.
+                {t('settings.local.batteryVoltageHelp')}
               </p>
             </div>
           </div>
@@ -484,10 +482,9 @@ export function SettingsLocalSection({
               className="mt-0.5"
             />
             <div className="space-y-1">
-              <Label htmlFor="status-dot-pulse">Status Dot Glitters</Label>
+              <Label htmlFor="status-dot-pulse">{t('settings.local.statusDotPulse')}</Label>
               <p className="text-[0.8125rem] text-muted-foreground">
-                Flash the connection status dot in color as packets arrive: blue for channel, purple
-                for DM, cyan for advert, dark green for other.
+                {t('settings.local.statusDotPulseHelp')}
               </p>
             </div>
           </div>
@@ -504,13 +501,12 @@ export function SettingsLocalSection({
               className="mt-0.5"
             />
             <div className="space-y-1">
-              <Label htmlFor="render-rich-payloads">Render MeshCore Open reactions as emoji</Label>
+              <Label htmlFor="render-rich-payloads">{t('settings.local.richPayloads')}</Label>
               <p className="text-[0.8125rem] text-muted-foreground">
-                MeshCore Open clients send emoji reactions as encoded text (e.g.{' '}
-                <code className="text-[0.75rem]">r:1a2b:05</code>). When enabled, unmatched reaction
-                messages render as the emoji instead of the raw text. GIFs always display as images
-                — they load from media.giphy.com, which reaches outside your local network and
-                exposes your IP to Giphy.
+                <Trans
+                  i18nKey="settings.local.richPayloadsHelp"
+                  components={{ code: <code className="text-[0.75rem]" /> }}
+                />
               </p>
             </div>
           </div>
@@ -543,11 +539,12 @@ export function SettingsLocalSection({
               className="mt-0.5"
             />
             <div className="space-y-1">
-              <Label htmlFor="show-path-hop-width">Show Path Hop Width</Label>
+              <Label htmlFor="show-path-hop-width">{t('settings.local.pathHopWidth')}</Label>
               <p className="text-[0.8125rem] text-muted-foreground">
-                Append the per-hop identifier width to the hop-count badge on received messages —
-                e.g. <code className="text-[0.75rem]">(2 · 2B)</code> for a 2-hop path with 2-byte
-                hops. Direct (0-hop) messages show no width. Off by default.
+                <Trans
+                  i18nKey="settings.local.pathHopWidthHelp"
+                  components={{ code: <code className="text-[0.75rem]" /> }}
+                />
               </p>
             </div>
           </div>
@@ -565,10 +562,9 @@ export function SettingsLocalSection({
                 className="mt-0.5"
               />
               <div className="space-y-1">
-                <Label htmlFor="text-replace">Replace as you Type</Label>
+                <Label htmlFor="text-replace">{t('settings.local.textReplace')}</Label>
                 <p className="text-[0.8125rem] text-muted-foreground">
-                  Automatically replace characters as you type in the message input. Define
-                  replacements as a JSON object mapping source strings to their replacements.
+                  {t('settings.local.textReplaceHelp')}
                 </p>
               </div>
             </div>
@@ -587,11 +583,11 @@ export function SettingsLocalSection({
                     'w-full rounded-md border bg-background px-3 py-2 text-sm font-mono',
                     textReplaceError ? 'border-destructive' : 'border-input'
                   )}
-                  aria-label="Text replacement map (JSON)"
+                  aria-label={t('settings.local.textReplaceMap')}
                 />
                 {textReplaceError && (
                   <p className="text-xs text-destructive">
-                    {textReplaceError} Changes are not saved until this is resolved.
+                    {t('settings.local.textReplaceUnsaved', { error: textReplaceError })}
                   </p>
                 )}
                 <button
@@ -603,7 +599,7 @@ export function SettingsLocalSection({
                   }}
                   className="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  Reset to Default
+                  {t('settings.local.textReplaceReset')}
                 </button>
               </div>
             )}
@@ -611,7 +607,7 @@ export function SettingsLocalSection({
         </div>
 
         <div className="space-y-3">
-          <Label htmlFor="font-scale-input">Relative Font Size</Label>
+          <Label htmlFor="font-scale-input">{t('settings.local.fontSize')}</Label>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
               type="range"
@@ -624,7 +620,7 @@ export function SettingsLocalSection({
               onTouchEnd={(event) => handleSliderCommit(Number(event.currentTarget.value))}
               onKeyUp={(event) => handleSliderCommit(Number(event.currentTarget.value))}
               onBlur={(event) => handleSliderCommit(Number(event.currentTarget.value))}
-              aria-label="Relative font size slider"
+              aria-label={t('settings.local.fontSizeSlider')}
               className="w-full accent-primary sm:flex-1"
             />
             <div className="flex items-center gap-2 sm:w-40">
@@ -668,7 +664,7 @@ export function SettingsLocalSection({
                   }
                   commitFontScale(parsed);
                 }}
-                aria-label="Relative font size percentage"
+                aria-label={t('settings.local.fontSizePercent')}
               />
               <span className="text-sm text-muted-foreground">%</span>
             </div>
@@ -678,12 +674,11 @@ export function SettingsLocalSection({
               className="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               disabled={fontScale === DEFAULT_FONT_SCALE}
             >
-              Reset
+              {t('settings.local.reset')}
             </button>
           </div>
           <p className="text-[0.8125rem] text-muted-foreground">
-            Scales the app&apos;s typography for this browser only. The slider moves in 5% steps;
-            the number field accepts any value from 25% to 400%.
+            {t('settings.local.fontSizeHelp')}
           </p>
         </div>
       </div>
@@ -696,23 +691,22 @@ export function SettingsLocalSection({
 }
 
 function ThemePreview({ className }: { className?: string }) {
+  const { t } = useTranslation();
   const [showStyleRef, setShowStyleRef] = useState(false);
 
   return (
     <div className={`rounded-lg border border-border bg-card p-3 ${className ?? ''}`}>
-      <p className="text-xs text-muted-foreground mb-3">
-        Preview alert, message, sidebar, and badge contrast for the selected theme.
-      </p>
+      <p className="text-xs text-muted-foreground mb-3">{t('settings.local.preview.intro')}</p>
 
       <div className="space-y-2">
         <PreviewBanner className="border border-status-connected/30 bg-status-connected/15 text-status-connected">
-          Connected preview: radio link healthy and syncing.
+          {t('settings.local.preview.connected')}
         </PreviewBanner>
         <PreviewBanner className="border border-warning/50 bg-warning/10 text-warning">
-          Warning preview: packet audit suggests missing history.
+          {t('settings.local.preview.warning')}
         </PreviewBanner>
         <PreviewBanner className="border border-destructive/30 bg-destructive/10 text-destructive">
-          Error preview: radio reconnect failed.
+          {t('settings.local.preview.error')}
         </PreviewBanner>
       </div>
 
@@ -720,18 +714,20 @@ function ThemePreview({ className }: { className?: string }) {
         <PreviewMessage
           sender="Alice"
           bubbleClassName="bg-msg-incoming text-foreground"
-          text="Hello, mesh!"
+          text={t('settings.local.preview.helloMesh')}
         />
         <PreviewMessage
-          sender="You"
+          sender={t('settings.local.preview.you')}
           alignRight
           bubbleClassName="bg-msg-outgoing text-foreground"
-          text="Hi there! I'm using Meshloom."
+          text={t('settings.local.preview.hiThere')}
         />
       </div>
 
       <div className="mt-4 rounded-md border border-border bg-background p-2">
-        <p className="mb-2 text-[0.6875rem] font-medium text-muted-foreground">Sidebar preview</p>
+        <p className="mb-2 text-[0.6875rem] font-medium text-muted-foreground">
+          {t('settings.local.preview.sidebar')}
+        </p>
         <div className="space-y-1">
           <PreviewSidebarRow
             active
@@ -743,7 +739,7 @@ function ThemePreview({ className }: { className?: string }) {
                 <Logs className="h-3.5 w-3.5" />
               </span>
             }
-            label="Packet Feed"
+            label={t('settings.local.preview.packetFeed')}
           />
           <PreviewSidebarRow
             leading={<ContactAvatar name="Alice" publicKey={'ab'.repeat(32)} size={24} />}
@@ -775,43 +771,47 @@ function ThemePreview({ className }: { className?: string }) {
         <ChevronRight
           className={cn('h-3.5 w-3.5 transition-transform', showStyleRef && 'rotate-90')}
         />
-        Canonical style reference
+        {t('settings.local.preview.styleRef')}
       </button>
 
       {showStyleRef && (
         <>
           {/* ── Text Hierarchy ── */}
-          <PreviewSection title="Text hierarchy">
+          <PreviewSection title={t('settings.local.preview.textHierarchy')}>
             <div className="space-y-2">
               <PreviewTextRow
                 classes="text-xl font-semibold"
                 label="text-xl font-semibold"
-                desc="Hero / large data"
+                desc={t('settings.local.preview.hero')}
               />
               <PreviewTextRow
                 classes="text-lg font-semibold"
                 label="text-lg font-semibold"
-                desc="Sheet / dialog title"
+                desc={t('settings.local.preview.sheetTitle')}
               />
               <PreviewTextRow
                 classes="text-base font-semibold tracking-tight"
                 label="text-base font-semibold tracking-tight"
-                desc="Section / group title"
+                desc={t('settings.local.preview.sectionTitle')}
               />
-              <PreviewTextRow classes="text-sm" label="text-sm" desc="Body text, form labels" />
+              <PreviewTextRow
+                classes="text-sm"
+                label="text-sm"
+                desc={t('settings.local.preview.bodyText')}
+              />
               <PreviewTextRow
                 classes="text-[0.8125rem] text-muted-foreground"
                 label="text-[0.8125rem] text-muted-foreground"
-                desc="Helper / description text"
+                desc={t('settings.local.preview.helperText')}
               />
               <PreviewTextRow
                 classes="text-[0.6875rem] text-muted-foreground"
                 label="text-[0.6875rem] text-muted-foreground"
-                desc="Metadata, timestamps"
+                desc={t('settings.local.preview.metadata')}
               />
               <div>
                 <p className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
-                  Metadata Label
+                  {t('settings.local.preview.metadataLabel')}
                 </p>
                 <p className="text-[0.625rem] text-muted-foreground/60 mt-0.5">
                   text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium
@@ -821,42 +821,42 @@ function ThemePreview({ className }: { className?: string }) {
           </PreviewSection>
 
           {/* ── Mono Text ── */}
-          <PreviewSection title="Mono text">
+          <PreviewSection title={t('settings.local.preview.monoText')}>
             <div className="space-y-1.5">
               <div>
                 <p className="text-xs font-mono text-muted-foreground">
                   a1b2c3d4e5f6...7890abcdef01
                 </p>
                 <p className="text-[0.625rem] text-muted-foreground/60">
-                  text-xs font-mono — keys, identifiers
+                  text-xs font-mono — {t('settings.local.preview.keysIds')}
                 </p>
               </div>
               <div>
                 <p className="text-[0.6875rem] font-mono">1h 23m 45s uptime</p>
                 <p className="text-[0.625rem] text-muted-foreground/60">
-                  text-[0.6875rem] font-mono — metadata mono
+                  text-[0.6875rem] font-mono — {t('settings.local.preview.metadataMono')}
                 </p>
               </div>
               <div>
                 <p className="text-sm font-mono">$ req_status_sync 0xA1B2...</p>
                 <p className="text-[0.625rem] text-muted-foreground/60">
-                  text-sm font-mono — console / code
+                  text-sm font-mono — {t('settings.local.preview.consoleCode')}
                 </p>
               </div>
             </div>
           </PreviewSection>
 
           {/* ── Badges ── */}
-          <PreviewSection title="Badges and tags">
+          <PreviewSection title={t('settings.local.preview.badges')}>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
-                Hashtag
+                {t('settings.local.preview.hashtag')}
               </span>
               <span className="text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
-                Repeater
+                {t('settings.local.preview.repeater')}
               </span>
               <span className="text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
-                On Radio
+                {t('settings.local.preview.onRadio')}
               </span>
               <span className="rounded-full bg-badge-unread/90 px-1.5 py-0.5 text-[0.625rem] font-semibold text-badge-unread-foreground">
                 3
@@ -871,25 +871,25 @@ function ThemePreview({ className }: { className?: string }) {
           </PreviewSection>
 
           {/* ── Buttons ── */}
-          <PreviewSection title="Buttons">
+          <PreviewSection title={t('settings.local.preview.buttons')}>
             <div className="space-y-3">
               <div>
                 <p className="text-[0.625rem] text-muted-foreground/60 mb-1.5">
-                  Standard variants (size sm)
+                  {t('settings.local.preview.standardVariants')}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  <Button size="sm">Default</Button>
+                  <Button size="sm">{t('settings.local.preview.default')}</Button>
                   <Button size="sm" variant="outline">
-                    Outline
+                    {t('settings.local.preview.outline')}
                   </Button>
                   <Button size="sm" variant="secondary">
-                    Secondary
+                    {t('settings.local.preview.secondary')}
                   </Button>
                   <Button size="sm" variant="destructive">
-                    Destructive
+                    {t('settings.local.preview.destructive')}
                   </Button>
                   <Button size="sm" variant="ghost">
-                    Ghost
+                    {t('settings.local.preview.ghost')}
                   </Button>
                   <Button size="icon" variant="outline">
                     <Settings className="h-4 w-4" />
@@ -901,7 +901,7 @@ function ThemePreview({ className }: { className?: string }) {
               </div>
               <div>
                 <p className="text-[0.625rem] text-muted-foreground/60 mb-1.5">
-                  Semantic outline variants
+                  {t('settings.local.preview.semanticOutline')}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   <Button
@@ -909,30 +909,34 @@ function ThemePreview({ className }: { className?: string }) {
                     variant="outline"
                     className="border-destructive/50 text-destructive hover:bg-destructive/10"
                   >
-                    Danger
+                    {t('settings.local.preview.danger')}
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     className="border-warning/50 text-warning hover:bg-warning/10"
                   >
-                    Warning
+                    {t('settings.local.preview.warning')}
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     className="border-green-600/50 text-green-600 hover:bg-green-600/10"
                   >
-                    Success
+                    {t('settings.local.preview.success')}
                   </Button>
                 </div>
               </div>
               <div>
                 <p className="text-[0.625rem] text-muted-foreground/60 mb-1.5">
-                  Metric selector pills
+                  {t('settings.local.preview.metricPills')}
                 </p>
                 <div className="flex gap-1">
-                  {['Voltage', 'Noise Floor', 'Packets'].map((label, i) => (
+                  {[
+                    t('settings.local.preview.voltage'),
+                    t('settings.local.preview.noiseFloor'),
+                    t('settings.local.preview.packets'),
+                  ].map((label, i) => (
                     <button
                       key={label}
                       type="button"
@@ -952,21 +956,21 @@ function ThemePreview({ className }: { className?: string }) {
           </PreviewSection>
 
           {/* ── Clickable Text ── */}
-          <PreviewSection title="Clickable text">
+          <PreviewSection title={t('settings.local.preview.clickable')}>
             <div className="space-y-1.5">
               <span
                 role="button"
                 tabIndex={0}
                 className="text-xs font-mono text-muted-foreground cursor-pointer hover:text-primary transition-colors block"
               >
-                a1b2c3d4e5f6 (click to copy)
+                a1b2c3d4e5f6 {t('settings.local.preview.clickToCopy')}
               </span>
               <span
                 role="button"
                 tabIndex={0}
                 className="text-sm cursor-pointer underline underline-offset-2 decoration-muted-foreground/50 hover:text-primary transition-colors"
               >
-                Underlined navigational link
+                {t('settings.local.preview.navLink')}
               </span>
             </div>
             <p className="text-[0.625rem] text-muted-foreground/60 mt-1.5">
@@ -976,16 +980,16 @@ function ThemePreview({ className }: { className?: string }) {
           </PreviewSection>
 
           {/* ── Inline Alerts ── */}
-          <PreviewSection title="Inline alerts">
+          <PreviewSection title={t('settings.local.preview.inlineAlerts')}>
             <div className="space-y-1.5">
               <div className="rounded-md border border-info/30 bg-info/10 px-3 py-2 text-xs text-info">
-                Info: channel slot cache refreshed from radio.
+                {t('settings.local.preview.infoAlert')}
               </div>
               <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-                Warning: radio clock skew detected.
+                {t('settings.local.preview.warnAlert')}
               </div>
               <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                Error: post-connect setup timed out. Reboot the radio and restart.
+                {t('settings.local.preview.errorAlert')}
               </div>
             </div>
           </PreviewSection>
@@ -1013,9 +1017,10 @@ function PreviewTextRow({
   label: string;
   desc: string;
 }) {
+  const { t } = useTranslation();
   return (
     <div>
-      <p className={classes}>Sample text at this size</p>
+      <p className={classes}>{t('settings.local.preview.sampleText')}</p>
       <p className="text-[0.625rem] text-muted-foreground/60">
         {label} — {desc}
       </p>

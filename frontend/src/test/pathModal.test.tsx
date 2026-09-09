@@ -9,6 +9,7 @@ vi.mock('../api', () => ({
 
 import { api } from '../api';
 
+import './eSlices';
 import { PathModal } from '../components/PathModal';
 import i18n from '../i18n';
 import { CONTACT_TYPE_REPEATER, type Contact, type RadioConfig } from '../types';

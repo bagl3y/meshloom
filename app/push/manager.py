@@ -32,18 +32,25 @@ def _state_key_for_message(data: dict) -> str:
     return f"channel-{conversation_key}"
 
 
-def _build_payload(data: dict) -> str:
+def _build_payload(data: dict, language: str = "fr") -> str:
     """Build the push notification JSON payload from a message event."""
     msg_type = data.get("type", "")
     text = data.get("text", "")
     sender_name = data.get("sender_name") or ""
     channel_name = data.get("channel_name") or ""
+    lang = language if language in ("fr", "en") else "fr"
 
     if msg_type == "PRIV":
-        title = f"Message from {sender_name}" if sender_name else "New direct message"
+        if lang == "en":
+            title = f"Message from {sender_name}" if sender_name else "New direct message"
+        else:
+            title = f"Message de {sender_name}" if sender_name else "Nouveau message privé"
         body = text
     else:
-        title = channel_name if channel_name else "Channel message"
+        if lang == "en":
+            title = channel_name if channel_name else "Channel message"
+        else:
+            title = channel_name if channel_name else "Message de canal"
         body = text
 
     conversation_key = data.get("conversation_key", "")
@@ -120,14 +127,20 @@ class PushManager:
         if not subs:
             return
 
-        payload = _build_payload(data)
         vapid_key = get_vapid_private_key()
         if not vapid_key:
             logger.debug("Push dispatch: no VAPID key configured, skipping")
             return
 
         results = await asyncio.gather(
-            *(self._send_one(sub, payload, vapid_key) for sub in subs),
+            *(
+                self._send_one(
+                    sub,
+                    _build_payload(data, sub.get("language") or "fr"),
+                    vapid_key,
+                )
+                for sub in subs
+            ),
             return_exceptions=True,
         )
 

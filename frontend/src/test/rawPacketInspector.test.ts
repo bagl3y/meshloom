@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { PayloadType } from '@michaelhart/meshcore-decoder';
 
+import './eSlices';
+import i18n from '../i18n';
 import { describeCiphertextStructure, formatHexByHop } from '../utils/rawPacketInspector';
 
 describe('rawPacketInspector helpers', () => {
@@ -15,14 +17,11 @@ describe('rawPacketInspector helpers', () => {
   });
 
   it('describes undecryptable ciphertext with multiline bullets', () => {
-    expect(describeCiphertextStructure(PayloadType.GroupText, 9, 'fallback')).toContain(
-      '\n• Timestamp (4 bytes)'
+    expect(describeCiphertextStructure(PayloadType.GroupText, 9, 'fallback')).toBe(
+      i18n.t('rawPacket.ciphertextGroup', { bytes: 9 })
     );
-    expect(describeCiphertextStructure(PayloadType.GroupText, 9, 'fallback')).toContain(
-      '\n• Flags (1 byte)'
-    );
-    expect(describeCiphertextStructure(PayloadType.TextMessage, 12, 'fallback')).toContain(
-      '\n• Message (remaining bytes)'
+    expect(describeCiphertextStructure(PayloadType.TextMessage, 12, 'fallback')).toBe(
+      i18n.t('rawPacket.ciphertextDm', { bytes: 12 })
     );
   });
 });

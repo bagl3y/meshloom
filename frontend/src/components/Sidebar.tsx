@@ -85,32 +85,32 @@ function nextSortOrder(section: SidebarSortableSection, current: SortOrder): Sor
 }
 
 // Compact glyph/text shown on the toggle for the current order.
-function sortOrderLabel(order: SortOrder): string {
+function sortOrderLabelKey(order: SortOrder): string {
   switch (order) {
     case 'alpha':
-      return 'A-Z';
+      return 'sidebar.sortLabelAlpha';
     case 'type-recent':
-      return 'Type ⏱';
+      return 'sidebar.sortLabelTypeRecent';
     case 'type-alpha':
-      return 'Type A-Z';
+      return 'sidebar.sortLabelTypeAlpha';
     case 'recent':
     default:
-      return '⏱';
+      return 'sidebar.sortLabelRecent';
   }
 }
 
 // Human phrase for aria/title, describing what the order sorts by.
-function sortOrderDescription(order: SortOrder): string {
+function sortOrderDescriptionKey(order: SortOrder): string {
   switch (order) {
     case 'alpha':
-      return 'alphabetically';
+      return 'sidebar.sortAlpha';
     case 'type-recent':
-      return 'by type, then recent';
+      return 'sidebar.sortTypeRecent';
     case 'type-alpha':
-      return 'by type, then alphabetically';
+      return 'sidebar.sortTypeAlpha';
     case 'recent':
     default:
-      return 'by recent';
+      return 'sidebar.sortRecent';
   }
 }
 
@@ -675,7 +675,7 @@ export function Sidebar({
             ? 'bg-badge-mention text-badge-mention-foreground'
             : 'bg-badge-unread/90 text-badge-unread-foreground'
         )}
-        aria-label={`${row.unreadCount} unread message${row.unreadCount !== 1 ? 's' : ''}`}
+        aria-label={t('sidebar.unreadMessages', { count: row.unreadCount })}
       >
         {row.unreadCount}
       </span>
@@ -731,13 +731,16 @@ export function Sidebar({
         </span>
         <span className={cn('ml-auto flex items-center gap-1', desktopCollapsed && 'md:hidden')}>
           {row.muted ? (
-            <span aria-label="Channel muted" title="Channel muted">
+            <span aria-label={t('sidebar.muted')} title={t('sidebar.muted')}>
               <BellOff className="h-3.5 w-3.5 text-muted-foreground" />
             </span>
           ) : (
             <>
               {row.notificationsEnabled && (
-                <span aria-label="Notifications enabled" title="Notifications enabled">
+                <span
+                  aria-label={t('sidebar.notificationsEnabled')}
+                  title={t('sidebar.notificationsEnabled')}
+                >
                   <Bell className="h-3.5 w-3.5 text-muted-foreground" />
                 </span>
               )}
@@ -817,52 +820,52 @@ export function Sidebar({
           key: 'tool-raw',
           active: isActive('raw', 'raw'),
           icon: <Logs className="h-4 w-4" />,
-          name: 'Packet Feed',
-          label: 'Packet Feed',
+          name: t('sidebar.packetFeed'),
+          label: t('sidebar.packetFeed'),
           onClick: () =>
             handleSelectConversation({
               type: 'raw',
               id: 'raw',
-              name: 'Raw Packet Feed',
+              name: t('sidebar.rawPacketFeed'),
             }),
         }),
         renderSidebarActionRow({
           key: 'tool-map',
           active: isActive('map', 'map'),
           icon: <Map className="h-4 w-4" />,
-          name: 'Node Map',
-          label: 'Node Map',
+          name: t('sidebar.nodeMap'),
+          label: t('sidebar.nodeMap'),
           onClick: () =>
             handleSelectConversation({
               type: 'map',
               id: 'map',
-              name: 'Node Map',
+              name: t('sidebar.nodeMap'),
             }),
         }),
         renderSidebarActionRow({
           key: 'tool-visualizer',
           active: isActive('visualizer', 'visualizer'),
           icon: <ChartNetwork className="h-4 w-4" />,
-          name: 'Mesh Visualizer',
-          label: 'Mesh Visualizer',
+          name: t('sidebar.meshVisualizer'),
+          label: t('sidebar.meshVisualizer'),
           onClick: () =>
             handleSelectConversation({
               type: 'visualizer',
               id: 'visualizer',
-              name: 'Mesh Visualizer',
+              name: t('sidebar.meshVisualizer'),
             }),
         }),
         renderSidebarActionRow({
           key: 'tool-trace',
           active: isActive('trace', 'trace'),
           icon: <Cable className="h-4 w-4" />,
-          name: 'Trace',
-          label: 'Trace',
+          name: t('sidebar.trace'),
+          label: t('sidebar.trace'),
           onClick: () =>
             handleSelectConversation({
               type: 'trace',
               id: 'trace',
-              name: 'Trace',
+              name: t('sidebar.trace'),
             }),
         }),
         renderSidebarActionRow({
@@ -875,37 +878,37 @@ export function Sidebar({
             handleSelectConversation({
               type: 'locate',
               id: 'locate',
-              name: 'RF Locate',
+              name: t('locate.title'),
             }),
         }),
         renderSidebarActionRow({
           key: 'tool-search',
           active: isActive('search', 'search'),
           icon: <SearchIcon className="h-4 w-4" />,
-          name: 'Message Search',
-          label: 'Message Search',
+          name: t('sidebar.messageSearch'),
+          label: t('sidebar.messageSearch'),
           onClick: () =>
             handleSelectConversation({
               type: 'search',
               id: 'search',
-              name: 'Message Search',
+              name: t('sidebar.messageSearch'),
             }),
         }),
         renderSidebarActionRow({
           key: 'tool-cracker',
           active: showCracker,
           icon: <LockOpen className="h-4 w-4" />,
-          name: showCracker ? 'Hide Channel Finder' : 'Show Channel Finder',
+          name: showCracker ? t('sidebar.hideChannelFinder') : t('sidebar.showChannelFinder'),
           label: (
             <>
-              {showCracker ? 'Hide' : 'Show'} Channel Finder
+              {showCracker ? t('sidebar.hideChannelFinder') : t('sidebar.showChannelFinder')}
               <span
                 className={cn(
                   'ml-1 text-[0.6875rem]',
                   crackerRunning ? 'text-primary' : 'text-muted-foreground'
                 )}
               >
-                ({crackerRunning ? 'running' : 'idle'})
+                ({crackerRunning ? t('sidebar.running') : t('sidebar.idle')})
               </span>
             </>
           ),
@@ -960,16 +963,16 @@ export function Sidebar({
               <button
                 className="bg-transparent text-muted-foreground/60 px-1 py-0.5 text-[0.625rem] rounded hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring whitespace-nowrap"
                 onClick={() => handleSortToggle(sortSection)}
-                aria-label={`Sort ${title} ${sortOrderDescription(
-                  nextSortOrder(sortSection, sectionSortOrder)
-                )}`}
-                title={`Currently sorted ${sortOrderDescription(
-                  sectionSortOrder
-                )}. Click to sort ${sortOrderDescription(
-                  nextSortOrder(sortSection, sectionSortOrder)
-                )}.`}
+                aria-label={t('sidebar.sortNext', {
+                  title,
+                  order: t(sortOrderDescriptionKey(nextSortOrder(sortSection, sectionSortOrder))),
+                })}
+                title={t('sidebar.sortCurrent', {
+                  current: t(sortOrderDescriptionKey(sectionSortOrder)),
+                  next: t(sortOrderDescriptionKey(nextSortOrder(sortSection, sectionSortOrder))),
+                })}
               >
-                {sortOrderLabel(sectionSortOrder)}
+                {t(sortOrderLabelKey(sectionSortOrder))}
               </button>
             )}
             {unreadCount > 0 && (
@@ -980,7 +983,7 @@ export function Sidebar({
                     ? 'bg-badge-mention text-badge-mention-foreground'
                     : 'bg-secondary text-muted-foreground'
                 )}
-                aria-label={`${unreadCount} unread`}
+                aria-label={t('sidebar.unreadCount', { count: unreadCount })}
               >
                 {unreadCount}
               </span>
@@ -1000,7 +1003,7 @@ export function Sidebar({
         'sidebar h-full min-h-0 overflow-hidden bg-card border-r border-border flex flex-col',
         desktopCollapsed ? 'w-full md:w-14' : 'w-60'
       )}
-      aria-label="Conversations"
+      aria-label={t('sidebar.conversations')}
       data-desktop-collapsed={desktopCollapsed ? 'true' : undefined}
     >
       {/* Header */}
@@ -1030,15 +1033,15 @@ export function Sidebar({
           variant="outline"
           size="sm"
           onClick={onNewMessage}
-          title="Add channel or contact"
-          aria-label="Add channel or contact"
+          title={t('sidebar.addAria')}
+          aria-label={t('sidebar.addAria')}
           className={cn(
             'h-8 w-full justify-start gap-2 border-primary/20 bg-primary/5 px-3 text-[0.8125rem] text-primary hover:bg-primary/10 hover:text-primary',
             desktopCollapsed && 'md:w-8 md:justify-center md:px-0 md:gap-0'
           )}
         >
           <SquarePen className="h-4 w-4" />
-          <span className={cn(desktopCollapsed && 'md:hidden')}>Add Channel/Contact</span>
+          <span className={cn(desktopCollapsed && 'md:hidden')}>{t('sidebar.add')}</span>
         </Button>
       </div>
 
@@ -1048,8 +1051,8 @@ export function Sidebar({
           <div className="relative min-w-0">
             <Input
               type="text"
-              placeholder="Search channels/contacts..."
-              aria-label="Search conversations"
+              placeholder={t('sidebar.searchPlaceholder')}
+              aria-label={t('sidebar.searchAria')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={cn('h-7 text-[0.8125rem] bg-background/50', searchQuery ? 'pr-8' : 'pr-3')}
@@ -1058,8 +1061,8 @@ export function Sidebar({
               <button
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                 onClick={() => setSearchQuery('')}
-                title="Clear search"
-                aria-label="Clear search"
+                title={t('sidebar.clearSearch')}
+                aria-label={t('sidebar.clearSearch')}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1070,7 +1073,9 @@ export function Sidebar({
         {/* Tools */}
         {toolRows.length > 0 && (
           <>
-            {renderSectionHeader('Tools', toolsCollapsed, () => setToolsCollapsed((prev) => !prev))}
+            {renderSectionHeader(t('sidebar.tools'), toolsCollapsed, () =>
+              setToolsCollapsed((prev) => !prev)
+            )}
             {showSectionBody(toolsCollapsed) && toolRows}
           </>
         )}
@@ -1084,8 +1089,8 @@ export function Sidebar({
             )}
             role="button"
             tabIndex={0}
-            title="Mark all as read"
-            aria-label="Mark all as read"
+            title={t('sidebar.markAllRead')}
+            aria-label={t('sidebar.markAllRead')}
             onKeyDown={handleKeyboardActivate}
             onClick={onMarkAllRead}
           >
@@ -1096,7 +1101,7 @@ export function Sidebar({
                 desktopCollapsed && 'md:hidden'
               )}
             >
-              Mark all as read
+              {t('sidebar.markAllRead')}
             </span>
           </div>
         )}
@@ -1105,7 +1110,7 @@ export function Sidebar({
         {favoriteItems.length > 0 && (
           <>
             {renderSectionHeader(
-              'Favorites',
+              t('sidebar.favorites'),
               favoritesCollapsed,
               () => setFavoritesCollapsed((prev) => !prev),
               'favorites',
@@ -1121,7 +1126,7 @@ export function Sidebar({
         {nonFavoriteChannels.length > 0 && (
           <>
             {renderSectionHeader(
-              'Channels',
+              t('sidebar.channels'),
               channelsCollapsed,
               () => setChannelsCollapsed((prev) => !prev),
               'channels',
@@ -1137,7 +1142,7 @@ export function Sidebar({
         {nonFavoriteContacts.length > 0 && (
           <>
             {renderSectionHeader(
-              'Contacts',
+              t('sidebar.contacts'),
               contactsCollapsed,
               () => setContactsCollapsed((prev) => !prev),
               'contacts',
@@ -1153,7 +1158,7 @@ export function Sidebar({
         {nonFavoriteRepeaters.length > 0 && (
           <>
             {renderSectionHeader(
-              'Repeaters',
+              t('sidebar.repeaters'),
               repeatersCollapsed,
               () => setRepeatersCollapsed((prev) => !prev),
               'repeaters',
@@ -1168,7 +1173,7 @@ export function Sidebar({
         {nonFavoriteRooms.length > 0 && (
           <>
             {renderSectionHeader(
-              'Room Servers',
+              t('sidebar.roomServers'),
               roomsCollapsed,
               () => setRoomsCollapsed((prev) => !prev),
               'rooms',
@@ -1191,7 +1196,7 @@ export function Sidebar({
                 desktopCollapsed && 'md:hidden'
               )}
             >
-              {query ? 'No matches found' : 'No conversations yet'}
+              {query ? t('sidebar.noMatches') : t('sidebar.empty')}
             </div>
           )}
       </div>

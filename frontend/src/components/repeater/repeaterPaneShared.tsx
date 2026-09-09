@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
+import i18n from '../../i18n';
 import type { LppSensor, PaneState } from '../../types';
 
 // --- Shared Icons ---
@@ -57,12 +59,12 @@ export function formatClockDrift(
       clockUtc.replace(' ', 'T') + (clockUtc.includes('Z') || clockUtc.includes('UTC') ? '' : 'Z')
     );
   }
-  if (isNaN(parsed.getTime())) return { text: '(invalid)', isLarge: false };
+  if (isNaN(parsed.getTime())) return { text: i18n.t('repeater.clockInvalid'), isLarge: false };
 
   const driftMs = Math.abs(referenceTimeMs - parsed.getTime());
   const driftSec = Math.floor(driftMs / 1000);
 
-  if (driftSec >= 86400) return { text: '>24 hours!', isLarge: true };
+  if (driftSec >= 86400) return { text: i18n.t('repeater.clockDriftLarge'), isLarge: true };
 
   const h = Math.floor(driftSec / 3600);
   const m = Math.floor((driftSec % 3600) / 60);
@@ -82,7 +84,7 @@ export function formatAdvertInterval(
 ): string {
   if (val == null) return '—';
   const trimmed = val.trim();
-  if (trimmed === '0') return '<disabled>';
+  if (trimmed === '0') return i18n.t('repeater.advertDisabled');
   if (unit === 'hours') return `${trimmed}h`;
   const mins = parseInt(trimmed, 10);
   if (isNaN(mins)) return trimmed;
@@ -94,19 +96,19 @@ export function formatAdvertInterval(
 function formatFetchedRelative(fetchedAt: number): string {
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - fetchedAt) / 1000));
 
-  if (elapsedSeconds < 60) return 'Just now';
+  if (elapsedSeconds < 60) return i18n.t('repeater.justNow');
 
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
   if (elapsedMinutes < 60) {
-    return `${elapsedMinutes} minute${elapsedMinutes === 1 ? '' : 's'} ago`;
+    return i18n.t('repeater.minutesAgo', { count: elapsedMinutes });
   }
 
   const elapsedHours = Math.floor(elapsedMinutes / 60);
-  return `${elapsedHours} hour${elapsedHours === 1 ? '' : 's'} ago`;
+  return i18n.t('repeater.hoursAgo', { count: elapsedHours });
 }
 
 function formatFetchedTime(fetchedAt: number): string {
-  return new Date(fetchedAt).toLocaleTimeString([], {
+  return new Date(fetchedAt).toLocaleTimeString(i18n.language, {
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
@@ -134,6 +136,7 @@ export function RepeaterPane({
   className?: string;
   contentClassName?: string;
 }) {
+  const { t } = useTranslation();
   const fetchedAt = state.fetched_at ?? null;
 
   return (
@@ -147,7 +150,10 @@ export function RepeaterPane({
               className="text-[0.6875rem] text-muted-foreground"
               title={new Date(fetchedAt).toLocaleString()}
             >
-              Fetched {formatFetchedTime(fetchedAt)} ({formatFetchedRelative(fetchedAt)})
+              {t('repeater.fetched', {
+                time: formatFetchedTime(fetchedAt),
+                relative: formatFetchedRelative(fetchedAt),
+              })}
             </p>
           )}
         </div>
@@ -162,8 +168,8 @@ export function RepeaterPane({
                 ? 'text-muted-foreground'
                 : 'text-success hover:bg-accent hover:text-success'
             )}
-            title="Refresh"
-            aria-label={`Refresh ${title}`}
+            title={t('repeater.refresh')}
+            aria-label={t('repeater.refreshTitle', { title })}
           >
             <RefreshIcon
               className={cn(
@@ -182,7 +188,9 @@ export function RepeaterPane({
       <div className={cn('p-3', contentClassName)}>
         {state.loading ? (
           <p className="text-sm text-muted-foreground italic">
-            Fetching{state.attempt > 1 ? ` (attempt ${state.attempt}/${3})` : ''}...
+            {state.attempt > 1
+              ? t('repeater.fetchingAttempt', { attempt: state.attempt, max: 3 })
+              : t('repeater.fetching')}
           </p>
         ) : (
           children
@@ -193,7 +201,8 @@ export function RepeaterPane({
 }
 
 export function NotFetched() {
-  return <p className="text-sm text-muted-foreground italic">&lt;not fetched&gt;</p>;
+  const { t } = useTranslation();
+  return <p className="text-sm text-muted-foreground italic">{t('repeater.notFetched')}</p>;
 }
 
 export function KvRow({ label, value }: { label: string; value: ReactNode }) {

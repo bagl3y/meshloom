@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { api, isAbortError } from '../api';
 import type { Contact, Channel } from '../types';
 import { formatTime } from '../utils/messageParser';
@@ -89,6 +90,7 @@ export function SearchView({
   onNavigateToMessage,
   prefillRequest = null,
 }: SearchViewProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -230,7 +232,7 @@ export function SearchView({
     <div className="flex flex-col h-full">
       {/* Header */}
       <h2 className="flex justify-between items-center px-4 py-2.5 border-b border-border font-semibold text-base">
-        Message Search
+        {t('search.title')}
       </h2>
 
       {/* Search input */}
@@ -238,11 +240,11 @@ export function SearchView({
         <Input
           ref={inputRef}
           type="text"
-          placeholder="Search all messages..."
+          placeholder={t('search.placeholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="h-9 text-sm"
-          aria-label="Search messages"
+          aria-label={t('search.ariaLabel')}
         />
       </div>
 
@@ -250,28 +252,23 @@ export function SearchView({
       <div className="flex-1 overflow-y-auto">
         {!debouncedQuery && (
           <div className="p-8 text-center text-muted-foreground text-sm">
-            <p>Type to search across all messages</p>
+            <p>{t('search.emptyPrompt')}</p>
             <p className="mt-2 text-xs">
-              Tip: use <code>user:</code> or <code>channel:</code> for keys or names, and wrap names
-              with spaces in them in quotes.
+              <Trans i18nKey="search.tip" components={{ code: <code /> }} />
             </p>
-            <p className="mt-2 text-xs">
-              Warning: User-key linkage for group messages is best-effort and based on correlation
-              at advertise time. It does not account for multiple users with the same name, and
-              should be considered unreliable.
-            </p>
+            <p className="mt-2 text-xs">{t('search.warning')}</p>
           </div>
         )}
 
         {debouncedQuery && results.length === 0 && !loading && (
           <div className="p-8 text-center text-muted-foreground text-sm">
-            No messages found for &ldquo;{debouncedQuery}&rdquo;
+            {t('search.noResults', { query: debouncedQuery })}
           </div>
         )}
 
         {results.map((result) => {
           const convName = getConversationName(result);
-          const typeBadge = result.type === 'CHAN' ? 'Channel' : 'DM';
+          const typeBadge = result.type === 'CHAN' ? t('search.channel') : t('search.dm');
 
           return (
             <div
@@ -307,7 +304,9 @@ export function SearchView({
                 {result.sender_name && !result.outgoing && (
                   <span className="text-muted-foreground">{result.sender_name}: </span>
                 )}
-                {result.outgoing && <span className="text-muted-foreground">You: </span>}
+                {result.outgoing && (
+                  <span className="text-muted-foreground">{t('search.you')}: </span>
+                )}
                 {highlightMatch(
                   result.sender_name && result.text.startsWith(`${result.sender_name}: `)
                     ? result.text.slice(result.sender_name.length + 2)
@@ -321,14 +320,14 @@ export function SearchView({
 
         {loading && (
           <div className="p-4 text-center text-muted-foreground text-sm" role="status">
-            Searching...
+            {t('search.searching')}
           </div>
         )}
 
         {hasMore && !loading && (
           <div className="p-4 text-center">
             <Button variant="outline" size="sm" onClick={loadMore}>
-              Load more results
+              {t('search.loadMore')}
             </Button>
           </div>
         )}

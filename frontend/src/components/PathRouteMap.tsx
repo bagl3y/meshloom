@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MapContainer, TileLayer, Marker, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -101,6 +102,7 @@ export function PathRouteMap({
   directoryHits = {},
   height = 220,
 }: PathRouteMapProps) {
+  const { t } = useTranslation();
   const points = collectPoints(resolved, directoryHits);
   const hasAnyGps = points.length > 0;
 
@@ -124,7 +126,7 @@ export function PathRouteMap({
   if (!hasAnyGps) {
     return (
       <div className="h-14 rounded border border-border bg-muted/30 flex items-center justify-center text-sm text-muted-foreground">
-        No nodes in this route have GPS coordinates
+        {t('path.noGps')}
       </div>
     );
   }
@@ -136,7 +138,7 @@ export function PathRouteMap({
       <div
         className="rounded border border-border overflow-hidden"
         role="img"
-        aria-label="Map showing message route between nodes"
+        aria-label={t('path.routeMapAria')}
         style={{ height }}
       >
         <MapContainer
@@ -160,7 +162,7 @@ export function PathRouteMap({
               <Tooltip direction="top" offset={[0, -14]}>
                 <span className="font-mono">{resolved.sender.prefix}</span>
                 {' · '}
-                {senderInfo.name || 'Sender'}
+                {senderInfo.name || t('path.sender')}
               </Tooltip>
             </Marker>
           )}
@@ -209,16 +211,14 @@ export function PathRouteMap({
               <Tooltip direction="top" offset={[0, -14]}>
                 <span className="font-mono">{resolved.receiver.prefix}</span>
                 {' · '}
-                {resolved.receiver.name || 'Receiver'}
+                {resolved.receiver.name || t('path.receiver')}
               </Tooltip>
             </Marker>
           )}
         </MapContainer>
       </div>
       {someMissingGps && (
-        <p className="text-xs text-muted-foreground mt-1">
-          Some nodes in this route have no GPS and are not shown
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">{t('path.someMissingGps')}</p>
       )}
     </div>
   );

@@ -12,15 +12,26 @@ self.addEventListener("activate", (event) => {
 // We don't cache anything; the app always fetches from the network.
 self.addEventListener("fetch", () => {});
 
+// Documented as pwa.newMessage. SW cannot import i18next; keep a tiny lookup.
+const NEW_MESSAGE_TITLES = {
+  fr: "Nouveau message",
+  en: "New message",
+};
+
+function fallbackNewMessageTitle(language) {
+  return NEW_MESSAGE_TITLES[language] || NEW_MESSAGE_TITLES.fr;
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: "New message", body: event.data?.text() || "" };
+    data = { title: fallbackNewMessageTitle("fr"), body: event.data?.text() || "" };
   }
 
-  const title = data.title || "New message";
+  const language = data.language === "en" || data.language === "fr" ? data.language : "fr";
+  const title = data.title || fallbackNewMessageTitle(language);
   const options = {
     body: data.body || "",
     icon: "./favicon-256x256.png",

@@ -13,14 +13,25 @@ logger = logging.getLogger(__name__)
 # without any successful delivery in between.
 MAX_CONSECUTIVE_FAILURES = 15
 
+_PUSH_LANGUAGES = frozenset({"fr", "en"})
+
+
+def _normalize_language(language: str | None) -> str:
+    if language in _PUSH_LANGUAGES:
+        return language
+    return "fr"
+
 
 def _row_to_dict(row: Any) -> dict[str, Any]:
+    keys = row.keys() if hasattr(row, "keys") else []
+    raw_language = row["language"] if "language" in keys else None
     return {
         "id": row["id"],
         "endpoint": row["endpoint"],
         "p256dh": row["p256dh"],
         "auth": row["auth"],
         "label": row["label"] or "",
+        "language": _normalize_language(raw_language),
         "created_at": row["created_at"] or 0,
         "last_success_at": row["last_success_at"],
         "failure_count": row["failure_count"] or 0,
@@ -34,25 +45,28 @@ class PushSubscriptionRepository:
         p256dh: str,
         auth: str,
         label: str = "",
+        language: str = "fr",
     ) -> dict[str, Any]:
         """Create or upsert a push subscription (keyed by endpoint)."""
         sub_id = str(uuid.uuid4())
         now = int(time.time())
+        language = _normalize_language(language)
 
         async with db.tx() as conn:
             await conn.execute(
                 """
                 INSERT INTO push_subscriptions
-                    (id, endpoint, p256dh, auth, label, created_at, failure_count)
-                VALUES (?, ?, ?, ?, ?, ?, 0)
+                    (id, endpoint, p256dh, auth, label, language, created_at, failure_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0)
                 ON CONFLICT(endpoint) DO UPDATE SET
                     p256dh = excluded.p256dh,
                     auth = excluded.auth,
                     label = CASE WHEN excluded.label != '' THEN excluded.label
                                  ELSE push_subscriptions.label END,
+                    language = excluded.language,
                     failure_count = 0
                 """,
-                (sub_id, endpoint, p256dh, auth, label, now),
+                (sub_id, endpoint, p256dh, auth, label, language, now),
             )
             async with conn.execute(
                 "SELECT * FROM push_subscriptions WHERE endpoint = ?", (endpoint,)
@@ -96,6 +110,10 @@ class PushSubscriptionRepository:
         if "label" in fields:
             updates.append("label = ?")
             params.append(fields["label"])
+
+        if "language" in fields:
+            updates.append("language = ?")
+            params.append(_normalize_language(fields["language"]))
 
         if not updates:
             return await PushSubscriptionRepository.get(subscription_id)

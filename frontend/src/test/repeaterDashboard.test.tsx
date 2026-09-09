@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { RepeaterDashboard } from '../components/RepeaterDashboard';
 import i18n from '../i18n';
+import fEn from '../i18n/locales/slices/f.en.json';
+import fFr from '../i18n/locales/slices/f.fr.json';
+
+i18n.addResourceBundle('en', 'translation', fEn, true, true);
+i18n.addResourceBundle('fr', 'translation', fFr, true, true);
 import type { UseRepeaterDashboardResult } from '../hooks/useRepeaterDashboard';
 import type { Contact, Conversation } from '../types';
 
@@ -176,10 +181,10 @@ describe('RepeaterDashboard', () => {
   it('renders login form when not logged in', () => {
     render(<RepeaterDashboard {...defaultProps} />);
 
-    expect(screen.getByText('Login with Password')).toBeInTheDocument();
-    expect(screen.getByText('Login as Guest / ACLs')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Repeater password...')).toBeInTheDocument();
-    expect(screen.getByText('Log in to access repeater dashboard')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.loginPassword'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.loginGuest'))).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(i18n.t('repeater.passwordPlaceholder'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.loginDescription'))).toBeInTheDocument();
   });
 
   it('renders dashboard panes when logged in', () => {
@@ -187,16 +192,16 @@ describe('RepeaterDashboard', () => {
 
     render(<RepeaterDashboard {...defaultProps} />);
 
-    expect(screen.getByText('Telemetry')).toBeInTheDocument();
-    expect(screen.getByText('Node Info')).toBeInTheDocument();
-    expect(screen.getByText('Neighbors')).toBeInTheDocument();
-    expect(screen.getByText('ACL')).toBeInTheDocument();
-    expect(screen.getByText('Radio Settings')).toBeInTheDocument();
-    expect(screen.getByText('Advert Intervals')).toBeInTheDocument(); // sub-section inside Radio Settings
-    expect(screen.getByText('LPP Sensors')).toBeInTheDocument();
-    expect(screen.getByText('Owner Info')).toBeInTheDocument();
-    expect(screen.getByText('Actions')).toBeInTheDocument();
-    expect(screen.getByText('Console')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.telemetry'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.nodeInfo'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.neighbors'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.acl'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.radioSettings'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.advertIntervals'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.lppSensors'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.ownerInfo'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.actions'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.console'))).toBeInTheDocument();
   });
 
   it('shows not fetched placeholder for empty panes', () => {
@@ -205,7 +210,7 @@ describe('RepeaterDashboard', () => {
     render(<RepeaterDashboard {...defaultProps} />);
 
     // All panes should show <not fetched> since data is null
-    const notFetched = screen.getAllByText('<not fetched>');
+    const notFetched = screen.getAllByText(i18n.t('repeater.notFetched'));
     expect(notFetched.length).toBeGreaterThanOrEqual(7); // At least 7 data panes (incl. LPP Sensors)
   });
 
@@ -214,7 +219,7 @@ describe('RepeaterDashboard', () => {
 
     render(<RepeaterDashboard {...defaultProps} />);
 
-    expect(screen.getByText('Load All')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.loadAll'))).toBeInTheDocument();
   });
 
   it('calls loadAll when Load All button is clicked', () => {
@@ -222,7 +227,7 @@ describe('RepeaterDashboard', () => {
 
     render(<RepeaterDashboard {...defaultProps} />);
 
-    fireEvent.click(screen.getByText('Load All'));
+    fireEvent.click(screen.getByText(i18n.t('repeater.loadAll')));
     expect(mockHook.loadAll).toHaveBeenCalledTimes(1);
   });
 
@@ -235,18 +240,18 @@ describe('RepeaterDashboard', () => {
       />
     );
 
-    fireEvent.click(screen.getByText('Notifications On'));
+    fireEvent.click(screen.getByText(i18n.t('notifications.on')));
 
-    expect(screen.getByText('Notifications On')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('notifications.on'))).toBeInTheDocument();
     expect(defaultProps.onToggleNotifications).toHaveBeenCalledTimes(1);
   });
 
   it('shows login error when present', () => {
-    mockHook.loginError = 'Invalid password';
+    mockHook.loginError = i18n.t('toast.loginFailed');
 
     render(<RepeaterDashboard {...defaultProps} />);
 
-    expect(screen.getByText('Invalid password')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('toast.loginFailed'))).toBeInTheDocument();
   });
 
   it('returns to an empty login form when re-entering the password', () => {
@@ -256,7 +261,7 @@ describe('RepeaterDashboard', () => {
     mockHook.lastLoginAttempt = {
       method: 'password',
       outcome: 'not_confirmed',
-      summary: 'Password login was not confirmed',
+      summary: i18n.t('repeater.loginNotConfirmedSummary'),
       details: null,
       heardBack: false,
       at: Date.now(),
@@ -268,22 +273,26 @@ describe('RepeaterDashboard', () => {
 
     const { rerender } = render(<RepeaterDashboard {...defaultProps} />);
 
-    fireEvent.click(screen.getByText('Re-enter Password'));
+    fireEvent.click(screen.getByText(i18n.t('repeater.reenterPassword')));
     expect(mockHook.resetLogin).toHaveBeenCalledTimes(1);
 
     rerender(<RepeaterDashboard {...defaultProps} />);
 
-    expect(screen.getByPlaceholderText('Repeater password...')).toHaveValue('');
+    expect(screen.getByPlaceholderText(i18n.t('repeater.passwordPlaceholder'))).toHaveValue('');
     expect(localStorage.getItem(storageKey)).toBe(null);
   });
 
   it('shows pane error when fetch fails', () => {
     mockHook.loggedIn = true;
-    mockHook.paneStates.status = { loading: false, attempt: 3, error: 'Timeout' };
+    mockHook.paneStates.status = {
+      loading: false,
+      attempt: 3,
+      error: i18n.t('toast.requestFailed'),
+    };
 
     render(<RepeaterDashboard {...defaultProps} />);
 
-    expect(screen.getByText('Timeout')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('toast.requestFailed'))).toBeInTheDocument();
   });
 
   it('shows GPS unavailable message for neighbors when repeater coords are missing', () => {
@@ -314,13 +323,9 @@ describe('RepeaterDashboard', () => {
 
     render(<RepeaterDashboard {...defaultProps} />);
 
-    expect(
-      screen.getByText(
-        'Map and distance data are unavailable until this repeater has a valid position from either its advert or a Node Info fetch.'
-      )
-    ).toBeInTheDocument();
-    expect(screen.getByText('No repeater position available')).toBeInTheDocument();
-    expect(screen.queryByText('Dist')).not.toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.mapUnavailable'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.posMissing'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('repeater.dist'))).not.toBeInTheDocument();
   });
 
   it('shows neighbor distance when repeater node info includes valid coords', () => {
@@ -376,13 +381,9 @@ describe('RepeaterDashboard', () => {
 
     render(<RepeaterDashboard {...defaultProps} contacts={contactsWithNeighbor} />);
 
-    expect(screen.getByText('Dist')).toBeInTheDocument();
-    expect(screen.getByText('Using repeater-reported position')).toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        'Map and distance data are unavailable until this repeater has a valid position from either its advert or a Node Info fetch.'
-      )
-    ).not.toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.dist'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.posReported'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('repeater.mapUnavailable'))).not.toBeInTheDocument();
   });
 
   it('uses advert coords for neighbor distance when node info is unavailable', () => {
@@ -437,8 +438,8 @@ describe('RepeaterDashboard', () => {
 
     render(<RepeaterDashboard {...defaultProps} contacts={contactsWithAdvertAndNeighbor} />);
 
-    expect(screen.getByText('Dist')).toBeInTheDocument();
-    expect(screen.getByText('Using advert position')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.dist'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.posAdvert'))).toBeInTheDocument();
   });
 
   it('sorts the neighbors table when column headers are clicked', () => {
@@ -460,7 +461,9 @@ describe('RepeaterDashboard', () => {
     render(<RepeaterDashboard {...defaultProps} />);
 
     // Scope to the Neighbors table; the dashboard renders multiple panes at once.
-    const table = screen.getByRole('columnheader', { name: /last heard/i }).closest('table')!;
+    const table = screen
+      .getByRole('columnheader', { name: new RegExp(i18n.t('repeater.lastHeard'), 'i') })
+      .closest('table')!;
     // The first child of each name cell is the bare name text node (the prefix
     // lives in a nested span), so this reads exactly the neighbor name.
     const names = () =>
@@ -474,13 +477,13 @@ describe('RepeaterDashboard', () => {
     expect(names()).toEqual(['Zeta', 'Mike', 'Alpha']);
 
     // Name ascending, then toggle to descending on a second click.
-    fireEvent.click(header(/name/i));
+    fireEvent.click(header(new RegExp(i18n.t('repeater.name'), 'i')));
     expect(names()).toEqual(['Alpha', 'Mike', 'Zeta']);
-    fireEvent.click(header(/name/i));
+    fireEvent.click(header(new RegExp(i18n.t('repeater.name'), 'i')));
     expect(names()).toEqual(['Zeta', 'Mike', 'Alpha']);
 
     // Last Heard ascending surfaces the most recently heard neighbor first.
-    fireEvent.click(header(/last heard/i));
+    fireEvent.click(header(new RegExp(i18n.t('repeater.lastHeard'), 'i')));
     expect(names()).toEqual(['Alpha', 'Mike', 'Zeta']);
   });
 
@@ -490,7 +493,9 @@ describe('RepeaterDashboard', () => {
 
     render(<RepeaterDashboard {...defaultProps} />);
 
-    expect(screen.getByText('Fetching (attempt 2/3)...')).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('repeater.fetchingAttempt', { attempt: 2, max: 3 }))
+    ).toBeInTheDocument();
   });
 
   it('renders telemetry data when available', () => {
@@ -554,7 +559,7 @@ describe('RepeaterDashboard', () => {
 
     render(<RepeaterDashboard {...defaultProps} />);
 
-    expect(screen.getByText(/Fetched .*Just now/)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(i18n.t('repeater.justNow')))).toBeInTheDocument();
   });
 
   it('keeps repeater clock drift anchored to fetch time across remounts', () => {
@@ -578,14 +583,16 @@ describe('RepeaterDashboard', () => {
       };
 
       const firstRender = render(<RepeaterDashboard {...defaultProps} />);
-      expect(screen.getByText(/\(drift: 30s\)/)).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('repeater.clockDrift', { text: '30s' }))).toBeInTheDocument();
 
       vi.setSystemTime(fetchedAt + 10 * 60 * 1000);
       firstRender.unmount();
 
       render(<RepeaterDashboard {...defaultProps} />);
-      expect(screen.getByText(/\(drift: 30s\)/)).toBeInTheDocument();
-      expect(screen.queryByText(/\(drift: 10m30s\)/)).not.toBeInTheDocument();
+      expect(screen.getByText(i18n.t('repeater.clockDrift', { text: '30s' }))).toBeInTheDocument();
+      expect(
+        screen.queryByText(i18n.t('repeater.clockDrift', { text: '10m30s' }))
+      ).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
@@ -596,17 +603,17 @@ describe('RepeaterDashboard', () => {
 
     render(<RepeaterDashboard {...defaultProps} />);
 
-    expect(screen.getByText('Zero Hop Advert')).toBeInTheDocument();
-    expect(screen.getByText('Flood Advert')).toBeInTheDocument();
-    expect(screen.getByText('Sync Clock')).toBeInTheDocument();
-    expect(screen.getByText('Reboot')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.zeroHopAdvert'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.sendFloodAdvert'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.syncClock'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.reboot'))).toBeInTheDocument();
   });
 
   it('calls onTrace when trace button clicked', () => {
     render(<RepeaterDashboard {...defaultProps} />);
 
     // The trace button has title "Direct Trace"
-    fireEvent.click(screen.getByTitle('Direct Trace'));
+    fireEvent.click(screen.getByTitle(i18n.t('repeater.directTrace')));
     expect(defaultProps.onTrace).toHaveBeenCalledTimes(1);
   });
 
@@ -615,7 +622,7 @@ describe('RepeaterDashboard', () => {
 
     render(<RepeaterDashboard {...defaultProps} />);
 
-    expect(screen.getByText('Type a CLI command below...')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('repeater.consoleEmpty'))).toBeInTheDocument();
   });
 
   it('console input does not autocapitalise or autocorrect', () => {
@@ -623,7 +630,7 @@ describe('RepeaterDashboard', () => {
 
     render(<RepeaterDashboard {...defaultProps} />);
 
-    const input = screen.getByLabelText('Console command');
+    const input = screen.getByLabelText(i18n.t('repeater.consoleAria'));
     expect(input).toHaveAttribute('autocapitalize', 'none');
     expect(input).toHaveAttribute('autocorrect', 'off');
     expect(input).toHaveAttribute('spellcheck', 'false');
@@ -645,7 +652,7 @@ describe('RepeaterDashboard', () => {
     it('arrow up recalls the last command', () => {
       render(<RepeaterDashboard {...defaultProps} />);
 
-      const input = screen.getByLabelText('Console command') as HTMLInputElement;
+      const input = screen.getByLabelText(i18n.t('repeater.consoleAria')) as HTMLInputElement;
       fireEvent.keyDown(input, { key: 'ArrowUp' });
       expect(input.value).toBe('clock sync');
     });
@@ -653,7 +660,7 @@ describe('RepeaterDashboard', () => {
     it('repeated arrow up walks further back, deduping consecutive repeats', () => {
       render(<RepeaterDashboard {...defaultProps} />);
 
-      const input = screen.getByLabelText('Console command') as HTMLInputElement;
+      const input = screen.getByLabelText(i18n.t('repeater.consoleAria')) as HTMLInputElement;
       fireEvent.keyDown(input, { key: 'ArrowUp' });
       fireEvent.keyDown(input, { key: 'ArrowUp' });
       expect(input.value).toBe('advert');
@@ -666,7 +673,7 @@ describe('RepeaterDashboard', () => {
     it('arrow down returns toward the empty input', () => {
       render(<RepeaterDashboard {...defaultProps} />);
 
-      const input = screen.getByLabelText('Console command') as HTMLInputElement;
+      const input = screen.getByLabelText(i18n.t('repeater.consoleAria')) as HTMLInputElement;
       fireEvent.keyDown(input, { key: 'ArrowUp' });
       fireEvent.keyDown(input, { key: 'ArrowUp' });
       fireEvent.keyDown(input, { key: 'ArrowDown' });
@@ -681,7 +688,7 @@ describe('RepeaterDashboard', () => {
 
       render(<RepeaterDashboard {...defaultProps} />);
 
-      const input = screen.getByLabelText('Console command') as HTMLInputElement;
+      const input = screen.getByLabelText(i18n.t('repeater.consoleAria')) as HTMLInputElement;
       fireEvent.change(input, { target: { value: 'partial' } });
       fireEvent.keyDown(input, { key: 'ArrowUp' });
       expect(input.value).toBe('partial');
@@ -698,16 +705,20 @@ describe('RepeaterDashboard', () => {
     it('help palette stays closed until opened', () => {
       render(<RepeaterDashboard {...defaultProps} />);
 
-      expect(screen.queryByRole('button', { name: 'Insert ver' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: i18n.t('repeater.insertCommand', { command: 'ver' }) })
+      ).not.toBeInTheDocument();
     });
 
     it('help palette inserts a frequent command into the input', () => {
       render(<RepeaterDashboard {...defaultProps} />);
 
       fireEvent.click(screen.getByRole('button', { name: i18n.t('repeater.help') }));
-      fireEvent.click(screen.getByRole('button', { name: 'Insert ver' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: i18n.t('repeater.insertCommand', { command: 'ver' }) })
+      );
 
-      const input = screen.getByLabelText('Console command') as HTMLInputElement;
+      const input = screen.getByLabelText(i18n.t('repeater.consoleAria')) as HTMLInputElement;
       expect(input.value).toBe('ver');
     });
   });
@@ -716,7 +727,7 @@ describe('RepeaterDashboard', () => {
     it('shows flood when direct_path_len is -1', () => {
       render(<RepeaterDashboard {...defaultProps} />);
 
-      expect(screen.getByText('flood')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.flood'))).toBeInTheDocument();
     });
 
     it('shows direct when direct_path_len is 0', () => {
@@ -726,7 +737,7 @@ describe('RepeaterDashboard', () => {
 
       render(<RepeaterDashboard {...defaultProps} contacts={directContacts} />);
 
-      expect(screen.getByText('direct')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.hopDirect'))).toBeInTheDocument();
     });
 
     it('shows N hops when direct_path_len > 0', () => {
@@ -736,7 +747,7 @@ describe('RepeaterDashboard', () => {
 
       render(<RepeaterDashboard {...defaultProps} contacts={hoppedContacts} />);
 
-      expect(screen.getByText('3 hops')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.hopCount', { count: 3 }))).toBeInTheDocument();
     });
 
     it('shows 1 hop (singular) for single hop', () => {
@@ -746,7 +757,7 @@ describe('RepeaterDashboard', () => {
 
       render(<RepeaterDashboard {...defaultProps} contacts={oneHopContacts} />);
 
-      expect(screen.getByText('1 hop')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.hopCount', { count: 1 }))).toBeInTheDocument();
     });
 
     it('direct path is clickable, underlined, and marked as editable', () => {
@@ -756,9 +767,9 @@ describe('RepeaterDashboard', () => {
 
       render(<RepeaterDashboard {...defaultProps} contacts={directContacts} />);
 
-      const directEl = screen.getByTitle('Click to edit routing override');
+      const directEl = screen.getByTitle(i18n.t('contactInfo.editRouting'));
       expect(directEl).toBeInTheDocument();
-      expect(directEl.textContent).toBe('direct');
+      expect(directEl.textContent).toBe(i18n.t('contactInfo.hopDirect'));
       expect(directEl.className).toContain('underline');
     });
 
@@ -776,8 +787,8 @@ describe('RepeaterDashboard', () => {
 
       render(<RepeaterDashboard {...defaultProps} contacts={forcedContacts} />);
 
-      expect(screen.getByText('2 hops')).toBeInTheDocument();
-      expect(screen.getByText('(forced)')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.hopCount', { count: 2 }))).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.forced'))).toBeInTheDocument();
     });
 
     it('clicking direct path opens modal and can force direct routing', async () => {
@@ -793,9 +804,9 @@ describe('RepeaterDashboard', () => {
 
       render(<RepeaterDashboard {...defaultProps} contacts={directContacts} />);
 
-      fireEvent.click(screen.getByTitle('Click to edit routing override'));
+      fireEvent.click(screen.getByTitle(i18n.t('contactInfo.editRouting')));
       expect(await screen.findByRole('dialog')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Force Direct' }));
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('contactInfo.forceDirect') }));
 
       await waitFor(() => {
         expect(overrideSpy).toHaveBeenCalledWith(REPEATER_KEY, '0');
@@ -817,9 +828,9 @@ describe('RepeaterDashboard', () => {
 
       render(<RepeaterDashboard {...defaultProps} contacts={directContacts} />);
 
-      fireEvent.click(screen.getByTitle('Click to edit routing override'));
+      fireEvent.click(screen.getByTitle(i18n.t('contactInfo.editRouting')));
       expect(await screen.findByRole('dialog')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('contactInfo.cancel') }));
 
       expect(overrideSpy).not.toHaveBeenCalled();
 
@@ -849,8 +860,8 @@ describe('RepeaterDashboard', () => {
 
       render(<RepeaterDashboard {...defaultProps} />);
 
-      expect(screen.getByText('Telemetry History')).toBeInTheDocument();
-      expect(screen.getByText(/No history yet/)).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('repeater.telemetryHistory'))).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('repeater.noHistory'))).toBeInTheDocument();
     });
 
     it('updates history from live status fetch', async () => {
@@ -885,7 +896,7 @@ describe('RepeaterDashboard', () => {
       render(<RepeaterDashboard {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText('1 samples')).toBeInTheDocument();
+        expect(screen.getByText(i18n.t('repeater.samples', { count: 1 }))).toBeInTheDocument();
       });
     });
 
@@ -921,13 +932,13 @@ describe('RepeaterDashboard', () => {
       render(<RepeaterDashboard {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText('1 samples')).toBeInTheDocument();
+        expect(screen.getByText(i18n.t('repeater.samples', { count: 1 }))).toBeInTheDocument();
       });
 
       deferred.resolve([{ timestamp: 1690000000, data: { battery_volts: 3.9 } }]);
       await deferred.promise;
 
-      expect(screen.getByText('1 samples')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('repeater.samples', { count: 1 }))).toBeInTheDocument();
     });
   });
 });

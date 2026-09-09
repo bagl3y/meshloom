@@ -26,7 +26,6 @@ import {
   isValidLocation,
   calculateDistance,
   formatDistance,
-  formatRouteLabel,
   getDirectContactRoute,
   getEffectiveContactRoute,
   hasRoutingOverride,
@@ -56,19 +55,36 @@ import type {
   TelemetryLppSensor,
 } from '../types';
 
-const CONTACT_TYPE_LABELS: Record<number, string> = {
-  0: 'Unknown',
-  1: 'Client',
-  2: 'Repeater',
-  3: 'Room',
-  4: 'Sensor',
-};
+function contactTypeLabel(type: number, t: (key: string) => string): string {
+  if (type === 1) return t('contactInfo.typeClient');
+  if (type === 2) return t('contactInfo.typeRepeater');
+  if (type === 3) return t('contactInfo.typeRoom');
+  if (type === 4) return t('contactInfo.typeSensor');
+  return t('contactInfo.typeUnknown');
+}
 
-function formatPathHashMode(mode: number): string | null {
+function formatPathHashMode(
+  mode: number,
+  t: (key: string, opts?: { n: number }) => string
+): string | null {
   if (mode < 0 || mode > 2) {
     return null;
   }
-  return `${mode + 1}-byte IDs`;
+  return t('contactInfo.byteIds', { n: mode + 1 });
+}
+
+function formatContactRouteLabel(
+  pathLen: number,
+  t: (key: string, opts?: { count: number }) => string,
+  capitalize = false
+): string {
+  const label =
+    pathLen === -1
+      ? t('contactInfo.flood')
+      : pathLen === 0
+        ? t('contactInfo.hopDirect')
+        : t('contactInfo.hopCount', { count: pathLen });
+  return capitalize ? label.charAt(0).toUpperCase() + label.slice(1) : label;
 }
 
 interface ContactInfoPaneProps {
@@ -147,7 +163,7 @@ export function ContactInfoPane({
       .catch((err) => {
         if (!isAbortError(err)) {
           console.error('Failed to fetch contact analytics:', err);
-          toast.error('Failed to load contact info');
+          toast.error(t('contactInfo.loadFailed'));
         }
       })
       .finally(() => {
@@ -186,7 +202,7 @@ export function ContactInfoPane({
       setTelemetryHistory(result.telemetry_history);
     } catch (err) {
       if (!isAbortError(err)) {
-        toast.error(err instanceof Error ? err.message : 'Failed to fetch telemetry');
+        toast.error(err instanceof Error ? err.message : t('contactInfo.telemetryFailed'));
       }
     } finally {
       setTelemetryLoading(false);
@@ -207,9 +223,11 @@ export function ContactInfoPane({
   const directRoute = contact ? getDirectContactRoute(contact) : null;
   const pathHashModeLabel =
     effectiveRoute && effectiveRoute.pathLen >= 0
-      ? formatPathHashMode(effectiveRoute.pathHashMode)
+      ? formatPathHashMode(effectiveRoute.pathHashMode, t)
       : null;
-  const learnedRouteLabel = directRoute ? formatRouteLabel(directRoute.path_len, true) : null;
+  const learnedRouteLabel = directRoute
+    ? formatContactRouteLabel(directRoute.path_len, t, true)
+    : null;
   const isPrefixOnlyResolvedContact = contact ? isPrefixOnlyContact(contact.public_key) : false;
   const isUnknownFullKeyResolvedContact =
     contact !== null &&
@@ -228,8 +246,8 @@ export function ContactInfoPane({
     <Sheet open={contactKey !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="w-full sm:max-w-[400px] p-0 flex flex-col">
         <SheetHeader className="sr-only">
-          <SheetTitle>Contact Info</SheetTitle>
-          <SheetDescription>Contact details and actions</SheetDescription>
+          <SheetTitle>{t('contactInfo.title')}</SheetTitle>
+          <SheetDescription>{t('contactInfo.description')}</SheetDescription>
         </SheetHeader>
 
         {isNameOnly && nameOnlyValue ? (
@@ -247,8 +265,7 @@ export function ContactInfoPane({
                     {analytics?.name ?? nameOnlyValue}
                   </h2>
                   <p className="text-xs text-muted-foreground mt-1">
-                    We have not heard an advertisement associated with this name, so we cannot
-                    identify their key.
+                    {t('contactInfo.nameUnknownKey')}
                   </p>
                 </div>
               </div>
@@ -265,12 +282,12 @@ export function ContactInfoPane({
                   {blockedNames.includes(nameOnlyValue) ? (
                     <>
                       <Ban className="h-4.5 w-4.5 text-destructive" aria-hidden="true" />
-                      <span>Unblock this name</span>
+                      <span>{t('contactInfo.unblockName')}</span>
                     </>
                   ) : (
                     <>
                       <Ban className="h-4.5 w-4.5 text-muted-foreground" aria-hidden="true" />
-                      <span>Block this name</span>
+                      <span>{t('contactInfo.blockName')}</span>
                     </>
                   )}
                 </button>
@@ -285,7 +302,7 @@ export function ContactInfoPane({
                   onClick={() => onSearchMessagesByName(nameOnlyValue)}
                 >
                   <Search className="h-4.5 w-4.5 text-muted-foreground" aria-hidden="true" />
-                  <span>Search user&apos;s messages by name</span>
+                  <span>{t('contactInfo.searchByName')}</span>
                 </button>
               </div>
             )}
@@ -308,7 +325,7 @@ export function ContactInfoPane({
               <div className="px-5 py-3 border-b border-border">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                   <InfoItem
-                    label="Name First In Use"
+                    label={t('contactInfo.nameFirstInUse')}
                     value={formatTime(analytics.name_first_seen_at)}
                   />
                 </div>
@@ -324,7 +341,7 @@ export function ContactInfoPane({
           </div>
         ) : loading && !analytics && !contact ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            Loading...
+            {t('contactInfo.loading')}
           </div>
         ) : contact ? (
           <div className="flex-1 overflow-y-auto">
@@ -348,15 +365,15 @@ export function ContactInfoPane({
                     onKeyDown={handleKeyboardActivate}
                     onClick={() => {
                       navigator.clipboard.writeText(contact.public_key);
-                      toast.success('Public key copied!');
+                      toast.success(t('contactInfo.publicKeyCopied'));
                     }}
-                    title="Click to copy"
+                    title={t('contactInfo.clickToCopy')}
                   >
                     {contact.public_key}
                   </span>
                   <div className="flex items-center gap-2 mt-1.5">
                     <span className="text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
-                      {CONTACT_TYPE_LABELS[contact.type] ?? 'Unknown'}
+                      {contactTypeLabel(contact.type, t)}
                     </span>
                   </div>
                 </div>
@@ -365,16 +382,13 @@ export function ContactInfoPane({
 
             {isPrefixOnlyResolvedContact && (
               <div className="mx-5 mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                We&apos;ve received a message from this sender but don&apos;t have their full
-                identity yet. This contact stays read-only until their identity is confirmed &mdash;
-                this usually happens automatically when they next advertise.
+                {t('contactInfo.prefixOnly')}
               </div>
             )}
 
             {isUnknownFullKeyResolvedContact && (
               <div className="mx-5 mt-4 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
-                This sender&apos;s profile details (name, location) haven&apos;t arrived yet. They
-                will fill in automatically when the sender&apos;s next advertisement is heard.
+                {t('contactInfo.unknownFullKey')}
               </div>
             )}
 
@@ -382,36 +396,50 @@ export function ContactInfoPane({
             <div className="px-5 py-3 border-b border-border">
               <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                 {contact.last_seen && (
-                  <InfoItem label="Last Seen" value={formatTime(contact.last_seen)} />
+                  <InfoItem
+                    label={t('contactInfo.lastSeen')}
+                    value={formatTime(contact.last_seen)}
+                  />
                 )}
                 {contact.first_seen && (
-                  <InfoItem label="First Heard" value={formatTime(contact.first_seen)} />
+                  <InfoItem
+                    label={t('contactInfo.firstHeard')}
+                    value={formatTime(contact.first_seen)}
+                  />
                 )}
                 {contact.last_contacted && (
-                  <InfoItem label="Last Contacted" value={formatTime(contact.last_contacted)} />
+                  <InfoItem
+                    label={t('contactInfo.lastContacted')}
+                    value={formatTime(contact.last_contacted)}
+                  />
                 )}
                 {distFromUs !== null && (
-                  <InfoItem label="Distance" value={formatDistance(distFromUs, distanceUnit)} />
+                  <InfoItem
+                    label={t('contactInfo.distance')}
+                    value={formatDistance(distFromUs, distanceUnit)}
+                  />
                 )}
                 {effectiveRoute && (
                   <InfoItem
-                    label="Routing"
+                    label={t('contactInfo.routing')}
                     value={
                       effectiveRoute.forced ? (
                         <span>
-                          {formatRouteLabel(effectiveRoute.pathLen, true)}{' '}
-                          <span className="text-destructive">(forced)</span>
+                          {formatContactRouteLabel(effectiveRoute.pathLen, t, true)}{' '}
+                          <span className="text-destructive">{t('contactInfo.forced')}</span>
                         </span>
                       ) : (
-                        formatRouteLabel(effectiveRoute.pathLen, true)
+                        formatContactRouteLabel(effectiveRoute.pathLen, t, true)
                       )
                     }
                   />
                 )}
                 {hasRoutingOverride(contact) && learnedRouteLabel && (
-                  <InfoItem label="Learned Route" value={learnedRouteLabel} />
+                  <InfoItem label={t('contactInfo.learnedRoute')} value={learnedRouteLabel} />
                 )}
-                {pathHashModeLabel && <InfoItem label="Hop Width" value={pathHashModeLabel} />}
+                {pathHashModeLabel && (
+                  <InfoItem label={t('contactInfo.hopWidth')} value={pathHashModeLabel} />
+                )}
               </div>
             </div>
 
@@ -432,7 +460,7 @@ export function ContactInfoPane({
             {/* GPS */}
             {isValidLocation(contact.lat, contact.lon) && (
               <div className="px-5 py-3 border-b border-border">
-                <SectionLabel>Location</SectionLabel>
+                <SectionLabel>{t('contactInfo.location')}</SectionLabel>
                 <span
                   className="text-sm font-mono cursor-pointer hover:text-primary hover:underline transition-colors"
                   role="button"
@@ -445,7 +473,7 @@ export function ContactInfoPane({
                       getMapFocusHash(contact.public_key);
                     window.open(url, '_blank');
                   }}
-                  title="View on map"
+                  title={t('contactInfo.viewOnMap')}
                 >
                   {contact.lat!.toFixed(5)}, {contact.lon!.toFixed(5)}
                 </span>
@@ -468,17 +496,17 @@ export function ContactInfoPane({
                 type="button"
                 className="text-sm flex items-center gap-2 hover:text-primary transition-colors"
                 onClick={() => onToggleFavorite('contact', contact.public_key)}
-                title="Favorite contacts stay loaded on the radio for ACK support"
+                title={t('contactInfo.favoriteHelp')}
               >
                 {contact.favorite ? (
                   <>
                     <Star className="h-4.5 w-4.5 fill-current text-favorite" aria-hidden="true" />
-                    <span>Remove from favorites</span>
+                    <span>{t('contactInfo.removeFavorite')}</span>
                   </>
                 ) : (
                   <>
                     <Star className="h-4.5 w-4.5 text-muted-foreground" aria-hidden="true" />
-                    <span>Add to favorites</span>
+                    <span>{t('contactInfo.addFavorite')}</span>
                   </>
                 )}
               </button>
@@ -503,12 +531,12 @@ export function ContactInfoPane({
                     {blockedKeys.includes(contact.public_key.toLowerCase()) ? (
                       <>
                         <Ban className="h-4.5 w-4.5 text-destructive" aria-hidden="true" />
-                        <span>Unblock this key</span>
+                        <span>{t('contactInfo.unblockKey')}</span>
                       </>
                     ) : (
                       <>
                         <Ban className="h-4.5 w-4.5 text-muted-foreground" aria-hidden="true" />
-                        <span>Block this key</span>
+                        <span>{t('contactInfo.blockKey')}</span>
                       </>
                     )}
                   </button>
@@ -522,12 +550,12 @@ export function ContactInfoPane({
                     {blockedNames.includes(contact.name) ? (
                       <>
                         <Ban className="h-4.5 w-4.5 text-destructive" aria-hidden="true" />
-                        <span>Unblock name &ldquo;{contact.name}&rdquo;</span>
+                        <span>{t('contactInfo.unblockNameQuoted', { name: contact.name })}</span>
                       </>
                     ) : (
                       <>
                         <Ban className="h-4.5 w-4.5 text-muted-foreground" aria-hidden="true" />
-                        <span>Block name &ldquo;{contact.name}&rdquo;</span>
+                        <span>{t('contactInfo.blockNameQuoted', { name: contact.name })}</span>
                       </>
                     )}
                   </button>
@@ -543,7 +571,7 @@ export function ContactInfoPane({
                   onClick={() => onSearchMessagesByKey(contact.public_key)}
                 >
                   <Search className="h-4.5 w-4.5 text-muted-foreground" aria-hidden="true" />
-                  <span>Search user&apos;s messages by key</span>
+                  <span>{t('contactInfo.searchByKey')}</span>
                 </button>
               </div>
             )}
@@ -558,7 +586,7 @@ export function ContactInfoPane({
                 if (recent.length === 0) return null;
                 return (
                   <div className="px-5 py-3 border-b border-border">
-                    <SectionLabel>Nearest Repeaters — Hops (last 7 days)</SectionLabel>
+                    <SectionLabel>{t('contactInfo.nearestHops')}</SectionLabel>
                     <div className="space-y-1">
                       {recent.map((r) => (
                         <div
@@ -568,9 +596,9 @@ export function ContactInfoPane({
                           <span className="truncate">{r.name || r.public_key.slice(0, 12)}</span>
                           <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
                             {r.path_len === 0
-                              ? 'direct'
-                              : `${r.path_len} hop${r.path_len > 1 ? 's' : ''}`}{' '}
-                            · {r.heard_count}x
+                              ? t('contactInfo.hopDirect')
+                              : t('contactInfo.hopCount', { count: r.path_len })}{' '}
+                            · {t('contactInfo.heardCount', { count: r.heard_count })}
                           </span>
                         </div>
                       ))}
@@ -591,7 +619,7 @@ export function ContactInfoPane({
             {/* Advert Paths */}
             {analytics && analytics.advert_paths.length > 0 && (
               <div className="px-5 py-3 border-b border-border">
-                <SectionLabel>Recent Advert Paths</SectionLabel>
+                <SectionLabel>{t('contactInfo.advertPaths')}</SectionLabel>
                 <div className="space-y-1.5">
                   {analytics.advert_paths.map((p) => (
                     <div
@@ -599,7 +627,9 @@ export function ContactInfoPane({
                       className="flex justify-between items-start gap-2 text-sm"
                     >
                       <span className="font-mono text-xs break-all">
-                        {p.path ? parsePathHops(p.path, p.path_len).join(' → ') : '(direct)'}
+                        {p.path
+                          ? parsePathHops(p.path, p.path_len).join(' → ')
+                          : t('contactInfo.directPath')}
                       </span>
                       <span className="text-xs text-muted-foreground flex-shrink-0">
                         {p.heard_count}x · {formatTime(p.last_seen)}
@@ -619,7 +649,7 @@ export function ContactInfoPane({
             {/* AKA (Name History) - only show if more than one name */}
             {analytics && analytics.name_history.length > 1 && (
               <div className="px-5 py-3 border-b border-border">
-                <SectionLabel>Also Known As</SectionLabel>
+                <SectionLabel>{t('contactInfo.aka')}</SectionLabel>
                 <div className="space-y-1">
                   {analytics.name_history.map((h) => (
                     <div key={h.name} className="flex justify-between items-center text-sm">
@@ -651,7 +681,7 @@ export function ContactInfoPane({
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            Contact not found
+            {t('contactInfo.notFound')}
           </div>
         )}
       </SheetContent>
@@ -676,14 +706,14 @@ function ChannelAttributionWarning({
   nameOnly?: boolean;
   className?: string;
 }) {
+  const { t } = useTranslation();
   return (
     <div className={className}>
       <p className="text-xs text-warning">
-        Channel sender identity is based on best-effort name matching. Different nodes using the
-        same name will be attributed to the same {nameOnly ? 'sender name' : 'contact'}. Stats below
-        may be inaccurate.
-        {includeAliasNote &&
-          ' Historical counts below may include messages previously attributed under names shown in Also Known As.'}
+        {t('contactInfo.attribution', {
+          kind: nameOnly ? t('contactInfo.attributionName') : t('contactInfo.attributionContact'),
+        })}
+        {includeAliasNote && t('contactInfo.attributionAlias')}
       </p>
     </div>
   );
@@ -698,19 +728,26 @@ function MessageStatsSection({
   channelMessageCount: number;
   showDirectMessages?: boolean;
 }) {
+  const { t } = useTranslation();
   if ((showDirectMessages ? dmMessageCount : 0) <= 0 && channelMessageCount <= 0) {
     return null;
   }
 
   return (
     <div className="px-5 py-3 border-b border-border">
-      <SectionLabel>Messages</SectionLabel>
+      <SectionLabel>{t('contactInfo.messages')}</SectionLabel>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
         {showDirectMessages && dmMessageCount > 0 && (
-          <InfoItem label="Direct Messages" value={dmMessageCount.toLocaleString()} />
+          <InfoItem
+            label={t('contactInfo.directMessages')}
+            value={dmMessageCount.toLocaleString()}
+          />
         )}
         {channelMessageCount > 0 && (
-          <InfoItem label="Channel Messages" value={channelMessageCount.toLocaleString()} />
+          <InfoItem
+            label={t('contactInfo.channelMessages')}
+            value={channelMessageCount.toLocaleString()}
+          />
         )}
       </div>
     </div>
@@ -724,13 +761,14 @@ function MostActiveChannelsSection({
   channels: ContactActiveRoom[];
   onNavigateToChannel?: (channelKey: string) => void;
 }) {
+  const { t } = useTranslation();
   if (channels.length === 0) {
     return null;
   }
 
   return (
     <div className="px-5 py-3 border-b border-border">
-      <SectionLabel>Most Active Channels</SectionLabel>
+      <SectionLabel>{t('contactInfo.mostActive')}</SectionLabel>
       <div className="space-y-1">
         {channels.map((channel) => (
           <div key={channel.channel_key} className="flex justify-between items-center text-sm">
@@ -750,8 +788,7 @@ function MostActiveChannelsSection({
                 : `#${channel.channel_name}`}
             </span>
             <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
-              {channel.message_count.toLocaleString()} msg
-              {channel.message_count !== 1 ? 's' : ''}
+              {t('contactInfo.msgCount', { count: channel.message_count })}
             </span>
           </div>
         ))}
@@ -767,6 +804,7 @@ function ActivityChartsSection({
   analytics: ContactAnalytics | null;
   ready: boolean;
 }) {
+  const { t } = useTranslation();
   if (!analytics) {
     return null;
   }
@@ -784,20 +822,20 @@ function ActivityChartsSection({
     <div className="px-5 py-3 border-b border-border space-y-4">
       {hasHourlyActivity && (
         <div>
-          <SectionLabel>Messages Per Hour</SectionLabel>
+          <SectionLabel>{t('contactInfo.perHour')}</SectionLabel>
           <ActivityLineChart
             ready={ready}
-            ariaLabel="Messages per hour"
+            ariaLabel={t('contactInfo.perHourAria')}
             points={analytics.hourly_activity}
             series={[
-              { key: 'last_24h_count', color: '#2563eb', label: 'Last 24h' },
-              { key: 'last_week_average', color: '#ea580c', label: '7-day avg' },
-              { key: 'all_time_average', color: '#64748b', label: 'All-time avg' },
+              { key: 'last_24h_count', color: '#2563eb', label: t('contactInfo.last24h') },
+              { key: 'last_week_average', color: '#ea580c', label: t('contactInfo.avg7d') },
+              { key: 'all_time_average', color: '#64748b', label: t('contactInfo.avgAll') },
             ]}
             legendItems={[
-              { label: 'Last 24h', color: '#2563eb' },
-              { label: '7-day avg', color: '#ea580c' },
-              { label: 'All-time avg', color: '#64748b' },
+              { label: t('contactInfo.last24h'), color: '#2563eb' },
+              { label: t('contactInfo.avg7d'), color: '#ea580c' },
+              { label: t('contactInfo.avgAll'), color: '#64748b' },
             ]}
             valueFormatter={(value) => value.toFixed(value % 1 === 0 ? 0 : 1)}
             tickFormatter={(bucket) =>
@@ -813,12 +851,14 @@ function ActivityChartsSection({
 
       {hasWeeklyActivity && (
         <div>
-          <SectionLabel>Messages Per Week</SectionLabel>
+          <SectionLabel>{t('contactInfo.perWeek')}</SectionLabel>
           <ActivityLineChart
             ready={ready}
-            ariaLabel="Messages per week"
+            ariaLabel={t('contactInfo.perWeekAria')}
             points={analytics.weekly_activity}
-            series={[{ key: 'message_count', color: '#16a34a', label: 'Messages' }]}
+            series={[
+              { key: 'message_count', color: '#16a34a', label: t('contactInfo.messagesSeries') },
+            ]}
             valueFormatter={(value) => value.toFixed(0)}
             tickFormatter={(bucket) =>
               new Date(bucket.bucket_start * 1000).toLocaleDateString([], {
@@ -831,10 +871,8 @@ function ActivityChartsSection({
       )}
 
       <p className="text-[0.6875rem] text-muted-foreground">
-        Hourly lines compare the last 24 hours against 7-day and all-time averages for the same hour
-        slots.
-        {!analytics.includes_direct_messages &&
-          ' Name-only analytics include channel messages only.'}
+        {t('contactInfo.hourlyHelp')}
+        {!analytics.includes_direct_messages && ` ${t('contactInfo.nameOnlyHelp')}`}
       </p>
     </div>
   );
@@ -997,11 +1035,12 @@ function NearbyRepeatersSection({
     return results.slice(0, 5);
   }, [contact.public_key, contact.lat, contact.lon, contacts]);
 
+  const { t } = useTranslation();
   if (nearby.length === 0) return null;
 
   return (
     <div className="px-5 py-3 border-b border-border">
-      <SectionLabel>Nearest Repeaters — Geo (last 7 days)</SectionLabel>
+      <SectionLabel>{t('contactInfo.nearestGeo')}</SectionLabel>
       <div className="space-y-1">
         {nearby.map((r) => (
           <div key={r.publicKey} className="flex justify-between items-center text-sm">
@@ -1043,6 +1082,7 @@ function ContactTelemetrySection({
   isTracked: boolean;
   onToggleTracked?: (publicKey: string) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const { distanceUnit } = useDistanceUnit();
   const [expanded, setExpanded] = useState(true);
   const [mapExpanded, setMapExpanded] = useState(false);
@@ -1138,7 +1178,7 @@ function ContactTelemetrySection({
           onClick={() => setExpanded(!expanded)}
         >
           {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-          Telemetry
+          {t('contactInfo.telemetry')}
         </button>
         <button
           type="button"
@@ -1147,7 +1187,7 @@ function ContactTelemetrySection({
           className="text-xs px-2 py-0.5 rounded border border-border hover:bg-accent disabled:opacity-50 transition-colors flex items-center gap-1"
         >
           <Activity className="h-3 w-3" />
-          {loading ? 'Fetching...' : 'Request'}
+          {loading ? t('contactInfo.fetching') : t('contactInfo.request')}
         </button>
       </div>
 
@@ -1155,7 +1195,7 @@ function ContactTelemetrySection({
         <div className="mt-2">
           {sensors.length === 0 ? (
             <p className="text-sm text-muted-foreground italic">
-              {fetchedAt ? 'No sensor data in last response' : 'Not yet fetched'}
+              {fetchedAt ? t('contactInfo.noSensorData') : t('contactInfo.notFetched')}
             </p>
           ) : (
             <>
@@ -1220,7 +1260,7 @@ function ContactTelemetrySection({
 
               {fetchedAt && (
                 <p className="text-[0.6875rem] text-muted-foreground mt-1.5">
-                  Fetched {formatTime(fetchedAt)}
+                  {t('contactInfo.fetchedAt', { time: formatTime(fetchedAt) })}
                 </p>
               )}
             </>
@@ -1239,7 +1279,7 @@ function ContactTelemetrySection({
                 ) : (
                   <ChevronRight className="h-3 w-3" />
                 )}
-                History ({telemetryHistory.length} samples)
+                {t('contactInfo.historySamples', { count: telemetryHistory.length })}
               </button>
               {chartExpanded && (
                 <div className="mt-1">
@@ -1325,10 +1365,10 @@ function ContactTelemetrySection({
                 } disabled:opacity-50`}
               >
                 {toggling
-                  ? 'Updating...'
+                  ? t('contactInfo.updating')
                   : isTracked
-                    ? 'Stop Tracking Telemetry'
-                    : 'Track Telemetry on Interval'}
+                    ? t('contactInfo.stopTracking')
+                    : t('contactInfo.startTracking')}
               </button>
             </div>
           )}

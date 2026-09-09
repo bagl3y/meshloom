@@ -456,7 +456,7 @@ class RadioManager:
         if self._frontend_reconnect_error_broadcasts == MAX_FRONTEND_RECONNECT_ERROR_BROADCASTS:
             details = f"{details} Further reconnect failures will be logged only until a connection succeeds."
 
-        broadcast_error("Reconnection failed", details)
+        broadcast_error("Reconnection failed", details, code="reconnection_failed")
 
     async def _disable_meshcore_auto_reconnect(self, mc: MeshCore) -> None:
         """Disable library-managed reconnects so manual teardown fully releases transport."""

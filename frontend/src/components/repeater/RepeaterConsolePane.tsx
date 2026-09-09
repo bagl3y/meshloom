@@ -12,14 +12,14 @@ import { Input } from '../ui/input';
 
 // Short curated list from docs.meshcore.io/cli_commands — not a live scrape.
 const FREQUENT_CLI_COMMANDS = [
-  { command: 'ver', hint: 'Firmware version' },
-  { command: 'clock', hint: 'UTC time' },
-  { command: 'clock sync', hint: 'Sync clock' },
-  { command: 'advert', hint: 'Flood advert' },
-  { command: 'advert.zerohop', hint: 'Zero-hop advert' },
-  { command: 'neighbors', hint: 'Nearby neighbors' },
-  { command: 'get name', hint: 'Node name' },
-  { command: 'reboot', hint: 'Reboot (no reply)' },
+  { command: 'ver', hintKey: 'repeater.cliHintVer' },
+  { command: 'clock', hintKey: 'repeater.cliHintClock' },
+  { command: 'clock sync', hintKey: 'repeater.cliHintClockSync' },
+  { command: 'advert', hintKey: 'repeater.cliHintAdvert' },
+  { command: 'advert.zerohop', hintKey: 'repeater.cliHintAdvertZerohop' },
+  { command: 'neighbors', hintKey: 'repeater.cliHintNeighbors' },
+  { command: 'get name', hintKey: 'repeater.cliHintGetName' },
+  { command: 'reboot', hintKey: 'repeater.cliHintReboot' },
 ] as const;
 
 export function ConsolePane({
@@ -95,7 +95,7 @@ export function ConsolePane({
   return (
     <div className="border border-border rounded-lg overflow-hidden col-span-full">
       <div className="px-3 py-2 bg-muted/50 border-b border-border flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">Console</h3>
+        <h3 className="text-sm font-medium">{t('repeater.console')}</h3>
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -122,15 +122,15 @@ export function ConsolePane({
           className="px-3 py-2 border-b border-border bg-muted/30 space-y-1.5"
         >
           <p className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
-            Frequent commands
+            {t('repeater.frequentCommands')}
           </p>
           <ul className="flex flex-wrap gap-1.5">
             {FREQUENT_CLI_COMMANDS.map((item) => (
               <li key={item.command}>
                 <button
                   type="button"
-                  title={item.hint}
-                  aria-label={`Insert ${item.command}`}
+                  title={t(item.hintKey)}
+                  aria-label={t('repeater.insertCommand', { command: item.command })}
                   onClick={() => insertCommand(item.command)}
                   className="font-mono text-[0.625rem] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
                 >
@@ -146,7 +146,7 @@ export function ConsolePane({
         className="h-48 overflow-y-auto p-3 font-mono text-xs bg-console-bg/50 text-console space-y-1"
       >
         {history.length === 0 && (
-          <p className="text-muted-foreground italic">Type a CLI command below...</p>
+          <p className="text-muted-foreground italic">{t('repeater.consoleEmpty')}</p>
         )}
         {history.map((entry, i) =>
           entry.outgoing ? (
@@ -175,13 +175,13 @@ export function ConsolePane({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="CLI command..."
-          aria-label="Console command"
+          placeholder={t('repeater.consolePlaceholder')}
+          aria-label={t('repeater.consoleAria')}
           disabled={loading}
           className="flex-1 font-mono text-sm"
         />
         <Button type="submit" size="sm" disabled={loading || !input.trimStart()}>
-          Send
+          {t('chat.send')}
         </Button>
       </form>
     </div>

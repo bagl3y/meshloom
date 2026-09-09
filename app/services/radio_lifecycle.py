@@ -299,6 +299,7 @@ async def prepare_connected_radio(radio_manager, *, broadcast_on_success: bool =
             broadcast_error(
                 "Radio startup appears stuck",
                 "Initial radio offload took too long. Reboot the radio and restart the server.",
+                code="radio_startup_stuck",
             )
             raise RuntimeError("Post-connect setup timed out") from exc
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { api } from '../api';
 import type { Contact, ContactAdvertPathSummary, RadioConfig, RawPacket } from '../types';
@@ -23,6 +24,7 @@ export function PacketVisualizer3D({
   fullScreen,
   onFullScreenChange,
 }: PacketVisualizer3DProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [savedSettings] = useState(getVisualizerSettings);
@@ -136,7 +138,7 @@ export function PacketVisualizer3D({
       ref={containerRef}
       className="w-full h-full bg-background relative overflow-hidden"
       role="img"
-      aria-label="3D mesh network visualizer showing radio nodes as colored spheres and packet transmissions as animated arcs between them"
+      aria-label={t('visualizer.ariaLabel')}
     >
       <VisualizerControls
         showControls={showControls}

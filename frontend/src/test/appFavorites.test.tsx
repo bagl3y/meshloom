@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import i18n from '../i18n';
 
 const mocks = vi.hoisted(() => ({
   api: {
@@ -124,7 +125,7 @@ vi.mock('../components/StatusBar', () => ({
     onSettingsClick: () => void;
   }) => (
     <button type="button" onClick={onSettingsClick} data-testid="status-bar-settings-toggle">
-      {settingsMode ? 'Back to Chat' : 'Radio & Config'}
+      {settingsMode ? i18n.t('shell.backToChat') : i18n.t('statusBar.settings')}
     </button>
   ),
 }));
@@ -263,17 +264,17 @@ describe('App favorite toggle flow', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByTitle('Add to favorites')).toBeInTheDocument();
+      expect(screen.getByTitle(i18n.t('chatHeader.addFavorite'))).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByTitle('Add to favorites'));
+    fireEvent.click(screen.getByTitle(i18n.t('chatHeader.addFavorite')));
 
     await waitFor(() => {
       expect(mocks.api.toggleFavorite).toHaveBeenCalledWith('channel', publicChannel.key);
     });
 
     await waitFor(() => {
-      expect(screen.getByTitle('Remove from favorites')).toBeInTheDocument();
+      expect(screen.getByTitle(i18n.t('chatHeader.removeFavorite'))).toBeInTheDocument();
     });
   });
 
@@ -283,21 +284,21 @@ describe('App favorite toggle flow', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByTitle('Add to favorites')).toBeInTheDocument();
+      expect(screen.getByTitle(i18n.t('chatHeader.addFavorite'))).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByTitle('Add to favorites'));
+    fireEvent.click(screen.getByTitle(i18n.t('chatHeader.addFavorite')));
 
     await waitFor(() => {
       expect(mocks.api.toggleFavorite).toHaveBeenCalledWith('channel', publicChannel.key);
     });
 
     await waitFor(() => {
-      expect(mocks.toast.error).toHaveBeenCalledWith('Failed to update favorite');
+      expect(mocks.toast.error).toHaveBeenCalledWith(i18n.t('toast.favoriteFailed'));
     });
 
     await waitFor(() => {
-      expect(screen.getByTitle('Add to favorites')).toBeInTheDocument();
+      expect(screen.getByTitle(i18n.t('chatHeader.addFavorite'))).toBeInTheDocument();
     });
   });
 
@@ -327,26 +328,30 @@ describe('App favorite toggle flow', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Radio & Config' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: i18n.t('statusBar.settings') })
+      ).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Radio & Config' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('statusBar.settings') }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Back to Chat' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: i18n.t('shell.backToChat') })).toBeInTheDocument();
       expect(screen.getByTestId('settings-modal-section')).toHaveTextContent('radio');
     });
 
-    fireEvent.click(screen.getAllByRole('button', { name: /Local Configuration/i })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: i18n.t('settingsNav.local') })[0]);
 
     await waitFor(() => {
       expect(screen.getByTestId('settings-modal-section')).toHaveTextContent('local');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Back to Chat' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('shell.backToChat') }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Radio & Config' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: i18n.t('statusBar.settings') })
+      ).toBeInTheDocument();
       expect(screen.queryByTestId('settings-modal-section')).not.toBeInTheDocument();
     });
   });
@@ -359,11 +364,17 @@ describe('App favorite toggle flow', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Notification settings' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: i18n.t('chatHeader.notifications') })
+      ).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Notification settings' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /web push/i }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('chatHeader.notifications') }));
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: (accessibleName) => accessibleName.includes(i18n.t('chatHeader.webPush')),
+      })
+    );
 
     await waitFor(() => {
       expect(mocks.push.subscribe).toHaveBeenCalledTimes(1);
@@ -379,11 +390,17 @@ describe('App favorite toggle flow', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Notification settings' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: i18n.t('chatHeader.notifications') })
+      ).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Notification settings' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /web push/i }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('chatHeader.notifications') }));
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: (accessibleName) => accessibleName.includes(i18n.t('chatHeader.webPush')),
+      })
+    );
 
     await waitFor(() => {
       expect(mocks.push.subscribe).toHaveBeenCalledTimes(1);

@@ -612,6 +612,7 @@ class TestSyncAndOffloadAll:
         assert result["contact_reconcile_started"] is True
         mock_broadcast.assert_called_once()
         assert "best-effort" in mock_broadcast.call_args.args[1]
+        assert mock_broadcast.call_args.kwargs.get("code") == "radio_contacts_enum_failed"
 
     @pytest.mark.asyncio
     async def test_advert_fill_skips_repeaters(self, test_db):
@@ -1774,6 +1775,7 @@ class TestMessagePollLoopRaces:
             "A periodic poll task has discovered radio inconsistencies.",
             "Please check the logs for recommendations (search "
             "'MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK').",
+            code="radio_inconsistency_found",
         )
 
     @pytest.mark.asyncio

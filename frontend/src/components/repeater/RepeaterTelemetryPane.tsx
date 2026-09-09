@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Separator } from '../ui/separator';
 import { RepeaterPane, NotFetched, KvRow, formatDuration } from './repeaterPaneShared';
 import type { RepeaterStatusResponse, PaneState } from '../../types';
@@ -29,21 +30,27 @@ export function TelemetryPane({
   onRefresh: () => void;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
   const txPct = data ? formatAirtimePercent(data.airtime_seconds, data.uptime_seconds) : null;
   const rxPct = data ? formatAirtimePercent(data.rx_airtime_seconds, data.uptime_seconds) : null;
   const rxPerMin = data ? formatPerMinute(data.packets_received, data.uptime_seconds) : null;
   const txPerMin = data ? formatPerMinute(data.packets_sent, data.uptime_seconds) : null;
 
   return (
-    <RepeaterPane title="Telemetry" state={state} onRefresh={onRefresh} disabled={disabled}>
+    <RepeaterPane
+      title={t('repeater.telemetry')}
+      state={state}
+      onRefresh={onRefresh}
+      disabled={disabled}
+    >
       {!data ? (
         <NotFetched />
       ) : (
         <div className="space-y-2">
-          <KvRow label="Battery" value={`${data.battery_volts.toFixed(3)}V`} />
-          <KvRow label="Uptime" value={formatDuration(data.uptime_seconds)} />
+          <KvRow label={t('repeater.battery')} value={`${data.battery_volts.toFixed(3)}V`} />
+          <KvRow label={t('repeater.uptime')} value={formatDuration(data.uptime_seconds)} />
           <KvRow
-            label="TX Airtime"
+            label={t('repeater.txAirtime')}
             value={
               <>
                 {formatDuration(data.airtime_seconds)}
@@ -52,7 +59,7 @@ export function TelemetryPane({
             }
           />
           <KvRow
-            label="RX Airtime"
+            label={t('repeater.rxAirtime')}
             value={
               <>
                 {formatDuration(data.rx_airtime_seconds)}
@@ -61,39 +68,48 @@ export function TelemetryPane({
             }
           />
           <Separator className="my-1" />
-          <KvRow label="Noise Floor" value={`${data.noise_floor_dbm} dBm`} />
-          <KvRow label="Last RSSI" value={`${data.last_rssi_dbm} dBm`} />
-          <KvRow label="Last SNR" value={`${data.last_snr_db.toFixed(1)} dB`} />
+          <KvRow label={t('repeater.noiseFloor')} value={`${data.noise_floor_dbm} dBm`} />
+          <KvRow label={t('repeater.lastRssi')} value={`${data.last_rssi_dbm} dBm`} />
+          <KvRow label={t('repeater.lastSnr')} value={`${data.last_snr_db.toFixed(1)} dB`} />
           <Separator className="my-1" />
           <KvRow
-            label="Packets"
+            label={t('repeater.packets')}
             value={
               <>
-                {data.packets_received.toLocaleString()} rx / {data.packets_sent.toLocaleString()}{' '}
-                tx
+                {t('repeater.packetsRxTx', {
+                  rx: data.packets_received.toLocaleString(),
+                  tx: data.packets_sent.toLocaleString(),
+                })}
                 {rxPerMin && txPerMin && (
-                  <Secondary>
-                    (avg {rxPerMin} rx/min / {txPerMin} tx/min)
-                  </Secondary>
+                  <Secondary>{t('repeater.packetsAvg', { rx: rxPerMin, tx: txPerMin })}</Secondary>
                 )}
               </>
             }
           />
           <KvRow
-            label="Flood"
-            value={`${data.recv_flood.toLocaleString()} rx / ${data.sent_flood.toLocaleString()} tx`}
+            label={t('repeater.flood')}
+            value={t('repeater.packetsRxTx', {
+              rx: data.recv_flood.toLocaleString(),
+              tx: data.sent_flood.toLocaleString(),
+            })}
           />
           <KvRow
-            label="Direct"
-            value={`${data.recv_direct.toLocaleString()} rx / ${data.sent_direct.toLocaleString()} tx`}
+            label={t('repeater.direct')}
+            value={t('repeater.packetsRxTx', {
+              rx: data.recv_direct.toLocaleString(),
+              tx: data.sent_direct.toLocaleString(),
+            })}
           />
           <KvRow
-            label="Duplicates"
-            value={`${data.flood_dups.toLocaleString()} flood / ${data.direct_dups.toLocaleString()} direct`}
+            label={t('repeater.duplicates')}
+            value={t('repeater.duplicatesValue', {
+              flood: data.flood_dups.toLocaleString(),
+              direct: data.direct_dups.toLocaleString(),
+            })}
           />
           {data.recv_errors != null && (
             <KvRow
-              label="RX Errors"
+              label={t('repeater.rxErrors')}
               value={
                 <>
                   {data.recv_errors.toLocaleString()}
@@ -112,8 +128,8 @@ export function TelemetryPane({
             />
           )}
           <Separator className="my-1" />
-          <KvRow label="TX Queue" value={data.tx_queue_len} />
-          <KvRow label="Debug Flags" value={data.full_events} />
+          <KvRow label={t('repeater.txQueue')} value={data.tx_queue_len} />
+          <KvRow label={t('repeater.debugFlags')} value={data.full_events} />
         </div>
       )}
     </RepeaterPane>

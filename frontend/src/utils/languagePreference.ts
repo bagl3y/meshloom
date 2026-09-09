@@ -30,3 +30,10 @@ export function setSavedLanguage(language: AppLanguage): void {
     // localStorage may be unavailable
   }
 }
+
+export function applyDocumentLanguage(language: string): void {
+  if (typeof document === 'undefined') {
+    return;
+  }
+  document.documentElement.lang = isAppLanguage(language) ? language : DEFAULT_LOCALE;
+}

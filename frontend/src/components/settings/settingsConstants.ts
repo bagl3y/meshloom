@@ -28,14 +28,15 @@ export const SETTINGS_SECTION_ORDER: SettingsSection[] = [
   'about',
 ];
 
+/** i18n key ids. Translate at render with t(SETTINGS_SECTION_LABELS[section]). */
 export const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
-  radio: 'Radio',
-  local: 'Local Configuration',
-  'radio-app': 'Radio-App Management',
-  database: 'Database',
-  fanout: 'MQTT & Automation',
-  statistics: 'Statistics',
-  about: 'About',
+  radio: 'settingsNav.radio',
+  local: 'settingsNav.local',
+  'radio-app': 'settingsNav.radioApp',
+  database: 'settingsNav.database',
+  fanout: 'settingsNav.fanout',
+  statistics: 'settingsNav.statistics',
+  about: 'settingsNav.about',
 };
 
 export const SETTINGS_SECTION_ICONS: Record<SettingsSection, LucideIcon> = {

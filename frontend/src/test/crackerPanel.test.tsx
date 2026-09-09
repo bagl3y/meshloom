@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import './eSlices';
 import { CrackerPanel } from '../components/CrackerPanel';
+import i18n from '../i18n';
 
 vi.mock('meshcore-hashtag-cracker', () => ({
   GroupTextCracker: class {
@@ -49,7 +51,7 @@ describe('CrackerPanel', () => {
       expect(mockedApi.getUndecryptedPacketCount).toHaveBeenCalled();
     });
 
-    const maxLengthInput = screen.getByLabelText('Max Length:') as HTMLInputElement;
+    const maxLengthInput = screen.getByLabelText(i18n.t('cracker.maxLength')) as HTMLInputElement;
     fireEvent.change(maxLengthInput, { target: { value: '' } });
 
     expect(maxLengthInput.value).toBe('');

@@ -789,6 +789,7 @@ export interface PushSubscriptionInfo {
   p256dh: string;
   auth: string;
   label: string;
+  language: 'fr' | 'en';
   created_at: number;
   last_success_at: number | null;
   failure_count: number;

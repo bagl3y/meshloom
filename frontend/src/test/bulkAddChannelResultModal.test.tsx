@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { BulkAddChannelResultModal } from '../components/BulkAddChannelResultModal';
+import i18n from '../i18n';
 
 describe('BulkAddChannelResultModal', () => {
   it('renders links only for newly created rooms', () => {
@@ -45,6 +46,6 @@ describe('BulkAddChannelResultModal', () => {
     expect(opsLink.getAttribute('href')).toContain('#channel/');
     expect(meshLink.getAttribute('href')).toContain('#channel/');
     expect(screen.queryByRole('link', { name: /bad_room/i })).toBeNull();
-    expect(screen.getByText(/Ignored invalid channel names: bad_room/)).toBeTruthy();
+    expect(screen.getByText(i18n.t('newMessage.bulkIgnored', { names: 'bad_room' }))).toBeTruthy();
   });
 });

@@ -4,6 +4,8 @@ import * as React from 'react';
 import { Command as CommandPrimitive } from 'cmdk';
 import { Search } from 'lucide-react';
 
+import { useTranslation } from 'react-i18next';
+
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 
@@ -23,13 +25,12 @@ const Command = React.forwardRef<
 Command.displayName = CommandPrimitive.displayName;
 
 function CommandDialog({ children, ...props }: React.ComponentProps<typeof Dialog>) {
+  const { t } = useTranslation();
   return (
     <Dialog {...props}>
       <DialogContent className="overflow-hidden p-0 shadow-lg" hideCloseButton>
-        <DialogTitle className="sr-only">Command palette</DialogTitle>
-        <DialogDescription className="sr-only">
-          Search for conversations, settings, and tools
-        </DialogDescription>
+        <DialogTitle className="sr-only">{t('commandPalette.title')}</DialogTitle>
+        <DialogDescription className="sr-only">{t('commandPalette.description')}</DialogDescription>
         <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3">
           {children}
         </Command>

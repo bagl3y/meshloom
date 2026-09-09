@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import './eSlices';
 import { MapView } from '../components/MapView';
 import { api } from '../api';
 import i18n from '../i18n';
@@ -83,9 +84,13 @@ describe('MapView', () => {
     render(<MapView contacts={[contact]} focusedKey={contact.public_key} />);
 
     expect(
-      screen.getByText(/showing 1 contact heard in the last 7 days plus the focused contact/i)
+      screen.getByText(
+        i18n.t('map.showingHeardFocused', { count: 1, since: i18n.t('map.inLast7d') })
+      )
     ).toBeInTheDocument();
-    expect(screen.getByText('Last heard: Never heard by this server')).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('map.lastHeard', { time: i18n.t('map.neverHeard') }))
+    ).toBeInTheDocument();
   });
 
   it('invokes onSelectContact when the popup name is clicked', () => {
@@ -115,7 +120,7 @@ describe('MapView', () => {
     render(<MapView contacts={[contact]} onSelectContact={onSelectContact} />);
 
     const link = screen.getByRole('button', { name: 'Clickable' });
-    expect(link).toHaveAttribute('title', 'Open conversation with Clickable');
+    expect(link).toHaveAttribute('title', i18n.t('map.openConversation', { name: 'Clickable' }));
     fireEvent.click(link);
 
     expect(onSelectContact).toHaveBeenCalledWith(contact);
@@ -146,7 +151,9 @@ describe('MapView', () => {
 
     render(<MapView contacts={[contact]} />);
 
-    expect(screen.queryByRole('button', { name: /open conversation with static/i })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: i18n.t('map.openConversation', { name: 'Static' }) })
+    ).toBeNull();
     expect(screen.getByText('Static')).toBeInTheDocument();
   });
 
@@ -179,13 +186,17 @@ describe('MapView', () => {
 
       const { rerender } = render(<MapView contacts={[contact]} focusedKey={null} />);
 
-      expect(screen.getByText(/showing 1 contact heard in the last 7 days/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(i18n.t('map.showingHeard', { count: 1, since: i18n.t('map.inLast7d') }))
+      ).toBeInTheDocument();
 
       // Re-rendering alone must not recompute the cutoff — that was the memo
       // thrash this guards against (see "Reduce memo thrash on map update").
       rerender(<MapView contacts={[contact]} focusedKey={null} />);
 
-      expect(screen.getByText(/showing 1 contact heard in the last 7 days/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(i18n.t('map.showingHeard', { count: 1, since: i18n.t('map.inLast7d') }))
+      ).toBeInTheDocument();
       expect(screen.getByText('Almost Stale')).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
@@ -233,7 +244,9 @@ describe('MapView', () => {
 
       expect(screen.getByText('Fresh Node')).toBeInTheDocument();
       expect(screen.queryByText('Older Node')).toBeNull();
-      expect(screen.getByText(/heard in the last 1 hour/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(i18n.t('map.showingHeard', { count: 1, since: i18n.t('map.inLast1h') }))
+      ).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: '<1d' }));
 
@@ -248,10 +261,12 @@ describe('MapView', () => {
       // Previously the map capped at 7 days and this node was unreachable.
       expect(screen.queryByText('Ancient Node')).toBeNull();
 
-      fireEvent.click(screen.getByRole('button', { name: 'All' }));
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('map.sinceAll') }));
 
       expect(screen.getByText('Ancient Node')).toBeInTheDocument();
-      expect(screen.getByText(/heard at any time/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(i18n.t('map.showingHeard', { count: 1, since: i18n.t('map.atAnyTime') }))
+      ).toBeInTheDocument();
     });
 
     it('treats a custom datetime as local wall-clock time', () => {
@@ -273,8 +288,8 @@ describe('MapView', () => {
 
         render(<MapView contacts={[before, after]} />);
 
-        fireEvent.click(screen.getByRole('button', { name: 'Custom' }));
-        fireEvent.change(screen.getByLabelText(/heard since \(local time\)/i), {
+        fireEvent.click(screen.getByRole('button', { name: i18n.t('map.sinceCustom') }));
+        fireEvent.change(screen.getByLabelText(i18n.t('map.sinceCustomAria')), {
           target: { value: '2026-03-15T12:30' },
         });
 
@@ -293,7 +308,11 @@ describe('MapView', () => {
       fireEvent.click(screen.getByRole('button', { name: '<1h' }));
 
       expect(screen.getByText('Stale Focus')).toBeInTheDocument();
-      expect(screen.getByText(/plus the focused contact/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          i18n.t('map.showingHeardFocused', { count: 1, since: i18n.t('map.inLast1h') })
+        )
+      ).toBeInTheDocument();
     });
   });
 

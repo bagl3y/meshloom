@@ -7,6 +7,12 @@ import {
   useRepeaterDashboard,
 } from '../hooks/useRepeaterDashboard';
 import type { Conversation } from '../types';
+import i18n from '../i18n';
+import fEn from '../i18n/locales/slices/f.en.json';
+import fFr from '../i18n/locales/slices/f.fr.json';
+
+i18n.addResourceBundle('en', 'translation', fEn, true, true);
+i18n.addResourceBundle('fr', 'translation', fFr, true, true);
 
 // Mock the api module
 vi.mock('../api', async (importOriginal) => ({
@@ -101,7 +107,7 @@ describe('useRepeaterDashboard', () => {
     expect(result.current.loginError).toBe('Auth failed');
     expect(result.current.lastLoginAttempt?.heardBack).toBe(true);
     expect(result.current.lastLoginAttempt?.outcome).toBe('not_confirmed');
-    expect(mockToast.error).toHaveBeenCalledWith('Login not confirmed', {
+    expect(mockToast.error).toHaveBeenCalledWith(i18n.t('toast.loginNotConfirmed'), {
       description: 'Auth failed',
     });
   });
@@ -136,9 +142,8 @@ describe('useRepeaterDashboard', () => {
     expect(result.current.loginError).toBe('Network error');
     expect(result.current.lastLoginAttempt?.heardBack).toBe(false);
     expect(result.current.lastLoginAttempt?.outcome).toBe('request_failed');
-    expect(mockToast.error).toHaveBeenCalledWith('Login request failed', {
-      description:
-        'Network error. The dashboard is still available, but repeater operations may fail until a login succeeds.',
+    expect(mockToast.error).toHaveBeenCalledWith(i18n.t('toast.loginRequestFailed'), {
+      description: i18n.t('toast.loginRequestFailedDetail', { message: 'Network error' }),
     });
   });
 
@@ -271,7 +276,9 @@ describe('useRepeaterDashboard', () => {
     expect(result.current.consoleHistory[0].outgoing).toBe(true);
     expect(result.current.consoleHistory[0].command).toBe('ver');
     expect(result.current.consoleHistory[1].outgoing).toBe(false);
-    expect(result.current.consoleHistory[1].response).toBe('Error: Network error');
+    expect(result.current.consoleHistory[1].response).toBe(
+      i18n.t('repeater.consoleError', { message: 'Network error' })
+    );
     expect(result.current.consoleLoading).toBe(false);
   });
 

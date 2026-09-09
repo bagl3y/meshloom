@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StatusBar } from '../components/StatusBar';
+import i18n from '../i18n';
 import type { HealthStatus } from '../types';
 
 const baseHealth: HealthStatus = {
@@ -25,8 +26,12 @@ describe('StatusBar', () => {
       />
     );
 
-    expect(screen.getByRole('status', { name: 'Radio Initializing' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('status', { name: i18n.t('statusBar.radioInitializing') })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: i18n.t('statusBar.reconnect') })
+    ).not.toBeInTheDocument();
   });
 
   it('shows Radio OK when the radio is connected and ready', () => {
@@ -38,14 +43,16 @@ describe('StatusBar', () => {
       />
     );
 
-    expect(screen.getByRole('status', { name: 'Radio OK' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: i18n.t('statusBar.radioOk') })).toBeInTheDocument();
   });
 
   it('shows Radio Disconnected when the radio is unavailable', () => {
     render(<StatusBar health={baseHealth} config={null} onSettingsClick={vi.fn()} />);
 
-    expect(screen.getByRole('status', { name: 'Radio Disconnected' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('status', { name: i18n.t('statusBar.radioDisconnected') })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: i18n.t('statusBar.reconnect') })).toBeInTheDocument();
   });
 
   it('shows Radio Paused and a Connect action when reconnect attempts are paused', () => {
@@ -57,8 +64,10 @@ describe('StatusBar', () => {
       />
     );
 
-    expect(screen.getByRole('status', { name: 'Radio Paused' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('status', { name: i18n.t('statusBar.radioPaused') })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: i18n.t('statusBar.connect') })).toBeInTheDocument();
   });
 
   it('toggles between classic and light themes from the shortcut button', () => {
@@ -66,13 +75,13 @@ describe('StatusBar', () => {
 
     render(<StatusBar health={baseHealth} config={null} onSettingsClick={vi.fn()} />);
 
-    const themeToggle = screen.getByRole('button', { name: 'Switch to light theme' });
+    const themeToggle = screen.getByRole('button', { name: i18n.t('statusBar.themeLight') });
     fireEvent.click(themeToggle);
 
     expect(localStorage.getItem('remoteterm-theme')).toBe('light');
     expect(document.documentElement.dataset.theme).toBe('light');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Switch to classic theme' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('statusBar.themeClassic') }));
 
     expect(localStorage.getItem('remoteterm-theme')).toBe('original');
     expect(document.documentElement.dataset.theme).toBeUndefined();
@@ -108,8 +117,8 @@ describe('StatusBar', () => {
 
       render(<StatusBar health={baseHealth} config={null} onSettingsClick={vi.fn()} />);
 
-      // OS is dark → effective is original → toggle offers "Switch to light theme"
-      const toggle = screen.getByRole('button', { name: 'Switch to light theme' });
+      // OS is dark → effective is original → toggle offers light theme
+      const toggle = screen.getByRole('button', { name: i18n.t('statusBar.themeLight') });
       fireEvent.click(toggle);
 
       expect(localStorage.getItem('remoteterm-theme')).toBe('light');
@@ -122,8 +131,8 @@ describe('StatusBar', () => {
 
       render(<StatusBar health={baseHealth} config={null} onSettingsClick={vi.fn()} />);
 
-      // OS is light → effective is light → toggle offers "Switch to classic theme"
-      const toggle = screen.getByRole('button', { name: 'Switch to classic theme' });
+      // OS is light → effective is light → toggle offers classic theme
+      const toggle = screen.getByRole('button', { name: i18n.t('statusBar.themeClassic') });
       fireEvent.click(toggle);
 
       expect(localStorage.getItem('remoteterm-theme')).toBe('original');

@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, lazy, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { RepeaterPane, NotFetched, formatDuration } from './repeaterPaneShared';
 import { isValidLocation, calculateDistance, formatDistance } from '../../utils/pathUtils';
@@ -79,6 +80,7 @@ export function NeighborsPane({
   nodeInfoState: PaneState;
   repeaterName: string | null;
 }) {
+  const { t } = useTranslation();
   const { distanceUnit } = useDistanceUnit();
   const advertLat = repeaterContact?.lat ?? null;
   const advertLon = repeaterContact?.lon ?? null;
@@ -107,12 +109,12 @@ export function NeighborsPane({
   const hasValidRepeaterGps = positionSource.source !== null;
   const headerNote =
     positionSource.source === 'reported'
-      ? 'Using repeater-reported position'
+      ? t('repeater.posReported')
       : positionSource.source === 'advert'
-        ? 'Using advert position'
+        ? t('repeater.posAdvert')
         : nodeInfoState.loading
-          ? 'Waiting for repeater position'
-          : 'No repeater position available';
+          ? t('repeater.posWaiting')
+          : t('repeater.posMissing');
 
   const [sortField, setSortField] = useState<SortField>('snr');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -205,10 +207,15 @@ export function NeighborsPane({
     <RepeaterPane
       title={
         !data
-          ? 'Neighbors'
+          ? t('repeater.neighbors')
           : data.reported_count != null && data.reported_count !== data.neighbors.length
-            ? `Neighbors (${data.neighbors.length} of ${data.reported_count})`
-            : `Neighbors (${data.reported_count ?? data.neighbors.length})`
+            ? t('repeater.neighborsCountOf', {
+                shown: data.neighbors.length,
+                total: data.reported_count,
+              })
+            : t('repeater.neighborsCount', {
+                count: data.reported_count ?? data.neighbors.length,
+              })
       }
       headerNote={headerNote}
       state={state}
@@ -220,7 +227,7 @@ export function NeighborsPane({
       {!data ? (
         <NotFetched />
       ) : sorted.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No neighbors reported</p>
+        <p className="text-sm text-muted-foreground">{t('repeater.noNeighbors')}</p>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-2">
           <div className="shrink-0 overflow-x-auto">
@@ -228,14 +235,14 @@ export function NeighborsPane({
               <thead>
                 <tr className="text-left text-muted-foreground text-xs">
                   <SortableHeader
-                    label="Name"
+                    label={t('repeater.name')}
                     field="name"
                     sortField={sortField}
                     sortDir={sortDir}
                     onSort={handleSort}
                   />
                   <SortableHeader
-                    label="SNR"
+                    label={t('repeater.snr')}
                     field="snr"
                     sortField={sortField}
                     sortDir={sortDir}
@@ -244,7 +251,7 @@ export function NeighborsPane({
                   />
                   {hasDistances && (
                     <SortableHeader
-                      label="Dist"
+                      label={t('repeater.dist')}
                       field="distance"
                       sortField={sortField}
                       sortDir={sortDir}
@@ -253,7 +260,7 @@ export function NeighborsPane({
                     />
                   )}
                   <SortableHeader
-                    label="Last Heard"
+                    label={t('repeater.lastHeard')}
                     field="last_heard"
                     sortField={sortField}
                     sortDir={sortDir}
@@ -285,7 +292,9 @@ export function NeighborsPane({
                         </td>
                       )}
                       <td className="py-1 text-right text-muted-foreground">
-                        {formatDuration(n.last_heard_seconds)} ago
+                        {t('repeater.lastHeardAgo', {
+                          duration: formatDuration(n.last_heard_seconds),
+                        })}
                       </td>
                     </tr>
                   );
@@ -297,7 +306,7 @@ export function NeighborsPane({
             <Suspense
               fallback={
                 <div className="flex min-h-48 flex-1 items-center justify-center text-xs text-muted-foreground">
-                  Loading map...
+                  {t('repeater.loadingMap')}
                 </div>
               }
             >
@@ -311,8 +320,7 @@ export function NeighborsPane({
             </Suspense>
           ) : (
             <div className="rounded border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-              Map and distance data are unavailable until this repeater has a valid position from
-              either its advert or a Node Info fetch.
+              {t('repeater.mapUnavailable')}
             </div>
           )}
         </div>

@@ -5,7 +5,13 @@ import {
   getNotificationEnableToastInfo,
   useBrowserNotifications,
 } from '../hooks/useBrowserNotifications';
+import i18n from '../i18n';
+import fEn from '../i18n/locales/slices/f.en.json';
+import fFr from '../i18n/locales/slices/f.fr.json';
 import type { Message } from '../types';
+
+i18n.addResourceBundle('en', 'translation', fEn, true, true);
+i18n.addResourceBundle('fr', 'translation', fFr, true, true);
 
 const mocks = vi.hoisted(() => ({
   toast: {
@@ -87,14 +93,16 @@ describe('useBrowserNotifications', () => {
     expect(result.current.isConversationNotificationsEnabled('contact', 'ef'.repeat(32))).toBe(
       false
     );
-    expect(window.Notification).toHaveBeenCalledWith('New message in #flightless', {
-      body: 'Notifications will look like this. These require the tab to stay open, and will not be reliable on mobile.',
-      icon: './favicon-256x256.png',
-      tag: `meshcore-notification-preview-channel-${incomingChannelMessage.conversation_key}`,
-    });
-    expect(mocks.toast.warning).toHaveBeenCalledWith('Notifications enabled with warning', {
-      description:
-        'Desktop notifications are on for this conversation, but you are using HTTP instead of HTTPS. Notifications will likely not work reliably.',
+    expect(window.Notification).toHaveBeenCalledWith(
+      i18n.t('notifications.newMessageIn', { name: '#flightless' }),
+      {
+        body: i18n.t('notifications.previewBody'),
+        icon: './favicon-256x256.png',
+        tag: `meshcore-notification-preview-channel-${incomingChannelMessage.conversation_key}`,
+      }
+    );
+    expect(mocks.toast.warning).toHaveBeenCalledWith(i18n.t('notifications.enabledWarning'), {
+      description: i18n.t('notifications.httpWarning'),
     });
   });
 
@@ -120,11 +128,15 @@ describe('useBrowserNotifications', () => {
     });
 
     expect(window.Notification).toHaveBeenCalledTimes(2);
-    expect(window.Notification).toHaveBeenNthCalledWith(2, 'New message in #flightless', {
-      body: 'hello room',
-      icon: './favicon-256x256.png',
-      tag: 'meshcore-message-42',
-    });
+    expect(window.Notification).toHaveBeenNthCalledWith(
+      2,
+      i18n.t('notifications.newMessageIn', { name: '#flightless' }),
+      {
+        body: 'hello room',
+        icon: './favicon-256x256.png',
+        tag: 'meshcore-message-42',
+      }
+    );
   });
 
   it('notification click deep-links to the conversation hash', async () => {
@@ -176,9 +188,8 @@ describe('useBrowserNotifications', () => {
       );
     });
 
-    expect(mocks.toast.error).toHaveBeenCalledWith('Notifications blocked', {
-      description:
-        'Desktop notifications are blocked by your browser. Allow notifications in browser settings, then try again. Non-HTTPS or untrusted HTTPS origins may also prevent notifications from working reliably.',
+    expect(mocks.toast.error).toHaveBeenCalledWith(i18n.t('notifications.blocked'), {
+      description: i18n.t('notifications.blockedDetail'),
     });
   });
 
@@ -193,11 +204,10 @@ describe('useBrowserNotifications', () => {
       );
     });
 
-    expect(mocks.toast.warning).toHaveBeenCalledWith('Notifications enabled with warning', {
-      description:
-        'Desktop notifications are on for this conversation, but you are using HTTP instead of HTTPS. Notifications will likely not work reliably.',
+    expect(mocks.toast.warning).toHaveBeenCalledWith(i18n.t('notifications.enabledWarning'), {
+      description: i18n.t('notifications.httpWarning'),
     });
-    expect(mocks.toast.success).not.toHaveBeenCalledWith('Notifications enabled');
+    expect(mocks.toast.success).not.toHaveBeenCalledWith(i18n.t('notifications.enabled'));
   });
 
   it('best-effort detects insecure HTTPS for the enable-warning copy', () => {
@@ -208,9 +218,8 @@ describe('useBrowserNotifications', () => {
       })
     ).toEqual({
       level: 'warning',
-      title: 'Notifications enabled with warning',
-      description:
-        'Desktop notifications are on for this conversation, but your HTTPS connection is untrusted, such as a self-signed certificate. Notification delivery may be inconsistent depending on your browser.',
+      title: i18n.t('notifications.enabledWarning'),
+      description: i18n.t('notifications.httpsUntrustedWarning'),
     });
   });
 
@@ -233,8 +242,8 @@ describe('useBrowserNotifications', () => {
       );
     });
 
-    expect(mocks.toast.success).toHaveBeenCalledWith('Notifications disabled', {
-      description: 'Desktop notifications are off for #flightless.',
+    expect(mocks.toast.success).toHaveBeenCalledWith(i18n.t('notifications.disabled'), {
+      description: i18n.t('notifications.disabledOn', { label: '#flightless' }),
     });
   });
 });

@@ -3,6 +3,7 @@ import type { SimulationLinkDatum } from 'd3-force';
 import type { SimulationNodeDatum3D } from 'd3-force-3d';
 import type { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
+import i18n from '../../i18n';
 import type { NodeType } from '../../utils/visualizerUtils';
 
 export interface GraphNode extends SimulationNodeDatum3D {
@@ -70,15 +71,18 @@ export function arraysEqual(a: string[], b: string[]): boolean {
 
 export function formatRelativeTime(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 5) return 'just now';
-  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 5) return i18n.t('visualizer.justNow');
+  if (seconds < 60) return i18n.t('visualizer.secondsAgo', { count: seconds });
   const minutes = Math.floor(seconds / 60);
   const secs = seconds % 60;
-  return secs > 0 ? `${minutes}m ${secs}s ago` : `${minutes}m ago`;
+  return secs > 0
+    ? i18n.t('visualizer.minutesSecondsAgo', { minutes, seconds: secs })
+    : i18n.t('visualizer.minutesAgo', { minutes });
 }
 
 export function getSceneNodeLabel(node: Pick<GraphNode, 'id' | 'name' | 'type' | 'isAmbiguous'>) {
-  const baseLabel = node.name || (node.type === 'self' ? 'Me' : node.id.slice(0, 8));
+  const baseLabel =
+    node.name || (node.type === 'self' ? i18n.t('visualizer.me') : node.id.slice(0, 8));
   return node.isAmbiguous ? `${baseLabel} (?)` : baseLabel;
 }
 

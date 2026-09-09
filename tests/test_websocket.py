@@ -248,6 +248,69 @@ class TestBroadcastEventFanout:
             mock_fm.broadcast_raw.assert_called_once_with({"data": "ff00"})
 
 
+class TestBroadcastErrorSuccessCodes:
+    """Stable i18n codes on error/success toasts must not drop the English message."""
+
+    @pytest.mark.asyncio
+    async def test_broadcast_error_payload_without_code_is_unchanged(self):
+        from app.websocket import broadcast_error
+
+        with patch("app.websocket.ws_manager") as mock_ws:
+            mock_ws.broadcast = AsyncMock()
+            broadcast_error("Radio not connected")
+            await asyncio.sleep(0)
+
+        mock_ws.broadcast.assert_called_once_with("error", {"message": "Radio not connected"})
+
+    @pytest.mark.asyncio
+    async def test_broadcast_error_includes_code_and_params(self):
+        from app.websocket import broadcast_error
+
+        with patch("app.websocket.ws_manager") as mock_ws:
+            mock_ws.broadcast = AsyncMock()
+            broadcast_error(
+                "Cannot decrypt historical DMs",
+                "Private key not available.",
+                code="cannot_decrypt_historical_dms",
+                params={"name": "Alice"},
+            )
+            await asyncio.sleep(0)
+
+        mock_ws.broadcast.assert_called_once_with(
+            "error",
+            {
+                "message": "Cannot decrypt historical DMs",
+                "details": "Private key not available.",
+                "code": "cannot_decrypt_historical_dms",
+                "params": {"name": "Alice"},
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_broadcast_success_includes_code(self):
+        from app.websocket import broadcast_success
+
+        with patch("app.websocket.ws_manager") as mock_ws:
+            mock_ws.broadcast = AsyncMock()
+            broadcast_success(
+                "Historical decrypt complete for Alice",
+                "Decrypted 1 message",
+                code="historical_decrypt_complete",
+                params={"name": "Alice"},
+            )
+            await asyncio.sleep(0)
+
+        mock_ws.broadcast.assert_called_once_with(
+            "success",
+            {
+                "message": "Historical decrypt complete for Alice",
+                "details": "Decrypted 1 message",
+                "code": "historical_decrypt_complete",
+                "params": {"name": "Alice"},
+            },
+        )
+
+
 class TestTypedEventSerialization:
     """Tests for typed websocket event serialization."""
 
@@ -269,6 +332,27 @@ class TestTypedEventSerialization:
         assert json.loads(serialized) == {
             "type": "message_deleted",
             "data": {"message_id": 42},
+        }
+
+    def test_dump_ws_event_preserves_toast_code_and_params(self):
+        from app.events import dump_ws_event
+
+        serialized = dump_ws_event(
+            "error",
+            {
+                "message": "Radio not connected",
+                "code": "radio_not_connected",
+                "params": {"name": "Alice"},
+            },
+        )
+
+        assert json.loads(serialized) == {
+            "type": "error",
+            "data": {
+                "message": "Radio not connected",
+                "code": "radio_not_connected",
+                "params": {"name": "Alice"},
+            },
         }
 
     def test_dump_ws_event_falls_back_to_raw_payload_when_validation_fails(self):

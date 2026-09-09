@@ -15,6 +15,7 @@ import {
 import { findPublicChannel } from '../utils/publicChannel';
 import { getContactDisplayName } from '../utils/pubkey';
 import { toast } from '../components/ui/sonner';
+import i18n from '../i18n';
 import type { Channel, Contact, Conversation } from '../types';
 
 function resolvePublicFromChannels(channels: Channel[]): Conversation | null {
@@ -225,7 +226,7 @@ export function useConversationRouter({
       if (hashConv?.type === 'channel') {
         const token =
           hashConv.name.length > 16 ? hashConv.name.substring(0, 16) + '…' : hashConv.name;
-        toast.error(`Channel not found: ${token}`);
+        toast.error(i18n.t('toast.channelNotFound', { token }));
       }
       setActiveConversationState(publicConversation);
       hasSetDefaultConversation.current = true;
@@ -254,7 +255,7 @@ export function useConversationRouter({
       // Contact hash didn't match — fall back to Public if channels loaded.
       const token =
         hashConv.name.length > 16 ? hashConv.name.substring(0, 16) + '…' : hashConv.name;
-      toast.error(`Contact not found: ${token}`);
+      toast.error(i18n.t('toast.contactNotFound', { token }));
       const publicConversation = getPublicChannelConversation();
       if (publicConversation) {
         setActiveConversationState(publicConversation);

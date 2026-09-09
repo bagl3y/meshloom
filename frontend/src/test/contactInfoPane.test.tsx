@@ -3,6 +3,11 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { ContactInfoPane } from '../components/ContactInfoPane';
 import i18n from '../i18n';
+import sliceEn from '../i18n/locales/slices/b.en.json';
+import sliceFr from '../i18n/locales/slices/b.fr.json';
+
+i18n.addResourceBundle('en', 'translation', sliceEn, true, true);
+i18n.addResourceBundle('fr', 'translation', sliceFr, true, true);
 import type { Contact, ContactAnalytics } from '../types';
 
 const { getContactAnalytics, contactTelemetryHistory } = vi.hoisted(() => ({
@@ -124,8 +129,8 @@ describe('ContactInfoPane', () => {
 
     await screen.findByText(contact.public_key);
     await waitFor(() => {
-      expect(screen.getByText('Hop Width')).toBeInTheDocument();
-      expect(screen.getByText('2-byte IDs')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.hopWidth'))).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.byteIds', { n: 2 }))).toBeInTheDocument();
     });
   });
 
@@ -137,8 +142,8 @@ describe('ContactInfoPane', () => {
 
     await screen.findByText('Alice');
     await waitFor(() => {
-      expect(screen.queryByText('Hop Width')).not.toBeInTheDocument();
-      expect(screen.getByText('Flood')).toBeInTheDocument();
+      expect(screen.queryByText(i18n.t('contactInfo.hopWidth'))).not.toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.flood'))).toBeInTheDocument();
     });
   });
 
@@ -156,10 +161,10 @@ describe('ContactInfoPane', () => {
 
     await screen.findByText('Alice');
     await waitFor(() => {
-      expect(screen.getByText('Routing')).toBeInTheDocument();
-      expect(screen.getByText('(forced)')).toBeInTheDocument();
-      expect(screen.getByText('Learned Route')).toBeInTheDocument();
-      expect(screen.getByText('1 hop')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.routing'))).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.forced'))).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.learnedRoute'))).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.hopCount', { count: 1 }))).toBeInTheDocument();
     });
   });
 
@@ -198,19 +203,24 @@ describe('ContactInfoPane', () => {
         { name: 'Mystery' },
         expect.any(AbortSignal)
       );
-      expect(screen.getByText('Messages')).toBeInTheDocument();
-      expect(screen.getByText('Channel Messages')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.messages'))).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.channelMessages'))).toBeInTheDocument();
       expect(screen.getByText('4', { selector: 'p' })).toBeInTheDocument();
-      expect(screen.getByText('Name First In Use')).toBeInTheDocument();
-      expect(screen.getByText('Messages Per Hour')).toBeInTheDocument();
-      expect(screen.getByText('Messages Per Week')).toBeInTheDocument();
-      expect(screen.getByText('Most Active Channels')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.nameFirstInUse'))).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.perHour'))).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.perWeek'))).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.mostActive'))).toBeInTheDocument();
       expect(screen.getByText('#ops')).toBeInTheDocument();
       expect(
-        screen.getByText(/Name-only analytics include channel messages only/i)
+        screen.getByText(i18n.t('contactInfo.nameOnlyHelp'), { exact: false })
       ).toBeInTheDocument();
-      expect(screen.getByText(/same sender name/i)).toBeInTheDocument();
-      expect(screen.getByText("Search user's messages by name")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          i18n.t('contactInfo.attribution', { kind: i18n.t('contactInfo.attributionName') }),
+          { exact: false }
+        )
+      ).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.searchByName'))).toBeInTheDocument();
     });
   });
 
@@ -221,7 +231,7 @@ describe('ContactInfoPane', () => {
 
     render(<ContactInfoPane {...baseProps} contactKey="name:Mystery" fromChannel />);
 
-    const button = await screen.findByRole('button', { name: "Search user's messages by name" });
+    const button = await screen.findByRole('button', { name: i18n.t('contactInfo.searchByName') });
     button.click();
 
     expect(baseProps.onSearchMessagesByName).toHaveBeenCalledWith('Mystery');
@@ -242,13 +252,10 @@ describe('ContactInfoPane', () => {
 
     await screen.findByText(contact.public_key);
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Also Known As' })).toBeInTheDocument();
-      expect(
-        screen.getByText(
-          /may include messages previously attributed under names shown in Also Known As/i
-        )
-      ).toBeInTheDocument();
-      expect(screen.getByText("Search user's messages by key")).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: i18n.t('contactInfo.aka') })).toBeInTheDocument();
+      const aliasNote = i18n.t('contactInfo.attributionAlias').trim();
+      expect(screen.getByText(aliasNote, { exact: false })).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('contactInfo.searchByKey'))).toBeInTheDocument();
     });
   });
 
@@ -266,7 +273,7 @@ describe('ContactInfoPane', () => {
     );
 
     const button = await screen.findByTestId('locate-contact-cta');
-    expect(screen.queryByText('Location')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('contactInfo.location'))).not.toBeInTheDocument();
     button.click();
     expect(onLocateContact).toHaveBeenCalledWith(contact.public_key);
   });
@@ -277,7 +284,7 @@ describe('ContactInfoPane', () => {
 
     render(<ContactInfoPane {...baseProps} contactKey={contact.public_key} />);
 
-    const button = await screen.findByRole('button', { name: "Search user's messages by key" });
+    const button = await screen.findByRole('button', { name: i18n.t('contactInfo.searchByKey') });
     button.click();
 
     expect(baseProps.onSearchMessagesByKey).toHaveBeenCalledWith(contact.public_key);

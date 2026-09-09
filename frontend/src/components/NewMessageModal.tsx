@@ -47,11 +47,11 @@ interface NewMessageModalProps {
 
 function validateHashtagName(channelName: string, permitExtended: boolean): string | null {
   if (!channelName) {
-    return 'Channel name is required';
+    return 'newMessage.hashtagRequired';
   }
   // The on-radio channel name field holds 32 UTF-8 bytes including the leading '#'.
   if (new TextEncoder().encode(`#${channelName}`).length > 32) {
-    return 'Channel name is too long (max 32 bytes including #)';
+    return 'newMessage.hashtagTooLong';
   }
   if (permitExtended) {
     // Hashed verbatim, matching meshcore_py / meshcore-cli / meshcore.js — any character
@@ -59,7 +59,7 @@ function validateHashtagName(channelName: string, permitExtended: boolean): stri
     return null;
   }
   if (!/^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*$/.test(channelName)) {
-    return 'Use letters, numbers, and single dashes (no leading/trailing dashes)';
+    return 'newMessage.hashtagInvalid';
   }
   return null;
 }
@@ -203,13 +203,13 @@ export function NewMessageModal({
     try {
       if (tab === 'new-contact') {
         if (!name.trim() || !contactKey.trim()) {
-          setError('Name and public key are required');
+          setError(t('newMessage.nameRequired'));
           return;
         }
         await onCreateContact(name.trim(), contactKey.trim(), tryHistorical, contactType);
       } else if (tab === 'new-channel') {
         if (!name.trim() || !channelKey.trim()) {
-          setError('Channel name and key are required');
+          setError(t('newMessage.channelRequired'));
           return;
         }
         await onCreateChannel(name.trim(), channelKey.trim(), tryHistorical);
@@ -217,7 +217,7 @@ export function NewMessageModal({
         const channelName = name.trim();
         const validationError = validateHashtagName(channelName, permitExtended);
         if (validationError) {
-          setError(validationError);
+          setError(t(validationError));
           return;
         }
         const normalizedName = permitExtended ? channelName : channelName.toLowerCase();
@@ -228,11 +228,11 @@ export function NewMessageModal({
           permitExtended
         );
         if (channelNames.length === 0) {
-          setError('Enter at least one valid channel name');
+          setError(t('newMessage.bulkEmpty'));
           return;
         }
         if (invalidNames.length > 0) {
-          setError(`Invalid channel names: ${invalidNames.join(', ')}`);
+          setError(t('newMessage.invalidNames', { names: invalidNames.join(', ') }));
           return;
         }
         await onBulkAddHashtagChannels(channelNames, tryHistorical);
@@ -241,10 +241,10 @@ export function NewMessageModal({
       resetForm();
       onClose();
     } catch (err) {
-      toast.error('Failed to create conversation', {
+      toast.error(t('newMessage.createFailed'), {
         description: err instanceof Error ? err.message : undefined,
       });
-      setError(err instanceof Error ? err.message : 'Failed to create');
+      setError(err instanceof Error ? err.message : t('newMessage.createFailedShort'));
     } finally {
       setLoading(false);
     }
@@ -255,7 +255,7 @@ export function NewMessageModal({
     const channelName = name.trim();
     const validationError = validateHashtagName(channelName, permitExtended);
     if (validationError) {
-      setError(validationError);
+      setError(t(validationError));
       return;
     }
 
@@ -266,10 +266,10 @@ export function NewMessageModal({
       setName('');
       hashtagInputRef.current?.focus();
     } catch (err) {
-      toast.error('Failed to create conversation', {
+      toast.error(t('newMessage.createFailed'), {
         description: err instanceof Error ? err.message : undefined,
       });
-      setError(err instanceof Error ? err.message : 'Failed to create');
+      setError(err instanceof Error ? err.message : t('newMessage.createFailedShort'));
     } finally {
       setLoading(false);
     }
@@ -289,12 +289,12 @@ export function NewMessageModal({
     >
       <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
-          <DialogTitle>New Conversation</DialogTitle>
+          <DialogTitle>{t('newMessage.title')}</DialogTitle>
           <DialogDescription className="sr-only">
-            {tab === 'new-contact' && 'Add a new contact by entering their name and public key'}
-            {tab === 'new-channel' && 'Create a private channel with a shared encryption key'}
-            {tab === 'hashtag' && 'Join a public hashtag channel'}
-            {tab === 'bulk-hashtag' && 'Paste multiple hashtag channels to add them in one batch'}
+            {tab === 'new-contact' && t('newMessage.descContact')}
+            {tab === 'new-channel' && t('newMessage.descChannel')}
+            {tab === 'hashtag' && t('newMessage.descHashtag')}
+            {tab === 'bulk-hashtag' && t('newMessage.descBulk')}
           </DialogDescription>
         </DialogHeader>
 
@@ -330,17 +330,17 @@ export function NewMessageModal({
               showBulkAddChannelTab ? 'grid w-full grid-cols-4' : 'grid w-full grid-cols-3'
             }
           >
-            <TabsTrigger value="new-contact">Contact</TabsTrigger>
-            <TabsTrigger value="new-channel">Private Channel</TabsTrigger>
-            <TabsTrigger value="hashtag">Hashtag Channel</TabsTrigger>
+            <TabsTrigger value="new-contact">{t('newMessage.tabContact')}</TabsTrigger>
+            <TabsTrigger value="new-channel">{t('newMessage.tabChannel')}</TabsTrigger>
+            <TabsTrigger value="hashtag">{t('newMessage.tabHashtag')}</TabsTrigger>
             {showBulkAddChannelTab && (
-              <TabsTrigger value="bulk-hashtag">Bulk Add Channel</TabsTrigger>
+              <TabsTrigger value="bulk-hashtag">{t('newMessage.tabBulk')}</TabsTrigger>
             )}
           </TabsList>
 
           <TabsContent value="new-contact" className="mt-4 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="contact-name">Name</Label>
+              <Label htmlFor="contact-name">{t('newMessage.name')}</Label>
               <Input
                 id="contact-name"
                 value={name}
@@ -351,11 +351,11 @@ export function NewMessageModal({
                     e.preventDefault();
                   }
                 }}
-                placeholder="Contact name"
+                placeholder={t('newMessage.namePlaceholder')}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="contact-key">Public Key</Label>
+              <Label htmlFor="contact-key">{t('newMessage.publicKey')}</Label>
               <Input
                 id="contact-key"
                 value={contactKey}
@@ -366,28 +366,28 @@ export function NewMessageModal({
                     e.preventDefault();
                   }
                 }}
-                placeholder="64-character hex public key"
+                placeholder={t('newMessage.publicKeyPlaceholder')}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="contact-type">Type</Label>
+              <Label htmlFor="contact-type">{t('newMessage.type')}</Label>
               <select
                 id="contact-type"
                 value={contactType}
                 onChange={(e) => setContactType(Number(e.target.value))}
                 className="block h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm"
               >
-                <option value={1}>Client</option>
-                <option value={2}>Repeater</option>
-                <option value={3}>Room Server</option>
-                <option value={4}>Sensor</option>
+                <option value={1}>{t('newMessage.typeClient')}</option>
+                <option value={2}>{t('newMessage.typeRepeater')}</option>
+                <option value={3}>{t('newMessage.typeRoom')}</option>
+                <option value={4}>{t('newMessage.typeSensor')}</option>
               </select>
             </div>
           </TabsContent>
 
           <TabsContent value="new-channel" className="mt-4 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="channel-name">Channel Name</Label>
+              <Label htmlFor="channel-name">{t('newMessage.channelName')}</Label>
               <Input
                 id="channel-name"
                 value={name}
@@ -398,11 +398,11 @@ export function NewMessageModal({
                     e.preventDefault();
                   }
                 }}
-                placeholder="Channel name"
+                placeholder={t('newMessage.channelNamePlaceholder')}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="channel-key">Channel Key</Label>
+              <Label htmlFor="channel-key">{t('newMessage.channelKey')}</Label>
               <div className="flex gap-2">
                 <Input
                   id="channel-key"
@@ -414,7 +414,7 @@ export function NewMessageModal({
                       e.preventDefault();
                     }
                   }}
-                  placeholder="Pre-shared key (hex)"
+                  placeholder={t('newMessage.channelKeyPlaceholder')}
                   className="flex-1"
                 />
                 <Button
@@ -429,8 +429,8 @@ export function NewMessageModal({
                       .join('');
                     setChannelKey(hex);
                   }}
-                  title="Generate random key"
-                  aria-label="Generate random key"
+                  title={t('newMessage.generateKey')}
+                  aria-label={t('newMessage.generateKey')}
                 >
                   <Dice5 className="h-4 w-4" aria-hidden="true" />
                 </Button>
@@ -440,7 +440,7 @@ export function NewMessageModal({
 
           <TabsContent value="hashtag" className="mt-4">
             <div className="space-y-2">
-              <Label htmlFor="hashtag-name">Hashtag Channel</Label>
+              <Label htmlFor="hashtag-name">{t('newMessage.hashtagLabel')}</Label>
               <div className="flex items-center gap-1">
                 <span className="text-sm text-muted-foreground">#</span>
                 <Input
@@ -448,7 +448,7 @@ export function NewMessageModal({
                   id="hashtag-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="channel-name"
+                  placeholder={t('newMessage.hashtagPlaceholder')}
                   className="flex-1"
                 />
               </div>
@@ -461,14 +461,10 @@ export function NewMessageModal({
                   onChange={(e) => setPermitExtended(e.target.checked)}
                   className="h-4 w-4 rounded border-input accent-primary"
                 />
-                <span className="text-sm">
-                  Permit capitals, whitespace, and extended characters
-                </span>
+                <span className="text-sm">{t('newMessage.permitExtended')}</span>
               </label>
               <p className="pl-7 text-xs text-muted-foreground">
-                Off normalizes to lowercase letters, numbers, and dashes. On hashes the name exactly
-                as typed — matches other MeshCore clients and lets you join channels with capitals,
-                spaces, or symbols like &amp;.
+                {t('newMessage.permitExtendedHelp')}
               </p>
             </div>
           </TabsContent>
@@ -476,20 +472,18 @@ export function NewMessageModal({
           {showBulkAddChannelTab && (
             <TabsContent value="bulk-hashtag" className="mt-4 space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="bulk-hashtag-names">Bulk Add Channel</Label>
+                <Label htmlFor="bulk-hashtag-names">{t('newMessage.bulkLabel')}</Label>
                 <textarea
                   ref={bulkTextareaRef}
                   id="bulk-hashtag-names"
-                  aria-label="Bulk channel names"
+                  aria-label={t('newMessage.bulkNamesAria')}
                   value={bulkChannelText}
                   onChange={(e) => setBulkChannelText(e.target.value)}
                   placeholder={'#ops\nmesh-chat\nanother-channel'}
                   className="min-h-48 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {permitExtended
-                    ? 'One channel name per line (or comma-separated); spaces are kept as part of the name. Leading # marks are stripped automatically.'
-                    : 'Paste channel names separated by lines, spaces, or commas. Leading # marks are stripped automatically.'}
+                  {permitExtended ? t('newMessage.bulkHelpExtended') : t('newMessage.bulkHelp')}
                 </p>
               </div>
               <div className="space-y-1">
@@ -500,14 +494,10 @@ export function NewMessageModal({
                     onChange={(e) => setPermitExtended(e.target.checked)}
                     className="h-4 w-4 rounded border-input accent-primary"
                   />
-                  <span className="text-sm">
-                    Permit capitals, whitespace, and extended characters
-                  </span>
+                  <span className="text-sm">{t('newMessage.permitExtended')}</span>
                 </label>
                 <p className="pl-7 text-xs text-muted-foreground">
-                  Off normalizes to lowercase letters, numbers, and dashes. On hashes each name
-                  exactly as typed — matches other MeshCore clients and lets you join channels with
-                  capitals, spaces, or symbols like &amp;.
+                  {t('newMessage.permitExtendedHelpBulk')}
                 </p>
               </div>
             </TabsContent>
@@ -521,8 +511,7 @@ export function NewMessageModal({
                 htmlFor="try-historical"
                 className="cursor-pointer text-sm text-muted-foreground"
               >
-                Try decrypting {undecryptedCount.toLocaleString()} stored packet
-                {undecryptedCount !== 1 ? 's' : ''}
+                {t('newMessage.tryDecrypt', { count: undecryptedCount })}
               </Label>
               <Checkbox
                 id="try-historical"
@@ -532,7 +521,7 @@ export function NewMessageModal({
             </div>
             {tryHistorical && (
               <p className="text-right text-xs text-muted-foreground">
-                Messages will stream in as they decrypt in the background
+                {t('newMessage.tryDecryptHelp')}
               </p>
             )}
           </div>
@@ -552,21 +541,21 @@ export function NewMessageModal({
               onClose();
             }}
           >
-            Cancel
+            {t('newMessage.cancel')}
           </Button>
           {tab === 'hashtag' && (
             <Button variant="secondary" onClick={handleCreateAndAddAnother} disabled={loading}>
-              {loading ? 'Creating...' : 'Create & Add Another'}
+              {loading ? t('newMessage.creating') : t('newMessage.createAnother')}
             </Button>
           )}
           <Button onClick={handleCreate} disabled={loading}>
             {loading
               ? tab === 'bulk-hashtag'
-                ? 'Adding...'
-                : 'Creating...'
+                ? t('newMessage.adding')
+                : t('newMessage.creating')
               : tab === 'bulk-hashtag'
-                ? 'Add Channels'
-                : 'Create'}
+                ? t('newMessage.addChannels')
+                : t('newMessage.create')}
           </Button>
         </DialogFooter>
       </DialogContent>

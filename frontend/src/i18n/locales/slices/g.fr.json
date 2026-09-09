@@ -1,0 +1,15 @@
+{
+  "errors": {
+    "radio_not_connected": "Radio non connectée",
+    "radio_initializing": "Radio en cours d'initialisation",
+    "radio_startup_stuck": "Le démarrage de la radio semble bloqué",
+    "reconnection_failed": "Échec de la reconnexion",
+    "radio_no_response_after_send": "La commande d'envoi a été transmise à la radio, mais aucune réponse n'a été reçue. Le message a peut-être été envoyé, ou non.",
+    "cannot_decrypt_historical_dms": "Impossible de déchiffrer les messages privés historiques",
+    "historical_decrypt_complete": "Déchiffrement historique terminé pour {{name}}",
+    "radio_contacts_enum_failed": "Impossible d'énumérer les contacts de la radio",
+    "radio_inconsistency_found": "Une tâche périodique a détecté des incohérences radio.",
+    "mqtt_connected": "MQTT connecté",
+    "community_mqtt_unavailable": "MQTT communautaire indisponible"
+  }
+}

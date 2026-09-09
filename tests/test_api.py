@@ -438,7 +438,9 @@ class TestRadioDisconnectedHandler:
             )
 
         assert response.status_code == 423
-        assert "not connected" in response.json()["detail"].lower()
+        detail = response.json()["detail"]
+        assert detail["code"] == "radio_not_connected"
+        assert "not connected" in detail["message"].lower()
 
 
 class TestDebugApplicationInfo:

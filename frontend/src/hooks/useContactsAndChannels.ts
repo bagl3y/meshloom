@@ -1,7 +1,8 @@
 import { useState, useCallback, type MutableRefObject } from 'react';
-import { api } from '../api';
+import { api, formatApiError } from '../api';
 import { takePrefetchOrFetch } from '../prefetch';
 import { toast } from '../components/ui/sonner';
+import i18n from '../i18n';
 import { getContactDisplayName } from '../utils/pubkey';
 import { findPublicChannel, PUBLIC_CHANNEL_KEY, PUBLIC_CHANNEL_NAME } from '../utils/publicChannel';
 import type { BulkCreateHashtagChannelsResult, Channel, Contact, Conversation } from '../types';
@@ -132,7 +133,7 @@ export function useContactsAndChannels({
 
   const handleDeleteChannel = useCallback(
     async (key: string) => {
-      if (!confirm('Delete this channel? Message history will be preserved.')) return;
+      if (!confirm(i18n.t('toast.deleteChannelConfirm'))) return;
       try {
         pendingDeleteFallbackRef.current = true;
         await api.deleteChannel(key);
@@ -146,11 +147,11 @@ export function useContactsAndChannels({
           id: publicChannel?.key || PUBLIC_CHANNEL_KEY,
           name: publicChannel?.name || PUBLIC_CHANNEL_NAME,
         });
-        toast.success('Channel deleted');
+        toast.success(i18n.t('toast.channelDeleted'));
       } catch (err) {
         console.error('Failed to delete channel:', err);
-        toast.error('Failed to delete channel', {
-          description: err instanceof Error ? err.message : undefined,
+        toast.error(i18n.t('toast.deleteChannelFailed'), {
+          description: formatApiError(err, i18n.t),
         });
       }
     },
@@ -164,7 +165,7 @@ export function useContactsAndChannels({
 
   const handleDeleteContact = useCallback(
     async (publicKey: string) => {
-      if (!confirm('Delete this contact? Message history will be preserved.')) return;
+      if (!confirm(i18n.t('toast.deleteContactConfirm'))) return;
       try {
         pendingDeleteFallbackRef.current = true;
         await api.deleteContact(publicKey);
@@ -179,11 +180,11 @@ export function useContactsAndChannels({
           id: publicChannel?.key || PUBLIC_CHANNEL_KEY,
           name: publicChannel?.name || PUBLIC_CHANNEL_NAME,
         });
-        toast.success('Contact deleted');
+        toast.success(i18n.t('toast.contactDeleted'));
       } catch (err) {
         console.error('Failed to delete contact:', err);
-        toast.error('Failed to delete contact', {
-          description: err instanceof Error ? err.message : undefined,
+        toast.error(i18n.t('toast.deleteContactFailed'), {
+          description: formatApiError(err, i18n.t),
         });
       }
     },

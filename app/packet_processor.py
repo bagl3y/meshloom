@@ -228,6 +228,8 @@ async def run_historical_dm_decryption(
         broadcast_success(
             f"Historical decrypt complete for {name}",
             f"Decrypted {decrypted_count} message{'s' if decrypted_count != 1 else ''}",
+            code="historical_decrypt_complete",
+            params={"name": name},
         )
 
 
@@ -242,9 +244,12 @@ async def start_historical_dm_decryption(
             "Cannot start historical DM decryption: private key not available. "
             "Ensure radio firmware has ENABLE_PRIVATE_KEY_EXPORT=1."
         )
+        params = {"name": display_name} if display_name else None
         broadcast_error(
             "Cannot decrypt historical DMs",
             "Private key not available. Radio firmware may need ENABLE_PRIVATE_KEY_EXPORT=1.",
+            code="cannot_decrypt_historical_dms",
+            params=params,
         )
         return
 

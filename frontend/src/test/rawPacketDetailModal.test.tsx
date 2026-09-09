@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import './eSlices';
 import { RawPacketDetailModal } from '../components/RawPacketDetailModal';
+import i18n from '../i18n';
 import type { Channel, RawPacket } from '../types';
 
 vi.mock('../components/ui/sonner', () => ({
@@ -61,10 +63,10 @@ describe('RawPacketDetailModal', () => {
 
     render(<RawPacketDetailModal packet={BOT_PACKET} channels={[BOT_CHANNEL]} onClose={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('rawPacket.copy') }));
 
     expect(writeText).toHaveBeenCalledWith(BOT_PACKET.data);
-    expect(mockToast.success).toHaveBeenCalledWith('Packet hex copied!');
+    expect(mockToast.success).toHaveBeenCalledWith(i18n.t('rawPacket.copied'));
   });
 
   it('renders path hops as nowrap arrow-delimited groups and links hover state to the full packet hex', () => {
@@ -94,9 +96,11 @@ describe('RawPacketDetailModal', () => {
   it('shows scope card with transport codes for scoped packets without a resolved region', () => {
     render(<RawPacketDetailModal packet={SCOPED_PACKET} channels={[]} onClose={vi.fn()} />);
 
-    expect(screen.getByText('Scope')).toBeInTheDocument();
-    expect(screen.getByText('Regional')).toBeInTheDocument();
-    expect(screen.getByText('0x1234, 0x5678 · unknown region')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.scope'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.regional'))).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('rawPacket.unknownRegion', { codes: '0x1234, 0x5678' }))
+    ).toBeInTheDocument();
   });
 
   it('shows the resolved region name in the scope card when the backend matched one', () => {
@@ -108,7 +112,7 @@ describe('RawPacketDetailModal', () => {
       />
     );
 
-    expect(screen.getByText('Scope')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.scope'))).toBeInTheDocument();
     expect(screen.getByText('nl-gr')).toBeInTheDocument();
     // Raw codes remain visible as the secondary detail.
     expect(screen.getByText('0x1234, 0x5678')).toBeInTheDocument();
@@ -117,6 +121,6 @@ describe('RawPacketDetailModal', () => {
   it('does not show scope card for non-transport packets', () => {
     render(<RawPacketDetailModal packet={BOT_PACKET} channels={[BOT_CHANNEL]} onClose={vi.fn()} />);
 
-    expect(screen.queryByText('Scope')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('rawPacket.scope'))).not.toBeInTheDocument();
   });
 });

@@ -1,3 +1,4 @@
+import { Trans, useTranslation } from 'react-i18next';
 import type { HealthStatus } from '../../types';
 import { Separator } from '../ui/separator';
 
@@ -10,6 +11,7 @@ export function SettingsAboutSection({
   health?: HealthStatus | null;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const version = health?.app_info?.version ?? 'unknown';
   const commit = health?.app_info?.commit_hash;
 
@@ -52,37 +54,49 @@ export function SettingsAboutSection({
         {/* Author & License */}
         <div className="text-sm text-center space-y-2">
           <p>
-            Made with love and open source by{' '}
-            <a
-              href="https://jacksbrain.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              Jack Kingsman
-            </a>
+            <Trans
+              i18nKey="settings.about.madeBy"
+              components={{
+                author: (
+                  <a
+                    href="https://jacksbrain.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  />
+                ),
+              }}
+            />
           </p>
           <p>
-            Licensed under the{' '}
-            <a
-              href={`${GITHUB_URL}/blob/main/LICENSE.md`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              MIT License
-            </a>
+            <Trans
+              i18nKey="settings.about.licensed"
+              components={{
+                license: (
+                  <a
+                    href={`${GITHUB_URL}/blob/main/LICENSE.md`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  />
+                ),
+              }}
+            />
           </p>
           <p>
-            This code is free, and ad-free, forever. If you love my work,{' '}
-            <a
-              href="https://ko-fi.com/jackkingsman"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              buy me a coffee!
-            </a>
+            <Trans
+              i18nKey="settings.about.kofi"
+              components={{
+                kofi: (
+                  <a
+                    href="https://ko-fi.com/jackkingsman"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  />
+                ),
+              }}
+            />
           </p>
         </div>
 
@@ -96,7 +110,7 @@ export function SettingsAboutSection({
             rel="noopener noreferrer"
             className="text-primary hover:underline"
           >
-            GitHub
+            {t('settings.about.github')}
           </a>
           <a
             href={`${GITHUB_URL}/issues`}
@@ -104,7 +118,7 @@ export function SettingsAboutSection({
             rel="noopener noreferrer"
             className="text-primary hover:underline"
           >
-            Report a Bug
+            {t('settings.about.reportBug')}
           </a>
           <a
             href={`${GITHUB_URL}/blob/main/CHANGELOG.md`}
@@ -112,7 +126,7 @@ export function SettingsAboutSection({
             rel="noopener noreferrer"
             className="text-primary hover:underline"
           >
-            Changelog
+            {t('settings.about.changelog')}
           </a>
         </div>
 
@@ -120,7 +134,7 @@ export function SettingsAboutSection({
 
         {/* Acknowledgements */}
         <div className="text-sm text-center text-muted-foreground space-y-2">
-          <p>With great appreciation to those who have made the tools upon which this is built:</p>
+          <p>{t('settings.about.thanks')}</p>
           <p>
             <a
               href="https://github.com/meshcore-dev/MeshCore"
@@ -151,7 +165,7 @@ export function SettingsAboutSection({
             rel="noopener noreferrer"
             className="text-xs text-muted-foreground hover:text-primary hover:underline"
           >
-            Open debug support snapshot
+            {t('settings.about.debugSnapshot')}
           </a>
         </div>
       </div>

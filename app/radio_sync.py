@@ -497,6 +497,7 @@ async def sync_and_offload_all(mc: MeshCore) -> dict:
             "is already full. Set MESHCORE_LOAD_WITH_AUTOEVICT=true for more "
             "reliable loading without needing to read the radio first. "
             "See 'Contact Loading Issues' in the Advanced Setup documentation.",
+            code="radio_contacts_enum_failed",
         )
 
     start_background_contact_reconciliation(
@@ -639,6 +640,7 @@ async def audit_channel_send_cache(mc: MeshCore) -> bool:
         "A periodic poll task has discovered radio inconsistencies.",
         "Please check the logs for recommendations (search "
         "'MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE').",
+        code="radio_inconsistency_found",
     )
     return False
 
@@ -679,6 +681,7 @@ async def _message_poll_loop():
                                     "A periodic poll task has discovered radio inconsistencies.",
                                     "Please check the logs for recommendations (search "
                                     "'MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK').",
+                                    code="radio_inconsistency_found",
                                 )
                 except RadioOperationBusyError:
                     logger.debug("Skipping message poll: radio busy")

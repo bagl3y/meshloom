@@ -2,6 +2,16 @@ import { render, screen, waitFor, fireEvent, within } from '@testing-library/rea
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { SettingsFanoutSection } from '../components/settings/SettingsFanoutSection';
 import type { HealthStatus, FanoutConfig } from '../types';
+import i18n from '../i18n';
+import fanoutEn from '../i18n/locales/slices/d.en.json';
+import fanoutFr from '../i18n/locales/slices/d.fr.json';
+
+i18n.addResourceBundle('en', 'translation', fanoutEn, true, true);
+i18n.addResourceBundle('fr', 'translation', fanoutFr, true, true);
+
+function tf(key: string, options?: Record<string, unknown>) {
+  return i18n.t(`settings.fanout.${key}`, options);
+}
 
 // Mock the api module
 vi.mock('../api', () => ({
@@ -76,24 +86,24 @@ function startsWithAccessibleName(name: string) {
 
 async function openCreateIntegrationDialog() {
   await waitFor(() => {
-    expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: tf('list.addIntegration') })).toBeInTheDocument();
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Add Integration' }));
-  return screen.findByRole('dialog', { name: 'Create Integration' });
+  fireEvent.click(screen.getByRole('button', { name: tf('list.addIntegration') }));
+  return screen.findByRole('dialog', { name: tf('create.title') });
 }
 
 function selectCreateIntegration(name: string) {
-  const dialog = screen.getByRole('dialog', { name: 'Create Integration' });
+  const dialog = screen.getByRole('dialog', { name: tf('create.title') });
   fireEvent.click(within(dialog).getByRole('button', { name: startsWithAccessibleName(name) }));
 }
 
 function confirmCreateIntegration() {
-  const dialog = screen.getByRole('dialog', { name: 'Create Integration' });
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+  const dialog = screen.getByRole('dialog', { name: tf('create.title') });
+  fireEvent.click(within(dialog).getByRole('button', { name: tf('create.create') }));
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   vi.spyOn(window, 'confirm').mockReturnValue(true);
   mockedApi.getFanoutConfigs.mockResolvedValue([]);
   mockedApi.getChannels.mockResolvedValue([]);
@@ -137,47 +147,61 @@ describe('SettingsFanoutSection', () => {
       .getAllByRole('button')
       .filter((button) => button.hasAttribute('aria-pressed'));
     expect(optionButtons).toHaveLength(11);
-    expect(within(dialog).getByRole('button', { name: 'Close' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Create' })).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole('button', { name: startsWithAccessibleName('Private MQTT') })
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole('button', { name: startsWithAccessibleName('MeshRank') })
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole('button', { name: startsWithAccessibleName('LetsMesh (US)') })
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole('button', { name: startsWithAccessibleName('LetsMesh (EU)') })
-    ).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: tf('create.close') })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: tf('create.create') })).toBeInTheDocument();
     expect(
       within(dialog).getByRole('button', {
-        name: startsWithAccessibleName('Community MQTT/meshcoretomqtt'),
+        name: startsWithAccessibleName(tf('create.mqtt_private.label')),
       })
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByRole('button', { name: startsWithAccessibleName('Webhook') })
+      within(dialog).getByRole('button', {
+        name: startsWithAccessibleName(tf('create.mqtt_community_meshrank.label')),
+      })
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByRole('button', { name: startsWithAccessibleName('Apprise') })
+      within(dialog).getByRole('button', {
+        name: startsWithAccessibleName(tf('create.mqtt_community_letsmesh_us.label')),
+      })
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByRole('button', { name: startsWithAccessibleName('Amazon SQS') })
+      within(dialog).getByRole('button', {
+        name: startsWithAccessibleName(tf('create.mqtt_community_letsmesh_eu.label')),
+      })
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByRole('button', { name: startsWithAccessibleName('Python Bot') })
+      within(dialog).getByRole('button', {
+        name: startsWithAccessibleName(tf('create.mqtt_community.label')),
+      })
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByRole('button', { name: startsWithAccessibleName('Map Upload') })
+      within(dialog).getByRole('button', {
+        name: startsWithAccessibleName(tf('create.webhook.label')),
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', {
+        name: startsWithAccessibleName(tf('create.apprise.label')),
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: startsWithAccessibleName(tf('create.sqs.label')) })
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: startsWithAccessibleName(tf('create.bot.label')) })
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', {
+        name: startsWithAccessibleName(tf('create.map_upload.label')),
+      })
     ).toBeInTheDocument();
     expect(within(dialog).getByRole('heading', { level: 3 })).toBeInTheDocument();
 
     const genericCommunityIndex = optionButtons.findIndex((button) =>
-      button.textContent?.startsWith('Community MQTT/meshcoretomqtt')
+      button.textContent?.startsWith(tf('create.mqtt_community.label'))
     );
     const meshRankIndex = optionButtons.findIndex((button) =>
-      button.textContent?.startsWith('MeshRank')
+      button.textContent?.startsWith(tf('create.mqtt_community_meshrank.label'))
     );
     expect(genericCommunityIndex).toBeGreaterThan(-1);
     expect(meshRankIndex).toBeGreaterThan(-1);
@@ -188,14 +212,14 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     const dialog = await openCreateIntegrationDialog();
     expect(
-      within(dialog).getByRole('button', { name: startsWithAccessibleName('Python Bot') })
+      within(dialog).getByRole('button', { name: startsWithAccessibleName(tf('create.bot.label')) })
     ).toBeInTheDocument();
   });
 
   it('shows bots disabled banner when bots_disabled', async () => {
     renderSection({ health: { ...baseHealth, bots_disabled: true } });
     await waitFor(() => {
-      expect(screen.getByText(/Bot system is disabled/)).toBeInTheDocument();
+      expect(screen.getByText(tf('list.botsDisabled'))).toBeInTheDocument();
     });
   });
 
@@ -204,7 +228,7 @@ describe('SettingsFanoutSection', () => {
       health: { ...baseHealth, bots_disabled: true, bots_disabled_source: 'until_restart' },
     });
     await waitFor(() => {
-      expect(screen.getByText(/disabled until the server restarts/i)).toBeInTheDocument();
+      expect(screen.getByText(tf('list.botsDisabledUntilRestart'))).toBeInTheDocument();
     });
   });
 
@@ -212,7 +236,9 @@ describe('SettingsFanoutSection', () => {
     renderSection({ health: { ...baseHealth, bots_disabled: true } });
     const dialog = await openCreateIntegrationDialog();
     expect(
-      within(dialog).queryByRole('button', { name: startsWithAccessibleName('Python Bot') })
+      within(dialog).queryByRole('button', {
+        name: startsWithAccessibleName(tf('create.bot.label')),
+      })
     ).not.toBeInTheDocument();
   });
 
@@ -244,9 +270,13 @@ describe('SettingsFanoutSection', () => {
       expect(screen.getByText('Test Hook')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'View error details for Test Hook' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: tf('list.viewErrorAria', { name: 'Test Hook' }) })
+    );
 
-    expect(screen.getByRole('dialog', { name: 'Test Hook Error' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: tf('list.errorTitle', { name: 'Test Hook' }) })
+    ).toBeInTheDocument();
     expect(screen.getByText('HTTP 500')).toBeInTheDocument();
   });
 
@@ -270,7 +300,7 @@ describe('SettingsFanoutSection', () => {
     });
 
     expect(
-      screen.queryByRole('button', { name: 'View error details for Test Hook' })
+      screen.queryByRole('button', { name: tf('list.viewErrorAria', { name: 'Test Hook' }) })
     ).not.toBeInTheDocument();
   });
 
@@ -281,11 +311,11 @@ describe('SettingsFanoutSection', () => {
       expect(screen.getByText('Test Hook')).toBeInTheDocument();
     });
 
-    const editBtn = screen.getByRole('button', { name: 'Edit' });
+    const editBtn = screen.getByRole('button', { name: tf('list.edit') });
     fireEvent.click(editBtn);
 
     await waitFor(() => {
-      expect(screen.getByText('← Back to list')).toBeInTheDocument();
+      expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument();
     });
   });
 
@@ -299,12 +329,12 @@ describe('SettingsFanoutSection', () => {
     renderSectionWithRefresh(failingRefresh);
     await waitFor(() => expect(screen.getByText('Test Hook')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Enabled' }));
+    fireEvent.click(screen.getByRole('button', { name: tf('list.saveEnabled') }));
 
-    await waitFor(() => expect(screen.queryByText('← Back to list')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(tf('list.backToList'))).not.toBeInTheDocument());
     expect(screen.getByText('Test Hook')).toBeInTheDocument();
   });
 
@@ -333,11 +363,11 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('Test Hook')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
     // "none" is not a valid mode without raw packets — should fall back to "all"
-    const allRadio = screen.getByLabelText('All messages');
+    const allRadio = screen.getByLabelText(tf('scope.allMessages'));
     expect(allRadio).toBeChecked();
   });
 
@@ -350,11 +380,11 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('Test Hook')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    expect(screen.getByText('All messages')).toBeInTheDocument();
-    expect(screen.queryByText('No messages')).not.toBeInTheDocument();
+    expect(screen.getByText(tf('scope.allMessages'))).toBeInTheDocument();
+    expect(screen.queryByText(tf('scope.noMessages'))).not.toBeInTheDocument();
   });
 
   it('shows empty scope warning when "only" mode has nothing selected', async () => {
@@ -366,10 +396,10 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('Test Hook')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    expect(screen.getByText(/will not forward any data/)).toBeInTheDocument();
+    expect(screen.getByText(tf('scope.emptyWarning'))).toBeInTheDocument();
   });
 
   it('shows warning for private MQTT when both scope axes are off', async () => {
@@ -387,10 +417,10 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('My MQTT')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    expect(screen.getByText(/will not forward any data/)).toBeInTheDocument();
+    expect(screen.getByText(tf('scope.emptyWarning'))).toBeInTheDocument();
   });
 
   it('private MQTT shows raw packets toggle and No messages option', async () => {
@@ -408,11 +438,11 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('My MQTT')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    expect(screen.getByText('Forward raw packets')).toBeInTheDocument();
-    expect(screen.getByText('No messages')).toBeInTheDocument();
+    expect(screen.getByText(tf('scope.forwardRaw'))).toBeInTheDocument();
+    expect(screen.getByText(tf('scope.noMessages'))).toBeInTheDocument();
   });
 
   it('private MQTT hides warning when raw packets enabled but messages off', async () => {
@@ -430,23 +460,25 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('My MQTT')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    expect(screen.queryByText(/will not forward any data/)).not.toBeInTheDocument();
+    expect(screen.queryByText(tf('scope.emptyWarning'))).not.toBeInTheDocument();
   });
 
   it('navigates to create view when clicking add button', async () => {
     renderSection();
     await openCreateIntegrationDialog();
-    selectCreateIntegration('Webhook');
+    selectCreateIntegration(tf('create.webhook.label'));
     confirmCreateIntegration();
 
     await waitFor(() => {
-      expect(screen.getByText('← Back to list')).toBeInTheDocument();
-      expect(screen.getByLabelText('Name')).toHaveValue('Webhook #1');
+      expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument();
+      expect(screen.getByLabelText(tf('list.name'))).toHaveValue(
+        tf('defaultNameCounted', { label: tf('types.webhook'), n: 1 })
+      );
       // Should show the URL input for webhook type
-      expect(screen.getByLabelText(/URL/)).toBeInTheDocument();
+      expect(screen.getByLabelText(tf('webhook.url'))).toBeInTheDocument();
     });
 
     expect(mockedApi.createFanoutConfig).not.toHaveBeenCalled();
@@ -455,28 +487,30 @@ describe('SettingsFanoutSection', () => {
   it('new SQS draft shows queue url fields and sensible defaults', async () => {
     renderSection();
     await openCreateIntegrationDialog();
-    selectCreateIntegration('Amazon SQS');
+    selectCreateIntegration(tf('create.sqs.label'));
     confirmCreateIntegration();
 
     await waitFor(() => {
-      expect(screen.getByText('← Back to list')).toBeInTheDocument();
-      expect(screen.getByLabelText('Name')).toHaveValue('Amazon SQS #1');
-      expect(screen.getByLabelText('Queue URL')).toBeInTheDocument();
-      expect(screen.getByText('Forward raw packets')).toBeInTheDocument();
+      expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument();
+      expect(screen.getByLabelText(tf('list.name'))).toHaveValue(
+        tf('defaultNameCounted', { label: tf('types.sqs'), n: 1 })
+      );
+      expect(screen.getByLabelText(tf('sqs.queueUrl'))).toBeInTheDocument();
+      expect(screen.getByText(tf('scope.forwardRaw'))).toBeInTheDocument();
     });
   });
 
   it('backing out of a new draft does not create an integration', async () => {
     renderSection();
     await openCreateIntegrationDialog();
-    selectCreateIntegration('Webhook');
+    selectCreateIntegration(tf('create.webhook.label'));
     confirmCreateIntegration();
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText('← Back to list'));
+    fireEvent.click(screen.getByText(tf('list.backToList')));
 
-    expect(window.confirm).toHaveBeenCalledWith('Leave without saving?');
-    await waitFor(() => expect(screen.queryByText('← Back to list')).not.toBeInTheDocument());
+    expect(window.confirm).toHaveBeenCalledWith(tf('confirm.leaveUnsaved'));
+    await waitFor(() => expect(screen.queryByText(tf('list.backToList'))).not.toBeInTheDocument());
     expect(mockedApi.createFanoutConfig).not.toHaveBeenCalled();
   });
 
@@ -485,13 +519,13 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('Test Hook')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText('← Back to list'));
+    fireEvent.click(screen.getByText(tf('list.backToList')));
 
     expect(window.confirm).not.toHaveBeenCalled();
-    await waitFor(() => expect(screen.queryByText('← Back to list')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(tf('list.backToList'))).not.toBeInTheDocument());
   });
 
   it('back to list asks for confirmation after editing an existing integration', async () => {
@@ -499,16 +533,16 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('Test Hook')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    fireEvent.change(screen.getByLabelText('URL'), {
+    fireEvent.change(screen.getByLabelText(tf('webhook.url')), {
       target: { value: 'https://example.com/new' },
     });
-    fireEvent.click(screen.getByText('← Back to list'));
+    fireEvent.click(screen.getByText(tf('list.backToList')));
 
-    expect(window.confirm).toHaveBeenCalledWith('Leave without saving?');
-    await waitFor(() => expect(screen.queryByText('← Back to list')).not.toBeInTheDocument());
+    expect(window.confirm).toHaveBeenCalledWith(tf('confirm.leaveUnsaved'));
+    await waitFor(() => expect(screen.queryByText(tf('list.backToList'))).not.toBeInTheDocument());
   });
 
   it('back to list stays on the edit screen when confirmation is cancelled after edits', async () => {
@@ -517,16 +551,16 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('Test Hook')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    fireEvent.change(screen.getByLabelText('URL'), {
+    fireEvent.change(screen.getByLabelText(tf('webhook.url')), {
       target: { value: 'https://example.com/new' },
     });
-    fireEvent.click(screen.getByText('← Back to list'));
+    fireEvent.click(screen.getByText(tf('list.backToList')));
 
-    expect(window.confirm).toHaveBeenCalledWith('Leave without saving?');
-    expect(screen.getByText('← Back to list')).toBeInTheDocument();
+    expect(window.confirm).toHaveBeenCalledWith(tf('confirm.leaveUnsaved'));
+    expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument();
   });
 
   it('saving a new draft creates the integration on demand', async () => {
@@ -545,16 +579,16 @@ describe('SettingsFanoutSection', () => {
 
     renderSection();
     await openCreateIntegrationDialog();
-    selectCreateIntegration('Webhook');
+    selectCreateIntegration(tf('create.webhook.label'));
     confirmCreateIntegration();
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Disabled' }));
+    fireEvent.click(screen.getByRole('button', { name: tf('list.saveDisabled') }));
 
     await waitFor(() =>
       expect(mockedApi.createFanoutConfig).toHaveBeenCalledWith({
         type: 'webhook',
-        name: 'Webhook #1',
+        name: tf('defaultNameCounted', { label: tf('types.webhook'), n: 1 }),
         config: { url: '', method: 'POST', headers: {}, hmac_secret: '', hmac_header: '' },
         scope: { messages: 'all', raw_packets: 'none' },
         enabled: false,
@@ -586,21 +620,19 @@ describe('SettingsFanoutSection', () => {
 
     renderSection();
     await openCreateIntegrationDialog();
-    selectCreateIntegration('Apprise');
+    selectCreateIntegration(tf('create.apprise.label'));
     confirmCreateIntegration();
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    expect(screen.getByLabelText(/Forward Meshloom-sent messages/)).not.toBeChecked();
-    expect(
-      screen.getByText(/Outgoing messages carry no routing path or signal data/)
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText(tf('apprise.includeOutgoing'))).not.toBeChecked();
+    expect(screen.getByText(tf('apprise.includeOutgoingHelp'))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Enabled' }));
+    fireEvent.click(screen.getByRole('button', { name: tf('list.saveEnabled') }));
 
     await waitFor(() =>
       expect(mockedApi.createFanoutConfig).toHaveBeenCalledWith({
         type: 'apprise',
-        name: 'Apprise #1',
+        name: tf('defaultNameCounted', { label: tf('types.apprise'), n: 1 }),
         config: {
           urls: '',
           preserve_identity: true,
@@ -638,15 +670,18 @@ describe('SettingsFanoutSection', () => {
     });
 
     renderSection();
-    await waitFor(() => expect(screen.getByText('Apprise Feed')).toBeInTheDocument());
+    const group = await screen.findByRole('group', {
+      name: tf('list.integrationAria', { name: 'Apprise Feed' }),
+    });
+    expect(within(group).getByText('Apprise Feed')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(within(group).getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    const includeOutgoing = screen.getByLabelText(/Forward Meshloom-sent messages/);
+    const includeOutgoing = screen.getByLabelText(tf('apprise.includeOutgoing'));
     expect(includeOutgoing).not.toBeChecked();
     fireEvent.click(includeOutgoing);
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Enabled' }));
+    fireEvent.click(screen.getByRole('button', { name: tf('list.saveEnabled') }));
 
     await waitFor(() =>
       expect(mockedApi.updateFanoutConfig).toHaveBeenCalledWith('ap-1', {
@@ -676,9 +711,13 @@ describe('SettingsFanoutSection', () => {
     await waitFor(() => expect(screen.getByText('Test Hook')).toBeInTheDocument());
 
     await openCreateIntegrationDialog();
-    selectCreateIntegration('Webhook');
+    selectCreateIntegration(tf('create.webhook.label'));
     confirmCreateIntegration();
-    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Webhook #3'));
+    await waitFor(() =>
+      expect(screen.getByLabelText(tf('list.name'))).toHaveValue(
+        tf('defaultNameCounted', { label: tf('types.webhook'), n: 3 })
+      )
+    );
   });
 
   it('clicking a list name allows inline rename and saves on blur', async () => {
@@ -692,7 +731,7 @@ describe('SettingsFanoutSection', () => {
     await waitFor(() => expect(screen.getByText('Test Hook')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: 'Test Hook' }));
-    const inlineInput = screen.getByLabelText('Edit name for Test Hook');
+    const inlineInput = screen.getByLabelText(tf('list.editNameAria', { name: 'Test Hook' }));
     fireEvent.change(inlineInput, { target: { value: 'Renamed Hook' } });
     fireEvent.blur(inlineInput);
 
@@ -708,7 +747,7 @@ describe('SettingsFanoutSection', () => {
     await waitFor(() => expect(screen.getByText('Test Hook')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: 'Test Hook' }));
-    const inlineInput = screen.getByLabelText('Edit name for Test Hook');
+    const inlineInput = screen.getByLabelText(tf('list.editNameAria', { name: 'Test Hook' }));
     fireEvent.change(inlineInput, { target: { value: 'Cancelled Hook' } });
     fireEvent.keyDown(inlineInput, { key: 'Escape' });
 
@@ -744,16 +783,30 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('Community Feed')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    expect(screen.getByLabelText('Packet Topic Template')).toHaveValue(
+    expect(screen.getByLabelText(tf('community.packetTopicTemplate'))).toHaveValue(
       'mesh2mqtt/{IATA}/node/{PUBLIC_KEY}'
     );
-    expect(screen.getByLabelText('Transport')).toHaveValue('tcp');
-    expect(screen.getByLabelText('Authentication')).toHaveValue('token');
-    expect(screen.getByLabelText('Token Audience')).toHaveValue('meshrank.net');
-    expect(screen.getByText(/LetsMesh uses/)).toBeInTheDocument();
+    expect(screen.getByLabelText(tf('community.transport'))).toHaveValue('tcp');
+    expect(screen.getByLabelText(tf('community.authentication'))).toHaveValue('token');
+    expect(screen.getByLabelText(tf('community.tokenAudience'))).toHaveValue('meshrank.net');
+    const letsMeshAuthLead = tf('community.letsMeshAuthHelp')
+      .split(/<[^>]+>/)[0]
+      .trim();
+    expect(
+      screen.getByText((_, element) => {
+        const content = element?.textContent ?? '';
+        return Boolean(
+          letsMeshAuthLead &&
+          content.includes(letsMeshAuthLead) &&
+          Array.from(element?.children ?? []).every(
+            (child) => !child.textContent?.includes(letsMeshAuthLead)
+          )
+        );
+      })
+    ).toBeInTheDocument();
   });
 
   it('existing community MQTT config without auth_mode defaults to token in the editor', async () => {
@@ -781,11 +834,11 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('Legacy Community MQTT')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    expect(screen.getByLabelText('Authentication')).toHaveValue('token');
-    expect(screen.getByLabelText('Token Audience')).toBeInTheDocument();
+    expect(screen.getByLabelText(tf('community.authentication'))).toHaveValue('token');
+    expect(screen.getByLabelText(tf('community.tokenAudience'))).toBeInTheDocument();
   });
 
   it('community MQTT token audience can be cleared back to blank', async () => {
@@ -814,10 +867,10 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('Community Feed')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    const audienceInput = screen.getByLabelText('Token Audience');
+    const audienceInput = screen.getByLabelText(tf('community.tokenAudience'));
     fireEvent.change(audienceInput, { target: { value: '' } });
 
     expect(audienceInput).toHaveValue('');
@@ -854,12 +907,14 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('Community Feed')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    const hostInput = screen.getByLabelText('Broker Host') as HTMLInputElement;
-    const portInput = screen.getByLabelText('Broker Port') as HTMLInputElement;
-    const topicTemplateInput = screen.getByLabelText('Packet Topic Template') as HTMLInputElement;
+    const hostInput = screen.getByLabelText(tf('mqtt.brokerHost')) as HTMLInputElement;
+    const portInput = screen.getByLabelText(tf('mqtt.brokerPort')) as HTMLInputElement;
+    const topicTemplateInput = screen.getByLabelText(
+      tf('community.packetTopicTemplate')
+    ) as HTMLInputElement;
 
     fireEvent.change(hostInput, { target: { value: '' } });
     fireEvent.change(portInput, { target: { value: '' } });
@@ -869,7 +924,7 @@ describe('SettingsFanoutSection', () => {
     expect(portInput.value).toBe('');
     expect(topicTemplateInput.value).toBe('');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Enabled' }));
+    fireEvent.click(screen.getByRole('button', { name: tf('list.saveEnabled') }));
 
     await waitFor(() =>
       expect(mockedApi.updateFanoutConfig).toHaveBeenCalledWith('comm-1', {
@@ -916,11 +971,11 @@ describe('SettingsFanoutSection', () => {
     renderSection();
     await waitFor(() => expect(screen.getByText('Community Feed')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: tf('list.edit') }));
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    expect(screen.getByLabelText('Authentication')).toHaveValue('none');
-    expect(screen.queryByLabelText('Token Audience')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(tf('community.authentication'))).toHaveValue('none');
+    expect(screen.queryByLabelText(tf('community.tokenAudience'))).not.toBeInTheDocument();
   });
 
   it('community MQTT list shows configured packet topic', async () => {
@@ -948,10 +1003,13 @@ describe('SettingsFanoutSection', () => {
     mockedApi.getFanoutConfigs.mockResolvedValue([communityConfig]);
     renderSection();
 
-    const group = await screen.findByRole('group', { name: 'Integration Community Feed' });
+    const group = await screen.findByRole('group', {
+      name: tf('list.integrationAria', { name: 'Community Feed' }),
+    });
     expect(
       within(group).getByText(
-        (_, element) => element?.textContent === 'Broker: mqtt-us-v1.letsmesh.net:443'
+        (_, element) =>
+          element?.textContent === tf('list.broker', { summary: 'mqtt-us-v1.letsmesh.net:443' })
       )
     ).toBeInTheDocument();
     expect(within(group).getByText('mesh2mqtt/{IATA}/node/{PUBLIC_KEY}')).toBeInTheDocument();
@@ -961,14 +1019,14 @@ describe('SettingsFanoutSection', () => {
   it('MeshRank preset pre-fills the broker settings and asks for the topic template', async () => {
     renderSection();
     await openCreateIntegrationDialog();
-    selectCreateIntegration('MeshRank');
+    selectCreateIntegration(tf('create.mqtt_community_meshrank.label'));
     confirmCreateIntegration();
 
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    expect(screen.getByLabelText('Name')).toHaveValue('MeshRank');
-    expect(screen.getByLabelText('Packet Topic Template')).toHaveValue('');
-    expect(screen.queryByLabelText('Broker Host')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(tf('list.name'))).toHaveValue('MeshRank');
+    expect(screen.getByLabelText(tf('community.packetTopicTemplate'))).toHaveValue('');
+    expect(screen.queryByLabelText(tf('mqtt.brokerHost'))).not.toBeInTheDocument();
   });
 
   it('private MQTT fields can be cleared while editing and normalize defaults on create', async () => {
@@ -995,26 +1053,28 @@ describe('SettingsFanoutSection', () => {
 
     renderSection();
     await openCreateIntegrationDialog();
-    selectCreateIntegration('Private MQTT');
+    selectCreateIntegration(tf('create.mqtt_private.label'));
     confirmCreateIntegration();
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    fireEvent.change(screen.getByLabelText('Broker Host'), { target: { value: 'broker.local' } });
+    fireEvent.change(screen.getByLabelText(tf('mqtt.brokerHost')), {
+      target: { value: 'broker.local' },
+    });
 
-    const portInput = screen.getByLabelText('Broker Port') as HTMLInputElement;
-    const prefixInput = screen.getByLabelText('Topic Prefix') as HTMLInputElement;
+    const portInput = screen.getByLabelText(tf('mqtt.brokerPort')) as HTMLInputElement;
+    const prefixInput = screen.getByLabelText(tf('mqtt.topicPrefix')) as HTMLInputElement;
     fireEvent.change(portInput, { target: { value: '' } });
     fireEvent.change(prefixInput, { target: { value: '' } });
 
     expect(portInput.value).toBe('');
     expect(prefixInput.value).toBe('');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Enabled' }));
+    fireEvent.click(screen.getByRole('button', { name: tf('list.saveEnabled') }));
 
     await waitFor(() =>
       expect(mockedApi.createFanoutConfig).toHaveBeenCalledWith({
         type: 'mqtt_private',
-        name: 'Private MQTT #1',
+        name: tf('defaultNameCounted', { label: tf('types.mqtt_private'), n: 1 }),
         config: {
           broker_host: 'broker.local',
           broker_port: 1883,
@@ -1059,16 +1119,16 @@ describe('SettingsFanoutSection', () => {
 
     renderSection();
     await openCreateIntegrationDialog();
-    selectCreateIntegration('MeshRank');
+    selectCreateIntegration(tf('create.mqtt_community_meshrank.label'));
     confirmCreateIntegration();
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    fireEvent.change(screen.getByLabelText('Packet Topic Template'), {
+    fireEvent.change(screen.getByLabelText(tf('community.packetTopicTemplate')), {
       target: {
         value: 'meshrank/uplink/B435F6D5F7896B74C6B995FE221C2C1F/{PUBLIC_KEY}/packets',
       },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Enabled' }));
+    fireEvent.click(screen.getByRole('button', { name: tf('list.saveEnabled') }));
 
     await waitFor(() =>
       expect(mockedApi.createFanoutConfig).toHaveBeenCalledWith({
@@ -1161,18 +1221,20 @@ describe('SettingsFanoutSection', () => {
 
     renderSection();
     await openCreateIntegrationDialog();
-    selectCreateIntegration('Home Assistant MQTT Discovery');
+    selectCreateIntegration(tf('create.mqtt_ha.label'));
     confirmCreateIntegration();
 
-    expect(await screen.findByText('Published topic summary')).toBeInTheDocument();
+    expect(await screen.findByText(tf('ha.publishedTopicSummary'))).toBeInTheDocument();
 
     fireEvent.click(await screen.findByLabelText(/Alice/));
     fireEvent.click(await screen.findByLabelText(/Repeater One/));
 
     await waitFor(() => {
-      expect(screen.getAllByText('node id aaaaaaaaaaaa').length).toBeGreaterThanOrEqual(2);
-      expect(screen.getByText('node id bbbbbbbbbbbb')).toBeInTheDocument();
-      expect(screen.getByText('node id cccccccccccc')).toBeInTheDocument();
+      expect(
+        screen.getAllByText(tf('ha.nodeId', { id: 'aaaaaaaaaaaa' })).length
+      ).toBeGreaterThanOrEqual(2);
+      expect(screen.getByText(tf('ha.nodeId', { id: 'bbbbbbbbbbbb' }))).toBeInTheDocument();
+      expect(screen.getByText(tf('ha.nodeId', { id: 'cccccccccccc' }))).toBeInTheDocument();
     });
 
     expect(screen.getByText('meshcore/aaaaaaaaaaaa/health')).toBeInTheDocument();
@@ -1210,17 +1272,21 @@ describe('SettingsFanoutSection', () => {
 
     renderSection();
     await openCreateIntegrationDialog();
-    selectCreateIntegration('LetsMesh (US)');
+    selectCreateIntegration(tf('create.mqtt_community_letsmesh_us.label'));
     confirmCreateIntegration();
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    expect(screen.getByLabelText('Name')).toHaveValue('LetsMesh (US)');
-    expect(screen.queryByLabelText('Authentication')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Packet Topic Template')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(tf('list.name'))).toHaveValue('LetsMesh (US)');
+    expect(screen.queryByLabelText(tf('community.authentication'))).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(tf('community.packetTopicTemplate'))).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } });
-    fireEvent.change(screen.getByLabelText('Region Code (IATA)'), { target: { value: 'lax' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Disabled' }));
+    fireEvent.change(screen.getByLabelText(tf('letsmesh.email')), {
+      target: { value: 'user@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(tf('community.regionCode')), {
+      target: { value: 'lax' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: tf('list.saveDisabled') }));
 
     await waitFor(() =>
       expect(mockedApi.createFanoutConfig).toHaveBeenCalledWith({
@@ -1267,24 +1333,24 @@ describe('SettingsFanoutSection', () => {
 
     renderSection();
     await openCreateIntegrationDialog();
-    selectCreateIntegration('Map Upload');
+    selectCreateIntegration(tf('create.map_upload.label'));
     confirmCreateIntegration();
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText('Enable Geofence'));
-    const radiusInput = screen.getByLabelText('Radius (km)') as HTMLInputElement;
+    fireEvent.click(screen.getByText(tf('map.enableGeofence')));
+    const radiusInput = screen.getByLabelText(tf('map.radius')) as HTMLInputElement;
 
     fireEvent.change(radiusInput, { target: { value: '100' } });
     fireEvent.change(radiusInput, { target: { value: '' } });
 
     expect(radiusInput.value).toBe('');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Enabled' }));
+    fireEvent.click(screen.getByRole('button', { name: tf('list.saveEnabled') }));
 
     await waitFor(() =>
       expect(mockedApi.createFanoutConfig).toHaveBeenCalledWith({
         type: 'map_upload',
-        name: 'Map Upload #1',
+        name: tf('defaultNameCounted', { label: tf('types.map_upload'), n: 1 }),
         config: {
           api_url: '',
           dry_run: true,
@@ -1326,13 +1392,17 @@ describe('SettingsFanoutSection', () => {
 
     renderSection();
     await openCreateIntegrationDialog();
-    selectCreateIntegration('LetsMesh (EU)');
+    selectCreateIntegration(tf('create.mqtt_community_letsmesh_eu.label'));
     confirmCreateIntegration();
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } });
-    fireEvent.change(screen.getByLabelText('Region Code (IATA)'), { target: { value: 'ams' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Enabled' }));
+    fireEvent.change(screen.getByLabelText(tf('letsmesh.email')), {
+      target: { value: 'user@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(tf('community.regionCode')), {
+      target: { value: 'ams' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: tf('list.saveEnabled') }));
 
     await waitFor(() =>
       expect(mockedApi.createFanoutConfig).toHaveBeenCalledWith({
@@ -1361,15 +1431,17 @@ describe('SettingsFanoutSection', () => {
   it('generic Community MQTT entry still opens the full editor', async () => {
     renderSection();
     await openCreateIntegrationDialog();
-    selectCreateIntegration('Community MQTT/meshcoretomqtt');
+    selectCreateIntegration(tf('create.mqtt_community.label'));
     confirmCreateIntegration();
 
-    await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(tf('list.backToList'))).toBeInTheDocument());
 
-    expect(screen.getByLabelText('Name')).toHaveValue('Community Sharing #1');
-    expect(screen.getByLabelText('Broker Host')).toBeInTheDocument();
-    expect(screen.getByLabelText('Authentication')).toBeInTheDocument();
-    expect(screen.getByLabelText('Packet Topic Template')).toBeInTheDocument();
+    expect(screen.getByLabelText(tf('list.name'))).toHaveValue(
+      tf('defaultNameCounted', { label: tf('types.mqtt_community'), n: 1 })
+    );
+    expect(screen.getByLabelText(tf('mqtt.brokerHost'))).toBeInTheDocument();
+    expect(screen.getByLabelText(tf('community.authentication'))).toBeInTheDocument();
+    expect(screen.getByLabelText(tf('community.packetTopicTemplate'))).toBeInTheDocument();
   });
 
   it('private MQTT list shows broker and topic summary', async () => {
@@ -1386,9 +1458,13 @@ describe('SettingsFanoutSection', () => {
     mockedApi.getFanoutConfigs.mockResolvedValue([privateConfig]);
     renderSection();
 
-    const group = await screen.findByRole('group', { name: 'Integration Private Broker' });
+    const group = await screen.findByRole('group', {
+      name: tf('list.integrationAria', { name: 'Private Broker' }),
+    });
     expect(
-      within(group).getByText((_, element) => element?.textContent === 'Broker: broker.local:1883')
+      within(group).getByText(
+        (_, element) => element?.textContent === tf('list.broker', { summary: 'broker.local:1883' })
+      )
     ).toBeInTheDocument();
     expect(
       within(group).getByText('meshcore/dm:<pubkey>, meshcore/gm:<channel>, meshcore/raw/...')
@@ -1409,7 +1485,9 @@ describe('SettingsFanoutSection', () => {
     mockedApi.getFanoutConfigs.mockResolvedValue([config]);
     renderSection();
 
-    const group = await screen.findByRole('group', { name: 'Integration Webhook Feed' });
+    const group = await screen.findByRole('group', {
+      name: tf('list.integrationAria', { name: 'Webhook Feed' }),
+    });
     expect(within(group).getByText('https://example.com/hook')).toBeInTheDocument();
   });
 
@@ -1431,7 +1509,9 @@ describe('SettingsFanoutSection', () => {
     mockedApi.getFanoutConfigs.mockResolvedValue([config]);
     renderSection();
 
-    const group = await screen.findByRole('group', { name: 'Integration Apprise Feed' });
+    const group = await screen.findByRole('group', {
+      name: tf('list.integrationAria', { name: 'Apprise Feed' }),
+    });
     expect(
       within(group).getByText(/discord:\/\/\*{8}, mailto:\/\/\*{8}, mailto:\/\/\*{8}/)
     ).toBeInTheDocument();
@@ -1454,7 +1534,9 @@ describe('SettingsFanoutSection', () => {
     mockedApi.getFanoutConfigs.mockResolvedValue([config]);
     renderSection();
 
-    const group = await screen.findByRole('group', { name: 'Integration Queue Feed' });
+    const group = await screen.findByRole('group', {
+      name: tf('list.integrationAria', { name: 'Queue Feed' }),
+    });
     expect(
       within(group).getByText('https://sqs.us-east-1.amazonaws.com/123456789012/mesh-events')
     ).toBeInTheDocument();
@@ -1485,11 +1567,17 @@ describe('SettingsFanoutSection', () => {
     ]);
     renderSection();
 
-    const webhookGroup = await screen.findByRole('region', { name: 'Webhook integrations' });
-    const appriseGroup = screen.getByRole('region', { name: 'Apprise integrations' });
+    const webhookGroup = await screen.findByRole('region', {
+      name: tf('list.groupAria', { label: tf('types.webhook') }),
+    });
+    const appriseGroup = screen.getByRole('region', {
+      name: tf('list.groupAria', { label: tf('types.apprise') }),
+    });
 
     expect(
-      screen.queryByRole('region', { name: 'Private MQTT integrations' })
+      screen.queryByRole('region', {
+        name: tf('list.groupAria', { label: tf('types.mqtt_private') }),
+      })
     ).not.toBeInTheDocument();
     expect(within(webhookGroup).getByText('Alpha Hook')).toBeInTheDocument();
     expect(within(webhookGroup).getByText('Zulu Hook')).toBeInTheDocument();

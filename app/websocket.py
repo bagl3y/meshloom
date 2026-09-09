@@ -118,25 +118,47 @@ def broadcast_event(event_type: str, data: dict, *, realtime: bool = True) -> No
             asyncio.create_task(fanout_manager.broadcast_contact(data))
 
 
-def broadcast_error(message: str, details: str | None = None) -> None:
+def broadcast_error(
+    message: str,
+    details: str | None = None,
+    *,
+    code: str | None = None,
+    params: dict | None = None,
+) -> None:
     """Broadcast an error notification to all connected clients.
 
     This appears as a toast notification in the frontend.
+    ``code`` / ``params`` are optional stable i18n keys; ``message`` stays English.
     """
-    data = {"message": message}
+    data: dict[str, Any] = {"message": message}
     if details:
         data["details"] = details
+    if code:
+        data["code"] = code
+    if params:
+        data["params"] = params
     asyncio.create_task(ws_manager.broadcast("error", data))
 
 
-def broadcast_success(message: str, details: str | None = None) -> None:
+def broadcast_success(
+    message: str,
+    details: str | None = None,
+    *,
+    code: str | None = None,
+    params: dict | None = None,
+) -> None:
     """Broadcast a success notification to all connected clients.
 
     This appears as a toast notification in the frontend.
+    ``code`` / ``params`` are optional stable i18n keys; ``message`` stays English.
     """
-    data = {"message": message}
+    data: dict[str, Any] = {"message": message}
     if details:
         data["details"] = details
+    if code:
+        data["code"] = code
+    if params:
+        data["params"] = params
     asyncio.create_task(ws_manager.broadcast("success", data))
 
 

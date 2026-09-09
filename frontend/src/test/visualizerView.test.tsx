@@ -1,7 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import './eSlices';
 import { VisualizerView } from '../components/VisualizerView';
+import i18n from '../i18n';
 import { resetRawPacketStore, seedRawPacketStore } from '../stores/rawPacketStore';
 import type { RawPacket } from '../types';
 
@@ -34,17 +36,17 @@ describe('VisualizerView packet feed', () => {
     seedRawPacketStore({ packets: [createPacket({ id: 7, observation_id: 21 })] });
     render(<VisualizerView contacts={[]} channels={[]} config={null} />);
 
-    expect(screen.queryByText('Packet Details')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('rawPacket.details'))).not.toBeInTheDocument();
 
     // Desktop split-pane and mobile tab both render the feed, so take the first.
     fireEvent.click(screen.getAllByRole('button', { name: /TF/ })[0]);
 
-    expect(screen.getByText('Packet Details')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.details'))).toBeInTheDocument();
   });
 
   it('does not render the analyzer until a packet is selected', () => {
     render(<VisualizerView contacts={[]} channels={[]} config={null} />);
 
-    expect(screen.queryByText('Packet Details')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('rawPacket.details'))).not.toBeInTheDocument();
   });
 });

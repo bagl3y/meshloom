@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Button } from './ui/button';
 import type { ServerLoginAttemptState } from '../utils/serverLoginState';
 import { getServerLoginAttemptTone } from '../utils/serverLoginState';
@@ -21,9 +22,13 @@ export function ServerLoginStatusBanner({
   onRetryPassword,
   onRetryBlank,
   onReenterPassword,
-  passwordRetryLabel = 'Retry Password Login',
-  blankRetryLabel = 'Retry Existing-Access Login',
+  passwordRetryLabel,
+  blankRetryLabel,
 }: ServerLoginStatusBannerProps) {
+  const { t } = useTranslation();
+  const resolvedPasswordRetry = passwordRetryLabel ?? t('repeater.retryPassword');
+  const resolvedBlankRetry = blankRetryLabel ?? t('repeater.retryExistingAccess');
+
   if (attempt?.outcome === 'confirmed') {
     return null;
   }
@@ -42,9 +47,7 @@ export function ServerLoginStatusBanner({
     <div className={cn('rounded-md border px-4 py-3', toneClassName)}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1">
-          <p className="text-sm font-medium">
-            {attempt?.summary ?? 'No server login attempt has been recorded in this view yet.'}
-          </p>
+          <p className="text-sm font-medium">{attempt?.summary ?? t('repeater.noLoginAttempt')}</p>
           {attempt?.details && <p className="text-xs opacity-90">{attempt.details}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -55,7 +58,7 @@ export function ServerLoginStatusBanner({
             onClick={() => void onRetryPassword()}
             disabled={loading || !canRetryPassword}
           >
-            {passwordRetryLabel}
+            {resolvedPasswordRetry}
           </Button>
           <Button
             type="button"
@@ -64,10 +67,10 @@ export function ServerLoginStatusBanner({
             onClick={() => void onRetryBlank()}
             disabled={loading}
           >
-            {blankRetryLabel}
+            {resolvedBlankRetry}
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={onReenterPassword}>
-            Re-enter Password
+            {t('repeater.reenterPassword')}
           </Button>
         </div>
       </div>

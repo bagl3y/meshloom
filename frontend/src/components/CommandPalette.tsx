@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Crosshair,
   Hash,
@@ -69,39 +70,27 @@ interface SettingItem extends Searchable {
   icon: React.ComponentType<{ className?: string }>;
 }
 
-const TOOL_ITEMS: ToolItem[] = [
-  { id: 'raw', name: 'Raw Packet Feed', icon: Radio, type: 'raw', searchText: 'raw packet feed' },
-  { id: 'map', name: 'Map View', icon: Map, type: 'map', searchText: 'map view' },
-  {
-    id: 'visualizer',
-    name: 'Network Visualizer',
-    icon: Network,
-    type: 'visualizer',
-    searchText: 'network visualizer',
-  },
-  {
-    id: 'search',
-    name: 'Message Search',
-    icon: Search,
-    type: 'search',
-    searchText: 'message search',
-  },
-  { id: 'trace', name: 'Route Trace', icon: Route, type: 'trace', searchText: 'route trace' },
-  {
-    id: 'locate',
-    name: 'RF Locate',
-    icon: Crosshair,
-    type: 'locate',
-    searchText: 'rf locate zone corescope',
-  },
+const TOOL_DEFS: Omit<ToolItem, 'name' | 'searchText'>[] = [
+  { id: 'raw', icon: Radio, type: 'raw' },
+  { id: 'map', icon: Map, type: 'map' },
+  { id: 'visualizer', icon: Network, type: 'visualizer' },
+  { id: 'search', icon: Search, type: 'search' },
+  { id: 'trace', icon: Route, type: 'trace' },
+  { id: 'locate', icon: Crosshair, type: 'locate' },
 ];
 
-const SETTING_ITEMS: SettingItem[] = SETTINGS_SECTION_ORDER.map((section) => ({
-  section,
-  label: SETTINGS_SECTION_LABELS[section],
-  icon: SETTINGS_SECTION_ICONS[section],
-  searchText: `settings ${SETTINGS_SECTION_LABELS[section]}`.toLowerCase(),
-}));
+const TOOL_NAME_KEYS: Record<string, string> = {
+  raw: 'commandPalette.rawPacketFeed',
+  map: 'commandPalette.mapView',
+  visualizer: 'commandPalette.networkVisualizer',
+  search: 'commandPalette.messageSearch',
+  trace: 'commandPalette.routeTrace',
+  locate: 'locate.title',
+};
+
+const TOOL_SEARCH_EXTRA: Record<string, string> = {
+  locate: 'rf locate zone corescope',
+};
 
 function fuzzyMatch(text: string, query: string): boolean {
   let qi = 0;
@@ -132,8 +121,41 @@ export function CommandPalette({
   onOpenSettings,
   onRepeaterAutoLogin,
 }: CommandPaletteProps) {
+  const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+
+  const toolItems = useMemo<ToolItem[]>(
+    () =>
+      TOOL_DEFS.map((tool) => {
+        const nameKey = TOOL_NAME_KEYS[tool.id];
+        const name = t(nameKey);
+        const extra = TOOL_SEARCH_EXTRA[tool.id] ?? '';
+        return {
+          ...tool,
+          name,
+          searchText:
+            `${name} ${i18n.t(nameKey, { lng: 'en' })} ${i18n.t(nameKey, { lng: 'fr' })} ${extra}`.toLowerCase(),
+        };
+      }),
+    [t, i18n]
+  );
+
+  const settingItems = useMemo<SettingItem[]>(
+    () =>
+      SETTINGS_SECTION_ORDER.map((section) => {
+        const labelKey = SETTINGS_SECTION_LABELS[section];
+        const label = t(labelKey);
+        return {
+          section,
+          label,
+          icon: SETTINGS_SECTION_ICONS[section],
+          searchText:
+            `settings ${label} ${i18n.t(labelKey, { lng: 'en' })} ${i18n.t(labelKey, { lng: 'fr' })}`.toLowerCase(),
+        };
+      }),
+    [t, i18n]
+  );
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -203,8 +225,8 @@ export function CommandPalette({
   }, [contacts, channels]);
 
   const lq = query.toLowerCase();
-  const fTools = filterList(TOOL_ITEMS, lq);
-  const fSettings = filterList(SETTING_ITEMS, lq);
+  const fTools = filterList(toolItems, lq);
+  const fSettings = filterList(settingItems, lq);
   const fFavContacts = filterList(favContacts, lq);
   const fFavRepeaters = filterList(favRepeaters, lq);
   const fFavChannels = filterList(favChannels, lq);
@@ -233,17 +255,19 @@ export function CommandPalette({
       }}
     >
       <DialogContent className="overflow-hidden p-0 shadow-lg" hideCloseButton>
-        <DialogTitle className="sr-only">Command palette</DialogTitle>
-        <DialogDescription className="sr-only">
-          Search for conversations, settings, and tools
-        </DialogDescription>
+        <DialogTitle className="sr-only">{t('commandPalette.title')}</DialogTitle>
+        <DialogDescription className="sr-only">{t('commandPalette.description')}</DialogDescription>
         <Command shouldFilter={false}>
-          <CommandInput placeholder="Jump to..." value={query} onValueChange={setQuery} />
+          <CommandInput
+            placeholder={t('commandPalette.placeholder')}
+            value={query}
+            onValueChange={setQuery}
+          />
           <CommandList>
-            {totalResults === 0 && <CommandEmpty>No results found.</CommandEmpty>}
+            {totalResults === 0 && <CommandEmpty>{t('commandPalette.empty')}</CommandEmpty>}
 
             {fTools.length > 0 && (
-              <CommandGroup heading="Tools">
+              <CommandGroup heading={t('commandPalette.tools')}>
                 {fTools.map((tool) => (
                   <CommandItem
                     key={tool.id}
@@ -261,7 +285,7 @@ export function CommandPalette({
             )}
 
             {fSettings.length > 0 && (
-              <CommandGroup heading="Settings">
+              <CommandGroup heading={t('commandPalette.settings')}>
                 {fSettings.map((item) => (
                   <CommandItem
                     key={item.section}
@@ -276,7 +300,7 @@ export function CommandPalette({
 
             {fFavContacts.length > 0 && (
               <ContactGroup
-                heading="Favorite Contacts"
+                heading={t('commandPalette.favoriteContacts')}
                 items={fFavContacts}
                 icon={User}
                 onSelect={select}
@@ -287,7 +311,7 @@ export function CommandPalette({
 
             {fFavRepeaters.length > 0 && (
               <RepeaterGroup
-                heading="Favorite Repeaters"
+                heading={t('commandPalette.favoriteRepeaters')}
                 items={fFavRepeaters}
                 onSelect={select}
                 onSelectConversation={onSelectConversation}
@@ -297,7 +321,7 @@ export function CommandPalette({
             )}
 
             {fFavChannels.length > 0 && (
-              <CommandGroup heading="Favorite Channels">
+              <CommandGroup heading={t('commandPalette.favoriteChannels')}>
                 {fFavChannels.map(({ channel: ch }) => (
                   <CommandItem
                     key={ch.key}
@@ -317,7 +341,7 @@ export function CommandPalette({
 
             {fContacts.length > 0 && (
               <ContactGroup
-                heading="Contacts"
+                heading={t('commandPalette.contacts')}
                 items={fContacts}
                 icon={User}
                 onSelect={select}
@@ -327,7 +351,7 @@ export function CommandPalette({
 
             {fRepeaters.length > 0 && (
               <RepeaterGroup
-                heading="Repeaters"
+                heading={t('commandPalette.repeaters')}
                 items={fRepeaters}
                 onSelect={select}
                 onSelectConversation={onSelectConversation}
@@ -337,7 +361,7 @@ export function CommandPalette({
 
             {fRooms.length > 0 && (
               <ContactGroup
-                heading="Rooms"
+                heading={t('commandPalette.rooms')}
                 items={fRooms}
                 icon={MessageSquare}
                 onSelect={select}
@@ -346,7 +370,7 @@ export function CommandPalette({
             )}
 
             {fChannels.length > 0 && (
-              <CommandGroup heading="Channels">
+              <CommandGroup heading={t('commandPalette.channels')}>
                 {fChannels.map(({ channel: ch }) => (
                   <CommandItem
                     key={ch.key}
@@ -419,6 +443,7 @@ function RepeaterGroup({
   onSelectConversation: (conv: Conversation) => void;
   onRepeaterAutoLogin: (publicKey: string, displayName: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <CommandGroup heading={heading}>
       {items.flatMap(({ contact: c, displayName }) => [
@@ -440,7 +465,8 @@ function RepeaterGroup({
         >
           <Waypoints className="text-muted-foreground" />
           <span>
-            {displayName} <span className="text-muted-foreground">(ACL login + load all)</span>
+            {displayName}{' '}
+            <span className="text-muted-foreground">{t('commandPalette.aclLogin')}</span>
           </span>
         </CommandItem>,
       ])}

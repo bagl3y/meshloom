@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { api } from '../api';
 import { takePrefetchOrFetch } from '../prefetch';
 import { toast } from '../components/ui/sonner';
+import i18n from '../i18n';
 import { initLastMessageTimes } from '../utils/conversationState';
 import type { AppSettings, AppSettingsUpdate } from '../types';
 
@@ -52,7 +53,7 @@ export function useAppSettings() {
       } catch {
         // If refetch also fails, leave optimistic state
       }
-      toast.error('Failed to update blocked key');
+      toast.error(i18n.t('toast.blockedKeyFailed'));
     }
   }, []);
 
@@ -76,7 +77,7 @@ export function useAppSettings() {
       } catch {
         // If refetch also fails, leave optimistic state
       }
-      toast.error('Failed to update blocked name');
+      toast.error(i18n.t('toast.blockedNameFailed'));
     }
   }, []);
 
@@ -108,7 +109,7 @@ export function useAppSettings() {
       if (typeof detail === 'object' && detail?.message) {
         toast.error(detail.message);
       } else {
-        toast.error('Failed to update tracked telemetry');
+        toast.error(i18n.t('toast.trackedTelemetryFailed'));
       }
     }
   }, []);
@@ -141,7 +142,7 @@ export function useAppSettings() {
       if (typeof detail === 'object' && detail?.message) {
         toast.error(detail.message);
       } else {
-        toast.error('Failed to update tracked contact telemetry');
+        toast.error(i18n.t('toast.trackedContactTelemetryFailed'));
       }
     }
   }, []);

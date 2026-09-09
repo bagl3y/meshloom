@@ -1,3 +1,5 @@
+import type { TFunction } from 'i18next';
+
 import type {
   AppSettings,
   AppSettingsUpdate,
@@ -69,6 +71,42 @@ export class ApiError extends Error {
   }
 }
 
+export function getApiErrorCode(
+  detail: unknown
+): { code: string; params: Record<string, unknown> } | null {
+  if (!detail || typeof detail !== 'object') {
+    return null;
+  }
+  const record = detail as { code?: unknown; params?: unknown };
+  if (typeof record.code !== 'string' || record.code.length === 0) {
+    return null;
+  }
+  const params =
+    record.params && typeof record.params === 'object' && !Array.isArray(record.params)
+      ? (record.params as Record<string, unknown>)
+      : {};
+  return { code: record.code, params };
+}
+
+/** Translate a known API error code, otherwise keep the backend message. */
+export function formatApiError(err: unknown, t: TFunction): string {
+  if (err instanceof ApiError) {
+    const parsed = getApiErrorCode(err.detail);
+    if (parsed) {
+      const key = `errors.${parsed.code}`;
+      const translated = t(key, parsed.params);
+      if (translated !== key) {
+        return translated;
+      }
+    }
+    return err.message;
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return String(err);
+}
+
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const hasBody = options?.body !== undefined;
   const res = await fetch(`${API_BASE}${url}`, {
@@ -90,7 +128,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
         errorMessage =
           typeof errorJson.detail === 'string'
             ? errorJson.detail
-            : errorJson.detail?.reason || errorText;
+            : errorJson.detail?.message || errorJson.detail?.reason || errorText;
       }
     } catch {
       // Not JSON, use raw text
@@ -582,6 +620,7 @@ export const api = {
     p256dh: string;
     auth: string;
     label?: string;
+    language?: 'fr' | 'en';
   }) =>
     fetchJson<PushSubscriptionInfo>('/push/subscribe', {
       method: 'POST',

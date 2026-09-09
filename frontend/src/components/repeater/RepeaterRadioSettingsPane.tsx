@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { Separator } from '../ui/separator';
 import {
@@ -59,34 +60,47 @@ export function RadioSettingsPane({
   advertState: PaneState;
   onRefreshAdvert: () => void;
 }) {
+  const { t } = useTranslation();
   const formattedRadio = formatRadioTuple(data?.radio ?? null);
 
   return (
-    <RepeaterPane title="Radio Settings" state={state} onRefresh={onRefresh} disabled={disabled}>
+    <RepeaterPane
+      title={t('repeater.radioSettings')}
+      state={state}
+      onRefresh={onRefresh}
+      disabled={disabled}
+    >
       {!data ? (
         <NotFetched />
       ) : (
         <div>
-          <KvRow label="Firmware" value={data.firmware_version ?? '—'} />
+          <KvRow label={t('repeater.firmware')} value={data.firmware_version ?? '—'} />
           <KvRow
-            label="Radio"
+            label={t('repeater.radio')}
             value={<span title={formattedRadio.raw ?? undefined}>{formattedRadio.display}</span>}
           />
-          <KvRow label="TX Power" value={data.tx_power != null ? `${data.tx_power} dBm` : '—'} />
-          <KvRow label="Airtime Factor" value={data.airtime_factor ?? '—'} />
+          <KvRow
+            label={t('repeater.txPower')}
+            value={
+              data.tx_power != null ? t('repeater.txPowerValue', { value: data.tx_power }) : '—'
+            }
+          />
+          <KvRow label={t('repeater.airtimeFactor')} value={data.airtime_factor ?? '—'} />
           {/* Duty cycle limit is firmware >= 1.15 only; omit the row entirely on
               older nodes rather than showing an empty placeholder. */}
           {data.duty_cycle_limit != null && (
-            <KvRow label="Duty Cycle Limit" value={data.duty_cycle_limit} />
+            <KvRow label={t('repeater.dutyCycleLimit')} value={data.duty_cycle_limit} />
           )}
-          <KvRow label="Repeat Mode" value={data.repeat_enabled ?? '—'} />
-          <KvRow label="Max Flood Hops" value={data.flood_max ?? '—'} />
+          <KvRow label={t('repeater.repeatMode')} value={data.repeat_enabled ?? '—'} />
+          <KvRow label={t('repeater.maxFloodHops')} value={data.flood_max ?? '—'} />
         </div>
       )}
       {/* Advert Intervals sub-section */}
       <Separator className="my-2" />
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-medium text-muted-foreground">Advert Intervals</span>
+        <span className="text-xs font-medium text-muted-foreground">
+          {t('repeater.advertIntervals')}
+        </span>
         <button
           type="button"
           onClick={onRefreshAdvert}
@@ -97,8 +111,8 @@ export function RadioSettingsPane({
               ? 'text-muted-foreground'
               : 'text-success hover:bg-accent hover:text-success'
           )}
-          title="Refresh Advert Intervals"
-          aria-label="Refresh Advert Intervals"
+          title={t('repeater.refreshAdvertIntervals')}
+          aria-label={t('repeater.refreshAdvertIntervals')}
         >
           <RefreshIcon
             className={cn(
@@ -111,18 +125,20 @@ export function RadioSettingsPane({
       {advertState.error && <p className="text-xs text-destructive mb-1">{advertState.error}</p>}
       {advertState.loading ? (
         <p className="text-sm text-muted-foreground italic">
-          Fetching{advertState.attempt > 1 ? ` (attempt ${advertState.attempt}/3)` : ''}...
+          {advertState.attempt > 1
+            ? t('repeater.fetchingAttempt', { attempt: advertState.attempt, max: 3 })
+            : t('repeater.fetching')}
         </p>
       ) : !advertData ? (
         <NotFetched />
       ) : (
         <div>
           <KvRow
-            label="Local Advert"
+            label={t('repeater.localAdvert')}
             value={formatAdvertInterval(advertData.advert_interval, 'minutes')}
           />
           <KvRow
-            label="Flood Advert"
+            label={t('repeater.floodAdvert')}
             value={formatAdvertInterval(advertData.flood_advert_interval)}
           />
         </div>

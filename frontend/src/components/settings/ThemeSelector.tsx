@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { THEMES, getSavedTheme, applyTheme } from '../../utils/theme';
 
 /** 3x2 grid of colored dots previewing a theme's palette. */
@@ -17,6 +18,7 @@ function ThemeSwatch({ colors }: { colors: readonly string[] }) {
 }
 
 export function ThemeSelector() {
+  const { t } = useTranslation();
   const [current, setCurrent] = useState(getSavedTheme);
 
   const handleChange = (themeId: string) => {
@@ -26,7 +28,7 @@ export function ThemeSelector() {
 
   return (
     <fieldset className="flex flex-wrap gap-2 md:grid md:grid-cols-4">
-      <legend className="sr-only">Color theme</legend>
+      <legend className="sr-only">{t('settings.local.colorThemeLegend')}</legend>
       {THEMES.map((theme) => (
         <label
           key={theme.id}
@@ -46,7 +48,9 @@ export function ThemeSelector() {
             className="sr-only"
           />
           <ThemeSwatch colors={theme.swatches} />
-          <span className="text-xs whitespace-nowrap">{theme.name}</span>
+          <span className="text-xs whitespace-nowrap">
+            {t(`settings.local.themes.${theme.id}`, { defaultValue: theme.name })}
+          </span>
         </label>
       ))}
     </fieldset>

@@ -8,6 +8,7 @@ import {
 import { api } from '../api';
 import type { UseWebSocketOptions } from '../useWebSocket';
 import { toast } from '../components/ui/sonner';
+import i18n from '../i18n';
 import { getStateKey } from '../utils/conversationState';
 import { mergeContactIntoList } from '../utils/contactMerge';
 import { getContactDisplayName } from '../utils/pubkey';
@@ -147,18 +148,18 @@ export function useRealtimeAppState({
 
         if (prev !== null && prev.radio_connected !== data.radio_connected) {
           if (data.radio_connected) {
-            toast.success('Radio connected', {
+            toast.success(i18n.t('toast.radioConnected'), {
               description: data.connection_info
-                ? `Connected via ${data.connection_info}`
+                ? i18n.t('toast.radioConnectedVia', { info: data.connection_info })
                 : undefined,
             });
             fetchConfig();
           } else {
             if (nextRadioState === 'paused') {
-              toast.success('Radio connection paused');
+              toast.success(i18n.t('toast.radioPaused'));
             } else {
-              toast.error('Radio disconnected', {
-                description: 'Check radio connection and power',
+              toast.error(i18n.t('toast.radioDisconnected'), {
+                description: i18n.t('toast.radioDisconnectedDetail'),
               });
             }
           }
@@ -168,13 +169,27 @@ export function useRealtimeAppState({
           fetchConfig();
         }
       },
-      onError: (error: { message: string; details?: string }) => {
-        toast.error(error.message, {
+      onError: (error: {
+        message: string;
+        details?: string;
+        code?: string;
+        params?: Record<string, unknown>;
+      }) => {
+        const key = error.code ? `errors.${error.code}` : '';
+        const translated = key ? i18n.t(key, error.params) : error.message;
+        toast.error(key && translated !== key ? translated : error.message, {
           description: error.details,
         });
       },
-      onSuccess: (success: { message: string; details?: string }) => {
-        toast.success(success.message, {
+      onSuccess: (success: {
+        message: string;
+        details?: string;
+        code?: string;
+        params?: Record<string, unknown>;
+      }) => {
+        const key = success.code ? `errors.${success.code}` : '';
+        const translated = key ? i18n.t(key, success.params) : success.message;
+        toast.success(key && translated !== key ? translated : success.message, {
           description: success.details,
         });
       },

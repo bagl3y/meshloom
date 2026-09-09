@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import './eSlices';
 import { RawPacketFeedView } from '../components/RawPacketFeedView';
+import i18n from '../i18n';
 import { resetRawPacketStore, seedRawPacketStore } from '../stores/rawPacketStore';
 import type { RawPacketStatsSessionState } from '../utils/rawPacketStats';
 import type { Channel, Contact, RawPacket } from '../types';
@@ -125,42 +127,44 @@ describe('RawPacketFeedView', () => {
   it('opens a stats drawer with window controls and grouped summaries', () => {
     renderView();
 
-    expect(screen.getByText('Raw Packet Feed')).toBeInTheDocument();
-    expect(screen.queryByText('Packet Types')).not.toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.title'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('rawPacket.packetTypes'))).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /show stats/i }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('rawPacket.showStats') }));
 
-    expect(screen.getByLabelText('Stats window')).toBeInTheDocument();
-    expect(screen.getByText('Packet Types')).toBeInTheDocument();
-    expect(screen.getByText('Hop Byte Width')).toBeInTheDocument();
-    expect(screen.getByText('Most-Heard Neighbors')).toBeInTheDocument();
-    expect(screen.getByText('Traffic Timeline')).toBeInTheDocument();
+    expect(screen.getByLabelText(i18n.t('rawPacket.windowAria'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.packetTypes'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.hopByteWidth'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.mostHeard'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.timeline'))).toBeInTheDocument();
   });
 
   it('shows an Autoscroll toggle that is ticked by default and can be unchecked', () => {
     renderView();
 
-    const autoscroll = screen.getByLabelText('Autoscroll') as HTMLInputElement;
+    const autoscroll = screen.getByLabelText(i18n.t('rawPacket.autoscroll')) as HTMLInputElement;
     expect(autoscroll.checked).toBe(true);
 
     fireEvent.click(autoscroll);
-    expect((screen.getByLabelText('Autoscroll') as HTMLInputElement).checked).toBe(false);
+    expect(
+      (screen.getByLabelText(i18n.t('rawPacket.autoscroll')) as HTMLInputElement).checked
+    ).toBe(false);
   });
 
   it('analyzes a pasted raw packet without adding it to the live feed', () => {
     renderView({ channels: [TEST_CHANNEL] });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Analyze Packet' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('rawPacket.analyze') }));
 
-    expect(screen.getByRole('heading', { name: 'Analyze Packet' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: i18n.t('rawPacket.analyze') })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Packet Hex'), {
+    fireEvent.change(screen.getByLabelText(i18n.t('rawPacket.pasteHex')), {
       target: { value: GROUP_TEXT_PACKET_HEX },
     });
 
-    expect(screen.getByText('Full packet hex')).toBeInTheDocument();
-    expect(screen.getByText('Packet fields')).toBeInTheDocument();
-    expect(screen.getByText('Payload fields')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.fullHex'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.packetFields'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.payloadFields'))).toBeInTheDocument();
   });
 
   it('shows stats by default on desktop', () => {
@@ -180,9 +184,9 @@ describe('RawPacketFeedView', () => {
 
     renderView();
 
-    expect(screen.getByText('Packet Types')).toBeInTheDocument();
-    expect(screen.getByText('Hop Byte Width')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /hide stats/i })).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.packetTypes'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.hopByteWidth'))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: i18n.t('rawPacket.hideStats') })).toBeInTheDocument();
   });
 
   it('refreshes coverage when packet or session props update without counter deltas', () => {
@@ -230,13 +234,27 @@ describe('RawPacketFeedView', () => {
       contacts: [],
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /show stats/i }));
-    fireEvent.change(screen.getByLabelText('Stats window'), { target: { value: '1m' } });
-    expect(screen.getByText(/only covered for 10 sec/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('rawPacket.showStats') }));
+    fireEvent.change(screen.getByLabelText(i18n.t('rawPacket.windowAria')), {
+      target: { value: '1m' },
+    });
+    expect(
+      screen.getByText(
+        i18n.t('rawPacket.coveragePartial', {
+          duration: i18n.t('rawPacket.durationSec', { count: 10 }),
+        })
+      )
+    ).toBeInTheDocument();
 
     vi.setSystemTime(new Date('2024-01-01T00:01:10Z'));
     act(() => seedRawPacketStore({ packets: nextPackets, statsSession: initialSession }));
-    expect(screen.getByText(/only covered for 50 sec/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        i18n.t('rawPacket.coveragePartial', {
+          duration: i18n.t('rawPacket.durationSec', { count: 50 }),
+        })
+      )
+    ).toBeInTheDocument();
 
     vi.setSystemTime(new Date('2024-01-01T00:01:30Z'));
     const nextSession = {
@@ -250,7 +268,13 @@ describe('RawPacketFeedView', () => {
       ],
     };
     act(() => seedRawPacketStore({ packets: nextPackets, statsSession: nextSession }));
-    expect(screen.getByText(/only covered for 10 sec/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        i18n.t('rawPacket.coveragePartial', {
+          duration: i18n.t('rawPacket.durationSec', { count: 10 }),
+        })
+      )
+    ).toBeInTheDocument();
 
     vi.useRealTimers();
   });
@@ -278,11 +302,15 @@ describe('RawPacketFeedView', () => {
       contacts: [createContact()],
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /show stats/i }));
-    fireEvent.change(screen.getByLabelText('Stats window'), { target: { value: 'session' } });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('rawPacket.showStats') }));
+    fireEvent.change(screen.getByLabelText(i18n.t('rawPacket.windowAria')), {
+      target: { value: 'session' },
+    });
     expect(screen.getAllByText('Alpha').length).toBeGreaterThan(0);
-    expect(screen.getByText('Strongest Neighbor')).toBeInTheDocument();
-    expect(screen.getByText('-70 dBm best heard')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.strongestNeighbor'))).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('rawPacket.bestHeard', { rssi: '-70 dBm' }))
+    ).toBeInTheDocument();
   });
 
   it('marks unresolved neighbor identities explicitly', () => {
@@ -308,9 +336,11 @@ describe('RawPacketFeedView', () => {
       contacts: [],
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /show stats/i }));
-    fireEvent.change(screen.getByLabelText('Stats window'), { target: { value: 'session' } });
-    expect(screen.getAllByText('Identity not resolvable').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('rawPacket.showStats') }));
+    fireEvent.change(screen.getByLabelText(i18n.t('rawPacket.windowAria')), {
+      target: { value: 'session' },
+    });
+    expect(screen.getAllByText(i18n.t('rawPacket.identityUnresolved')).length).toBeGreaterThan(0);
   });
 
   it('collapses uniquely resolved hash buckets into the same visible contact row', () => {
@@ -354,11 +384,13 @@ describe('RawPacketFeedView', () => {
       contacts: [alphaContact],
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /show stats/i }));
-    fireEvent.change(screen.getByLabelText('Stats window'), { target: { value: 'session' } });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('rawPacket.showStats') }));
+    fireEvent.change(screen.getByLabelText(i18n.t('rawPacket.windowAria')), {
+      target: { value: 'session' },
+    });
 
     expect(screen.getAllByText('Alpha').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Identity not resolvable')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('rawPacket.identityUnresolved'))).not.toBeInTheDocument();
   });
 
   describe('hex filter', () => {
@@ -376,7 +408,7 @@ describe('RawPacketFeedView', () => {
       };
     }
 
-    const HEX_FILTER_LABEL = 'Filter loaded packets by hex substring';
+    const HEX_FILTER_LABEL = i18n.t('rawPacket.hexAria');
 
     it('filters the feed to packets whose raw hex contains the query', () => {
       renderView({ packets: [makePacket(1, 'aa11bb22'), makePacket(2, 'cc33dd44')] });
@@ -407,9 +439,9 @@ describe('RawPacketFeedView', () => {
 
       fireEvent.change(screen.getByLabelText(HEX_FILTER_LABEL), { target: { value: 'zzz' } });
 
-      expect(screen.getByText('Enter hex only')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('rawPacket.hexOnly'))).toBeInTheDocument();
       expect(screen.queryByText('AABBCC')).not.toBeInTheDocument();
-      expect(screen.getByText(/No packets received yet/i)).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('rawPacket.empty'))).toBeInTheDocument();
     });
 
     it('restores the full feed when the filter is cleared', () => {
@@ -418,7 +450,7 @@ describe('RawPacketFeedView', () => {
       fireEvent.change(screen.getByLabelText(HEX_FILTER_LABEL), { target: { value: 'aa' } });
       expect(screen.queryByText('DDEEFF')).not.toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Clear hex filter' }));
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('rawPacket.clearHex') }));
 
       expect(screen.getByText('AABBCC')).toBeInTheDocument();
       expect(screen.getByText('DDEEFF')).toBeInTheDocument();
@@ -443,14 +475,27 @@ describe('RawPacketFeedView', () => {
       channels: [TEST_CHANNEL],
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /gt from flightless/i }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: new RegExp(i18n.t('rawPacket.gtFrom', { sender: 'Flightless🥝', path: '' }), 'i'),
+      })
+    );
 
-    expect(screen.getByText('Packet Details')).toBeInTheDocument();
-    expect(screen.getByText('Payload fields')).toBeInTheDocument();
-    expect(screen.getByText('Full packet hex')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.details'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.payloadFields'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.fullHex'))).toBeInTheDocument();
     expect(screen.getByText('#six77')).toBeInTheDocument();
-    expect(screen.getByText(/bytes · decrypted/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/sender: flightless/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        i18n.t('rawPacket.packetPrimary', {
+          bytes: GROUP_TEXT_PACKET_HEX.length / 2,
+          state: i18n.t('rawPacket.decrypted'),
+        })
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('rawPacket.sender', { name: 'Flightless🥝' }))
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/hello there; this hashtag room is essentially public/i)
     ).toBeInTheDocument();
@@ -474,9 +519,13 @@ describe('RawPacketFeedView', () => {
       channels: [TEST_CHANNEL, COLLIDING_TEST_CHANNEL],
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /gt from flightless/i }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: new RegExp(i18n.t('rawPacket.gtFrom', { sender: 'Flightless🥝', path: '' }), 'i'),
+      })
+    );
 
-    expect(screen.getByText(/channel hash e6/i)).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('rawPacket.channelHash', { hash: 'E6' }))).toBeInTheDocument();
     expect(screen.queryByText('#six77')).not.toBeInTheDocument();
     expect(screen.queryByText('#collision')).not.toBeInTheDocument();
   });

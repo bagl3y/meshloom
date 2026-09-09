@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { SettingsAboutSection } from '../components/settings/SettingsAboutSection';
+import i18n from '../i18n';
 
 describe('SettingsAboutSection', () => {
   it('renders the debug support snapshot link', () => {
@@ -24,7 +25,7 @@ describe('SettingsAboutSection', () => {
       />
     );
 
-    const link = screen.getByRole('link', { name: /Open debug support snapshot/i });
+    const link = screen.getByRole('link', { name: i18n.t('settings.about.debugSnapshot') });
     expect(link).toHaveAttribute('href', './api/debug');
     expect(link).toHaveAttribute('target', '_blank');
   });

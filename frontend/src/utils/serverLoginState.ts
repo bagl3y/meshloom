@@ -1,6 +1,8 @@
+import i18n from '../i18n';
 import type { RepeaterLoginResponse } from '../types';
 
 export type ServerLoginMethod = 'password' | 'blank';
+export type ServerLoginEntity = 'repeater' | 'room';
 
 export type ServerLoginAttemptState =
   | {
@@ -28,11 +30,10 @@ export type ServerLoginAttemptState =
       at: number;
     };
 
-function getServerLoginMethodLabel(
-  method: ServerLoginMethod,
-  blankLabel = 'existing-access'
-): string {
-  return method === 'password' ? 'password' : blankLabel;
+function getServerLoginMethodLabel(method: ServerLoginMethod, entity: ServerLoginEntity): string {
+  return method === 'password'
+    ? i18n.t(`${entity}.loginMethodPassword`)
+    : i18n.t(`${entity}.loginMethodExisting`);
 }
 
 export function getServerLoginAttemptTone(
@@ -47,17 +48,16 @@ export function getServerLoginAttemptTone(
 export function buildServerLoginAttemptFromResponse(
   method: ServerLoginMethod,
   result: RepeaterLoginResponse,
-  entityLabel: string
+  entity: ServerLoginEntity
 ): ServerLoginAttemptState {
-  const methodLabel = getServerLoginMethodLabel(method);
+  const methodLabel = getServerLoginMethodLabel(method, entity);
   const at = Date.now();
-  const target = `the ${entityLabel}`;
 
   if (result.authenticated) {
     return {
       method,
       outcome: 'confirmed',
-      summary: `Login confirmed by ${target}.`,
+      summary: i18n.t(`${entity}.loginConfirmedSummary`),
       details: null,
       heardBack: true,
       at,
@@ -68,10 +68,8 @@ export function buildServerLoginAttemptFromResponse(
     return {
       method,
       outcome: 'not_confirmed',
-      summary: `We couldn't confirm the login.`,
-      details:
-        result.message ??
-        `No confirmation came back from ${target} after the ${methodLabel} login attempt.`,
+      summary: i18n.t(`${entity}.loginUnconfirmedSummary`),
+      details: result.message ?? i18n.t(`${entity}.loginTimeoutDetail`, { method: methodLabel }),
       heardBack: false,
       at,
     };
@@ -80,10 +78,10 @@ export function buildServerLoginAttemptFromResponse(
   return {
     method,
     outcome: 'not_confirmed',
-    summary: `Login was not confirmed.`,
+    summary: i18n.t(`${entity}.loginNotConfirmedSummary`),
     details:
       result.message ??
-      `${target} responded, but did not confirm the ${methodLabel} login attempt.`,
+      i18n.t(`${entity}.loginRespondedUnconfirmedDetail`, { method: methodLabel }),
     heardBack: true,
     at,
   };
@@ -92,15 +90,14 @@ export function buildServerLoginAttemptFromResponse(
 export function buildServerLoginAttemptFromError(
   method: ServerLoginMethod,
   message: string,
-  entityLabel: string
+  entity: ServerLoginEntity
 ): ServerLoginAttemptState {
-  const methodLabel = getServerLoginMethodLabel(method);
-  const target = `the ${entityLabel}`;
+  const methodLabel = getServerLoginMethodLabel(method, entity);
   return {
     method,
     outcome: 'request_failed',
-    summary: `We couldn't send the login request.`,
-    details: `${target} never acknowledged the ${methodLabel} login attempt. ${message}`,
+    summary: i18n.t(`${entity}.loginRequestFailedSummary`),
+    details: i18n.t(`${entity}.loginRequestFailedDetail`, { method: methodLabel, message }),
     heardBack: false,
     at: Date.now(),
   };

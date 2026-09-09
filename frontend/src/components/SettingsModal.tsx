@@ -1,4 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import type {
   AppSettings,
   AppSettingsUpdate,
@@ -105,6 +106,7 @@ export function SettingsModal(props: SettingsModalProps) {
     trackedTelemetryContacts,
     onToggleTrackedTelemetryContact,
   } = props;
+  const { t } = useTranslation();
   const externalSidebarNav = props.externalSidebarNav === true;
   const desktopSection = props.externalSidebarNav ? props.desktopSection : undefined;
 
@@ -190,7 +192,7 @@ export function SettingsModal(props: SettingsModalProps) {
       >
         <span className="inline-flex items-center gap-2 font-medium" role="heading" aria-level={3}>
           <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <span>{SETTINGS_SECTION_LABELS[section]}</span>
+          <span>{t(SETTINGS_SECTION_LABELS[section])}</span>
         </span>
         <span className="text-muted-foreground md:hidden" aria-hidden="true">
           {expandedSections[section] ? '−' : '+'}
@@ -234,7 +236,7 @@ export function SettingsModal(props: SettingsModalProps) {
             ) : (
               <div className={sectionContentClass}>
                 <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                  Radio is not available.
+                  {t('settings.radio.unavailable')}
                 </div>
               </div>
             ))}
@@ -278,7 +280,7 @@ export function SettingsModal(props: SettingsModalProps) {
             ) : (
               <div className={sectionContentClass}>
                 <div className="rounded-md border border-input bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-                  Loading app settings...
+                  {t('settings.radioApp.loading')}
                 </div>
               </div>
             ))}
@@ -300,7 +302,7 @@ export function SettingsModal(props: SettingsModalProps) {
             ) : (
               <div className={sectionContentClass}>
                 <div className="rounded-md border border-input bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-                  Loading app settings...
+                  {t('settings.database.loading')}
                 </div>
               </div>
             ))}

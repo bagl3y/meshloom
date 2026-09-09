@@ -2479,8 +2479,8 @@ class TestRunHistoricalDmDecryption:
         broadcasts, mock_broadcast = captured_broadcasts
         success_calls = []
 
-        def mock_success(message, details=None):
-            success_calls.append({"message": message, "details": details})
+        def mock_success(message, details=None, **kwargs):
+            success_calls.append({"message": message, "details": details, **kwargs})
 
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
             with patch("app.packet_processor.try_decrypt_dm", return_value=mock_decrypted):
@@ -2497,6 +2497,8 @@ class TestRunHistoricalDmDecryption:
         assert len(success_calls) == 1
         assert "Alice" in success_calls[0]["message"]
         assert "1 message" in success_calls[0]["details"]
+        assert success_calls[0]["code"] == "historical_decrypt_complete"
+        assert success_calls[0]["params"] == {"name": "Alice"}
 
     @pytest.mark.asyncio
     async def test_no_broadcast_when_zero_decrypted(self, test_db, captured_broadcasts):
@@ -2509,8 +2511,8 @@ class TestRunHistoricalDmDecryption:
         broadcasts, mock_broadcast = captured_broadcasts
         success_calls = []
 
-        def mock_success(message, details=None):
-            success_calls.append({"message": message, "details": details})
+        def mock_success(message, details=None, **kwargs):
+            success_calls.append({"message": message, "details": details, **kwargs})
 
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
             with patch("app.packet_processor.try_decrypt_dm", return_value=None):
@@ -2558,8 +2560,8 @@ class TestRunHistoricalDmDecryption:
         broadcasts, mock_broadcast = captured_broadcasts
         success_calls = []
 
-        def mock_success(message, details=None):
-            success_calls.append({"message": message, "details": details})
+        def mock_success(message, details=None, **kwargs):
+            success_calls.append({"message": message, "details": details, **kwargs})
 
         with patch("app.packet_processor.broadcast_event", mock_broadcast):
             with patch("app.packet_processor.try_decrypt_dm", side_effect=mock_decrypt):

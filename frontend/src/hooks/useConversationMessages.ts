@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from '../components/ui/sonner';
-import { api, isAbortError } from '../api';
+import { api, formatApiError, isAbortError } from '../api';
+import i18n from '../i18n';
 import type { Conversation, Message, MessagePath } from '../types';
 import { getMessageContentKey } from '../utils/messageIdentity';
 
@@ -474,8 +475,8 @@ export function useConversationMessages(
           return;
         }
         console.error('Failed to fetch messages:', err);
-        toast.error('Failed to load messages', {
-          description: err instanceof Error ? err.message : 'Check your connection',
+        toast.error(i18n.t('toast.loadMessagesFailed'), {
+          description: formatApiError(err, i18n.t) || i18n.t('toast.checkConnection'),
         });
       } finally {
         if (showLoading) {
@@ -579,8 +580,8 @@ export function useConversationMessages(
         return;
       }
       console.error('Failed to fetch older messages:', err);
-      toast.error('Failed to load older messages', {
-        description: err instanceof Error ? err.message : 'Check your connection',
+      toast.error(i18n.t('toast.loadOlderFailed'), {
+        description: formatApiError(err, i18n.t) || i18n.t('toast.checkConnection'),
       });
     } finally {
       if (olderAbortControllerRef.current === controller) {
@@ -655,8 +656,8 @@ export function useConversationMessages(
         return;
       }
       console.error('Failed to fetch newer messages:', err);
-      toast.error('Failed to load newer messages', {
-        description: err instanceof Error ? err.message : 'Check your connection',
+      toast.error(i18n.t('toast.loadNewerFailed'), {
+        description: formatApiError(err, i18n.t) || i18n.t('toast.checkConnection'),
       });
     } finally {
       if (newerAbortControllerRef.current === controller) {
@@ -778,7 +779,7 @@ export function useConversationMessages(
         .catch((err) => {
           if (isAbortError(err)) return;
           console.error('Failed to fetch messages around target:', err);
-          toast.error('Failed to jump to message');
+          toast.error(i18n.t('toast.jumpFailed'));
         })
         .finally(() => {
           setMessagesLoading(false);

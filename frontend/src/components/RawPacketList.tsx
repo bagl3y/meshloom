@@ -1,4 +1,5 @@
 import { useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Channel, RawPacket } from '../types';
 import { getRawPacketObservationKey } from '../utils/rawPacketIdentity';
 import { createDecoderOptions, decodePacketSummary } from '../utils/rawPacketInspector';
@@ -66,6 +67,7 @@ export function RawPacketList({
   onPacketClick,
   autoScroll = true,
 }: RawPacketListProps) {
+  const { t } = useTranslation();
   const listRef = useRef<HTMLDivElement>(null);
   const decoderOptions = useMemo(() => createDecoderOptions(channels), [channels]);
 
@@ -94,7 +96,7 @@ export function RawPacketList({
   if (packets.length === 0) {
     return (
       <div className="h-full overflow-y-auto p-5 text-center text-muted-foreground [contain:layout_paint]">
-        No packets received yet. Packets will appear here in real-time.
+        {t('rawPacket.empty')}
       </div>
     );
   }
@@ -120,7 +122,7 @@ export function RawPacketList({
               {!packet.decrypted && (
                 <>
                   <span aria-hidden="true">🔒</span>
-                  <span className="sr-only">Encrypted</span>
+                  <span className="sr-only">{t('rawPacket.encrypted')}</span>
                 </>
               )}
 

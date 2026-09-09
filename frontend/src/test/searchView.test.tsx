@@ -11,7 +11,9 @@ vi.mock('../api', () => ({
   isAbortError: (err: unknown) => err instanceof DOMException && err.name === 'AbortError',
 }));
 
+import './eSlices';
 import { SearchView } from '../components/SearchView';
+import i18n from '../i18n';
 
 function createSearchResult(overrides: Partial<Message> = {}): Message {
   return {
@@ -50,7 +52,7 @@ const defaultProps = {
 
 /** Type the query into the search input and wait for debounced results to render. */
 async function typeAndWaitForResults(query: string) {
-  const input = screen.getByLabelText('Search messages');
+  const input = screen.getByLabelText(i18n.t('search.ariaLabel'));
   // Use fake timers only for the debounce, then switch to real timers for
   // React's async state updates and waitFor polling.
   vi.useFakeTimers();
@@ -78,17 +80,15 @@ describe('SearchView', () => {
   it('renders empty state with prompt text', () => {
     mockGetMessages.mockResolvedValue([]);
     render(<SearchView {...defaultProps} />);
-    expect(screen.getByText('Type to search across all messages')).toBeInTheDocument();
-    expect(screen.getByText(/Tip: use/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/User-key linkage for group messages is best-effort/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('search.emptyPrompt'))).toBeInTheDocument();
+    expect(screen.getByText('user:', { selector: 'code' })).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('search.warning'))).toBeInTheDocument();
   });
 
   it('focuses input on mount', () => {
     mockGetMessages.mockResolvedValue([]);
     render(<SearchView {...defaultProps} />);
-    expect(screen.getByLabelText('Search messages')).toHaveFocus();
+    expect(screen.getByLabelText(i18n.t('search.ariaLabel'))).toHaveFocus();
   });
 
   it('debounces search input', async () => {
@@ -96,7 +96,7 @@ describe('SearchView', () => {
     vi.useFakeTimers();
     render(<SearchView {...defaultProps} />);
 
-    const input = screen.getByLabelText('Search messages');
+    const input = screen.getByLabelText(i18n.t('search.ariaLabel'));
     await act(async () => {
       fireEvent.change(input, { target: { value: 'hello' } });
     });
@@ -139,7 +139,9 @@ describe('SearchView', () => {
 
     await typeAndWaitForResults('nonexistent');
 
-    expect(screen.getByText(/No messages found/)).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('search.noResults', { query: 'nonexistent' }))
+    ).toBeInTheDocument();
   });
 
   it('navigates to message on click', async () => {
@@ -192,7 +194,7 @@ describe('SearchView', () => {
 
     await typeAndWaitForResults('result');
 
-    expect(screen.getByText('Load more results')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('search.loadMore'))).toBeInTheDocument();
   });
 
   it('does not show load more when results are less than page size', async () => {
@@ -204,7 +206,7 @@ describe('SearchView', () => {
 
     const resultBtns = screen.getAllByRole('button');
     expect(resultBtns.some((b) => b.textContent?.includes('one'))).toBe(true);
-    expect(screen.queryByText('Load more results')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('search.loadMore'))).not.toBeInTheDocument();
   });
 
   it('resolves channel name from channels prop', async () => {
@@ -287,7 +289,7 @@ describe('SearchView', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(screen.getByLabelText('Search messages')).toHaveValue('user:"Alice Smith"');
+    expect(screen.getByLabelText(i18n.t('search.ariaLabel'))).toHaveValue('user:"Alice Smith"');
     expect(mockGetMessages).toHaveBeenCalledWith(
       expect.objectContaining({ q: 'user:"Alice Smith"' }),
       expect.any(AbortSignal)
@@ -318,7 +320,7 @@ describe('SearchView', () => {
       expect.objectContaining({ q: 'visible' }),
       expect.any(AbortSignal)
     );
-    expect(screen.getByText(/No messages found/)).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('search.noResults', { query: 'visible' }))).toBeInTheDocument();
   });
 
   it('aborts the load-more request on unmount', async () => {
@@ -336,7 +338,7 @@ describe('SearchView', () => {
     const { unmount } = render(<SearchView {...defaultProps} />);
 
     await typeAndWaitForResults('result');
-    fireEvent.click(screen.getByText('Load more results'));
+    fireEvent.click(screen.getByText(i18n.t('search.loadMore')));
 
     const loadMoreSignal = mockGetMessages.mock.calls[1]?.[1] as AbortSignal | undefined;
     expect(loadMoreSignal).toBeInstanceOf(AbortSignal);

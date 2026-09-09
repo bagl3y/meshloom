@@ -2,6 +2,12 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { usePushSubscription } from '../hooks/usePushSubscription';
+import i18n from '../i18n';
+import fEn from '../i18n/locales/slices/f.en.json';
+import fFr from '../i18n/locales/slices/f.fr.json';
+
+i18n.addResourceBundle('en', 'translation', fEn, true, true);
+i18n.addResourceBundle('fr', 'translation', fFr, true, true);
 
 const mocks = vi.hoisted(() => ({
   api: {
@@ -172,7 +178,7 @@ describe('usePushSubscription', () => {
 
     expect(result.current.loading).toBe(false);
     expect(mocks.toast.error).toHaveBeenCalledWith(
-      'Failed to enable push notifications',
+      i18n.t('notifications.pushEnableFailed'),
       expect.objectContaining({
         description: expect.stringContaining('trusted TLS certificate for service workers'),
       })
@@ -226,6 +232,7 @@ describe('usePushSubscription', () => {
       p256dh: 'p256dh-new',
       auth: 'auth-new',
       label: expect.any(String),
+      language: expect.any(String),
     });
     expect(result.current.currentSubscriptionId).toBe('sub-2');
   });

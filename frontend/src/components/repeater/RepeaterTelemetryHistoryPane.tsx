@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 import {
   AreaChart,
   Area,
@@ -32,13 +34,25 @@ interface MetricConfig {
   color: string;
 }
 
-const BUILTIN_METRIC_CONFIG: Record<BuiltinMetric, MetricConfig> = {
-  battery_volts: { label: 'Voltage', unit: 'V', color: '#22c55e' },
-  noise_floor_dbm: { label: 'Noise Floor', unit: 'dBm', color: '#8b5cf6' },
-  packets: { label: 'Packets', unit: '', color: '#0ea5e9' },
-  recv_errors: { label: 'RX Errors', unit: '', color: '#ef4444' },
-  uptime_seconds: { label: 'Uptime', unit: 's', color: '#f59e0b' },
+const BUILTIN_METRIC_KEYS: Record<BuiltinMetric, string> = {
+  battery_volts: 'repeater.metricVoltage',
+  noise_floor_dbm: 'repeater.metricNoiseFloor',
+  packets: 'repeater.metricPackets',
+  recv_errors: 'repeater.metricRxErrors',
+  uptime_seconds: 'repeater.metricUptime',
 };
+
+const BUILTIN_METRIC_CONFIG: Record<BuiltinMetric, MetricConfig> = {
+  battery_volts: { label: '', unit: 'V', color: '#22c55e' },
+  noise_floor_dbm: { label: '', unit: 'dBm', color: '#8b5cf6' },
+  packets: { label: '', unit: '', color: '#0ea5e9' },
+  recv_errors: { label: '', unit: '', color: '#ef4444' },
+  uptime_seconds: { label: '', unit: 's', color: '#f59e0b' },
+};
+
+function builtinMetricLabel(metric: BuiltinMetric): string {
+  return i18n.t(BUILTIN_METRIC_KEYS[metric]);
+}
 
 const BUILTIN_METRICS: BuiltinMetric[] = Object.keys(BUILTIN_METRIC_CONFIG) as BuiltinMetric[];
 
@@ -180,24 +194,37 @@ interface CsvColumn {
  *  metric the pane can plot — builtins, their derived series, and each
  *  discovered LPP sensor — gets a column. Keep the two in step. */
 function buildCsvColumns(lppMetrics: { key: string; config: MetricConfig }[]): CsvColumn[] {
-  const withUnit = (label: string, unit: string) => (unit ? `${label} (${unit})` : label);
+  const withUnit = (label: string, unit: string) =>
+    unit ? i18n.t('repeater.csvUnit', { label, unit }) : label;
   return [
-    { key: 'timestamp_iso', header: 'Timestamp (ISO 8601)' },
-    { key: 'timestamp', header: 'Unix Timestamp' },
-    { key: 'battery_volts', header: withUnit('Voltage', BUILTIN_METRIC_CONFIG.battery_volts.unit) },
+    { key: 'timestamp_iso', header: i18n.t('repeater.csvTimestampIso') },
+    { key: 'timestamp', header: i18n.t('repeater.csvUnixTimestamp') },
+    {
+      key: 'battery_volts',
+      header: withUnit(
+        builtinMetricLabel('battery_volts'),
+        BUILTIN_METRIC_CONFIG.battery_volts.unit
+      ),
+    },
     {
       key: 'noise_floor_dbm',
-      header: withUnit('Noise Floor', BUILTIN_METRIC_CONFIG.noise_floor_dbm.unit),
+      header: withUnit(
+        builtinMetricLabel('noise_floor_dbm'),
+        BUILTIN_METRIC_CONFIG.noise_floor_dbm.unit
+      ),
     },
-    { key: 'packets_received', header: 'Packets Received' },
-    { key: 'packets_sent', header: 'Packets Sent' },
-    { key: 'packets_received_delta', header: 'Packets Received Delta' },
-    { key: 'packets_sent_delta', header: 'Packets Sent Delta' },
-    { key: 'recv_errors', header: 'RX Errors' },
-    { key: 'recv_error_pct', header: 'RX Error Rate (%)' },
+    { key: 'packets_received', header: i18n.t('repeater.csvPacketsReceived') },
+    { key: 'packets_sent', header: i18n.t('repeater.csvPacketsSent') },
+    { key: 'packets_received_delta', header: i18n.t('repeater.csvPacketsReceivedDelta') },
+    { key: 'packets_sent_delta', header: i18n.t('repeater.csvPacketsSentDelta') },
+    { key: 'recv_errors', header: i18n.t('repeater.csvRxErrors') },
+    { key: 'recv_error_pct', header: i18n.t('repeater.csvRxErrorRate') },
     {
       key: 'uptime_seconds',
-      header: withUnit('Uptime', BUILTIN_METRIC_CONFIG.uptime_seconds.unit),
+      header: withUnit(
+        builtinMetricLabel('uptime_seconds'),
+        BUILTIN_METRIC_CONFIG.uptime_seconds.unit
+      ),
     },
     ...lppMetrics.map((m) => ({
       key: m.key,
@@ -246,6 +273,7 @@ export function TelemetryHistoryPane({
   trackedTelemetryRepeaters,
   onToggleTrackedTelemetry,
 }: TelemetryHistoryPaneProps) {
+  const { t } = useTranslation();
   const { distanceUnit } = useDistanceUnit();
   const [metric, setMetric] = useState<string>('battery_volts');
   const [toggling, setToggling] = useState(false);
@@ -299,7 +327,10 @@ export function TelemetryHistoryPane({
   const activeConfig: MetricConfig = useMemo(
     () =>
       isBuiltin
-        ? BUILTIN_METRIC_CONFIG[activeMetric as BuiltinMetric]
+        ? {
+            ...BUILTIN_METRIC_CONFIG[activeMetric as BuiltinMetric],
+            label: builtinMetricLabel(activeMetric as BuiltinMetric),
+          }
         : (lppMetrics.find((m) => m.key === activeMetric)?.config ?? {
             label: activeMetric,
             unit: '',
@@ -369,28 +400,28 @@ export function TelemetryHistoryPane({
           color: '#0ea5e9',
           axis: 'left' as const,
           line: false,
-          label: 'Received',
+          label: i18n.t('repeater.seriesReceived'),
         },
         {
           key: 'packets_sent',
           color: '#f43f5e',
           axis: 'left' as const,
           line: false,
-          label: 'Sent',
+          label: i18n.t('repeater.seriesSent'),
         },
         {
           key: 'packets_received_delta',
           color: '#14b8a6',
           axis: 'right' as const,
           line: true,
-          label: 'Received Δ',
+          label: i18n.t('repeater.seriesReceivedDelta'),
         },
         {
           key: 'packets_sent_delta',
           color: '#f59e0b',
           axis: 'right' as const,
           line: true,
-          label: 'Sent Δ',
+          label: i18n.t('repeater.seriesSentDelta'),
         },
       ];
     }
@@ -401,14 +432,14 @@ export function TelemetryHistoryPane({
           color: '#ef4444',
           axis: 'left' as const,
           line: false,
-          label: 'RX Errors',
+          label: i18n.t('repeater.metricRxErrors'),
         },
         {
           key: 'recv_error_pct',
           color: '#f59e0b',
           axis: 'right' as const,
           line: false,
-          label: 'Error Rate',
+          label: i18n.t('repeater.seriesErrorRate'),
         },
       ];
     }
@@ -562,9 +593,11 @@ export function TelemetryHistoryPane({
     <div className="border border-border rounded-lg overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b border-border">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium">Telemetry History</h3>
+          <h3 className="text-sm font-medium">{t('repeater.telemetryHistory')}</h3>
           {entries.length > 0 && (
-            <span className="text-[0.625rem] text-muted-foreground">{entries.length} samples</span>
+            <span className="text-[0.625rem] text-muted-foreground">
+              {t('repeater.samples', { count: entries.length })}
+            </span>
           )}
         </div>
         {entries.length > 0 && (
@@ -572,10 +605,10 @@ export function TelemetryHistoryPane({
             variant="outline"
             size="sm"
             onClick={handleDownloadCsv}
-            title="Download all telemetry history as CSV"
+            title={t('repeater.downloadCsvTitle')}
           >
             <Download className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
-            Download CSV
+            {t('repeater.downloadCsv')}
           </Button>
         )}
       </div>
@@ -583,21 +616,21 @@ export function TelemetryHistoryPane({
         {/* Explanation + tracking toggle */}
         <div className="mb-3 space-y-3">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Any time repeater telemetry is fetched, the metrics are stored for 30 days (or 1,000
-            samples, whichever comes first). This telemetry is stored on normal interactive fetches
-            via the repeater pane, API calls to the endpoint (
-            <code className="text-[0.6875rem]">POST /api/contacts/&lt;key&gt;/repeater/status</code>
-            ), or when the repeater is opted into interval telemetry polling, in which case the
-            repeater will be polled for metrics automatically. Fetch frequency can be configured in{' '}
-            <a
-              href="#settings/radio-app"
-              className="underline text-primary hover:text-primary/80 transition-colors"
-            >
-              Settings &rarr; Radio-App Management
-            </a>
-            , where you can also see which repeaters are currently opted in. A maximum of{' '}
-            {MAX_TRACKED} repeaters may be opted into this for the sake of keeping mesh congestion
-            reasonable.
+            <Trans
+              i18nKey="repeater.historyHelp"
+              values={{
+                endpoint: 'POST /api/contacts/<key>/repeater/status',
+                max: MAX_TRACKED,
+              }}
+              components={{
+                settings: (
+                  <a
+                    href="#settings/radio-app"
+                    className="underline text-primary hover:text-primary/80 transition-colors"
+                  />
+                ),
+              }}
+            />
           </p>
 
           {isTracked ? (
@@ -607,16 +640,20 @@ export function TelemetryHistoryPane({
               disabled={toggling}
               className="border-destructive/50 text-destructive hover:bg-destructive/10"
             >
-              {toggling ? 'Updating...' : 'Remove Repeater from Interval Metrics Tracking'}
+              {toggling ? t('repeater.updating') : t('repeater.removeTracking')}
             </Button>
           ) : slotsFull ? (
             <div className="space-y-2">
               <Button variant="outline" disabled>
-                Tracking Full ({trackedTelemetryRepeaters.length}/{MAX_TRACKED} slots used)
+                {t('repeater.trackingFull', {
+                  used: trackedTelemetryRepeaters.length,
+                  max: MAX_TRACKED,
+                })}
               </Button>
               <p className="text-xs text-muted-foreground">
-                Disable tracking on another repeater to free a slot:{' '}
-                {trackedNames.map((t) => t.name).join(', ')}
+                {t('repeater.trackingFullHelp', {
+                  names: trackedNames.map((item) => item.name).join(', '),
+                })}
               </p>
             </div>
           ) : (
@@ -626,7 +663,7 @@ export function TelemetryHistoryPane({
               disabled={toggling}
               className="border-green-600/50 text-green-600 hover:bg-green-600/10"
             >
-              {toggling ? 'Updating...' : 'Opt Repeater into Interval Metrics Tracking'}
+              {toggling ? t('repeater.updating') : t('repeater.optInTracking')}
             </Button>
           )}
         </div>
@@ -647,7 +684,7 @@ export function TelemetryHistoryPane({
                   : 'text-muted-foreground hover:text-foreground hover:bg-accent'
               )}
             >
-              {BUILTIN_METRIC_CONFIG[m].label}
+              {builtinMetricLabel(m)}
             </button>
           ))}
           {lppMetrics.map((m) => (
@@ -668,9 +705,7 @@ export function TelemetryHistoryPane({
         </div>
 
         {entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic">
-            No history yet. Fetch status above to record data points.
-          </p>
+          <p className="text-sm text-muted-foreground italic">{t('repeater.noHistory')}</p>
         ) : (
           <ResponsiveContainer width="100%" height={210}>
             <AreaChart

@@ -270,6 +270,7 @@ class CommunityMqttPublisher(BaseMqttPublisher):
             broadcast_error(
                 "Community MQTT unavailable",
                 "Radio firmware does not support private key export.",
+                code="community_mqtt_unavailable",
             )
             self._key_unavailable_warned = True
 

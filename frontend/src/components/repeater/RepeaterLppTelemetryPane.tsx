@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { RepeaterPane, NotFetched, LppSensorRow, formatLppLabel } from './repeaterPaneShared';
 import { useDistanceUnit } from '../../contexts/DistanceUnitContext';
 import type { RepeaterLppTelemetryResponse, PaneState } from '../../types';
@@ -14,6 +15,7 @@ export function LppTelemetryPane({
   onRefresh: () => void;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
   const { distanceUnit } = useDistanceUnit();
 
   // Build disambiguated labels matching the telemetry history chart names
@@ -24,16 +26,27 @@ export function LppTelemetryPane({
       const base = `${s.type_name}_${s.channel}`;
       const n = (counts.get(base) ?? 0) + 1;
       counts.set(base, n);
-      return formatLppLabel(s.type_name) + ` Ch${s.channel}` + (n > 1 ? ` (${n})` : '');
+      return n > 1
+        ? t('repeater.lppChannelN', {
+            label: formatLppLabel(s.type_name),
+            channel: s.channel,
+            n,
+          })
+        : t('repeater.lppChannel', { label: formatLppLabel(s.type_name), channel: s.channel });
     });
-  }, [data]);
+  }, [data, t]);
 
   return (
-    <RepeaterPane title="LPP Sensors" state={state} onRefresh={onRefresh} disabled={disabled}>
+    <RepeaterPane
+      title={t('repeater.lppSensors')}
+      state={state}
+      onRefresh={onRefresh}
+      disabled={disabled}
+    >
       {!data ? (
         <NotFetched />
       ) : data.sensors.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No sensor data available</p>
+        <p className="text-sm text-muted-foreground">{t('repeater.noSensors')}</p>
       ) : (
         <div className="space-y-0.5">
           {data.sensors.map((sensor, i) => (

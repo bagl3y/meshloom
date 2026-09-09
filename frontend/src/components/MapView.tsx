@@ -50,7 +50,6 @@ interface MapViewProps {
 // satellite tiles) before committing.
 interface TileLayerPreset {
   id: string;
-  label: string;
   url: string;
   attribution: string;
   background: string;
@@ -71,7 +70,6 @@ const MAP_MAX_ZOOM = 19;
 const TILE_LAYERS: readonly TileLayerPreset[] = [
   {
     id: 'light',
-    label: 'Light (OpenStreetMap)',
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     background: '#1a1a2e',
@@ -79,7 +77,6 @@ const TILE_LAYERS: readonly TileLayerPreset[] = [
   },
   {
     id: 'dark',
-    label: 'Dark (CARTO)',
     url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
@@ -88,7 +85,6 @@ const TILE_LAYERS: readonly TileLayerPreset[] = [
   },
   {
     id: 'topographic',
-    label: 'Topographic (OpenTopoMap)',
     url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
     attribution:
       'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
@@ -97,7 +93,6 @@ const TILE_LAYERS: readonly TileLayerPreset[] = [
   },
   {
     id: 'satellite',
-    label: 'Satellite (Esri)',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution:
       'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
@@ -574,18 +569,32 @@ export function MapView({
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  const handleLayerChange = useCallback((layerName: string) => {
-    const match = TILE_LAYERS.find((l) => l.label === layerName);
-    if (!match) return;
-    setSelectedLayerId(match.id);
-    try {
-      localStorage.setItem(MAP_LAYER_STORAGE_KEY, match.id);
-      // Clear the legacy key so a future downgrade-rollback doesn't revert us.
-      localStorage.removeItem(LEGACY_DARK_MAP_STORAGE_KEY);
-    } catch {
-      // localStorage may be disabled; selection stays in memory only.
-    }
-  }, []);
+  const layerNameById = useCallback(
+    (id: string) => {
+      if (id === 'light') return t('map.layerLight');
+      if (id === 'dark') return t('map.layerDark');
+      if (id === 'topographic') return t('map.layerTopo');
+      if (id === 'satellite') return t('map.layerSatellite');
+      return id;
+    },
+    [t]
+  );
+
+  const handleLayerChange = useCallback(
+    (layerName: string) => {
+      const match = TILE_LAYERS.find((l) => layerNameById(l.id) === layerName);
+      if (!match) return;
+      setSelectedLayerId(match.id);
+      try {
+        localStorage.setItem(MAP_LAYER_STORAGE_KEY, match.id);
+        // Clear the legacy key so a future downgrade-rollback doesn't revert us.
+        localStorage.removeItem(LEGACY_DARK_MAP_STORAGE_KEY);
+      } catch {
+        // localStorage may be disabled; selection stays in memory only.
+      }
+    },
+    [layerNameById]
+  );
 
   const [showPackets, setShowPackets] = useState(false);
   const [showInternetRelays, setShowInternetRelays] = useState(false);
@@ -944,18 +953,22 @@ export function MapView({
   const sinceLabel = useMemo(() => {
     if (sinceId === 'custom') {
       return sinceCutoffSec == null
-        ? 'at any time'
-        : `since ${new Date(sinceCutoffSec * 1000).toLocaleString()}`;
+        ? t('map.atAnyTime')
+        : t('map.sinceDate', { date: new Date(sinceCutoffSec * 1000).toLocaleString() });
     }
-    if (!activeSincePreset || activeSincePreset.windowLabel == null) return 'at any time';
-    return `in the last ${activeSincePreset.windowLabel}`;
-  }, [sinceId, sinceCutoffSec, activeSincePreset]);
+    if (!activeSincePreset || activeSincePreset.windowLabel == null) return t('map.atAnyTime');
+    if (activeSincePreset.id === '1h') return t('map.inLast1h');
+    if (activeSincePreset.id === '1d') return t('map.inLast1d');
+    if (activeSincePreset.id === '3d') return t('map.inLast3d');
+    return t('map.inLast7d');
+  }, [sinceId, sinceCutoffSec, activeSincePreset, t]);
 
-  const contactCountLabel = `${mappableContacts.length} contact${mappableContacts.length !== 1 ? 's' : ''}`;
   const infoLabel =
     showPackets && discoveryMode
-      ? `${mappableContacts.length} node${mappableContacts.length !== 1 ? 's' : ''} discovered from live traffic`
-      : `Showing ${contactCountLabel} heard ${sinceLabel}${includesFocusedOutsideWindow ? ' plus the focused contact' : ''}`;
+      ? t('map.discovered', { count: mappableContacts.length })
+      : includesFocusedOutsideWindow
+        ? t('map.showingHeardFocused', { count: mappableContacts.length, since: sinceLabel })
+        : t('map.showingHeard', { count: mappableContacts.length, since: sinceLabel });
 
   return (
     <div className="flex flex-col h-full">
@@ -973,7 +986,7 @@ export function MapView({
             <div
               className="flex flex-wrap items-center gap-x-3 gap-y-1"
               role="group"
-              aria-label="Marker recency legend"
+              aria-label={t('map.recencyLegend')}
             >
               <span className="flex items-center gap-1">
                 <span
@@ -1005,7 +1018,7 @@ export function MapView({
                   style={{ backgroundColor: MAP_RECENCY_COLORS.old }}
                   aria-hidden="true"
                 />{' '}
-                older
+                {t('map.older')}
               </span>
             </div>
           )}
@@ -1017,7 +1030,7 @@ export function MapView({
                   style={{ backgroundColor: PARTICLE_COLOR_MAP['AD'] }}
                   aria-hidden="true"
                 />
-                Ad
+                {t('map.legendAd')}
               </span>
               <span className="flex items-center gap-1">
                 <span
@@ -1025,7 +1038,7 @@ export function MapView({
                   style={{ backgroundColor: PARTICLE_COLOR_MAP['GT'] }}
                   aria-hidden="true"
                 />
-                Ch
+                {t('map.legendCh')}
               </span>
               <span className="flex items-center gap-1">
                 <span
@@ -1033,7 +1046,7 @@ export function MapView({
                   style={{ backgroundColor: PARTICLE_COLOR_MAP['DM'] }}
                   aria-hidden="true"
                 />
-                DM
+                {t('map.legendDm')}
               </span>
               <span className="flex items-center gap-1">
                 <span
@@ -1041,7 +1054,7 @@ export function MapView({
                   style={{ backgroundColor: PARTICLE_COLOR_MAP['ACK'] }}
                   aria-hidden="true"
                 />
-                ACK
+                {t('map.legendAck')}
               </span>
             </>
           )}
@@ -1051,7 +1064,7 @@ export function MapView({
               style={{ borderColor: MAP_REPEATER_RING, backgroundColor: MAP_RECENCY_COLORS.today }}
               aria-hidden="true"
             />{' '}
-            repeater
+            {t('map.legendRepeater')}
           </span>
           {showInternetRelays && (
             <span className="flex items-center gap-1">
@@ -1072,9 +1085,9 @@ export function MapView({
             <div
               className="flex flex-wrap items-center gap-1"
               role="group"
-              aria-label="Show nodes heard since"
+              aria-label={t('map.sinceAria')}
             >
-              <span className="text-[0.6875rem] text-muted-foreground">Since</span>
+              <span className="text-[0.6875rem] text-muted-foreground">{t('map.since')}</span>
               {MAP_SINCE_PRESETS.map((preset) => (
                 <button
                   key={preset.id}
@@ -1088,7 +1101,7 @@ export function MapView({
                       : 'bg-muted hover:bg-accent'
                   )}
                 >
-                  {preset.label}
+                  {preset.id === 'all' ? t('map.sinceAll') : preset.label}
                 </button>
               ))}
               <button
@@ -1102,7 +1115,7 @@ export function MapView({
                     : 'bg-muted hover:bg-accent'
                 )}
               >
-                Custom
+                {t('map.sinceCustom')}
               </button>
               {sinceId === 'custom' && (
                 <>
@@ -1110,7 +1123,7 @@ export function MapView({
                     type="datetime-local"
                     value={customSince}
                     onChange={(e) => setCustomSince(e.target.value)}
-                    aria-label="Show nodes heard since (local time)"
+                    aria-label={t('map.sinceCustomAria')}
                     className="rounded border border-input bg-background px-1.5 py-0.5 text-[0.6875rem] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
                   {customSince && (
@@ -1119,7 +1132,7 @@ export function MapView({
                       onClick={() => setCustomSince('')}
                       className="rounded px-1.5 py-0.5 text-[0.625rem] uppercase tracking-wider bg-muted hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      Clear
+                      {t('map.sinceClear')}
                     </button>
                   )}
                 </>
@@ -1147,7 +1160,7 @@ export function MapView({
               onChange={(e) => setShowPackets(e.target.checked)}
               className="rounded border-border"
             />
-            <span className="text-[0.6875rem]">Visualize packets</span>
+            <span className="text-[0.6875rem]">{t('map.visualizePackets')}</span>
           </label>
           {showPackets && (
             <label className="flex items-center gap-1.5 cursor-pointer">
@@ -1157,7 +1170,7 @@ export function MapView({
                 onChange={(e) => setDiscoveryMode(e.target.checked)}
                 className="rounded border-border"
               />
-              <span className="text-[0.6875rem]">Discover nodes</span>
+              <span className="text-[0.6875rem]">{t('map.discoverNodes')}</span>
             </label>
           )}
         </div>
@@ -1168,7 +1181,7 @@ export function MapView({
         className="flex-1 relative"
         style={{ zIndex: 0 }}
         role="img"
-        aria-label="Map showing mesh node locations"
+        aria-label={t('map.mapAria')}
       >
         <MapContainer
           center={[20, 0]}
@@ -1182,7 +1195,7 @@ export function MapView({
             {TILE_LAYERS.map((layer) => (
               <LayersControl.BaseLayer
                 key={layer.id}
-                name={layer.label}
+                name={layerNameById(layer.id)}
                 checked={layer.id === selectedLayerId}
               >
                 <TileLayer
@@ -1212,9 +1225,7 @@ export function MapView({
             const color = getMarkerColor(contact.last_seen);
             const displayName = contact.name || contact.public_key.slice(0, 12);
             const lastHeardLabel =
-              contact.last_seen != null
-                ? formatTime(contact.last_seen)
-                : 'Never heard by this server';
+              contact.last_seen != null ? formatTime(contact.last_seen) : t('map.neverHeard');
             const radius = isRepeater ? 10 : 7;
 
             return (
@@ -1235,7 +1246,7 @@ export function MapView({
                     <div className="text-sm">
                       <div className="font-medium flex items-center gap-1">
                         {isRepeater && (
-                          <span title="Repeater" aria-hidden="true">
+                          <span title={t('map.repeaterTitle')} aria-hidden="true">
                             🛜
                           </span>
                         )}
@@ -1247,7 +1258,7 @@ export function MapView({
                               event.stopPropagation();
                               onSelectContact(contact);
                             }}
-                            title={`Open conversation with ${displayName}`}
+                            title={t('map.openConversation', { name: displayName })}
                           >
                             {displayName}
                           </button>
@@ -1255,7 +1266,9 @@ export function MapView({
                           displayName
                         )}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">Last heard: {lastHeardLabel}</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {t('map.lastHeard', { time: lastHeardLabel })}
+                      </div>
                       <div className="text-xs text-gray-400 mt-1 font-mono">
                         {contact.lat!.toFixed(5)}, {contact.lon!.toFixed(5)}
                       </div>

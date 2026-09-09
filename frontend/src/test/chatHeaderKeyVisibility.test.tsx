@@ -2,7 +2,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, expect, it, vi } from 'vitest';
 
 import { ChatHeader } from '../components/ChatHeader';
+import i18n from '../i18n';
+import sliceEn from '../i18n/locales/slices/b.en.json';
+import sliceFr from '../i18n/locales/slices/b.fr.json';
 import type { Channel, Contact, Conversation, PathDiscoveryResponse } from '../types';
+
+i18n.addResourceBundle('en', 'translation', sliceEn, true, true);
+i18n.addResourceBundle('fr', 'translation', sliceFr, true, true);
 import { CONTACT_TYPE_ROOM } from '../types';
 import { PUBLIC_CHANNEL_KEY } from '../utils/publicChannel';
 
@@ -46,10 +52,10 @@ describe('ChatHeader key visibility', () => {
     render(<ChatHeader {...baseProps} conversation={conversation} channels={[channel]} />);
 
     expect(screen.getByText(key.toLowerCase())).toBeInTheDocument();
-    expect(screen.queryByText('Show Key')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('chatHeader.showKey'))).not.toBeInTheDocument();
   });
 
-  it('hides key behind "Show Key" button for private channels', () => {
+  it('hides key behind Show Key button for private channels', () => {
     const key = 'BB'.repeat(16);
     const channel = makeChannel(key, 'Secret Room', false);
     const conversation: Conversation = { type: 'channel', id: key, name: 'Secret Room' };
@@ -57,20 +63,20 @@ describe('ChatHeader key visibility', () => {
     render(<ChatHeader {...baseProps} conversation={conversation} channels={[channel]} />);
 
     expect(screen.queryByText(key.toLowerCase())).not.toBeInTheDocument();
-    expect(screen.getByText('Show Key')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('chatHeader.showKey'))).toBeInTheDocument();
   });
 
-  it('reveals key when "Show Key" is clicked', () => {
+  it('reveals key when Show Key is clicked', () => {
     const key = 'CC'.repeat(16);
     const channel = makeChannel(key, 'Private', false);
     const conversation: Conversation = { type: 'channel', id: key, name: 'Private' };
 
     render(<ChatHeader {...baseProps} conversation={conversation} channels={[channel]} />);
 
-    fireEvent.click(screen.getByText('Show Key'));
+    fireEvent.click(screen.getByText(i18n.t('chatHeader.showKey')));
 
     expect(screen.getByText(key.toLowerCase())).toBeInTheDocument();
-    expect(screen.queryByText('Show Key')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('chatHeader.showKey'))).not.toBeInTheDocument();
   });
 
   it('resets key visibility when conversation changes', () => {
@@ -86,14 +92,14 @@ describe('ChatHeader key visibility', () => {
     );
 
     // Reveal key for first conversation
-    fireEvent.click(screen.getByText('Show Key'));
+    fireEvent.click(screen.getByText(i18n.t('chatHeader.showKey')));
     expect(screen.getByText(key1.toLowerCase())).toBeInTheDocument();
 
     // Switch conversation — key should be hidden again
     rerender(<ChatHeader {...baseProps} conversation={conv2} channels={[ch1, ch2]} />);
 
     expect(screen.queryByText(key2.toLowerCase())).not.toBeInTheDocument();
-    expect(screen.getByText('Show Key')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('chatHeader.showKey'))).toBeInTheDocument();
   });
 
   it('shows key directly for contacts', () => {
@@ -103,7 +109,7 @@ describe('ChatHeader key visibility', () => {
     render(<ChatHeader {...baseProps} conversation={conversation} channels={[]} />);
 
     expect(screen.getByText(pubKey)).toBeInTheDocument();
-    expect(screen.queryByText('Show Key')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('chatHeader.showKey'))).not.toBeInTheDocument();
   });
 
   it('renders the clickable conversation title as a real button inside the heading', () => {
@@ -121,7 +127,9 @@ describe('ChatHeader key visibility', () => {
     );
 
     const heading = screen.getByRole('heading', { name: /alice/i });
-    const titleButton = within(heading).getByRole('button', { name: 'View info for Alice' });
+    const titleButton = within(heading).getByRole('button', {
+      name: i18n.t('chatHeader.viewInfoFor', { name: 'Alice' }),
+    });
 
     expect(heading).toContainElement(titleButton);
     fireEvent.click(titleButton);
@@ -139,7 +147,7 @@ describe('ChatHeader key visibility', () => {
     render(<ChatHeader {...baseProps} conversation={conversation} channels={[channel]} />);
 
     // Reveal key then click to copy
-    fireEvent.click(screen.getByText('Show Key'));
+    fireEvent.click(screen.getByText(i18n.t('chatHeader.showKey')));
     fireEvent.click(screen.getByText(key.toLowerCase()));
 
     expect(writeText).toHaveBeenCalledWith(key);
@@ -173,11 +181,13 @@ describe('ChatHeader key visibility', () => {
     );
 
     // Bell button should be present; open the dropdown
-    const bellBtn = screen.getByRole('button', { name: 'Notification settings' });
+    const bellBtn = screen.getByRole('button', { name: i18n.t('chatHeader.notifications') });
     fireEvent.click(bellBtn);
 
     // Desktop notifications checkbox should be checked
-    const checkbox = screen.getByRole('checkbox', { name: /desktop notifications/i });
+    const checkbox = screen.getByRole('checkbox', {
+      name: (accessibleName) => accessibleName.includes(i18n.t('chatHeader.desktopNotif')),
+    });
     expect(checkbox).toBeChecked();
 
     // Toggling calls the handler
@@ -200,10 +210,18 @@ describe('ChatHeader key visibility', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Notification settings' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('chatHeader.notifications') }));
 
-    expect(screen.getByRole('checkbox', { name: /desktop notifications/i })).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: /web push/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', {
+        name: (accessibleName) => accessibleName.includes(i18n.t('chatHeader.desktopNotif')),
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', {
+        name: (accessibleName) => accessibleName.includes(i18n.t('chatHeader.webPush')),
+      })
+    ).toBeInTheDocument();
   });
 
   it('hides trace and notification controls for room-server contacts', () => {
@@ -232,9 +250,15 @@ describe('ChatHeader key visibility', () => {
       <ChatHeader {...baseProps} conversation={conversation} channels={[]} contacts={[contact]} />
     );
 
-    expect(screen.queryByRole('button', { name: 'Path Discovery' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Direct Trace' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Notification settings' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: i18n.t('chatHeader.pathDiscovery') })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: i18n.t('chatHeader.directTrace') })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: i18n.t('chatHeader.notifications') })
+    ).not.toBeInTheDocument();
   });
 
   it('hides the delete button for the canonical Public channel', () => {
@@ -243,7 +267,9 @@ describe('ChatHeader key visibility', () => {
 
     render(<ChatHeader {...baseProps} conversation={conversation} channels={[channel]} />);
 
-    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: i18n.t('chatHeader.delete') })
+    ).not.toBeInTheDocument();
   });
 
   it('still shows the delete button for non-canonical channels named Public', () => {
@@ -253,7 +279,7 @@ describe('ChatHeader key visibility', () => {
 
     render(<ChatHeader {...baseProps} conversation={conversation} channels={[channel]} />);
 
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: i18n.t('chatHeader.delete') })).toBeInTheDocument();
   });
 
   it('opens path discovery modal for contacts and runs the request on demand', async () => {
@@ -293,10 +319,10 @@ describe('ChatHeader key visibility', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Path Discovery' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('chatHeader.pathDiscovery') }));
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Run path discovery' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('contactInfo.runDiscovery') }));
 
     await waitFor(() => {
       expect(onPathDiscovery).toHaveBeenCalledWith(pubKey);
@@ -332,13 +358,16 @@ describe('ChatHeader key visibility', () => {
       <ChatHeader {...baseProps} conversation={conversation} channels={[]} contacts={[contact]} />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Path Discovery' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('chatHeader.pathDiscovery') }));
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText(/current learned route: 1 hop \(AA\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/current forced route: 2 hops \(BB -> DD\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/forced route override is currently set/i)).toBeInTheDocument();
-    expect(screen.getByText(/clearing the forced route afterward is enough/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('contactInfo.learnedRouteCurrent', { summary: '1 hop (AA)' }))
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('contactInfo.forcedRouteCurrent', { summary: '2 hops (BB -> DD)' }))
+    ).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('contactInfo.forcedWarning'))).toBeInTheDocument();
   });
 
   it('opens the regional override modal and applies the entered region', async () => {
@@ -356,11 +385,17 @@ describe('ChatHeader key visibility', () => {
       />
     );
 
-    fireEvent.click(screen.getByTitle('Set regional override'));
+    fireEvent.click(screen.getByTitle(i18n.t('chatHeader.regionalOverride')));
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Region'), { target: { value: 'Esperance' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Scope #flightless to Esperance' }));
+    fireEvent.change(screen.getByLabelText(i18n.t('channelInfo.region')), {
+      target: { value: 'Esperance' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: i18n.t('channelInfo.scopeTo', { name: '#flightless', region: 'Esperance' }),
+      })
+    );
 
     expect(onSetChannelFloodScopeOverride).toHaveBeenCalledWith(key, 'Esperance');
   });
@@ -380,11 +415,11 @@ describe('ChatHeader key visibility', () => {
       />
     );
 
-    fireEvent.click(screen.getByTitle('Set regional override'));
+    fireEvent.click(screen.getByTitle(i18n.t('chatHeader.regionalOverride')));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Always send #flightless unscoped (ignore global region)',
+        name: i18n.t('channelInfo.alwaysUnscoped', { name: '#flightless' }),
       })
     );
 

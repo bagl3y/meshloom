@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { RepeaterPane, NotFetched } from './repeaterPaneShared';
 import { cn } from '@/lib/utils';
 import type { RepeaterRegionsResponse, PaneState } from '../../types';
@@ -13,15 +14,16 @@ export function RegionsPane({
   onRefresh: () => void;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
   const headerNote = data?.truncated
-    ? 'List truncated by the radio — showing the first regions only'
+    ? t('repeater.regionsTruncated')
     : data?.source === 'anon'
-      ? 'Guest view: flood-allowed regions only (log in as admin for the full hierarchy)'
-      : 'Region hierarchy and flood permissions';
+      ? t('repeater.regionsNoteAnon')
+      : t('repeater.regionsNote');
 
   return (
     <RepeaterPane
-      title="Regions"
+      title={t('repeater.regions')}
       state={state}
       onRefresh={onRefresh}
       disabled={disabled}
@@ -30,10 +32,7 @@ export function RegionsPane({
       {!data ? (
         <NotFetched />
       ) : data.regions.length === 0 ? (
-        <p className="text-sm text-muted-foreground italic">
-          No regions returned. The repeater may be unreachable, or full region details require admin
-          access.
-        </p>
+        <p className="text-sm text-muted-foreground italic">{t('repeater.noRegions')}</p>
       ) : (
         <div className="space-y-0.5">
           {data.regions.map((region, index) => (
@@ -43,11 +42,11 @@ export function RegionsPane({
               style={{ paddingLeft: `${region.depth * 0.9}rem` }}
             >
               <span className="font-mono truncate">
-                {region.name === '*' ? '∗ (all regions)' : region.name}
+                {region.name === '*' ? t('repeater.allRegions') : region.name}
               </span>
               {region.is_home && (
                 <span className="text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                  Home
+                  {t('repeater.home')}
                 </span>
               )}
               <span
@@ -59,11 +58,11 @@ export function RegionsPane({
                 )}
                 title={
                   region.flood_allowed
-                    ? 'Flood is allowed for this region'
-                    : 'Flood is blocked for this region'
+                    ? t('repeater.floodAllowedTitle')
+                    : t('repeater.floodBlockedTitle')
                 }
               >
-                {region.flood_allowed ? 'Flood' : 'Blocked'}
+                {region.flood_allowed ? t('repeater.floodAllowed') : t('repeater.floodBlocked')}
               </span>
             </div>
           ))}

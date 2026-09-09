@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { formatDuration, formatClockDrift } from '../components/RepeaterDashboard';
+import i18n from '../i18n';
+import fEn from '../i18n/locales/slices/f.en.json';
+import fFr from '../i18n/locales/slices/f.fr.json';
+
+i18n.addResourceBundle('en', 'translation', fEn, true, true);
+i18n.addResourceBundle('fr', 'translation', fFr, true, true);
 
 describe('formatDuration', () => {
   it('formats seconds only', () => {
@@ -63,12 +69,12 @@ describe('formatClockDrift', () => {
 
     const result = formatClockDrift('12:30 - 9/1/2025 UTC');
     expect(result.isLarge).toBe(true);
-    expect(result.text).toBe('>24 hours!');
+    expect(result.text).toBe(i18n.t('repeater.clockDriftLarge'));
   });
 
   it('handles invalid date strings', () => {
     const result = formatClockDrift('not a date');
-    expect(result.text).toBe('(invalid)');
+    expect(result.text).toBe(i18n.t('repeater.clockInvalid'));
     expect(result.isLarge).toBe(false);
   });
 

@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -30,10 +31,12 @@ class PushSubscribeRequest(BaseModel):
     p256dh: str = Field(min_length=1)
     auth: str = Field(min_length=1)
     label: str = ""
+    language: Literal["fr", "en"] = "fr"
 
 
 class PushSubscriptionUpdate(BaseModel):
     label: str | None = None
+    language: Literal["fr", "en"] | None = None
 
 
 class PushConversationToggle(BaseModel):
@@ -60,6 +63,7 @@ async def subscribe(body: PushSubscribeRequest) -> dict:
         p256dh=body.p256dh,
         auth=body.auth,
         label=body.label,
+        language=body.language,
     )
     return sub
 
@@ -80,6 +84,8 @@ async def update_subscription(subscription_id: str, body: PushSubscriptionUpdate
     updates = {}
     if body.label is not None:
         updates["label"] = body.label
+    if body.language is not None:
+        updates["language"] = body.language
 
     result = await PushSubscriptionRepository.update(subscription_id, **updates)
     return result or existing
@@ -105,10 +111,16 @@ async def test_push(subscription_id: str) -> dict:
     if not vapid_key:
         raise HTTPException(status_code=423, detail="VAPID keys not initialized")
 
+    language = sub.get("language") or "fr"
+    if language == "en":
+        title, body = "Meshloom Test", "Push notifications are working!"
+    else:
+        title, body = "Test Meshloom", "Les notifications push fonctionnent !"
+
     payload = json.dumps(
         {
-            "title": "Meshloom Test",
-            "body": "Push notifications are working!",
+            "title": title,
+            "body": body,
             "tag": "meshcore-test",
             "url_hash": "",
         }

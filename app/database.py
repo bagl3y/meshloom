@@ -175,6 +175,7 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
     p256dh TEXT NOT NULL,
     auth TEXT NOT NULL,
     label TEXT NOT NULL DEFAULT '',
+    language TEXT NOT NULL DEFAULT 'fr',
     created_at INTEGER NOT NULL,
     last_success_at INTEGER,
     failure_count INTEGER DEFAULT 0,

@@ -41,8 +41,8 @@ export function SettingsDatabaseSection({
   const handleCleanup = async () => {
     const days = parseInt(retentionDays, 10);
     if (isNaN(days) || days < 1) {
-      toast.error('Invalid retention days', {
-        description: 'Retention days must be at least 1',
+      toast.error(t('settings.database.invalidRetention'), {
+        description: t('settings.database.invalidRetentionHelp'),
       });
       return;
     }
@@ -51,14 +51,14 @@ export function SettingsDatabaseSection({
 
     try {
       const result = await api.runMaintenance({ pruneUndecryptedDays: days });
-      toast.success('Database cleanup complete', {
-        description: `Deleted ${result.packets_deleted} old packet${result.packets_deleted === 1 ? '' : 's'}`,
+      toast.success(t('settings.database.cleanupComplete'), {
+        description: t('settings.database.deletedPackets', { count: result.packets_deleted }),
       });
       await onHealthRefresh();
     } catch (err) {
       console.error('Failed to run maintenance:', err);
-      toast.error('Database cleanup failed', {
-        description: err instanceof Error ? err.message : 'Unknown error',
+      toast.error(t('settings.database.cleanupFailed'), {
+        description: err instanceof Error ? err.message : t('settings.database.unknownError'),
       });
     } finally {
       setCleaning(false);
@@ -70,14 +70,14 @@ export function SettingsDatabaseSection({
 
     try {
       const result = await api.runMaintenance({ purgeLinkedRawPackets: true });
-      toast.success('Decrypted raw packets purged', {
-        description: `Deleted ${result.packets_deleted} raw packet${result.packets_deleted === 1 ? '' : 's'}`,
+      toast.success(t('settings.database.purgeComplete'), {
+        description: t('settings.database.purgedPackets', { count: result.packets_deleted }),
       });
       await onHealthRefresh();
     } catch (err) {
       console.error('Failed to purge decrypted raw packets:', err);
-      toast.error('Failed to purge decrypted raw packets', {
-        description: err instanceof Error ? err.message : 'Unknown error',
+      toast.error(t('settings.database.purgeFailed'), {
+        description: err instanceof Error ? err.message : t('settings.database.unknownError'),
       });
     } finally {
       setPurgingDecryptedRaw(false);
@@ -91,8 +91,8 @@ export function SettingsDatabaseSection({
       } catch (err) {
         console.error('Failed to save database settings:', err);
         revert();
-        toast.error('Failed to save setting', {
-          description: err instanceof Error ? err.message : 'Unknown error',
+        toast.error(t('settings.database.saveFailed'), {
+          description: err instanceof Error ? err.message : t('settings.database.unknownError'),
         });
       }
     });
@@ -104,24 +104,29 @@ export function SettingsDatabaseSection({
     <div className={className}>
       {/* ── Database Overview ── */}
       <div className="space-y-3">
-        <h3 className="text-base font-semibold tracking-tight">Database Overview</h3>
+        <h3 className="text-base font-semibold tracking-tight">
+          {t('settings.database.overview')}
+        </h3>
         <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
           <div className="flex justify-between items-center">
-            <span className="text-sm">Database size</span>
+            <span className="text-sm">{t('settings.database.size')}</span>
             <span className="text-sm font-semibold">{health?.database_size_mb ?? '?'} MB</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-sm">Oldest undecrypted packet</span>
+            <span className="text-sm">{t('settings.database.oldestUndecrypted')}</span>
             {health?.oldest_undecrypted_timestamp ? (
               <span className="text-sm font-semibold">
                 {formatTime(health.oldest_undecrypted_timestamp)}
                 <span className="font-normal text-muted-foreground ml-1">
-                  ({Math.floor((Date.now() / 1000 - health.oldest_undecrypted_timestamp) / 86400)}{' '}
-                  days)
+                  {t('settings.database.daysOld', {
+                    count: Math.floor(
+                      (Date.now() / 1000 - health.oldest_undecrypted_timestamp) / 86400
+                    ),
+                  })}
                 </span>
               </span>
             ) : (
-              <span className="text-sm text-muted-foreground">None</span>
+              <span className="text-sm text-muted-foreground">{t('settings.database.none')}</span>
             )}
           </div>
         </div>
@@ -131,19 +136,17 @@ export function SettingsDatabaseSection({
 
       {/* ── Storage Cleanup ── */}
       <div className="space-y-4">
-        <h3 className="text-base font-semibold tracking-tight">Storage Cleanup</h3>
+        <h3 className="text-base font-semibold tracking-tight">{t('settings.database.cleanup')}</h3>
 
         <div className="rounded-md border border-border p-3 space-y-2">
-          <h3 className="text-sm font-semibold">Delete Undecrypted Packets</h3>
+          <h3 className="text-sm font-semibold">{t('settings.database.deleteUndecrypted')}</h3>
           <p className="text-[0.8125rem] text-muted-foreground">
-            Permanently deletes stored raw packets that have not yet been decrypted. These are
-            retained in case you later obtain the correct key — once deleted, these messages can
-            never be recovered.
+            {t('settings.database.deleteUndecryptedHelp')}
           </p>
           <div className="flex gap-2 items-end">
             <div className="space-y-1">
               <Label htmlFor="retention-days" className="text-xs text-muted-foreground">
-                Older than (days)
+                {t('settings.database.olderThan')}
               </Label>
               <Input
                 id="retention-days"
@@ -161,17 +164,15 @@ export function SettingsDatabaseSection({
               disabled={cleaning}
               className="border-destructive/50 text-destructive hover:bg-destructive/10"
             >
-              {cleaning ? 'Deleting...' : 'Delete'}
+              {cleaning ? t('settings.database.deleting') : t('settings.delete')}
             </Button>
           </div>
         </div>
 
         <div className="rounded-md border border-border p-3 space-y-2">
-          <h3 className="text-sm font-semibold">Purge Archival Raw Packets</h3>
+          <h3 className="text-sm font-semibold">{t('settings.database.purgeArchival')}</h3>
           <p className="text-[0.8125rem] text-muted-foreground">
-            Deletes the raw packet bytes behind messages that are already decrypted and visible in
-            chat. This frees space but removes packet-analysis availability for those messages. It
-            does not affect displayed messages or future decryption.
+            {t('settings.database.purgeArchivalHelp')}
           </p>
           <Button
             variant="outline"
@@ -179,7 +180,9 @@ export function SettingsDatabaseSection({
             disabled={purgingDecryptedRaw}
             className="w-full border-warning/50 text-warning hover:bg-warning/10"
           >
-            {purgingDecryptedRaw ? 'Purging...' : 'Purge Archival Packets'}
+            {purgingDecryptedRaw
+              ? t('settings.database.purging')
+              : t('settings.database.purgeArchivalButton')}
           </Button>
         </div>
       </div>
@@ -188,7 +191,9 @@ export function SettingsDatabaseSection({
 
       {/* ── DM Decryption ── */}
       <div className="space-y-3">
-        <h3 className="text-base font-semibold tracking-tight">DM Decryption</h3>
+        <h3 className="text-base font-semibold tracking-tight">
+          {t('settings.database.dmDecrypt')}
+        </h3>
         <label className="flex items-center gap-3 cursor-pointer">
           <input
             type="checkbox"
@@ -203,11 +208,10 @@ export function SettingsDatabaseSection({
             }}
             className="w-4 h-4 rounded border-input accent-primary"
           />
-          <span className="text-sm">Auto-decrypt historical DMs when new contact advertises</span>
+          <span className="text-sm">{t('settings.database.autoDecrypt')}</span>
         </label>
         <p className="text-[0.8125rem] text-muted-foreground">
-          When enabled, the server will automatically try to decrypt stored DM packets when a new
-          contact sends an advertisement. This may cause brief delays on large packet backlogs.
+          {t('settings.database.autoDecryptHelp')}
         </p>
       </div>
 
@@ -231,7 +235,8 @@ export function SettingsDatabaseSection({
                 await api.downloadDatabaseBackup();
               } catch (err) {
                 toast.error(t('settings.backupDbFailed'), {
-                  description: err instanceof Error ? err.message : 'Unknown error',
+                  description:
+                    err instanceof Error ? err.message : t('settings.database.unknownError'),
                 });
               } finally {
                 setDownloadingDb(false);
@@ -263,7 +268,8 @@ export function SettingsDatabaseSection({
                 URL.revokeObjectURL(href);
               } catch (err) {
                 toast.error(t('settings.backupJsonFailed'), {
-                  description: err instanceof Error ? err.message : 'Unknown error',
+                  description:
+                    err instanceof Error ? err.message : t('settings.database.unknownError'),
                 });
               } finally {
                 setDownloadingJson(false);
@@ -308,7 +314,8 @@ export function SettingsDatabaseSection({
                 await onHealthRefresh();
               } catch (err) {
                 toast.error(t('settings.restoreFailed'), {
-                  description: err instanceof Error ? err.message : 'Unknown error',
+                  description:
+                    err instanceof Error ? err.message : t('settings.database.unknownError'),
                 });
               } finally {
                 setRestoring(false);

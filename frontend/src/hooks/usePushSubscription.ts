@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from '../components/ui/sonner';
 import { api } from '../api';
+import i18n from '../i18n';
 import type { PushSubscriptionInfo } from '../types';
+import { getSavedLanguage } from '../utils/languagePreference';
 
 function generateLabel(): string {
   const ua = navigator.userAgent;
@@ -215,6 +217,7 @@ export function usePushSubscription(): PushSubscriptionState {
         p256dh: json.keys!.p256dh!,
         auth: json.keys!.auth!,
         label: generateLabel(),
+        language: getSavedLanguage(),
       });
 
       setCurrentSubscriptionId(result.id);
@@ -222,8 +225,9 @@ export function usePushSubscription(): PushSubscriptionState {
       return result.id;
     } catch (err) {
       console.error('Push subscribe failed:', err);
-      toast.error('Failed to enable push notifications', {
-        description: err instanceof Error ? err.message : 'Check that notifications are allowed',
+      toast.error(i18n.t('notifications.pushEnableFailed'), {
+        description:
+          err instanceof Error ? err.message : i18n.t('notifications.pushEnableFailedDetail'),
         duration: 8_000,
       });
       return null;
@@ -257,7 +261,7 @@ export function usePushSubscription(): PushSubscriptionState {
       const updated = await api.togglePushConversation(conversationKey);
       setPushConversations(updated);
     } catch {
-      toast.error('Failed to update push preferences');
+      toast.error(i18n.t('notifications.pushPrefsFailed'));
     }
   }, []);
 
@@ -289,9 +293,9 @@ export function usePushSubscription(): PushSubscriptionState {
   const testPush = useCallback(async (subscriptionId: string) => {
     try {
       await api.testPushSubscription(subscriptionId);
-      toast.success('Test notification sent');
+      toast.success(i18n.t('notifications.pushTestSent'));
     } catch {
-      toast.error('Test notification failed');
+      toast.error(i18n.t('notifications.pushTestFailed'));
     }
   }, []);
 

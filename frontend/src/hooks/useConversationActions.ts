@@ -1,6 +1,7 @@
 import { useCallback, type MutableRefObject, type RefObject } from 'react';
-import { api } from '../api';
+import { api, formatApiError } from '../api';
 import { toast } from '../components/ui/sonner';
+import i18n from '../i18n';
 import type { MessageInputHandle } from '../components/MessageInput';
 import type { Channel, Contact, Conversation, Message, PathDiscoveryResponse } from '../types';
 import { mergeContactIntoList } from '../utils/contactMerge';
@@ -83,10 +84,10 @@ export function useConversationActions({
         ) {
           observeMessage(resentMessage);
         }
-        toast.success(newTimestamp ? 'Message resent with new timestamp' : 'Message resent');
+        toast.success(newTimestamp ? i18n.t('toast.resentNewTimestamp') : i18n.t('toast.resent'));
       } catch (err) {
-        toast.error('Failed to resend', {
-          description: err instanceof Error ? err.message : 'Unknown error',
+        toast.error(i18n.t('toast.resendFailed'), {
+          description: formatApiError(err, i18n.t),
         });
       }
     },
@@ -99,11 +100,13 @@ export function useConversationActions({
         const updated = await api.setChannelFloodScopeOverride(channelKey, floodScopeOverride);
         mergeChannelIntoList(updated);
         toast.success(
-          updated.flood_scope_override ? 'Regional override saved' : 'Regional override cleared'
+          updated.flood_scope_override
+            ? i18n.t('toast.regionalOverrideSaved')
+            : i18n.t('toast.regionalOverrideCleared')
         );
       } catch (err) {
-        toast.error('Failed to update regional override', {
-          description: err instanceof Error ? err.message : 'Unknown error',
+        toast.error(i18n.t('toast.regionalOverrideFailed'), {
+          description: formatApiError(err, i18n.t),
         });
       }
     },
@@ -117,12 +120,12 @@ export function useConversationActions({
         mergeChannelIntoList(updated);
         toast.success(
           updated.path_hash_mode_override != null
-            ? 'Path hop width override saved'
-            : 'Path hop width override cleared'
+            ? i18n.t('toast.pathHopOverrideSaved')
+            : i18n.t('toast.pathHopOverrideCleared')
         );
       } catch (err) {
-        toast.error('Failed to update path hop width override', {
-          description: err instanceof Error ? err.message : 'Unknown error',
+        toast.error(i18n.t('toast.pathHopOverrideFailed'), {
+          description: formatApiError(err, i18n.t),
         });
       }
     },
@@ -142,17 +145,23 @@ export function useConversationActions({
 
   const handleTrace = useCallback(async () => {
     if (!activeConversation || activeConversation.type !== 'contact') return;
-    toast('Trace started...');
+    toast(i18n.t('toast.traceStarted'));
     try {
       const result = await api.requestTrace(activeConversation.id);
       const parts: string[] = [];
-      if (result.remote_snr !== null) parts.push(`Remote SNR: ${result.remote_snr.toFixed(1)} dB`);
-      if (result.local_snr !== null) parts.push(`Local SNR: ${result.local_snr.toFixed(1)} dB`);
+      if (result.remote_snr !== null) {
+        parts.push(i18n.t('toast.traceRemoteSnr', { snr: result.remote_snr.toFixed(1) }));
+      }
+      if (result.local_snr !== null) {
+        parts.push(i18n.t('toast.traceLocalSnr', { snr: result.local_snr.toFixed(1) }));
+      }
       const detail = parts.join(', ');
-      toast.success(detail ? `Trace complete! ${detail}` : 'Trace complete!');
+      toast.success(
+        detail ? i18n.t('toast.traceCompleteDetail', { detail }) : i18n.t('toast.traceComplete')
+      );
     } catch (err) {
-      toast.error('Trace failed', {
-        description: err instanceof Error ? err.message : 'Unknown error',
+      toast.error(i18n.t('toast.traceFailed'), {
+        description: formatApiError(err, i18n.t),
       });
     }
   }, [activeConversation]);

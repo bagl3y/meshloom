@@ -157,6 +157,14 @@ class BaseMqttPublisher(ABC):
     def _on_error(self) -> tuple[str, str]:
         """Return ``(title, detail)`` for the error toast on connect failure."""
 
+    def _connected_code(self) -> str | None:
+        """Stable i18n code for the connect-success toast."""
+        return "mqtt_connected"
+
+    def _error_code(self) -> str | None:
+        """Stable i18n code for the connect-failure toast, if any."""
+        return None
+
     # ── Optional hooks ─────────────────────────────────────────────────
 
     def _should_break_wait(self, elapsed: float) -> bool:
@@ -234,7 +242,7 @@ class BaseMqttPublisher(ABC):
                         self._suppress_next_connect_toast = False
                     else:
                         title, detail = self._on_connected(settings)
-                        broadcast_success(title, detail)
+                        broadcast_success(title, detail, code=self._connected_code())
                     await self._on_connected_async(settings)
                     _broadcast_health()
 
@@ -301,7 +309,7 @@ class BaseMqttPublisher(ABC):
 
                 if not self._error_notified:
                     title, detail = self._on_error()
-                    broadcast_error(title, detail)
+                    broadcast_error(title, detail, code=self._error_code())
                     _broadcast_health()
                     self._error_notified = True
                 logger.warning(

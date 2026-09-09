@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { RepeaterPane, NotFetched } from './repeaterPaneShared';
 import type { RepeaterAclResponse, PaneState } from '../../types';
@@ -13,6 +14,7 @@ export function AclPane({
   onRefresh: () => void;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
   const permColor: Record<number, string> = {
     0: 'bg-muted text-muted-foreground',
     1: 'bg-info/10 text-info',
@@ -21,17 +23,17 @@ export function AclPane({
   };
 
   return (
-    <RepeaterPane title="ACL" state={state} onRefresh={onRefresh} disabled={disabled}>
+    <RepeaterPane title={t('repeater.acl')} state={state} onRefresh={onRefresh} disabled={disabled}>
       {!data ? (
         <NotFetched />
       ) : data.acl.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No ACL entries</p>
+        <p className="text-sm text-muted-foreground">{t('repeater.noAcl')}</p>
       ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-muted-foreground text-xs">
-              <th className="pb-1 font-medium">Name</th>
-              <th className="pb-1 font-medium text-right">Permission</th>
+              <th className="pb-1 font-medium">{t('repeater.name')}</th>
+              <th className="pb-1 font-medium text-right">{t('repeater.permission')}</th>
             </tr>
           </thead>
           <tbody>

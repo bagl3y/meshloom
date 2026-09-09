@@ -189,17 +189,17 @@ function setMatchMedia(matches: boolean) {
 }
 
 function openRadioSection() {
-  const radioToggle = screen.getByRole('button', { name: /^Radio$/i });
+  const radioToggle = screen.getByRole('button', { name: i18n.t('settingsNav.radio') });
   fireEvent.click(radioToggle);
 }
 
 function openLocalSection() {
-  const localToggle = screen.getByRole('button', { name: /Local Configuration/i });
+  const localToggle = screen.getByRole('button', { name: i18n.t('settingsNav.local') });
   fireEvent.click(localToggle);
 }
 
 function openDatabaseSection() {
-  const databaseToggle = screen.getByRole('button', { name: /Database/i });
+  const databaseToggle = screen.getByRole('button', { name: i18n.t('settingsNav.database') });
   fireEvent.click(databaseToggle);
 }
 
@@ -234,14 +234,14 @@ describe('SettingsModal', () => {
 
   it('does not render when closed outside page mode', () => {
     renderModal({ open: false });
-    expect(screen.queryByLabelText('Preset')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(i18n.t('settings.radio.preset'))).not.toBeInTheDocument();
   });
 
   it('shows favorite-contact radio sync helper text in radio tab', async () => {
     renderModal();
     openRadioSection();
 
-    expect(screen.getByText(/Configured radio contact capacity/i)).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.radio.maxContactsHelp'))).toBeInTheDocument();
   });
 
   it('renders flood and zero-hop advert buttons and passes the selected mode', async () => {
@@ -249,12 +249,12 @@ describe('SettingsModal', () => {
     renderModal({ onAdvertise });
     openRadioSection();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send Flood Advertisement' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.radio.sendFlood') }));
     await waitFor(() => {
       expect(onAdvertise).toHaveBeenCalledWith('flood');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send Zero-Hop Advertisement' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.radio.sendZeroHop') }));
     await waitFor(() => {
       expect(onAdvertise).toHaveBeenCalledWith('zero_hop');
     });
@@ -263,11 +263,11 @@ describe('SettingsModal', () => {
   it('shows radio-unavailable message when config is null', () => {
     renderModal({ config: null });
 
-    const radioToggle = screen.getByRole('button', { name: /^Radio$/i });
+    const radioToggle = screen.getByRole('button', { name: i18n.t('settingsNav.radio') });
     expect(radioToggle).not.toBeDisabled();
 
     fireEvent.click(radioToggle);
-    expect(screen.getByText('Radio is not available.')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.radio.unavailable'))).toBeInTheDocument();
   });
 
   it('shows radio-unavailable message in sidebar-nav mode when config is null', () => {
@@ -277,7 +277,7 @@ describe('SettingsModal', () => {
       desktopSection: 'radio',
     });
 
-    expect(screen.getByText('Radio is not available.')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.radio.unavailable'))).toBeInTheDocument();
   });
 
   it('shows cached radio firmware and capacity info under the connection status', () => {
@@ -296,7 +296,15 @@ describe('SettingsModal', () => {
     openRadioSection();
 
     expect(
-      screen.getByText('T-Echo running 2025-02-01/1.2.3 (max: 350 contacts, 64 channels)')
+      screen.getByText(
+        i18n.t('settings.radio.deviceRunning', {
+          model: 'T-Echo',
+          firmware: '2025-02-01/1.2.3',
+        }) +
+          i18n.t('settings.radio.deviceMax', {
+            capacity: `${i18n.t('settings.radio.contactsCount', { count: 350 })}, ${i18n.t('settings.radio.channelsCount', { count: 64 })}`,
+          })
+      )
     ).toBeInTheDocument();
   });
 
@@ -306,14 +314,18 @@ describe('SettingsModal', () => {
     });
     openRadioSection();
 
-    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: i18n.t('settings.radio.reconnect') })
+    ).toBeInTheDocument();
   });
 
   it('runs repeater mesh discovery from the radio tab', async () => {
     const { onDiscoverMesh } = renderModal();
     openRadioSection();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Discover Repeaters' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('settings.radio.discoverRepeaters') })
+    );
 
     await waitFor(() => {
       expect(onDiscoverMesh).toHaveBeenCalledWith('repeaters');
@@ -340,10 +352,12 @@ describe('SettingsModal', () => {
     });
     openRadioSection();
 
-    expect(screen.getByText('Last sweep: 1 node')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.radio.lastSweep', { count: 1 }))).toBeInTheDocument();
     expect(screen.getByText('repeater')).toBeInTheDocument();
-    expect(screen.getByText('heard 2 times')).toBeInTheDocument();
-    expect(screen.getByText('8s listen window')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.radio.heardCount', { count: 2 }))).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('settings.radio.listenWindow', { seconds: '8' }))
+    ).toBeInTheDocument();
   });
 
   it('discovers regions using repeaters from the last mesh sweep', async () => {
@@ -375,7 +389,7 @@ describe('SettingsModal', () => {
     });
     openRadioSection();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Discover Regions' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.radio.discoverRegions') }));
 
     // Only the repeater's key is passed, not the sensor's.
     await waitFor(() => {
@@ -394,14 +408,18 @@ describe('SettingsModal', () => {
     });
     openRadioSection();
 
-    expect(screen.getByText('2/2 repeaters answered — 2 regions found')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        `${i18n.t('settings.radio.regionsAnswered', { answered: 2, queried: 2, count: 2 })}${i18n.t('settings.radio.regionsFound', { count: 2 })}`
+      )
+    ).toBeInTheDocument();
 
     const knownRegions = screen.getByLabelText(
-      'Known Regions (for decoding)'
+      i18n.t('settings.radio.knownRegions')
     ) as HTMLTextAreaElement;
     fireEvent.change(knownRegions, { target: { value: 'nl-gr' } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add to Known Regions' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.radio.addToKnown') }));
 
     // Existing 'nl-gr' preserved, only the new 'de-by' appended.
     expect(knownRegions.value).toBe('nl-gr\nde-by');
@@ -429,10 +447,10 @@ describe('SettingsModal', () => {
     const { onSave } = renderModal();
     openRadioSection();
 
-    fireEvent.change(screen.getByLabelText('Advert Location Source'), {
+    fireEvent.change(screen.getByLabelText(i18n.t('settings.radio.advertLocationSource')), {
       target: { value: 'off' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save Radio Config' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.radio.saveConfig') }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith(
@@ -445,8 +463,8 @@ describe('SettingsModal', () => {
     const { onSave } = renderModal();
     openRadioSection();
 
-    fireEvent.click(screen.getByLabelText('Extra Direct ACK Transmission'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save Radio Config' }));
+    fireEvent.click(screen.getByLabelText(i18n.t('settings.radio.multiAcks')));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.radio.saveConfig') }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ multi_acks_enabled: true }));
@@ -457,11 +475,13 @@ describe('SettingsModal', () => {
     const { onSaveAppSettings } = renderModal();
     openRadioSection();
 
-    const maxContactsInput = screen.getByLabelText('Max Contacts on Radio');
+    const maxContactsInput = screen.getByLabelText(i18n.t('settings.radio.maxContacts'));
     fireEvent.change(maxContactsInput, { target: { value: '250' } });
 
     // Click the "Save Messaging Settings" button
-    const saveButtons = screen.getAllByRole('button', { name: 'Save Messaging Settings' });
+    const saveButtons = screen.getAllByRole('button', {
+      name: i18n.t('settings.radio.saveMessaging'),
+    });
     fireEvent.click(saveButtons[0]);
 
     await waitFor(() => {
@@ -476,7 +496,9 @@ describe('SettingsModal', () => {
     openRadioSection();
 
     // Click the "Save Messaging Settings" button
-    const saveButtons = screen.getAllByRole('button', { name: 'Save Messaging Settings' });
+    const saveButtons = screen.getAllByRole('button', {
+      name: i18n.t('settings.radio.saveMessaging'),
+    });
     fireEvent.click(saveButtons[0]);
 
     await waitFor(() => {
@@ -493,9 +515,13 @@ describe('SettingsModal', () => {
     await waitFor(() => {
       expect(api.getFanoutConfigs).toHaveBeenCalled();
     });
-    expect(screen.getByRole('button', { name: 'Add Integration' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Local Configuration/i })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Preset')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: i18n.t('settings.fanout.list.addIntegration') })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: i18n.t('settingsNav.local') })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(i18n.t('settings.radio.preset'))).not.toBeInTheDocument();
   });
 
   it('does not clip the fanout add-integration menu in external desktop mode', async () => {
@@ -504,7 +530,9 @@ describe('SettingsModal', () => {
       desktopSection: 'fanout',
     });
 
-    const addIntegrationButton = await screen.findByRole('button', { name: 'Add Integration' });
+    const addIntegrationButton = await screen.findByRole('button', {
+      name: i18n.t('settings.fanout.list.addIntegration'),
+    });
     const wrapperSection = addIntegrationButton.closest('section');
     expect(wrapperSection).not.toHaveClass('overflow-hidden');
   });
@@ -515,30 +543,34 @@ describe('SettingsModal', () => {
       desktopSection: 'local',
     });
 
-    const localSettingsText = screen.getByText('These settings apply only to this device/browser.');
+    const localSettingsText = screen.getByText(i18n.t('settings.local.deviceOnly'));
     expect(localSettingsText.closest('div')).toHaveClass('mx-auto', 'w-full', 'max-w-[800px]');
   });
 
   it('toggles sections in mobile accordion mode', () => {
     renderModal({ mobile: true });
-    const localToggle = screen.getAllByRole('button', { name: /Local Configuration/i })[0];
+    const localToggle = screen.getAllByRole('button', { name: i18n.t('settingsNav.local') })[0];
 
-    expect(screen.queryByLabelText('Preset')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Local label text')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(i18n.t('settings.radio.preset'))).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(i18n.t('settings.local.localLabelText'))
+    ).not.toBeInTheDocument();
 
     fireEvent.click(localToggle);
-    expect(screen.getByLabelText('Local label text')).toBeInTheDocument();
+    expect(screen.getByLabelText(i18n.t('settings.local.localLabelText'))).toBeInTheDocument();
 
     fireEvent.click(localToggle);
-    expect(screen.queryByLabelText('Local label text')).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(i18n.t('settings.local.localLabelText'))
+    ).not.toBeInTheDocument();
   });
 
   it('lists the new Windows 95 and iPhone themes', () => {
     renderModal();
     openLocalSection();
 
-    expect(screen.getByText('Windows 95')).toBeInTheDocument();
-    expect(screen.getByText('iPhone')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.local.themes.windows-95'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.local.themes.ios'))).toBeInTheDocument();
   });
 
   it('reverts checkbox state when auto-persist fails on the database section', async () => {
@@ -557,7 +589,7 @@ describe('SettingsModal', () => {
     });
 
     const checkbox = screen.getByRole('checkbox', {
-      name: /Auto-decrypt historical DMs/i,
+      name: i18n.t('settings.database.autoDecrypt'),
     }) as HTMLInputElement;
     const initialChecked = checkbox.checked;
 
@@ -596,8 +628,12 @@ describe('SettingsModal', () => {
     });
 
     // Two distinct checkboxes in quick succession.
-    const blockClients = screen.getByRole('checkbox', { name: /Block clients/i });
-    const blockRepeaters = screen.getByRole('checkbox', { name: /Block repeaters/i });
+    const blockClients = screen.getByRole('checkbox', {
+      name: i18n.t('settings.radioApp.blockClients'),
+    });
+    const blockRepeaters = screen.getByRole('checkbox', {
+      name: i18n.t('settings.radioApp.blockRepeaters'),
+    });
 
     fireEvent.click(blockClients);
     fireEvent.click(blockRepeaters);
@@ -640,17 +676,19 @@ describe('SettingsModal', () => {
     });
     openRadioSection();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save Radio Config & Reboot' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('settings.radio.saveConfigReboot') })
+    );
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledTimes(1);
       expect(onReboot).toHaveBeenCalledTimes(1);
     });
     expect(onClose).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByLabelText('Set Private Key (write-only)'), {
+    fireEvent.change(screen.getByLabelText(i18n.t('settings.radio.setPrivateKey')), {
       target: { value: 'a'.repeat(64) },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Set Private Key & Reboot' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.radio.setKeyReboot') }));
 
     await waitFor(() => {
       expect(onSetPrivateKey).toHaveBeenCalledWith('a'.repeat(64));
@@ -680,7 +718,7 @@ describe('SettingsModal', () => {
     renderModal();
     openLocalSection();
 
-    const checkbox = screen.getByLabelText('Reopen Last Conversation');
+    const checkbox = screen.getByLabelText(i18n.t('settings.local.reopenLast'));
     expect(checkbox).not.toBeChecked();
 
     fireEvent.click(checkbox);
@@ -698,7 +736,7 @@ describe('SettingsModal', () => {
     renderModal();
     openLocalSection();
 
-    const checkbox = screen.getByLabelText('Show Path Hop Width');
+    const checkbox = screen.getByLabelText(i18n.t('settings.local.pathHopWidth'));
     expect(checkbox).not.toBeChecked();
     expect(localStorage.getItem(SHOW_PATH_HOP_WIDTH_KEY)).toBeNull();
 
@@ -711,7 +749,7 @@ describe('SettingsModal', () => {
     renderModal();
     openLocalSection();
 
-    const select = screen.getByLabelText('Distance Units');
+    const select = screen.getByLabelText(i18n.t('settings.local.distanceUnits'));
     expect(select).toHaveValue('metric');
 
     fireEvent.change(select, { target: { value: 'smoots' } });
@@ -723,8 +761,8 @@ describe('SettingsModal', () => {
     renderModal();
     openLocalSection();
 
-    const slider = screen.getByLabelText('Relative font size slider');
-    const input = screen.getByLabelText('Relative font size percentage');
+    const slider = screen.getByLabelText(i18n.t('settings.local.fontSizeSlider'));
+    const input = screen.getByLabelText(i18n.t('settings.local.fontSizePercent'));
 
     expect(slider).toHaveValue(String(DEFAULT_FONT_SCALE));
     expect(slider).toHaveAttribute('step', '5');
@@ -737,7 +775,7 @@ describe('SettingsModal', () => {
     renderModal();
     openLocalSection();
 
-    const slider = screen.getByLabelText('Relative font size slider');
+    const slider = screen.getByLabelText(i18n.t('settings.local.fontSizeSlider'));
 
     fireEvent.change(slider, { target: { value: '135' } });
 
@@ -751,7 +789,7 @@ describe('SettingsModal', () => {
       expect(document.documentElement.style.fontSize).toBe('135%');
     });
 
-    fireEvent.change(screen.getByLabelText('Relative font size percentage'), {
+    fireEvent.change(screen.getByLabelText(i18n.t('settings.local.fontSizePercent')), {
       target: { value: '137.5' },
     });
 
@@ -760,7 +798,7 @@ describe('SettingsModal', () => {
       expect(document.documentElement.style.fontSize).toBe('137.5%');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.local.reset') }));
 
     await waitFor(() => {
       expect(localStorage.getItem(FONT_SCALE_KEY)).toBeNull();
@@ -777,11 +815,11 @@ describe('SettingsModal', () => {
     renderModal();
     openDatabaseSection();
 
-    expect(
-      screen.getByText(/removes packet-analysis availability for those messages/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.database.purgeArchivalHelp'))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Purge Archival Packets' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('settings.database.purgeArchivalButton') })
+    );
 
     await waitFor(() => {
       expect(runMaintenanceSpy).toHaveBeenCalledWith({ purgeLinkedRawPackets: true });
@@ -849,35 +887,51 @@ describe('SettingsModal', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Network')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('settings.stats.network'))).toBeInTheDocument();
     });
 
     // Verify key labels are present
-    expect(screen.getByText('Contacts')).toBeInTheDocument();
-    expect(screen.getByText('Repeaters')).toBeInTheDocument();
-    expect(screen.getByText('Direct Messages')).toBeInTheDocument();
-    expect(screen.getByText('Channel Messages')).toBeInTheDocument();
-    expect(screen.getByText('Sent (Outgoing)')).toBeInTheDocument();
-    expect(screen.getByText('Total stored')).toBeInTheDocument();
-    expect(screen.getByText('Decrypted')).toBeInTheDocument();
-    expect(screen.getByText('Undecrypted')).toBeInTheDocument();
-    expect(screen.getByText('Path Hash Width (24h)')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.contacts'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.repeaters'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.dms'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.channelMessages'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.outgoing'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.totalStored'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.decrypted'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.undecrypted'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.pathHashWidth'))).toBeInTheDocument();
     expect(
-      screen.getByText(/Parsed stored raw packets from the last 24 hours: 120/)
+      screen.getByText(i18n.t('settings.stats.pathHashHelp', { count: 120 }))
     ).toBeInTheDocument();
-    expect(screen.getByText('Contacts heard')).toBeInTheDocument();
-    expect(screen.getByText('Repeaters heard')).toBeInTheDocument();
-    expect(screen.getByText('Known-channels active')).toBeInTheDocument();
-    expect(screen.getByText('Busiest Channels (24h)')).toBeInTheDocument();
-    expect(screen.getByText('Noise Floor (24h)')).toBeInTheDocument();
-    expect(screen.getByText('Region Scope (24h)')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.contactsHeard'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.repeatersHeard'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.channelsActive'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.busiest'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.noiseFloor'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.stats.regionScope'))).toBeInTheDocument();
     // Fractions, not bare percentages — the sample size matters at this sparsity
-    expect(screen.getByText(/40 of 120/)).toBeInTheDocument();
-    expect(screen.getByText(/3 of 12/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        i18n.t('settings.stats.ofTotal', {
+          scoped: (40).toLocaleString(),
+          total: (120).toLocaleString(),
+        }),
+        { exact: false }
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        i18n.t('settings.stats.ofTotal', {
+          scoped: (3).toLocaleString(),
+          total: (12).toLocaleString(),
+        }),
+        { exact: false }
+      )
+    ).toBeInTheDocument();
     // 40 scoped is well above the floor of 2, so the percentage is shown
     expect(screen.getByText(/33\.3%/)).toBeInTheDocument();
     expect(
-      screen.queryByText(/at or below the estimated false-positive floor/)
+      screen.queryByText(i18n.t('settings.stats.floorNoise', { floor: '2' }))
     ).not.toBeInTheDocument();
   });
 
@@ -936,16 +990,33 @@ describe('SettingsModal', () => {
     renderModal({ externalSidebarNav: true, desktopSection: 'statistics' });
 
     await waitFor(() => {
-      expect(screen.getByText('Region Scope (24h)')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('settings.stats.regionScope'))).toBeInTheDocument();
     });
 
     // 70 scoped sits just above the 60.3 floor, so most of it is corrupt captures
-    expect(screen.getByText(/Includes an estimated 60 false positives/)).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('settings.stats.floorIncludes', { floor: '60' }), { exact: false })
+    ).toBeInTheDocument();
     // 0.0179% would render as a meaningless "0.0%", so the share is withheld
     expect(screen.queryByText(/0\.0%/)).not.toBeInTheDocument();
-    expect(screen.getByText(/70 of 391/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        i18n.t('settings.stats.ofTotal', {
+          scoped: (70).toLocaleString(),
+          total: (391757).toLocaleString(),
+        })
+      )
+    ).toBeInTheDocument();
     // ...but the decryption-backed sender figure still stands
-    expect(screen.getByText(/3 of 117/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        i18n.t('settings.stats.ofTotal', {
+          scoped: (3).toLocaleString(),
+          total: (117).toLocaleString(),
+        }),
+        { exact: false }
+      )
+    ).toBeInTheDocument();
     expect(screen.getByText(/2\.6%/)).toBeInTheDocument();
   });
 
@@ -1002,11 +1073,11 @@ describe('SettingsModal', () => {
     renderModal({ externalSidebarNav: true, desktopSection: 'statistics' });
 
     await waitFor(() => {
-      expect(screen.getByText('Region Scope (24h)')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('settings.stats.regionScope'))).toBeInTheDocument();
     });
 
     expect(
-      screen.getByText(/at or below the estimated false-positive floor \(20\)/)
+      screen.getByText(i18n.t('settings.stats.floorNoise', { floor: '20' }), { exact: false })
     ).toBeInTheDocument();
     // Percentage withheld even though 0.24% would round visibly — it is noise
     expect(screen.queryByText(/0\.2%/)).not.toBeInTheDocument();
@@ -1069,14 +1140,14 @@ describe('SettingsModal', () => {
     });
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: /Statistics/i }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settingsNav.statistics') }));
 
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalledWith('./api/statistics', expect.any(Object));
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Network')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('settings.stats.network'))).toBeInTheDocument();
     });
   });
 
@@ -1090,7 +1161,9 @@ describe('SettingsModal', () => {
     });
 
     const checkbox = screen.getByRole('checkbox', {
-      name: /Poll direct\/routed-path repeaters hourly/i,
+      name: (accessibleName) =>
+        accessibleName.includes(i18n.t('settings.radioApp.pollRoutedHourly')) &&
+        accessibleName.includes(i18n.t('settings.radioApp.pollRoutedHourlyHelp')),
     }) as HTMLInputElement;
 
     expect(checkbox).toBeInTheDocument();
@@ -1165,6 +1238,6 @@ describe('SettingsModal', () => {
     });
 
     expect(screen.getByText('DirectRepeater')).toBeInTheDocument();
-    expect(screen.getByText('direct')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.radioApp.routeDirect'))).toBeInTheDocument();
   });
 });

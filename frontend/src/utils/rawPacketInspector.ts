@@ -8,6 +8,7 @@ import {
   type PacketStructure,
 } from '@michaelhart/meshcore-decoder';
 
+import i18n from '../i18n';
 import type { Channel, RawPacket } from '../types';
 
 export interface RawPacketSummary {
@@ -65,18 +66,11 @@ export function describeCiphertextStructure(
 ): string {
   switch (payloadType) {
     case PayloadType.GroupText:
-      return `Encrypted message content (${byteLength} bytes). Contains encrypted plaintext with this structure:
-• Timestamp (4 bytes) - send time as unix timestamp
-• Flags (1 byte) - channel-message flags byte
-• Message (remaining bytes) - UTF-8 channel message text`;
+      return i18n.t('rawPacket.ciphertextGroup', { bytes: byteLength });
     case PayloadType.TextMessage:
-      return `Encrypted message data (${byteLength} bytes). Contains encrypted plaintext with this structure:
-• Timestamp (4 bytes) - send time as unix timestamp
-• Message (remaining bytes) - UTF-8 direct message text`;
+      return i18n.t('rawPacket.ciphertextDm', { bytes: byteLength });
     case PayloadType.Response:
-      return `Encrypted response data (${byteLength} bytes). Contains encrypted plaintext with this structure:
-• Tag (4 bytes) - request/response correlation tag
-• Content (remaining bytes) - response body`;
+      return i18n.t('rawPacket.ciphertextResponse', { bytes: byteLength });
     default:
       return fallbackDescription;
   }
@@ -158,13 +152,14 @@ export function decodePacketSummary(
     const decoded = MeshCoreDecoder.decode(packet.data, decoderOptions);
 
     if (!decoded.isValid) {
-      return { summary: 'Invalid packet', routeType: 'Unknown' };
+      return { summary: i18n.t('rawPacket.invalidPacket'), routeType: 'Unknown' };
     }
 
     const routeType = Utils.getRouteTypeName(decoded.routeType);
     const payloadTypeName = Utils.getPayloadTypeName(decoded.payloadType);
     const pathTokens = getPathTokens(decoded);
-    const pathStr = pathTokens.length > 0 ? ` via ${pathTokens.join(', ')}` : '';
+    const pathStr =
+      pathTokens.length > 0 ? i18n.t('rawPacket.viaPath', { path: pathTokens.join(', ') }) : '';
 
     let summary = payloadTypeName;
     let details: string | undefined;
@@ -176,9 +171,13 @@ export function decodePacketSummary(
           sourceHash?: string;
         } | null;
         if (payload?.sourceHash && payload?.destinationHash) {
-          summary = `DM from ${payload.sourceHash} to ${payload.destinationHash}${pathStr}`;
+          summary = i18n.t('rawPacket.dmFromTo', {
+            source: payload.sourceHash,
+            dest: payload.destinationHash,
+            path: pathStr,
+          });
         } else {
-          summary = `DM${pathStr}`;
+          summary = i18n.t('rawPacket.dmOnly', { path: pathStr });
         }
         break;
       }
@@ -189,18 +188,28 @@ export function decodePacketSummary(
         } | null;
         if (packet.decrypted_info?.channel_name) {
           if (packet.decrypted_info.sender) {
-            summary = `GT from ${packet.decrypted_info.sender} in ${packet.decrypted_info.channel_name}${pathStr}`;
+            summary = i18n.t('rawPacket.gtFromIn', {
+              sender: packet.decrypted_info.sender,
+              channel: packet.decrypted_info.channel_name,
+              path: pathStr,
+            });
           } else {
-            summary = `GT in ${packet.decrypted_info.channel_name}${pathStr}`;
+            summary = i18n.t('rawPacket.gtIn', {
+              channel: packet.decrypted_info.channel_name,
+              path: pathStr,
+            });
           }
         } else if (payload?.decrypted?.sender) {
-          summary = `GT from ${payload.decrypted.sender}${pathStr}`;
+          summary = i18n.t('rawPacket.gtFrom', {
+            sender: payload.decrypted.sender,
+            path: pathStr,
+          });
         } else if (payload?.decrypted?.message) {
-          summary = `GT decrypted${pathStr}`;
+          summary = i18n.t('rawPacket.gtDecrypted', { path: pathStr });
         } else if (payload?.channelHash) {
-          summary = `GT ch:${payload.channelHash}${pathStr}`;
+          summary = i18n.t('rawPacket.gtCh', { hash: payload.channelHash, path: pathStr });
         } else {
-          summary = `GroupText${pathStr}`;
+          summary = i18n.t('rawPacket.groupTextPath', { path: pathStr });
         }
         break;
       }
@@ -214,37 +223,44 @@ export function decodePacketSummary(
             payload.appData.deviceRole !== undefined
               ? Utils.getDeviceRoleName(payload.appData.deviceRole)
               : '';
-          summary = `Advert: ${payload.appData.name}${role ? ` (${role})` : ''}${pathStr}`;
+          summary = i18n.t('rawPacket.advertNamed', {
+            name: payload.appData.name,
+            role: role ? ` (${role})` : '',
+            path: pathStr,
+          });
         } else if (payload?.publicKey) {
-          summary = `Advert: ${payload.publicKey.slice(0, 8)}...${pathStr}`;
+          summary = i18n.t('rawPacket.advertKey', {
+            key: payload.publicKey.slice(0, 8),
+            path: pathStr,
+          });
         } else {
-          summary = `Advert${pathStr}`;
+          summary = i18n.t('rawPacket.advertOnly', { path: pathStr });
         }
         break;
       }
       case PayloadType.Ack:
-        summary = `ACK${pathStr}`;
+        summary = i18n.t('rawPacket.ackPath', { path: pathStr });
         break;
       case PayloadType.Request:
-        summary = `Request${pathStr}`;
+        summary = i18n.t('rawPacket.requestPath', { path: pathStr });
         break;
       case PayloadType.Response:
-        summary = `Response${pathStr}`;
+        summary = i18n.t('rawPacket.responsePath', { path: pathStr });
         break;
       case PayloadType.Trace:
-        summary = `Trace${pathStr}`;
+        summary = i18n.t('rawPacket.tracePath', { path: pathStr });
         break;
       case PayloadType.Path:
-        summary = `Path${pathStr}`;
+        summary = i18n.t('rawPacket.pathOnly', { path: pathStr });
         break;
       default:
-        summary = `${payloadTypeName}${pathStr}`;
+        summary = i18n.t('rawPacket.typePath', { type: payloadTypeName, path: pathStr });
         break;
     }
 
     return { summary, routeType, details };
   } catch {
-    return { summary: 'Decode error', routeType: 'Unknown' };
+    return { summary: i18n.t('rawPacket.decodeError'), routeType: 'Unknown' };
   }
 }
 
@@ -348,13 +364,19 @@ export function inspectRawPacketWithOptions(
       }
       const detailLines = [
         payload.decrypted.timestamp != null
-          ? `Sent (packet): ${formatUnixTimestamp(payload.decrypted.timestamp)}`
+          ? i18n.t('rawPacket.sentPacket', {
+              time: formatUnixTimestamp(payload.decrypted.timestamp),
+            })
           : null,
         payload.decrypted.flags != null
-          ? `Flags: 0x${payload.decrypted.flags.toString(16).padStart(2, '0')}`
+          ? i18n.t('rawPacket.flags', {
+              value: `0x${payload.decrypted.flags.toString(16).padStart(2, '0')}`,
+            })
           : null,
-        payload.decrypted.sender ? `Sender: ${payload.decrypted.sender}` : null,
-        `Message: ${payload.decrypted.message}`,
+        payload.decrypted.sender
+          ? i18n.t('rawPacket.sender', { name: payload.decrypted.sender })
+          : null,
+        i18n.t('rawPacket.messageLabel', { text: payload.decrypted.message }),
       ].filter((line): line is string => line !== null);
       return { ...withStructure, decryptedMessage: detailLines.join('\n') };
     }
@@ -364,10 +386,12 @@ export function inspectRawPacketWithOptions(
       const info = packet.decrypted_info;
       const detailLines = [
         info.sender_timestamp != null
-          ? `Sent (packet): ${formatUnixTimestamp(info.sender_timestamp)}`
+          ? i18n.t('rawPacket.sentPacket', {
+              time: formatUnixTimestamp(info.sender_timestamp),
+            })
           : null,
-        info.sender ? `Sender: ${info.sender}` : null,
-        `Message: ${info.message}`,
+        info.sender ? i18n.t('rawPacket.sender', { name: info.sender }) : null,
+        i18n.t('rawPacket.messageLabel', { text: info.message }),
       ].filter((line): line is string => line !== null);
       return { ...withStructure, decryptedMessage: detailLines.join('\n') };
     }
@@ -386,7 +410,7 @@ export function inspectRawPacketWithOptions(
     validationErrors:
       validationErrors.length > 0
         ? validationErrors
-        : (decoded?.errors ?? (decoded || structure ? [] : ['Unable to decode packet'])),
+        : (decoded?.errors ?? (decoded || structure ? [] : [i18n.t('rawPacket.unableToDecode')])),
     packetFields,
     payloadFields: enrichedPayloadFields,
   };

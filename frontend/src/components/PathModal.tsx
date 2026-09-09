@@ -1,5 +1,5 @@
 import { useEffect, useState, lazy, Suspense } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import type { Contact, RadioConfig, MessagePath } from '../types';
 import { api } from '../api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
@@ -57,6 +57,7 @@ export function PathModal({
   onResend,
   onAnalyzePacket,
 }: PathModalProps) {
+  const { t } = useTranslation();
   const { distanceUnit } = useDistanceUnit();
   const [mapModalIndex, setMapModalIndex] = useState<number | null>(null);
   const [directoryHits, setDirectoryHits] = useState<Record<string, DirectoryHopHit>>({});
@@ -112,24 +113,22 @@ export function PathModal({
         <DialogHeader>
           <DialogTitle>
             {hasPaths
-              ? `Message Path${!hasSinglePath ? `s (${paths.length})` : ''}`
-              : 'Message Status'}
+              ? hasSinglePath
+                ? t('path.title')
+                : t('path.titlePlural', { count: paths.length })
+              : t('path.statusTitle')}
           </DialogTitle>
           <DialogDescription>
             {!hasPaths ? (
-              <>No echoes heard yet. Echoes appear when repeaters re-broadcast your message.</>
+              t('path.noEchoes')
             ) : hasSinglePath ? (
-              <>
-                This shows <em>one route</em> that this message traveled through the mesh network.
-                Repeater identities are inferred from locally known advert and path data, so some
-                hops may be missing or misidentified when that data is incomplete.
-              </>
+              <Trans i18nKey="path.singleHelp" components={{ em: <em /> }} />
             ) : (
-              <>
-                This message was received via <strong>{paths.length} different routes</strong>.
-                Repeater identities are inferred from locally known advert and path data, so some
-                hops may be missing or misidentified when that data is incomplete.
-              </>
+              <Trans
+                i18nKey="path.multiHelp"
+                values={{ count: paths.length }}
+                components={{ strong: <strong /> }}
+              />
             )}
           </DialogDescription>
         </DialogHeader>
@@ -138,7 +137,7 @@ export function PathModal({
           <div className="flex-1 overflow-y-auto py-2 space-y-4">
             {showAnalyzePacket ? (
               <Button type="button" variant="outline" className="w-full" onClick={onAnalyzePacket}>
-                Analyze Packet
+                {t('path.analyze')}
               </Button>
             ) : null}
 
@@ -146,18 +145,19 @@ export function PathModal({
             <div className="text-sm space-y-1">
               {paths.map((p, index) => {
                 const hops = parsePathHops(p.path, p.path_len);
-                const rawPath = hops.length > 0 ? hops.join('->') : 'direct';
+                const rawPath = hops.length > 0 ? hops.join('->') : t('path.direct');
                 const hasSignal = p.rssi != null || p.snr != null;
                 return (
                   <div key={index}>
                     <div>
-                      <span className="text-foreground/70 font-semibold">Path {index + 1}:</span>{' '}
+                      <span className="text-foreground/70 font-semibold">
+                        {t('path.pathN', { n: index + 1 })}
+                      </span>{' '}
                       <span className="font-mono text-muted-foreground">{rawPath}</span>
                     </div>
                     {hasSignal && (
                       <div className="text-[0.6875rem] text-muted-foreground ml-4">
-                        Last hop (as heard by you):{' '}
-                        {p.rssi != null && <span>{p.rssi} dBm RSSI</span>}
+                        {t('path.lastHopHeard')} {p.rssi != null && <span>{p.rssi} dBm RSSI</span>}
                         {p.rssi != null && p.snr != null && <span> · </span>}
                         {p.snr != null && <span>{p.snr.toFixed(1)} dB SNR</span>}
                       </div>
@@ -178,7 +178,7 @@ export function PathModal({
                 resolvedPaths[0].resolved.receiver.lon
               ) && (
                 <div className="text-sm pb-2 border-b border-border">
-                  <span className="text-muted-foreground">Straight-line distance: </span>
+                  <span className="text-muted-foreground">{t('path.straightLine')} </span>
                   <span className="font-medium">
                     {formatDistance(
                       calculateDistance(
@@ -198,9 +198,9 @@ export function PathModal({
                 <div className="flex items-center justify-between mb-2 pb-1 border-b border-border">
                   {!hasSinglePath ? (
                     <div className="text-sm text-foreground/70 font-semibold">
-                      Path {index + 1}{' '}
+                      {t('path.pathN', { n: index + 1 })}{' '}
                       <span className="font-normal text-muted-foreground">
-                        — received {formatTime(pathData.received_at)}
+                        {t('path.receivedAt', { time: formatTime(pathData.received_at) })}
                       </span>
                     </div>
                   ) : (
@@ -210,7 +210,7 @@ export function PathModal({
                     onClick={() => setMapModalIndex(index)}
                     className="text-xs text-primary hover:underline cursor-pointer shrink-0 ml-2"
                   >
-                    Map route
+                    {t('path.mapRoute')}
                   </button>
                 </div>
                 <PathVisualization
@@ -231,12 +231,10 @@ export function PathModal({
                 <DialogHeader>
                   <DialogTitle>
                     {mapModalIndex !== null && !hasSinglePath
-                      ? `Path ${mapModalIndex + 1} Route Map`
-                      : 'Route Map'}
+                      ? t('path.routeMapTitleN', { n: mapModalIndex + 1 })
+                      : t('path.routeMapTitle')}
                   </DialogTitle>
-                  <DialogDescription>
-                    Map of known node locations along this message route.
-                  </DialogDescription>
+                  <DialogDescription>{t('path.routeMapHelp')}</DialogDescription>
                 </DialogHeader>
                 {mapModalIndex !== null && (
                   <Suspense
@@ -273,9 +271,9 @@ export function PathModal({
                   }}
                 >
                   <span className="flex flex-col items-center leading-tight">
-                    <span>↻ Resend</span>
+                    <span>{t('path.resend')}</span>
                     <span className="text-[0.625rem] font-normal opacity-80">
-                      Only repeated by new repeaters
+                      {t('path.resendHint')}
                     </span>
                   </span>
                 </Button>
@@ -289,16 +287,16 @@ export function PathModal({
                 }}
               >
                 <span className="flex flex-col items-center leading-tight">
-                  <span>↻ Resend as new</span>
+                  <span>{t('path.resendNew')}</span>
                   <span className="text-[0.625rem] font-normal opacity-80">
-                    Will appear as duplicate to receivers
+                    {t('path.resendNewHint')}
                   </span>
                 </span>
               </Button>
             </div>
           )}
           <Button variant="secondary" className="h-auto py-2" onClick={onClose}>
-            Close
+            {t('path.close')}
           </Button>
         </div>
       </DialogContent>
@@ -319,6 +317,7 @@ function PathVisualization({
   distanceUnit,
   directoryHits,
 }: PathVisualizationProps) {
+  const { t } = useTranslation();
   // Track previous location for each hop to calculate distances
   // Returns null if previous hop was ambiguous or has invalid location
   const getPrevLocation = (hopIndex: number): { lat: number | null; lon: number | null } | null => {
@@ -349,7 +348,7 @@ function PathVisualization({
     <div className="space-y-0">
       {/* Sender */}
       <PathNode
-        label="Sender"
+        label={t('path.sender')}
         name={resolved.sender.name}
         prefix={resolved.sender.prefix}
         distance={null}
@@ -374,7 +373,7 @@ function PathVisualization({
 
       {/* Receiver */}
       <PathNode
-        label="Receiver (me)"
+        label={t('path.receiver')}
         name={resolved.receiver.name}
         prefix={resolved.receiver.prefix}
         distance={calculateReceiverDistance(resolved)}
@@ -388,9 +387,7 @@ function PathVisualization({
       {/* Total distance */}
       {resolved.totalDistances && resolved.totalDistances.length > 0 && (
         <div className="pt-3 mt-3 border-t border-border">
-          <span className="text-sm text-muted-foreground">
-            Presumed unambiguous distance covered:{' '}
-          </span>
+          <span className="text-sm text-muted-foreground">{t('path.unambiguousDistance')} </span>
           <span className="text-sm font-medium">
             {resolved.hasGaps ? '>' : ''}
             {formatDistance(resolved.totalDistances[0], distanceUnit)}
@@ -583,6 +580,7 @@ function HopNode({ hop, hopNumber, prevLocation, distanceUnit, directoryHit }: H
  * Render clickable coordinates that open the map focused on the contact
  */
 function CoordinateLink({ lat, lon, publicKey }: { lat: number; lon: number; publicKey: string }) {
+  const { t } = useTranslation();
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -603,7 +601,7 @@ function CoordinateLink({ lat, lon, publicKey }: { lat: number; lon: number; pub
         }
       }}
       onClick={handleClick}
-      title="View on map"
+      title={t('path.viewOnMap')}
     >
       ({lat.toFixed(4)}, {lon.toFixed(4)})
     </span>

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react';
 
+import i18n from '../i18n';
 import type { Channel, Contact } from '../types';
 import { getStateKey } from '../utils/conversationState';
 
-const APP_TITLE = 'Meshloom';
-const UNREAD_APP_TITLE = 'Meshloom';
+function appTitle(): string {
+  return i18n.t('pwa.title', { defaultValue: 'Meshloom' });
+}
 const BASE_FAVICON_PATH = './favicon.svg';
 const UNREAD_BADGE_FILL = '#BF5AF2';
 const RED_BADGE_FILL = '#dc2626';
@@ -64,11 +66,11 @@ export function getUnreadTitle(
 ): string {
   const unreadCount = getFavoriteUnreadCount(unreadCounts, contacts, channels);
   if (unreadCount <= 0) {
-    return APP_TITLE;
+    return appTitle();
   }
 
   const label = unreadCount > 99 ? '99+' : String(unreadCount);
-  return `(${label}) ${UNREAD_APP_TITLE}`;
+  return i18n.t('pwa.unreadTitle', { count: label, defaultValue: '({{count}}) Meshloom' });
 }
 
 export function deriveFaviconBadgeState(
@@ -151,7 +153,7 @@ export function useUnreadTitle(
     document.title = title;
 
     return () => {
-      document.title = APP_TITLE;
+      document.title = appTitle();
     };
   }, [title]);
 }

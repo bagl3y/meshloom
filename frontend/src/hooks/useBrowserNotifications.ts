@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from '../components/ui/sonner';
+import i18n from '../i18n';
 import type { Message } from '../types';
 import { getStateKey } from '../utils/conversationState';
 
@@ -78,17 +79,19 @@ function getMessageConversationNotificationKey(message: Message): string | null 
 
 function buildNotificationTitle(message: Message): string {
   if (message.type === 'PRIV') {
-    return message.sender_name
-      ? `New message from ${message.sender_name}`
-      : `New message from ${message.conversation_key.slice(0, 12)}`;
+    return i18n.t('notifications.newMessageFrom', {
+      name: message.sender_name || message.conversation_key.slice(0, 12),
+    });
   }
 
   const roomName = message.channel_name || message.conversation_key.slice(0, 8);
-  return `New message in ${roomName}`;
+  return i18n.t('notifications.newMessageIn', { name: roomName });
 }
 
 function buildPreviewNotificationTitle(type: 'channel' | 'contact', label: string): string {
-  return type === 'contact' ? `New message from ${label}` : `New message in ${label}`;
+  return type === 'contact'
+    ? i18n.t('notifications.newMessageFrom', { name: label })
+    : i18n.t('notifications.newMessageIn', { name: label });
 }
 
 function buildMessageNotificationHash(message: Message): string | null {
@@ -107,7 +110,7 @@ export function getNotificationEnableToastInfo(
   environment?: Partial<NotificationEnvironment>
 ): NotificationEnableToastInfo {
   if (typeof window === 'undefined') {
-    return { level: 'success', title: 'Notifications enabled' };
+    return { level: 'success', title: i18n.t('notifications.enabled') };
   }
 
   const protocol = environment?.protocol ?? window.location.protocol;
@@ -116,9 +119,8 @@ export function getNotificationEnableToastInfo(
   if (protocol === 'http:') {
     return {
       level: 'warning',
-      title: 'Notifications enabled with warning',
-      description:
-        'Desktop notifications are on for this conversation, but you are using HTTP instead of HTTPS. Notifications will likely not work reliably.',
+      title: i18n.t('notifications.enabledWarning'),
+      description: i18n.t('notifications.httpWarning'),
     };
   }
 
@@ -128,13 +130,12 @@ export function getNotificationEnableToastInfo(
   if (protocol === 'https:' && !isSecureContext) {
     return {
       level: 'warning',
-      title: 'Notifications enabled with warning',
-      description:
-        'Desktop notifications are on for this conversation, but your HTTPS connection is untrusted, such as a self-signed certificate. Notification delivery may be inconsistent depending on your browser.',
+      title: i18n.t('notifications.enabledWarning'),
+      description: i18n.t('notifications.httpsUntrustedWarning'),
     };
   }
 
-  return { level: 'success', title: 'Notifications enabled' };
+  return { level: 'success', title: i18n.t('notifications.enabled') };
 }
 
 export function useBrowserNotifications() {
@@ -163,23 +164,22 @@ export function useBrowserNotifications() {
           writeStoredEnabledMap(next);
           return next;
         });
-        toast.success('Notifications disabled', {
-          description: `Desktop notifications are off for ${label}.`,
+        toast.success(i18n.t('notifications.disabled'), {
+          description: i18n.t('notifications.disabledOn', { label }),
         });
         return;
       }
 
       if (permission === 'unsupported') {
-        toast.error('Notifications unavailable', {
-          description: 'This browser does not support desktop notifications.',
+        toast.error(i18n.t('notifications.unavailable'), {
+          description: i18n.t('notifications.unavailableDetail'),
         });
         return;
       }
 
       if (permission === 'denied') {
-        toast.error('Notifications blocked', {
-          description:
-            'Desktop notifications are blocked by your browser. Allow notifications in browser settings, then try again. Non-HTTPS or untrusted HTTPS origins may also prevent notifications from working reliably.',
+        toast.error(i18n.t('notifications.blocked'), {
+          description: i18n.t('notifications.blockedDetail'),
         });
         return;
       }
@@ -197,7 +197,7 @@ export function useBrowserNotifications() {
           return next;
         });
         new window.Notification(buildPreviewNotificationTitle(type, label), {
-          body: 'Notifications will look like this. These require the tab to stay open, and will not be reliable on mobile.',
+          body: i18n.t('notifications.previewBody'),
           icon: NOTIFICATION_ICON_PATH,
           tag: `meshcore-notification-preview-${conversationKey}`,
         });
@@ -208,17 +208,17 @@ export function useBrowserNotifications() {
           });
         } else {
           toast.success(toastInfo.title, {
-            description: `Desktop notifications are on for ${label}.`,
+            description: i18n.t('notifications.enabledOn', { label }),
           });
         }
         return;
       }
 
-      toast.error('Notifications not enabled', {
+      toast.error(i18n.t('notifications.notEnabled'), {
         description:
           nextPermission === 'denied'
-            ? 'Desktop notifications were denied by your browser. Allow notifications in browser settings, then try again.'
-            : 'The browser permission request was dismissed.',
+            ? i18n.t('notifications.deniedDetail')
+            : i18n.t('notifications.dismissedDetail'),
       });
     },
     [enabledByConversation, permission]

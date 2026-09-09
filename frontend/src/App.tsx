@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef, useState, useMemo, type MouseEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from './api';
 import { takePrefetchOrFetch } from './prefetch';
 import { useWebSocket } from './useWebSocket';
@@ -71,6 +72,7 @@ export function resolveUnreadMarkerId(
 }
 
 export function App() {
+  const { t } = useTranslation();
   const quoteSearchOperatorValue = useCallback((value: string) => {
     return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
   }, []);
@@ -236,10 +238,10 @@ export function App() {
             prev.map((c) => (c.key === id ? { ...c, favorite: !c.favorite } : c))
           );
         }
-        toast.error('Failed to update favorite');
+        toast.error(t('toast.favoriteFailed'));
       }
     },
-    [setContacts, setChannels]
+    [setContacts, setChannels, t]
   );
 
   // useConversationRouter is called second — it receives channels/contacts as inputs
@@ -356,10 +358,10 @@ export function App() {
         await refreshUnreads();
       } catch {
         setChannels((prev) => prev.map((c) => (c.key === key ? { ...c, muted: !c.muted } : c)));
-        toast.error('Failed to update mute');
+        toast.error(t('toast.muteFailed'));
       }
     },
-    [setChannels, refreshUnreads]
+    [setChannels, refreshUnreads, t]
   );
 
   useEffect(() => {

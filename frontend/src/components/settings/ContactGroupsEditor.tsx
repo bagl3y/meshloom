@@ -35,7 +35,7 @@ export function ContactGroupsEditor({ contacts }: { contacts: Contact[] }) {
       setExpandedId(created.id);
     } catch (err) {
       toast.error(t('settings.groupCreateFailed'), {
-        description: err instanceof Error ? err.message : 'Unknown error',
+        description: err instanceof Error ? err.message : t('settings.radioApp.unknownError'),
       });
     }
   };
@@ -47,7 +47,7 @@ export function ContactGroupsEditor({ contacts }: { contacts: Contact[] }) {
       if (expandedId === group.id) setExpandedId(null);
     } catch (err) {
       toast.error(t('settings.groupDeleteFailed'), {
-        description: err instanceof Error ? err.message : 'Unknown error',
+        description: err instanceof Error ? err.message : t('settings.radioApp.unknownError'),
       });
     }
   };
@@ -58,7 +58,7 @@ export function ContactGroupsEditor({ contacts }: { contacts: Contact[] }) {
       setGroups((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
     } catch (err) {
       toast.error(t('settings.groupUpdateFailed'), {
-        description: err instanceof Error ? err.message : 'Unknown error',
+        description: err instanceof Error ? err.message : t('settings.radioApp.unknownError'),
       });
     }
   };

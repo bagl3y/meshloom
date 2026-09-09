@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import './eSlices';
 import { VisualizerControls } from '../components/visualizer/VisualizerControls';
+import i18n from '../i18n';
 
 describe('VisualizerControls', () => {
   it('allows clearing numeric inputs while editing', () => {
@@ -39,8 +41,10 @@ describe('VisualizerControls', () => {
       />
     );
 
-    const observationInput = screen.getByLabelText('Ack/echo listen window:') as HTMLInputElement;
-    const pruneInput = screen.getByLabelText('Window:') as HTMLInputElement;
+    const observationInput = screen.getByLabelText(
+      i18n.t('visualizer.ackWindow')
+    ) as HTMLInputElement;
+    const pruneInput = screen.getByLabelText(i18n.t('visualizer.window')) as HTMLInputElement;
 
     fireEvent.change(observationInput, { target: { value: '' } });
     fireEvent.change(pruneInput, { target: { value: '' } });

@@ -7,6 +7,7 @@ import {
   DEFAULT_LOCALE,
   FALLBACK_LOCALE,
   LANGUAGE_STORAGE_KEY,
+  applyDocumentLanguage,
   getSavedLanguage,
   setSavedLanguage,
 } from '../utils/languagePreference';
@@ -33,6 +34,15 @@ describe('i18n', () => {
     expect(getSavedLanguage()).toBe('en');
   });
 
+  it('writes the active locale onto <html lang>', async () => {
+    applyDocumentLanguage('fr');
+    expect(document.documentElement.lang).toBe('fr');
+    await i18n.changeLanguage('en');
+    expect(document.documentElement.lang).toBe('en');
+    await i18n.changeLanguage('fr');
+    expect(document.documentElement.lang).toBe('fr');
+  });
+
   it('exposes French chat labels by default', () => {
     expect(i18n.t('chat.send')).toBe('Envoyer');
     expect(i18n.t('sidebar.collapse')).toBe('Réduire la barre latérale');
@@ -50,6 +60,21 @@ describe('i18n', () => {
 
     await i18n.changeLanguage('en');
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hi' } });
-    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: i18n.t('chat.send') })).toBeInTheDocument();
+  });
+
+  it('keeps English and French catalogs on the same key set', () => {
+    const flatten = (obj: unknown, prefix = ''): string[] => {
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+        return prefix ? [prefix] : [];
+      }
+      return Object.entries(obj as Record<string, unknown>).flatMap(([key, value]) =>
+        flatten(value, prefix ? `${prefix}.${key}` : key)
+      );
+    };
+    const enKeys = new Set(flatten(i18n.getResourceBundle('en', 'translation')));
+    const frKeys = new Set(flatten(i18n.getResourceBundle('fr', 'translation')));
+    expect([...enKeys].filter((key) => !frKeys.has(key)).sort()).toEqual([]);
+    expect([...frKeys].filter((key) => !enKeys.has(key)).sort()).toEqual([]);
   });
 });

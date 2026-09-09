@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import type { Channel, Contact, RawPacket, RadioConfig } from '../types';
 import { PacketVisualizer3D } from './PacketVisualizer3D';
@@ -16,6 +17,7 @@ interface VisualizerViewProps {
 }
 
 export function VisualizerView({ contacts, channels, config }: VisualizerViewProps) {
+  const { t } = useTranslation();
   const packets = useRawPackets();
   const [fullScreen, setFullScreen] = useState(() => getVisualizerSettings().hidePacketFeed);
   const [paneFullScreen, setPaneFullScreen] = useState(false);
@@ -53,12 +55,14 @@ export function VisualizerView({ contacts, channels, config }: VisualizerViewPro
     <div ref={containerRef} className="flex flex-col h-full bg-background">
       {/* Header */}
       <div className="flex justify-between items-center px-4 py-3 border-b border-border font-medium text-lg">
-        <span>{paneFullScreen ? 'Meshloom Visualizer' : 'Mesh Visualizer'}</span>
+        <span>{paneFullScreen ? t('visualizer.titleFullscreen') : t('visualizer.title')}</span>
         <button
           className="hidden md:inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={toggleFullScreen}
-          title={paneFullScreen ? 'Exit fullscreen' : 'Fullscreen'}
-          aria-label={paneFullScreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          title={paneFullScreen ? t('visualizer.exitFullscreen') : t('visualizer.fullscreen')}
+          aria-label={
+            paneFullScreen ? t('visualizer.exitFullscreen') : t('visualizer.enterFullscreen')
+          }
         >
           {paneFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
         </button>
@@ -68,8 +72,8 @@ export function VisualizerView({ contacts, channels, config }: VisualizerViewPro
       <div className="flex-1 overflow-hidden md:hidden">
         <Tabs defaultValue="visualizer" className="h-full flex flex-col">
           <TabsList className="mx-4 mt-2 grid grid-cols-2">
-            <TabsTrigger value="visualizer">Visualizer</TabsTrigger>
-            <TabsTrigger value="packets">Packet Feed</TabsTrigger>
+            <TabsTrigger value="visualizer">{t('visualizer.tabVisualizer')}</TabsTrigger>
+            <TabsTrigger value="packets">{t('visualizer.tabPackets')}</TabsTrigger>
           </TabsList>
           <TabsContent value="visualizer" className="flex-1 m-0 overflow-hidden">
             <PacketVisualizer3D packets={packets} contacts={contacts} config={config} />
@@ -111,7 +115,7 @@ export function VisualizerView({ contacts, channels, config }: VisualizerViewPro
         >
           <div className="h-full flex flex-col">
             <div className="px-3 py-2 border-b border-border text-sm font-medium text-muted-foreground">
-              Packet Feed
+              {t('visualizer.packetFeed')}
             </div>
             <div className="flex-1 overflow-hidden">
               <RawPacketList
@@ -134,10 +138,10 @@ export function VisualizerView({ contacts, channels, config }: VisualizerViewPro
         source={
           selectedPacket
             ? { kind: 'packet', packet: selectedPacket }
-            : { kind: 'loading', message: 'Loading packet...' }
+            : { kind: 'loading', message: t('rawPacket.loading') }
         }
-        title="Packet Details"
-        description="Detailed byte and field breakdown for the selected raw packet."
+        title={t('rawPacket.details')}
+        description={t('rawPacket.detailsDescription')}
       />
     </div>
   );

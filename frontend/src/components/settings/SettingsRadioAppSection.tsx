@@ -141,8 +141,8 @@ export function SettingsRadioAppSection({
       } catch (err) {
         console.error('Failed to save radio-app settings:', err);
         revert();
-        toast.error('Failed to save setting', {
-          description: err instanceof Error ? err.message : 'Unknown error',
+        toast.error(t('settings.radioApp.saveFailed'), {
+          description: err instanceof Error ? err.message : t('settings.radioApp.unknownError'),
         });
       }
     });
@@ -154,18 +154,19 @@ export function SettingsRadioAppSection({
     <div className={className}>
       {/* ── Tracked Repeater Telemetry ── */}
       <div className="space-y-3">
-        <h3 className="text-base font-semibold tracking-tight">Tracked Repeater Telemetry</h3>
+        <h3 className="text-base font-semibold tracking-tight">
+          {t('settings.radioApp.trackedRepeaters')}
+        </h3>
         <p className="text-[0.8125rem] text-muted-foreground">
-          Repeaters opted into automatic telemetry collection are polled on a scheduled interval. To
-          limit mesh traffic, the app caps telemetry at 24 checks per day across all tracked
-          repeaters — so fewer tracked repeaters allows shorter intervals, and more tracked
-          repeaters forces longer ones. Up to {schedule?.max_tracked ?? 8} repeaters may be tracked
-          at once ({trackedTelemetryRepeaters.length} / {schedule?.max_tracked ?? 8} slots used).
+          {t('settings.radioApp.trackedRepeatersHelp', {
+            max: schedule?.max_tracked ?? 8,
+            used: trackedTelemetryRepeaters.length,
+          })}
         </p>
 
         <div className="space-y-1.5">
           <Label htmlFor="telemetry-interval" className="text-sm">
-            Collection interval
+            {t('settings.radioApp.collectionInterval')}
           </Label>
           <div className="flex items-center gap-2">
             <select
@@ -184,20 +185,22 @@ export function SettingsRadioAppSection({
             >
               {(schedule?.options ?? [1, 2, 3, 4, 6, 8, 12, 24]).map((hrs) => (
                 <option key={hrs} value={hrs}>
-                  Every {hrs} hour{hrs === 1 ? '' : 's'} ({Math.floor(24 / hrs)} check
-                  {Math.floor(24 / hrs) === 1 ? '' : 's'}/day)
+                  {t('settings.radioApp.everyHour', {
+                    count: hrs,
+                    checks: Math.floor(24 / hrs),
+                  })}
                 </option>
               ))}
             </select>
           </div>
           {schedule && schedule.effective_hours !== schedule.preferred_hours && (
             <p className="text-xs text-warning">
-              Saved preference is {schedule.preferred_hours} hour
-              {schedule.preferred_hours === 1 ? '' : 's'}, but the scheduler is using{' '}
-              {schedule.effective_hours} hours because {schedule.tracked_count} repeater
-              {schedule.tracked_count === 1 ? '' : 's'}{' '}
-              {schedule.tracked_count === 1 ? 'is' : 'are'} tracked. Your preference will be
-              restored if you drop back to a supported count.
+              {t('settings.radioApp.intervalClamped', {
+                count: schedule.tracked_count,
+                preferred: schedule.preferred_hours,
+                effective: schedule.effective_hours,
+                tracked: schedule.tracked_count,
+              })}
             </p>
           )}
         </div>
@@ -213,30 +216,31 @@ export function SettingsRadioAppSection({
             className="w-4 h-4 rounded border-input accent-primary mt-0.5"
           />
           <div>
-            <span className="text-sm">Poll direct/routed-path repeaters hourly</span>
+            <span className="text-sm">{t('settings.radioApp.pollRoutedHourly')}</span>
             <p className="text-[0.8125rem] text-muted-foreground">
-              When enabled, tracked repeaters with a direct or routed path (not flood) are polled
-              every hour instead of on the scheduled interval above. Flood-only repeaters still
-              follow the normal schedule.
+              {t('settings.radioApp.pollRoutedHourlyHelp')}
             </p>
           </div>
         </label>
 
         {schedule?.next_run_at != null && (
           <p className="text-xs text-muted-foreground">
-            {schedule.routed_hourly ? 'Next flood run at' : 'Next run at'}{' '}
-            {formatTime(schedule.next_run_at)} (UTC top of hour).
+            {schedule.routed_hourly
+              ? t('settings.radioApp.nextFloodRun', { time: formatTime(schedule.next_run_at) })
+              : t('settings.radioApp.nextRun', { time: formatTime(schedule.next_run_at) })}
           </p>
         )}
         {schedule?.next_routed_run_at != null && (
           <p className="text-xs text-muted-foreground">
-            Next direct/routed run at {formatTime(schedule.next_routed_run_at)} (UTC top of hour).
+            {t('settings.radioApp.nextRoutedRun', {
+              time: formatTime(schedule.next_routed_run_at),
+            })}
           </p>
         )}
 
         {trackedTelemetryRepeaters.length === 0 ? (
           <p className="text-sm text-muted-foreground italic">
-            No repeaters are being tracked. Enable tracking from a repeater's dashboard.
+            {t('settings.radioApp.noRepeatersTracked')}
           </p>
         ) : (
           <div className="space-y-2">
@@ -247,12 +251,12 @@ export function SettingsRadioAppSection({
               const hasRealPath =
                 contact?.effective_route != null && contact.effective_route.path_len >= 0;
               const routeLabel = !hasRealPath
-                ? 'flood'
+                ? t('settings.radioApp.routeFlood')
                 : routeSource === 'override'
-                  ? 'routed'
+                  ? t('settings.radioApp.routeRouted')
                   : routeSource === 'direct'
-                    ? 'direct'
-                    : 'flood';
+                    ? t('settings.radioApp.routeDirect')
+                    : t('settings.radioApp.routeFlood');
               const routeColor = hasRealPath
                 ? 'text-primary bg-primary/10'
                 : 'text-muted-foreground bg-muted';
@@ -281,19 +285,24 @@ export function SettingsRadioAppSection({
                         onClick={() => onToggleTrackedTelemetry(key)}
                         className="h-7 text-xs flex-shrink-0 text-destructive hover:text-destructive"
                       >
-                        Remove
+                        {t('settings.remove')}
                       </Button>
                     )}
                   </div>
                   {d ? (
                     <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[0.625rem] text-muted-foreground">
                       <span>{d.battery_volts?.toFixed(2)}V</span>
-                      <span>noise {d.noise_floor_dbm} dBm</span>
+                      <span>{t('settings.radioApp.noise', { value: d.noise_floor_dbm })}</span>
                       <span>
-                        rx {d.packets_received != null ? d.packets_received.toLocaleString() : '?'}
+                        {t('settings.radioApp.rx', {
+                          value:
+                            d.packets_received != null ? d.packets_received.toLocaleString() : '?',
+                        })}
                       </span>
                       <span>
-                        tx {d.packets_sent != null ? d.packets_sent.toLocaleString() : '?'}
+                        {t('settings.radioApp.tx', {
+                          value: d.packets_sent != null ? d.packets_sent.toLocaleString() : '?',
+                        })}
                       </span>
                       {d.lpp_sensors?.map((s) => {
                         const display = lppDisplayUnit(s.type_name, s.value, distanceUnit);
@@ -311,11 +320,13 @@ export function SettingsRadioAppSection({
                           </span>
                         );
                       })}
-                      <span className="ml-auto">checked {formatTime(snap.timestamp)}</span>
+                      <span className="ml-auto">
+                        {t('settings.radioApp.checked', { time: formatTime(snap.timestamp) })}
+                      </span>
                     </div>
                   ) : snap === null ? (
                     <div className="mt-1 text-[0.625rem] text-muted-foreground italic">
-                      No telemetry recorded yet
+                      {t('settings.radioApp.noTelemetryYet')}
                     </div>
                   ) : null}
                 </div>
@@ -329,17 +340,16 @@ export function SettingsRadioAppSection({
 
       {/* ── Tracked Contact Telemetry ── */}
       <div className="space-y-3">
-        <h3 className="text-base font-semibold tracking-tight">Tracked Contact Telemetry</h3>
+        <h3 className="text-base font-semibold tracking-tight">
+          {t('settings.radioApp.trackedContacts')}
+        </h3>
         <p className="text-[0.8125rem] text-muted-foreground">
-          Non-repeater contacts (companions, rooms, sensors) can also be tracked for periodic LPP
-          telemetry collection (battery, sensors, GPS). Up to 8 contacts may be tracked. The daily
-          check ceiling is shared with tracked repeaters — adding contacts may clamp the interval
-          upward.
+          {t('settings.radioApp.trackedContactsHelp')}
         </p>
 
         {trackedTelemetryContacts.length === 0 ? (
           <p className="text-sm text-muted-foreground italic">
-            No contacts are being tracked. Enable tracking from a contact&apos;s info pane.
+            {t('settings.radioApp.noContactsTracked')}
           </p>
         ) : (
           <div className="space-y-2">
@@ -350,12 +360,12 @@ export function SettingsRadioAppSection({
               const hasRealPath =
                 contact?.effective_route != null && contact.effective_route.path_len >= 0;
               const routeLabel = !hasRealPath
-                ? 'flood'
+                ? t('settings.radioApp.routeFlood')
                 : routeSource === 'override'
-                  ? 'routed'
+                  ? t('settings.radioApp.routeRouted')
                   : routeSource === 'direct'
-                    ? 'direct'
-                    : 'flood';
+                    ? t('settings.radioApp.routeDirect')
+                    : t('settings.radioApp.routeFlood');
               const routeColor = hasRealPath
                 ? 'text-primary bg-primary/10'
                 : 'text-muted-foreground bg-muted';
@@ -384,7 +394,7 @@ export function SettingsRadioAppSection({
                         onClick={() => onToggleTrackedTelemetryContact(key)}
                         className="h-7 text-xs flex-shrink-0 text-destructive hover:text-destructive"
                       >
-                        Remove
+                        {t('settings.remove')}
                       </Button>
                     )}
                   </div>
@@ -407,11 +417,13 @@ export function SettingsRadioAppSection({
                           </span>
                         );
                       })}
-                      <span className="ml-auto">checked {formatTime(snap.timestamp)}</span>
+                      <span className="ml-auto">
+                        {t('settings.radioApp.checked', { time: formatTime(snap.timestamp) })}
+                      </span>
                     </div>
                   ) : snap === null ? (
                     <div className="mt-1 text-[0.625rem] text-muted-foreground italic">
-                      No telemetry recorded yet
+                      {t('settings.radioApp.noTelemetryYet')}
                     </div>
                   ) : null}
                 </div>
@@ -425,23 +437,24 @@ export function SettingsRadioAppSection({
 
       {/* ── Contact Management ── */}
       <div className="space-y-5">
-        <h3 className="text-base font-semibold tracking-tight">Contact Management</h3>
+        <h3 className="text-base font-semibold tracking-tight">
+          {t('settings.radioApp.contactManagement')}
+        </h3>
 
         <ContactGroupsEditor contacts={contacts} />
 
         <div className="space-y-3">
-          <h4 className="text-sm font-semibold">Block Discovery of New Node Types</h4>
+          <h4 className="text-sm font-semibold">{t('settings.radioApp.blockDiscovery')}</h4>
           <p className="text-[0.8125rem] text-muted-foreground">
-            Checked types will be ignored when heard via advertisement. Existing contacts of these
-            types are still updated. This does not affect contacts added manually or via DM.
+            {t('settings.radioApp.blockDiscoveryHelp')}
           </p>
           <div className="space-y-1.5">
             {(
               [
-                [1, 'Block clients'],
-                [2, 'Block repeaters'],
-                [3, 'Block room servers'],
-                [4, 'Block sensors'],
+                [1, t('settings.radioApp.blockClients')],
+                [2, t('settings.radioApp.blockRepeaters')],
+                [3, t('settings.radioApp.blockRooms')],
+                [4, t('settings.radioApp.blockSensors')],
               ] as const
             ).map(([typeCode, label]) => {
               const checked = discoveryBlockedTypes.includes(typeCode);
@@ -469,36 +482,40 @@ export function SettingsRadioAppSection({
           </div>
           {discoveryBlockedTypes.length > 0 && (
             <p className="text-xs text-warning">
-              New{' '}
-              {discoveryBlockedTypes
-                .map((t) =>
-                  t === 1 ? 'clients' : t === 2 ? 'repeaters' : t === 3 ? 'room servers' : 'sensors'
-                )
-                .join(', ')}{' '}
-              heard via advertisement will not be added to your contact list.
+              {t('settings.radioApp.blockedTypesWarn', {
+                types: discoveryBlockedTypes
+                  .map((typeCode) =>
+                    typeCode === 1
+                      ? t('settings.radioApp.typeClients')
+                      : typeCode === 2
+                        ? t('settings.radioApp.typeRepeaters')
+                        : typeCode === 3
+                          ? t('settings.radioApp.typeRooms')
+                          : t('settings.radioApp.typeSensors')
+                  )
+                  .join(', '),
+              })}
             </p>
           )}
         </div>
 
         <div className="space-y-3">
-          <h4 className="text-sm font-semibold">Blocked Contacts</h4>
+          <h4 className="text-sm font-semibold">{t('settings.radioApp.blockedContacts')}</h4>
           <p className="text-[0.8125rem] text-muted-foreground">
-            Blocked contacts are hidden from the sidebar. Blocking only hides messages from the UI —
-            MQTT forwarding and bot responses are not affected. Messages are still stored and will
-            reappear if unblocked.
+            {t('settings.radioApp.blockedContactsHelp')}
           </p>
 
           {blockedKeys.length === 0 && blockedNames.length === 0 ? (
             <p className="text-sm text-muted-foreground italic">
-              No blocked contacts. Block contacts from their info pane, viewed by clicking their
-              avatar in any channel, or their name within the top status bar with the conversation
-              open.
+              {t('settings.radioApp.noBlocked')}
             </p>
           ) : (
             <div className="space-y-2">
               {blockedKeys.length > 0 && (
                 <div>
-                  <span className="text-xs text-muted-foreground font-medium">Blocked Keys</span>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    {t('settings.radioApp.blockedKeys')}
+                  </span>
                   <div className="mt-1 space-y-1">
                     {blockedKeys.map((key) => (
                       <div key={key} className="flex items-center justify-between gap-2">
@@ -510,7 +527,7 @@ export function SettingsRadioAppSection({
                             onClick={() => onToggleBlockedKey(key)}
                             className="h-7 text-xs flex-shrink-0"
                           >
-                            Unblock
+                            {t('settings.radioApp.unblock')}
                           </Button>
                         )}
                       </div>
@@ -520,7 +537,9 @@ export function SettingsRadioAppSection({
               )}
               {blockedNames.length > 0 && (
                 <div>
-                  <span className="text-xs text-muted-foreground font-medium">Blocked Names</span>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    {t('settings.radioApp.blockedNames')}
+                  </span>
                   <div className="mt-1 space-y-1">
                     {blockedNames.map((name) => (
                       <div key={name} className="flex items-center justify-between gap-2">
@@ -532,7 +551,7 @@ export function SettingsRadioAppSection({
                             onClick={() => onToggleBlockedName(name)}
                             className="h-7 text-xs flex-shrink-0"
                           >
-                            Unblock
+                            {t('settings.radioApp.unblock')}
                           </Button>
                         )}
                       </div>
@@ -545,13 +564,12 @@ export function SettingsRadioAppSection({
         </div>
 
         <div className="space-y-3">
-          <h4 className="text-sm font-semibold">Bulk Delete Contacts</h4>
+          <h4 className="text-sm font-semibold">{t('settings.radioApp.bulkDelete')}</h4>
           <p className="text-[0.8125rem] text-muted-foreground">
-            Remove multiple contacts or repeaters at once. Useful for cleaning up spam or unwanted
-            nodes. Message history will be preserved.
+            {t('settings.radioApp.bulkDeleteHelp')}
           </p>
           <Button variant="outline" className="w-full" onClick={() => setBulkDeleteOpen(true)}>
-            Open Bulk Delete
+            {t('settings.radioApp.openBulkDelete')}
           </Button>
           <BulkDeleteContactsModal
             open={bulkDeleteOpen}
@@ -647,7 +665,8 @@ export function SettingsRadioAppSection({
               })
               .catch((err: unknown) => {
                 toast.error(t('settings.directoryClearFailed'), {
-                  description: err instanceof Error ? err.message : 'Unknown error',
+                  description:
+                    err instanceof Error ? err.message : t('settings.radioApp.unknownError'),
                 });
               })
               .finally(() => setCacheResetting(false));

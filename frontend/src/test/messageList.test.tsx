@@ -5,6 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageList } from '../components/MessageList';
 import i18n from '../i18n';
+import sliceEn from '../i18n/locales/slices/b.en.json';
+import sliceFr from '../i18n/locales/slices/b.fr.json';
+
+i18n.addResourceBundle('en', 'translation', sliceEn, true, true);
+i18n.addResourceBundle('fr', 'translation', sliceFr, true, true);
 import { PathHopWidthProvider } from '../contexts/PathHopWidthContext';
 import { RichPayloadProvider } from '../contexts/RichPayloadContext';
 import { CONTACT_TYPE_ROOM, type Contact, type Message } from '../types';
@@ -76,7 +81,7 @@ describe('MessageList channel sender rendering', () => {
       />
     );
 
-    expect(screen.getByText('<No name -- corrupt packet?>')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('messageList.corruptSender'))).toBeInTheDocument();
     expect(screen.getByTestId('corrupt-avatar')).toBeInTheDocument();
   });
 
@@ -90,7 +95,9 @@ describe('MessageList channel sender rendering', () => {
     );
 
     expect(screen.getByText('nl-gr')).toBeInTheDocument();
-    expect(screen.getByTitle('Regional scope: nl-gr')).toBeInTheDocument();
+    expect(
+      screen.getByTitle(i18n.t('messageList.regionalScope', { region: 'nl-gr' }))
+    ).toBeInTheDocument();
   });
 
   it('does not render a region badge for unscoped messages', () => {
@@ -241,7 +248,9 @@ describe('MessageList channel sender rendering', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: 'View info for Alice' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: i18n.t('messageList.viewInfoFor', { name: 'Alice' }) })
+    ).toBeInTheDocument();
   });
 
   it('renders valid channel references as clickable links and ignores invalid ones', async () => {
@@ -359,9 +368,9 @@ describe('MessageList channel sender rendering', () => {
       />
     );
 
-    expect(screen.queryByText('Unread messages')).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('messageList.unread'))).not.toBeInTheDocument();
 
-    const jump = await screen.findByRole('button', { name: 'Jump to unread' });
+    const jump = await screen.findByRole('button', { name: i18n.t('messageList.jumpToUnread') });
     await user.click(jump);
 
     // Hands off to the jump-to-message path rather than scrolling to a wrong row.
@@ -378,8 +387,10 @@ describe('MessageList channel sender rendering', () => {
       />
     );
 
-    expect(screen.queryByText('Unread messages')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Jump to unread' })).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('messageList.unread'))).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: i18n.t('messageList.jumpToUnread') })
+    ).not.toBeInTheDocument();
   });
 
   it('renders and dismisses an unread marker at the first unread message boundary', async () => {
@@ -405,14 +416,18 @@ describe('MessageList channel sender rendering', () => {
 
     render(<DismissibleUnreadMarkerList />);
 
-    const marker = screen.getByRole('button', { name: /Unread messages/i });
+    const marker = screen.getByRole('button', {
+      name: new RegExp(i18n.t('messageList.unread'), 'i'),
+    });
     expect(marker).toBeInTheDocument();
     expect(screen.getByText('older')).toBeInTheDocument();
     expect(screen.getByText('newer')).toBeInTheDocument();
 
     await user.click(marker);
 
-    expect(screen.queryByRole('button', { name: /Unread messages/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: new RegExp(i18n.t('messageList.unread'), 'i') })
+    ).not.toBeInTheDocument();
   });
 
   it('shows a jump-to-unread button and dismisses it after use without hiding the marker', async () => {
@@ -426,14 +441,16 @@ describe('MessageList channel sender rendering', () => {
       <MessageList messages={messages} contacts={[]} loading={false} unreadMarkerMessageId={2} />
     );
 
-    const jumpButton = screen.getByRole('button', { name: 'Jump to unread' });
+    const jumpButton = screen.getByRole('button', { name: i18n.t('messageList.jumpToUnread') });
     expect(jumpButton).toBeInTheDocument();
-    expect(screen.getByText('Unread messages')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('messageList.unread'))).toBeInTheDocument();
 
     await user.click(jumpButton);
 
-    expect(screen.queryByRole('button', { name: 'Jump to unread' })).not.toBeInTheDocument();
-    expect(screen.getByText('Unread messages')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: i18n.t('messageList.jumpToUnread') })
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(i18n.t('messageList.unread'))).toBeInTheDocument();
     expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 
@@ -448,10 +465,12 @@ describe('MessageList channel sender rendering', () => {
       <MessageList messages={messages} contacts={[]} loading={false} unreadMarkerMessageId={2} />
     );
 
-    await user.click(screen.getByRole('button', { name: 'Dismiss jump to unread' }));
+    await user.click(screen.getByRole('button', { name: i18n.t('messageList.dismissJump') }));
 
-    expect(screen.queryByRole('button', { name: 'Jump to unread' })).not.toBeInTheDocument();
-    expect(screen.getByText('Unread messages')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: i18n.t('messageList.jumpToUnread') })
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(i18n.t('messageList.unread'))).toBeInTheDocument();
     expect(scrollIntoViewMock).not.toHaveBeenCalled();
   });
 
@@ -461,7 +480,7 @@ describe('MessageList channel sender rendering', () => {
       writable: true,
       value: function () {
         const element = this as HTMLElement;
-        if (element.textContent?.includes('Unread messages')) {
+        if (element.textContent?.includes(i18n.t('messageList.unread'))) {
           return {
             top: 200,
             bottom: 240,
@@ -510,8 +529,10 @@ describe('MessageList channel sender rendering', () => {
       <MessageList messages={messages} contacts={[]} loading={false} unreadMarkerMessageId={2} />
     );
 
-    expect(screen.getByText('Unread messages')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Jump to unread' })).not.toBeInTheDocument();
+    expect(screen.getByText(i18n.t('messageList.unread'))).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: i18n.t('messageList.jumpToUnread') })
+    ).not.toBeInTheDocument();
   });
   it('mounts only a window of rows for a long history', () => {
     const messages = Array.from({ length: 500 }, (_, i) =>
@@ -811,7 +832,7 @@ describe('MessageList Open reactions and replies', () => {
     await user.click(screen.getByRole('button', { name: i18n.t('messageList.actions') }));
     await user.click(screen.getByRole('menuitem', { name: i18n.t('messageList.messageDetails') }));
 
-    expect(screen.getByText('Message Status')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('messageList.messageStatus'))).toBeInTheDocument();
   });
 
   it('deletes a message after confirmation', async () => {

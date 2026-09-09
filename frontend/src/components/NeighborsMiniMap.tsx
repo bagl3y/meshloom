@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -32,6 +33,7 @@ interface Props {
 }
 
 export function NeighborsMiniMap({ neighbors, radioLat, radioLon, radioName }: Props) {
+  const { t } = useTranslation();
   const valid = neighbors.filter(
     (n): n is Neighbor & { lat: number; lon: number } => n.lat != null && n.lon != null
   );
@@ -47,7 +49,7 @@ export function NeighborsMiniMap({ neighbors, radioLat, radioLon, radioName }: P
     <div
       className="min-h-48 flex-1 rounded border border-border overflow-hidden"
       role="img"
-      aria-label="Map showing repeater neighbor locations"
+      aria-label={t('repeater.mapAria')}
     >
       <MapContainer
         center={center}
@@ -90,7 +92,7 @@ export function NeighborsMiniMap({ neighbors, radioLat, radioLon, radioName }: P
             }}
           >
             <Popup>
-              <span className="text-sm font-medium">{radioName || 'Our Radio'}</span>
+              <span className="text-sm font-medium">{radioName || t('repeater.ourRadio')}</span>
             </Popup>
           </CircleMarker>
         )}

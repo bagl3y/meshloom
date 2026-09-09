@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import './eSlices';
 import { TracePane } from '../components/TracePane';
+import i18n from '../i18n';
 import type { Contact, RadioConfig, RadioTraceResponse } from '../types';
 import { CONTACT_TYPE_REPEATER } from '../types';
 
@@ -30,6 +32,16 @@ function makeContact(
     first_seen: null,
     ...overrides,
   };
+}
+
+function addRepeaterAria(name: string) {
+  return i18n.t('trace.addRepeaterAria', { name });
+}
+
+const addRepeaterPrefix = i18n.t('trace.addRepeaterAria', { name: '' }).trimEnd();
+
+function isAddRepeaterButton(accessibleName: string) {
+  return accessibleName.startsWith(addRepeaterPrefix);
 }
 
 const config: RadioConfig = {
@@ -68,11 +80,15 @@ describe('TracePane', () => {
     expect(screen.queryByText('Prefix Relay')).not.toBeInTheDocument();
     expect(screen.queryByText('Client Node')).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Search repeaters'), { target: { value: 'beta' } });
+    fireEvent.change(screen.getByLabelText(i18n.t('trace.searchAria')), {
+      target: { value: 'beta' },
+    });
     expect(screen.queryByText('Relay Alpha')).not.toBeInTheDocument();
     expect(screen.getByText('Relay Beta')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Search repeaters'), { target: { value: '111111' } });
+    fireEvent.change(screen.getByLabelText(i18n.t('trace.searchAria')), {
+      target: { value: '111111' },
+    });
     expect(screen.getByText('Relay Alpha')).toBeInTheDocument();
   });
 
@@ -113,13 +129,21 @@ describe('TracePane', () => {
       <TracePane config={config} onRunTracePath={onRunTracePath} contacts={[relayA, relayB]} />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay alpha/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay beta/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('trace.addRepeaterAria', { name: 'Relay Alpha' }) })
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('trace.addRepeaterAria', { name: 'Relay Beta' }) })
+    );
 
-    expect(screen.getByText(/2 hops selected · 4-byte trace/)).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('trace.hopsSelected', { count: 2, bytes: 4 }))
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /move relay beta up/i }));
-    fireEvent.click(screen.getByRole('button', { name: /send trace/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('trace.moveUp', { name: 'Relay Beta' }) })
+    );
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.send') }));
 
     await waitFor(() => {
       expect(onRunTracePath).toHaveBeenCalledWith(4, [
@@ -128,14 +152,22 @@ describe('TracePane', () => {
       ]);
     });
 
-    expect(screen.getByRole('heading', { name: 'Results (6.0s)' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: i18n.t('trace.resultsWithTime', { time: '6.0' }) })
+    ).toBeInTheDocument();
     expect(screen.getByText('+7.5 dB')).toBeInTheDocument();
     expect(screen.getByText('+5.0 dB')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /remove relay alpha/i }));
-    expect(screen.getByText(/1 hop selected · 4-byte trace/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /remove relay beta/i }));
-    expect(screen.getByText('No hops selected')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('trace.remove', { name: 'Relay Alpha' }) })
+    );
+    expect(
+      screen.getByText(i18n.t('trace.hopsSelected', { count: 1, bytes: 4 }))
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('trace.remove', { name: 'Relay Beta' }) })
+    );
+    expect(screen.getByText(i18n.t('trace.noHopsSelected'))).toBeInTheDocument();
   });
 
   it('reverse link appends the reversed hop chain to build a return path (issue #287)', async () => {
@@ -159,17 +191,27 @@ describe('TracePane', () => {
     );
 
     // Single hop: Reverse link is a no-op (and disabled).
-    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay alpha/i }));
-    expect(screen.getByRole('button', { name: /reverse link/i })).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('trace.addRepeaterAria', { name: 'Relay Alpha' }) })
+    );
+    expect(screen.getByRole('button', { name: i18n.t('trace.reverseLink') })).toBeDisabled();
 
     // R1, R2, R3 -> append R2, R1 => R1, R2, R3, R2, R1.
-    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay beta/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay charlie/i }));
-    fireEvent.click(screen.getByRole('button', { name: /reverse link/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('trace.addRepeaterAria', { name: 'Relay Beta' }) })
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: i18n.t('trace.addRepeaterAria', { name: 'Relay Charlie' }),
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.reverseLink') }));
 
-    expect(screen.getByText(/5 hops selected · 4-byte trace/)).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('trace.hopsSelected', { count: 5, bytes: 4 }))
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /send trace/i }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.send') }));
     await waitFor(() => {
       expect(onRunTracePath).toHaveBeenCalledWith(4, [
         { public_key: relayA.public_key },
@@ -186,11 +228,17 @@ describe('TracePane', () => {
 
     render(<TracePane config={config} onRunTracePath={vi.fn()} contacts={[relayA]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay alpha/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay alpha/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('trace.addRepeaterAria', { name: 'Relay Alpha' }) })
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('trace.addRepeaterAria', { name: 'Relay Alpha' }) })
+    );
 
-    expect(screen.getByText(/2 hops selected · 4-byte trace/)).toBeInTheDocument();
-    expect(screen.getByText('Added 2 times')).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('trace.hopsSelected', { count: 2, bytes: 4 }))
+    ).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('trace.addedTimes', { count: 2 }))).toBeInTheDocument();
   });
 
   it('adds custom hops from the modal and locks later custom hops to the same byte width', async () => {
@@ -227,16 +275,24 @@ describe('TracePane', () => {
 
     render(<TracePane config={config} onRunTracePath={onRunTracePath} contacts={[relayA]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Custom path' }));
-    fireEvent.click(screen.getByRole('button', { name: '1-byte' }));
-    fireEvent.change(screen.getByLabelText('Repeater prefix'), { target: { value: 'ae' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add custom hop' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.customPath') }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.nByte', { count: 1 }) }));
+    fireEvent.change(screen.getByLabelText(i18n.t('trace.repeaterPrefix')), {
+      target: { value: 'ae' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.addCustomHop') }));
 
-    expect(screen.getByText(/1 hop selected · 1-byte trace/)).toBeInTheDocument();
-    expect(screen.getByText('AE (1-byte)')).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('trace.hopsSelected', { count: 1, bytes: 1 }))
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('trace.customHopBytes', { hex: 'AE', count: 1 }))
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay alpha/i }));
-    fireEvent.click(screen.getByRole('button', { name: /send trace/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('trace.addRepeaterAria', { name: 'Relay Alpha' }) })
+    );
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.send') }));
 
     await waitFor(() => {
       expect(onRunTracePath).toHaveBeenCalledWith(1, [
@@ -245,10 +301,14 @@ describe('TracePane', () => {
       ]);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Custom path' }));
-    expect(screen.getByRole('button', { name: '2-byte' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '4-byte' })).toBeDisabled();
-    expect(screen.getByText(/custom hops are locked to 1-byte prefixes/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.customPath') }));
+    expect(
+      screen.getByRole('button', { name: i18n.t('trace.nByte', { count: 2 }) })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: i18n.t('trace.nByte', { count: 4 }) })
+    ).toBeDisabled();
+    expect(screen.getByText(i18n.t('trace.customLocked', { bytes: 1 }))).toBeInTheDocument();
   });
 
   it('Traced lists only trace-used repeaters in MRU order, persisted locally (issue #286)', async () => {
@@ -273,33 +333,41 @@ describe('TracePane', () => {
 
     const rowNames = () =>
       screen
-        .queryAllByRole('button', { name: /^add repeater/i })
+        .queryAllByRole('button', { name: isAddRepeaterButton })
         .map((row) => row.getAttribute('aria-label'));
 
     // No history yet: Traced shows an explanatory empty state, not the full list.
-    fireEvent.click(screen.getByRole('button', { name: 'Traced' }));
-    expect(screen.getByText(/no repeaters have been used in traces yet/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.sortTraced') }));
+    expect(screen.getByText(i18n.t('trace.emptyTracedNone'))).toBeInTheDocument();
     expect(rowNames()).toEqual([]);
 
     // Build and run a trace with B from the A/Z list.
-    fireEvent.click(screen.getByRole('button', { name: 'A/Z' }));
-    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay beta/i }));
-    fireEvent.click(screen.getByRole('button', { name: /send trace/i }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.sortAlpha') }));
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('trace.addRepeaterAria', { name: 'Relay Beta' }) })
+    );
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.send') }));
     await waitFor(() => expect(onRunTracePath).toHaveBeenCalledTimes(1));
 
     // Traced lists only B; untraced A and C are filtered out.
-    fireEvent.click(screen.getByRole('button', { name: 'Traced' }));
-    expect(rowNames()).toEqual(['Add repeater Relay Beta']);
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.sortTraced') }));
+    expect(rowNames()).toEqual([addRepeaterAria('Relay Beta')]);
 
     // A second trace with C bumps it above B.
-    fireEvent.click(screen.getByRole('button', { name: 'A/Z' }));
-    fireEvent.click(screen.getByRole('button', { name: /remove relay beta/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay charlie/i }));
-    fireEvent.click(screen.getByRole('button', { name: /send trace/i }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.sortAlpha') }));
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('trace.remove', { name: 'Relay Beta' }) })
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: i18n.t('trace.addRepeaterAria', { name: 'Relay Charlie' }),
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.send') }));
     await waitFor(() => expect(onRunTracePath).toHaveBeenCalledTimes(2));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Traced' }));
-    expect(rowNames()).toEqual(['Add repeater Relay Charlie', 'Add repeater Relay Beta']);
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.sortTraced') }));
+    expect(rowNames()).toEqual([addRepeaterAria('Relay Charlie'), addRepeaterAria('Relay Beta')]);
 
     // Order persists across remounts via localStorage.
     unmount();
@@ -310,8 +378,8 @@ describe('TracePane', () => {
         contacts={[relayA, relayB, relayC]}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Traced' }));
-    expect(rowNames()).toEqual(['Add repeater Relay Charlie', 'Add repeater Relay Beta']);
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.sortTraced') }));
+    expect(rowNames()).toEqual([addRepeaterAria('Relay Charlie'), addRepeaterAria('Relay Beta')]);
   });
 
   it('seeds Traced from stored recent traces when no usage history exists', () => {
@@ -332,12 +400,12 @@ describe('TracePane', () => {
 
     render(<TracePane config={config} onRunTracePath={vi.fn()} contacts={[relayA, relayB]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Traced' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.sortTraced') }));
     expect(
       screen
-        .getAllByRole('button', { name: /^add repeater/i })
+        .getAllByRole('button', { name: isAddRepeaterButton })
         .map((row) => row.getAttribute('aria-label'))
-    ).toEqual(['Add repeater Relay Beta']);
+    ).toEqual([addRepeaterAria('Relay Beta')]);
   });
 
   it('Dist. hides repeaters without a known distance when the radio has a location', () => {
@@ -353,13 +421,15 @@ describe('TracePane', () => {
     expect(screen.getByText('Relay Located')).toBeInTheDocument();
     expect(screen.getByText('Relay Mystery')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Dist.' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.sortDistance') }));
     expect(screen.getByText('Relay Located')).toBeInTheDocument();
     expect(screen.queryByText('Relay Mystery')).not.toBeInTheDocument();
 
     // Without a local radio location, the filter is skipped (note explains instead).
-    fireEvent.change(screen.getByLabelText('Search repeaters'), { target: { value: 'mystery' } });
-    expect(screen.getByText(/no repeaters with a known distance matched/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(i18n.t('trace.searchAria')), {
+      target: { value: 'mystery' },
+    });
+    expect(screen.getByText(i18n.t('trace.emptyDistanceNoMatch'))).toBeInTheDocument();
   });
 
   it('caps the rendered repeater list and reports the overflow', () => {
@@ -369,8 +439,10 @@ describe('TracePane', () => {
 
     render(<TracePane config={config} onRunTracePath={vi.fn()} contacts={contacts} />);
 
-    expect(screen.getAllByRole('button', { name: /^add repeater/i })).toHaveLength(60);
-    expect(screen.getByText(/showing the first 60 of 70 repeaters/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: isAddRepeaterButton })).toHaveLength(60);
+    expect(
+      screen.getByText(i18n.t('trace.showingFirst', { shown: 60, total: 70 }))
+    ).toBeInTheDocument();
   });
 
   it('drops an in-flight result after the draft path changes', async () => {
@@ -388,17 +460,23 @@ describe('TracePane', () => {
       <TracePane config={config} onRunTracePath={onRunTracePath} contacts={[relayA, relayB]} />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay alpha/i }));
-    fireEvent.click(screen.getByRole('button', { name: /send trace/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('trace.addRepeaterAria', { name: 'Relay Alpha' }) })
+    );
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('trace.send') }));
 
     await waitFor(() => {
       expect(onRunTracePath).toHaveBeenCalledWith(4, [{ public_key: relayA.public_key }]);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /^add repeater relay beta/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: i18n.t('trace.addRepeaterAria', { name: 'Relay Beta' }) })
+    );
 
-    expect(screen.getByText(/2 hops selected · 4-byte trace/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /send trace/i })).toBeEnabled();
+    expect(
+      screen.getByText(i18n.t('trace.hopsSelected', { count: 2, bytes: 4 }))
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: i18n.t('trace.send') })).toBeEnabled();
 
     await act(async () => {
       resolveTrace?.({
@@ -423,7 +501,9 @@ describe('TracePane', () => {
       });
     });
 
-    expect(screen.queryByRole('heading', { name: 'Results (6.0s)' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: i18n.t('trace.resultsWithTime', { time: '6.0' }) })
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('+7.5 dB')).not.toBeInTheDocument();
     // The Results section stays hidden entirely until a result or error lands.
     expect(screen.queryByRole('heading', { name: /^results/i })).not.toBeInTheDocument();

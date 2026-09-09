@@ -3,7 +3,29 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { isAbortError, api } from '../api';
+import { ApiError, formatApiError, getApiErrorCode, isAbortError, api } from '../api';
+import i18n from '../i18n';
+
+describe('formatApiError', () => {
+  it('returns the backend message when no code is present', () => {
+    expect(formatApiError(new ApiError('Radio not connected', 423), i18n.t)).toBe(
+      'Radio not connected'
+    );
+  });
+
+  it('translates a known error code', () => {
+    const err = new ApiError('Radio not connected', 423, { code: 'radio_not_connected' });
+    i18n.addResource('en', 'translation', 'errors.radio_not_connected', 'Radio is offline');
+    i18n.addResource('fr', 'translation', 'errors.radio_not_connected', 'Radio hors ligne');
+    expect(getApiErrorCode(err.detail)).toEqual({ code: 'radio_not_connected', params: {} });
+    expect(formatApiError(err, i18n.t)).toBe(i18n.t('errors.radio_not_connected'));
+  });
+
+  it('falls back to Error.message for unknown values', () => {
+    expect(formatApiError(new Error('boom'), i18n.t)).toBe('boom');
+    expect(formatApiError('plain', i18n.t)).toBe('plain');
+  });
+});
 
 describe('isAbortError', () => {
   it('returns true for AbortError', () => {
@@ -134,6 +156,44 @@ describe('fetchJson (via api methods)', () => {
       });
 
       await expect(api.getHealth()).rejects.toThrow('Radio not connected');
+    });
+
+    it('extracts message from object detail with a stable code', async () => {
+      installMockFetch();
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 423,
+        statusText: 'Locked',
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              detail: { code: 'radio_not_connected', message: 'Radio not connected' },
+            })
+          ),
+      });
+
+      await expect(api.getHealth()).rejects.toMatchObject({
+        message: 'Radio not connected',
+        status: 423,
+        detail: { code: 'radio_not_connected', message: 'Radio not connected' },
+      });
+    });
+
+    it('keeps reason-based object details for telemetry-style errors', async () => {
+      installMockFetch();
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        statusText: 'Conflict',
+        text: () =>
+          Promise.resolve(JSON.stringify({ detail: { reason: 'ambiguous', candidates: [] } })),
+      });
+
+      await expect(api.getHealth()).rejects.toMatchObject({
+        message: 'ambiguous',
+        status: 409,
+        detail: { reason: 'ambiguous', candidates: [] },
+      });
     });
 
     it('uses raw text when error response is not JSON', async () => {

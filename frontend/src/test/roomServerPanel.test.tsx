@@ -2,6 +2,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { RoomServerPanel, resetRoomCacheForTests } from '../components/RoomServerPanel';
+import i18n from '../i18n';
+import fEn from '../i18n/locales/slices/f.en.json';
+import fFr from '../i18n/locales/slices/f.fr.json';
+
+i18n.addResourceBundle('en', 'translation', fEn, true, true);
+i18n.addResourceBundle('fr', 'translation', fFr, true, true);
 import { resetRememberedServerPasswordsForTests } from '../hooks/useRememberedServerPassword';
 import type { Contact } from '../types';
 
@@ -59,23 +65,21 @@ describe('RoomServerPanel', () => {
     mockApi.roomLogin.mockResolvedValueOnce({
       status: 'timeout',
       authenticated: false,
-      message:
-        "No login confirmation was heard from the room server. You're free to try sending messages; try logging in again if authenticated actions fail.",
+      message: i18n.t('room.loginUnconfirmedFallback'),
     });
     const onAuthenticatedChange = vi.fn();
 
     render(<RoomServerPanel contact={roomContact} onAuthenticatedChange={onAuthenticatedChange} />);
 
-    fireEvent.click(screen.getByText('Login with Existing Access / Guest'));
+    fireEvent.click(screen.getByText(i18n.t('room.loginGuest')));
 
     await waitFor(() => {
-      expect(screen.getByText('Show Tools')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('room.showTools'))).toBeInTheDocument();
     });
-    expect(screen.getByText('Show Tools')).toBeInTheDocument();
-    expect(screen.getByText('Retry Existing-Access Login')).toBeInTheDocument();
-    expect(mockToast.warning).toHaveBeenCalledWith("Couldn't confirm room login", {
-      description:
-        "No login confirmation was heard from the room server. You're free to try sending messages; try logging in again if authenticated actions fail.",
+    expect(screen.getByText(i18n.t('room.showTools'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('room.retryExistingAccess'))).toBeInTheDocument();
+    expect(mockToast.warning).toHaveBeenCalledWith(i18n.t('room.loginUnconfirmed'), {
+      description: i18n.t('room.loginUnconfirmedFallback'),
     });
     expect(onAuthenticatedChange).toHaveBeenLastCalledWith(true);
   });
@@ -95,16 +99,16 @@ describe('RoomServerPanel', () => {
 
     render(<RoomServerPanel contact={roomContact} />);
 
-    fireEvent.change(screen.getByLabelText('Repeater password'), {
+    fireEvent.change(screen.getByLabelText(i18n.t('repeater.passwordAria')), {
       target: { value: 'secret-room-password' },
     });
-    fireEvent.click(screen.getByText('Login with Password'));
+    fireEvent.click(screen.getByText(i18n.t('repeater.loginPassword')));
 
     await waitFor(() => {
-      expect(screen.getByText('Retry Password Login')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('repeater.retryPassword'))).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Retry Password Login'));
+    fireEvent.click(screen.getByText(i18n.t('repeater.retryPassword')));
 
     await waitFor(() => {
       expect(mockApi.roomLogin).toHaveBeenNthCalledWith(
@@ -129,23 +133,23 @@ describe('RoomServerPanel', () => {
 
     render(<RoomServerPanel contact={roomContact} />);
 
-    fireEvent.click(screen.getByLabelText('Remember password'));
-    fireEvent.change(screen.getByLabelText('Repeater password'), {
+    fireEvent.click(screen.getByLabelText(i18n.t('repeater.rememberPassword')));
+    fireEvent.change(screen.getByLabelText(i18n.t('repeater.passwordAria')), {
       target: { value: 'wrong-password' },
     });
-    fireEvent.click(screen.getByText('Login with Password'));
+    fireEvent.click(screen.getByText(i18n.t('repeater.loginPassword')));
 
     await waitFor(() => {
-      expect(screen.getByText('Re-enter Password')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('repeater.reenterPassword'))).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Re-enter Password'));
+    fireEvent.click(screen.getByText(i18n.t('repeater.reenterPassword')));
 
     await waitFor(() => {
-      expect(screen.getByText('Login with Password')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('repeater.loginPassword'))).toBeInTheDocument();
     });
-    expect(screen.getByLabelText('Repeater password')).toHaveValue('');
-    expect(screen.queryByText('Re-enter Password')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(i18n.t('repeater.passwordAria'))).toHaveValue('');
+    expect(screen.queryByText(i18n.t('repeater.reenterPassword'))).not.toBeInTheDocument();
     expect(localStorage.getItem(`remoteterm-server-password:room:${roomContact.public_key}`)).toBe(
       null
     );
@@ -160,16 +164,16 @@ describe('RoomServerPanel', () => {
 
     render(<RoomServerPanel contact={roomContact} />);
 
-    fireEvent.click(screen.getByText('Login with Existing Access / Guest'));
+    fireEvent.click(screen.getByText(i18n.t('room.loginGuest')));
 
     await waitFor(() => {
-      expect(screen.getByText('Show Tools')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('room.showTools'))).toBeInTheDocument();
     });
 
-    expect(screen.queryByText('Login confirmed by the room server.')).not.toBeInTheDocument();
-    expect(screen.queryByText('Retry Password Login')).not.toBeInTheDocument();
-    expect(screen.queryByText('Retry Existing-Access Login')).not.toBeInTheDocument();
-    expect(mockToast.success).toHaveBeenCalledWith('Login confirmed by the room server.');
+    expect(screen.queryByText(i18n.t('room.loginConfirmed'))).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('repeater.retryPassword'))).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('room.retryExistingAccess'))).not.toBeInTheDocument();
+    expect(mockToast.success).toHaveBeenCalledWith(i18n.t('room.loginConfirmed'));
   });
   it('auto-logs in once when a password is already remembered', async () => {
     localStorage.setItem(
@@ -181,7 +185,7 @@ describe('RoomServerPanel', () => {
     const { rerender } = render(<RoomServerPanel contact={roomContact} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Show Tools')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('room.showTools'))).toBeInTheDocument();
     });
     rerender(<RoomServerPanel contact={roomContact} />);
 
@@ -193,7 +197,7 @@ describe('RoomServerPanel', () => {
     render(<RoomServerPanel contact={roomContact} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Login with Password')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('repeater.loginPassword'))).toBeInTheDocument();
     });
     expect(mockApi.roomLogin).not.toHaveBeenCalled();
   });
@@ -212,7 +216,7 @@ describe('RoomServerPanel', () => {
     });
     rerender(<RoomServerPanel contact={roomContact} />);
     await waitFor(() => {
-      expect(screen.getByText('Retry Password Login')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('repeater.retryPassword'))).toBeInTheDocument();
     });
 
     expect(mockApi.roomLogin).toHaveBeenCalledTimes(1);
@@ -223,12 +227,12 @@ describe('RoomServerPanel', () => {
 
     render(<RoomServerPanel contact={roomContact} />);
 
-    fireEvent.click(screen.getByText('Login with Existing Access / Guest'));
+    fireEvent.click(screen.getByText(i18n.t('room.loginGuest')));
     await waitFor(() => {
-      expect(screen.getByText('Sync Now')).toBeInTheDocument();
+      expect(screen.getByText(i18n.t('room.syncNow'))).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Sync Now'));
+    fireEvent.click(screen.getByText(i18n.t('room.syncNow')));
 
     await waitFor(() => {
       expect(mockApi.roomLogin).toHaveBeenCalledTimes(2);

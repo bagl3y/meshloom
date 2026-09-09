@@ -35,6 +35,7 @@ async def test_db():
         contacts,
         directory,
         messages,
+        push_subscriptions,
         raw_packets,
         repeater_telemetry,
         settings,
@@ -55,6 +56,7 @@ async def test_db():
         fanout_repo,
         repeater_telemetry,
         contact_telemetry,
+        push_subscriptions,
     ]
     originals = [(mod, mod.db) for mod in submodules]
 

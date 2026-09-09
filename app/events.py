@@ -55,6 +55,8 @@ class MessageDeletedPayload(TypedDict):
 class ToastPayload(TypedDict):
     message: str
     details: NotRequired[str]
+    code: NotRequired[str]
+    params: NotRequired[dict[str, Any]]
 
 
 _PAYLOAD_ADAPTERS: dict[WsEventType, TypeAdapter[Any]] = {

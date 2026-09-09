@@ -27,6 +27,8 @@ export interface ChannelDeletedPayload {
 export interface ToastPayload {
   message: string;
   details?: string;
+  code?: string;
+  params?: Record<string, unknown>;
 }
 
 export type KnownWsEvent =

@@ -1098,6 +1098,7 @@ class TestPostConnectSetupOrdering:
         mock_broadcast_error.assert_called_once_with(
             "Radio startup appears stuck",
             "Initial radio offload took too long. Reboot the radio and restart the server.",
+            code="radio_startup_stuck",
         )
         mock_broadcast_health.assert_not_called()
 

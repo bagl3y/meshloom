@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { ApiError, api } from '../api';
+import { ApiError, api, formatApiError } from '../api';
 import { toast } from '../components/ui/sonner';
+import i18n from '../i18n';
 import type {
   Conversation,
   PaneName,
@@ -130,13 +131,25 @@ const repeaterDashboardCache = new Map<string, RepeaterDashboardCacheEntry>();
 function getLoginToastTitle(status: string): string {
   switch (status) {
     case 'timeout':
-      return 'Login confirmation not heard';
+      return i18n.t('toast.loginNotHeard');
     case 'error':
-      return 'Login not confirmed';
+      return i18n.t('toast.loginNotConfirmed');
     default:
-      return 'Repeater login not confirmed';
+      return i18n.t('toast.repeaterLoginNotConfirmed');
   }
 }
+
+const PANE_LABEL_KEYS: Record<PaneName, string> = {
+  status: 'repeater.telemetry',
+  nodeInfo: 'repeater.nodeInfo',
+  neighbors: 'repeater.neighbors',
+  radioSettings: 'repeater.radioSettings',
+  acl: 'repeater.acl',
+  advertIntervals: 'repeater.advertIntervals',
+  ownerInfo: 'repeater.ownerInfo',
+  lppTelemetry: 'repeater.lppSensors',
+  regions: 'repeater.regions',
+};
 
 function clonePaneData(data: PaneData): PaneData {
   return { ...data };
@@ -348,18 +361,18 @@ export function useRepeaterDashboard(
         setLastLoginAttempt(buildServerLoginAttemptFromResponse(method, result, 'repeater'));
         setLoggedIn(true);
         if (!result.authenticated) {
-          const msg = result.message ?? 'Repeater login was not confirmed';
+          const msg = result.message ?? i18n.t('repeater.loginNotConfirmed');
           setLoginError(msg);
           toast.error(getLoginToastTitle(result.status), { description: msg });
         }
       } catch (err) {
         if (activeIdRef.current !== conversationId) return;
-        const msg = err instanceof Error ? err.message : 'Login failed';
+        const msg = err instanceof Error ? err.message : i18n.t('toast.loginFailed');
         setLastLoginAttempt(buildServerLoginAttemptFromError(method, msg, 'repeater'));
         setLoggedIn(true);
         setLoginError(msg);
-        toast.error('Login request failed', {
-          description: `${msg}. The dashboard is still available, but repeater operations may fail until a login succeeds.`,
+        toast.error(i18n.t('toast.loginRequestFailed'), {
+          description: i18n.t('toast.loginRequestFailedDetail', { message: msg }),
         });
       } finally {
         if (activeIdRef.current === conversationId) {
@@ -446,7 +459,7 @@ export function useRepeaterDashboard(
         } catch (err) {
           if (!mountedRef.current || activeIdRef.current !== conversationId) return;
 
-          const msg = err instanceof Error ? err.message : 'Request failed';
+          const msg = err instanceof Error ? err.message : i18n.t('toast.requestFailed');
           // 4xx means the request itself failed (e.g. 422 mesh timeout); retrying
           // just floods the mesh with duplicate requests.
           const retryable = !(err instanceof ApiError && err.status >= 400 && err.status < 500);
@@ -466,7 +479,9 @@ export function useRepeaterDashboard(
               ...prev,
               [pane]: errorState,
             }));
-            toast.error(`Failed to fetch ${pane}`, { description: msg });
+            toast.error(i18n.t('toast.fetchPaneFailed', { pane: i18n.t(PANE_LABEL_KEYS[pane]) }), {
+              description: formatApiError(err, i18n.t) || msg,
+            });
             return;
           } else {
             // Wait before retrying
@@ -526,10 +541,15 @@ export function useRepeaterDashboard(
         ]);
       } catch (err) {
         if (activeIdRef.current !== conversationId) return;
-        const msg = err instanceof Error ? err.message : 'Command failed';
+        const msg = err instanceof Error ? err.message : i18n.t('toast.commandFailed');
         setConsoleHistory((prev) => [
           ...prev,
-          { command, response: `Error: ${msg}`, timestamp: now, outgoing: false },
+          {
+            command,
+            response: i18n.t('repeater.consoleError', { message: msg }),
+            timestamp: now,
+            outgoing: false,
+          },
         ]);
       } finally {
         if (activeIdRef.current === conversationId) {

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { RepeaterPane, NotFetched, KvRow } from './repeaterPaneShared';
 import type { RepeaterOwnerInfoResponse, PaneState } from '../../types';
 
@@ -21,16 +22,22 @@ export function OwnerInfoPane({
   onRefresh: () => void;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
-    <RepeaterPane title="Owner Info" state={state} onRefresh={onRefresh} disabled={disabled}>
+    <RepeaterPane
+      title={t('repeater.ownerInfo')}
+      state={state}
+      onRefresh={onRefresh}
+      disabled={disabled}
+    >
       {!data ? (
         <NotFetched />
       ) : (
         <div className="space-y-1">
-          <LabeledBlock label="Owner Info" value={data.owner_info ?? '—'} />
-          <KvRow label="Firmware" value={data.firmware_version ?? '—'} />
-          {data.name && <KvRow label="Name" value={data.name} />}
-          <KvRow label="Guest Password" value={data.guest_password ?? '—'} />
+          <LabeledBlock label={t('repeater.ownerInfo')} value={data.owner_info ?? '—'} />
+          <KvRow label={t('repeater.firmware')} value={data.firmware_version ?? '—'} />
+          {data.name && <KvRow label={t('repeater.name')} value={data.name} />}
+          <KvRow label={t('repeater.guestPassword')} value={data.guest_password ?? '—'} />
         </div>
       )}
     </RepeaterPane>

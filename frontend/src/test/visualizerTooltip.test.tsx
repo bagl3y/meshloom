@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import './eSlices';
 import { VisualizerTooltip } from '../components/visualizer/VisualizerTooltip';
+import i18n from '../i18n';
 import type { PacketNetworkNode } from '../networkGraph/packetNetworkGraph';
 
 function createNode(
@@ -76,16 +78,34 @@ describe('VisualizerTooltip', () => {
     );
 
     expect(screen.getByText('Likely Relay')).toBeInTheDocument();
-    expect(screen.getByText('ID: ?32')).toBeInTheDocument();
-    expect(screen.getByText('Type: repeater (ambiguous)')).toBeInTheDocument();
-    expect(screen.getByText('Probably: Likely Relay')).toBeInTheDocument();
-    expect(screen.getByText('Other possible: Relay A, Relay B')).toBeInTheDocument();
-    expect(screen.getByText('Last active: 1m 30s ago')).toBeInTheDocument();
-    expect(screen.getByText('Reason: Relayed GT')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('visualizer.id', { id: '?32' }))).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        i18n.t('visualizer.typeAmbiguous', { type: i18n.t('visualizer.nodeType.repeater') })
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('visualizer.probably', { name: 'Likely Relay' }))
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('visualizer.otherPossible', { names: 'Relay A, Relay B' }))
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        i18n.t('visualizer.lastActive', {
+          time: i18n.t('visualizer.minutesSecondsAgo', { minutes: 1, seconds: 30 }),
+        })
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        i18n.t('visualizer.reason', { reason: i18n.t('visualizer.reasonRelayed', { label: 'GT' }) })
+      )
+    ).toBeInTheDocument();
     expect(screen.getByText('Neighbor Node')).toBeInTheDocument();
     expect(screen.getByText('(Alt Neighbor)')).toBeInTheDocument();
     expect(screen.getByText('44')).toBeInTheDocument();
-    expect(screen.getByText('(hidden)')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('visualizer.hidden'))).toBeInTheDocument();
 
     vi.useRealTimers();
   });

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { GroupTextCracker, type ProgressReport } from 'meshcore-hashtag-cracker';
 import NoSleep from 'nosleep.js';
 import type { RawPacket, Channel } from '../types';
@@ -36,6 +37,7 @@ export function CrackerPanel({
   onRunningChange,
   visible = false,
 }: CrackerPanelProps) {
+  const { t } = useTranslation();
   const packets = useRawPackets();
   const [isRunning, setIsRunning] = useState(false);
   const [maxLength, setMaxLength] = useState(6);
@@ -97,11 +99,11 @@ export function CrackerPanel({
       })
       .catch((err) => {
         console.error('Failed to load wordlist:', err);
-        toast.error('Failed to load wordlist', {
-          description: 'Channel finder will not be available',
+        toast.error(t('cracker.wordlistFailed'), {
+          description: t('cracker.wordlistFailedDetail'),
         });
       });
-  }, [visible, wordlistLoaded]);
+  }, [visible, wordlistLoaded, t]);
 
   // Fetch undecrypted packet count
   useEffect(() => {
@@ -356,9 +358,8 @@ export function CrackerPanel({
             }
           } catch (err) {
             console.error('Failed to create channel or decrypt historical:', err);
-            toast.error('Failed to save found channel', {
-              description:
-                err instanceof Error ? err.message : 'Channel discovered but could not be saved',
+            toast.error(t('cracker.saveFailed'), {
+              description: err instanceof Error ? err.message : t('cracker.saveFailedDetail'),
             });
           }
         }
@@ -403,16 +404,16 @@ export function CrackerPanel({
     if (isRunningRef.current) {
       setTimeout(() => processNext(), 100);
     }
-  }, [onChannelCreate]);
+  }, [onChannelCreate, t]);
 
   // Start/stop handlers
   const handleStart = () => {
     if (!gpuAvailable) {
-      toast.error('WebGPU not available', {
+      toast.error(t('cracker.webgpuTitle'), {
         description:
           typeof window !== 'undefined' && !window.isSecureContext
-            ? 'WebGPU requires HTTPS when not on localhost. Set up a certificate or configure your browser to treat this origin as secure.'
-            : 'Channel finder requires Chrome 113+ or Edge 113+ with WebGPU support.',
+            ? t('cracker.httpsToast')
+            : t('cracker.chromeRequired'),
       });
       return;
     }
@@ -436,7 +437,7 @@ export function CrackerPanel({
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <label htmlFor="cracker-max-length" className="text-sm text-muted-foreground">
-            Max Length:
+            {t('cracker.maxLength')}
           </label>
           <input
             id="cracker-max-length"
@@ -473,7 +474,7 @@ export function CrackerPanel({
             onChange={(e) => setRetryFailedAtNextLength(e.target.checked)}
             className="rounded"
           />
-          Retry failed at n+1
+          {t('cracker.retryFailed')}
         </label>
 
         <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
@@ -483,13 +484,15 @@ export function CrackerPanel({
             onChange={(e) => setDecryptHistorical(e.target.checked)}
             className="rounded"
           />
-          Decrypt historical packets if key found
+          {t('cracker.decryptHistorical')}
         </label>
         {decryptHistorical && (
           <span className="text-xs text-muted-foreground">
             {undecryptedPacketCount !== null && undecryptedPacketCount > 0
-              ? `(${undecryptedPacketCount.toLocaleString()} packets; messages will stream in as decrypted)`
-              : '(messages will stream in as decrypted)'}
+              ? t('cracker.historicalCount', {
+                  count: undecryptedPacketCount.toLocaleString(),
+                })
+              : t('cracker.historicalPlain')}
           </span>
         )}
 
@@ -500,7 +503,7 @@ export function CrackerPanel({
             onChange={(e) => setTwoWordMode(e.target.checked)}
             className="rounded"
           />
-          Try word pairs
+          {t('cracker.wordPairs')}
         </label>
 
         <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
@@ -510,7 +513,7 @@ export function CrackerPanel({
             onChange={(e) => setTurboMode(e.target.checked)}
             className="rounded"
           />
-          Turbo mode (experimental)
+          {t('cracker.turbo')}
         </label>
       </div>
 
@@ -526,28 +529,28 @@ export function CrackerPanel({
         )}
       >
         {isRunning
-          ? 'Stop Search'
+          ? t('cracker.stop')
           : gpuAvailable === false
-            ? 'GPU Not Available'
+            ? t('cracker.gpuUnavailable')
             : !wordlistLoaded
-              ? 'Loading dictionary...'
-              : 'Find Channels'}
+              ? t('cracker.loadingDict')
+              : t('cracker.findChannels')}
       </button>
 
       {/* Status */}
       <div className="flex gap-4 text-sm">
         <span className="text-muted-foreground">
-          Pending: <span className="text-foreground font-medium">{pendingCount}</span>
+          {t('cracker.pending')} <span className="text-foreground font-medium">{pendingCount}</span>
         </span>
         <span className="text-muted-foreground">
-          Found: <span className="text-success font-medium">{crackedCount}</span>
+          {t('cracker.found')} <span className="text-success font-medium">{crackedCount}</span>
         </span>
         <span className="text-muted-foreground">
-          Failed: <span className="text-destructive font-medium">{failedCount}</span>
+          {t('cracker.failed')} <span className="text-destructive font-medium">{failedCount}</span>
         </span>
         {skippedDuplicates > 0 && (
           <span className="text-muted-foreground">
-            Skipped (dup):{' '}
+            {t('cracker.skipped')}{' '}
             <span className="text-muted-foreground font-medium">{skippedDuplicates}</span>
           </span>
         )}
@@ -559,20 +562,20 @@ export function CrackerPanel({
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>
               {progress.phase === 'wordlist'
-                ? 'Dictionary'
+                ? t('cracker.phaseWordlist')
                 : progress.phase === 'wordlist-pairs'
-                  ? 'Word Pairs'
+                  ? t('cracker.phasePairs')
                   : progress.phase === 'bruteforce'
-                    ? 'Bruteforce'
-                    : 'Public Key'}
-              {progress.phase === 'bruteforce' && ` - Length ${progress.currentLength}`}:{' '}
+                    ? t('cracker.bruteforceLength', { length: progress.currentLength })
+                    : t('cracker.phasePubkey')}
+              {progress.phase !== 'bruteforce' ? ': ' : ': '}
               {progress.currentPosition}
             </span>
             <span>
               {progress.rateKeysPerSec >= 1e9
                 ? `${(progress.rateKeysPerSec / 1e9).toFixed(2)} Gkeys/s`
                 : `${(progress.rateKeysPerSec / 1e6).toFixed(1)} Mkeys/s`}{' '}
-              • ETA:{' '}
+              • {t('cracker.eta')}{' '}
               {progress.etaSeconds < 60
                 ? `${Math.round(progress.etaSeconds)}s`
                 : `${Math.round(progress.etaSeconds / 60)}m`}
@@ -584,7 +587,7 @@ export function CrackerPanel({
             aria-valuenow={Math.round(progress.percent)}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-label="Channel finder progress"
+            aria-label={t('cracker.progressAria')}
           >
             <div
               className="h-full bg-primary transition-all duration-200"
@@ -597,37 +600,31 @@ export function CrackerPanel({
       {/* GPU status */}
       {gpuAvailable === false && (
         <div className="text-sm text-destructive space-y-1.5" role="alert">
-          <p>WebGPU not available.</p>
+          <p>{t('cracker.webgpuUnavailable')}</p>
           {typeof window !== 'undefined' && !window.isSecureContext ? (
             <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2.5 text-xs text-destructive/90">
-              <p className="font-medium mb-1">WebGPU requires HTTPS when not on localhost.</p>
-              <p>To enable it:</p>
+              <p className="font-medium mb-1">{t('cracker.httpsRequired')}</p>
+              <p>{t('cracker.httpsEnable')}</p>
               <ul className="list-disc ml-4 mt-1 space-y-0.5">
-                <li>
-                  Set up a TLS certificate (see the HTTPS section of README_ADVANCED.md, or re-run
-                  the Docker setup script which can generate one automatically)
-                </li>
-                <li>
-                  Or configure your browser to treat this origin as secure (sometimes called
-                  &ldquo;insecure origins treated as secure&rdquo; in browser flags)
-                </li>
+                <li>{t('cracker.httpsCert')}</li>
+                <li>{t('cracker.httpsFlag')}</li>
               </ul>
             </div>
           ) : (
-            <p>Channel finder requires Chrome 113+ or Edge 113+ with WebGPU support.</p>
+            <p>{t('cracker.chromeRequired')}</p>
           )}
         </div>
       )}
       {!wordlistLoaded && gpuAvailable !== false && (
         <div className="text-sm text-muted-foreground" role="status">
-          Loading wordlist...
+          {t('cracker.loadingWordlist')}
         </div>
       )}
 
       {/* Found channels list */}
       {crackedChannels.length > 0 && (
         <div>
-          <div className="text-xs text-muted-foreground mb-1">Found Channels:</div>
+          <div className="text-xs text-muted-foreground mb-1">{t('cracker.foundChannels')}</div>
           <div className="space-y-1">
             {crackedChannels.map((channel, i) => (
               <div
@@ -647,20 +644,7 @@ export function CrackerPanel({
 
       <hr className="border-border" />
       <p className="text-sm text-muted-foreground leading-relaxed">
-        For unknown-keyed GroupText packets, this will attempt to dictionary attack, then brute
-        force payloads as they arrive, testing channel names up to the specified length to discover
-        active channels on the local mesh (GroupText packets may not be hashtag messages; we have no
-        way of knowing but try as if they are).
-        <strong> Retry failed at n+1</strong> will return to the failed queue and pick up messages
-        it couldn't find a key for, attempting them at one longer length.
-        <strong> Try word pairs</strong> will also try every combination of two dictionary words
-        concatenated together (e.g. "hello" + "world" = "#helloworld") after the single-word
-        dictionary pass; this can substantially increase search time and also result in
-        false-positives.
-        <strong> Decrypt historical</strong> will run an async job on any channel name it finds to
-        see if any historically captured packets will decrypt with that key.
-        <strong> Turbo mode</strong> will push your GPU to the max (target dispatch time of 10s) and
-        may allow accelerated searching and/or system instability.
+        <Trans i18nKey="cracker.help" components={{ strong: <strong /> }} />
       </p>
     </div>
   );

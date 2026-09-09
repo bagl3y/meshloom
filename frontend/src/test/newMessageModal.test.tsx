@@ -11,6 +11,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { NewMessageModal } from '../components/NewMessageModal';
 import i18n from '../i18n';
+import sliceEn from '../i18n/locales/slices/b.en.json';
+import sliceFr from '../i18n/locales/slices/b.fr.json';
+
+i18n.addResourceBundle('en', 'translation', sliceEn, true, true);
+i18n.addResourceBundle('fr', 'translation', sliceFr, true, true);
 import { toast } from '../components/ui/sonner';
 
 // Mock sonner (toast)
@@ -67,26 +72,29 @@ describe('NewMessageModal form reset', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByRole('tab', { name: 'Hashtag Channel' })).toHaveAttribute(
+        expect(screen.getByRole('tab', { name: i18n.t('newMessage.tabHashtag') })).toHaveAttribute(
           'data-state',
           'active'
         );
       });
-      expect((screen.getByPlaceholderText('channel-name') as HTMLInputElement).value).toBe(
-        'mesh-room'
-      );
+      expect(
+        (screen.getByPlaceholderText(i18n.t('newMessage.hashtagPlaceholder')) as HTMLInputElement)
+          .value
+      ).toBe('mesh-room');
     });
 
     it('clears name after successful Create', async () => {
       const user = userEvent.setup();
       const { unmount } = renderModal();
-      await switchToTab(user, 'Hashtag Channel');
+      await switchToTab(user, i18n.t('newMessage.tabHashtag'));
 
-      const input = screen.getByPlaceholderText('channel-name') as HTMLInputElement;
+      const input = screen.getByPlaceholderText(
+        i18n.t('newMessage.hashtagPlaceholder')
+      ) as HTMLInputElement;
       await user.type(input, 'testchan');
       expect(input.value).toBe('testchan');
 
-      await user.click(screen.getByRole('button', { name: 'Create' }));
+      await user.click(screen.getByRole('button', { name: i18n.t('newMessage.create') }));
 
       await waitFor(() => {
         expect(onCreateHashtagChannel).toHaveBeenCalledWith('#testchan', false);
@@ -96,49 +104,58 @@ describe('NewMessageModal form reset', () => {
 
       // Re-render to simulate reopening — state should be reset
       renderModal();
-      await switchToTab(user, 'Hashtag Channel');
-      expect((screen.getByPlaceholderText('channel-name') as HTMLInputElement).value).toBe('');
+      await switchToTab(user, i18n.t('newMessage.tabHashtag'));
+      expect(
+        (screen.getByPlaceholderText(i18n.t('newMessage.hashtagPlaceholder')) as HTMLInputElement)
+          .value
+      ).toBe('');
     });
 
     it('clears name when Cancel is clicked', async () => {
       const user = userEvent.setup();
       renderModal();
-      await switchToTab(user, 'Hashtag Channel');
+      await switchToTab(user, i18n.t('newMessage.tabHashtag'));
 
-      const input = screen.getByPlaceholderText('channel-name') as HTMLInputElement;
+      const input = screen.getByPlaceholderText(
+        i18n.t('newMessage.hashtagPlaceholder')
+      ) as HTMLInputElement;
       await user.type(input, 'mychannel');
       expect(input.value).toBe('mychannel');
 
-      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      await user.click(screen.getByRole('button', { name: i18n.t('newMessage.cancel') }));
       expect(onClose).toHaveBeenCalled();
     });
 
     it('rejects extended characters when the extended toggle is off', async () => {
       const user = userEvent.setup();
       renderModal();
-      await switchToTab(user, 'Hashtag Channel');
+      await switchToTab(user, i18n.t('newMessage.tabHashtag'));
 
-      await user.type(screen.getByPlaceholderText('channel-name'), 'Cats&Dogs');
-      await user.click(screen.getByRole('button', { name: 'Create' }));
+      await user.type(
+        screen.getByPlaceholderText(i18n.t('newMessage.hashtagPlaceholder')),
+        'Cats&Dogs'
+      );
+      await user.click(screen.getByRole('button', { name: i18n.t('newMessage.create') }));
 
       expect(onCreateHashtagChannel).not.toHaveBeenCalled();
-      expect(
-        screen.getByText('Use letters, numbers, and single dashes (no leading/trailing dashes)')
-      ).toBeTruthy();
+      expect(screen.getByText(i18n.t('newMessage.hashtagInvalid'))).toBeTruthy();
     });
 
     it('hashes the name verbatim when the extended toggle is on', async () => {
       const user = userEvent.setup();
       renderModal();
-      await switchToTab(user, 'Hashtag Channel');
+      await switchToTab(user, i18n.t('newMessage.tabHashtag'));
 
       await user.click(
         screen.getByRole('checkbox', {
-          name: /Permit capitals, whitespace, and extended characters/,
+          name: i18n.t('newMessage.permitExtended'),
         })
       );
-      await user.type(screen.getByPlaceholderText('channel-name'), 'Cats&Dogs');
-      await user.click(screen.getByRole('button', { name: 'Create' }));
+      await user.type(
+        screen.getByPlaceholderText(i18n.t('newMessage.hashtagPlaceholder')),
+        'Cats&Dogs'
+      );
+      await user.click(screen.getByRole('button', { name: i18n.t('newMessage.create') }));
 
       await waitFor(() => {
         expect(onCreateHashtagChannel).toHaveBeenCalledWith('#Cats&Dogs', false);
@@ -149,7 +166,7 @@ describe('NewMessageModal form reset', () => {
   describe('bulk hashtag tab', () => {
     it('is only visible when enabled', () => {
       renderModal();
-      expect(screen.queryByRole('tab', { name: 'Bulk Add Channel' })).toBeNull();
+      expect(screen.queryByRole('tab', { name: i18n.t('newMessage.tabBulk') })).toBeNull();
     });
 
     it('opens on the bulk tab when enabled and submits normalized channel names', async () => {
@@ -157,17 +174,17 @@ describe('NewMessageModal form reset', () => {
       renderModal(true, { showBulkAddChannelTab: true });
 
       await waitFor(() => {
-        expect(screen.getByRole('tab', { name: 'Bulk Add Channel' })).toHaveAttribute(
+        expect(screen.getByRole('tab', { name: i18n.t('newMessage.tabBulk') })).toHaveAttribute(
           'data-state',
           'active'
         );
       });
 
       await user.type(
-        screen.getByRole('textbox', { name: 'Bulk channel names' }),
+        screen.getByRole('textbox', { name: i18n.t('newMessage.bulkNamesAria') }),
         '#Ops{enter}mesh-room another-room #Ops'
       );
-      await user.click(screen.getByRole('button', { name: 'Add Channels' }));
+      await user.click(screen.getByRole('button', { name: i18n.t('newMessage.addChannels') }));
 
       await waitFor(() => {
         expect(onBulkAddHashtagChannels).toHaveBeenCalledWith(
@@ -183,13 +200,15 @@ describe('NewMessageModal form reset', () => {
       renderModal(true, { showBulkAddChannelTab: true });
 
       await user.type(
-        screen.getByRole('textbox', { name: 'Bulk channel names' }),
+        screen.getByRole('textbox', { name: i18n.t('newMessage.bulkNamesAria') }),
         'good-room bad_room'
       );
-      await user.click(screen.getByRole('button', { name: 'Add Channels' }));
+      await user.click(screen.getByRole('button', { name: i18n.t('newMessage.addChannels') }));
 
       expect(onBulkAddHashtagChannels).not.toHaveBeenCalled();
-      expect(screen.getByText('Invalid channel names: bad_room')).toBeTruthy();
+      expect(
+        screen.getByText(i18n.t('newMessage.invalidNames', { names: 'bad_room' }))
+      ).toBeTruthy();
     });
 
     it('accepts extended names split by lines when the toggle is on', async () => {
@@ -198,14 +217,14 @@ describe('NewMessageModal form reset', () => {
 
       await user.click(
         screen.getByRole('checkbox', {
-          name: /Permit capitals, whitespace, and extended characters/,
+          name: i18n.t('newMessage.permitExtended'),
         })
       );
       await user.type(
-        screen.getByRole('textbox', { name: 'Bulk channel names' }),
+        screen.getByRole('textbox', { name: i18n.t('newMessage.bulkNamesAria') }),
         '#Cats & Dogs{enter}Mesh Room'
       );
-      await user.click(screen.getByRole('button', { name: 'Add Channels' }));
+      await user.click(screen.getByRole('button', { name: i18n.t('newMessage.addChannels') }));
 
       await waitFor(() => {
         expect(onBulkAddHashtagChannels).toHaveBeenCalledWith(
@@ -227,15 +246,19 @@ describe('NewMessageModal form reset', () => {
         },
       });
 
-      expect((screen.getByPlaceholderText('Contact name') as HTMLInputElement).value).toBe(
-        'Example Contact'
-      );
       expect(
-        (screen.getByPlaceholderText('64-character hex public key') as HTMLInputElement).value
+        (screen.getByPlaceholderText(i18n.t('newMessage.namePlaceholder')) as HTMLInputElement)
+          .value
+      ).toBe('Example Contact');
+      expect(
+        (screen.getByPlaceholderText(i18n.t('newMessage.publicKeyPlaceholder')) as HTMLInputElement)
+          .value
       ).toBe(publicKey);
-      expect((screen.getByLabelText('Type') as HTMLSelectElement).value).toBe('2');
+      expect((screen.getByLabelText(i18n.t('newMessage.type')) as HTMLSelectElement).value).toBe(
+        '2'
+      );
 
-      await user.click(screen.getByRole('button', { name: 'Create' }));
+      await user.click(screen.getByRole('button', { name: i18n.t('newMessage.create') }));
       await waitFor(() => {
         expect(onCreateContact).toHaveBeenCalledWith('Example Contact', publicKey, false, 2);
       });
@@ -252,19 +275,27 @@ describe('NewMessageModal form reset', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByRole('tab', { name: 'Private Channel' })).toHaveAttribute(
+        expect(screen.getByRole('tab', { name: i18n.t('newMessage.tabChannel') })).toHaveAttribute(
           'data-state',
           'active'
         );
       });
-      expect((screen.getByPlaceholderText('Channel name') as HTMLInputElement).value).toBe(
-        'Public'
-      );
-      expect((screen.getByPlaceholderText('Pre-shared key (hex)') as HTMLInputElement).value).toBe(
-        secret
-      );
+      expect(
+        (
+          screen.getByPlaceholderText(
+            i18n.t('newMessage.channelNamePlaceholder')
+          ) as HTMLInputElement
+        ).value
+      ).toBe('Public');
+      expect(
+        (
+          screen.getByPlaceholderText(
+            i18n.t('newMessage.channelKeyPlaceholder')
+          ) as HTMLInputElement
+        ).value
+      ).toBe(secret);
 
-      await user.click(screen.getByRole('button', { name: 'Create' }));
+      await user.click(screen.getByRole('button', { name: i18n.t('newMessage.create') }));
       await waitFor(() => {
         expect(onCreateChannel).toHaveBeenCalledWith('Public', secret, false);
       });
@@ -285,12 +316,15 @@ describe('NewMessageModal form reset', () => {
     it('clears name and key after successful Create', async () => {
       const user = userEvent.setup();
       renderModal();
-      await switchToTab(user, 'Contact');
+      await switchToTab(user, i18n.t('newMessage.tabContact'));
 
-      await user.type(screen.getByPlaceholderText('Contact name'), 'Bob');
-      await user.type(screen.getByPlaceholderText('64-character hex public key'), 'bb'.repeat(32));
+      await user.type(screen.getByPlaceholderText(i18n.t('newMessage.namePlaceholder')), 'Bob');
+      await user.type(
+        screen.getByPlaceholderText(i18n.t('newMessage.publicKeyPlaceholder')),
+        'bb'.repeat(32)
+      );
 
-      await user.click(screen.getByRole('button', { name: 'Create' }));
+      await user.click(screen.getByRole('button', { name: i18n.t('newMessage.create') }));
 
       await waitFor(() => {
         expect(onCreateContact).toHaveBeenCalledWith('Bob', 'bb'.repeat(32), false, 1);
@@ -303,12 +337,18 @@ describe('NewMessageModal form reset', () => {
     it('clears name and key after successful Create', async () => {
       const user = userEvent.setup();
       renderModal();
-      await switchToTab(user, 'Private Channel');
+      await switchToTab(user, i18n.t('newMessage.tabChannel'));
 
-      await user.type(screen.getByPlaceholderText('Channel name'), 'MyRoom');
-      await user.type(screen.getByPlaceholderText('Pre-shared key (hex)'), 'cc'.repeat(16));
+      await user.type(
+        screen.getByPlaceholderText(i18n.t('newMessage.channelNamePlaceholder')),
+        'MyRoom'
+      );
+      await user.type(
+        screen.getByPlaceholderText(i18n.t('newMessage.channelKeyPlaceholder')),
+        'cc'.repeat(16)
+      );
 
-      await user.click(screen.getByRole('button', { name: 'Create' }));
+      await user.click(screen.getByRole('button', { name: i18n.t('newMessage.create') }));
 
       await waitFor(() => {
         expect(onCreateChannel).toHaveBeenCalledWith('MyRoom', 'cc'.repeat(16), false);
@@ -320,14 +360,20 @@ describe('NewMessageModal form reset', () => {
       const user = userEvent.setup();
       onCreateChannel.mockRejectedValueOnce(new Error('Bad key'));
       renderModal();
-      await switchToTab(user, 'Private Channel');
+      await switchToTab(user, i18n.t('newMessage.tabChannel'));
 
-      await user.type(screen.getByPlaceholderText('Channel name'), 'MyRoom');
-      await user.type(screen.getByPlaceholderText('Pre-shared key (hex)'), 'cc'.repeat(16));
-      await user.click(screen.getByRole('button', { name: 'Create' }));
+      await user.type(
+        screen.getByPlaceholderText(i18n.t('newMessage.channelNamePlaceholder')),
+        'MyRoom'
+      );
+      await user.type(
+        screen.getByPlaceholderText(i18n.t('newMessage.channelKeyPlaceholder')),
+        'cc'.repeat(16)
+      );
+      await user.click(screen.getByRole('button', { name: i18n.t('newMessage.create') }));
 
       await waitFor(() => {
-        expect(mockToast.error).toHaveBeenCalledWith('Failed to create conversation', {
+        expect(mockToast.error).toHaveBeenCalledWith(i18n.t('newMessage.createFailed'), {
           description: 'Bad key',
         });
       });
@@ -339,31 +385,53 @@ describe('NewMessageModal form reset', () => {
     it('clears contact fields when switching to channel tab', async () => {
       const user = userEvent.setup();
       renderModal();
-      await switchToTab(user, 'Contact');
+      await switchToTab(user, i18n.t('newMessage.tabContact'));
 
-      await user.type(screen.getByPlaceholderText('Contact name'), 'Bob');
-      await user.type(screen.getByPlaceholderText('64-character hex public key'), 'deadbeef');
+      await user.type(screen.getByPlaceholderText(i18n.t('newMessage.namePlaceholder')), 'Bob');
+      await user.type(
+        screen.getByPlaceholderText(i18n.t('newMessage.publicKeyPlaceholder')),
+        'deadbeef'
+      );
 
       // Switch to Private Channel tab — fields should reset
-      await switchToTab(user, 'Private Channel');
+      await switchToTab(user, i18n.t('newMessage.tabChannel'));
 
-      expect((screen.getByPlaceholderText('Channel name') as HTMLInputElement).value).toBe('');
-      expect((screen.getByPlaceholderText('Pre-shared key (hex)') as HTMLInputElement).value).toBe(
-        ''
-      );
+      expect(
+        (
+          screen.getByPlaceholderText(
+            i18n.t('newMessage.channelNamePlaceholder')
+          ) as HTMLInputElement
+        ).value
+      ).toBe('');
+      expect(
+        (
+          screen.getByPlaceholderText(
+            i18n.t('newMessage.channelKeyPlaceholder')
+          ) as HTMLInputElement
+        ).value
+      ).toBe('');
     });
 
     it('clears channel fields when switching to hashtag tab', async () => {
       const user = userEvent.setup();
       renderModal();
-      await switchToTab(user, 'Private Channel');
+      await switchToTab(user, i18n.t('newMessage.tabChannel'));
 
-      await user.type(screen.getByPlaceholderText('Channel name'), 'SecretRoom');
-      await user.type(screen.getByPlaceholderText('Pre-shared key (hex)'), 'ff'.repeat(16));
+      await user.type(
+        screen.getByPlaceholderText(i18n.t('newMessage.channelNamePlaceholder')),
+        'SecretRoom'
+      );
+      await user.type(
+        screen.getByPlaceholderText(i18n.t('newMessage.channelKeyPlaceholder')),
+        'ff'.repeat(16)
+      );
 
-      await switchToTab(user, 'Hashtag Channel');
+      await switchToTab(user, i18n.t('newMessage.tabHashtag'));
 
-      expect((screen.getByPlaceholderText('channel-name') as HTMLInputElement).value).toBe('');
+      expect(
+        (screen.getByPlaceholderText(i18n.t('newMessage.hashtagPlaceholder')) as HTMLInputElement)
+          .value
+      ).toBe('');
     });
   });
 
@@ -371,21 +439,23 @@ describe('NewMessageModal form reset', () => {
     it('resets tryHistorical when switching tabs', async () => {
       const user = userEvent.setup();
       renderModal();
-      await switchToTab(user, 'Hashtag Channel');
+      await switchToTab(user, i18n.t('newMessage.tabHashtag'));
 
       // Check the "Try decrypting" checkbox
-      const checkbox = screen.getByRole('checkbox', { name: /Try decrypting/ });
+      const checkbox = screen.getByRole('checkbox', {
+        name: i18n.t('newMessage.tryDecrypt', { count: 5 }),
+      });
       await user.click(checkbox);
 
       // The streaming message should appear
-      expect(screen.getByText(/Messages will stream in/)).toBeTruthy();
+      expect(screen.getByText(i18n.t('newMessage.tryDecryptHelp'))).toBeTruthy();
 
       // Switch tab and come back
-      await switchToTab(user, 'Contact');
-      await switchToTab(user, 'Hashtag Channel');
+      await switchToTab(user, i18n.t('newMessage.tabContact'));
+      await switchToTab(user, i18n.t('newMessage.tabHashtag'));
 
       // The streaming message should be gone (tryHistorical was reset)
-      expect(screen.queryByText(/Messages will stream in/)).toBeNull();
+      expect(screen.queryByText(i18n.t('newMessage.tryDecryptHelp'))).toBeNull();
     });
   });
 });

@@ -119,6 +119,8 @@ async def _run_historical_channel_decryption(
         broadcast_success(
             f"Historical decrypt complete for {name}",
             f"Decrypted {decrypted_count} message{'s' if decrypted_count != 1 else ''}",
+            code="historical_decrypt_complete",
+            params={"name": name},
         )
 
 

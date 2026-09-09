@@ -5,11 +5,15 @@ import { parseWsEvent } from './wsEvents';
 interface ErrorEvent {
   message: string;
   details?: string;
+  code?: string;
+  params?: Record<string, unknown>;
 }
 
 interface SuccessEvent {
   message: string;
   details?: string;
+  code?: string;
+  params?: Record<string, unknown>;
 }
 
 export interface UseWebSocketOptions {

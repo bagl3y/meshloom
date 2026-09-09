@@ -105,20 +105,18 @@ function LoadingPane({ label }: { label: string }) {
 }
 
 function ContactResolutionBanner({ variant }: { variant: 'unknown-full-key' | 'prefix-only' }) {
+  const { t } = useTranslation();
   if (variant === 'prefix-only') {
     return (
       <div className="mx-4 mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-        We&apos;ve received a message from this sender but don&apos;t have their full identity yet.
-        Sending is disabled until their identity is confirmed &mdash; this usually happens
-        automatically when they next advertise.
+        {t('conversation.prefixOnlyBanner')}
       </div>
     );
   }
 
   return (
     <div className="mx-4 mt-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
-      This sender&apos;s profile details (name, location) haven&apos;t arrived yet. They will fill
-      in automatically when the sender&apos;s next advert is heard.
+      {t('conversation.unknownFullKeyBanner')}
     </div>
   );
 }
@@ -206,7 +204,7 @@ export function ConversationPane({
   if (!activeConversation) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
-        Select a conversation or start a new one
+        {t('conversation.selectPrompt')}
       </div>
     );
   }
@@ -215,10 +213,10 @@ export function ConversationPane({
     return (
       <>
         <h2 className="flex justify-between items-center px-4 py-2.5 border-b border-border font-semibold text-base">
-          Node Map
+          {t('conversation.nodeMap')}
         </h2>
         <div className="flex-1 overflow-hidden">
-          <Suspense fallback={<LoadingPane label="Loading map..." />}>
+          <Suspense fallback={<LoadingPane label={t('conversation.loadingMap')} />}>
             <MapView
               contacts={contacts}
               focusedKey={activeConversation.mapFocusKey}
@@ -246,7 +244,7 @@ export function ConversationPane({
 
   if (activeConversation.type === 'visualizer') {
     return (
-      <Suspense fallback={<LoadingPane label="Loading visualizer..." />}>
+      <Suspense fallback={<LoadingPane label={t('conversation.loadingVisualizer')} />}>
         <VisualizerView contacts={contacts} channels={channels} config={config} />
       </Suspense>
     );
@@ -278,7 +276,7 @@ export function ConversationPane({
 
   if (activeContactIsRepeater) {
     return (
-      <Suspense fallback={<LoadingPane label="Loading dashboard..." />}>
+      <Suspense fallback={<LoadingPane label={t('conversation.loadingDashboard')} />}>
         <RepeaterDashboard
           key={activeConversation.id}
           conversation={activeConversation}

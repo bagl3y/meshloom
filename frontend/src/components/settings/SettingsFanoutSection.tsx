@@ -8,7 +8,9 @@ import {
   Suspense,
   type ReactNode,
 } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { ChevronDown, Info } from 'lucide-react';
+import i18n from '../../i18n';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
@@ -30,16 +32,18 @@ const BotCodeEditor = lazy(() =>
   import('../BotCodeEditor').then((m) => ({ default: m.BotCodeEditor }))
 );
 
-const TYPE_LABELS: Record<string, string> = {
-  mqtt_private: 'Private MQTT',
-  mqtt_community: 'Community Sharing',
-  mqtt_ha: 'Home Assistant',
-  bot: 'Python Bot',
-  webhook: 'Webhook',
-  apprise: 'Apprise',
-  sqs: 'Amazon SQS',
-  map_upload: 'Map Upload',
-};
+const transInline = { code: <code />, strong: <strong /> };
+
+const FANOUT_TYPE_ORDER = [
+  'mqtt_private',
+  'mqtt_community',
+  'mqtt_ha',
+  'bot',
+  'webhook',
+  'apprise',
+  'sqs',
+  'map_upload',
+] as const;
 
 const DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE = 'meshcore/{IATA}/{PUBLIC_KEY}/packets';
 const DEFAULT_COMMUNITY_BROKER_HOST = 'mqtt-us-v1.letsmesh.net';
@@ -141,13 +145,12 @@ type DraftType =
   | 'bot'
   | 'map_upload';
 
+type CreateSectionKey = 'privateForwarding' | 'communitySharing' | 'automation';
+
 type CreateIntegrationDefinition = {
   value: DraftType;
   savedType: string;
-  label: string;
-  section: string;
-  description: string;
-  defaultName: string;
+  sectionKey: CreateSectionKey;
   nameMode: 'counted' | 'fixed';
   defaults: {
     config: Record<string, unknown>;
@@ -155,15 +158,31 @@ type CreateIntegrationDefinition = {
   };
 };
 
+function fanoutTypeLabel(type: string) {
+  return i18n.t(`settings.fanout.types.${type}`, { defaultValue: type });
+}
+
+function fanoutCreateLabel(value: DraftType) {
+  return i18n.t(`settings.fanout.create.${value}.label`);
+}
+
+function fanoutCreateDescription(value: DraftType) {
+  return i18n.t(`settings.fanout.create.${value}.description`);
+}
+
+function fanoutCreateDefaultName(value: DraftType) {
+  return i18n.t(`settings.fanout.create.${value}.defaultName`);
+}
+
+function fanoutCreateSection(sectionKey: CreateSectionKey) {
+  return i18n.t(`settings.fanout.create.sections.${sectionKey}`);
+}
+
 const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
   {
     value: 'mqtt_private',
     savedType: 'mqtt_private',
-    label: 'Private MQTT',
-    section: 'Private Forwarding',
-    description:
-      'Customizable-scope forwarding of all or some messages to an MQTT broker of your choosing, in raw and/or decrypted form.',
-    defaultName: 'Private MQTT',
+    sectionKey: 'privateForwarding',
     nameMode: 'counted',
     defaults: {
       config: {
@@ -181,11 +200,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
   {
     value: 'mqtt_ha',
     savedType: 'mqtt_ha',
-    label: 'Home Assistant MQTT Discovery',
-    section: 'Private Forwarding',
-    description:
-      "Publishes MQTT Discovery payloads so mesh devices appear natively in Home Assistant. Requires HA's built-in MQTT integration connected to the same broker. Select specific contacts for GPS tracking and repeaters for telemetry sensors.",
-    defaultName: 'Home Assistant',
+    sectionKey: 'privateForwarding',
     nameMode: 'fixed',
     defaults: {
       config: {
@@ -205,11 +220,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
   {
     value: 'mqtt_community',
     savedType: 'mqtt_community',
-    label: 'Community MQTT/meshcoretomqtt',
-    section: 'Community Sharing',
-    description:
-      'MeshcoreToMQTT-compatible raw-packet feed publishing, compatible with community aggregators (in other words, make your companion radio also serve as an observer node). Superset of other Community MQTT presets.',
-    defaultName: 'Community MQTT',
+    sectionKey: 'communitySharing',
     nameMode: 'counted',
     defaults: {
       config: createCommunityConfigDefaults(),
@@ -219,11 +230,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
   {
     value: 'mqtt_community_meshrank',
     savedType: 'mqtt_community',
-    label: 'MeshRank',
-    section: 'Community Sharing',
-    description:
-      'A community MQTT config preconfigured for MeshRank, requiring only the provided topic from your MeshRank configuration. A subset of the primary Community MQTT/meshcoretomqtt configuration; you are free to edit all configuration after creation.',
-    defaultName: 'MeshRank',
+    sectionKey: 'communitySharing',
     nameMode: 'fixed',
     defaults: {
       config: createCommunityConfigDefaults({
@@ -242,11 +249,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
   {
     value: 'mqtt_community_letsmesh_us',
     savedType: 'mqtt_community',
-    label: 'LetsMesh (US)',
-    section: 'Community Sharing',
-    description:
-      'A community MQTT config preconfigured for the LetsMesh US-ingest endpoint, requiring only your email and IATA region code. Good to use with an additional EU configuration for redundancy. A subset of the primary Community MQTT/meshcoretomqtt configuration; you are free to edit all configuration after creation.',
-    defaultName: 'LetsMesh (US)',
+    sectionKey: 'communitySharing',
     nameMode: 'fixed',
     defaults: {
       config: createCommunityConfigDefaults({
@@ -259,11 +262,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
   {
     value: 'mqtt_community_letsmesh_eu',
     savedType: 'mqtt_community',
-    label: 'LetsMesh (EU)',
-    section: 'Community Sharing',
-    description:
-      'A community MQTT config preconfigured for the LetsMesh EU-ingest endpoint, requiring only your email and IATA region code. Good to use with an additional US configuration for redundancy. A subset of the primary Community MQTT/meshcoretomqtt configuration; you are free to edit all configuration after creation.',
-    defaultName: 'LetsMesh (EU)',
+    sectionKey: 'communitySharing',
     nameMode: 'fixed',
     defaults: {
       config: createCommunityConfigDefaults({
@@ -276,11 +275,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
   {
     value: 'webhook',
     savedType: 'webhook',
-    label: 'Webhook',
-    section: 'Automation',
-    description:
-      'Generic webhook for decrypted channel/DM messages with customizable verb, method, and optional HMAC signature.',
-    defaultName: 'Webhook',
+    sectionKey: 'automation',
     nameMode: 'counted',
     defaults: {
       config: {
@@ -296,11 +291,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
   {
     value: 'apprise',
     savedType: 'apprise',
-    label: 'Apprise',
-    section: 'Automation',
-    description:
-      'A wide-ranging generic fanout, capable of forwarding decrypted channel/DM messages to Discord, Telegram, email, SMS, and many others.',
-    defaultName: 'Apprise',
+    sectionKey: 'automation',
     nameMode: 'counted',
     defaults: {
       config: {
@@ -318,10 +309,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
   {
     value: 'sqs',
     savedType: 'sqs',
-    label: 'Amazon SQS',
-    section: 'Private Forwarding',
-    description: 'Send full or scope-customized raw or decrypted packets to an SQS',
-    defaultName: 'Amazon SQS',
+    sectionKey: 'privateForwarding',
     nameMode: 'counted',
     defaults: {
       config: {
@@ -338,11 +326,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
   {
     value: 'bot',
     savedType: 'bot',
-    label: 'Python Bot',
-    section: 'Automation',
-    description:
-      'A simple, Python-based interface for basic bots that can respond to DM and channel messages.',
-    defaultName: 'Bot',
+    sectionKey: 'automation',
     nameMode: 'counted',
     defaults: {
       config: {
@@ -354,11 +338,7 @@ const CREATE_INTEGRATION_DEFINITIONS: readonly CreateIntegrationDefinition[] = [
   {
     value: 'map_upload',
     savedType: 'map_upload',
-    label: 'Map Upload',
-    section: 'Community Sharing',
-    description:
-      'Upload repeaters and room servers to map.meshcore.io or a compatible map API endpoint.',
-    defaultName: 'Map Upload',
+    sectionKey: 'communitySharing',
     nameMode: 'counted',
     defaults: {
       config: {
@@ -459,7 +439,7 @@ function getCreateIntegrationDefinition(draftType: DraftType) {
 function normalizeDraftName(draftType: DraftType, name: string, configs: FanoutConfig[]) {
   const definition = getCreateIntegrationDefinition(draftType);
   if (name) return name;
-  if (definition.nameMode === 'fixed') return definition.defaultName;
+  if (definition.nameMode === 'fixed') return fanoutCreateDefaultName(draftType);
   return getDefaultIntegrationName(definition.savedType, configs);
 }
 
@@ -467,7 +447,7 @@ function normalizeDraftConfig(draftType: DraftType, config: Record<string, unkno
   if (draftType === 'mqtt_community_meshrank') {
     const topicTemplate = String(config.topic_template || '').trim();
     if (!topicTemplate) {
-      throw new Error('MeshRank packet topic is required');
+      throw new Error(i18n.t('settings.fanout.toast.meshrankTopicRequired'));
     }
 
     return normalizeIntegrationConfigForSave('mqtt_community', {
@@ -543,6 +523,7 @@ function CreateIntegrationDialog({
   onSelect: (type: DraftType) => void;
   onCreate: () => void;
 }) {
+  const { t } = useTranslation();
   const selectedOption =
     options.find((option) => option.value === selectedType) ?? options[0] ?? null;
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -567,10 +548,11 @@ function CreateIntegrationDialog({
     };
   }, [open, options, updateScrollHint]);
 
-  const sectionedOptions = [...new Set(options.map((o) => o.section))]
-    .map((section) => ({
-      section,
-      options: options.filter((option) => option.section === section),
+  const sectionedOptions = [...new Set(options.map((o) => o.sectionKey))]
+    .map((sectionKey) => ({
+      sectionKey,
+      section: fanoutCreateSection(sectionKey),
+      options: options.filter((option) => option.sectionKey === sectionKey),
     }))
     .filter((group) => group.options.length > 0);
 
@@ -582,7 +564,7 @@ function CreateIntegrationDialog({
         className="flex max-h-[calc(100dvh-2rem)] w-[96vw] max-w-[960px] flex-col overflow-hidden p-0 sm:rounded-xl"
       >
         <DialogHeader className="border-b border-border px-5 py-4">
-          <DialogTitle>Create Integration</DialogTitle>
+          <DialogTitle>{t('settings.fanout.create.title')}</DialogTitle>
         </DialogHeader>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[240px_minmax(0,1fr)]">
@@ -594,7 +576,7 @@ function CreateIntegrationDialog({
             >
               <div className="space-y-4">
                 {sectionedOptions.map((group) => (
-                  <div key={group.section} className="space-y-1.5">
+                  <div key={group.sectionKey} className="space-y-1.5">
                     <div className="px-2 text-[0.6875rem] font-semibold uppercase tracking-wider text-muted-foreground">
                       {group.section}
                     </div>
@@ -613,7 +595,9 @@ function CreateIntegrationDialog({
                           aria-pressed={selected}
                           onClick={() => onSelect(option.value)}
                         >
-                          <div className="text-sm font-medium">{option.label}</div>
+                          <div className="text-sm font-medium">
+                            {fanoutCreateLabel(option.value)}
+                          </div>
                         </button>
                       );
                     })}
@@ -636,18 +620,20 @@ function CreateIntegrationDialog({
               <>
                 <div className="space-y-1.5">
                   <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {selectedOption.section}
+                    {fanoutCreateSection(selectedOption.sectionKey)}
                   </div>
-                  <h3 className="text-lg font-semibold">{selectedOption.label}</h3>
+                  <h3 className="text-lg font-semibold">
+                    {fanoutCreateLabel(selectedOption.value)}
+                  </h3>
                 </div>
 
                 <p className="text-sm leading-6 text-muted-foreground">
-                  {selectedOption.description}
+                  {fanoutCreateDescription(selectedOption.value)}
                 </p>
               </>
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                No integration types are currently available.
+                {t('settings.fanout.create.empty')}
               </div>
             )}
           </div>
@@ -655,10 +641,10 @@ function CreateIntegrationDialog({
 
         <DialogFooter className="gap-2 border-t border-border px-5 py-4 sm:justify-end">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
+            {t('settings.fanout.create.close')}
           </Button>
           <Button onClick={onCreate} disabled={!selectedOption}>
-            Create
+            {t('settings.fanout.create.create')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -667,8 +653,8 @@ function CreateIntegrationDialog({
 }
 
 function getDetailTypeLabel(detailType: string) {
-  if (isDraftType(detailType)) return getCreateIntegrationDefinition(detailType).label;
-  return TYPE_LABELS[detailType] || detailType;
+  if (isDraftType(detailType)) return fanoutCreateLabel(detailType);
+  return fanoutTypeLabel(detailType);
 }
 
 function fanoutDraftHasUnsavedChanges(
@@ -712,31 +698,31 @@ function formatAppriseTargets(urls: string | undefined) {
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
-  if (targets.length === 0) return 'No targets configured';
+  if (targets.length === 0) return i18n.t('settings.fanout.apprise.noTargets');
 
   return targets.map(censorAppriseUrl).join(', ');
 }
 
 function formatSqsQueueSummary(config: Record<string, unknown>) {
   const queueUrl = ((config.queue_url as string) || '').trim();
-  if (!queueUrl) return 'No queue configured';
+  if (!queueUrl) return i18n.t('settings.fanout.sqs.noQueue');
   return queueUrl;
 }
 
 function getDefaultIntegrationName(type: string, configs: FanoutConfig[]) {
-  const label = TYPE_LABELS[type] || type;
+  const label = fanoutTypeLabel(type);
   const nextIndex = configs.filter((cfg) => cfg.type === type).length + 1;
-  return `${label} #${nextIndex}`;
+  return i18n.t('settings.fanout.defaultNameCounted', { label, n: nextIndex });
 }
 
 function getStatusLabel(status: string | undefined, type?: string) {
   if (status === 'connected')
     return type === 'bot' || type === 'webhook' || type === 'apprise' || type === 'map_upload'
-      ? 'Active'
-      : 'Connected';
-  if (status === 'error') return 'Error';
-  if (status === 'disconnected') return 'Disconnected';
-  return 'Inactive';
+      ? i18n.t('settings.fanout.status.active')
+      : i18n.t('settings.fanout.status.connected');
+  if (status === 'error') return i18n.t('settings.fanout.status.error');
+  if (status === 'disconnected') return i18n.t('settings.fanout.status.disconnected');
+  return i18n.t('settings.fanout.status.inactive');
 }
 
 function getStatusColor(status: string | undefined, enabled?: boolean) {
@@ -759,30 +745,30 @@ function MqttPrivateConfigEditor({
   onChange: (config: Record<string, unknown>) => void;
   onScopeChange: (scope: Record<string, unknown>) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-3">
       <p className="text-[0.8125rem] text-muted-foreground">
-        Forward mesh data to your own MQTT broker for home automation, logging, or alerting.
+        {t('settings.fanout.mqtt.privateHelp')}
       </p>
 
       <div className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning">
-        Outgoing messages (DMs and group messages) will be reported to private MQTT brokers in
-        decrypted/plaintext form.
+        {t('settings.fanout.mqtt.outgoingWarning')}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="fanout-mqtt-host">Broker Host</Label>
+          <Label htmlFor="fanout-mqtt-host">{t('settings.fanout.mqtt.brokerHost')}</Label>
           <Input
             id="fanout-mqtt-host"
             type="text"
-            placeholder="e.g. 192.168.1.100"
+            placeholder={t('settings.fanout.mqtt.hostPlaceholder')}
             value={(config.broker_host as string) || ''}
             onChange={(e) => onChange({ ...config, broker_host: e.target.value })}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="fanout-mqtt-port">Broker Port</Label>
+          <Label htmlFor="fanout-mqtt-port">{t('settings.fanout.mqtt.brokerPort')}</Label>
           <Input
             id="fanout-mqtt-port"
             type="number"
@@ -798,21 +784,21 @@ function MqttPrivateConfigEditor({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="fanout-mqtt-user">Username</Label>
+          <Label htmlFor="fanout-mqtt-user">{t('settings.fanout.mqtt.username')}</Label>
           <Input
             id="fanout-mqtt-user"
             type="text"
-            placeholder="Optional"
+            placeholder={t('settings.fanout.mqtt.optional')}
             value={(config.username as string) || ''}
             onChange={(e) => onChange({ ...config, username: e.target.value })}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="fanout-mqtt-pass">Password</Label>
+          <Label htmlFor="fanout-mqtt-pass">{t('settings.fanout.mqtt.password')}</Label>
           <Input
             id="fanout-mqtt-pass"
             type="password"
-            placeholder="Optional"
+            placeholder={t('settings.fanout.mqtt.optional')}
             value={(config.password as string) || ''}
             onChange={(e) => onChange({ ...config, password: e.target.value })}
           />
@@ -826,7 +812,7 @@ function MqttPrivateConfigEditor({
           onChange={(e) => onChange({ ...config, use_tls: e.target.checked })}
           className="h-4 w-4 rounded border-border"
         />
-        <span className="text-sm">Use TLS</span>
+        <span className="text-sm">{t('settings.fanout.mqtt.useTls')}</span>
       </label>
 
       {!!config.use_tls && (
@@ -837,14 +823,14 @@ function MqttPrivateConfigEditor({
             onChange={(e) => onChange({ ...config, tls_insecure: e.target.checked })}
             className="h-4 w-4 rounded border-border"
           />
-          <span className="text-sm">Skip certificate verification</span>
+          <span className="text-sm">{t('settings.fanout.mqtt.skipCert')}</span>
         </label>
       )}
 
       <Separator />
 
       <div className="space-y-2">
-        <Label htmlFor="fanout-mqtt-prefix">Topic Prefix</Label>
+        <Label htmlFor="fanout-mqtt-prefix">{t('settings.fanout.mqtt.topicPrefix')}</Label>
         <Input
           id="fanout-mqtt-prefix"
           type="text"
@@ -876,6 +862,7 @@ function MqttHaConfigEditor({
   const [trackedRepeaters, setTrackedRepeaters] = useState<string[]>([]);
   const [contactSearch, setContactSearch] = useState('');
   const [radioConfig, setRadioConfig] = useState<{ public_key: string; name: string } | null>(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     (async () => {
@@ -995,10 +982,10 @@ function MqttHaConfigEditor({
   }, [nodeIdForKey, prefix, radioConfig, selectedContactDetails, selectedRepeaterDetails]);
 
   const kindLabel: Record<(typeof topicSummary)[number]['kind'], string> = {
-    radio: 'Local radio state',
-    event: 'Message events',
-    repeater: 'Repeater telemetry',
-    contact: 'Contact GPS',
+    radio: t('settings.fanout.ha.kindRadio'),
+    event: t('settings.fanout.ha.kindEvent'),
+    repeater: t('settings.fanout.ha.kindRepeater'),
+    contact: t('settings.fanout.ha.kindContact'),
   };
   const localRadioNodeId = radioConfig?.public_key
     ? nodeIdForKey(radioConfig.public_key)
@@ -1032,112 +1019,122 @@ function MqttHaConfigEditor({
     <div className="space-y-3">
       <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
         <div className="space-y-1">
-          <h3 className="text-base font-semibold tracking-tight">Home Assistant MQTT Discovery</h3>
-          <p className="text-sm text-muted-foreground">
-            Publish discovery configs and MeshCore state to your MQTT broker so Home Assistant
-            creates native devices, sensors, GPS trackers, and message events automatically.
-          </p>
+          <h3 className="text-base font-semibold tracking-tight">
+            {t('settings.fanout.ha.title')}
+          </h3>
+          <p className="text-sm text-muted-foreground">{t('settings.fanout.ha.help')}</p>
         </div>
 
         <div className="grid gap-2 md:grid-cols-3">
           <div className="rounded-md border border-border/70 bg-background/80 p-3">
-            <div className="text-sm font-medium text-foreground">1. Same broker</div>
+            <div className="text-sm font-medium text-foreground">
+              {t('settings.fanout.ha.step1Title')}
+            </div>
             <p className="mt-1 text-[0.8125rem] text-muted-foreground">
-              Home Assistant&apos;s built-in MQTT integration must point at the same broker
-              configured below.
+              {t('settings.fanout.ha.step1Help')}
             </p>
           </div>
           <div className="rounded-md border border-border/70 bg-background/80 p-3">
-            <div className="text-sm font-medium text-foreground">2. Pick what to expose</div>
+            <div className="text-sm font-medium text-foreground">
+              {t('settings.fanout.ha.step2Title')}
+            </div>
             <p className="mt-1 text-[0.8125rem] text-muted-foreground">
-              Choose repeaters for telemetry sensors and contacts for GPS tracker entities.
+              {t('settings.fanout.ha.step2Help')}
             </p>
           </div>
           <div className="rounded-md border border-border/70 bg-background/80 p-3">
-            <div className="text-sm font-medium text-foreground">3. Automate in HA</div>
+            <div className="text-sm font-medium text-foreground">
+              {t('settings.fanout.ha.step3Title')}
+            </div>
             <p className="mt-1 text-[0.8125rem] text-muted-foreground">
-              Radio health and message events publish continuously; repeater and contact data update
-              when new data is heard or collected.
+              {t('settings.fanout.ha.step3Help')}
             </p>
           </div>
         </div>
 
         <p className="text-[0.8125rem] text-muted-foreground">
-          Uses{' '}
-          <span
-            role="link"
-            tabIndex={0}
-            className="underline cursor-pointer hover:text-primary transition-colors"
-            onClick={() =>
-              window.open(
-                'https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery',
-                '_blank'
-              )
-            }
-            onKeyDown={(e) => {
-              if (e.key === 'Enter')
-                window.open(
-                  'https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery',
-                  '_blank'
-                );
+          <Trans
+            i18nKey="settings.fanout.ha.usesDiscovery"
+            components={{
+              ...transInline,
+              discovery: (
+                <span
+                  role="link"
+                  tabIndex={0}
+                  className="underline cursor-pointer hover:text-primary transition-colors"
+                  onClick={() =>
+                    window.open(
+                      'https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery',
+                      '_blank'
+                    )
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter')
+                      window.open(
+                        'https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery',
+                        '_blank'
+                      );
+                  }}
+                />
+              ),
+              readme: (
+                <span
+                  role="link"
+                  tabIndex={0}
+                  className="underline cursor-pointer hover:text-primary transition-colors"
+                  onClick={() =>
+                    window.open(
+                      'https://github.com/statico/remoteterm-meshcore/blob/main/README_HA.md',
+                      '_blank'
+                    )
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter')
+                      window.open(
+                        'https://github.com/statico/remoteterm-meshcore/blob/main/README_HA.md',
+                        '_blank'
+                      );
+                  }}
+                />
+              ),
             }}
-          >
-            MQTT Discovery
-          </span>{' '}
-          and the topic conventions documented in{' '}
-          <span
-            role="link"
-            tabIndex={0}
-            className="underline cursor-pointer hover:text-primary transition-colors"
-            onClick={() =>
-              window.open(
-                'https://github.com/statico/remoteterm-meshcore/blob/main/README_HA.md',
-                '_blank'
-              )
-            }
-            onKeyDown={(e) => {
-              if (e.key === 'Enter')
-                window.open(
-                  'https://github.com/statico/remoteterm-meshcore/blob/main/README_HA.md',
-                  '_blank'
-                );
-            }}
-          >
-            README_HA.md
-          </span>
-          .
+          />
         </p>
       </div>
 
       <details className="group">
         <summary className="text-sm font-medium text-foreground cursor-pointer select-none flex items-center gap-1">
           <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-0 -rotate-90" />
-          What gets created in Home Assistant
+          {t('settings.fanout.ha.whatGetsCreated')}
         </summary>
         <div className="mt-2 space-y-2 text-sm text-muted-foreground rounded-md border border-border bg-muted/20 p-3">
           <div>
-            <span className="font-medium text-foreground">Local radio device</span> (always)
-            <span className="ml-1">&mdash; updates every 60s</span>
+            <span className="font-medium text-foreground">
+              {t('settings.fanout.ha.localRadio')}
+            </span>{' '}
+            {t('settings.fanout.ha.localRadioAlways')}
+            <span className="ml-1">{t('settings.fanout.ha.updatesEvery60s')}</span>
             <ul className="mt-0.5 ml-4 list-disc space-y-0.5">
               <li>
                 <code className="text-[0.6875rem]">
                   {`binary_sensor.meshcore_${localRadioNodeId}_connected`}
                 </code>{' '}
-                &mdash; radio online/offline
+                {t('settings.fanout.ha.radioOnline')}
               </li>
               <li>
                 <code className="text-[0.6875rem]">
                   {`sensor.meshcore_${localRadioNodeId}_noise_floor`}
                 </code>{' '}
-                &mdash; radio noise floor (dBm)
+                {t('settings.fanout.ha.radioNoiseFloor')}
               </li>
             </ul>
           </div>
 
           <div>
-            <span className="font-medium text-foreground">Per tracked repeater</span> &mdash;
-            updates on telemetry collect cycle (~8h) or manual dashboard fetch. Entity IDs shown use
-            one repeater for example; these sensors are created for each selected repeater.
+            <span className="font-medium text-foreground">
+              {t('settings.fanout.ha.perRepeater')}
+            </span>{' '}
+            {t('settings.fanout.ha.perRepeaterHelp')}
             <ul className="mt-0.5 ml-4 list-disc space-y-0.5">
               <li>
                 <code className="text-[0.6875rem]">
@@ -1182,51 +1179,53 @@ function MqttHaConfigEditor({
                 <code className="text-[0.6875rem]">
                   {`sensor.meshcore_${exampleRepeaterNodeId}_lpp_humidity_ch1`}
                 </code>
-                , etc. &mdash; CayenneLPP sensors (auto-detected from repeater)
+                {t('settings.fanout.ha.lppAuto')}
               </li>
             </ul>
           </div>
 
           <div>
-            <span className="font-medium text-foreground">Per tracked contact</span> &mdash; updates
-            passively when advertisements with GPS are heard, and from any GPS reading in the
-            contact&apos;s CayenneLPP telemetry. Shown for one contact; a tracker is created for
-            each selected contact.
+            <span className="font-medium text-foreground">
+              {t('settings.fanout.ha.perContact')}
+            </span>{' '}
+            {t('settings.fanout.ha.perContactHelp')}
             <ul className="mt-0.5 ml-4 list-disc space-y-0.5">
               <li>
                 <code className="text-[0.6875rem]">
                   {`device_tracker.meshcore_${exampleContactNodeId}`}
                 </code>{' '}
-                &mdash; latitude/longitude (plus altitude when telemetry provides it)
+                {t('settings.fanout.ha.trackerHelp')}
               </li>
               <li>
                 <code className="text-[0.6875rem]">
                   {`sensor.meshcore_${exampleContactNodeId}_lpp_temperature_ch1`}
                 </code>
-                , etc. &mdash; CayenneLPP sensors (when the contact is tracked for telemetry; GPS
-                goes to the tracker above)
+                {t('settings.fanout.ha.contactLpp')}
               </li>
             </ul>
           </div>
 
           <div>
-            <span className="font-medium text-foreground">Message events</span> &mdash; fires for
-            each message matching the scope below
+            <span className="font-medium text-foreground">
+              {t('settings.fanout.ha.messageEventsTitle')}
+            </span>{' '}
+            {t('settings.fanout.ha.messageEventsFires')}
             <ul className="mt-0.5 ml-4 list-disc space-y-0.5">
               <li>
                 <code className="text-[0.6875rem]">
                   {`event.meshcore_${localRadioNodeId}_messages`}
                 </code>{' '}
-                &mdash; trigger automations on sender, channel, or message content
+                {t('settings.fanout.ha.messageEventsTrigger')}
               </li>
             </ul>
           </div>
 
           <p className="text-[0.6875rem] mt-1.5">
-            Entity IDs use the first 12 characters of the node&apos;s public key. Entities are
-            removed from HA when this integration is disabled or deleted. State topics are published
-            under{' '}
-            <code className="text-[0.6875rem]">{prefix}/&lt;node_id&gt;/health|telemetry|gps</code>.
+            <Trans
+              i18nKey="settings.fanout.ha.entityIdsHelp"
+              values={{ prefix }}
+              components={transInline}
+            />
           </p>
         </div>
       </details>
@@ -1234,18 +1233,15 @@ function MqttHaConfigEditor({
       <details className="group">
         <summary className="text-sm font-medium text-foreground cursor-pointer select-none flex items-center gap-1">
           <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-0 -rotate-90" />
-          Published topic summary
+          {t('settings.fanout.ha.publishedTopicSummary')}
         </summary>
         <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/20 p-3">
           <p className="text-xs text-muted-foreground">
-            Home Assistant device and entity IDs are keyed off the first 12 characters of each
-            node&apos;s public key, not the display name. Those same 12 characters are used in the
-            MQTT state topics below.
+            {t('settings.fanout.ha.topicSummaryHelp')}
           </p>
           {topicSummary.length === 0 ? (
             <p className="text-xs text-muted-foreground italic">
-              No topic previews available yet. Connect to a radio to resolve the local radio key,
-              and select contacts or repeaters above to preview their published topics.
+              {t('settings.fanout.ha.noTopicPreviews')}
             </p>
           ) : (
             <div className="space-y-2">
@@ -1258,11 +1254,11 @@ function MqttHaConfigEditor({
                     <span className="font-medium text-foreground">{kindLabel[item.kind]}</span>
                     <span className="text-foreground">{item.label}</span>
                     <span className="font-mono text-[0.6875rem] text-muted-foreground">
-                      node id {item.nodeId}
+                      {t('settings.fanout.ha.nodeId', { id: item.nodeId })}
                     </span>
                   </div>
                   <div className="mt-1 text-[0.6875rem] text-muted-foreground font-mono break-all">
-                    key {item.publicKey}
+                    {t('settings.fanout.ha.key', { key: item.publicKey })}
                   </div>
                   {item.topics.map((topic) => (
                     <div
@@ -1277,30 +1273,30 @@ function MqttHaConfigEditor({
             </div>
           )}
           <p className="text-[0.6875rem] text-muted-foreground">
-            Discovery config topics are also published under{' '}
-            <code className="text-[0.6875rem]">homeassistant/.../config</code>, but the topics above
-            are the primary runtime state and event topics.
+            <Trans i18nKey="settings.fanout.ha.discoveryTopics" components={transInline} />
           </p>
         </div>
       </details>
 
       <Separator />
 
-      <h3 className="text-base font-semibold tracking-tight">MQTT Broker</h3>
+      <h3 className="text-base font-semibold tracking-tight">
+        {t('settings.fanout.ha.mqttBroker')}
+      </h3>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="fanout-ha-host">Broker Host</Label>
+          <Label htmlFor="fanout-ha-host">{t('settings.fanout.mqtt.brokerHost')}</Label>
           <Input
             id="fanout-ha-host"
             type="text"
-            placeholder="e.g. 192.168.1.100"
+            placeholder={t('settings.fanout.mqtt.hostPlaceholder')}
             value={(config.broker_host as string) || ''}
             onChange={(e) => onChange({ ...config, broker_host: e.target.value })}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="fanout-ha-port">Broker Port</Label>
+          <Label htmlFor="fanout-ha-port">{t('settings.fanout.mqtt.brokerPort')}</Label>
           <Input
             id="fanout-ha-port"
             type="number"
@@ -1316,21 +1312,21 @@ function MqttHaConfigEditor({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="fanout-ha-user">Username</Label>
+          <Label htmlFor="fanout-ha-user">{t('settings.fanout.mqtt.username')}</Label>
           <Input
             id="fanout-ha-user"
             type="text"
-            placeholder="Optional"
+            placeholder={t('settings.fanout.mqtt.optional')}
             value={(config.username as string) || ''}
             onChange={(e) => onChange({ ...config, username: e.target.value })}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="fanout-ha-pass">Password</Label>
+          <Label htmlFor="fanout-ha-pass">{t('settings.fanout.mqtt.password')}</Label>
           <Input
             id="fanout-ha-pass"
             type="password"
-            placeholder="Optional"
+            placeholder={t('settings.fanout.mqtt.optional')}
             value={(config.password as string) || ''}
             onChange={(e) => onChange({ ...config, password: e.target.value })}
           />
@@ -1344,7 +1340,7 @@ function MqttHaConfigEditor({
           onChange={(e) => onChange({ ...config, use_tls: e.target.checked })}
           className="h-4 w-4 rounded border-border"
         />
-        <span className="text-sm">Use TLS</span>
+        <span className="text-sm">{t('settings.fanout.mqtt.useTls')}</span>
       </label>
 
       {!!config.use_tls && (
@@ -1355,12 +1351,12 @@ function MqttHaConfigEditor({
             onChange={(e) => onChange({ ...config, tls_insecure: e.target.checked })}
             className="h-4 w-4 rounded border-border"
           />
-          <span className="text-sm">Skip certificate verification</span>
+          <span className="text-sm">{t('settings.fanout.mqtt.skipCert')}</span>
         </label>
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="fanout-ha-prefix">Topic Prefix</Label>
+        <Label htmlFor="fanout-ha-prefix">{t('settings.fanout.mqtt.topicPrefix')}</Label>
         <Input
           id="fanout-ha-prefix"
           type="text"
@@ -1369,19 +1365,22 @@ function MqttHaConfigEditor({
           onChange={(e) => onChange({ ...config, topic_prefix: e.target.value })}
         />
         <p className="text-[0.6875rem] text-muted-foreground">
-          State updates publish under <code className="text-[0.6875rem]">{prefix}/</code>. Discovery
-          configs always use the <code className="text-[0.6875rem]">homeassistant/</code> prefix.
+          <Trans
+            i18nKey="settings.fanout.ha.topicPrefixHelp"
+            values={{ prefix }}
+            components={transInline}
+          />
         </p>
       </div>
 
       <Separator />
 
       <div className="space-y-2">
-        <h3 className="text-base font-semibold tracking-tight">GPS Tracked Contacts</h3>
+        <h3 className="text-base font-semibold tracking-tight">
+          {t('settings.fanout.ha.gpsTitle')}
+        </h3>
         <p className="text-[0.8125rem] text-muted-foreground">
-          Each selected contact becomes a <code className="text-[0.6875rem]">device_tracker</code>{' '}
-          in HA, updated whenever an advertisement with GPS coordinates is heard. Useful for
-          tracking mobile nodes on an HA map dashboard.
+          <Trans i18nKey="settings.fanout.ha.gpsHelp" components={transInline} />
         </p>
 
         {selectedContactDetails.length > 0 && (
@@ -1396,7 +1395,9 @@ function MqttHaConfigEditor({
                   type="button"
                   className="ml-0.5 hover:text-destructive transition-colors"
                   onClick={() => toggleTrackedContact(c.public_key)}
-                  aria-label={`Remove ${c.name || c.public_key.slice(0, 12)}`}
+                  aria-label={t('settings.fanout.ha.removeAria', {
+                    name: c.name || c.public_key.slice(0, 12),
+                  })}
                 >
                   &times;
                 </button>
@@ -1406,12 +1407,14 @@ function MqttHaConfigEditor({
         )}
 
         {contactOptions.length === 0 ? (
-          <p className="text-[0.8125rem] text-muted-foreground italic">No contacts available.</p>
+          <p className="text-[0.8125rem] text-muted-foreground italic">
+            {t('settings.fanout.ha.noContacts')}
+          </p>
         ) : (
           <>
             <Input
               type="text"
-              placeholder={`Search ${contactOptions.length} contacts...`}
+              placeholder={t('settings.fanout.ha.searchContacts', { count: contactOptions.length })}
               value={contactSearch}
               onChange={(e) => setContactSearch(e.target.value)}
               className="h-8 text-sm"
@@ -1419,7 +1422,7 @@ function MqttHaConfigEditor({
             <div className="max-h-48 overflow-y-auto space-y-1 rounded border border-border p-2">
               {filteredContacts.length === 0 ? (
                 <p className="text-[0.8125rem] text-muted-foreground italic py-1">
-                  No contacts match &ldquo;{contactSearch}&rdquo;
+                  {t('settings.fanout.ha.noContactsMatch', { query: contactSearch })}
                 </p>
               ) : (
                 filteredContacts.map((c) => (
@@ -1448,23 +1451,19 @@ function MqttHaConfigEditor({
       <Separator />
 
       <div className="space-y-2">
-        <h3 className="text-base font-semibold tracking-tight">Telemetry Tracked Repeaters</h3>
+        <h3 className="text-base font-semibold tracking-tight">
+          {t('settings.fanout.ha.telemetryTitle')}
+        </h3>
         <p className="text-[0.8125rem] text-muted-foreground">
-          Each selected repeater becomes an HA device with sensors for battery voltage, RSSI, SNR,
-          noise floor, packet counts, and uptime. Data updates whenever telemetry is collected
-          (auto-collect runs every ~8 hours, or on manual dashboard fetch). Only repeaters already
-          in the auto-telemetry tracking list appear here (add new repeaters by logging into the
-          repeater and opting in at the bottom of the page).
+          {t('settings.fanout.ha.telemetryHelp')}
         </p>
         {trackedRepeaters.length === 0 ? (
           <div className="rounded-md border border-muted bg-muted/30 px-3 py-2 text-[0.8125rem] text-muted-foreground">
-            No repeaters are being auto-tracked for telemetry. Add repeaters to the auto-telemetry
-            tracking list in the Radio section first, then return here to select which ones to
-            expose to HA.
+            {t('settings.fanout.ha.noTrackedRepeaters')}
           </div>
         ) : repeaterOptions.length === 0 ? (
           <p className="text-[0.8125rem] text-muted-foreground italic">
-            Auto-tracked repeaters not found in contact list.
+            {t('settings.fanout.ha.trackedNotFound')}
           </p>
         ) : (
           <div className="max-h-40 overflow-y-auto space-y-1 rounded border border-border p-2">
@@ -1489,12 +1488,15 @@ function MqttHaConfigEditor({
       <Separator />
 
       <div className="space-y-2">
-        <h3 className="text-base font-semibold tracking-tight">Message Events</h3>
+        <h3 className="text-base font-semibold tracking-tight">
+          {t('settings.fanout.ha.messageEventsHeading')}
+        </h3>
         <p className="text-[0.8125rem] text-muted-foreground">
-          Matching messages fire an{' '}
-          <code className="text-[0.6875rem]">{`event.meshcore_${localRadioNodeId}_messages`}</code>{' '}
-          entity in HA with sender, text, channel, and direction attributes. Use HA automations to
-          trigger actions on specific messages, channels, or contacts.
+          <Trans
+            i18nKey="settings.fanout.ha.messageEventsHelp"
+            values={{ entity: `event.meshcore_${localRadioNodeId}_messages` }}
+            components={transInline}
+          />
         </p>
       </div>
       <ScopeSelector scope={scope} onChange={onScopeChange} />
@@ -1510,18 +1512,17 @@ function MqttCommunityConfigEditor({
   onChange: (config: Record<string, unknown>) => void;
 }) {
   const authMode = (config.auth_mode as string) || DEFAULT_COMMUNITY_AUTH_MODE;
+  const { t } = useTranslation();
 
   return (
     <div className="space-y-3">
       <p className="text-[0.8125rem] text-muted-foreground">
-        Advanced community MQTT editor. Use this for manual meshcoretomqtt-compatible setups or for
-        modifying a saved preset after creation. Only raw RF packets are shared &mdash; never
-        decrypted messages.
+        {t('settings.fanout.community.help')}
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="fanout-comm-host">Broker Host</Label>
+          <Label htmlFor="fanout-comm-host">{t('settings.fanout.mqtt.brokerHost')}</Label>
           <Input
             id="fanout-comm-host"
             type="text"
@@ -1531,7 +1532,7 @@ function MqttCommunityConfigEditor({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="fanout-comm-port">Broker Port</Label>
+          <Label htmlFor="fanout-comm-port">{t('settings.fanout.mqtt.brokerPort')}</Label>
           <Input
             id="fanout-comm-port"
             type="number"
@@ -1550,31 +1551,33 @@ function MqttCommunityConfigEditor({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="fanout-comm-transport">Transport</Label>
+          <Label htmlFor="fanout-comm-transport">{t('settings.fanout.community.transport')}</Label>
           <select
             id="fanout-comm-transport"
             value={(config.transport as string) || DEFAULT_COMMUNITY_TRANSPORT}
             onChange={(e) => onChange({ ...config, transport: e.target.value })}
             className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
-            <option value="websockets">WebSockets</option>
-            <option value="tcp">TCP</option>
+            <option value="websockets">{t('settings.fanout.community.websockets')}</option>
+            <option value="tcp">{t('settings.fanout.community.tcp')}</option>
           </select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="fanout-comm-auth-mode">Authentication</Label>
+          <Label htmlFor="fanout-comm-auth-mode">
+            {t('settings.fanout.community.authentication')}
+          </Label>
           <select
             id="fanout-comm-auth-mode"
             value={authMode}
             onChange={(e) => onChange({ ...config, auth_mode: e.target.value })}
             className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
-            <option value="token">Token</option>
-            <option value="none">None</option>
-            <option value="password">Username / Password</option>
+            <option value="token">{t('settings.fanout.community.token')}</option>
+            <option value="none">{t('settings.fanout.community.none')}</option>
+            <option value="password">{t('settings.fanout.community.passwordAuth')}</option>
           </select>
           <p className="text-[0.8125rem] text-muted-foreground">
-            LetsMesh uses <code>token</code> auth. MeshRank uses <code>none</code>.
+            <Trans i18nKey="settings.fanout.community.letsMeshAuthHelp" components={transInline} />
           </p>
         </div>
       </div>
@@ -1582,7 +1585,7 @@ function MqttCommunityConfigEditor({
       {((config.transport as string) || DEFAULT_COMMUNITY_TRANSPORT) === 'websockets' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="fanout-comm-ws-path">WebSocket Path</Label>
+            <Label htmlFor="fanout-comm-ws-path">{t('settings.fanout.community.wsPath')}</Label>
             <Input
               id="fanout-comm-ws-path"
               type="text"
@@ -1591,7 +1594,7 @@ function MqttCommunityConfigEditor({
               onChange={(e) => onChange({ ...config, websocket_path: e.target.value })}
             />
             <p className="text-[0.8125rem] text-muted-foreground">
-              Defaults to <code>/</code> — use <code>/mqtt</code> for brokers that require a path
+              <Trans i18nKey="settings.fanout.community.wsPathHelp" components={transInline} />
             </p>
           </div>
         </div>
@@ -1600,7 +1603,9 @@ function MqttCommunityConfigEditor({
       {authMode === 'token' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="fanout-comm-token-audience">Token Audience</Label>
+            <Label htmlFor="fanout-comm-token-audience">
+              {t('settings.fanout.community.tokenAudience')}
+            </Label>
             <Input
               id="fanout-comm-token-audience"
               type="text"
@@ -1609,20 +1614,20 @@ function MqttCommunityConfigEditor({
               onChange={(e) => onChange({ ...config, token_audience: e.target.value })}
             />
             <p className="text-[0.8125rem] text-muted-foreground">
-              Defaults to the broker host when blank
+              {t('settings.fanout.community.tokenAudienceHelp')}
             </p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="fanout-comm-email">Owner Email (optional)</Label>
+            <Label htmlFor="fanout-comm-email">{t('settings.fanout.community.ownerEmail')}</Label>
             <Input
               id="fanout-comm-email"
               type="email"
-              placeholder="you@example.com"
+              placeholder={t('settings.fanout.community.emailPlaceholder')}
               value={(config.email as string) || ''}
               onChange={(e) => onChange({ ...config, email: e.target.value })}
             />
             <p className="text-[0.8125rem] text-muted-foreground">
-              Used to claim your node on the community aggregator
+              {t('settings.fanout.community.ownerEmailHelp')}
             </p>
           </div>
         </div>
@@ -1631,7 +1636,7 @@ function MqttCommunityConfigEditor({
       {authMode === 'password' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="fanout-comm-username">Username</Label>
+            <Label htmlFor="fanout-comm-username">{t('settings.fanout.mqtt.username')}</Label>
             <Input
               id="fanout-comm-username"
               type="text"
@@ -1640,7 +1645,7 @@ function MqttCommunityConfigEditor({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="fanout-comm-password">Password</Label>
+            <Label htmlFor="fanout-comm-password">{t('settings.fanout.mqtt.password')}</Label>
             <Input
               id="fanout-comm-password"
               type="password"
@@ -1659,7 +1664,7 @@ function MqttCommunityConfigEditor({
             onChange={(e) => onChange({ ...config, use_tls: e.target.checked })}
             className="h-4 w-4 rounded border-border"
           />
-          <span className="text-sm">Use TLS</span>
+          <span className="text-sm">{t('settings.fanout.mqtt.useTls')}</span>
         </label>
 
         <label className="flex items-center gap-3 cursor-pointer ml-7">
@@ -1670,28 +1675,30 @@ function MqttCommunityConfigEditor({
             className="h-4 w-4 rounded border-border"
             disabled={config.use_tls === undefined ? false : !config.use_tls}
           />
-          <span className="text-sm">Verify TLS certificates</span>
+          <span className="text-sm">{t('settings.fanout.mqtt.verifyTls')}</span>
         </label>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="fanout-comm-iata">Region Code (IATA)</Label>
+        <Label htmlFor="fanout-comm-iata">{t('settings.fanout.community.regionCode')}</Label>
         <Input
           id="fanout-comm-iata"
           type="text"
           maxLength={3}
-          placeholder="e.g. DEN, LAX, NYC"
+          placeholder={t('settings.fanout.community.regionPlaceholder')}
           value={(config.iata as string) || ''}
           onChange={(e) => onChange({ ...config, iata: e.target.value.toUpperCase() })}
           className="w-32"
         />
         <p className="text-[0.8125rem] text-muted-foreground">
-          Your nearest airport&apos;s IATA code (required)
+          {t('settings.fanout.community.regionHelp')}
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="fanout-comm-topic-template">Packet Topic Template</Label>
+        <Label htmlFor="fanout-comm-topic-template">
+          {t('settings.fanout.community.packetTopicTemplate')}
+        </Label>
         <Input
           id="fanout-comm-topic-template"
           type="text"
@@ -1700,8 +1707,11 @@ function MqttCommunityConfigEditor({
           onChange={(e) => onChange({ ...config, topic_template: e.target.value })}
         />
         <p className="text-[0.8125rem] text-muted-foreground">
-          Use <code>{'{IATA}'}</code> and <code>{'{PUBLIC_KEY}'}</code>. Default:{' '}
-          <code>{DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE}</code>
+          <Trans
+            i18nKey="settings.fanout.community.packetTopicHelp"
+            values={{ defaultTemplate: DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE }}
+            components={transInline}
+          />
         </p>
       </div>
     </div>
@@ -1715,22 +1725,29 @@ function MeshRankConfigEditor({
   config: Record<string, unknown>;
   onChange: (config: Record<string, unknown>) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-3">
-      <p className="text-[0.8125rem] text-muted-foreground">
-        Pre-filled MeshRank setup. This saves as a regular Community MQTT integration once created,
-        but only asks for the MeshRank packet topic you were given.
-      </p>
+      <p className="text-[0.8125rem] text-muted-foreground">{t('settings.fanout.meshrank.help')}</p>
 
       <div className="rounded-md border border-input bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-        Broker <code>{DEFAULT_MESHRANK_BROKER_HOST}</code> on port{' '}
-        <code>{DEFAULT_MESHRANK_BROKER_PORT}</code> via <code>{DEFAULT_MESHRANK_TRANSPORT}</code>,
-        auth <code>{DEFAULT_MESHRANK_AUTH_MODE}</code>, TLS on, certificate verification on, region
-        code fixed to <code>{DEFAULT_MESHRANK_IATA}</code>.
+        <Trans
+          i18nKey="settings.fanout.meshrank.brokerSummary"
+          values={{
+            host: DEFAULT_MESHRANK_BROKER_HOST,
+            port: DEFAULT_MESHRANK_BROKER_PORT,
+            transport: DEFAULT_MESHRANK_TRANSPORT,
+            auth: DEFAULT_MESHRANK_AUTH_MODE,
+            iata: DEFAULT_MESHRANK_IATA,
+          }}
+          components={transInline}
+        />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="fanout-meshrank-topic-template">Packet Topic Template</Label>
+        <Label htmlFor="fanout-meshrank-topic-template">
+          {t('settings.fanout.community.packetTopicTemplate')}
+        </Label>
         <Input
           id="fanout-meshrank-topic-template"
           type="text"
@@ -1745,8 +1762,7 @@ function MeshRankConfigEditor({
           }
         />
         <p className="text-[0.8125rem] text-muted-foreground">
-          Paste the full topic template from your MeshRank config, for example{' '}
-          <code>meshrank/uplink/B435F6D5F7896B74C6B995FE221C2C1F/{'{PUBLIC_KEY}'}/packets</code>.
+          <Trans i18nKey="settings.fanout.meshrank.topicHelp" components={transInline} />
         </p>
       </div>
     </div>
@@ -1762,26 +1778,31 @@ function LetsMeshConfigEditor({
   onChange: (config: Record<string, unknown>) => void;
   brokerHost: string;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-3">
-      <p className="text-[0.8125rem] text-muted-foreground">
-        Pre-filled LetsMesh setup. This saves as a regular Community MQTT integration once created,
-        but only asks for the values LetsMesh expects from you.
-      </p>
+      <p className="text-[0.8125rem] text-muted-foreground">{t('settings.fanout.letsmesh.help')}</p>
 
       <div className="rounded-md border border-input bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-        Broker <code>{brokerHost}</code> on port <code>{DEFAULT_COMMUNITY_BROKER_PORT}</code> via{' '}
-        <code>{DEFAULT_COMMUNITY_TRANSPORT}</code>, auth <code>{DEFAULT_COMMUNITY_AUTH_MODE}</code>,
-        TLS on, certificate verification on, token audience fixed to <code>{brokerHost}</code>.
+        <Trans
+          i18nKey="settings.fanout.letsmesh.brokerSummary"
+          values={{
+            host: brokerHost,
+            port: DEFAULT_COMMUNITY_BROKER_PORT,
+            transport: DEFAULT_COMMUNITY_TRANSPORT,
+            auth: DEFAULT_COMMUNITY_AUTH_MODE,
+          }}
+          components={transInline}
+        />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="fanout-letsmesh-email">Email</Label>
+          <Label htmlFor="fanout-letsmesh-email">{t('settings.fanout.letsmesh.email')}</Label>
           <Input
             id="fanout-letsmesh-email"
             type="email"
-            placeholder="you@example.com"
+            placeholder={t('settings.fanout.community.emailPlaceholder')}
             value={(config.email as string) || ''}
             onChange={(e) =>
               onChange({ ...config, email: e.target.value, broker_host: brokerHost })
@@ -1789,12 +1810,12 @@ function LetsMeshConfigEditor({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="fanout-letsmesh-iata">Region Code (IATA)</Label>
+          <Label htmlFor="fanout-letsmesh-iata">{t('settings.fanout.community.regionCode')}</Label>
           <Input
             id="fanout-letsmesh-iata"
             type="text"
             maxLength={3}
-            placeholder="e.g. DEN, LAX, NYC"
+            placeholder={t('settings.fanout.community.regionPlaceholder')}
             value={(config.iata as string) || ''}
             onChange={(e) =>
               onChange({
@@ -1820,34 +1841,30 @@ function BotConfigEditor({
   onChange: (config: Record<string, unknown>) => void;
 }) {
   const code = (config.code as string) || '';
+  const { t } = useTranslation();
   return (
     <div className="space-y-3">
       <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-md">
         <p className="text-sm text-destructive">
-          <strong>Experimental:</strong> This is an alpha feature and introduces automated message
-          sending to your radio; unexpected behavior may occur. Use with caution, and please report
-          any bugs!
+          <Trans i18nKey="settings.fanout.bot.experimental" components={transInline} />
         </p>
       </div>
 
       <div className="p-3 bg-warning/10 border border-warning/30 rounded-md">
         <p className="text-sm text-warning">
-          <strong>Security Warning:</strong> This feature executes arbitrary Python code on the
-          server. Only run trusted code, and be cautious of arbitrary usage of message parameters.
+          <Trans i18nKey="settings.fanout.bot.security" components={transInline} />
         </p>
       </div>
 
       <div className="p-3 bg-warning/10 border border-warning/30 rounded-md">
         <p className="text-sm text-warning">
-          <strong>Don&apos;t wreck the mesh!</strong> Bots process ALL messages, including their
-          own. Be careful of creating infinite loops!
+          <Trans i18nKey="settings.fanout.bot.dontWreck" components={transInline} />
         </p>
       </div>
 
       <div className="flex items-center justify-between">
         <p className="text-[0.8125rem] text-muted-foreground">
-          Define a <code className="bg-muted px-1 rounded">bot()</code> function that receives
-          message data and optionally returns a reply.
+          <Trans i18nKey="settings.fanout.bot.defineFunction" components={transInline} />
         </p>
         <Button
           type="button"
@@ -1855,14 +1872,14 @@ function BotConfigEditor({
           size="sm"
           onClick={() => onChange({ ...config, code: DEFAULT_BOT_CODE })}
         >
-          Reset to Example
+          {t('settings.fanout.bot.resetExample')}
         </Button>
       </div>
 
       <Suspense
         fallback={
           <div className="h-64 md:h-96 rounded-md border border-input bg-code-editor-bg flex items-center justify-center text-muted-foreground">
-            Loading editor...
+            {t('settings.fanout.bot.loadingEditor')}
           </div>
         }
       >
@@ -1871,17 +1888,13 @@ function BotConfigEditor({
 
       <div className="text-[0.8125rem] text-muted-foreground space-y-1">
         <p>
-          <strong>Available:</strong> Standard Python libraries and any modules installed in the
-          server environment.
+          <Trans i18nKey="settings.fanout.bot.available" components={transInline} />
         </p>
         <p>
-          <strong>Limits:</strong> 10 second timeout per bot.
+          <Trans i18nKey="settings.fanout.bot.limits" components={transInline} />
         </p>
         <p>
-          <strong>Note:</strong> Bots respond to all messages, including your own. For channel
-          messages, <code>sender_key</code> is <code>None</code>. Multiple enabled bots run
-          concurrently. Outgoing messages are serialized with a two-second delay between sends to
-          prevent repeater collision.
+          <Trans i18nKey="settings.fanout.bot.note" components={transInline} />
         </p>
       </div>
     </div>
@@ -1914,29 +1927,34 @@ function MapUploadConfigEditor({
 
   const radioLatLonConfigured =
     radioLat !== null && radioLon !== null && !(radioLat === 0 && radioLon === 0);
+  const { t } = useTranslation();
 
   return (
     <div className="space-y-3">
       <p className="text-[0.8125rem] text-muted-foreground">
-        Automatically upload heard repeater and room server advertisements to{' '}
-        <a
-          href="https://map.meshcore.io"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline hover:text-foreground"
-        >
-          map.meshcore.io
-        </a>
-        . Requires the radio&apos;s private key to be available (firmware must have{' '}
-        <code>ENABLE_PRIVATE_KEY_EXPORT=1</code>). Only raw RF packets are shared &mdash; never
-        decrypted messages.
+        <Trans
+          i18nKey="settings.fanout.map.help"
+          components={{
+            ...transInline,
+            map: (
+              <a
+                href="https://map.meshcore.io"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-foreground"
+              />
+            ),
+          }}
+        />
       </p>
 
       <div className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning">
-        <strong>Dry Run is {isDryRun ? 'ON' : 'OFF'}.</strong>{' '}
-        {isDryRun
-          ? 'No uploads will be sent. Check the backend logs to verify the payload looks correct before enabling live sends.'
-          : 'Live uploads are enabled. Each advert is rate-limited to once per hour per node.'}
+        <Trans
+          i18nKey={
+            isDryRun ? 'settings.fanout.map.dryRunStatusOn' : 'settings.fanout.map.dryRunStatusOff'
+          }
+          components={transInline}
+        />
       </div>
 
       <label className="flex items-center gap-3 cursor-pointer">
@@ -1947,10 +1965,9 @@ function MapUploadConfigEditor({
           className="h-4 w-4 rounded border-border"
         />
         <div>
-          <span className="text-sm font-medium">Dry Run (log only, no uploads)</span>
+          <span className="text-sm font-medium">{t('settings.fanout.map.dryRunLabel')}</span>
           <p className="text-[0.8125rem] text-muted-foreground">
-            When enabled, upload payloads are logged at INFO level but not sent. Disable once you
-            have confirmed the logged output looks correct.
+            {t('settings.fanout.map.dryRunHelp')}
           </p>
         </div>
       </label>
@@ -1958,7 +1975,7 @@ function MapUploadConfigEditor({
       <Separator />
 
       <div className="space-y-2">
-        <Label htmlFor="fanout-map-api-url">API URL (optional)</Label>
+        <Label htmlFor="fanout-map-api-url">{t('settings.fanout.map.apiUrl')}</Label>
         <Input
           id="fanout-map-api-url"
           type="url"
@@ -1967,7 +1984,7 @@ function MapUploadConfigEditor({
           onChange={(e) => onChange({ ...config, api_url: e.target.value })}
         />
         <p className="text-[0.8125rem] text-muted-foreground">
-          Leave blank to use the default <code>map.meshcore.io</code> endpoint.
+          <Trans i18nKey="settings.fanout.map.apiUrlHelp" components={transInline} />
         </p>
       </div>
 
@@ -1981,11 +1998,9 @@ function MapUploadConfigEditor({
           className="h-4 w-4 rounded border-border"
         />
         <div>
-          <span className="text-sm font-medium">Enable Geofence</span>
+          <span className="text-sm font-medium">{t('settings.fanout.map.enableGeofence')}</span>
           <p className="text-[0.8125rem] text-muted-foreground">
-            Only upload nodes whose location falls within the configured radius of your radio&apos;s
-            own position. Helps exclude nodes with false or spoofed coordinates. Uses the
-            latitude/longitude set in Radio Settings.
+            {t('settings.fanout.map.geofenceHelp')}
           </p>
         </div>
       </label>
@@ -1994,28 +2009,26 @@ function MapUploadConfigEditor({
         <div className="space-y-3 pl-7">
           {!radioLatLonConfigured && (
             <div className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning">
-              Your radio does not currently have a latitude/longitude configured. Geofencing will be
-              silently skipped until coordinates are set in{' '}
-              <strong>Settings &rarr; Radio &rarr; Location</strong>.
+              <Trans i18nKey="settings.fanout.map.noCoords" components={transInline} />
             </div>
           )}
           {radioLatLonConfigured && (
             <p className="text-[0.8125rem] text-muted-foreground">
-              Using radio position{' '}
-              <code>
-                {radioLat?.toFixed(5)}, {radioLon?.toFixed(5)}
-              </code>{' '}
-              as the geofence center. Update coordinates in Radio Settings to move the center.
+              <Trans
+                i18nKey="settings.fanout.map.usingPosition"
+                values={{ lat: radioLat?.toFixed(5), lon: radioLon?.toFixed(5) }}
+                components={transInline}
+              />
             </p>
           )}
           <div className="space-y-2">
-            <Label htmlFor="fanout-map-geofence-radius">Radius (km)</Label>
+            <Label htmlFor="fanout-map-geofence-radius">{t('settings.fanout.map.radius')}</Label>
             <Input
               id="fanout-map-geofence-radius"
               type="number"
               min="0"
               step="any"
-              placeholder="e.g. 100"
+              placeholder={t('settings.fanout.map.radiusPlaceholder')}
               value={getOptionalNumberInputValue(config.geofence_radius_km)}
               onChange={(e) =>
                 onChange({
@@ -2025,7 +2038,7 @@ function MapUploadConfigEditor({
               }
             />
             <p className="text-[0.8125rem] text-muted-foreground">
-              Nodes further than this distance from your radio&apos;s position will not be uploaded.
+              {t('settings.fanout.map.radiusHelp')}
             </p>
           </div>
         </div>
@@ -2089,6 +2102,7 @@ function PillsSearchList({
   onNone,
   searchPlaceholder,
   emptyItemsMessage,
+  matchKind,
 }: {
   label: string;
   labelSuffix: string;
@@ -2099,7 +2113,9 @@ function PillsSearchList({
   onNone: () => void;
   searchPlaceholder: string;
   emptyItemsMessage: string;
+  matchKind: 'channels' | 'contacts';
 }) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const searchLower = search.toLowerCase().trim();
 
@@ -2137,7 +2153,7 @@ function PillsSearchList({
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             onClick={onAll}
           >
-            All
+            {t('settings.fanout.scope.all')}
           </button>
           <span className="text-xs text-muted-foreground">/</span>
           <button
@@ -2145,7 +2161,7 @@ function PillsSearchList({
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             onClick={onNone}
           >
-            None
+            {t('settings.fanout.scope.none')}
           </button>
         </span>
       </div>
@@ -2154,8 +2170,7 @@ function PillsSearchList({
         <div className="flex flex-wrap gap-1.5">
           {overPillLimit ? (
             <span className="inline-flex items-center text-[0.6875rem] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-              &gt;{MAX_SCOPE_PILL_DISPLAY} selections made; hiding selection preview to keep the
-              interface clean
+              {t('settings.fanout.scope.hidePills', { max: MAX_SCOPE_PILL_DISPLAY })}
             </span>
           ) : (
             selectedDetails.map((it) => (
@@ -2168,7 +2183,7 @@ function PillsSearchList({
                   type="button"
                   className="ml-0.5 hover:text-destructive transition-colors"
                   onClick={() => onToggle(it.key)}
-                  aria-label={`Remove ${it.label}`}
+                  aria-label={t('settings.fanout.scope.removeAria', { name: it.label })}
                 >
                   &times;
                 </button>
@@ -2192,7 +2207,12 @@ function PillsSearchList({
           <div className="max-h-48 overflow-y-auto space-y-1 rounded border border-border p-2">
             {filtered.length === 0 ? (
               <p className="text-[0.8125rem] text-muted-foreground italic py-1">
-                No {label.toLowerCase()} match &ldquo;{search}&rdquo;
+                {t(
+                  matchKind === 'channels'
+                    ? 'settings.fanout.scope.noChannelsMatch'
+                    : 'settings.fanout.scope.noContactsMatch',
+                  { query: search }
+                )}
               </p>
             ) : (
               filtered.map((it) => (
@@ -2228,6 +2248,7 @@ function ScopeSelector({
   onChange: (scope: Record<string, unknown>) => void;
   showRawPackets?: boolean;
 }) {
+  const { t } = useTranslation();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
 
@@ -2309,10 +2330,10 @@ function ScopeSelector({
   const filteredContacts = contacts.filter((c) => c.type === 0 || c.type === 1);
 
   const modeDescriptions: Record<ScopeMode, string> = {
-    all: 'All messages',
-    none: 'No messages',
-    only: 'Only listed channels/contacts',
-    except: 'All except listed channels/contacts',
+    all: t('settings.fanout.scope.allMessages'),
+    none: t('settings.fanout.scope.noMessages'),
+    only: t('settings.fanout.scope.onlyListed'),
+    except: t('settings.fanout.scope.allExcept'),
   };
 
   const rawEnabled = showRawPackets && scope.raw_packets === 'all';
@@ -2329,11 +2350,10 @@ function ScopeSelector({
   const showEmptyScopeWarning = messagesEffectivelyNone && !rawEnabled;
 
   const listHint =
-    mode === 'only'
-      ? 'Newly added channels or contacts will not be automatically included.'
-      : 'Newly added channels or contacts will be automatically included unless excluded here.';
+    mode === 'only' ? t('settings.fanout.scope.onlyHint') : t('settings.fanout.scope.exceptHint');
 
-  const checkboxLabel = mode === 'except' ? 'exclude' : 'include';
+  const checkboxLabel =
+    mode === 'except' ? t('settings.fanout.scope.exclude') : t('settings.fanout.scope.include');
 
   const messageModes: ScopeMode[] = showRawPackets
     ? ['all', 'none', 'only', 'except']
@@ -2341,7 +2361,7 @@ function ScopeSelector({
 
   return (
     <div className="space-y-3">
-      <h3 className="text-base font-semibold tracking-tight">Message Scope</h3>
+      <h3 className="text-base font-semibold tracking-tight">{t('settings.fanout.scope.title')}</h3>
 
       {showRawPackets && (
         <label className="flex items-center gap-3 cursor-pointer">
@@ -2351,7 +2371,7 @@ function ScopeSelector({
             onChange={(e) => onChange({ ...scope, raw_packets: e.target.checked ? 'all' : 'none' })}
             className="h-4 w-4 rounded border-border"
           />
-          <span className="text-sm">Forward raw packets</span>
+          <span className="text-sm">{t('settings.fanout.scope.forwardRaw')}</span>
         </label>
       )}
 
@@ -2372,7 +2392,7 @@ function ScopeSelector({
 
       {showEmptyScopeWarning && (
         <div className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning">
-          Nothing is selected &mdash; this integration will not forward any data.
+          {t('settings.fanout.scope.emptyWarning')}
         </div>
       )}
 
@@ -2382,7 +2402,7 @@ function ScopeSelector({
 
           {channels.length > 0 && (
             <PillsSearchList
-              label="Channels"
+              label={t('settings.fanout.scope.channels')}
               labelSuffix={checkboxLabel}
               items={channels.map((ch) => ({ key: ch.key, label: ch.name }))}
               selectedKeys={selectedChannels}
@@ -2397,14 +2417,17 @@ function ScopeSelector({
                 })
               }
               onNone={() => onChange({ ...scope, messages: buildMessages([], selectedContacts) })}
-              searchPlaceholder={`Search ${channels.length} channel${channels.length === 1 ? '' : 's'}...`}
-              emptyItemsMessage="No channels available."
+              searchPlaceholder={t('settings.fanout.scope.searchChannels', {
+                count: channels.length,
+              })}
+              emptyItemsMessage={t('settings.fanout.scope.noChannels')}
+              matchKind="channels"
             />
           )}
 
           {filteredContacts.length > 0 && (
             <PillsSearchList
-              label="Contacts"
+              label={t('settings.fanout.scope.contacts')}
               labelSuffix={checkboxLabel}
               items={filteredContacts.map((c) => ({
                 key: c.public_key,
@@ -2423,8 +2446,11 @@ function ScopeSelector({
                 })
               }
               onNone={() => onChange({ ...scope, messages: buildMessages(selectedChannels, []) })}
-              searchPlaceholder={`Search ${filteredContacts.length} contact${filteredContacts.length === 1 ? '' : 's'}...`}
-              emptyItemsMessage="No contacts available."
+              searchPlaceholder={t('settings.fanout.scope.searchContacts', {
+                count: filteredContacts.length,
+              })}
+              emptyItemsMessage={t('settings.fanout.scope.noContacts')}
+              matchKind="contacts"
             />
           )}
         </>
@@ -2517,19 +2543,22 @@ function AppriseFormatPreview({
   markdown?: boolean;
 }) {
   const raw = appriseApplyFormat(format, vars);
+  const { t } = useTranslation();
   return (
     <div className="rounded-md border border-border bg-muted/30 p-2 space-y-1.5">
       {markdown && (
         <div>
           <span className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
-            Rendered (Discord, Slack, Telegram)
+            {t('settings.fanout.apprise.renderedPreview')}
           </span>
           <p className="text-xs break-all">{appriseRenderMarkdown(raw)}</p>
         </div>
       )}
       <div>
         <span className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
-          {markdown ? 'Raw (email, SMS)' : 'Preview'}
+          {markdown
+            ? t('settings.fanout.apprise.rawPreview')
+            : t('settings.fanout.apprise.preview')}
         </span>
         <p className="text-xs font-mono break-all text-muted-foreground">{raw}</p>
       </div>
@@ -2559,33 +2588,36 @@ function AppriseConfigEditor({
   const defaultChan = markdown ? APPRISE_DEFAULT_CHANNEL : APPRISE_DEFAULT_CHANNEL_PLAIN;
   const dmFormat = ((config.body_format_dm as string) || '').trim() || defaultDm;
   const chanFormat = ((config.body_format_channel as string) || '').trim() || defaultChan;
+  const { t } = useTranslation();
 
   return (
     <div className="space-y-3">
       <p className="text-[0.8125rem] text-muted-foreground">
-        Send push notifications via{' '}
-        <a
-          href="https://github.com/caronc/apprise"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline hover:text-foreground"
-        >
-          Apprise
-        </a>{' '}
-        when messages are received. Supports Discord, Slack, Telegram, email, and{' '}
-        <a
-          href="https://github.com/caronc/apprise/wiki#supported-notifications"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline hover:text-foreground"
-        >
-          100+ other services
-        </a>
-        .
+        <Trans
+          i18nKey="settings.fanout.apprise.help"
+          components={{
+            apprise: (
+              <a
+                href="https://github.com/caronc/apprise"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-foreground"
+              />
+            ),
+            services: (
+              <a
+                href="https://github.com/caronc/apprise/wiki#supported-notifications"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-foreground"
+              />
+            ),
+          }}
+        />
       </p>
 
       <div className="space-y-2">
-        <Label htmlFor="fanout-apprise-urls">Notification URLs</Label>
+        <Label htmlFor="fanout-apprise-urls">{t('settings.fanout.apprise.urls')}</Label>
         <textarea
           id="fanout-apprise-urls"
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono min-h-[80px]"
@@ -2597,8 +2629,7 @@ function AppriseConfigEditor({
           rows={4}
         />
         <p className="text-[0.8125rem] text-muted-foreground">
-          One URL per line. All URLs receive every matched notification. For Matrix room version 12
-          (servername-less room IDs), append <code>?hsreq=no</code> to the URL.
+          <Trans i18nKey="settings.fanout.apprise.urlsHelp" components={transInline} />
         </p>
       </div>
 
@@ -2610,34 +2641,40 @@ function AppriseConfigEditor({
           className="h-4 w-4 rounded border-border"
         />
         <div>
-          <span className="text-sm">Preserve identity on Discord</span>
+          <span className="text-sm">{t('settings.fanout.apprise.preserveIdentity')}</span>
           <p className="text-[0.8125rem] text-muted-foreground">
-            When enabled, Discord webhooks will use their configured name/avatar instead of
-            overriding with MeshCore sender info.
+            {t('settings.fanout.apprise.preserveIdentityHelp')}
           </p>
         </div>
       </label>
 
-      <label className="flex items-center gap-3 cursor-pointer">
+      <div className="flex items-center gap-3">
         <input
+          id="fanout-apprise-include-outgoing"
           type="checkbox"
           checked={config.include_outgoing === true}
           onChange={(e) => onChange({ ...config, include_outgoing: e.target.checked })}
           className="h-4 w-4 rounded border-border"
+          aria-describedby="fanout-apprise-include-outgoing-help"
         />
         <div>
-          <span className="text-sm">Forward Meshloom-sent messages</span>
-          <p className="text-[0.8125rem] text-muted-foreground">
-            Include DMs and channel messages sent by this Meshloom instance, including manual sends
-            and bot replies. Outgoing messages carry no routing path or signal data, so path-related
-            format fields render as direct and RSSI/SNR are empty.
+          <label htmlFor="fanout-apprise-include-outgoing" className="text-sm cursor-pointer">
+            {t('settings.fanout.apprise.includeOutgoing')}
+          </label>
+          <p
+            id="fanout-apprise-include-outgoing-help"
+            className="text-[0.8125rem] text-muted-foreground"
+          >
+            {t('settings.fanout.apprise.includeOutgoingHelp')}
           </p>
         </div>
-      </label>
+      </div>
 
       <Separator />
 
-      <h3 className="text-base font-semibold tracking-tight">Message Format</h3>
+      <h3 className="text-base font-semibold tracking-tight">
+        {t('settings.fanout.apprise.messageFormat')}
+      </h3>
 
       <label className="flex items-center gap-3 cursor-pointer">
         <input
@@ -2664,10 +2701,9 @@ function AppriseConfigEditor({
           className="h-4 w-4 rounded border-border"
         />
         <div>
-          <span className="text-sm">Markdown formatting</span>
+          <span className="text-sm">{t('settings.fanout.apprise.markdown')}</span>
           <p className="text-[0.8125rem] text-muted-foreground">
-            If notifications fail on services like Telegram due to special characters in sender
-            names, disable this option.
+            {t('settings.fanout.apprise.markdownHelp')}
           </p>
         </div>
       </label>
@@ -2675,66 +2711,74 @@ function AppriseConfigEditor({
       <details className="group">
         <summary className="text-sm font-medium text-foreground cursor-pointer select-none flex items-center gap-1">
           <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-0 -rotate-90" />
-          Available variables
+          {t('settings.fanout.apprise.availableVars')}
         </summary>
         <div className="mt-2 rounded-md border border-border bg-muted/30 p-2 text-xs space-y-0.5">
           <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
             <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">{'{text}'}</code>
-            <span className="text-muted-foreground">Message body</span>
+            <span className="text-muted-foreground">{t('settings.fanout.apprise.varText')}</span>
             <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">
               {'{sender_name}'}
             </code>
-            <span className="text-muted-foreground">Sender display name</span>
+            <span className="text-muted-foreground">
+              {t('settings.fanout.apprise.varSenderName')}
+            </span>
             <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">
               {'{sender_key}'}
             </code>
-            <span className="text-muted-foreground">Sender public key (hex)</span>
+            <span className="text-muted-foreground">
+              {t('settings.fanout.apprise.varSenderKey')}
+            </span>
             <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">
               {'{channel_name}'}
             </code>
-            <span className="text-muted-foreground">Channel name (channel messages only)</span>
+            <span className="text-muted-foreground">
+              {t('settings.fanout.apprise.varChannelName')}
+            </span>
             <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">
               {'{conversation_key}'}
             </code>
             <span className="text-muted-foreground">
-              Contact pubkey (DM) or channel key (channel)
+              {t('settings.fanout.apprise.varConversationKey')}
             </span>
             <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">{'{type}'}</code>
-            <span className="text-muted-foreground">PRIV or CHAN</span>
+            <span className="text-muted-foreground">{t('settings.fanout.apprise.varType')}</span>
             <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">{'{hops}'}</code>
-            <span className="text-muted-foreground">
-              Comma-separated hop IDs, or &quot;direct&quot;
-            </span>
+            <span className="text-muted-foreground">{t('settings.fanout.apprise.varHops')}</span>
             <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">
               {'{hops_backticked}'}
             </code>
-            <span className="text-muted-foreground">Hops wrapped in backticks for markdown</span>
+            <span className="text-muted-foreground">
+              {t('settings.fanout.apprise.varHopsBackticked')}
+            </span>
             <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">
               {'{hop_count}'}
             </code>
-            <span className="text-muted-foreground">Number of hops (0 for direct)</span>
+            <span className="text-muted-foreground">
+              {t('settings.fanout.apprise.varHopCount')}
+            </span>
             <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">{'{rssi}'}</code>
-            <span className="text-muted-foreground">Last-hop RSSI in dBm</span>
+            <span className="text-muted-foreground">{t('settings.fanout.apprise.varRssi')}</span>
             <code className="text-[0.6875rem] font-mono bg-muted px-1 rounded">{'{snr}'}</code>
-            <span className="text-muted-foreground">Last-hop SNR in dB</span>
+            <span className="text-muted-foreground">{t('settings.fanout.apprise.varSnr')}</span>
           </div>
           <p className="text-xs text-muted-foreground mt-1.5">
-            Empty textareas use the default format. RSSI/SNR may be empty if unavailable.
+            {t('settings.fanout.apprise.varsFooter')}
           </p>
         </div>
       </details>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label htmlFor="fanout-apprise-fmt-dm">DM format</Label>
+          <Label htmlFor="fanout-apprise-fmt-dm">{t('settings.fanout.apprise.dmFormat')}</Label>
           {!appriseIsDefault(config.body_format_dm, defaultDm) && (
             <button
               type="button"
-              aria-label="Reset DM format to default"
+              aria-label={t('settings.fanout.apprise.resetDmAria')}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => onChange({ ...config, body_format_dm: defaultDm })}
             >
-              Reset to default
+              {t('settings.fanout.apprise.resetDefault')}
             </button>
           )}
         </div>
@@ -2751,15 +2795,17 @@ function AppriseConfigEditor({
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label htmlFor="fanout-apprise-fmt-chan">Channel format</Label>
+          <Label htmlFor="fanout-apprise-fmt-chan">
+            {t('settings.fanout.apprise.channelFormat')}
+          </Label>
           {!appriseIsDefault(config.body_format_channel, defaultChan) && (
             <button
               type="button"
-              aria-label="Reset channel format to default"
+              aria-label={t('settings.fanout.apprise.resetChannelAria')}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => onChange({ ...config, body_format_channel: defaultChan })}
             >
-              Reset to default
+              {t('settings.fanout.apprise.resetDefault')}
             </button>
           )}
         </div>
@@ -2795,30 +2841,29 @@ function WebhookConfigEditor({
   const headersStr = JSON.stringify(config.headers ?? {}, null, 2);
   const [headersText, setHeadersText] = useState(headersStr);
   const [headersError, setHeadersError] = useState<string | null>(null);
+  const { t } = useTranslation();
 
   const handleHeadersChange = (text: string) => {
     setHeadersText(text);
     try {
       const parsed = JSON.parse(text);
       if (typeof parsed !== 'object' || Array.isArray(parsed)) {
-        setHeadersError('Must be a JSON object');
+        setHeadersError(i18n.t('settings.fanout.webhook.mustBeObject'));
         return;
       }
       setHeadersError(null);
       onChange({ ...config, headers: parsed });
     } catch {
-      setHeadersError('Invalid JSON');
+      setHeadersError(i18n.t('settings.fanout.webhook.invalidJson'));
     }
   };
 
   return (
     <div className="space-y-3">
-      <p className="text-[0.8125rem] text-muted-foreground">
-        Send message data as JSON to an HTTP endpoint when messages are received.
-      </p>
+      <p className="text-[0.8125rem] text-muted-foreground">{t('settings.fanout.webhook.help')}</p>
 
       <div className="space-y-2">
-        <Label htmlFor="fanout-webhook-url">URL</Label>
+        <Label htmlFor="fanout-webhook-url">{t('settings.fanout.webhook.url')}</Label>
         <Input
           id="fanout-webhook-url"
           type="url"
@@ -2830,7 +2875,7 @@ function WebhookConfigEditor({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="fanout-webhook-method">HTTP Method</Label>
+          <Label htmlFor="fanout-webhook-method">{t('settings.fanout.webhook.httpMethod')}</Label>
           <select
             id="fanout-webhook-method"
             value={(config.method as string) || 'POST'}
@@ -2847,25 +2892,29 @@ function WebhookConfigEditor({
       <Separator />
 
       <div className="space-y-3">
-        <h3 className="text-base font-semibold tracking-tight">HMAC Signing</h3>
+        <h3 className="text-base font-semibold tracking-tight">
+          {t('settings.fanout.webhook.hmacTitle')}
+        </h3>
         <p className="text-[0.8125rem] text-muted-foreground">
-          When a secret is set, each request includes an HMAC-SHA256 signature of the JSON body in
-          the specified header (e.g. <code className="bg-muted px-1 rounded">sha256=ab12cd...</code>
-          ).
+          <Trans i18nKey="settings.fanout.webhook.hmacHelp" components={transInline} />
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="fanout-webhook-hmac-secret">HMAC Secret</Label>
+            <Label htmlFor="fanout-webhook-hmac-secret">
+              {t('settings.fanout.webhook.hmacSecret')}
+            </Label>
             <Input
               id="fanout-webhook-hmac-secret"
               type="password"
-              placeholder="Leave empty to disable signing"
+              placeholder={t('settings.fanout.webhook.hmacSecretPlaceholder')}
               value={(config.hmac_secret as string) || ''}
               onChange={(e) => onChange({ ...config, hmac_secret: e.target.value })}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="fanout-webhook-hmac-header">Signature Header Name</Label>
+            <Label htmlFor="fanout-webhook-hmac-header">
+              {t('settings.fanout.webhook.signatureHeader')}
+            </Label>
             <Input
               id="fanout-webhook-hmac-header"
               type="text"
@@ -2880,7 +2929,7 @@ function WebhookConfigEditor({
       <Separator />
 
       <div className="space-y-2">
-        <Label htmlFor="fanout-webhook-headers">Extra Headers (JSON)</Label>
+        <Label htmlFor="fanout-webhook-headers">{t('settings.fanout.webhook.extraHeaders')}</Label>
         <textarea
           id="fanout-webhook-headers"
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono min-h-[60px]"
@@ -2909,20 +2958,17 @@ function SqsConfigEditor({
   onChange: (config: Record<string, unknown>) => void;
   onScopeChange: (scope: Record<string, unknown>) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-3">
-      <p className="text-[0.8125rem] text-muted-foreground">
-        Send matched mesh events to an Amazon SQS queue for durable processing by workers, Lambdas,
-        or downstream automation.
-      </p>
+      <p className="text-[0.8125rem] text-muted-foreground">{t('settings.fanout.sqs.help')}</p>
 
       <div className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning">
-        Outgoing messages and any selected raw packets will be delivered exactly as forwarded by the
-        fanout scope, including decrypted/plaintext message content.
+        {t('settings.fanout.sqs.warning')}
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="fanout-sqs-queue-url">Queue URL</Label>
+        <Label htmlFor="fanout-sqs-queue-url">{t('settings.fanout.sqs.queueUrl')}</Label>
         <Input
           id="fanout-sqs-queue-url"
           type="url"
@@ -2934,7 +2980,7 @@ function SqsConfigEditor({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="fanout-sqs-region">Region (optional)</Label>
+          <Label htmlFor="fanout-sqs-region">{t('settings.fanout.sqs.region')}</Label>
           <Input
             id="fanout-sqs-region"
             type="text"
@@ -2944,7 +2990,7 @@ function SqsConfigEditor({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="fanout-sqs-endpoint">Endpoint URL (optional)</Label>
+          <Label htmlFor="fanout-sqs-endpoint">{t('settings.fanout.sqs.endpoint')}</Label>
           <Input
             id="fanout-sqs-endpoint"
             type="url"
@@ -2953,7 +2999,7 @@ function SqsConfigEditor({
             onChange={(e) => onChange({ ...config, endpoint_url: e.target.value })}
           />
           <p className="text-[0.8125rem] text-muted-foreground">
-            Useful for LocalStack or custom endpoints
+            {t('settings.fanout.sqs.endpointHelp')}
           </p>
         </div>
       </div>
@@ -2961,15 +3007,17 @@ function SqsConfigEditor({
       <Separator />
 
       <div className="space-y-2">
-        <h3 className="text-base font-semibold tracking-tight">Static Credentials (optional)</h3>
+        <h3 className="text-base font-semibold tracking-tight">
+          {t('settings.fanout.sqs.staticCreds')}
+        </h3>
         <p className="text-[0.8125rem] text-muted-foreground">
-          Leave blank to use the server&apos;s normal AWS credential chain.
+          {t('settings.fanout.sqs.staticCredsHelp')}
         </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="fanout-sqs-access-key">Access Key ID</Label>
+          <Label htmlFor="fanout-sqs-access-key">{t('settings.fanout.sqs.accessKey')}</Label>
           <Input
             id="fanout-sqs-access-key"
             type="text"
@@ -2978,7 +3026,7 @@ function SqsConfigEditor({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="fanout-sqs-secret-key">Secret Access Key</Label>
+          <Label htmlFor="fanout-sqs-secret-key">{t('settings.fanout.sqs.secretKey')}</Label>
           <Input
             id="fanout-sqs-secret-key"
             type="password"
@@ -2989,7 +3037,7 @@ function SqsConfigEditor({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="fanout-sqs-session-token">Session Token (optional)</Label>
+        <Label htmlFor="fanout-sqs-session-token">{t('settings.fanout.sqs.sessionToken')}</Label>
         <Input
           id="fanout-sqs-session-token"
           type="password"
@@ -3029,6 +3077,7 @@ export function SettingsFanoutSection({
     error: string;
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  const { t } = useTranslation();
 
   const loadConfigs = useCallback(async () => {
     try {
@@ -3071,9 +3120,11 @@ export function SettingsFanoutSection({
       await api.updateFanoutConfig(cfg.id, { enabled: !cfg.enabled });
       await loadConfigs();
       if (onHealthRefresh) await onHealthRefresh();
-      toast.success(cfg.enabled ? 'Integration disabled' : 'Integration enabled');
+      toast.success(
+        cfg.enabled ? t('settings.fanout.toast.disabled') : t('settings.fanout.toast.enabled')
+      );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update');
+      toast.error(err instanceof Error ? err.message : t('settings.fanout.toast.failedUpdate'));
     }
   };
 
@@ -3110,7 +3161,7 @@ export function SettingsFanoutSection({
           scope: editScope,
         }
       );
-    if (shouldConfirm && !confirm('Leave without saving?')) return;
+    if (shouldConfirm && !confirm(t('settings.fanout.confirm.leaveUnsaved'))) return;
     setEditingId(null);
     setDraftType(null);
   };
@@ -3119,7 +3170,7 @@ export function SettingsFanoutSection({
     const nextName = inlineEditName.trim();
     if (inlineEditingId !== cfg.id) return;
     if (!nextName) {
-      toast.error('Name cannot be empty');
+      toast.error(t('settings.fanout.toast.nameEmpty'));
       handleCancelInlineEdit();
       return;
     }
@@ -3133,9 +3184,9 @@ export function SettingsFanoutSection({
         setEditName(nextName);
       }
       await loadConfigs();
-      toast.success('Name updated');
+      toast.success(t('settings.fanout.toast.nameUpdated'));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update name');
+      toast.error(err instanceof Error ? err.message : t('settings.fanout.toast.failedUpdateName'));
     } finally {
       handleCancelInlineEdit();
     }
@@ -3158,7 +3209,7 @@ export function SettingsFanoutSection({
         });
       } else {
         if (!currentEditingId) {
-          throw new Error('Missing fanout config id for update');
+          throw new Error(t('settings.fanout.toast.missingId'));
         }
         const editingType = configs.find((cfg) => cfg.id === currentEditingId)?.type ?? '';
         const update: Record<string, unknown> = {
@@ -3179,9 +3230,11 @@ export function SettingsFanoutSection({
           console.error('Failed to refresh health after saving fanout config:', err);
         }
       }
-      toast.success(enabled ? 'Integration saved and enabled' : 'Integration saved');
+      toast.success(
+        enabled ? t('settings.fanout.toast.savedEnabled') : t('settings.fanout.toast.saved')
+      );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save');
+      toast.error(err instanceof Error ? err.message : t('settings.fanout.toast.failedSave'));
     } finally {
       setBusy(false);
     }
@@ -3189,15 +3242,15 @@ export function SettingsFanoutSection({
 
   const handleDelete = async (id: string) => {
     const cfg = configs.find((c) => c.id === id);
-    if (!confirm(`Delete "${cfg?.name}"? This cannot be undone.`)) return;
+    if (!confirm(t('settings.fanout.confirm.delete', { name: cfg?.name ?? '' }))) return;
     try {
       await api.deleteFanoutConfig(id);
       if (editingId === id) setEditingId(null);
       await loadConfigs();
       if (onHealthRefresh) await onHealthRefresh();
-      toast.success('Integration deleted');
+      toast.success(t('settings.fanout.toast.deleted'));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete');
+      toast.error(err instanceof Error ? err.message : t('settings.fanout.toast.failedDelete'));
     }
   };
 
@@ -3209,7 +3262,7 @@ export function SettingsFanoutSection({
     setDraftType(type);
     setEditName(
       definition.nameMode === 'fixed'
-        ? definition.defaultName
+        ? fanoutCreateDefaultName(type)
         : getDefaultIntegrationName(definition.savedType, configs)
     );
     setEditConfig(defaults.config);
@@ -3219,15 +3272,13 @@ export function SettingsFanoutSection({
   const editingConfig = editingId ? configs.find((c) => c.id === editingId) : null;
   const detailType = draftType ?? editingConfig?.type ?? null;
   const isDraft = draftType !== null;
-  const configGroups = Object.entries(TYPE_LABELS)
-    .map(([type, label]) => ({
-      type,
-      label,
-      configs: configs
-        .filter((cfg) => cfg.type === type)
-        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
-    }))
-    .filter((group) => group.configs.length > 0);
+  const configGroups = FANOUT_TYPE_ORDER.map((type) => ({
+    type,
+    label: fanoutTypeLabel(type),
+    configs: configs
+      .filter((cfg) => cfg.type === type)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
+  })).filter((group) => group.configs.length > 0);
 
   // Detail view
   if (detailType) {
@@ -3238,11 +3289,11 @@ export function SettingsFanoutSection({
           className="inline-flex items-center rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-sm text-warning transition-colors hover:bg-warning/20"
           onClick={handleBackToList}
         >
-          &larr; Back to list
+          {t('settings.fanout.list.backToList')}
         </button>
 
         <div className="space-y-2">
-          <Label htmlFor="fanout-edit-name">Name</Label>
+          <Label htmlFor="fanout-edit-name">{t('settings.fanout.list.name')}</Label>
           <Input
             id="fanout-edit-name"
             type="text"
@@ -3251,7 +3302,9 @@ export function SettingsFanoutSection({
           />
         </div>
 
-        <div className="text-xs text-muted-foreground">Type: {getDetailTypeLabel(detailType)}</div>
+        <div className="text-xs text-muted-foreground">
+          {t('settings.fanout.list.type', { type: getDetailTypeLabel(detailType) })}
+        </div>
 
         <Separator />
 
@@ -3338,7 +3391,7 @@ export function SettingsFanoutSection({
             disabled={busy}
             className="flex-1 bg-status-connected hover:bg-status-connected/90 text-primary-foreground"
           >
-            {busy ? 'Saving...' : 'Save as Enabled'}
+            {busy ? t('settings.fanout.list.saving') : t('settings.fanout.list.saveEnabled')}
           </Button>
           <Button
             variant="secondary"
@@ -3346,11 +3399,11 @@ export function SettingsFanoutSection({
             disabled={busy}
             className="flex-1"
           >
-            {busy ? 'Saving...' : 'Save as Disabled'}
+            {busy ? t('settings.fanout.list.saving') : t('settings.fanout.list.saveDisabled')}
           </Button>
           {!isDraft && editingConfig && (
             <Button variant="destructive" onClick={() => handleDelete(editingConfig.id)}>
-              Delete
+              {t('settings.fanout.list.delete')}
             </Button>
           )}
         </div>
@@ -3362,21 +3415,20 @@ export function SettingsFanoutSection({
   return (
     <div className={cn('mx-auto w-full max-w-[800px] space-y-4', className)}>
       <div className="rounded-md border border-warning/50 bg-warning/10 px-4 py-3 text-sm text-warning">
-        Integrations are an experimental feature in open beta, and allow you to fanout raw and
-        decrypted messages across multiple services for automation, analysis, or archiving.
+        {t('settings.fanout.list.experimentalBanner')}
       </div>
 
       {health?.bots_disabled && (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {health.bots_disabled_source === 'until_restart'
-            ? 'Bot system is disabled until the server restarts. Bot integrations cannot run, be created, or be modified right now.'
-            : 'Bot system is disabled by server configuration (MESHCORE_DISABLE_BOTS). Bot integrations cannot run, be created, or be modified.'}
+            ? t('settings.fanout.list.botsDisabledUntilRestart')
+            : t('settings.fanout.list.botsDisabled')}
         </div>
       )}
 
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" onClick={() => setCreateDialogOpen(true)}>
-          Add Integration
+          {t('settings.fanout.list.addIntegration')}
         </Button>
       </div>
 
@@ -3404,11 +3456,11 @@ export function SettingsFanoutSection({
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="border-b border-border px-5 py-4">
             <DialogTitle>
-              {errorDialogState ? `${errorDialogState.integrationName} Error` : 'Integration Error'}
+              {errorDialogState
+                ? t('settings.fanout.list.errorTitle', { name: errorDialogState.integrationName })
+                : t('settings.fanout.list.errorTitleFallback')}
             </DialogTitle>
-            <DialogDescription>
-              Most recent backend error retained for this integration.
-            </DialogDescription>
+            <DialogDescription>{t('settings.fanout.list.errorDescription')}</DialogDescription>
           </DialogHeader>
           <div className="px-5 py-4 text-sm text-muted-foreground">
             <p className="whitespace-pre-wrap break-words font-mono text-foreground">
@@ -3424,7 +3476,7 @@ export function SettingsFanoutSection({
             <section
               key={group.type}
               className="mb-4 inline-block w-full break-inside-avoid space-y-2"
-              aria-label={`${group.label} integrations`}
+              aria-label={t('settings.fanout.list.groupAria', { label: group.label })}
             >
               <div className="px-1 text-sm font-medium text-muted-foreground">{group.label}</div>
               <div className="space-y-2">
@@ -3437,7 +3489,7 @@ export function SettingsFanoutSection({
                     <div
                       key={cfg.id}
                       role="group"
-                      aria-label={`Integration ${cfg.name}`}
+                      aria-label={t('settings.fanout.list.integrationAria', { name: cfg.name })}
                       className="border border-input rounded-md overflow-hidden"
                     >
                       <div className="flex items-center gap-2 px-3 py-2 bg-muted/50">
@@ -3450,7 +3502,7 @@ export function SettingsFanoutSection({
                             checked={cfg.enabled}
                             onChange={() => handleToggleEnabled(cfg)}
                             className="w-4 h-4 rounded border-input accent-primary"
-                            aria-label={`Enable ${cfg.name}`}
+                            aria-label={t('settings.fanout.list.enableAria', { name: cfg.name })}
                           />
                         </label>
 
@@ -3472,7 +3524,9 @@ export function SettingsFanoutSection({
                                   handleCancelInlineEdit();
                                 }
                               }}
-                              aria-label={`Edit name for ${cfg.name}`}
+                              aria-label={t('settings.fanout.list.editNameAria', {
+                                name: cfg.name,
+                              })}
                               className="h-8"
                             />
                           ) : (
@@ -3491,11 +3545,17 @@ export function SettingsFanoutSection({
                             'w-2 h-2 rounded-full transition-colors',
                             getStatusColor(status, cfg.enabled)
                           )}
-                          title={cfg.enabled ? getStatusLabel(status, cfg.type) : 'Disabled'}
+                          title={
+                            cfg.enabled
+                              ? getStatusLabel(status, cfg.type)
+                              : t('settings.fanout.status.disabled')
+                          }
                           aria-hidden="true"
                         />
                         <span className="text-xs text-muted-foreground hidden sm:inline">
-                          {cfg.enabled ? getStatusLabel(status, cfg.type) : 'Disabled'}
+                          {cfg.enabled
+                            ? getStatusLabel(status, cfg.type)
+                            : t('settings.fanout.status.disabled')}
                         </span>
 
                         {lastError && (
@@ -3510,8 +3570,8 @@ export function SettingsFanoutSection({
                                 error: lastError,
                               })
                             }
-                            aria-label={`View error details for ${cfg.name}`}
-                            title="View latest error"
+                            aria-label={t('settings.fanout.list.viewErrorAria', { name: cfg.name })}
+                            title={t('settings.fanout.list.viewLatestError')}
                           >
                             <Info className="h-3.5 w-3.5" aria-hidden="true" />
                           </Button>
@@ -3524,21 +3584,22 @@ export function SettingsFanoutSection({
                           className="h-6 px-2 text-xs"
                           onClick={() => handleEdit(cfg)}
                         >
-                          Edit
+                          {t('settings.fanout.list.edit')}
                         </Button>
                       </div>
 
                       {cfg.type === 'mqtt_community' && (
                         <div className="space-y-1 border-t border-input px-3 py-2 text-xs text-muted-foreground">
                           <div>
-                            Broker:{' '}
-                            {formatBrokerSummary(communityConfig, {
-                              host: DEFAULT_COMMUNITY_BROKER_HOST,
-                              port: DEFAULT_COMMUNITY_BROKER_PORT,
+                            {t('settings.fanout.list.broker', {
+                              summary: formatBrokerSummary(communityConfig, {
+                                host: DEFAULT_COMMUNITY_BROKER_HOST,
+                                port: DEFAULT_COMMUNITY_BROKER_PORT,
+                              }),
                             })}
                           </div>
                           <div className="break-all">
-                            Topic:{' '}
+                            {t('settings.fanout.list.topic')}{' '}
                             <code>
                               {(communityConfig.topic_template as string) ||
                                 DEFAULT_COMMUNITY_PACKET_TOPIC_TEMPLATE}
@@ -3550,14 +3611,15 @@ export function SettingsFanoutSection({
                       {cfg.type === 'mqtt_private' && (
                         <div className="space-y-1 border-t border-input px-3 py-2 text-xs text-muted-foreground">
                           <div>
-                            Broker:{' '}
-                            {formatBrokerSummary(cfg.config as Record<string, unknown>, {
-                              host: '',
-                              port: 1883,
+                            {t('settings.fanout.list.broker', {
+                              summary: formatBrokerSummary(cfg.config as Record<string, unknown>, {
+                                host: '',
+                                port: 1883,
+                              }),
                             })}
                           </div>
                           <div className="break-all">
-                            Topics:{' '}
+                            {t('settings.fanout.list.topics')}{' '}
                             <code>
                               {formatPrivateTopicSummary(cfg.config as Record<string, unknown>)}
                             </code>
@@ -3568,9 +3630,10 @@ export function SettingsFanoutSection({
                       {cfg.type === 'webhook' && (
                         <div className="space-y-1 border-t border-input px-3 py-2 text-xs text-muted-foreground">
                           <div className="break-all">
-                            URL:{' '}
+                            {t('settings.fanout.list.url')}{' '}
                             <code>
-                              {((cfg.config as Record<string, unknown>).url as string) || 'Not set'}
+                              {((cfg.config as Record<string, unknown>).url as string) ||
+                                t('settings.fanout.list.notSet')}
                             </code>
                           </div>
                         </div>
@@ -3579,7 +3642,7 @@ export function SettingsFanoutSection({
                       {cfg.type === 'apprise' && (
                         <div className="space-y-1 border-t border-input px-3 py-2 text-xs text-muted-foreground">
                           <div className="break-all">
-                            Targets:{' '}
+                            {t('settings.fanout.list.targets')}{' '}
                             <code>
                               {formatAppriseTargets(
                                 (cfg.config as Record<string, unknown>).urls as string | undefined
@@ -3592,7 +3655,7 @@ export function SettingsFanoutSection({
                       {cfg.type === 'sqs' && (
                         <div className="space-y-1 border-t border-input px-3 py-2 text-xs text-muted-foreground">
                           <div className="break-all">
-                            Queue:{' '}
+                            {t('settings.fanout.list.queue')}{' '}
                             <code>
                               {formatSqsQueueSummary(cfg.config as Record<string, unknown>)}
                             </code>

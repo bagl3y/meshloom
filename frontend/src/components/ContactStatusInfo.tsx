@@ -1,11 +1,11 @@
 import { useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { toast } from './ui/sonner';
 import { formatTime } from '../utils/messageParser';
 import {
   isValidLocation,
   calculateDistance,
   formatDistance,
-  formatRouteLabel,
   getEffectiveContactRoute,
 } from '../utils/pathUtils';
 import { getMapFocusHash } from '../utils/urlHash';
@@ -20,18 +20,28 @@ interface ContactStatusInfoProps {
   ourLon: number | null;
 }
 
+function formatContactRouteLabel(
+  pathLen: number,
+  t: (key: string, opts?: { count: number }) => string
+): string {
+  if (pathLen === -1) return t('contactInfo.flood');
+  if (pathLen === 0) return t('contactInfo.hopDirect');
+  return t('contactInfo.hopCount', { count: pathLen });
+}
+
 /**
  * Renders the "(Last heard: ..., N hops, lat, lon (dist))" status line
  * shared between ChatHeader and RepeaterDashboard.
  */
 export function ContactStatusInfo({ contact, ourLat, ourLon }: ContactStatusInfoProps) {
+  const { t } = useTranslation();
   const { distanceUnit } = useDistanceUnit();
   const [routingModalOpen, setRoutingModalOpen] = useState(false);
   const parts: ReactNode[] = [];
   const effectiveRoute = getEffectiveContactRoute(contact);
 
   if (contact.last_seen) {
-    parts.push(`Last heard: ${formatTime(contact.last_seen)}`);
+    parts.push(t('contactInfo.lastHeard', { time: formatTime(contact.last_seen) }));
   }
 
   parts.push(
@@ -45,10 +55,12 @@ export function ContactStatusInfo({ contact, ourLat, ourLon }: ContactStatusInfo
         e.stopPropagation();
         setRoutingModalOpen(true);
       }}
-      title="Click to edit routing override"
+      title={t('contactInfo.editRouting')}
     >
-      {formatRouteLabel(effectiveRoute.pathLen)}
-      {effectiveRoute.forced && <span className="text-destructive"> (forced)</span>}
+      {formatContactRouteLabel(effectiveRoute.pathLen, t)}
+      {effectiveRoute.forced && (
+        <span className="text-destructive"> {t('contactInfo.forced')}</span>
+      )}
     </span>
   );
 
@@ -72,7 +84,7 @@ export function ContactStatusInfo({ contact, ourLat, ourLon }: ContactStatusInfo
               getMapFocusHash(contact.public_key);
             window.open(url, '_blank');
           }}
-          title="View on map"
+          title={t('contactInfo.viewOnMap')}
         >
           {contact.lat!.toFixed(3)}, {contact.lon!.toFixed(3)}
         </span>

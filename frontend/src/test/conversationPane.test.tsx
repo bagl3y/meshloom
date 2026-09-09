@@ -3,7 +3,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConversationPane } from '../components/ConversationPane';
+import i18n from '../i18n';
+import sliceEn from '../i18n/locales/slices/b.en.json';
+import sliceFr from '../i18n/locales/slices/b.fr.json';
 import type { Channel, Contact, Conversation, HealthStatus, Message, RadioConfig } from '../types';
+
+i18n.addResourceBundle('en', 'translation', sliceEn, true, true);
+i18n.addResourceBundle('fr', 'translation', sliceFr, true, true);
 import type { RawPacketStatsSessionState } from '../utils/rawPacketStats';
 
 const mocks = vi.hoisted(() => ({
@@ -192,7 +198,7 @@ describe('ConversationPane', () => {
   it('renders the empty state when no conversation is active', () => {
     render(<ConversationPane {...createProps()} />);
 
-    expect(screen.getByText('Select a conversation or start a new one')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('conversation.selectPrompt'))).toBeInTheDocument();
   });
 
   it('renders repeater dashboard instead of chat chrome for repeater contacts', async () => {
@@ -484,7 +490,7 @@ describe('ConversationPane', () => {
       />
     );
 
-    expect(screen.getByText(/profile details.*haven't arrived yet/i)).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('conversation.unknownFullKeyBanner'))).toBeInTheDocument();
     expect(screen.getByTestId('message-input')).toBeInTheDocument();
   });
 
@@ -521,9 +527,7 @@ describe('ConversationPane', () => {
       />
     );
 
-    expect(
-      screen.getByText(/Sending is disabled until their identity is confirmed/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('conversation.prefixOnlyBanner'))).toBeInTheDocument();
     expect(screen.queryByTestId('message-input')).not.toBeInTheDocument();
   });
 });

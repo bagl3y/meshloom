@@ -195,7 +195,7 @@ export function AppShell({
         'sidebar h-full min-h-0 overflow-hidden bg-card border-r border-border flex flex-col',
         desktopSidebarWidthClass
       )}
-      aria-label="Settings"
+      aria-label={t('settingsNav.aria')}
       data-desktop-collapsed={desktopSidebarCollapsed ? 'true' : undefined}
     >
       <div
@@ -210,7 +210,7 @@ export function AppShell({
             desktopSidebarCollapsed && 'md:hidden'
           )}
         >
-          Settings
+          {t('settingsNav.title')}
         </h2>
         <div
           className={cn(
@@ -258,7 +258,7 @@ export function AppShell({
               key={section}
               type="button"
               disabled={disabled}
-              title={SETTINGS_SECTION_LABELS[section]}
+              title={t(SETTINGS_SECTION_LABELS[section])}
               className={cn(
                 'w-full px-3 py-2 text-left text-[0.8125rem] border-l-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-50',
                 !disabled && 'hover:bg-accent',
@@ -276,7 +276,7 @@ export function AppShell({
               >
                 <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 <span className={cn(desktopSidebarCollapsed && 'md:hidden')}>
-                  {SETTINGS_SECTION_LABELS[section]}
+                  {t(SETTINGS_SECTION_LABELS[section])}
                 </span>
               </span>
             </button>
@@ -302,7 +302,7 @@ export function AppShell({
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-2 focus:bg-primary focus:text-primary-foreground"
       >
-        Skip to content
+        {t('shell.skipToContent')}
       </a>
       {localLabel.text && (
         <div
@@ -338,8 +338,8 @@ export function AppShell({
             }}
           >
             <SheetHeader className="sr-only">
-              <SheetTitle>Navigation</SheetTitle>
-              <SheetDescription>Sidebar navigation</SheetDescription>
+              <SheetTitle>{t('shell.navigation')}</SheetTitle>
+              <SheetDescription>{t('shell.sidebarNav')}</SheetDescription>
             </SheetHeader>
             <div className="flex-1 overflow-hidden" {...closeSwipeHandlers}>
               {activeSidebarContent}
@@ -369,7 +369,7 @@ export function AppShell({
               <Suspense
                 fallback={
                   <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                    Loading search...
+                    {t('shell.loadingSearch')}
                   </div>
                 }
               >
@@ -384,7 +384,7 @@ export function AppShell({
                 <Suspense
                   fallback={
                     <div className="flex-1 flex items-center justify-center p-8 text-muted-foreground">
-                      Loading settings...
+                      {t('shell.loadingSettings')}
                     </div>
                   }
                 >
@@ -414,7 +414,7 @@ export function AppShell({
           <Suspense
             fallback={
               <div className="flex items-center justify-center h-full text-muted-foreground">
-                Loading channel finder...
+                {t('shell.loadingChannelFinder')}
               </div>
             }
           >

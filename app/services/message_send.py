@@ -45,10 +45,14 @@ class _ScopeUnset:
 
 SCOPE_UNSET = _ScopeUnset()
 
-NO_RADIO_RESPONSE_AFTER_SEND_DETAIL = (
+NO_RADIO_RESPONSE_AFTER_SEND_MESSAGE = (
     "Send command was issued to the radio, but no response was heard back. "
     "The message may or may not have sent successfully."
 )
+NO_RADIO_RESPONSE_AFTER_SEND_DETAIL = {
+    "code": "radio_no_response_after_send",
+    "message": NO_RADIO_RESPONSE_AFTER_SEND_MESSAGE,
+}
 TrackAckFn = Callable[[str, int, int], bool]
 NowFn = Callable[[], float]
 OutgoingReservationKey = tuple[str, str, str]

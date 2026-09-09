@@ -189,7 +189,8 @@ class TestRequireConnected:
                 radio_runtime.require_connected()
 
             assert exc_info.value.status_code == 423
-            assert "initializing" in exc_info.value.detail.lower()
+            assert exc_info.value.detail["code"] == "radio_initializing"
+            assert "initializing" in exc_info.value.detail["message"].lower()
 
     def test_raises_423_when_not_connected(self):
         """HTTPException 423 is raised when radio is not connected."""
