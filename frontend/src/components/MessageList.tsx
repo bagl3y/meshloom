@@ -125,15 +125,7 @@ function GifPayload({ gifId, rawText }: { gifId: string; rawText: string }) {
   );
 }
 
-function LocationPayload({
-  lat,
-  lon,
-  label,
-}: {
-  lat: number;
-  lon: number;
-  label: string;
-}) {
+function LocationPayload({ lat, lon, label }: { lat: number; lon: number; label: string }) {
   const { t } = useTranslation();
   const url = locationMapUrl(lat, lon);
   const coords = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
@@ -148,7 +140,9 @@ function LocationPayload({
     >
       <MapPin className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
       <span className="min-w-0">
-        <span className="block text-sm font-medium leading-tight">{label || t('messageList.locationAlt')}</span>
+        <span className="block text-sm font-medium leading-tight">
+          {label || t('messageList.locationAlt')}
+        </span>
         <span className="block text-[0.6875rem] text-muted-foreground tabular-nums">{coords}</span>
       </span>
     </a>

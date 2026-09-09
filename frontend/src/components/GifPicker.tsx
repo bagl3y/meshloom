@@ -74,24 +74,27 @@ export function GifPicker({ onSelect, onClose, disabled = false }: GifPickerProp
       return;
     }
     const requestId = ++requestIdRef.current;
-    const timer = window.setTimeout(() => {
-      setLoading(true);
-      setError(null);
-      void fetchGiphy(query, apiKey)
-        .then((next) => {
-          if (requestIdRef.current !== requestId) return;
-          setResults(next);
-        })
-        .catch(() => {
-          if (requestIdRef.current !== requestId) return;
-          setResults([]);
-          setError(t('chat.gifError'));
-        })
-        .finally(() => {
-          if (requestIdRef.current !== requestId) return;
-          setLoading(false);
-        });
-    }, query.trim() ? 300 : 0);
+    const timer = window.setTimeout(
+      () => {
+        setLoading(true);
+        setError(null);
+        void fetchGiphy(query, apiKey)
+          .then((next) => {
+            if (requestIdRef.current !== requestId) return;
+            setResults(next);
+          })
+          .catch(() => {
+            if (requestIdRef.current !== requestId) return;
+            setResults([]);
+            setError(t('chat.gifError'));
+          })
+          .finally(() => {
+            if (requestIdRef.current !== requestId) return;
+            setLoading(false);
+          });
+      },
+      query.trim() ? 300 : 0
+    );
     return () => {
       window.clearTimeout(timer);
     };

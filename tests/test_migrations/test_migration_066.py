@@ -31,7 +31,9 @@ class TestMigration066:
 
             columns = {
                 row[1]
-                for row in await (await conn.execute("PRAGMA table_info(directory_hop_cache)")).fetchall()
+                for row in await (
+                    await conn.execute("PRAGMA table_info(directory_hop_cache)")
+                ).fetchall()
             }
             assert {"public_key", "lat", "lon"} <= columns
         finally:

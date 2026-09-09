@@ -18,12 +18,22 @@ export function SettingsAboutSection({
       <div className="space-y-6">
         {/* Version */}
         <div className="text-center space-y-2">
-          <img
-            src="./meshloom-logo.png"
-            alt="Meshloom"
-            className="mx-auto h-36 w-auto object-contain"
-          />
-          <h3 className="sr-only">Meshloom</h3>
+          <div className="flex flex-col items-center gap-3">
+            <img
+              src="./meshloom-mark.svg"
+              alt=""
+              className="h-24 w-auto object-contain [filter:drop-shadow(0_0_16px_rgba(34,211,238,0.18))_drop-shadow(0_0_20px_rgba(191,90,242,0.2))]"
+            />
+            <h3
+              aria-label="Meshloom"
+              className="text-3xl font-semibold tracking-tight text-foreground"
+            >
+              <span>Mesh</span>
+              <span className="bg-[linear-gradient(90deg,#22D3EE_0%,#BF5AF2_100%)] bg-clip-text text-transparent">
+                loom
+              </span>
+            </h3>
+          </div>
           <div className="text-sm text-muted-foreground">
             v{version}
             {commit ? (

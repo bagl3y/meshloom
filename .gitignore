@@ -34,3 +34,4 @@ docker-compose.yaml
 
 # HA test environment (created by scripts/setup/start_ha_test_env.sh)
 ha_test_config/
+.DS_Store

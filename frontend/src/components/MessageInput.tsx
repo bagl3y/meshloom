@@ -78,7 +78,16 @@ function draftIdentityOf(
 }
 
 export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(function MessageInput(
-  { onSend, disabled, placeholder, conversationType, conversationId, senderName, radioLat, radioLon },
+  {
+    onSend,
+    disabled,
+    placeholder,
+    conversationType,
+    conversationId,
+    senderName,
+    radioLat,
+    radioLon,
+  },
   ref
 ) {
   const { t } = useTranslation();

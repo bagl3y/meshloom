@@ -831,7 +831,9 @@ describe('Sidebar section summaries', () => {
       'true'
     );
 
-    const monograms = screen.getAllByTestId('channel-rail-monogram').map((node) => node.textContent);
+    const monograms = screen
+      .getAllByTestId('channel-rail-monogram')
+      .map((node) => node.textContent);
     expect(monograms).toEqual(expect.arrayContaining(['PU', 'FL', 'OP']));
     expect(monograms).not.toContain('#');
   });

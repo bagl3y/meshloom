@@ -200,7 +200,7 @@ export function StatusBar({
         className="text-base font-semibold tracking-tight mr-auto text-foreground flex items-center gap-2"
       >
         <img
-          src="./meshloom-mark.png"
+          src="./meshloom-mark.svg"
           alt=""
           className="h-7 w-7 shrink-0 [filter:drop-shadow(0_0_8px_rgba(34,211,238,0.28))_drop-shadow(0_0_10px_rgba(191,90,242,0.28))]"
         />
