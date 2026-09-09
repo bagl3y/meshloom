@@ -590,7 +590,7 @@ describe('SettingsFanoutSection', () => {
     confirmCreateIntegration();
     await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
 
-    expect(screen.getByLabelText(/Forward RemoteTerm-sent messages/)).not.toBeChecked();
+    expect(screen.getByLabelText(/Forward Meshloom-sent messages/)).not.toBeChecked();
     expect(
       screen.getByText(/Outgoing messages carry no routing path or signal data/)
     ).toBeInTheDocument();
@@ -643,7 +643,7 @@ describe('SettingsFanoutSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await waitFor(() => expect(screen.getByText('← Back to list')).toBeInTheDocument());
 
-    const includeOutgoing = screen.getByLabelText(/Forward RemoteTerm-sent messages/);
+    const includeOutgoing = screen.getByLabelText(/Forward Meshloom-sent messages/);
     expect(includeOutgoing).not.toBeChecked();
     fireEvent.click(includeOutgoing);
     fireEvent.click(screen.getByRole('button', { name: 'Save as Enabled' }));

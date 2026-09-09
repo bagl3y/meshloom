@@ -14,22 +14,22 @@ export const FOLLOW_OS_THEME_ID = 'follow-os';
 export const THEMES: Theme[] = [
   {
     id: 'original',
-    name: 'Original',
-    swatches: ['#111419', '#181b21', '#27a05c', '#282c33', '#f59e0b', '#3b82f6'],
-    metaThemeColor: '#111419',
+    name: 'Meshloom',
+    swatches: ['#0A0C10', '#11141A', '#BF5AF2', '#1A1D28', '#22D3EE', '#7C3AED'],
+    metaThemeColor: '#0A0C10',
   },
   {
     id: 'light',
     name: 'Light',
-    swatches: ['#F8F7F4', '#FFFFFF', '#1B7D4E', '#EDEBE7', '#D97706', '#3B82F6'],
-    metaThemeColor: '#F8F7F4',
+    swatches: ['#F4F6FA', '#FFFFFF', '#7A2BB8', '#E8EAF2', '#0891B2', '#7C3AED'],
+    metaThemeColor: '#F4F6FA',
   },
   {
     id: FOLLOW_OS_THEME_ID,
     name: 'OS Light/Dark Mode',
     // Top row: light theme preview colors; bottom row: original (dark) preview colors
-    swatches: ['#F8F7F4', '#FFFFFF', '#1B7D4E', '#111419', '#181b21', '#27a05c'],
-    metaThemeColor: '#111419',
+    swatches: ['#F4F6FA', '#FFFFFF', '#7A2BB8', '#0A0C10', '#11141A', '#BF5AF2'],
+    metaThemeColor: '#0A0C10',
   },
   {
     id: 'ios',

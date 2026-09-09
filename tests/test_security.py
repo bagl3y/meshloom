@@ -50,7 +50,7 @@ def test_http_request_is_denied_without_basic_auth_credentials():
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Unauthorized"}
-    assert response.headers["www-authenticate"] == 'Basic realm="RemoteTerm", charset="UTF-8"'
+    assert response.headers["www-authenticate"] == 'Basic realm="Meshloom", charset="UTF-8"'
     assert response.headers["cache-control"] == "no-store"
 
 
@@ -87,7 +87,7 @@ def test_websocket_handshake_is_denied_without_basic_auth_credentials():
     response = exc_info.value
     assert response.status_code == 401
     assert response.json() == {"detail": "Unauthorized"}
-    assert response.headers["www-authenticate"] == 'Basic realm="RemoteTerm", charset="UTF-8"'
+    assert response.headers["www-authenticate"] == 'Basic realm="Meshloom", charset="UTF-8"'
 
 
 def test_websocket_handshake_is_allowed_with_valid_basic_auth_credentials():

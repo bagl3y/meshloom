@@ -18,7 +18,7 @@ def test_custom_swagger_docs_page_is_served():
         response = client.get("/docs")
 
     assert response.status_code == 200
-    assert "RemoteTerm API" in response.text
+    assert "Meshloom API" in response.text
     assert "SwaggerUIBundle" in response.text
     assert 'url: "openapi.json"' in response.text
     assert 'href="api/health"' in response.text
@@ -32,7 +32,7 @@ def test_openapi_includes_docs_metadata():
 
     assert response.status_code == 200
     data = response.json()
-    assert data["info"]["description"].startswith("RemoteTerm exposes")
+    assert data["info"]["description"].startswith("Meshloom exposes")
     assert "/docs" not in data["paths"]
     tags = {tag["name"]: tag["description"] for tag in data["tags"]}
     assert tags["messages"].startswith("Message history")

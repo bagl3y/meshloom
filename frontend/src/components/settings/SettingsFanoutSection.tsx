@@ -2626,11 +2626,11 @@ function AppriseConfigEditor({
           className="h-4 w-4 rounded border-border"
         />
         <div>
-          <span className="text-sm">Forward RemoteTerm-sent messages</span>
+          <span className="text-sm">Forward Meshloom-sent messages</span>
           <p className="text-[0.8125rem] text-muted-foreground">
-            Include DMs and channel messages sent by this RemoteTerm instance, including manual
-            sends and bot replies. Outgoing messages carry no routing path or signal data, so
-            path-related format fields render as direct and RSSI/SNR are empty.
+            Include DMs and channel messages sent by this Meshloom instance, including manual sends
+            and bot replies. Outgoing messages carry no routing path or signal data, so path-related
+            format fields render as direct and RSSI/SNR are empty.
           </p>
         </div>
       </label>

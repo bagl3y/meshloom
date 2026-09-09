@@ -13,7 +13,7 @@ from starlette.datastructures import Headers
 
 logger = logging.getLogger(__name__)
 
-_AUTH_REALM = "RemoteTerm"
+_AUTH_REALM = "Meshloom"
 _UNAUTHORIZED_BODY = json.dumps({"detail": "Unauthorized"}).encode("utf-8")
 
 

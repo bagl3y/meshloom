@@ -107,7 +107,7 @@ async def test_push(subscription_id: str) -> dict:
 
     payload = json.dumps(
         {
-            "title": "RemoteTerm Test",
+            "title": "Meshloom Test",
             "body": "Push notifications are working!",
             "tag": "meshcore-test",
             "url_hash": "",

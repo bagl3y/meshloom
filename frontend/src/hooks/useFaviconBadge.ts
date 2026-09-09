@@ -3,10 +3,10 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { Channel, Contact } from '../types';
 import { getStateKey } from '../utils/conversationState';
 
-const APP_TITLE = 'RemoteTerm for MeshCore';
-const UNREAD_APP_TITLE = 'RemoteTerm';
+const APP_TITLE = 'Meshloom';
+const UNREAD_APP_TITLE = 'Meshloom';
 const BASE_FAVICON_PATH = './favicon.svg';
-const GREEN_BADGE_FILL = '#16a34a';
+const UNREAD_BADGE_FILL = '#BF5AF2';
 const RED_BADGE_FILL = '#dc2626';
 const BADGE_CENTER = 750;
 const BADGE_OUTER_RADIUS = 220;
@@ -178,7 +178,7 @@ export function useFaviconBadge(
       return;
     }
 
-    const badgeFill = badgeState === 'red' ? RED_BADGE_FILL : GREEN_BADGE_FILL;
+    const badgeFill = badgeState === 'red' ? RED_BADGE_FILL : UNREAD_BADGE_FILL;
     let cancelled = false;
 
     void loadBaseFaviconSvg()

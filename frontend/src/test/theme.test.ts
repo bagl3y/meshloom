@@ -75,12 +75,12 @@ describe('theme module', () => {
     stubPrefersLight(true);
     applyTheme(FOLLOW_OS_THEME_ID);
     // Light theme's metaThemeColor
-    expect(meta.getAttribute('content')).toBe('#F8F7F4');
+    expect(meta.getAttribute('content')).toBe('#F4F6FA');
 
     stubPrefersLight(false);
     applyTheme(FOLLOW_OS_THEME_ID);
     // Original theme's metaThemeColor
-    expect(meta.getAttribute('content')).toBe('#111419');
+    expect(meta.getAttribute('content')).toBe('#0A0C10');
 
     meta.remove();
   });

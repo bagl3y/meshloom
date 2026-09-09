@@ -67,7 +67,7 @@ describe('useFaviconBadge', () => {
       <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       <link rel="shortcut icon" href="/favicon.ico" />
     `;
-    document.title = 'RemoteTerm for MeshCore';
+    document.title = 'Meshloom';
     objectUrlCounter = 0;
     fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -139,10 +139,10 @@ describe('useFaviconBadge', () => {
   });
 
   it('builds a dot-only badge into the base svg markup', () => {
-    const svg = buildBadgedFaviconSvg(baseSvg, '#16a34a');
+    const svg = buildBadgedFaviconSvg(baseSvg, '#BF5AF2');
 
     expect(svg).toContain('<circle cx="750" cy="750" r="220" fill="#ffffff"/>');
-    expect(svg).toContain('<circle cx="750" cy="750" r="180" fill="#16a34a"/>');
+    expect(svg).toContain('<circle cx="750" cy="750" r="180" fill="#BF5AF2"/>');
     expect(svg).not.toContain('<text');
   });
 
@@ -161,7 +161,7 @@ describe('useFaviconBadge', () => {
         [makeChannel('fav-chan', true)]
       )
     ).toBe(10);
-    expect(getUnreadTitle({}, [], [])).toBe('RemoteTerm for MeshCore');
+    expect(getUnreadTitle({}, [], [])).toBe('Meshloom');
     expect(
       getUnreadTitle(
         {
@@ -171,7 +171,7 @@ describe('useFaviconBadge', () => {
         [],
         [makeChannel('fav-chan', true)]
       )
-    ).toBe('(7) RemoteTerm');
+    ).toBe('(7) Meshloom');
     expect(
       getUnreadTitle(
         {
@@ -180,7 +180,7 @@ describe('useFaviconBadge', () => {
         [],
         [makeChannel('fav-chan', true)]
       )
-    ).toBe('(99+) RemoteTerm');
+    ).toBe('(99+) Meshloom');
   });
 
   it('switches between the base favicon and generated blob badges', async () => {
@@ -273,7 +273,7 @@ describe('useFaviconBadge', () => {
       }
     );
 
-    expect(document.title).toBe('RemoteTerm for MeshCore');
+    expect(document.title).toBe('Meshloom');
 
     rerender({
       unreadCounts: {
@@ -284,10 +284,10 @@ describe('useFaviconBadge', () => {
       currentChannels: channels,
     });
 
-    expect(document.title).toBe('(4) RemoteTerm');
+    expect(document.title).toBe('(4) Meshloom');
 
     unmount();
 
-    expect(document.title).toBe('RemoteTerm for MeshCore');
+    expect(document.title).toBe('Meshloom');
   });
 });

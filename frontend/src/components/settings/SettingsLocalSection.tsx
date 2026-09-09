@@ -117,7 +117,7 @@ function PushDeviceManagement({
         <p className="text-[0.8125rem] text-muted-foreground">
           {window.isSecureContext
             ? 'Push notifications are not supported by this browser.'
-            : 'Web Push requires HTTPS. Access RemoteTerm over HTTPS (self-signed certificates work) to enable push notifications.'}
+            : 'Web Push requires HTTPS. Access Meshloom over HTTPS (self-signed certificates work) to enable push notifications.'}
         </p>
       </div>
     );
@@ -504,15 +504,13 @@ export function SettingsLocalSection({
               className="mt-0.5"
             />
             <div className="space-y-1">
-              <Label htmlFor="render-rich-payloads">
-                Render MeshCore Open reactions as emoji
-              </Label>
+              <Label htmlFor="render-rich-payloads">Render MeshCore Open reactions as emoji</Label>
               <p className="text-[0.8125rem] text-muted-foreground">
                 MeshCore Open clients send emoji reactions as encoded text (e.g.{' '}
-                <code className="text-[0.75rem]">r:1a2b:05</code>). When enabled, unmatched
-                reaction messages render as the emoji instead of the raw text. GIFs always display
-                as images — they load from media.giphy.com, which reaches outside your local
-                network and exposes your IP to Giphy.
+                <code className="text-[0.75rem]">r:1a2b:05</code>). When enabled, unmatched reaction
+                messages render as the emoji instead of the raw text. GIFs always display as images
+                — they load from media.giphy.com, which reaches outside your local network and
+                exposes your IP to Giphy.
               </p>
             </div>
           </div>
@@ -728,7 +726,7 @@ function ThemePreview({ className }: { className?: string }) {
           sender="You"
           alignRight
           bubbleClassName="bg-msg-outgoing text-foreground"
-          text="Hi there! I'm using RemoteTerm."
+          text="Hi there! I'm using Meshloom."
         />
       </div>
 

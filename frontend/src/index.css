@@ -4,51 +4,51 @@
 
 @layer base {
   :root {
-    --background: 224 14% 8%;
-    --foreground: 213 15% 90%;
-    --card: 224 13% 11%;
-    --card-foreground: 213 15% 90%;
-    --popover: 224 13% 12%;
-    --popover-foreground: 213 15% 90%;
-    --primary: 152 60% 38%;
+    --background: 220 23% 5%;
+    --foreground: 220 20% 93%;
+    --card: 228 18% 8%;
+    --card-foreground: 220 20% 93%;
+    --popover: 228 16% 9%;
+    --popover-foreground: 220 20% 93%;
+    --primary: 280 85% 65%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 224 12% 17%;
-    --secondary-foreground: 213 12% 85%;
-    --muted: 224 12% 15%;
-    --muted-foreground: 218 10% 65%;
-    --accent: 224 11% 19%;
-    --accent-foreground: 213 15% 90%;
+    --secondary: 228 16% 14%;
+    --secondary-foreground: 220 16% 86%;
+    --muted: 228 14% 12%;
+    --muted-foreground: 226 10% 60%;
+    --accent: 228 16% 16%;
+    --accent-foreground: 220 20% 93%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 224 11% 23%;
-    --input: 224 11% 23%;
-    --ring: 152 60% 38%;
+    --border: 230 14% 18%;
+    --input: 230 14% 18%;
+    --ring: 188 100% 52%;
     --radius: 0.5rem;
 
     /* Semantic colors for specific contexts */
-    --msg-outgoing: 152 30% 14%;
-    --msg-incoming: 224 12% 15%;
+    --msg-outgoing: 280 30% 14%;
+    --msg-incoming: 228 12% 10%;
 
     /* Status indicator pips */
     --status-connected: 142 71% 45%;
-    --status-disconnected: 220 9% 46%;
+    --status-disconnected: 228 8% 42%;
 
     /* Semantic feedback colors */
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
+    --warning: 46 100% 52%;
+    --warning-foreground: 46 100% 10%;
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
-    --info: 217 91% 60%;
+    --info: 188 90% 56%;
     --info-foreground: 0 0% 100%;
-    --region-override: 270 80% 74%;
+    --region-override: 292 86% 72%;
 
     /* Favorites */
     --favorite: 43 96% 56%;
 
     /* Console / terminal */
-    --console: 142 69% 58%;
-    --console-command: 142 76% 73%;
-    --console-bg: 0 0% 0%;
+    --console: 188 95% 58%;
+    --console-command: 280 85% 78%;
+    --console-bg: 220 24% 4%;
 
     /* Unread badges */
     --badge-unread: var(--primary);
@@ -81,8 +81,8 @@
       ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
     /* Scrollbar */
-    --scrollbar: 224 11% 22%;
-    --scrollbar-hover: 224 11% 28%;
+    --scrollbar: 230 16% 18%;
+    --scrollbar-hover: 280 28% 28%;
   }
 }
 
@@ -132,6 +132,40 @@
 }
 .message-highlight {
   animation: message-highlight 2s ease-out forwards;
+}
+
+@keyframes meshloom-msg-highlight {
+  0% {
+    box-shadow:
+      0 0 0 2px hsl(var(--primary)),
+      0 0 16px hsl(var(--primary) / 0.35);
+  }
+  100% {
+    box-shadow:
+      0 0 0 2px transparent,
+      0 0 0 transparent;
+  }
+}
+
+/* Meshloom default atmosphere — only when no data-theme override is set */
+:root:not([data-theme]) .text-primary {
+  text-shadow: 0 0 10px hsl(var(--primary) / 0.35);
+}
+
+:root:not([data-theme]) .bg-primary {
+  background: linear-gradient(135deg, hsl(188 100% 52%), hsl(280 85% 62%));
+}
+
+:root:not([data-theme]) input:focus,
+:root:not([data-theme]) textarea:focus {
+  box-shadow:
+    0 0 0 1px hsl(var(--ring) / 0.5),
+    0 0 10px hsl(188 100% 52% / 0.22),
+    0 0 14px hsl(280 85% 65% / 0.18);
+}
+
+:root:not([data-theme]) .message-highlight {
+  animation: meshloom-msg-highlight 2s ease-out forwards;
 }
 
 .sidebar-tool-icon {

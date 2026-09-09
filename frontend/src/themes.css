@@ -1,52 +1,53 @@
 /* ============================================================
    Theme overrides
    Each [data-theme] block overrides the :root custom properties
-   defined in index.css. "Original" is the default (no attribute).
+   defined in index.css. "Meshloom" (id original) is the default
+   (no attribute).
    ============================================================ */
 
-/* ── Light ("Bleached Linen") ──────────────────────────────── */
+/* ── Light (cool linen + Meshloom violet) ─────────────────── */
 :root[data-theme='light'] {
-  --background: 40 18% 97%;
-  --foreground: 220 20% 14%;
+  --background: 230 24% 97%;
+  --foreground: 228 18% 14%;
   --card: 0 0% 100%;
-  --card-foreground: 220 20% 14%;
+  --card-foreground: 228 18% 14%;
   --popover: 0 0% 100%;
-  --popover-foreground: 220 20% 14%;
-  --primary: 153 65% 30%;
+  --popover-foreground: 228 18% 14%;
+  --primary: 280 72% 42%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 36 12% 92%;
-  --secondary-foreground: 220 15% 28%;
-  --muted: 40 10% 94%;
-  --muted-foreground: 220 8% 46%;
-  --accent: 36 14% 90%;
-  --accent-foreground: 220 20% 14%;
+  --secondary: 230 16% 93%;
+  --secondary-foreground: 228 14% 28%;
+  --muted: 230 14% 94%;
+  --muted-foreground: 226 8% 42%;
+  --accent: 230 16% 91%;
+  --accent-foreground: 228 18% 14%;
   --destructive: 0 84% 42%;
   --destructive-foreground: 0 0% 100%;
-  --border: 36 10% 84%;
-  --input: 36 10% 84%;
-  --ring: 153 65% 30%;
-  --msg-outgoing: 153 18% 92%;
-  --msg-incoming: 40 8% 95%;
+  --border: 228 12% 84%;
+  --input: 228 12% 84%;
+  --ring: 188 80% 32%;
+  --msg-outgoing: 280 40% 94%;
+  --msg-incoming: 230 12% 95%;
   --status-connected: 145 63% 38%;
-  --status-disconnected: 220 8% 64%;
-  --warning: 38 92% 45%;
-  --warning-foreground: 38 92% 14%;
+  --status-disconnected: 228 8% 58%;
+  --warning: 42 92% 40%;
+  --warning-foreground: 42 92% 12%;
   --success: 145 63% 32%;
   --success-foreground: 0 0% 100%;
-  --info: 217 91% 48%;
+  --info: 188 78% 32%;
   --info-foreground: 0 0% 100%;
-  --region-override: 274 78% 24%;
-  --favorite: 43 96% 50%;
-  --console: 153 50% 22%;
-  --console-command: 153 55% 18%;
-  --console-bg: 40 10% 94%;
+  --region-override: 280 62% 32%;
+  --favorite: 38 90% 42%;
+  --console: 188 72% 28%;
+  --console-command: 280 62% 34%;
+  --console-bg: 230 14% 94%;
   --toast-error: 0 40% 96%;
   --toast-error-foreground: 0 70% 38%;
   --toast-error-border: 0 30% 86%;
-  --code-editor-bg: 40 8% 94%;
-  --scrollbar: 36 8% 76%;
-  --scrollbar-hover: 36 8% 64%;
-  --overlay: 220 20% 10%;
+  --code-editor-bg: 230 12% 94%;
+  --scrollbar: 228 10% 76%;
+  --scrollbar-hover: 280 16% 58%;
+  --overlay: 228 18% 10%;
 }
 
 /* ── Windows 95 ───────────────────────────────────────────── */

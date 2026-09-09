@@ -91,9 +91,9 @@ export function SecurityWarningModal({ health }: SecurityWarningModalProps) {
             Bots are not disabled, and app-wide Basic Auth is not configured.
           </DialogDescription>
           <p>
-            Without one of those protections, or another access-control layer in front of
-            RemoteTerm, anyone on your local network who can reach this app can run Python code on
-            the computer hosting this instance via the bot system.
+            Without one of those protections, or another access-control layer in front of Meshloom,
+            anyone on your local network who can reach this app can run Python code on the computer
+            hosting this instance via the bot system.
           </p>
           <p className="font-semibold text-foreground">
             This is only safe on protected or isolated networks with appropriate access control. If

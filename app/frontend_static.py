@@ -126,15 +126,15 @@ def register_frontend_static_routes(app: FastAPI, frontend_dir: Path) -> bool:
         """Serve a dynamic web manifest using the active request base URL."""
         base = _resolve_request_base(request)
         manifest = {
-            "name": "RemoteTerm for MeshCore",
-            "short_name": "RemoteTerm",
+            "name": "Meshloom",
+            "short_name": "Meshloom",
             "id": base,
             "start_url": base,
             "scope": base,
             "display": "standalone",
             "display_override": ["window-controls-overlay", "standalone", "fullscreen"],
-            "theme_color": "#111419",
-            "background_color": "#111419",
+            "theme_color": "#0A0C10",
+            "background_color": "#0A0C10",
             # Icons are PNG-only on purpose. iOS Safari's manifest parser has
             # historically been unreliable with SVG icons, and Android/Chrome
             # PWA install flows prefer PNG for the install prompt.
@@ -182,19 +182,19 @@ def register_frontend_static_routes(app: FastAPI, frontend_dir: Path) -> bool:
                     "sizes": "1367x909",
                     "type": "image/png",
                     "form_factor": "wide",
-                    "label": "RemoteTerm desktop view",
+                    "label": "Meshloom desktop view",
                 },
                 {
                     "src": f"{base}screenshot-mobile.png",
                     "sizes": "1170x2532",
                     "type": "image/png",
-                    "label": "RemoteTerm mobile view",
+                    "label": "Meshloom mobile view",
                 },
                 {
                     "src": f"{base}screenshot-mobile-2.png",
                     "sizes": "750x1334",
                     "type": "image/png",
-                    "label": "RemoteTerm mobile conversation",
+                    "label": "Meshloom mobile conversation",
                 },
             ],
         }

@@ -17,8 +17,13 @@ export function SettingsAboutSection({
     <div className={className}>
       <div className="space-y-6">
         {/* Version */}
-        <div className="text-center space-y-1">
-          <h3 className="text-lg font-semibold">RemoteTerm for MeshCore</h3>
+        <div className="text-center space-y-2">
+          <img
+            src="./meshloom-logo.png"
+            alt="Meshloom"
+            className="mx-auto h-36 w-auto object-contain"
+          />
+          <h3 className="sr-only">Meshloom</h3>
           <div className="text-sm text-muted-foreground">
             v{version}
             {commit ? (

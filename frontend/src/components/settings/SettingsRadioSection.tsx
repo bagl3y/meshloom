@@ -1049,8 +1049,8 @@ export function SettingsRadioSection({
           <p className="text-[0.8125rem] text-muted-foreground">
             Companion-radio firmware does not distinguish between saved coordinates and live GPS
             here. When enabled, adverts include the node&apos;s current location state. That may be
-            the last coordinates you set from RemoteTerm or live GPS coordinates if the node itself
-            is already updating them. RemoteTerm cannot enable GPS on the node through the interface
+            the last coordinates you set from Meshloom or live GPS coordinates if the node itself is
+            already updating them. Meshloom cannot enable GPS on the node through the interface
             library.
           </p>
         </div>
@@ -1190,7 +1190,7 @@ export function SettingsRadioSection({
             <p className="text-[0.8125rem] text-muted-foreground">
               When enabled, the radio sends one extra direct ACK transmission before the normal ACK
               for received direct messages. This is a firmware-level receive behavior, not a
-              RemoteTerm retry setting.
+              Meshloom retry setting.
             </p>
           </div>
         </div>
