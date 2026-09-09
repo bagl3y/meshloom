@@ -62,8 +62,10 @@ from app.radio_sync import (
 )
 from app.routers import (
     channels,
+    contact_groups,
     contacts,
     debug,
+    directory,
     fanout,
     health,
     messages,
@@ -80,6 +82,7 @@ from app.routers import (
 from app.security import add_optional_basic_auth_middleware
 from app.services.radio_runtime import radio_runtime as radio_manager
 from app.services.radio_stats import start_radio_stats_sampling, stop_radio_stats_sampling
+from app.services.stale_contacts import start_stale_contact_purge, stop_stale_contact_purge
 from app.version_info import get_app_build_info
 
 setup_logging()
@@ -119,6 +122,7 @@ async def lifespan(app: FastAPI):
 
     await ensure_default_channels()
     await start_radio_stats_sampling()
+    start_stale_contact_purge()
 
     # Always start connection monitor (even if initial connection failed)
     await radio_manager.start_connection_monitor()
@@ -151,6 +155,7 @@ async def lifespan(app: FastAPI):
     await stop_periodic_advert()
     await stop_periodic_sync()
     await stop_telemetry_collect()
+    await stop_stale_contact_purge()
     if radio_manager.meshcore:
         await radio_manager.meshcore.stop_auto_message_fetching()
     await radio_manager.disconnect()
@@ -209,6 +214,8 @@ app.include_router(debug.router, prefix="/api")
 app.include_router(fanout.router, prefix="/api")
 app.include_router(radio.router, prefix="/api")
 app.include_router(contacts.router, prefix="/api")
+app.include_router(contact_groups.router, prefix="/api")
+app.include_router(directory.router, prefix="/api")
 app.include_router(repeaters.router, prefix="/api")
 app.include_router(rooms.router, prefix="/api")
 app.include_router(channels.router, prefix="/api")

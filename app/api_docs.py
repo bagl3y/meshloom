@@ -65,6 +65,10 @@ API_TAGS_METADATA: list[dict[str, Any]] = [
         "description": "App settings, favorites, muted channels, block lists, and telemetry tracking.",
     },
     {
+        "name": "directory",
+        "description": "Opt-in CoreScope hop directory proxy, map nodes, and cache reset.",
+    },
+    {
         "name": "push",
         "description": "Browser Web Push subscriptions, per-device preferences, tests, and conversations.",
     },

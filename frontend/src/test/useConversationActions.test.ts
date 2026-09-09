@@ -66,7 +66,7 @@ function createArgs(overrides: Partial<Parameters<typeof useConversationActions>
     setContacts: vi.fn(),
     setChannels: vi.fn(),
     observeMessage: vi.fn(() => ({ added: true, activeConversation: true })),
-    messageInputRef: { current: { appendText: vi.fn(), focus: vi.fn() } },
+    messageInputRef: { current: { appendText: vi.fn(), focus: vi.fn(), startReply: vi.fn() } },
     ...overrides,
   };
 }
@@ -125,6 +125,18 @@ describe('useConversationActions', () => {
     });
 
     expect(args.messageInputRef.current?.appendText).toHaveBeenCalledWith('@[Alice] ');
+  });
+
+  it('starts a composer reply with a visual quote when a snippet is provided', () => {
+    const args = createArgs();
+    const { result } = renderHook(() => useConversationActions(args));
+
+    act(() => {
+      result.current.handleSenderClick('Alice', 'hello mesh');
+    });
+
+    expect(args.messageInputRef.current?.startReply).toHaveBeenCalledWith('Alice', 'hello mesh');
+    expect(args.messageInputRef.current?.appendText).not.toHaveBeenCalled();
   });
 
   it('appends a new-timestamp resend immediately for the active channel', async () => {

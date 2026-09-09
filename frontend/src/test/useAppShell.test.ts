@@ -2,12 +2,14 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { useAppShell } from '../hooks/useAppShell';
+import { DESKTOP_SIDEBAR_COLLAPSED_KEY } from '../utils/sidebarRailPreference';
 
 describe('useAppShell', () => {
   let originalHash: string;
 
   beforeEach(() => {
     originalHash = window.location.hash;
+    localStorage.removeItem(DESKTOP_SIDEBAR_COLLAPSED_KEY);
   });
 
   afterEach(() => {
@@ -125,6 +127,34 @@ describe('useAppShell', () => {
     await waitFor(() => {
       expect(result.current.showSettings).toBe(false);
     });
+  });
+
+  it('loads the desktop sidebar rail from localStorage', () => {
+    localStorage.setItem(DESKTOP_SIDEBAR_COLLAPSED_KEY, 'true');
+
+    const { result } = renderHook(() => useAppShell());
+
+    expect(result.current.desktopSidebarCollapsed).toBe(true);
+  });
+
+  it('toggles and persists the desktop sidebar rail', () => {
+    const { result } = renderHook(() => useAppShell());
+
+    expect(result.current.desktopSidebarCollapsed).toBe(false);
+
+    act(() => {
+      result.current.handleToggleDesktopSidebar();
+    });
+
+    expect(result.current.desktopSidebarCollapsed).toBe(true);
+    expect(localStorage.getItem(DESKTOP_SIDEBAR_COLLAPSED_KEY)).toBe('true');
+
+    act(() => {
+      result.current.handleToggleDesktopSidebar();
+    });
+
+    expect(result.current.desktopSidebarCollapsed).toBe(false);
+    expect(localStorage.getItem(DESKTOP_SIDEBAR_COLLAPSED_KEY)).toBeNull();
   });
 
   it('toggles the cracker shell without affecting sidebar state', () => {

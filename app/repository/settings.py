@@ -43,7 +43,8 @@ class AppSettingsRepository:
                    blocked_keys, blocked_names, discovery_blocked_types,
                    tracked_telemetry_repeaters, tracked_telemetry_contacts,
                    auto_resend_channel,
-                   telemetry_interval_hours, telemetry_routed_hourly
+                   telemetry_interval_hours, telemetry_routed_hourly,
+                   stale_contact_days, directory_enabled, directory_url
             FROM app_settings WHERE id = 1
             """
         ) as cursor:
@@ -138,6 +139,22 @@ class AppSettingsRepository:
         except (KeyError, TypeError):
             telemetry_routed_hourly = False
 
+        try:
+            raw_stale = row["stale_contact_days"]
+            stale_contact_days = int(raw_stale) if raw_stale is not None else 0
+        except (KeyError, TypeError, ValueError):
+            stale_contact_days = 0
+
+        try:
+            directory_enabled = bool(row["directory_enabled"])
+        except (KeyError, TypeError):
+            directory_enabled = False
+
+        try:
+            directory_url = row["directory_url"] or ""
+        except (KeyError, TypeError):
+            directory_url = ""
+
         return AppSettings(
             max_radio_contacts=row["max_radio_contacts"],
             auto_decrypt_dm_on_advert=bool(row["auto_decrypt_dm_on_advert"]),
@@ -154,6 +171,9 @@ class AppSettingsRepository:
             auto_resend_channel=auto_resend_channel,
             telemetry_interval_hours=telemetry_interval_hours,
             telemetry_routed_hourly=telemetry_routed_hourly,
+            stale_contact_days=stale_contact_days,
+            directory_enabled=directory_enabled,
+            directory_url=directory_url,
         )
 
     @staticmethod
@@ -175,6 +195,9 @@ class AppSettingsRepository:
         auto_resend_channel: bool | None = None,
         telemetry_interval_hours: int | None = None,
         telemetry_routed_hourly: bool | None = None,
+        stale_contact_days: int | None = None,
+        directory_enabled: bool | None = None,
+        directory_url: str | None = None,
     ) -> None:
         """Apply field updates using an already-acquired connection.
 
@@ -244,6 +267,18 @@ class AppSettingsRepository:
             updates.append("telemetry_routed_hourly = ?")
             params.append(1 if telemetry_routed_hourly else 0)
 
+        if stale_contact_days is not None:
+            updates.append("stale_contact_days = ?")
+            params.append(stale_contact_days)
+
+        if directory_enabled is not None:
+            updates.append("directory_enabled = ?")
+            params.append(1 if directory_enabled else 0)
+
+        if directory_url is not None:
+            updates.append("directory_url = ?")
+            params.append(directory_url)
+
         if updates:
             query = f"UPDATE app_settings SET {', '.join(updates)} WHERE id = 1"
             async with conn.execute(query, params):
@@ -275,6 +310,9 @@ class AppSettingsRepository:
         auto_resend_channel: bool | None = None,
         telemetry_interval_hours: int | None = None,
         telemetry_routed_hourly: bool | None = None,
+        stale_contact_days: int | None = None,
+        directory_enabled: bool | None = None,
+        directory_url: str | None = None,
     ) -> AppSettings:
         """Update app settings. Only provided fields are updated."""
         async with db.tx() as conn:
@@ -295,6 +333,9 @@ class AppSettingsRepository:
                 auto_resend_channel=auto_resend_channel,
                 telemetry_interval_hours=telemetry_interval_hours,
                 telemetry_routed_hourly=telemetry_routed_hourly,
+                stale_contact_days=stale_contact_days,
+                directory_enabled=directory_enabled,
+                directory_url=directory_url,
             )
             return await AppSettingsRepository._get_in_conn(conn)
 

@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { Star } from 'lucide-react';
 import { api } from '../api';
 import { formatTime } from '../utils/messageParser';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { useEntranceSettled } from '../hooks/useEntranceSettled';
+import { formatChannelAddUri } from '../utils/meshcoreUri';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
+import { MeshcoreShareQr } from './MeshcoreShareQr';
 import { toast } from './ui/sonner';
 import type { Channel, ChannelDetail, PathHashWidthStats } from '../types';
 
@@ -22,6 +25,7 @@ export function ChannelInfoPane({
   channels,
   onToggleFavorite,
 }: ChannelInfoPaneProps) {
+  const { t } = useTranslation();
   const [detail, setDetail] = useState<ChannelDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -63,6 +67,13 @@ export function ChannelInfoPane({
 
   // Use live channel data where available, fall back to detail snapshot
   const channel = liveChannel ?? detail?.channel ?? null;
+  const shareUri = channel
+    ? formatChannelAddUri({
+        name: channel.name,
+        secret: channel.key,
+        regionScope: channel.flood_scope_override ?? undefined,
+      })
+    : null;
 
   return (
     <Sheet open={channelKey !== null} onOpenChange={(open) => !open && onClose()}>
@@ -140,6 +151,13 @@ export function ChannelInfoPane({
                 )}
               </button>
             </div>
+
+            {shareUri && (
+              <div className="px-5 py-3 border-b border-border">
+                <SectionLabel>{t('share.title')}</SectionLabel>
+                <MeshcoreShareQr uri={shareUri} />
+              </div>
+            )}
 
             {/* Message Activity */}
             {detail && detail.message_counts.all_time > 0 && (

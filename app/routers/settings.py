@@ -1,13 +1,24 @@
 import asyncio
 import logging
+import os
+import tempfile
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from app.models import CONTACT_TYPE_REPEATER, AppSettings
+from app.database import db
+from app.models import (
+    CONTACT_TYPE_REPEATER,
+    AppSettings,
+    BackupExport,
+    BackupRestoreRequest,
+    BackupRestoreResult,
+)
 from app.region_scope import normalize_region_scope
 from app.repository import AppSettingsRepository, ChannelRepository, ContactRepository
+from app.services.backup import PRIVATE_KEY_WARNING, export_json, restore_json, write_sqlite_backup
 from app.telemetry_interval import (
     DEFAULT_TELEMETRY_INTERVAL_HOURS,
     TELEMETRY_INTERVAL_OPTIONS_HOURS,
@@ -87,6 +98,20 @@ class AppSettingsUpdate(BaseModel):
             "When enabled, tracked repeaters with a direct or routed (non-flood) "
             "path are polled every hour instead of on the normal scheduled interval."
         ),
+    )
+    stale_contact_days: int | None = Field(
+        default=None,
+        ge=0,
+        le=3650,
+        description="Automatic stale-contact purge in days (0 = disabled)",
+    )
+    directory_enabled: bool | None = Field(
+        default=None,
+        description="Enable the opt-in CoreScope hop directory (off by default)",
+    )
+    directory_url: str | None = Field(
+        default=None,
+        description="CoreScope instance origin. Validated via GET /api/spec before persist.",
     )
 
 
@@ -270,6 +295,39 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
     if update.telemetry_routed_hourly is not None:
         logger.info("Updating telemetry_routed_hourly to %s", update.telemetry_routed_hourly)
         kwargs["telemetry_routed_hourly"] = update.telemetry_routed_hourly
+
+    if update.stale_contact_days is not None:
+        logger.info("Updating stale_contact_days to %d", update.stale_contact_days)
+        kwargs["stale_contact_days"] = update.stale_contact_days
+
+    if update.directory_enabled is not None:
+        logger.info("Updating directory_enabled to %s", update.directory_enabled)
+        kwargs["directory_enabled"] = update.directory_enabled
+        if not update.directory_enabled:
+            from app.services.directory import reset_directory_nodes_cache
+
+            reset_directory_nodes_cache()
+
+    if update.directory_url is not None:
+        from app.repository.directory import DirectoryHopCacheRepository
+        from app.services.directory import (
+            normalize_directory_origin,
+            reset_directory_nodes_cache,
+            validate_corescope_spec,
+        )
+
+        try:
+            origin = normalize_directory_origin(update.directory_url)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if origin:
+            await validate_corescope_spec(origin)
+        current = await AppSettingsRepository.get()
+        if origin != (current.directory_url or ""):
+            await DirectoryHopCacheRepository.wipe()
+            reset_directory_nodes_cache()
+        logger.info("Updating directory_url to %r", origin)
+        kwargs["directory_url"] = origin
 
     # Flood scope
     flood_scope_changed = False
@@ -545,3 +603,45 @@ async def get_contact_telemetry_schedule() -> TelemetrySchedule:
         app_settings.telemetry_interval_hours,
         app_settings.telemetry_routed_hourly,
     )
+
+
+@router.get("/backup/database")
+async def download_database_backup(background_tasks: BackgroundTasks) -> FileResponse:
+    """Download a consistent snapshot of meshcore.db.
+
+    The radio private key is NOT in this file (it lives in memory only).
+    This endpoint never replaces the live database.
+    """
+    fd, tmp_path = tempfile.mkstemp(prefix="meshcore-backup-", suffix=".db")
+    os.close(fd)
+    try:
+        await write_sqlite_backup(db, tmp_path)
+    except Exception:
+        os.unlink(tmp_path)
+        raise
+    background_tasks.add_task(os.unlink, tmp_path)
+    return FileResponse(
+        tmp_path,
+        filename="meshcore.db",
+        media_type="application/vnd.sqlite3",
+        headers={"X-Private-Key-Warning": PRIVATE_KEY_WARNING},
+    )
+
+
+@router.get("/backup/json", response_model=BackupExport)
+async def download_json_backup() -> BackupExport:
+    """Safer JSON export of contacts, channels, settings, and groups."""
+    return await export_json()
+
+
+@router.post("/backup/restore", response_model=BackupRestoreResult)
+async def restore_json_backup(request: BackupRestoreRequest) -> BackupRestoreResult:
+    """Merge a JSON backup into the live database.
+
+    Requires ``confirm=true``. Does not replace meshcore.db and does not delete
+    messages, packets, or rows missing from the file.
+    """
+    try:
+        return await restore_json(request)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e

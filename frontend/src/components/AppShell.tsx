@@ -27,10 +27,16 @@ import {
   type SettingsSection,
 } from './settings/settingsConstants';
 import { getContrastTextColor, type LocalLabel } from '../utils/localLabel';
+import {
+  getSavedDesktopSidebarCollapsed,
+  setSavedDesktopSidebarCollapsed,
+} from '../utils/sidebarRailPreference';
 import type { CrackerPanelProps } from './CrackerPanel';
 import type { SearchViewProps } from './SearchView';
 import type { SettingsModalProps } from './SettingsModal';
 import { cn } from '@/lib/utils';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const SettingsModal = lazy(() =>
   import('./SettingsModal').then((m) => ({ default: m.SettingsModal }))
@@ -112,6 +118,21 @@ export function AppShell({
   channelInfoPaneProps,
   onRepeaterAutoLogin,
 }: AppShellProps) {
+  const { t } = useTranslation();
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(
+    getSavedDesktopSidebarCollapsed
+  );
+
+  const handleToggleDesktopSidebar = useCallback(() => {
+    setDesktopSidebarCollapsed((prev) => {
+      const next = !prev;
+      setSavedDesktopSidebarCollapsed(next);
+      return next;
+    });
+  }, []);
+
+  const desktopSidebarWidthClass = desktopSidebarCollapsed ? 'w-full md:w-14' : 'w-60';
+
   const swipeHandlers = useSwipeable({
     onSwipedRight: ({ initial }) => {
       if (initial[0] < 30 && !sidebarOpen && window.innerWidth < 768) {
@@ -170,22 +191,63 @@ export function AppShell({
 
   const settingsSidebarContent = (
     <nav
-      className="sidebar w-60 h-full min-h-0 overflow-hidden bg-card border-r border-border flex flex-col"
+      className={cn(
+        'sidebar h-full min-h-0 overflow-hidden bg-card border-r border-border flex flex-col',
+        desktopSidebarWidthClass
+      )}
       aria-label="Settings"
+      data-desktop-collapsed={desktopSidebarCollapsed ? 'true' : undefined}
     >
-      <div className="flex justify-between items-center px-3 py-2.5 border-b border-border">
-        <h2 className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
+      <div
+        className={cn(
+          'flex justify-between items-center px-3 py-2.5 border-b border-border',
+          desktopSidebarCollapsed && 'md:flex-col md:items-center md:gap-1.5 md:px-1.5'
+        )}
+      >
+        <h2
+          className={cn(
+            'text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium',
+            desktopSidebarCollapsed && 'md:hidden'
+          )}
+        >
           Settings
         </h2>
-        <button
-          type="button"
-          onClick={onCloseSettingsView}
-          className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-status-connected/15 border border-status-connected/30 text-status-connected hover:bg-status-connected/25 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title="Back to conversations"
-          aria-label="Back to conversations"
+        <div
+          className={cn(
+            'flex items-center gap-1',
+            desktopSidebarCollapsed && 'md:flex-col md:gap-1.5'
+          )}
         >
-          &larr; Back to Chat
-        </button>
+          <button
+            type="button"
+            onClick={onCloseSettingsView}
+            className={cn(
+              'flex items-center gap-1 px-2 py-1 rounded text-xs bg-status-connected/15 border border-status-connected/30 text-status-connected hover:bg-status-connected/25 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              desktopSidebarCollapsed && 'md:px-1.5'
+            )}
+            title={t('shell.backToConversations')}
+            aria-label={t('shell.backToConversations')}
+          >
+            <span>&larr;</span>
+            <span className={cn(desktopSidebarCollapsed && 'md:hidden')}>
+              {t('shell.backToChat')}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={handleToggleDesktopSidebar}
+            className="hidden md:inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title={desktopSidebarCollapsed ? t('sidebar.expand') : t('sidebar.collapse')}
+            aria-label={desktopSidebarCollapsed ? t('sidebar.expand') : t('sidebar.collapse')}
+            aria-expanded={!desktopSidebarCollapsed}
+          >
+            {desktopSidebarCollapsed ? (
+              <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+            )}
+          </button>
+        </div>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto py-1 [contain:layout_paint]">
         {SETTINGS_SECTION_ORDER.map((section) => {
@@ -196,17 +258,26 @@ export function AppShell({
               key={section}
               type="button"
               disabled={disabled}
+              title={SETTINGS_SECTION_LABELS[section]}
               className={cn(
                 'w-full px-3 py-2 text-left text-[0.8125rem] border-l-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-50',
                 !disabled && 'hover:bg-accent',
-                settingsSection === section && !disabled && 'bg-accent border-l-primary'
+                settingsSection === section && !disabled && 'bg-accent border-l-primary',
+                desktopSidebarCollapsed && 'md:px-1.5 md:justify-center'
               )}
               aria-current={settingsSection === section ? 'true' : undefined}
               onClick={() => onSettingsSectionChange(section)}
             >
-              <span className="flex items-center gap-2">
+              <span
+                className={cn(
+                  'flex items-center gap-2',
+                  desktopSidebarCollapsed && 'md:justify-center'
+                )}
+              >
                 <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                <span>{SETTINGS_SECTION_LABELS[section]}</span>
+                <span className={cn(desktopSidebarCollapsed && 'md:hidden')}>
+                  {SETTINGS_SECTION_LABELS[section]}
+                </span>
               </span>
             </button>
           );
@@ -218,7 +289,11 @@ export function AppShell({
   const activeSidebarContent = showSettings ? (
     settingsSidebarContent
   ) : (
-    <Sidebar {...sidebarProps} />
+    <Sidebar
+      {...sidebarProps}
+      desktopCollapsed={desktopSidebarCollapsed}
+      onToggleDesktopCollapsed={handleToggleDesktopSidebar}
+    />
   );
 
   return (

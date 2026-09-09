@@ -5,11 +5,12 @@
  * Cancel, or Dialog dismiss) and when switching tabs.
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { NewMessageModal } from '../components/NewMessageModal';
+import i18n from '../i18n';
 import { toast } from '../components/ui/sonner';
 
 // Mock sonner (toast)
@@ -212,6 +213,71 @@ describe('NewMessageModal form reset', () => {
           false
         );
       });
+    });
+  });
+
+  describe('meshcore:// import', () => {
+    it('maps an official contact URI onto Create → onCreateContact', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      const publicKey = '9cd8fcf22a47333b591d96a2b848b73f457b1bb1a3ea2453a885f9e5787765b1';
+      fireEvent.change(screen.getByLabelText(i18n.t('share.importLabel')), {
+        target: {
+          value: `meshcore://contact/add?name=Example+Contact&public_key=${publicKey}&type=2`,
+        },
+      });
+
+      expect((screen.getByPlaceholderText('Contact name') as HTMLInputElement).value).toBe(
+        'Example Contact'
+      );
+      expect(
+        (screen.getByPlaceholderText('64-character hex public key') as HTMLInputElement).value
+      ).toBe(publicKey);
+      expect((screen.getByLabelText('Type') as HTMLSelectElement).value).toBe('2');
+
+      await user.click(screen.getByRole('button', { name: 'Create' }));
+      await waitFor(() => {
+        expect(onCreateContact).toHaveBeenCalledWith('Example Contact', publicKey, false, 2);
+      });
+    });
+
+    it('maps an official channel URI onto Create → onCreateChannel', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      const secret = '8b3387e9c5cdea6ac9e5edbaa115cd72';
+      fireEvent.change(screen.getByLabelText(i18n.t('share.importLabel')), {
+        target: {
+          value: `meshcore://channel/add?name=Public&secret=${secret}&region_scope=%23Esperance`,
+        },
+      });
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: 'Private Channel' })).toHaveAttribute(
+          'data-state',
+          'active'
+        );
+      });
+      expect((screen.getByPlaceholderText('Channel name') as HTMLInputElement).value).toBe(
+        'Public'
+      );
+      expect((screen.getByPlaceholderText('Pre-shared key (hex)') as HTMLInputElement).value).toBe(
+        secret
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Create' }));
+      await waitFor(() => {
+        expect(onCreateChannel).toHaveBeenCalledWith('Public', secret, false);
+      });
+    });
+
+    it('rejects unofficial meshcore paths', async () => {
+      renderModal();
+      fireEvent.change(screen.getByLabelText(i18n.t('share.importLabel')), {
+        target: { value: 'meshcore://settings' },
+      });
+      expect(screen.getByText(i18n.t('share.invalidUri'))).toBeTruthy();
+      expect(onCreateContact).not.toHaveBeenCalled();
+      expect(onCreateChannel).not.toHaveBeenCalled();
     });
   });
 

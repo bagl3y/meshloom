@@ -234,3 +234,14 @@ async def resend_channel_message(
         temp_radio_slot=TEMP_RADIO_SLOT,
         message_repository=MessageRepository,
     )
+
+
+@router.delete("/{message_id}")
+async def delete_message(message_id: int) -> dict[str, str]:
+    """Remove a stored message from this server. Does not retract it from the mesh."""
+    existing = await MessageRepository.get_by_id(message_id)
+    if existing is None:
+        return {"status": "ok"}
+    await MessageRepository.delete_by_id(message_id)
+    broadcast_event("message_deleted", {"message_id": message_id})
+    return {"status": "ok"}

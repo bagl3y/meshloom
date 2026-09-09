@@ -1,10 +1,12 @@
 from app.repository.channels import ChannelRepository
+from app.repository.contact_groups import ContactGroupRepository
 from app.repository.contacts import (
     AmbiguousPublicKeyPrefixError,
     ContactAdvertPathRepository,
     ContactNameHistoryRepository,
     ContactRepository,
 )
+from app.repository.directory import DirectoryHopCacheRepository
 from app.repository.fanout import FanoutConfigRepository
 from app.repository.messages import MessageRepository
 from app.repository.raw_packets import RawPacketRepository
@@ -16,8 +18,10 @@ __all__ = [
     "AppSettingsRepository",
     "ChannelRepository",
     "ContactAdvertPathRepository",
+    "ContactGroupRepository",
     "ContactNameHistoryRepository",
     "ContactRepository",
+    "DirectoryHopCacheRepository",
     "FanoutConfigRepository",
     "MessageRepository",
     "RawPacketRepository",

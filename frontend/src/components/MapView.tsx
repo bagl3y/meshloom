@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   MapContainer,
   TileLayer,
@@ -12,7 +13,8 @@ import {
 import type { LatLngBoundsExpression, CircleMarker as LeafletCircleMarker } from 'leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { Contact, RadioConfig } from '../types';
+import type { Contact, DirectoryMapNode, RadioConfig } from '../types';
+import { api } from '../api';
 import { formatTime } from '../utils/messageParser';
 import { isValidLocation } from '../utils/pathUtils';
 import { CONTACT_TYPE_REPEATER } from '../types';
@@ -24,6 +26,7 @@ import {
 } from '../utils/visualizerUtils';
 import { getRawPacketObservationKey } from '../utils/rawPacketIdentity';
 import { useRawPackets } from '../stores/rawPacketStore';
+import { DirectoryGlobeIcon } from './messagePath/DirectoryGlobeIcon';
 import { cn } from '@/lib/utils';
 
 interface MapViewProps {
@@ -36,6 +39,8 @@ interface MapViewProps {
   /** When provided, the contact name in each popup becomes a clickable link
    *  that opens the conversation for that contact (DM, repeater, or room). */
   onSelectContact?: (contact: Contact) => void;
+  /** Settings → Radio-App CoreScope switch. Overlay stays off until the map checkbox is ticked. */
+  directoryEnabled?: boolean;
 }
 
 // --- Tile layer presets ---
@@ -167,6 +172,7 @@ const MAP_RECENCY_COLORS = {
 } as const;
 const MAP_MARKER_STROKE = '#0f172a';
 const MAP_REPEATER_RING = '#f8fafc';
+const MAP_DIRECTORY_COLOR = '#f97316';
 
 // --- "Heard since" filter ---
 // Relative presets mirror the marker recency legend so the chips and the dot
@@ -545,7 +551,9 @@ export function MapView({
   blockedKeys,
   blockedNames,
   onSelectContact,
+  directoryEnabled = false,
 }: MapViewProps) {
+  const { t } = useTranslation();
   const rawPackets = useRawPackets();
   const [sinceId, setSinceId] = useState<MapSinceId>(getSavedSinceId);
   const [customSince, setCustomSince] = useState('');
@@ -580,6 +588,9 @@ export function MapView({
   }, []);
 
   const [showPackets, setShowPackets] = useState(false);
+  const [showInternetRelays, setShowInternetRelays] = useState(false);
+  const [directoryNodes, setDirectoryNodes] = useState<DirectoryMapNode[]>([]);
+  const [directoryLoadError, setDirectoryLoadError] = useState(false);
   const [discoveryMode, setDiscoveryMode] = useState(false);
   const [discoveredKeys, setDiscoveredKeys] = useState<Set<string>>(new Set());
   const [particles, setParticles] = useState<MapParticle[]>([]);
@@ -678,6 +689,50 @@ export function MapView({
     blockedKeys,
     blockedNames,
   ]);
+
+  const localContactKeys = useMemo(
+    () => new Set(contacts.map((contact) => contact.public_key.toLowerCase())),
+    [contacts]
+  );
+
+  const overlayDirectoryNodes = useMemo(() => {
+    if (!showInternetRelays) return [];
+    return directoryNodes.filter((node) => !localContactKeys.has(node.public_key.toLowerCase()));
+  }, [showInternetRelays, directoryNodes, localContactKeys]);
+
+  useEffect(() => {
+    if (!directoryEnabled) {
+      setShowInternetRelays(false);
+      setDirectoryNodes([]);
+      setDirectoryLoadError(false);
+    }
+  }, [directoryEnabled]);
+
+  useEffect(() => {
+    if (!directoryEnabled || !showInternetRelays) {
+      if (!showInternetRelays) {
+        setDirectoryNodes([]);
+        setDirectoryLoadError(false);
+      }
+      return;
+    }
+    let cancelled = false;
+    void api.getDirectoryMapNodes().then(
+      (res) => {
+        if (cancelled) return;
+        setDirectoryNodes(res.nodes);
+        setDirectoryLoadError(false);
+      },
+      () => {
+        if (cancelled) return;
+        setDirectoryNodes([]);
+        setDirectoryLoadError(true);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [directoryEnabled, showInternetRelays]);
 
   // Resolve a path of hop tokens to geographic waypoints (only unambiguous + has GPS)
   const resolvePacketPath = useCallback(
@@ -998,6 +1053,19 @@ export function MapView({
             />{' '}
             repeater
           </span>
+          {showInternetRelays && (
+            <span className="flex items-center gap-1">
+              <span
+                className="w-3 h-3 rounded-full border-2"
+                style={{
+                  borderColor: MAP_DIRECTORY_COLOR,
+                  backgroundColor: MAP_RECENCY_COLORS.today,
+                }}
+                aria-hidden="true"
+              />{' '}
+              {t('map.internetRelaysLegend')}
+            </span>
+          )}
           {/* "Heard since" filter. Hidden in discovery mode, which selects
               nodes by live traffic rather than by recency. */}
           {!(showPackets && discoveryMode) && (
@@ -1057,6 +1125,20 @@ export function MapView({
                 </>
               )}
             </div>
+          )}
+          {directoryEnabled && (
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showInternetRelays}
+                onChange={(e) => setShowInternetRelays(e.target.checked)}
+                className="rounded border-border"
+              />
+              <span className="text-[0.6875rem]">{t('map.internetRelays')}</span>
+            </label>
+          )}
+          {directoryEnabled && directoryLoadError && (
+            <span className="text-[0.6875rem] text-destructive">{t('map.internetLoadFailed')}</span>
           )}
           <label className="flex items-center gap-1.5 cursor-pointer">
             <input
@@ -1183,6 +1265,33 @@ export function MapView({
               </Fragment>
             );
           })}
+
+          {overlayDirectoryNodes.map((node) => (
+            <CircleMarker
+              key={`directory-${node.public_key}`}
+              center={[node.lat, node.lon]}
+              radius={10}
+              pathOptions={{
+                color: MAP_DIRECTORY_COLOR,
+                fillColor: MAP_RECENCY_COLORS.today,
+                fillOpacity: 0.9,
+                weight: 3,
+              }}
+            >
+              <Popup>
+                <div className="text-sm" data-testid="directory-map-marker">
+                  <div className="font-medium flex items-center gap-1">
+                    <DirectoryGlobeIcon />
+                    {node.name}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">{t('map.internetSource')}</div>
+                  <div className="text-xs text-gray-400 mt-1 font-mono">
+                    {node.lat.toFixed(5)}, {node.lon.toFixed(5)}
+                  </div>
+                </div>
+              </Popup>
+            </CircleMarker>
+          ))}
 
           {showPackets && <ParticleOverlay particles={particles} />}
         </MapContainer>

@@ -7,10 +7,19 @@
 import { describe, it, expect } from 'vitest';
 import {
   REACTION_EMOJIS,
+  attachOpenReaction,
+  computeReactionHash,
+  formatOpenReaction,
+  formatGif,
+  formatLocation,
   giphyUrlForId,
+  locationMapUrl,
   parseGif,
+  parseLocation,
   parseMeshCoreOneReaction,
   parseReaction,
+  reactionEmojiIndex,
+  reactionHashSourceFromFields,
   splitReplyMention,
 } from '../utils/meshcoreOpenPayloads';
 
@@ -37,6 +46,63 @@ describe('parseGif', () => {
 
   it('builds the Giphy media URL', () => {
     expect(giphyUrlForId('abc123')).toBe('https://media.giphy.com/media/abc123/giphy.gif');
+  });
+
+  it('encodes the compact Open wire form', () => {
+    expect(formatGif('abc123')).toBe('g:abc123');
+    expect(parseGif(formatGif(' aB3_-xY '))).toBe('aB3_-xY');
+  });
+
+  it('accepts Open-compatible Giphy URLs', () => {
+    expect(parseGif('https://media.giphy.com/media/abc123/giphy.gif')).toBe('abc123');
+    expect(parseGif('media.giphy.com/media/abc123/giphy.gif')).toBe('abc123');
+    expect(parseGif('https://media1.giphy.com/media/abc123/giphy.gif')).toBe('abc123');
+    expect(parseGif('https://i.giphy.com/abc123.gif')).toBe('abc123');
+    expect(parseGif('https://giphy.com/gifs/funny-cat-abc123')).toBe('abc123');
+    expect(parseGif('https://giphy.com/gifs/abc123/')).toBe('abc123');
+  });
+});
+
+describe('parseLocation / formatLocation', () => {
+  it('parses an Open loc pin', () => {
+    expect(parseLocation('m:43.580120,7.123450|FR-06-PSCL-Base|loc')).toEqual({
+      lat: 43.58012,
+      lon: 7.12345,
+      label: 'FR-06-PSCL-Base',
+      kind: 'loc',
+    });
+  });
+
+  it('parses a poi marker and trims whitespace', () => {
+    expect(parseLocation('  m:1.5,-2.25|Cafe|poi  ')).toEqual({
+      lat: 1.5,
+      lon: -2.25,
+      label: 'Cafe',
+      kind: 'poi',
+    });
+  });
+
+  it('encodes six-decimal Open wire and replaces pipes in the label', () => {
+    expect(formatLocation(43.58, 7.12, 'A|B')).toBe('m:43.580000,7.120000|A/B|loc');
+    expect(parseLocation(formatLocation(43.58, 7.12, 'A|B')!)).toMatchObject({
+      lat: 43.58,
+      lon: 7.12,
+      label: 'A/B',
+      kind: 'loc',
+    });
+  });
+
+  it('rejects unset 0,0 and out-of-range coordinates', () => {
+    expect(formatLocation(0, 0, 'here')).toBeNull();
+    expect(parseLocation('m:91,0|x|loc')).toBeNull();
+    expect(parseLocation('m:43.5,7.1|x|nope')).toBeNull();
+    expect(parseLocation('hello')).toBeNull();
+  });
+
+  it('builds an OpenStreetMap pin URL', () => {
+    expect(locationMapUrl(43.58, 7.12)).toBe(
+      'https://www.openstreetmap.org/?mlat=43.58&mlon=7.12#map=16/43.58/7.12'
+    );
   });
 });
 
@@ -158,5 +224,128 @@ describe('parseMeshCoreOneReaction', () => {
     expect(parseMeshCoreOneReaction('\u{1F44D} b45pc4ek')).toBeNull(); // single line
     expect(parseMeshCoreOneReaction('\u{1F44D}@[Bob]\nb45pc4ek\nmore')).toBeNull();
     expect(parseMeshCoreOneReaction('r:1a2b:00')).toBeNull();
+  });
+});
+
+describe('computeReactionHash / formatOpenReaction', () => {
+  // Dart VM String.hashCode (seed 0, kHashBits=30) then & 0xFFFF.
+  // Matches meshcore-open ReactionHelper, not Sestriere.
+  it('hashes a channel message as timestamp+name+first5', () => {
+    expect(computeReactionHash(1700000000, 'Alice', 'hello')).toBe('b0ba');
+  });
+
+  it('omits senderName for DMs', () => {
+    expect(computeReactionHash(1700000000, null, 'hello')).toBe('033f');
+    expect(computeReactionHash(1700000000, null, 'hello')).not.toBe(
+      computeReactionHash(1700000000, 'Alice', 'hello')
+    );
+  });
+
+  it('uses only the first five UTF-16 units of text', () => {
+    expect(computeReactionHash(1700000000, 'Alice', 'hello world')).toBe(
+      computeReactionHash(1700000000, 'Alice', 'hello')
+    );
+    expect(computeReactionHash(1, 'A', 'hi')).toBe('1b7d');
+  });
+
+  it('hashes UTF-16 code units (accents, emoji), not UTF-8 bytes', () => {
+    expect(computeReactionHash(1700000000, 'Alizé', 'hello')).toBe('94d9');
+    expect(computeReactionHash(1700000000, 'Alice', '👍yes')).toBe('b080');
+  });
+
+  it('formats a sendable r:HASH:INDEX that parseReaction accepts', () => {
+    const wire = formatOpenReaction(1700000000, 'Alice', 'hello', '👍');
+    expect(wire).toBe('r:b0ba:00');
+    expect(parseReaction(wire!)).toEqual({ emoji: '👍', targetHash: 'b0ba' });
+  });
+
+  it('returns null for an emoji outside the Open table', () => {
+    expect(formatOpenReaction(1700000000, 'Alice', 'hello', '🥑')).toBeNull();
+    expect(reactionEmojiIndex('🥑')).toBeNull();
+    expect(reactionEmojiIndex('👍')).toBe('00');
+  });
+});
+
+describe('reactionHashSourceFromFields / attachOpenReaction', () => {
+  const getSource = (msg: {
+    type: 'PRIV' | 'CHAN';
+    sender_timestamp: number | null;
+    sender_name: string | null;
+    text: string;
+  }) => reactionHashSourceFromFields(msg);
+
+  it('strips the stored channel "Name: " prefix before hashing', () => {
+    const source = reactionHashSourceFromFields({
+      type: 'CHAN',
+      sender_timestamp: 1700000000,
+      sender_name: 'Alice',
+      text: 'Alice: hello',
+    });
+    expect(source).toEqual({ timestampSeconds: 1700000000, senderName: 'Alice', text: 'hello' });
+    expect(computeReactionHash(source!.timestampSeconds, source!.senderName, source!.text)).toBe(
+      'b0ba'
+    );
+  });
+
+  it('omits senderName for PRIV even when sender_name is stored', () => {
+    expect(
+      reactionHashSourceFromFields({
+        type: 'PRIV',
+        sender_timestamp: 1700000000,
+        sender_name: 'Alice',
+        text: 'hello',
+      })
+    ).toEqual({ timestampSeconds: 1700000000, senderName: null, text: 'hello' });
+  });
+
+  it('returns null without a sender timestamp', () => {
+    expect(
+      reactionHashSourceFromFields({
+        type: 'CHAN',
+        sender_timestamp: null,
+        sender_name: 'Alice',
+        text: 'Alice: hello',
+      })
+    ).toBeNull();
+  });
+
+  it('attaches an inbound Open reaction to the newest matching target', () => {
+    const messages = [
+      {
+        type: 'CHAN' as const,
+        sender_timestamp: 1700000000,
+        sender_name: 'Alice',
+        text: 'Alice: hello',
+      },
+      {
+        type: 'CHAN' as const,
+        sender_timestamp: 1700000001,
+        sender_name: 'Bob',
+        text: 'Bob: later',
+      },
+      {
+        type: 'CHAN' as const,
+        sender_timestamp: 1700000000,
+        sender_name: 'Alice',
+        text: 'Alice: hello',
+      },
+    ];
+    const wire = formatOpenReaction(1700000000, 'Alice', 'hello', '🔥');
+    const attached = attachOpenReaction(messages, wire!, getSource);
+    expect(attached?.targetIndex).toBe(2);
+    expect(attached?.reaction).toEqual({ emoji: '🔥', targetHash: 'b0ba' });
+  });
+
+  it('does not attach MeshCore One inbound text via the Open hash', () => {
+    const messages = [
+      {
+        type: 'CHAN' as const,
+        sender_timestamp: 1700000000,
+        sender_name: 'Alice',
+        text: 'Alice: hello',
+      },
+    ];
+    expect(attachOpenReaction(messages, '\u{1F44D}@[Alice]\nb45pc4ek', getSource)).toBeNull();
+    expect(parseMeshCoreOneReaction('\u{1F44D}@[Alice]\nb45pc4ek')?.emoji).toBe('\u{1F44D}');
   });
 });

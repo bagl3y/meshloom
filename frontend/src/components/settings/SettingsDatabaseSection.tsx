@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
@@ -21,10 +22,15 @@ export function SettingsDatabaseSection({
   onHealthRefresh: () => Promise<void>;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const [retentionDays, setRetentionDays] = useState('14');
   const [cleaning, setCleaning] = useState(false);
   const [purgingDecryptedRaw, setPurgingDecryptedRaw] = useState(false);
   const [autoDecryptOnAdvert, setAutoDecryptOnAdvert] = useState(false);
+  const [downloadingDb, setDownloadingDb] = useState(false);
+  const [downloadingJson, setDownloadingJson] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreConfirm, setRestoreConfirm] = useState(false);
 
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -203,6 +209,113 @@ export function SettingsDatabaseSection({
           When enabled, the server will automatically try to decrypt stored DM packets when a new
           contact sends an advertisement. This may cause brief delays on large packet backlogs.
         </p>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-4">
+        <h3 className="text-base font-semibold tracking-tight">{t('settings.backupTitle')}</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">
+          <Trans i18nKey="settings.backupKeyWarning" />
+        </p>
+
+        <div className="rounded-md border border-border p-3 space-y-2">
+          <h4 className="text-sm font-semibold">{t('settings.backupDbTitle')}</h4>
+          <p className="text-[0.8125rem] text-muted-foreground">{t('settings.backupDbHelp')}</p>
+          <Button
+            variant="outline"
+            disabled={downloadingDb}
+            onClick={async () => {
+              setDownloadingDb(true);
+              try {
+                await api.downloadDatabaseBackup();
+              } catch (err) {
+                toast.error(t('settings.backupDbFailed'), {
+                  description: err instanceof Error ? err.message : 'Unknown error',
+                });
+              } finally {
+                setDownloadingDb(false);
+              }
+            }}
+          >
+            {downloadingDb ? t('settings.backupDbDownloading') : t('settings.backupDbDownload')}
+          </Button>
+        </div>
+
+        <div className="rounded-md border border-border p-3 space-y-2">
+          <h4 className="text-sm font-semibold">{t('settings.backupJsonTitle')}</h4>
+          <p className="text-[0.8125rem] text-muted-foreground">{t('settings.backupJsonHelp')}</p>
+          <Button
+            variant="outline"
+            disabled={downloadingJson}
+            onClick={async () => {
+              setDownloadingJson(true);
+              try {
+                const data = await api.getJsonBackup();
+                const blob = new Blob([JSON.stringify(data, null, 2)], {
+                  type: 'application/json',
+                });
+                const href = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = href;
+                a.download = 'remoteterm-backup.json';
+                a.click();
+                URL.revokeObjectURL(href);
+              } catch (err) {
+                toast.error(t('settings.backupJsonFailed'), {
+                  description: err instanceof Error ? err.message : 'Unknown error',
+                });
+              } finally {
+                setDownloadingJson(false);
+              }
+            }}
+          >
+            {downloadingJson ? t('settings.backupJsonExporting') : t('settings.backupJsonDownload')}
+          </Button>
+        </div>
+
+        <div className="rounded-md border border-warning/40 p-3 space-y-2">
+          <h4 className="text-sm font-semibold">{t('settings.restoreJsonTitle')}</h4>
+          <p className="text-[0.8125rem] text-muted-foreground">{t('settings.restoreJsonHelp')}</p>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={restoreConfirm}
+              onChange={(e) => setRestoreConfirm(e.target.checked)}
+              className="w-4 h-4 rounded border-input accent-primary"
+            />
+            <span className="text-sm">{t('settings.restoreConfirm')}</span>
+          </label>
+          <Input
+            type="file"
+            accept="application/json,.json"
+            disabled={!restoreConfirm || restoring}
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (!file || !restoreConfirm) return;
+              setRestoring(true);
+              try {
+                const parsed = JSON.parse(await file.text());
+                const result = await api.restoreJsonBackup(parsed);
+                toast.success(t('settings.restoreMerged'), {
+                  description: t('settings.restoreMergedDetail', {
+                    contacts: result.contacts_upserted,
+                    channels: result.channels_upserted,
+                    groups: result.groups_upserted,
+                  }),
+                });
+                await onHealthRefresh();
+              } catch (err) {
+                toast.error(t('settings.restoreFailed'), {
+                  description: err instanceof Error ? err.message : 'Unknown error',
+                });
+              } finally {
+                setRestoring(false);
+              }
+            }}
+          />
+        </div>
       </div>
     </div>
   );

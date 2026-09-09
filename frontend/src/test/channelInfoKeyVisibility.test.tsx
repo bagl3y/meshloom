@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ChannelInfoPane } from '../components/ChannelInfoPane';
+import i18n from '../i18n';
 import type { Channel, ChannelDetail } from '../types';
 
 // Mock the api module
@@ -126,5 +127,28 @@ describe('ChannelInfoPane key visibility', () => {
     });
     expect(screen.queryByText(key2.toLowerCase())).not.toBeInTheDocument();
     expect(screen.getByText('Show Key')).toBeInTheDocument();
+  });
+
+  it('copies the official channel share URI, including region_scope', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const key = '8b3387e9c5cdea6ac9e5edbaa115cd72';
+    const channel = {
+      ...makeChannel(key, 'Public', false),
+      flood_scope_override: '#Esperance',
+    };
+    mockGetChannelDetail.mockResolvedValue(makeDetail(channel));
+
+    render(<ChannelInfoPane {...baseProps} channelKey={key} channels={[channel]} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: i18n.t('share.copyUri') }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        `meshcore://channel/add?name=Public&secret=${key}&region_scope=%23Esperance`
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('share.showQr') }));
+    expect(screen.getByTitle(i18n.t('share.qrTitle'))).toBeInTheDocument();
   });
 });

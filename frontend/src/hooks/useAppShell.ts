@@ -4,6 +4,10 @@ import { getLocalLabel, type LocalLabel } from '../utils/localLabel';
 import { getSavedDistanceUnit, type DistanceUnit } from '../utils/distanceUnits';
 import { getSavedRenderRichPayloads } from '../utils/richPayloadPreference';
 import { getSavedShowPathHopWidth } from '../utils/pathHopWidthPreference';
+import {
+  getSavedDesktopSidebarCollapsed,
+  setSavedDesktopSidebarCollapsed,
+} from '../utils/sidebarRailPreference';
 import type { SettingsSection } from '../components/settings/settingsConstants';
 import { parseHashSettingsSection, updateSettingsHash, pushSettingsHash } from '../utils/urlHash';
 
@@ -12,6 +16,7 @@ interface UseAppShellResult {
   showSettings: boolean;
   settingsSection: SettingsSection;
   sidebarOpen: boolean;
+  desktopSidebarCollapsed: boolean;
   showCracker: boolean;
   crackerRunning: boolean;
   localLabel: LocalLabel;
@@ -30,6 +35,7 @@ interface UseAppShellResult {
   handleOpenNewMessage: () => void;
   handleCloseNewMessage: () => void;
   handleToggleCracker: () => void;
+  handleToggleDesktopSidebar: () => void;
 }
 
 export function useAppShell(): UseAppShellResult {
@@ -40,6 +46,9 @@ export function useAppShell(): UseAppShellResult {
     () => initialSettingsSection ?? 'radio'
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(
+    getSavedDesktopSidebarCollapsed
+  );
   const [showCracker, setShowCracker] = useState(false);
   const [crackerRunning, setCrackerRunning] = useState(false);
   const [localLabel, setLocalLabel] = useState(getLocalLabel);
@@ -126,11 +135,20 @@ export function useAppShell(): UseAppShellResult {
     setShowCracker((prev) => !prev);
   }, []);
 
+  const handleToggleDesktopSidebar = useCallback(() => {
+    setDesktopSidebarCollapsed((prev) => {
+      const next = !prev;
+      setSavedDesktopSidebarCollapsed(next);
+      return next;
+    });
+  }, []);
+
   return {
     showNewMessage,
     showSettings,
     settingsSection,
     sidebarOpen,
+    desktopSidebarCollapsed,
     showCracker,
     crackerRunning,
     localLabel,
@@ -149,5 +167,6 @@ export function useAppShell(): UseAppShellResult {
     handleOpenNewMessage,
     handleCloseNewMessage,
     handleToggleCracker,
+    handleToggleDesktopSidebar,
   };
 }

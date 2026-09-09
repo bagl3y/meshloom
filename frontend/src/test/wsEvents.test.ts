@@ -66,6 +66,17 @@ describe('wsEvents', () => {
     });
   });
 
+  it('parses message_deleted events', () => {
+    const event = parseWsEvent(
+      JSON.stringify({ type: 'message_deleted', data: { message_id: 42 } })
+    );
+
+    expect(event).toEqual({
+      type: 'message_deleted',
+      data: { message_id: 42 },
+    });
+  });
+
   it('parses channel_deleted events', () => {
     const event = parseWsEvent(JSON.stringify({ type: 'channel_deleted', data: { key: 'bb' } }));
 

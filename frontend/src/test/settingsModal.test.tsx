@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SettingsModal } from '../components/SettingsModal';
+import i18n from '../i18n';
 import type {
   AppSettings,
   AppSettingsUpdate,
@@ -23,6 +24,7 @@ import {
 import { api } from '../api';
 import { DISTANCE_UNIT_KEY } from '../utils/distanceUnits';
 import { SHOW_PATH_HOP_WIDTH_KEY } from '../utils/pathHopWidthPreference';
+import { DEFAULT_LOCALE, LANGUAGE_STORAGE_KEY } from '../utils/languagePreference';
 import {
   DEFAULT_FONT_SCALE,
   FONT_SCALE_KEY,
@@ -211,6 +213,7 @@ describe('SettingsModal', () => {
     localStorage.clear();
     window.location.hash = '';
     document.documentElement.style.fontSize = '';
+    void i18n.changeLanguage(DEFAULT_LOCALE);
   });
 
   it('refreshes app settings when opened', async () => {
@@ -402,6 +405,24 @@ describe('SettingsModal', () => {
 
     // Existing 'nl-gr' preserved, only the new 'de-by' appended.
     expect(knownRegions.value).toBe('nl-gr\nde-by');
+  });
+
+  it('copies radio lat,lon from config via Share my location', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    renderModal();
+    openRadioSection();
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('share.shareLocation') }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('1.00000, 2.00000');
+    });
+  });
+
+  it('disables Share my location when the radio has no coordinates', () => {
+    renderModal({ config: { ...baseConfig, lat: 0, lon: 0 } });
+    openRadioSection();
+    expect(screen.getByRole('button', { name: i18n.t('share.shareLocation') })).toBeDisabled();
   });
 
   it('saves advert location source through radio config save', async () => {
@@ -636,6 +657,22 @@ describe('SettingsModal', () => {
       expect(onReboot).toHaveBeenCalledTimes(2);
     });
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('defaults the language control to French and persists the pref', async () => {
+    renderModal();
+    openLocalSection();
+
+    const select = screen.getByLabelText(i18n.t('language.label')) as HTMLSelectElement;
+    expect(select.value).toBe('fr');
+
+    fireEvent.change(select, { target: { value: 'en' } });
+
+    expect(localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe('en');
+    expect(i18n.language).toBe('en');
+    expect(screen.getByLabelText(i18n.t('language.label'))).toHaveValue('en');
+
+    await i18n.changeLanguage(DEFAULT_LOCALE);
   });
 
   it('stores and clears reopen-last-conversation preference locally', () => {
@@ -906,7 +943,7 @@ describe('SettingsModal', () => {
     expect(screen.getByText(/Includes an estimated 60 false positives/)).toBeInTheDocument();
     // 0.0179% would render as a meaningless "0.0%", so the share is withheld
     expect(screen.queryByText(/0\.0%/)).not.toBeInTheDocument();
-    expect(screen.getByText(/70 of 391,757/)).toBeInTheDocument();
+    expect(screen.getByText(/70 of 391/)).toBeInTheDocument();
     // ...but the decryption-backed sender figure still stands
     expect(screen.getByText(/3 of 117/)).toBeInTheDocument();
     expect(screen.getByText(/2\.6%/)).toBeInTheDocument();
@@ -1064,6 +1101,30 @@ describe('SettingsModal', () => {
     await waitFor(() => {
       expect(onSaveAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({ telemetry_routed_hourly: true })
+      );
+    });
+  });
+
+  it('renders CoreScope directory switch off by default', async () => {
+    const onSaveAppSettings = vi.fn(async () => {});
+
+    renderModal({
+      externalSidebarNav: true,
+      desktopSection: 'radio-app',
+      onSaveAppSettings,
+    });
+
+    const checkbox = screen.getByRole('checkbox', {
+      name: i18n.t('settings.directoryEnable'),
+    }) as HTMLInputElement;
+
+    expect(checkbox.checked).toBe(false);
+
+    fireEvent.click(checkbox);
+
+    await waitFor(() => {
+      expect(onSaveAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ directory_enabled: true })
       );
     });
   });

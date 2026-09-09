@@ -95,6 +95,7 @@ function createRealtimeArgs(overrides: Partial<Parameters<typeof useRealtimeAppS
       renameConversationMessages: vi.fn(),
       removeConversationMessages: vi.fn(),
       receiveMessageAck: vi.fn(),
+      removeMessage: vi.fn(),
       notifyIncomingMessage: vi.fn(),
       ...overrides,
     },
@@ -316,5 +317,16 @@ describe('useRealtimeAppState', () => {
 
     expect(getRawPackets()).toEqual([packet]);
     expect(getRawPacketStatsSession().totalObservedPackets).toBe(1);
+  });
+
+  it('routes message_deleted to removeMessage', () => {
+    const { args } = createRealtimeArgs();
+    const { result } = renderHook(() => useRealtimeAppState(args));
+
+    act(() => {
+      result.current.onMessageDeleted?.(42);
+    });
+
+    expect(args.removeMessage).toHaveBeenCalledWith(42);
   });
 });

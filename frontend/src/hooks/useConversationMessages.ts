@@ -143,6 +143,20 @@ export class ConversationMessageCache {
     );
   }
 
+  removeMessage(messageId: number): void {
+    for (const [id, entry] of this.cache.entries()) {
+      if (!entry.messages.some((message) => message.id === messageId)) continue;
+      this.cache.set(
+        id,
+        this.normalizeEntry({
+          messages: entry.messages.filter((message) => message.id !== messageId),
+          hasOlderMessages: entry.hasOlderMessages,
+        })
+      );
+      return;
+    }
+  }
+
   clear(): void {
     this.cache.clear();
   }
@@ -271,6 +285,7 @@ interface UseConversationMessagesResult {
   reconcileOnReconnect: () => void;
   renameConversationMessages: (oldId: string, newId: string) => void;
   removeConversationMessages: (conversationId: string) => void;
+  removeMessage: (messageId: number) => void;
   clearConversationMessages: () => void;
 }
 
@@ -908,6 +923,11 @@ export function useConversationMessages(
     conversationMessageCache.remove(conversationId);
   }, []);
 
+  const removeMessage = useCallback((messageId: number) => {
+    setMessages((prev) => prev.filter((message) => message.id !== messageId));
+    conversationMessageCache.removeMessage(messageId);
+  }, []);
+
   const clearConversationMessages = useCallback(() => {
     conversationMessageCache.clear();
   }, []);
@@ -928,6 +948,7 @@ export function useConversationMessages(
     reconcileOnReconnect,
     renameConversationMessages,
     removeConversationMessages,
+    removeMessage,
     clearConversationMessages,
   };
 }

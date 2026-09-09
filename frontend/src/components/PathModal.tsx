@@ -1,5 +1,7 @@
-import { useState, lazy, Suspense } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Contact, RadioConfig, MessagePath } from '../types';
+import { api } from '../api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Button } from './ui/button';
 import {
@@ -8,14 +10,19 @@ import {
   calculateDistance,
   isValidLocation,
   formatDistance,
+  resolveLocalHopDisplay,
+  resolveHopDisplay,
   type SenderInfo,
   type ResolvedPath,
   type PathHop,
+  type DirectoryHopHit,
 } from '../utils/pathUtils';
 import { formatTime } from '../utils/messageParser';
 import { getMapFocusHash } from '../utils/urlHash';
 import { useDistanceUnit } from '../contexts/DistanceUnitContext';
 import type { DistanceUnit } from '../utils/distanceUnits';
+import { LocalRepeaterIcon } from './messagePath/LocalRepeaterIcon';
+import { DirectoryGlobeIcon } from './messagePath/DirectoryGlobeIcon';
 
 const PathRouteMap = lazy(() =>
   import('./PathRouteMap').then((m) => ({ default: m.PathRouteMap }))
@@ -52,6 +59,7 @@ export function PathModal({
 }: PathModalProps) {
   const { distanceUnit } = useDistanceUnit();
   const [mapModalIndex, setMapModalIndex] = useState<number | null>(null);
+  const [directoryHits, setDirectoryHits] = useState<Record<string, DirectoryHopHit>>({});
   const hasResendActions = isOutgoingChan && messageId !== undefined && onResend;
   const hasPaths = paths.length > 0;
   const showAnalyzePacket = hasPaths && packetId != null && onAnalyzePacket;
@@ -65,6 +73,38 @@ export function PathModal({
     : [];
 
   const hasSinglePath = paths.length === 1;
+
+  useEffect(() => {
+    if (!open) {
+      setDirectoryHits({});
+      return;
+    }
+    const prefixes = new Set<string>();
+    for (const p of paths) {
+      const resolved = resolvePath(p.path, senderInfo, contacts, config, p.path_len);
+      for (const hop of resolved.hops) {
+        if (resolveLocalHopDisplay(hop).kind === 'unknown') {
+          prefixes.add(hop.prefix);
+        }
+      }
+    }
+    if (prefixes.size === 0) {
+      setDirectoryHits({});
+      return;
+    }
+    let cancelled = false;
+    void api.resolveDirectoryHops([...prefixes]).then(
+      (res) => {
+        if (!cancelled) setDirectoryHits(res.resolved);
+      },
+      () => {
+        if (!cancelled) setDirectoryHits({});
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [open, paths, senderInfo, contacts, config]);
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -177,6 +217,7 @@ export function PathModal({
                   resolved={pathData.resolved}
                   senderInfo={senderInfo}
                   distanceUnit={distanceUnit}
+                  directoryHits={directoryHits}
                 />
               </div>
             ))}
@@ -209,6 +250,7 @@ export function PathModal({
                     <PathRouteMap
                       resolved={resolvedPaths[mapModalIndex].resolved}
                       senderInfo={senderInfo}
+                      directoryHits={directoryHits}
                       height={400}
                     />
                   </Suspense>
@@ -268,9 +310,15 @@ interface PathVisualizationProps {
   resolved: ResolvedPath;
   senderInfo: SenderInfo;
   distanceUnit: DistanceUnit;
+  directoryHits: Record<string, DirectoryHopHit>;
 }
 
-function PathVisualization({ resolved, senderInfo, distanceUnit }: PathVisualizationProps) {
+function PathVisualization({
+  resolved,
+  senderInfo,
+  distanceUnit,
+  directoryHits,
+}: PathVisualizationProps) {
   // Track previous location for each hop to calculate distances
   // Returns null if previous hop was ambiguous or has invalid location
   const getPrevLocation = (hopIndex: number): { lat: number | null; lon: number | null } | null => {
@@ -320,6 +368,7 @@ function PathVisualization({ resolved, senderInfo, distanceUnit }: PathVisualiza
           hopNumber={index + 1}
           prevLocation={getPrevLocation(index)}
           distanceUnit={distanceUnit}
+          directoryHit={directoryHits[hop.prefix]}
         />
       ))}
 
@@ -415,13 +464,14 @@ interface HopNodeProps {
   hopNumber: number;
   prevLocation: { lat: number | null; lon: number | null } | null;
   distanceUnit: DistanceUnit;
+  directoryHit?: DirectoryHopHit;
 }
 
 const AMBIGUOUS_MATCH_PREVIEW_LIMIT = 3;
 
-function HopNode({ hop, hopNumber, prevLocation, distanceUnit }: HopNodeProps) {
-  const isAmbiguous = hop.matches.length > 1;
-  const isUnknown = hop.matches.length === 0;
+function HopNode({ hop, hopNumber, prevLocation, distanceUnit, directoryHit }: HopNodeProps) {
+  const { t } = useTranslation();
+  const display = resolveHopDisplay(hop, directoryHit);
   const [expanded, setExpanded] = useState(false);
 
   // Calculate distance from previous location for a contact
@@ -452,63 +502,76 @@ function HopNode({ hop, hopNumber, prevLocation, distanceUnit }: HopNodeProps) {
       {/* Content */}
       <div className="pb-3 flex-1 min-w-0">
         <div className="text-sm font-semibold">
-          <span className="text-foreground/80">Hop {hopNumber}:</span>{' '}
+          <span className="text-foreground/80">{t('path.hop', { n: hopNumber })}</span>{' '}
           <span className="text-primary font-mono">{hop.prefix}</span>
-          {isAmbiguous && <span className="text-warning ml-1 font-normal">(ambiguous)</span>}
+          {display.kind === 'ambiguous' && (
+            <span className="text-warning ml-1 font-normal">{t('path.ambiguous')}</span>
+          )}
         </div>
 
-        {isUnknown ? (
-          <div className="font-medium text-muted-foreground">&lt;UNKNOWN&gt;</div>
-        ) : isAmbiguous ? (
+        {display.kind === 'hex-only' ? null : display.kind === 'unknown' ? (
+          <div className="font-medium text-muted-foreground">{t('path.unknown')}</div>
+        ) : display.kind === 'directory' ? (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <DirectoryGlobeIcon />
+            <div className="font-medium truncate">{display.name}</div>
+          </div>
+        ) : display.kind === 'ambiguous' ? (
           <div>
-            {(expanded ? hop.matches : hop.matches.slice(0, AMBIGUOUS_MATCH_PREVIEW_LIMIT)).map(
-              (contact) => {
-                const dist = getDistanceForContact(contact);
-                const hasLocation = isValidLocation(contact.lat, contact.lon);
-                return (
-                  <div key={contact.public_key} className="font-medium truncate">
-                    {contact.name || contact.public_key.slice(0, 12)}
-                    {dist !== null && (
-                      <span className="text-xs text-muted-foreground ml-1">
-                        - {formatDistance(dist, distanceUnit)}
-                      </span>
-                    )}
-                    {hasLocation && (
-                      <CoordinateLink
-                        lat={contact.lat!}
-                        lon={contact.lon!}
-                        publicKey={contact.public_key}
-                      />
-                    )}
-                  </div>
-                );
-              }
-            )}
-            {!expanded && hop.matches.length > AMBIGUOUS_MATCH_PREVIEW_LIMIT && (
+            {(expanded
+              ? display.matches
+              : display.matches.slice(0, AMBIGUOUS_MATCH_PREVIEW_LIMIT)
+            ).map((contact) => {
+              const dist = getDistanceForContact(contact);
+              const hasLocation = isValidLocation(contact.lat, contact.lon);
+              return (
+                <div key={contact.public_key} className="font-medium truncate">
+                  {contact.name || contact.public_key.slice(0, 12)}
+                  {dist !== null && (
+                    <span className="text-xs text-muted-foreground ml-1">
+                      - {formatDistance(dist, distanceUnit)}
+                    </span>
+                  )}
+                  {hasLocation && (
+                    <CoordinateLink
+                      lat={contact.lat!}
+                      lon={contact.lon!}
+                      publicKey={contact.public_key}
+                    />
+                  )}
+                </div>
+              );
+            })}
+            {!expanded && display.matches.length > AMBIGUOUS_MATCH_PREVIEW_LIMIT && (
               <button
                 type="button"
                 className="text-xs text-primary hover:underline cursor-pointer"
                 onClick={() => setExpanded(true)}
               >
-                (and {hop.matches.length - AMBIGUOUS_MATCH_PREVIEW_LIMIT} more)
+                {t('path.andMore', {
+                  count: display.matches.length - AMBIGUOUS_MATCH_PREVIEW_LIMIT,
+                })}
               </button>
             )}
           </div>
         ) : (
-          <div className="font-medium truncate">
-            {hop.matches[0].name || hop.matches[0].public_key.slice(0, 12)}
-            {hop.distanceFromPrev !== null && (
-              <span className="text-xs text-muted-foreground ml-1">
-                - {formatDistance(hop.distanceFromPrev, distanceUnit)}
-              </span>
-            )}
-            {isValidLocation(hop.matches[0].lat, hop.matches[0].lon) && (
-              <CoordinateLink
-                lat={hop.matches[0].lat!}
-                lon={hop.matches[0].lon!}
-                publicKey={hop.matches[0].public_key}
-              />
-            )}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <LocalRepeaterIcon />
+            <div className="font-medium truncate">
+              {display.contact.name || display.contact.public_key.slice(0, 12)}
+              {hop.distanceFromPrev !== null && (
+                <span className="text-xs text-muted-foreground ml-1">
+                  - {formatDistance(hop.distanceFromPrev, distanceUnit)}
+                </span>
+              )}
+              {isValidLocation(display.contact.lat, display.contact.lon) && (
+                <CoordinateLink
+                  lat={display.contact.lat!}
+                  lon={display.contact.lon!}
+                  publicKey={display.contact.public_key}
+                />
+              )}
+            </div>
           </div>
         )}
       </div>

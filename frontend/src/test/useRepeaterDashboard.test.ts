@@ -2,6 +2,7 @@ import { StrictMode, createElement, type ReactNode } from 'react';
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import {
+  REPEATER_CONSOLE_HISTORY_KEY_PREFIX,
   resetRepeaterDashboardCacheForTests,
   useRepeaterDashboard,
 } from '../hooks/useRepeaterDashboard';
@@ -53,6 +54,7 @@ describe('useRepeaterDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetRepeaterDashboardCacheForTests();
+    localStorage.clear();
   });
 
   it('starts with logged out state', () => {
@@ -492,5 +494,38 @@ describe('useRepeaterDashboard', () => {
     expect(secondMount.result.current.paneStates.status.loading).toBe(false);
     expect(secondMount.result.current.consoleHistory).toHaveLength(2);
     expect(secondMount.result.current.consoleHistory[1].response).toBe('v2.1.0');
+  });
+
+  it('persists console history to localStorage and restores it after cache reset', async () => {
+    mockApi.sendRepeaterCommand.mockResolvedValueOnce({
+      command: 'ver',
+      response: 'v2.1.0',
+      sender_timestamp: 1000,
+    });
+
+    const firstMount = renderHook(() => useRepeaterDashboard(repeaterConversation));
+
+    await act(async () => {
+      await firstMount.result.current.sendConsoleCommand('ver');
+    });
+
+    const stored = localStorage.getItem(`${REPEATER_CONSOLE_HISTORY_KEY_PREFIX}:${REPEATER_KEY}`);
+    expect(stored).toBeTruthy();
+    expect(JSON.parse(stored as string)).toHaveLength(2);
+
+    firstMount.unmount();
+    resetRepeaterDashboardCacheForTests();
+
+    const secondMount = renderHook(() => useRepeaterDashboard(repeaterConversation));
+    expect(secondMount.result.current.consoleHistory).toHaveLength(2);
+    expect(secondMount.result.current.consoleHistory[0].command).toBe('ver');
+    expect(secondMount.result.current.consoleHistory[1].response).toBe('v2.1.0');
+  });
+
+  it('ignores invalid stored console history', () => {
+    localStorage.setItem(`${REPEATER_CONSOLE_HISTORY_KEY_PREFIX}:${REPEATER_KEY}`, '{not-json');
+
+    const { result } = renderHook(() => useRepeaterDashboard(repeaterConversation));
+    expect(result.current.consoleHistory).toEqual([]);
   });
 });

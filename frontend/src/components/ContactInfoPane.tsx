@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Activity, Ban, ChevronDown, ChevronRight, Search, Star } from 'lucide-react';
 import {
   AreaChart,
@@ -35,9 +36,11 @@ import { isPublicChannelKey } from '../utils/publicChannel';
 import { getMapFocusHash } from '../utils/urlHash';
 import { handleKeyboardActivate } from '../utils/a11y';
 import { ContactAvatar } from './ContactAvatar';
+import { MeshcoreShareQr } from './MeshcoreShareQr';
 import { LppSensorRow, formatLppLabel } from './repeater/repeaterPaneShared';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
 import { toast } from './ui/sonner';
+import { formatContactAddUri, type MeshcoreContactType } from '../utils/meshcoreUri';
 import { useDistanceUnit } from '../contexts/DistanceUnitContext';
 import { useEntranceSettled } from '../hooks/useEntranceSettled';
 import { CONTACT_TYPE_REPEATER } from '../types';
@@ -103,6 +106,7 @@ export function ContactInfoPane({
   trackedTelemetryContacts = [],
   onToggleTrackedTelemetryContact,
 }: ContactInfoPaneProps) {
+  const { t } = useTranslation();
   const { distanceUnit } = useDistanceUnit();
   const isNameOnly = contactKey?.startsWith('name:') ?? false;
   const nameOnlyValue = isNameOnly && contactKey ? contactKey.slice(5) : null;
@@ -210,6 +214,13 @@ export function ContactInfoPane({
     !isPrefixOnlyResolvedContact &&
     isUnknownFullKeyContact(contact.public_key, contact.last_advert);
   const isRepeater = contact?.type === CONTACT_TYPE_REPEATER;
+  const shareUri = contact
+    ? formatContactAddUri({
+        name: contact.name ?? '',
+        publicKey: contact.public_key,
+        type: contact.type as MeshcoreContactType,
+      })
+    : null;
 
   return (
     <Sheet open={contactKey !== null} onOpenChange={(open) => !open && onClose()}>
@@ -456,6 +467,13 @@ export function ContactInfoPane({
                 )}
               </button>
             </div>
+
+            {shareUri && (
+              <div className="px-5 py-3 border-b border-border">
+                <SectionLabel>{t('share.title')}</SectionLabel>
+                <MeshcoreShareQr uri={shareUri} />
+              </div>
+            )}
 
             {/* Block toggles */}
             {(onToggleBlockedKey || onToggleBlockedName) && (

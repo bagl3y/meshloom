@@ -94,10 +94,13 @@ describe('formatTime', () => {
     const timestamp = 1700000000; // 2023-11-14
 
     const result = formatTime(timestamp);
+    const dateStr = new Date(timestamp * 1000).toLocaleDateString([], {
+      month: 'short',
+      day: 'numeric',
+    });
 
-    // Should contain month, day, and time
-    expect(result).toMatch(/\w+ \d{1,2}/); // e.g., "Nov 14"
-    expect(result).toMatch(/\d{1,2}:\d{2}/); // time portion
+    expect(result.startsWith(dateStr)).toBe(true);
+    expect(result).toMatch(/\d{1,2}:\d{2}/);
   });
 });
 

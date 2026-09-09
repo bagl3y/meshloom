@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { ContactInfoPane } from '../components/ContactInfoPane';
+import i18n from '../i18n';
 import type { Contact, ContactAnalytics } from '../types';
 
 const { getContactAnalytics, contactTelemetryHistory } = vi.hoisted(() => ({
@@ -261,5 +262,41 @@ describe('ContactInfoPane', () => {
     button.click();
 
     expect(baseProps.onSearchMessagesByKey).toHaveBeenCalledWith(contact.public_key);
+  });
+
+  it('copies the official contact share URI and can show a QR', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const contact = createContact();
+    getContactAnalytics.mockResolvedValue(createAnalytics(contact));
+
+    render(<ContactInfoPane {...baseProps} contactKey={contact.public_key} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: i18n.t('share.copyUri') }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        `meshcore://contact/add?name=Alice&public_key=${'aa'.repeat(32)}&type=1`
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('share.showQr') }));
+    expect(screen.getByTitle(i18n.t('share.qrTitle'))).toBeInTheDocument();
+  });
+
+  it('does not offer a share URI for name-only or unofficial contacts', async () => {
+    getContactAnalytics.mockResolvedValue(
+      createAnalytics(null, { lookup_type: 'name', name: 'Mystery' })
+    );
+    const { rerender } = render(
+      <ContactInfoPane {...baseProps} contactKey="name:Mystery" fromChannel />
+    );
+    await screen.findByText('Mystery');
+    expect(screen.queryByRole('button', { name: i18n.t('share.copyUri') })).not.toBeInTheDocument();
+
+    const prefixContact = createContact({ public_key: 'aabbccddeeff', type: 1 });
+    getContactAnalytics.mockResolvedValue(createAnalytics(prefixContact));
+    rerender(<ContactInfoPane {...baseProps} contactKey={prefixContact.public_key} />);
+    await screen.findByText('Alice');
+    expect(screen.queryByRole('button', { name: i18n.t('share.copyUri') })).not.toBeInTheDocument();
   });
 });

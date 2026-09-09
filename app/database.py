@@ -116,9 +116,39 @@ CREATE TABLE IF NOT EXISTS app_settings (
     telemetry_interval_hours INTEGER DEFAULT 8,
     vapid_private_key TEXT DEFAULT '',
     vapid_public_key TEXT DEFAULT '',
-    push_conversations TEXT DEFAULT '[]'
+    push_conversations TEXT DEFAULT '[]',
+    stale_contact_days INTEGER DEFAULT 0,
+    directory_enabled INTEGER DEFAULT 0,
+    directory_url TEXT DEFAULT ''
 );
 INSERT OR IGNORE INTO app_settings (id) VALUES (1);
+
+CREATE TABLE IF NOT EXISTS contact_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS contact_group_members (
+    group_id INTEGER NOT NULL,
+    public_key TEXT NOT NULL,
+    PRIMARY KEY (group_id, public_key),
+    FOREIGN KEY (group_id) REFERENCES contact_groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (public_key) REFERENCES contacts(public_key) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS directory_hop_cache (
+    prefix TEXT NOT NULL,
+    hash_width INTEGER NOT NULL,
+    name TEXT,
+    source TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    public_key TEXT,
+    lat REAL,
+    lon REAL,
+    PRIMARY KEY (prefix, hash_width)
+);
 
 CREATE TABLE IF NOT EXISTS fanout_configs (
     id TEXT PRIMARY KEY,
@@ -180,6 +210,8 @@ CREATE INDEX IF NOT EXISTS idx_contact_name_history_key
     ON contact_name_history(public_key, last_seen DESC);
 CREATE INDEX IF NOT EXISTS idx_repeater_telemetry_pk_ts
     ON repeater_telemetry_history(public_key, timestamp);
+CREATE INDEX IF NOT EXISTS idx_contact_group_members_key
+    ON contact_group_members(public_key);
 """
 
 

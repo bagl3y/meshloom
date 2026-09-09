@@ -10,6 +10,88 @@ export interface PathHop {
   distanceFromPrev: number | null; // km from previous hop
 }
 
+/** 2 hex chars = 1 byte. Named hops require 2+ bytes (4+ hex chars). */
+export const MIN_NAMED_HOP_HEX_CHARS = 4;
+
+export type LocalHopDisplay =
+  | { kind: 'hex-only' }
+  | { kind: 'unknown' }
+  | { kind: 'ambiguous'; matches: Contact[] }
+  | { kind: 'known'; contact: Contact };
+
+/**
+ * Named-hop display policy. 1-byte prefixes stay hex only — never a name,
+ * even when findContactsByPrefix returns a unique type-2 match.
+ */
+export function resolveLocalHopDisplay(hop: Pick<PathHop, 'prefix' | 'matches'>): LocalHopDisplay {
+  if (hop.prefix.length < MIN_NAMED_HOP_HEX_CHARS) {
+    return { kind: 'hex-only' };
+  }
+  if (hop.matches.length === 0) {
+    return { kind: 'unknown' };
+  }
+  if (hop.matches.length > 1) {
+    return { kind: 'ambiguous', matches: hop.matches };
+  }
+  const contact = hop.matches[0];
+  if (contact.type !== CONTACT_TYPE_REPEATER) {
+    return { kind: 'unknown' };
+  }
+  return { kind: 'known', contact };
+}
+
+export type DirectoryHopSource = 'corescope';
+
+export type DirectoryHopHit = {
+  name: string;
+  source: DirectoryHopSource;
+  public_key?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+};
+
+export type HopDisplay =
+  | LocalHopDisplay
+  | { kind: 'directory'; name: string; source: DirectoryHopSource };
+
+/**
+ * Layer an optional CoreScope name on top of local policy.
+ * Local unique type-2 always wins. 1-byte stays hex-only. Ambiguous stays ambiguous.
+ */
+export function resolveHopDisplay(
+  hop: Pick<PathHop, 'prefix' | 'matches'>,
+  directory?: DirectoryHopHit | null
+): HopDisplay {
+  const local = resolveLocalHopDisplay(hop);
+  if (local.kind === 'known' || local.kind === 'hex-only' || local.kind === 'ambiguous') {
+    return local;
+  }
+  if (
+    directory &&
+    directory.source === 'corescope' &&
+    directory.name &&
+    hop.prefix.length >= MIN_NAMED_HOP_HEX_CHARS
+  ) {
+    return { kind: 'directory', name: directory.name, source: directory.source };
+  }
+  return local;
+}
+
+/** CoreScope GPS for a hop that radio does not already know. Local RF always wins. */
+export function directoryHopLocation(
+  hop: Pick<PathHop, 'prefix' | 'matches'>,
+  directory?: DirectoryHopHit | null
+): { lat: number; lon: number; name: string } | null {
+  const display = resolveHopDisplay(hop, directory);
+  if (display.kind !== 'directory' || !directory) {
+    return null;
+  }
+  if (!isValidLocation(directory.lat ?? null, directory.lon ?? null)) {
+    return null;
+  }
+  return { lat: directory.lat!, lon: directory.lon!, name: directory.name };
+}
+
 export interface ResolvedPath {
   sender: { name: string; prefix: string; lat: number | null; lon: number | null };
   hops: PathHop[];

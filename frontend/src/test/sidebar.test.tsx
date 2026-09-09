@@ -1,10 +1,12 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Sidebar } from '../components/Sidebar';
+import { Sidebar, channelRailMonogram } from '../components/Sidebar';
+import i18n from '../i18n';
 import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM, type Channel, type Contact } from '../types';
 import { getStateKey, type ConversationTimes } from '../utils/conversationState';
 import { PUBLIC_CHANNEL_KEY } from '../utils/publicChannel';
+import { DESKTOP_SIDEBAR_COLLAPSED_KEY } from '../utils/sidebarRailPreference';
 
 function makeChannel(key: string, name: string): Channel {
   return {
@@ -805,5 +807,41 @@ describe('Sidebar section summaries', () => {
     expect(
       screen.getByRole('button', { name: 'Sort Favorites by type, then recent' })
     ).toBeInTheDocument();
+  });
+
+  it('toggles the desktop icon rail and persists the preference', () => {
+    const { unmount } = renderSidebar();
+    const nav = screen.getByRole('navigation', { name: 'Conversations' });
+
+    expect(nav).not.toHaveAttribute('data-desktop-collapsed');
+    expect(nav).toHaveClass('w-60');
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('sidebar.collapse') }));
+
+    expect(nav).toHaveAttribute('data-desktop-collapsed', 'true');
+    expect(nav).toHaveClass('md:w-14');
+    expect(localStorage.getItem(DESKTOP_SIDEBAR_COLLAPSED_KEY)).toBe('true');
+    expect(screen.getByRole('button', { name: i18n.t('sidebar.expand') })).toBeInTheDocument();
+
+    unmount();
+    renderSidebar();
+
+    expect(screen.getByRole('navigation', { name: 'Conversations' })).toHaveAttribute(
+      'data-desktop-collapsed',
+      'true'
+    );
+
+    const monograms = screen.getAllByTestId('channel-rail-monogram').map((node) => node.textContent);
+    expect(monograms).toEqual(expect.arrayContaining(['PU', 'FL', 'OP']));
+    expect(monograms).not.toContain('#');
+  });
+});
+
+describe('channelRailMonogram', () => {
+  it('uses the first two letters after a leading hash', () => {
+    expect(channelRailMonogram('#flight')).toBe('FL');
+    expect(channelRailMonogram('#ops')).toBe('OP');
+    expect(channelRailMonogram('Public')).toBe('PU');
+    expect(channelRailMonogram('#')).toBe('#');
   });
 });

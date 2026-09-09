@@ -2,12 +2,13 @@ import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { isValidLocation } from '../utils/pathUtils';
-import type { ResolvedPath, SenderInfo } from '../utils/pathUtils';
+import { directoryHopLocation, isValidLocation } from '../utils/pathUtils';
+import type { DirectoryHopHit, ResolvedPath, SenderInfo } from '../utils/pathUtils';
 
 interface PathRouteMapProps {
   resolved: ResolvedPath;
   senderInfo: SenderInfo;
+  directoryHits?: Record<string, DirectoryHopHit>;
   height?: number;
 }
 
@@ -25,8 +26,10 @@ const HOP_COLORS = [
 
 const SENDER_COLOR = '#3b82f6'; // blue
 const RECEIVER_COLOR = '#8b5cf6'; // violet
+const DIRECTORY_RING = '#f97316';
+const DIRECTORY_FILL = '#2563eb';
 
-function makeIcon(label: string, color: string): L.DivIcon {
+function makeIcon(label: string, color: string, ring = 'rgba(255,255,255,0.8)'): L.DivIcon {
   return L.divIcon({
     className: '',
     iconSize: [24, 24],
@@ -36,7 +39,7 @@ function makeIcon(label: string, color: string): L.DivIcon {
       background:${color};color:#fff;
       display:flex;align-items:center;justify-content:center;
       font-size:11px;font-weight:700;
-      border:2px solid rgba(255,255,255,0.8);
+      border:2px solid ${ring};
       box-shadow:0 1px 4px rgba(0,0,0,0.4);
     ">${label}</div>`,
   });
@@ -47,16 +50,25 @@ function getHopColor(hopIndex: number): string {
 }
 
 /** Collect all valid [lat, lon] points for bounds fitting */
-function collectPoints(resolved: ResolvedPath): [number, number][] {
+function collectPoints(
+  resolved: ResolvedPath,
+  directoryHits: Record<string, DirectoryHopHit>
+): [number, number][] {
   const pts: [number, number][] = [];
   if (isValidLocation(resolved.sender.lat, resolved.sender.lon)) {
     pts.push([resolved.sender.lat!, resolved.sender.lon!]);
   }
   for (const hop of resolved.hops) {
+    let usedLocal = false;
     for (const m of hop.matches) {
       if (isValidLocation(m.lat, m.lon)) {
         pts.push([m.lat!, m.lon!]);
+        usedLocal = true;
       }
+    }
+    if (!usedLocal) {
+      const directory = directoryHopLocation(hop, directoryHits[hop.prefix]);
+      if (directory) pts.push([directory.lat, directory.lon]);
     }
   }
   if (isValidLocation(resolved.receiver.lat, resolved.receiver.lon)) {
@@ -83,8 +95,13 @@ function RouteMapBounds({ points }: { points: [number, number][] }) {
   return null;
 }
 
-export function PathRouteMap({ resolved, senderInfo, height = 220 }: PathRouteMapProps) {
-  const points = collectPoints(resolved);
+export function PathRouteMap({
+  resolved,
+  senderInfo,
+  directoryHits = {},
+  height = 220,
+}: PathRouteMapProps) {
+  const points = collectPoints(resolved, directoryHits);
   const hasAnyGps = points.length > 0;
 
   // Check if some nodes are missing GPS
@@ -93,8 +110,10 @@ export function PathRouteMap({ resolved, senderInfo, height = 220 }: PathRouteMa
   if (isValidLocation(resolved.sender.lat, resolved.sender.lon)) nodesWithGps++;
   if (isValidLocation(resolved.receiver.lat, resolved.receiver.lon)) nodesWithGps++;
   for (const hop of resolved.hops) {
+    const directory = directoryHopLocation(hop, directoryHits[hop.prefix]);
     if (hop.matches.length === 0) {
       totalNodes++;
+      if (directory) nodesWithGps++;
     } else {
       totalNodes += hop.matches.length;
       nodesWithGps += hop.matches.filter((m) => isValidLocation(m.lat, m.lon)).length;
@@ -146,11 +165,11 @@ export function PathRouteMap({ resolved, senderInfo, height = 220 }: PathRouteMa
             </Marker>
           )}
 
-          {/* Hop markers */}
-          {resolved.hops.map((hop, hopIdx) =>
-            hop.matches
-              .filter((m) => isValidLocation(m.lat, m.lon))
-              .map((m, mIdx) => (
+          {/* Hop markers — local RF GPS first; CoreScope only when radio does not know the hop */}
+          {resolved.hops.map((hop, hopIdx) => {
+            const localGps = hop.matches.filter((m) => isValidLocation(m.lat, m.lon));
+            if (localGps.length > 0) {
+              return localGps.map((m, mIdx) => (
                 <Marker
                   key={`hop-${hopIdx}-${mIdx}`}
                   position={[m.lat!, m.lon!]}
@@ -162,8 +181,24 @@ export function PathRouteMap({ resolved, senderInfo, height = 220 }: PathRouteMa
                     {m.name || m.public_key.slice(0, 12)}
                   </Tooltip>
                 </Marker>
-              ))
-          )}
+              ));
+            }
+            const directory = directoryHopLocation(hop, directoryHits[hop.prefix]);
+            if (!directory) return null;
+            return (
+              <Marker
+                key={`hop-directory-${hopIdx}`}
+                position={[directory.lat, directory.lon]}
+                icon={makeIcon(String(hopIdx + 1), DIRECTORY_FILL, DIRECTORY_RING)}
+              >
+                <Tooltip direction="top" offset={[0, -14]}>
+                  <span className="font-mono">{hop.prefix}</span>
+                  {' · '}
+                  {directory.name}
+                </Tooltip>
+              </Marker>
+            );
+          })}
 
           {/* Receiver marker */}
           {isValidLocation(resolved.receiver.lat, resolved.receiver.lon) && (

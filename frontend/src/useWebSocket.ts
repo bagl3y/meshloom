@@ -27,6 +27,7 @@ export interface UseWebSocketOptions {
     paths?: MessagePath[],
     packetId?: number | null
   ) => void;
+  onMessageDeleted?: (messageId: number) => void;
   onError?: (error: ErrorEvent) => void;
   onSuccess?: (success: SuccessEvent) => void;
   onReconnect?: () => void;
@@ -145,6 +146,9 @@ export function useWebSocket(options: UseWebSocketOptions) {
             );
             break;
           }
+          case 'message_deleted':
+            handlers.onMessageDeleted?.((msg.data as { message_id: number }).message_id);
+            break;
           case 'error':
             handlers.onError?.(msg.data as ErrorEvent);
             break;

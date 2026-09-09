@@ -1,4 +1,9 @@
 import '@testing-library/jest-dom';
+import '../i18n';
+
+// i18n is initialized here (default locale `fr`, fallback `en`).
+// Query extracted copy via `i18n.t('key')` so tests stay locale-independent.
+// Surfaces left untranslated remain English.
 
 class ResizeObserver {
   observe() {}

@@ -1,11 +1,26 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageList } from '../components/MessageList';
+import i18n from '../i18n';
 import { PathHopWidthProvider } from '../contexts/PathHopWidthContext';
+import { RichPayloadProvider } from '../contexts/RichPayloadContext';
 import { CONTACT_TYPE_ROOM, type Contact, type Message } from '../types';
+import { formatOpenReaction } from '../utils/meshcoreOpenPayloads';
+
+const apiMocks = vi.hoisted(() => ({
+  deleteMessage: vi.fn(async (_id: number) => ({ status: 'ok' })),
+  getPacket: vi.fn(),
+}));
+
+vi.mock('../api', () => ({
+  api: {
+    deleteMessage: (...args: [number]) => apiMocks.deleteMessage(...args),
+    getPacket: (...args: [number]) => apiMocks.getPacket(...args),
+  },
+}));
 
 const scrollIntoViewMock = vi.fn();
 const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
@@ -31,6 +46,8 @@ function createMessage(overrides: Partial<Message> = {}): Message {
 
 describe('MessageList channel sender rendering', () => {
   beforeEach(() => {
+    apiMocks.deleteMessage.mockClear();
+    apiMocks.getPacket.mockClear();
     scrollIntoViewMock.mockReset();
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
       configurable: true,
@@ -106,7 +123,7 @@ describe('MessageList channel sender rendering', () => {
     );
 
     expect(screen.getByText('(2 · 2B)')).toBeInTheDocument();
-    expect(screen.getByTitle('View message path (2B per hop)')).toBeInTheDocument();
+    expect(screen.getByTitle(i18n.t('path.viewPathWidth', { width: '2B' }))).toBeInTheDocument();
   });
 
   it('hides the width by default (toggle off) and shows only the hop count', () => {
@@ -125,7 +142,7 @@ describe('MessageList channel sender rendering', () => {
 
     expect(screen.getByText('(2)')).toBeInTheDocument();
     expect(screen.queryByText('(2 · 2B)')).not.toBeInTheDocument();
-    expect(screen.getByTitle('View message path')).toBeInTheDocument();
+    expect(screen.getByTitle(i18n.t('path.viewPath'))).toBeInTheDocument();
   });
 
   it('omits the width for direct (0-hop) paths even when the toggle is on', () => {
@@ -145,7 +162,7 @@ describe('MessageList channel sender rendering', () => {
     );
 
     expect(screen.getByText('(d)')).toBeInTheDocument();
-    expect(screen.getByTitle('View message path')).toBeInTheDocument();
+    expect(screen.getByTitle(i18n.t('path.viewPath'))).toBeInTheDocument();
   });
 
   it('prefers stored sender_name for channel messages even when text is not sender-prefixed', () => {
@@ -513,5 +530,312 @@ describe('MessageList channel sender rendering', () => {
     const mounted = container.querySelectorAll('[data-message-id]').length;
     expect(mounted).toBeGreaterThan(0);
     expect(mounted).toBeLessThan(100);
+  });
+});
+
+describe('MessageList Open reactions and replies', () => {
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoViewMock,
+      writable: true,
+    });
+  });
+
+  it('renders an inbound Open GIF even when rich reactions are off', () => {
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            id: 1,
+            text: 'Alice: g:abc123',
+            sender_name: 'Alice',
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+      />
+    );
+
+    const gif = screen.getByTestId('message-gif');
+    expect(gif).toHaveAttribute('src', 'https://media.giphy.com/media/abc123/giphy.gif');
+    expect(screen.queryByText('g:abc123')).not.toBeInTheDocument();
+  });
+
+  it('renders an inbound Open location pin even when rich reactions are off', () => {
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            id: 1,
+            text: 'Alice: m:43.580000,7.120000|FR-06-PSCL-Base|loc',
+            sender_name: 'Alice',
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+      />
+    );
+
+    const pin = screen.getByTestId('message-location');
+    expect(pin).toHaveAttribute(
+      'href',
+      'https://www.openstreetmap.org/?mlat=43.58&mlon=7.12#map=16/43.58/7.12'
+    );
+    expect(screen.getByText('FR-06-PSCL-Base')).toBeInTheDocument();
+    expect(screen.queryByText(/m:43\.580000/)).not.toBeInTheDocument();
+  });
+
+  it('attaches a matching Open reaction as a badge on the target, not a standalone row', () => {
+    const wire = formatOpenReaction(1700000000, 'Alice', 'hello world', '🔥');
+    render(
+      <MessageList
+        messages={[
+          createMessage({ id: 1, text: 'Alice: hello world', sender_name: 'Alice' }),
+          createMessage({
+            id: 2,
+            text: `Bob: ${wire}`,
+            sender_name: 'Bob',
+            sender_timestamp: 1700000002,
+            received_at: 1700000003,
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+      />
+    );
+
+    expect(screen.getByText('hello world')).toBeInTheDocument();
+    expect(screen.getByTestId('message-reactions')).toHaveTextContent('🔥');
+    expect(screen.queryByText(i18n.t('messageList.reacted'))).not.toBeInTheDocument();
+    expect(screen.queryByText(wire!)).not.toBeInTheDocument();
+  });
+
+  it('keeps an unmatched Open reaction as a standalone reacted row when rich payloads are on', () => {
+    render(
+      <RichPayloadProvider renderRichPayloads setRenderRichPayloads={() => {}}>
+        <MessageList
+          messages={[
+            createMessage({
+              id: 1,
+              text: 'Bob: r:ffff:00',
+              sender_name: 'Bob',
+            }),
+          ]}
+          contacts={[]}
+          loading={false}
+        />
+      </RichPayloadProvider>
+    );
+
+    expect(screen.getByText(i18n.t('messageList.reacted'))).toBeInTheDocument();
+    expect(screen.getByText('👍')).toBeInTheDocument();
+  });
+
+  it('keeps parsing MeshCore One inbound as a standalone reacted row', () => {
+    render(
+      <RichPayloadProvider renderRichPayloads setRenderRichPayloads={() => {}}>
+        <MessageList
+          messages={[
+            createMessage({
+              id: 1,
+              text: 'Bob: \u{1F44D}@[Alice]\nb45pc4ek',
+              sender_name: 'Bob',
+            }),
+          ]}
+          contacts={[]}
+          loading={false}
+        />
+      </RichPayloadProvider>
+    );
+
+    expect(
+      screen.getByText(i18n.t('messageList.reactedTo', { sender: 'Alice' }))
+    ).toBeInTheDocument();
+  });
+
+  it('sends an Open reaction wire through onSendMessage', async () => {
+    const user = userEvent.setup();
+    const onSendMessage = vi.fn().mockResolvedValue(undefined);
+    const expected = formatOpenReaction(1700000000, 'Alice', 'hello world', '👍');
+
+    render(
+      <MessageList
+        messages={[createMessage({ sender_name: 'Alice' })]}
+        contacts={[]}
+        loading={false}
+        onSendMessage={onSendMessage}
+      />
+    );
+
+    expect(screen.queryByTestId('message-quick-reactions')).toBeNull();
+
+    await user.click(screen.getByTestId('message-react-trigger'));
+    await user.click(
+      screen.getAllByRole('button', { name: i18n.t('messageList.reactWith', { emoji: '👍' }) })[0]
+    );
+
+    expect(onSendMessage).toHaveBeenCalledWith(expected);
+  });
+
+  it('keeps the quick reaction bar closed until the emoji trigger is clicked', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MessageList
+        messages={[createMessage({ sender_name: 'Alice' })]}
+        contacts={[]}
+        loading={false}
+        onSendMessage={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId('message-react-trigger')).toBeInTheDocument();
+    expect(screen.queryByTestId('message-quick-reactions')).toBeNull();
+
+    await user.click(screen.getByTestId('message-react-trigger'));
+
+    expect(screen.getByTestId('message-quick-reactions')).toBeInTheDocument();
+  });
+
+  it('does not emit a keyless tapback when reacting', async () => {
+    const user = userEvent.setup();
+    const onSendMessage = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <MessageList
+        messages={[createMessage({ sender_name: 'Alice' })]}
+        contacts={[]}
+        loading={false}
+        onSendMessage={onSendMessage}
+      />
+    );
+
+    await user.click(screen.getByTestId('message-react-trigger'));
+    await user.click(
+      screen.getAllByRole('button', { name: i18n.t('messageList.reactWith', { emoji: '👍' }) })[0]
+    );
+
+    expect(onSendMessage).not.toHaveBeenCalledWith(expect.stringMatching(/^@\[Alice\]/));
+  });
+
+  it('replies by quoting the message and mentioning the sender', async () => {
+    const user = userEvent.setup();
+    const onSenderClick = vi.fn();
+
+    render(
+      <MessageList
+        messages={[createMessage({ sender_name: 'Alice' })]}
+        contacts={[]}
+        loading={false}
+        onSenderClick={onSenderClick}
+      />
+    );
+
+    expect(screen.queryByRole('menuitem', { name: i18n.t('messageList.reply') })).toBeNull();
+    expect(screen.queryByRole('button', { name: i18n.t('messageList.reply') })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: i18n.t('messageList.actions') }));
+    await user.click(screen.getByRole('menuitem', { name: i18n.t('messageList.reply') }));
+
+    expect(onSenderClick).toHaveBeenCalledWith('Alice', 'hello world');
+  });
+
+  it('does not offer react or reply on outgoing messages', async () => {
+    const user = userEvent.setup();
+    render(
+      <MessageList
+        messages={[createMessage({ outgoing: true, text: 'hello world' })]}
+        contacts={[]}
+        loading={false}
+        onSendMessage={vi.fn()}
+        onSenderClick={vi.fn()}
+        onOpenContactInfo={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: i18n.t('messageList.react') })).toBeNull();
+    expect(screen.queryByTestId('message-react-trigger')).toBeNull();
+    expect(screen.queryByTestId('message-quick-reactions')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: i18n.t('messageList.actions') }));
+
+    expect(screen.queryByRole('menuitem', { name: i18n.t('messageList.reply') })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: i18n.t('messageList.contactInfo') })).toBeNull();
+    expect(
+      screen.getByRole('menuitem', { name: i18n.t('messageList.messageDetails') })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: i18n.t('messageList.delete') })
+    ).toBeInTheDocument();
+  });
+
+  it('opens contact info from the message menu', async () => {
+    const user = userEvent.setup();
+    const onOpenContactInfo = vi.fn();
+    const publicKey = 'ab'.repeat(32);
+
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            type: 'PRIV',
+            conversation_key: publicKey,
+            text: 'hello world',
+            sender_name: 'Alice',
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+        onOpenContactInfo={onOpenContactInfo}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: i18n.t('messageList.actions') }));
+    await user.click(screen.getByRole('menuitem', { name: i18n.t('messageList.contactInfo') }));
+
+    expect(onOpenContactInfo).toHaveBeenCalledWith(publicKey, false);
+  });
+
+  it('opens message details from the menu', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MessageList
+        messages={[createMessage({ sender_name: 'Alice' })]}
+        contacts={[]}
+        loading={false}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: i18n.t('messageList.actions') }));
+    await user.click(screen.getByRole('menuitem', { name: i18n.t('messageList.messageDetails') }));
+
+    expect(screen.getByText('Message Status')).toBeInTheDocument();
+  });
+
+  it('deletes a message after confirmation', async () => {
+    const user = userEvent.setup();
+    const onMessageDeleted = vi.fn();
+
+    render(
+      <MessageList
+        messages={[createMessage({ sender_name: 'Alice' })]}
+        contacts={[]}
+        loading={false}
+        onMessageDeleted={onMessageDeleted}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: i18n.t('messageList.actions') }));
+    await user.click(screen.getByRole('menuitem', { name: i18n.t('messageList.delete') }));
+    await user.click(
+      screen.getByRole('button', { name: i18n.t('messageList.deleteConfirmAction') })
+    );
+
+    await waitFor(() => {
+      expect(apiMocks.deleteMessage).toHaveBeenCalledWith(1);
+      expect(onMessageDeleted).toHaveBeenCalledWith(1);
+    });
   });
 });

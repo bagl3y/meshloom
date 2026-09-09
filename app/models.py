@@ -1054,6 +1054,149 @@ class AppSettings(BaseModel):
             "are automatically byte-perfect resent once (within the 30-second dedup window)"
         ),
     )
+    stale_contact_days: int = Field(
+        default=0,
+        description=(
+            "Automatic stale-contact purge threshold in days. 0 = disabled (default). "
+            "When set, a best-effort job deletes non-favorite contacts whose last_seen "
+            "and first_seen are both older than this many days (same last-heard filter "
+            "as the bulk-delete UI)."
+        ),
+    )
+    directory_enabled: bool = Field(
+        default=False,
+        description="Opt-in CoreScope hop directory. Off by default; browser never calls it.",
+    )
+    directory_url: str = Field(
+        default="",
+        description="Operator-supplied CoreScope instance origin (http/https). Empty is fine.",
+    )
+
+
+class DirectoryHopHit(BaseModel):
+    name: str
+    source: Literal["corescope"]
+    hash_width: int
+    public_key: str | None = None
+    lat: float | None = None
+    lon: float | None = None
+
+
+class DirectoryResolveHopsRequest(BaseModel):
+    hops: list[str] = Field(default_factory=list, max_length=64)
+
+
+class DirectoryResolveHopsResponse(BaseModel):
+    resolved: dict[str, DirectoryHopHit] = Field(default_factory=dict)
+
+
+class DirectoryCacheResetResponse(BaseModel):
+    deleted: int
+
+
+class DirectoryMapNode(BaseModel):
+    """CoreScope repeater with GPS. Never mixed into RF contacts."""
+
+    public_key: str
+    name: str
+    role: Literal["repeater"] = "repeater"
+    lat: float
+    lon: float
+    source: Literal["corescope"] = "corescope"
+
+
+class DirectoryMapNodesResponse(BaseModel):
+    nodes: list[DirectoryMapNode] = Field(default_factory=list)
+
+
+class ContactGroup(BaseModel):
+    """Local-only contact group. Not synced to the radio."""
+
+    id: int
+    name: str
+    sort_order: int = 0
+    created_at: int
+    public_keys: list[str] = Field(default_factory=list)
+
+
+class ContactGroupCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+
+
+class ContactGroupUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=64)
+    sort_order: int | None = None
+
+
+class ContactGroupMembersUpdate(BaseModel):
+    public_keys: list[str] = Field(default_factory=list)
+
+
+class BackupContact(BaseModel):
+    """Contact fields included in the safer JSON backup (no computed routes)."""
+
+    public_key: str
+    name: str | None = None
+    type: int = 0
+    flags: int = 0
+    direct_path: str | None = None
+    direct_path_len: int | None = None
+    direct_path_hash_mode: int | None = None
+    direct_path_updated_at: int | None = None
+    route_override_path: str | None = None
+    route_override_len: int | None = None
+    route_override_hash_mode: int | None = None
+    last_advert: int | None = None
+    lat: float | None = None
+    lon: float | None = None
+    last_seen: int | None = None
+    last_contacted: int | None = None
+    first_seen: int | None = None
+    favorite: bool = False
+
+
+class BackupChannel(BaseModel):
+    key: str
+    name: str
+    is_hashtag: bool = False
+    flood_scope_override: str | None = None
+    path_hash_mode_override: int | None = None
+    favorite: bool = False
+    muted: bool = False
+
+
+class BackupExport(BaseModel):
+    """Safer JSON export of contacts, channels, settings, and groups.
+
+    Does not include messages, raw packets, the radio private key, or VAPID keys.
+    """
+
+    format: str = "remoteterm-backup-v1"
+    exported_at: int = 0
+    contacts: list[BackupContact] = Field(default_factory=list)
+    channels: list[BackupChannel] = Field(default_factory=list)
+    settings: AppSettings | None = None
+    groups: list[ContactGroup] = Field(default_factory=list)
+
+
+class BackupRestoreRequest(BackupExport):
+    confirm: bool = Field(
+        description=(
+            "Must be true. Restore merges into the live database and does not "
+            "delete existing messages, packets, or contacts/channels missing from the file."
+        ),
+    )
+
+
+class BackupRestoreResult(BaseModel):
+    contacts_upserted: int = 0
+    channels_upserted: int = 0
+    settings_updated: bool = False
+    groups_upserted: int = 0
+    private_key_warning: str = (
+        "The radio private key is not stored in backups. Restore does not replace "
+        "the live database file and does not delete messages or packets."
+    )
 
 
 class BusyChannel(BaseModel):

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dice5 } from 'lucide-react';
 import {
   Dialog,
@@ -14,6 +15,7 @@ import { Label } from './ui/label';
 import { Checkbox } from './ui/checkbox';
 import { Button } from './ui/button';
 import { toast } from './ui/sonner';
+import { parseMeshcoreUri } from '../utils/meshcoreUri';
 
 type Tab = 'new-contact' | 'new-channel' | 'hashtag' | 'bulk-hashtag';
 
@@ -105,6 +107,7 @@ export function NewMessageModal({
   onCreateHashtagChannel,
   onBulkAddHashtagChannels,
 }: NewMessageModalProps) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('new-contact');
   const [name, setName] = useState('');
   const [contactType, setContactType] = useState(1);
@@ -113,6 +116,7 @@ export function NewMessageModal({
   const [bulkChannelText, setBulkChannelText] = useState('');
   const [tryHistorical, setTryHistorical] = useState(false);
   const [permitExtended, setPermitExtended] = useState(false);
+  const [importUri, setImportUri] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const hashtagInputRef = useRef<HTMLInputElement>(null);
@@ -126,7 +130,28 @@ export function NewMessageModal({
     setBulkChannelText('');
     setTryHistorical(false);
     setPermitExtended(false);
+    setImportUri('');
     setError('');
+  };
+
+  const applyMeshcoreUri = (raw: string): boolean => {
+    const parsed = parseMeshcoreUri(raw);
+    if (!parsed) {
+      return false;
+    }
+    if (parsed.kind === 'contact') {
+      setTab('new-contact');
+      setName(parsed.name);
+      setContactKey(parsed.publicKey);
+      setContactType(parsed.type);
+    } else {
+      setTab('new-channel');
+      setName(parsed.name);
+      setChannelKey(parsed.secret);
+    }
+    setImportUri('');
+    setError('');
+    return true;
   };
 
   useEffect(() => {
@@ -142,6 +167,7 @@ export function NewMessageModal({
       setBulkChannelText('');
       setTryHistorical(false);
       setPermitExtended(false);
+      setImportUri('');
       setError('');
       setLoading(false);
       requestAnimationFrame(() => {
@@ -158,6 +184,7 @@ export function NewMessageModal({
       setBulkChannelText('');
       setTryHistorical(false);
       setPermitExtended(false);
+      setImportUri('');
       setError('');
       setLoading(false);
       requestAnimationFrame(() => {
@@ -271,6 +298,25 @@ export function NewMessageModal({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="space-y-2">
+          <Label htmlFor="meshcore-uri">{t('share.importLabel')}</Label>
+          <Input
+            id="meshcore-uri"
+            value={importUri}
+            onChange={(e) => {
+              const value = e.target.value;
+              setImportUri(value);
+              if (applyMeshcoreUri(value)) {
+                return;
+              }
+              if (value.trim().toLowerCase().startsWith('meshcore:')) {
+                setError(t('share.invalidUri'));
+              }
+            }}
+            placeholder={t('share.importPlaceholder')}
+          />
+        </div>
+
         <Tabs
           value={tab}
           onValueChange={(value) => {
@@ -299,6 +345,12 @@ export function NewMessageModal({
                 id="contact-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                onPaste={(e) => {
+                  const text = e.clipboardData.getData('text');
+                  if (applyMeshcoreUri(text)) {
+                    e.preventDefault();
+                  }
+                }}
                 placeholder="Contact name"
               />
             </div>
@@ -308,6 +360,12 @@ export function NewMessageModal({
                 id="contact-key"
                 value={contactKey}
                 onChange={(e) => setContactKey(e.target.value)}
+                onPaste={(e) => {
+                  const text = e.clipboardData.getData('text');
+                  if (applyMeshcoreUri(text)) {
+                    e.preventDefault();
+                  }
+                }}
                 placeholder="64-character hex public key"
               />
             </div>
@@ -322,6 +380,7 @@ export function NewMessageModal({
                 <option value={1}>Client</option>
                 <option value={2}>Repeater</option>
                 <option value={3}>Room Server</option>
+                <option value={4}>Sensor</option>
               </select>
             </div>
           </TabsContent>
@@ -333,6 +392,12 @@ export function NewMessageModal({
                 id="channel-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                onPaste={(e) => {
+                  const text = e.clipboardData.getData('text');
+                  if (applyMeshcoreUri(text)) {
+                    e.preventDefault();
+                  }
+                }}
                 placeholder="Channel name"
               />
             </div>
@@ -343,6 +408,12 @@ export function NewMessageModal({
                   id="channel-key"
                   value={channelKey}
                   onChange={(e) => setChannelKey(e.target.value)}
+                  onPaste={(e) => {
+                    const text = e.clipboardData.getData('text');
+                    if (applyMeshcoreUri(text)) {
+                      e.preventDefault();
+                    }
+                  }}
                   placeholder="Pre-shared key (hex)"
                   className="flex-1"
                 />

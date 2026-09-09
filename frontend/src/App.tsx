@@ -298,6 +298,7 @@ export function App() {
     reconcileOnReconnect,
     renameConversationMessages,
     removeConversationMessages,
+    removeMessage,
     clearConversationMessages,
   } = useConversationMessages(activeConversation, targetMessageId);
   removeConversationMessagesRef.current = removeConversationMessages;
@@ -413,6 +414,7 @@ export function App() {
     renameConversationMessages,
     removeConversationMessages,
     receiveMessageAck,
+    removeMessage,
     notifyIncomingMessage,
   });
   const handleVisibilityPolicyChanged = useCallback(() => {
@@ -598,6 +600,7 @@ export function App() {
     onLoadNewer: fetchNewerMessages,
     onJumpToBottom: jumpToBottom,
     onSendMessage: handleSendMessage,
+    onMessageDeleted: removeMessage,
     onDismissUnreadMarker: () => setChannelUnreadMarker(null),
     notificationsSupported,
     notificationsPermission,
@@ -650,6 +653,7 @@ export function App() {
     onClearRepeaterAutoLogin: () => setRepeaterAutoLoginKey(null),
     blockedKeys: appSettings?.blocked_keys,
     blockedNames: appSettings?.blocked_names,
+    directoryEnabled: appSettings?.directory_enabled ?? false,
   };
   const searchProps = {
     contacts,

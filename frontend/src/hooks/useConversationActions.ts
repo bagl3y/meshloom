@@ -25,7 +25,7 @@ interface UseConversationActionsResult {
     channelKey: string,
     pathHashModeOverride: number | null
   ) => Promise<void>;
-  handleSenderClick: (sender: string) => void;
+  handleSenderClick: (sender: string, quote?: string) => void;
   handleTrace: () => Promise<void>;
   handlePathDiscovery: (publicKey: string) => Promise<PathDiscoveryResponse>;
 }
@@ -130,7 +130,11 @@ export function useConversationActions({
   );
 
   const handleSenderClick = useCallback(
-    (sender: string) => {
+    (sender: string, quote?: string) => {
+      if (quote != null) {
+        messageInputRef.current?.startReply(sender, quote);
+        return;
+      }
       messageInputRef.current?.appendText(`@[${sender}] `);
     },
     [messageInputRef]

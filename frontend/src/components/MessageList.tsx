@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { Channel, Contact, Message, MessagePath, RadioConfig, RawPacket } from '../types';
+import type { Channel, Contact, Message, RadioConfig, RawPacket } from '../types';
 import { CONTACT_TYPE_ROOM } from '../types';
 import { api } from '../api';
 import {
@@ -16,21 +16,53 @@ import {
   parseSenderFromText,
 } from '../utils/messageParser';
 import {
+  QUICK_EMOJIS,
+  REACTION_EMOJIS,
+  attachOpenReaction,
+  formatOpenReaction,
   giphyUrlForId,
+  locationMapUrl,
   parseGif,
+  parseLocation,
   parseMeshCoreOneReaction,
   parseReaction,
+  reactionHashSourceFromFields,
   splitReplyMention,
+  type ReactionHashSource,
 } from '../utils/meshcoreOpenPayloads';
+import { useTranslation } from 'react-i18next';
 import { useRichPayloads } from '../contexts/RichPayloadContext';
-import { usePathHopWidth } from '../contexts/PathHopWidthContext';
-import { formatHopCounts, formatPathHopWidths, type SenderInfo } from '../utils/pathUtils';
-import { getDirectContactRoute } from '../utils/pathUtils';
+import { getDirectContactRoute, type SenderInfo } from '../utils/pathUtils';
 import { ContactAvatar } from './ContactAvatar';
-import { PathModal } from './PathModal';
+import { HopCountBadge } from './messagePath/HopCountBadge';
+import {
+  MessagePathModalHost,
+  type MessagePathModalHostHandle,
+  type MessagePathSelection,
+} from './messagePath/MessagePathModalHost';
 import { RawPacketInspectorDialog } from './RawPacketDetailModal';
 import { toast } from './ui/sonner';
+import { Button } from './ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
 import { handleKeyboardActivate } from '../utils/a11y';
+import {
+  ChevronDown,
+  Info,
+  MapPin,
+  Plus,
+  Reply,
+  Smile,
+  Trash2,
+  User,
+  type LucideIcon,
+} from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { cn } from '@/lib/utils';
 
@@ -46,7 +78,9 @@ interface MessageListProps {
   onDismissUnreadMarker?: () => void;
   /** Called when the unread boundary is not in loaded history and must be jumped to. */
   onNavigateToUnread?: (messageId: number) => void;
-  onSenderClick?: (sender: string) => void;
+  onSenderClick?: (sender: string, quote?: string) => void;
+  /** Send a formatted Open reaction (or any other plaintext) through the existing send path. */
+  onSendMessage?: (text: string) => Promise<void>;
   onLoadOlder?: () => void;
   onResendChannelMessage?: (messageId: number, newTimestamp?: boolean) => void;
   onChannelReferenceClick?: (channelName: string) => void;
@@ -60,10 +94,12 @@ interface MessageListProps {
   onLoadNewer?: () => void;
   onJumpToBottom?: () => void;
   preSorted?: boolean;
+  onMessageDeleted?: (messageId: number) => void;
 }
 
 // Renders a MeshCore Open GIF payload, falling back to the raw text on load error.
 function GifPayload({ gifId, rawText }: { gifId: string; rawText: string }) {
+  const { t } = useTranslation();
   const [failed, setFailed] = useState(false);
   if (failed) {
     return <>{rawText}</>;
@@ -75,11 +111,12 @@ function GifPayload({ gifId, rawText }: { gifId: string; rawText: string }) {
       target="_blank"
       rel="noopener noreferrer"
       className="inline-block"
-      title="Open GIF on Giphy"
+      title={t('messageList.openGif')}
     >
       <img
         src={url}
-        alt="GIF"
+        alt={t('messageList.gifAlt')}
+        data-testid="message-gif"
         loading="lazy"
         onError={() => setFailed(true)}
         className="max-w-[240px] max-h-[240px] rounded-md"
@@ -88,26 +125,141 @@ function GifPayload({ gifId, rawText }: { gifId: string; rawText: string }) {
   );
 }
 
+function LocationPayload({
+  lat,
+  lon,
+  label,
+}: {
+  lat: number;
+  lon: number;
+  label: string;
+}) {
+  const { t } = useTranslation();
+  const url = locationMapUrl(lat, lon);
+  const coords = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      data-testid="message-location"
+      className="inline-flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 hover:bg-muted/70"
+      title={t('messageList.openLocation')}
+    >
+      <MapPin className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+      <span className="min-w-0">
+        <span className="block text-sm font-medium leading-tight">{label || t('messageList.locationAlt')}</span>
+        <span className="block text-[0.6875rem] text-muted-foreground tabular-nums">{coords}</span>
+      </span>
+    </a>
+  );
+}
+
 // Renders a reaction generically (emoji + "reacted"); the target message is not
 // resolved (see issues #291 and #354). MeshCore One reactions name the target's
 // sender, so show that when it is there.
 function ReactionPayload({ emoji, targetSender }: { emoji: string; targetSender?: string }) {
+  const { t } = useTranslation();
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className="text-xl leading-none">{emoji}</span>
       <span className="text-xs text-muted-foreground italic">
-        {targetSender ? `reacted to ${targetSender}` : 'reacted'}
+        {targetSender
+          ? t('messageList.reactedTo', { sender: targetSender })
+          : t('messageList.reacted')}
       </span>
     </span>
   );
 }
 
+function MessageActionMenuItem({
+  icon: Icon,
+  label,
+  onSelect,
+  destructive = false,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onSelect: () => void;
+  destructive?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      className={cn(
+        'flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-accent',
+        destructive ? 'text-destructive' : 'text-foreground'
+      )}
+      onClick={onSelect}
+    >
+      <Icon
+        className={cn(
+          'h-4 w-4 shrink-0',
+          destructive ? 'text-destructive' : 'text-muted-foreground'
+        )}
+      />
+      {label}
+    </button>
+  );
+}
+
+function MessageActionMenu({
+  messageId,
+  canReply,
+  canOpenContact,
+  replyLabel,
+  contactLabel,
+  detailsLabel,
+  deleteLabel,
+  onReply,
+  onContact,
+  onDetails,
+  onDelete,
+}: {
+  messageId: number;
+  canReply: boolean;
+  canOpenContact: boolean;
+  replyLabel: string;
+  contactLabel: string;
+  detailsLabel: string;
+  deleteLabel: string;
+  onReply: () => void;
+  onContact: () => void;
+  onDetails: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      role="menu"
+      data-testid="message-action-menu"
+      data-message-menu={messageId}
+      className="absolute right-0 top-7 z-50 w-52 overflow-hidden rounded-xl border border-border bg-card py-1 shadow-lg"
+    >
+      {canReply && <MessageActionMenuItem icon={Reply} label={replyLabel} onSelect={onReply} />}
+      {canOpenContact && (
+        <MessageActionMenuItem icon={User} label={contactLabel} onSelect={onContact} />
+      )}
+      <MessageActionMenuItem icon={Info} label={detailsLabel} onSelect={onDetails} />
+      <div className="my-1 h-px bg-border" />
+      <MessageActionMenuItem icon={Trash2} label={deleteLabel} onSelect={onDelete} destructive />
+    </div>
+  );
+}
+
 // Render a bare payload body (no reply prefix) into its rich node, or null.
-function renderPayloadBody(body: string): ReactNode | null {
+// GIFs always render — the compact `g:<id>` form is otherwise unreadable, and
+// inbound Open GIFs would otherwise stay hidden behind the reactions toggle.
+function renderPayloadBody(body: string, allowReactions: boolean): ReactNode | null {
   const gifId = parseGif(body);
   if (gifId) {
     return <GifPayload gifId={gifId} rawText={body} />;
   }
+  const location = parseLocation(body);
+  if (location) {
+    return <LocationPayload lat={location.lat} lon={location.lon} label={location.label} />;
+  }
+  if (!allowReactions) return null;
   const reaction = parseReaction(body) ?? parseMeshCoreOneReaction(body);
   if (reaction) {
     return <ReactionPayload emoji={reaction.emoji} targetSender={reaction.targetSender} />;
@@ -123,14 +275,15 @@ function renderPayloadBody(body: string): ReactNode | null {
 function renderMeshcoreOpenPayload(
   content: string,
   radioName?: string,
-  onChannelReferenceClick?: (channelName: string) => void
+  onChannelReferenceClick?: (channelName: string) => void,
+  allowReactions = false
 ): ReactNode | null {
-  const whole = renderPayloadBody(content);
+  const whole = renderPayloadBody(content, allowReactions);
   if (whole) return whole;
 
   const split = splitReplyMention(content);
   if (split) {
-    const body = renderPayloadBody(split.body);
+    const body = renderPayloadBody(split.body, allowReactions);
     if (body) {
       // Preserve the reply mention (rendered as a normal @[Name] mention) so the
       // GIF/reaction still reads as a reply to that person.
@@ -143,6 +296,62 @@ function renderMeshcoreOpenPayload(
     }
   }
   return null;
+}
+
+function messageRichBody(msg: Message): string {
+  const content = msg.type === 'PRIV' ? msg.text : parseSenderFromText(msg.text).content;
+  return splitReplyMention(content)?.body ?? content;
+}
+
+function openReactionSource(msg: Message): ReactionHashSource | null {
+  if (msg.sender_timestamp == null) return null;
+  const body = messageRichBody(msg);
+  if (parseReaction(body) || parseMeshCoreOneReaction(body)) return null;
+  return reactionHashSourceFromFields({
+    type: msg.type,
+    sender_timestamp: msg.sender_timestamp,
+    sender_name: msg.sender_name,
+    text: msg.text,
+  });
+}
+
+function attachOpenReactionsAtRender(messages: Message[]): {
+  sortedMessages: Message[];
+  reactionsById: Map<number, string[]>;
+} {
+  const hidden = new Set<number>();
+  const reactionsById = new Map<number, string[]>();
+  for (const msg of messages) {
+    const open = parseReaction(messageRichBody(msg));
+    if (!open) continue;
+    const attached = attachOpenReaction(messages, open, openReactionSource);
+    if (!attached) continue;
+    hidden.add(msg.id);
+    const targetId = messages[attached.targetIndex].id;
+    const list = reactionsById.get(targetId) ?? [];
+    list.push(attached.reaction.emoji);
+    reactionsById.set(targetId, list);
+  }
+  if (hidden.size === 0) return { sortedMessages: messages, reactionsById };
+  return { sortedMessages: messages.filter((msg) => !hidden.has(msg.id)), reactionsById };
+}
+
+const LONG_PRESS_MS = 500;
+
+function MessageReactionBadges({ emojis }: { emojis: string[] }) {
+  if (emojis.length === 0) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1" data-testid="message-reactions">
+      {emojis.map((emoji, index) => (
+        <span
+          key={`${emoji}-${index}`}
+          className="rounded bg-muted px-1.5 py-0.5 text-[0.8125rem] leading-none"
+        >
+          {emoji}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -318,42 +527,6 @@ function renderTextWithMentions(
   return parts.length > 0 ? parts : text;
 }
 
-// Clickable hop count badge that opens the path modal
-interface HopCountBadgeProps {
-  paths: MessagePath[];
-  onClick: () => void;
-  variant: 'header' | 'inline';
-}
-
-function HopCountBadge({ paths, onClick, variant }: HopCountBadgeProps) {
-  const { showPathHopWidth } = usePathHopWidth();
-  const hopInfo = formatHopCounts(paths);
-  const widthLabel = showPathHopWidth ? formatPathHopWidths(paths) : null;
-  const label = widthLabel ? `(${hopInfo.display} · ${widthLabel})` : `(${hopInfo.display})`;
-
-  const className =
-    variant === 'header'
-      ? 'font-normal text-muted-foreground ml-1 text-[0.6875rem] cursor-pointer hover:text-primary hover:underline'
-      : 'text-[0.625rem] text-muted-foreground ml-1 cursor-pointer hover:text-primary hover:underline';
-
-  return (
-    <span
-      className={className}
-      role="button"
-      tabIndex={0}
-      onKeyDown={handleKeyboardActivate}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      title={widthLabel ? `View message path (${widthLabel} per hop)` : 'View message path'}
-      aria-label={`${hopInfo.display}${widthLabel ? `, ${widthLabel} per hop` : ''}, view path`}
-    >
-      {label}
-    </span>
-  );
-}
-
 // Region scope badge for messages that arrived via a transport-routed (region-scoped) packet.
 function RegionBadge({ region }: { region: string }) {
   return (
@@ -398,6 +571,7 @@ export function MessageList({
   onDismissUnreadMarker,
   onNavigateToUnread,
   onSenderClick,
+  onSendMessage,
   onLoadOlder,
   onResendChannelMessage,
   onChannelReferenceClick,
@@ -411,7 +585,9 @@ export function MessageList({
   onLoadNewer,
   onJumpToBottom,
   preSorted = false,
+  onMessageDeleted,
 }: MessageListProps) {
+  const { t } = useTranslation();
   const { renderRichPayloads } = useRichPayloads();
   const listRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef<number>(0);
@@ -432,13 +608,10 @@ export function MessageList({
   // banner above the rows; see the scrollMargin note on the virtualizer.
   const [scrollMargin, setScrollMargin] = useState(0);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
-  const [selectedPath, setSelectedPath] = useState<{
-    paths: MessagePath[];
-    senderInfo: SenderInfo;
-    messageId?: number;
-    packetId?: number | null;
-    isOutgoingChan?: boolean;
-  } | null>(null);
+  const pathModalHostRef = useRef<MessagePathModalHostHandle>(null);
+  const openMessagePath = useCallback((selection: MessagePathSelection) => {
+    pathModalHostRef.current?.open(selection);
+  }, []);
   const [resendableIds, setResendableIds] = useState<Set<number>>(new Set());
   const resendTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const packetCacheRef = useRef<Map<number, RawPacket>>(new Map());
@@ -451,6 +624,11 @@ export function MessageList({
     | { kind: 'unavailable'; message: string }
     | null
   >(null);
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [openReactId, setOpenReactId] = useState<number | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Message | null>(null);
+  const [pickerTarget, setPickerTarget] = useState<Message | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
   const [showJumpToUnread, setShowJumpToUnread] = useState(false);
   const [jumpToUnreadDismissed, setJumpToUnreadDismissed] = useState(false);
@@ -468,6 +646,83 @@ export function MessageList({
 
   // Track conversation key to detect when entire message set changes
   const prevConvKeyRef = useRef<string | null>(null);
+
+  const clearLongPress = useCallback(() => {
+    if (longPressTimerRef.current != null) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (openActionsId == null && openReactId == null) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (openActionsId != null) {
+        const menu = document.querySelector(`[data-message-menu="${openActionsId}"]`);
+        const toggle = document.querySelector(`[data-message-menu-toggle="${openActionsId}"]`);
+        if (!menu?.contains(target) && !toggle?.contains(target)) {
+          setOpenActionsId(null);
+        }
+      }
+      if (openReactId != null) {
+        const menu = document.querySelector(`[data-react-menu="${openReactId}"]`);
+        const toggle = document.querySelector(`[data-react-toggle="${openReactId}"]`);
+        if (!menu?.contains(target) && !toggle?.contains(target)) {
+          setOpenReactId(null);
+        }
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenActionsId(null);
+        setOpenReactId(null);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [openActionsId, openReactId]);
+
+  const confirmDeleteMessage = useCallback(async () => {
+    const target = pendingDelete;
+    if (!target) return;
+    setPendingDelete(null);
+    try {
+      await api.deleteMessage(target.id);
+      onMessageDeleted?.(target.id);
+    } catch (err) {
+      toast.error(t('messageList.deleteFailed'), {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  }, [onMessageDeleted, pendingDelete, t]);
+
+  const sendOpenReaction = useCallback(
+    async (target: Message, emoji: string) => {
+      const source = openReactionSource(target);
+      if (!source || !onSendMessage) return;
+      const wire = formatOpenReaction(
+        source.timestampSeconds,
+        source.senderName,
+        source.text,
+        emoji
+      );
+      if (!wire) return;
+      try {
+        await onSendMessage(wire);
+      } catch (err) {
+        toast.error('Failed to send reaction', {
+          description: err instanceof Error ? err.message : 'Check radio connection',
+        });
+      }
+    },
+    [onSendMessage]
+  );
 
   const handleAnalyzePacket = useCallback(async (message: Message) => {
     // Extract signal from the first path if available
@@ -516,13 +771,12 @@ export function MessageList({
   // Sort messages by received_at ascending (oldest first)
   // Note: Deduplication is handled by useConversationMessages.observeMessage()
   // and the database UNIQUE constraint on (type, conversation_key, text, sender_timestamp)
-  const sortedMessages = useMemo(
-    () =>
-      preSorted
-        ? messages
-        : [...messages].sort((a, b) => a.received_at - b.received_at || a.id - b.id),
-    [messages, preSorted]
-  );
+  const { sortedMessages, reactionsById } = useMemo(() => {
+    const chronological = preSorted
+      ? messages
+      : [...messages].sort((a, b) => a.received_at - b.received_at || a.id - b.id);
+    return attachOpenReactionsAtRender(chronological);
+  }, [messages, preSorted]);
   /**
    * Only the visible window of messages is mounted. A long channel history otherwise
    * costs a full render of every message on any update — hundreds of milliseconds once
@@ -916,10 +1170,6 @@ export function MessageList({
     [config?.name, config?.public_key, config?.lat, config?.lon, config?.path_hash_mode]
   );
 
-  // Derive live so the byte-perfect button disables if the 30s window expires while modal is open
-  const isSelectedMessageResendable =
-    selectedPath?.messageId !== undefined && resendableIds.has(selectedPath.messageId);
-
   // Look up contact by public key
   const getContact = (conversationKey: string | null): Contact | null => {
     if (!conversationKey) return null;
@@ -1132,6 +1382,14 @@ export function MessageList({
               onSenderClick &&
               displaySender !== 'Unknown' &&
               displaySender !== CORRUPT_SENDER_LABEL;
+            const replyName = msg.outgoing
+              ? radioName || msg.sender_name || null
+              : displaySender === 'Unknown' || displaySender === CORRUPT_SENDER_LABEL
+                ? null
+                : displaySender;
+            const canReply = Boolean(!msg.outgoing && onSenderClick && replyName);
+            const canReact = Boolean(!msg.outgoing && onSendMessage && openReactionSource(msg));
+            const attachedEmojis = reactionsById.get(msg.id) ?? [];
 
             // Determine if we should show avatar (first message in a chunk from same sender)
             const currentSenderKey = getSenderKey(
@@ -1190,6 +1448,9 @@ export function MessageList({
               avatarName && avatarName !== 'Unknown'
                 ? `View info for ${avatarName}`
                 : `View info for ${avatarKey.slice(0, 12)}`;
+            const canOpenContact = Boolean(
+              !msg.outgoing && onOpenContactInfo && avatarKey && avatarVariant !== 'corrupt'
+            );
 
             return (
               // Absolutely positioned so the scroll container keeps a stable total height
@@ -1199,7 +1460,10 @@ export function MessageList({
                 key={msg.id}
                 data-index={index}
                 ref={virtualizer.measureElement}
-                className="absolute left-0 top-0 flex w-full flex-col pb-0.5"
+                className={cn(
+                  'absolute left-0 top-0 flex w-full flex-col pb-0.5',
+                  (openActionsId === msg.id || openReactId === msg.id) && 'z-50'
+                )}
                 // start is measured from the scroll container's origin, which
                 // scrollMargin accounts for; the spacer already sits that far
                 // down, so subtract it back out when positioning within it.
@@ -1234,7 +1498,7 @@ export function MessageList({
                 <div
                   data-message-id={msg.id}
                   className={cn(
-                    'flex items-start max-w-[85%]',
+                    'group/row flex items-start',
                     msg.outgoing && 'flex-row-reverse self-end',
                     isFirstInGroup && !isFirstMessage && 'mt-3'
                   )}
@@ -1277,11 +1541,41 @@ export function MessageList({
                   )}
                   <div
                     className={cn(
-                      'py-1.5 px-3 rounded-lg min-w-0',
+                      'relative min-w-0 max-w-[85%] rounded-lg px-3 py-1.5 pr-7',
                       msg.outgoing ? 'bg-msg-outgoing' : 'bg-msg-incoming',
                       highlightedMessageId === msg.id && 'message-highlight'
                     )}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setOpenReactId(null);
+                      setOpenActionsId(msg.id);
+                    }}
+                    onTouchStart={() => {
+                      clearLongPress();
+                      longPressTimerRef.current = setTimeout(() => {
+                        setOpenReactId(null);
+                        setOpenActionsId(msg.id);
+                      }, LONG_PRESS_MS);
+                    }}
+                    onTouchEnd={clearLongPress}
+                    onTouchMove={clearLongPress}
+                    onTouchCancel={clearLongPress}
                   >
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      data-message-menu-toggle={msg.id}
+                      className="absolute right-0.5 top-0.5 h-6 w-6 text-muted-foreground opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100"
+                      aria-label={t('messageList.actions')}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setOpenReactId(null);
+                        setOpenActionsId((current) => (current === msg.id ? null : msg.id));
+                      }}
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
                     {showAvatar && (
                       <div className="text-[0.8125rem] font-semibold text-foreground mb-0.5">
                         {canClickSender ? (
@@ -1291,7 +1585,7 @@ export function MessageList({
                             tabIndex={0}
                             onKeyDown={handleKeyboardActivate}
                             onClick={() => onSenderClick(displaySender)}
-                            title={`Mention ${displaySender}`}
+                            title={t('messageList.mention', { name: displaySender })}
                           >
                             {displaySender}
                           </span>
@@ -1305,22 +1599,22 @@ export function MessageList({
                           <HopCountBadge
                             paths={msg.paths}
                             variant="header"
-                            onClick={() =>
-                              setSelectedPath({
-                                paths: msg.paths!,
-                                senderInfo: getSenderInfo(msg, contact, directSenderName || sender),
-                                messageId: msg.id,
-                                packetId: msg.packet_id,
-                              })
-                            }
+                            senderInfo={getSenderInfo(msg, contact, directSenderName || sender)}
+                            messageId={msg.id}
+                            packetId={msg.packet_id}
+                            onOpen={openMessagePath}
                           />
                         )}
                         {msg.region && <RegionBadge region={msg.region} />}
                       </div>
                     )}
                     <div className="break-words whitespace-pre-wrap">
-                      {(renderRichPayloads &&
-                        renderMeshcoreOpenPayload(content, radioName, onChannelReferenceClick)) ||
+                      {renderMeshcoreOpenPayload(
+                        content,
+                        radioName,
+                        onChannelReferenceClick,
+                        renderRichPayloads
+                      ) ||
                         content.split('\n').map((line, i, arr) => (
                           <span key={i}>
                             {renderTextWithMentions(line, radioName, onChannelReferenceClick)}
@@ -1336,18 +1630,10 @@ export function MessageList({
                             <HopCountBadge
                               paths={msg.paths}
                               variant="inline"
-                              onClick={() =>
-                                setSelectedPath({
-                                  paths: msg.paths!,
-                                  senderInfo: getSenderInfo(
-                                    msg,
-                                    contact,
-                                    directSenderName || sender
-                                  ),
-                                  messageId: msg.id,
-                                  packetId: msg.packet_id,
-                                })
-                              }
+                              senderInfo={getSenderInfo(msg, contact, directSenderName || sender)}
+                              messageId={msg.id}
+                              packetId={msg.packet_id}
+                              onOpen={openMessagePath}
                             />
                           )}
                           {msg.region && <RegionBadge region={msg.region} />}
@@ -1363,7 +1649,7 @@ export function MessageList({
                               onKeyDown={handleKeyboardActivate}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setSelectedPath({
+                                openMessagePath({
                                   paths: msg.paths!,
                                   senderInfo: selfSenderInfo,
                                   messageId: msg.id,
@@ -1385,7 +1671,7 @@ export function MessageList({
                             onKeyDown={handleKeyboardActivate}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedPath({
+                              openMessagePath({
                                 paths: [],
                                 senderInfo: selfSenderInfo,
                                 messageId: msg.id,
@@ -1406,7 +1692,111 @@ export function MessageList({
                           </span>
                         ))}
                     </div>
+                    <MessageReactionBadges emojis={attachedEmojis} />
+                    {openActionsId === msg.id && (
+                      <MessageActionMenu
+                        messageId={msg.id}
+                        canReply={canReply && Boolean(replyName)}
+                        canOpenContact={canOpenContact}
+                        replyLabel={t('messageList.reply')}
+                        contactLabel={t('messageList.contactInfo')}
+                        detailsLabel={t('messageList.messageDetails')}
+                        deleteLabel={t('messageList.delete')}
+                        onReply={() => {
+                          if (replyName) onSenderClick?.(replyName, content);
+                          setOpenActionsId(null);
+                        }}
+                        onContact={() => {
+                          onOpenContactInfo?.(
+                            avatarKey,
+                            msg.type === 'CHAN' || (msg.type === 'PRIV' && isRoomServer)
+                          );
+                          setOpenActionsId(null);
+                        }}
+                        onDetails={() => {
+                          setOpenActionsId(null);
+                          openMessagePath({
+                            paths: msg.paths ?? [],
+                            senderInfo: msg.outgoing
+                              ? selfSenderInfo
+                              : getSenderInfo(msg, contact, directSenderName || sender),
+                            messageId: msg.id,
+                            packetId: msg.packet_id,
+                            isOutgoingChan:
+                              msg.outgoing && msg.type === 'CHAN' && !!onResendChannelMessage,
+                          });
+                        }}
+                        onDelete={() => {
+                          setOpenActionsId(null);
+                          setPendingDelete(msg);
+                        }}
+                      />
+                    )}
                   </div>
+                  {canReact && (
+                    <div className="relative ml-1 flex shrink-0 self-center">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        data-react-toggle={msg.id}
+                        data-testid="message-react-trigger"
+                        className={cn(
+                          'h-7 w-7 rounded-full border border-border bg-card text-muted-foreground shadow-sm',
+                          openReactId === msg.id
+                            ? 'opacity-100'
+                            : 'opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100'
+                        )}
+                        aria-label={t('messageList.react')}
+                        aria-expanded={openReactId === msg.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setOpenActionsId(null);
+                          setOpenReactId((current) => (current === msg.id ? null : msg.id));
+                        }}
+                      >
+                        <Smile className="h-4 w-4" />
+                      </Button>
+                      {openReactId === msg.id && (
+                        <div
+                          data-testid="message-quick-reactions"
+                          data-react-menu={msg.id}
+                          className="absolute bottom-[calc(100%+0.25rem)] left-0 z-50 flex items-center rounded-full border border-border bg-card px-0.5 py-0.5 shadow-lg"
+                        >
+                          {QUICK_EMOJIS.map((emoji) => (
+                            <Button
+                              key={emoji}
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-base"
+                              aria-label={t('messageList.reactWith', { emoji })}
+                              onClick={() => {
+                                setOpenReactId(null);
+                                void sendOpenReaction(msg, emoji);
+                              }}
+                            >
+                              {emoji}
+                            </Button>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-label={t('messageList.moreEmojis')}
+                            title={t('messageList.moreEmojis')}
+                            onClick={() => {
+                              setOpenReactId(null);
+                              setPickerTarget(msg);
+                            }}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -1488,32 +1878,74 @@ export function MessageList({
         </button>
       )}
 
-      {/* Path modal */}
-      {selectedPath && (
-        <PathModal
-          open={true}
-          onClose={() => setSelectedPath(null)}
-          paths={selectedPath.paths}
-          senderInfo={selectedPath.senderInfo}
-          contacts={contacts}
-          config={config ?? null}
-          messageId={selectedPath.messageId}
-          packetId={selectedPath.packetId}
-          isOutgoingChan={selectedPath.isOutgoingChan}
-          isResendable={isSelectedMessageResendable}
-          onResend={onResendChannelMessage}
-          onAnalyzePacket={
-            selectedPath.packetId != null
-              ? () => {
-                  const message = messages.find((entry) => entry.id === selectedPath.messageId);
-                  if (message) {
-                    void handleAnalyzePacket(message);
-                  }
-                }
-              : undefined
+      <MessagePathModalHost
+        ref={pathModalHostRef}
+        contacts={contacts}
+        config={config ?? null}
+        resendableIds={resendableIds}
+        onResend={onResendChannelMessage}
+        onAnalyzePacket={(messageId) => {
+          const message = messages.find((entry) => entry.id === messageId);
+          if (message) {
+            void handleAnalyzePacket(message);
           }
-        />
-      )}
+        }}
+      />
+      <Dialog open={pendingDelete != null} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold tracking-tight">
+              {t('messageList.deleteConfirmTitle')}
+            </DialogTitle>
+            <DialogDescription className="text-[0.8125rem] text-muted-foreground">
+              {t('messageList.deleteConfirm')}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPendingDelete(null)}>
+              {t('messageList.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-destructive/50 text-destructive hover:bg-destructive/10"
+              onClick={() => {
+                void confirmDeleteMessage();
+              }}
+            >
+              {t('messageList.deleteConfirmAction')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={pickerTarget != null} onOpenChange={(open) => !open && setPickerTarget(null)}>
+        <DialogContent className="max-w-md" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold tracking-tight">
+              {t('messageList.react')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid max-h-[min(20rem,50vh)] grid-cols-8 gap-1 overflow-y-auto">
+            {REACTION_EMOJIS.map((emoji, index) => (
+              <Button
+                key={index}
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-lg"
+                aria-label={t('messageList.reactWith', { emoji })}
+                onClick={() => {
+                  const target = pickerTarget;
+                  setPickerTarget(null);
+                  if (target) void sendOpenReaction(target, emoji);
+                }}
+              >
+                {emoji}
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
       {packetInspectorSource && (
         <RawPacketInspectorDialog
           open={packetInspectorSource !== null}

@@ -261,6 +261,16 @@ class TestTypedEventSerialization:
             "data": {"message_id": 7, "ack_count": 2},
         }
 
+    def test_dump_ws_event_serializes_message_deleted(self):
+        from app.events import dump_ws_event
+
+        serialized = dump_ws_event("message_deleted", {"message_id": 42})
+
+        assert json.loads(serialized) == {
+            "type": "message_deleted",
+            "data": {"message_id": 42},
+        }
+
     def test_dump_ws_event_falls_back_to_raw_payload_when_validation_fails(self):
         from app.events import dump_ws_event
 

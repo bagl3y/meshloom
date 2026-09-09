@@ -1,6 +1,9 @@
 import type {
   AppSettings,
   AppSettingsUpdate,
+  BackupExport,
+  BackupRestoreResult,
+  ContactGroup,
   BulkCreateHashtagChannelsResult,
   Channel,
   ChannelDetail,
@@ -8,6 +11,8 @@ import type {
   Contact,
   ContactAnalytics,
   ContactAdvertPathSummary,
+  DirectoryMapNodesResponse,
+  DirectoryResolveHopsResponse,
   ContactTelemetryResponse,
   FanoutConfig,
   HealthStatus,
@@ -296,6 +301,8 @@ export const api = {
       `/messages/channel/${messageId}/resend${newTimestamp ? '?new_timestamp=true' : ''}`,
       { method: 'POST' }
     ),
+  deleteMessage: (messageId: number) =>
+    fetchJson<{ status: string }>(`/messages/${messageId}`, { method: 'DELETE' }),
 
   // Packets
   getPacket: (packetId: number) => fetchJson<RawPacket>(`/packets/${packetId}`),
@@ -336,6 +343,59 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(settings),
     }),
+
+  getContactGroups: () => fetchJson<ContactGroup[]>('/contact-groups'),
+  createContactGroup: (name: string) =>
+    fetchJson<ContactGroup>('/contact-groups', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+  updateContactGroup: (id: number, update: { name?: string; sort_order?: number }) =>
+    fetchJson<ContactGroup>(`/contact-groups/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(update),
+    }),
+  deleteContactGroup: (id: number) =>
+    fetchJson<{ status: string }>(`/contact-groups/${id}`, {
+      method: 'DELETE',
+    }),
+  setContactGroupMembers: (id: number, publicKeys: string[]) =>
+    fetchJson<ContactGroup>(`/contact-groups/${id}/members`, {
+      method: 'PUT',
+      body: JSON.stringify({ public_keys: publicKeys }),
+    }),
+
+  resolveDirectoryHops: (hops: string[]) =>
+    fetchJson<DirectoryResolveHopsResponse>('/directory/resolve-hops', {
+      method: 'POST',
+      body: JSON.stringify({ hops }),
+    }),
+  getDirectoryMapNodes: () => fetchJson<DirectoryMapNodesResponse>('/directory/nodes'),
+  resetDirectoryCache: () =>
+    fetchJson<{ deleted: number }>('/directory/cache/reset', {
+      method: 'POST',
+    }),
+
+  getJsonBackup: () => fetchJson<BackupExport>('/settings/backup/json'),
+  restoreJsonBackup: (payload: BackupExport) =>
+    fetchJson<BackupRestoreResult>('/settings/backup/restore', {
+      method: 'POST',
+      body: JSON.stringify({ ...payload, confirm: true }),
+    }),
+  downloadDatabaseBackup: async () => {
+    const res = await fetch(`${API_BASE}/settings/backup/database`);
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new ApiError(errorText || res.statusText, res.status);
+    }
+    const blob = await res.blob();
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = 'meshcore.db';
+    a.click();
+    URL.revokeObjectURL(href);
+  },
 
   // Block lists
   toggleBlockedKey: (key: string) =>

@@ -45,6 +45,7 @@ vi.mock('../hooks', async (importOriginal) => {
         reconcileOnReconnect: vi.fn(),
         renameConversationMessages: vi.fn(),
         removeConversationMessages: vi.fn(),
+        removeMessage: vi.fn(),
         clearConversationMessages: vi.fn(),
       };
     },

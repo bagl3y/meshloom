@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import { Separator } from '../ui/separator';
 import { toast } from '../ui/sonner';
 import { api } from '../../api';
@@ -8,6 +10,7 @@ import { formatTime } from '../../utils/messageParser';
 import { lppDisplayUnit } from '../repeater/repeaterPaneShared';
 import { useDistanceUnit } from '../../contexts/DistanceUnitContext';
 import { BulkDeleteContactsModal } from './BulkDeleteContactsModal';
+import { ContactGroupsEditor } from './ContactGroupsEditor';
 import type {
   AppSettings,
   AppSettingsUpdate,
@@ -45,9 +48,13 @@ export function SettingsRadioAppSection({
   onToggleTrackedTelemetryContact?: (publicKey: string) => Promise<void>;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const { distanceUnit } = useDistanceUnit();
   const [discoveryBlockedTypes, setDiscoveryBlockedTypes] = useState<number[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [staleDays, setStaleDays] = useState(String(appSettings.stale_contact_days ?? 0));
+  const [directoryUrl, setDirectoryUrl] = useState(appSettings.directory_url ?? '');
+  const [cacheResetting, setCacheResetting] = useState(false);
 
   const [latestTelemetry, setLatestTelemetry] = useState<
     Record<string, TelemetryHistoryEntry | null>
@@ -67,6 +74,8 @@ export function SettingsRadioAppSection({
   useEffect(() => {
     setDiscoveryBlockedTypes(appSettings.discovery_blocked_types ?? []);
     setIntervalDraft(appSettings.telemetry_interval_hours);
+    setStaleDays(String(appSettings.stale_contact_days ?? 0));
+    setDirectoryUrl(appSettings.directory_url ?? '');
   }, [appSettings]);
 
   useEffect(() => {
@@ -418,6 +427,8 @@ export function SettingsRadioAppSection({
       <div className="space-y-5">
         <h3 className="text-base font-semibold tracking-tight">Contact Management</h3>
 
+        <ContactGroupsEditor contacts={contacts} />
+
         <div className="space-y-3">
           <h4 className="text-sm font-semibold">Block Discovery of New Node Types</h4>
           <p className="text-[0.8125rem] text-muted-foreground">
@@ -549,6 +560,101 @@ export function SettingsRadioAppSection({
             onDeleted={(keys) => onBulkDeleteContacts?.(keys)}
           />
         </div>
+
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold">{t('settings.staleTitle')}</h4>
+          <p className="text-[0.8125rem] text-muted-foreground">{t('settings.staleHelp')}</p>
+          <div className="flex gap-2 items-end">
+            <div className="space-y-1">
+              <Label htmlFor="stale-contact-days" className="text-xs text-muted-foreground">
+                {t('settings.staleDays')}
+              </Label>
+              <Input
+                id="stale-contact-days"
+                type="number"
+                min="0"
+                max="3650"
+                value={staleDays}
+                onChange={(e) => setStaleDays(e.target.value)}
+                onBlur={() => {
+                  const days = parseInt(staleDays, 10);
+                  if (isNaN(days) || days < 0) {
+                    setStaleDays(String(appSettings.stale_contact_days ?? 0));
+                    return;
+                  }
+                  const prev = appSettings.stale_contact_days ?? 0;
+                  if (days === prev) return;
+                  void persistAppSettings({ stale_contact_days: days }, () =>
+                    setStaleDays(String(prev))
+                  );
+                }}
+                className="w-24"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <h3 className="text-base font-semibold tracking-tight">{t('settings.directoryTitle')}</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">{t('settings.directoryHelp')}</p>
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={appSettings.directory_enabled ?? false}
+            onChange={() => {
+              const next = !(appSettings.directory_enabled ?? false);
+              void persistAppSettings({ directory_enabled: next }, () => {});
+            }}
+            className="w-4 h-4 rounded border-input accent-primary mt-0.5"
+          />
+          <div>
+            <span className="text-sm">{t('settings.directoryEnable')}</span>
+          </div>
+        </label>
+        <div className="space-y-1">
+          <Label htmlFor="directory-url" className="text-xs text-muted-foreground">
+            {t('settings.directoryUrl')}
+          </Label>
+          <Input
+            id="directory-url"
+            type="url"
+            placeholder="https://corescope.example"
+            value={directoryUrl}
+            onChange={(e) => setDirectoryUrl(e.target.value)}
+            onBlur={() => {
+              const next = directoryUrl.trim();
+              const prev = appSettings.directory_url ?? '';
+              if (next === prev) return;
+              void persistAppSettings({ directory_url: next }, () => setDirectoryUrl(prev));
+            }}
+          />
+        </div>
+        <Button
+          variant="outline"
+          className="w-full"
+          disabled={cacheResetting}
+          onClick={() => {
+            setCacheResetting(true);
+            void api
+              .resetDirectoryCache()
+              .then((res) => {
+                toast.success(t('settings.directoryCleared'), {
+                  description: t('settings.directoryClearedDetail', { count: res.deleted }),
+                });
+              })
+              .catch((err: unknown) => {
+                toast.error(t('settings.directoryClearFailed'), {
+                  description: err instanceof Error ? err.message : 'Unknown error',
+                });
+              })
+              .finally(() => setCacheResetting(false));
+          }}
+        >
+          {t('settings.directoryReset')}
+        </Button>
       </div>
     </div>
   );

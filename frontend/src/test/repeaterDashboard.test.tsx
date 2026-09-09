@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { RepeaterDashboard } from '../components/RepeaterDashboard';
+import i18n from '../i18n';
 import type { UseRepeaterDashboardResult } from '../hooks/useRepeaterDashboard';
 import type { Contact, Conversation } from '../types';
 
@@ -689,9 +690,25 @@ describe('RepeaterDashboard', () => {
     it('links out to the MeshCore CLI docs', () => {
       render(<RepeaterDashboard {...defaultProps} />);
 
-      const link = screen.getByRole('link', { name: 'CLI docs' });
+      const link = screen.getByRole('link', { name: i18n.t('repeater.cliDocs') });
       expect(link).toHaveAttribute('href', 'https://docs.meshcore.io/cli_commands/');
       expect(link).toHaveAttribute('target', '_blank');
+    });
+
+    it('help palette stays closed until opened', () => {
+      render(<RepeaterDashboard {...defaultProps} />);
+
+      expect(screen.queryByRole('button', { name: 'Insert ver' })).not.toBeInTheDocument();
+    });
+
+    it('help palette inserts a frequent command into the input', () => {
+      render(<RepeaterDashboard {...defaultProps} />);
+
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('repeater.help') }));
+      fireEvent.click(screen.getByRole('button', { name: 'Insert ver' }));
+
+      const input = screen.getByLabelText('Console command') as HTMLInputElement;
+      expect(input.value).toBe('ver');
     });
   });
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronRight, Logs, MessageSquare, Send, Settings, X } from 'lucide-react';
 import { toast } from '../ui/sonner';
 import { usePush } from '../../contexts/PushSubscriptionContext';
@@ -26,6 +27,7 @@ import {
 import { useDistanceUnit } from '../../contexts/DistanceUnitContext';
 import { useRichPayloads } from '../../contexts/RichPayloadContext';
 import { setSavedRenderRichPayloads } from '../../utils/richPayloadPreference';
+import { getSavedGiphyApiKey, setSavedGiphyApiKey } from '../../utils/giphyPreference';
 import { usePathHopWidth } from '../../contexts/PathHopWidthContext';
 import { setSavedShowPathHopWidth } from '../../utils/pathHopWidthPreference';
 import {
@@ -56,6 +58,13 @@ import {
   getStatusDotPulseEnabled,
   setStatusDotPulseEnabled as saveStatusDotPulse,
 } from '../../utils/statusDotPulse';
+import {
+  APP_LANGUAGES,
+  getSavedLanguage,
+  setSavedLanguage,
+  type AppLanguage,
+} from '../../utils/languagePreference';
+import i18n from '../../i18n';
 
 /** Resolve a state key like "contact-abc123" or "channel-def456" to a display name. */
 function resolveConversationName(
@@ -233,9 +242,11 @@ export function SettingsLocalSection({
   channels?: Channel[];
   className?: string;
 }) {
+  const { t } = useTranslation();
   const { distanceUnit, setDistanceUnit } = useDistanceUnit();
   const { renderRichPayloads, setRenderRichPayloads } = useRichPayloads();
   const { showPathHopWidth, setShowPathHopWidth } = usePathHopWidth();
+  const [language, setLanguage] = useState(getSavedLanguage);
   const [reopenLastConversation, setReopenLastConversation] = useState(
     getReopenLastConversationEnabled
   );
@@ -245,6 +256,7 @@ export function SettingsLocalSection({
   const [batteryPercent, setBatteryPercent] = useState(getShowBatteryPercent);
   const [batteryVoltage, setBatteryVoltage] = useState(getShowBatteryVoltage);
   const [statusDotPulse, setStatusDotPulse] = useState(getStatusDotPulseEnabled);
+  const [giphyApiKey, setGiphyApiKey] = useState(getSavedGiphyApiKey);
   const [textReplaceEnabled, setTextReplaceEnabled] = useState(getTextReplaceEnabled);
   const [textReplaceJson, setTextReplaceJson] = useState(getTextReplaceMapJson);
   const [textReplaceError, setTextReplaceError] = useState<string | null>(null);
@@ -285,6 +297,30 @@ export function SettingsLocalSection({
       <p className="text-[0.8125rem] text-muted-foreground">
         These settings apply only to this device/browser.
       </p>
+
+      <div className="space-y-3">
+        <Label htmlFor="ui-language">{t('language.label')}</Label>
+        <select
+          id="ui-language"
+          value={language}
+          onChange={(event) => {
+            const next = event.target.value as AppLanguage;
+            setLanguage(next);
+            setSavedLanguage(next);
+            void i18n.changeLanguage(next);
+          }}
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+        >
+          {APP_LANGUAGES.map((code) => (
+            <option key={code} value={code}>
+              {t(`language.${code}`)}
+            </option>
+          ))}
+        </select>
+        <p className="text-[0.8125rem] text-muted-foreground">{t('language.description')}</p>
+      </div>
+
+      <Separator />
 
       <div className="space-y-1">
         <h3 className="text-base font-semibold tracking-tight">Color Scheme</h3>
@@ -469,18 +505,32 @@ export function SettingsLocalSection({
             />
             <div className="space-y-1">
               <Label htmlFor="render-rich-payloads">
-                Render MeshCore Open GIFs &amp; Reactions
+                Render MeshCore Open reactions as emoji
               </Label>
               <p className="text-[0.8125rem] text-muted-foreground">
-                MeshCore Open clients send GIFs and emoji reactions as encoded text (e.g.{' '}
-                <code className="text-[0.75rem]">g:abc123</code> or{' '}
-                <code className="text-[0.75rem]">r:1a2b:05</code>). When enabled, these render as
-                the GIF image or reaction emoji instead of the raw text. Reactions show generically
-                (the emoji is not tied to a specific message). GIFs load from media.giphy.com, which
-                reaches outside your local network and exposes your IP to Giphy — so this is off by
-                default.
+                MeshCore Open clients send emoji reactions as encoded text (e.g.{' '}
+                <code className="text-[0.75rem]">r:1a2b:05</code>). When enabled, unmatched
+                reaction messages render as the emoji instead of the raw text. GIFs always display
+                as images — they load from media.giphy.com, which reaches outside your local
+                network and exposes your IP to Giphy.
               </p>
             </div>
+          </div>
+
+          <div className="space-y-2 rounded-md border border-border/60 p-3">
+            <Label htmlFor="giphy-api-key">{t('settings.giphyKey')}</Label>
+            <Input
+              id="giphy-api-key"
+              type="password"
+              autoComplete="off"
+              value={giphyApiKey}
+              onChange={(event) => {
+                const next = event.target.value;
+                setGiphyApiKey(next);
+                setSavedGiphyApiKey(next);
+              }}
+            />
+            <p className="text-[0.8125rem] text-muted-foreground">{t('settings.giphyKeyHelp')}</p>
           </div>
 
           <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">

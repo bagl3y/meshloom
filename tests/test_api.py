@@ -820,6 +820,34 @@ class TestMessagesEndpoint:
         assert mock_mc.commands.set_channel.await_count == 0
         assert mock_mc.commands.send_chan_msg.await_count == 0
 
+    @pytest.mark.asyncio
+    async def test_delete_message_removes_row_and_broadcasts(self, test_db, client):
+        msg_id = await MessageRepository.create(
+            msg_type="CHAN",
+            text="Alice: bye",
+            conversation_key="AA" * 16,
+            sender_timestamp=1700000000,
+            received_at=1700000000,
+        )
+        assert msg_id is not None
+
+        with patch("app.routers.messages.broadcast_event") as mock_broadcast:
+            response = await client.delete(f"/api/messages/{msg_id}")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+        mock_broadcast.assert_called_once_with("message_deleted", {"message_id": msg_id})
+        assert await MessageRepository.get_by_id(msg_id) is None
+
+    @pytest.mark.asyncio
+    async def test_delete_missing_message_is_idempotent(self, test_db, client):
+        with patch("app.routers.messages.broadcast_event") as mock_broadcast:
+            response = await client.delete("/api/messages/999999")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+        mock_broadcast.assert_not_called()
+
 
 class TestChannelsEndpoint:
     """Test channel-related endpoints."""

@@ -56,6 +56,7 @@ interface UseRealtimeAppStateArgs {
     paths?: MessagePath[],
     packetId?: number | null
   ) => void;
+  removeMessage: (messageId: number) => void;
   notifyIncomingMessage?: (msg: Message) => void;
   /** Buffer cap override. Defaults to the store's own cap; tests use it to force eviction. */
   maxRawPackets?: number;
@@ -105,6 +106,7 @@ export function useRealtimeAppState({
   renameConversationMessages,
   removeConversationMessages,
   receiveMessageAck,
+  removeMessage,
   notifyIncomingMessage,
   maxRawPackets = MAX_RAW_PACKETS,
 }: UseRealtimeAppStateArgs): UseWebSocketOptions {
@@ -271,6 +273,9 @@ export function useRealtimeAppState({
       ) => {
         receiveMessageAck(messageId, ackCount, paths, packetId);
       },
+      onMessageDeleted: (messageId: number) => {
+        removeMessage(messageId);
+      },
     }),
     [
       activeConversationRef,
@@ -288,6 +293,7 @@ export function useRealtimeAppState({
       prevHealthRef,
       recordMessageEvent,
       receiveMessageAck,
+      removeMessage,
       observeMessage,
       refreshUnreads,
       reconcileOnReconnect,

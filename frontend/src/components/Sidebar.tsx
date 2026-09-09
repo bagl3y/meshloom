@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Bell,
   BellOff,
@@ -10,6 +11,8 @@ import {
   LockOpen,
   Logs,
   Map,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search as SearchIcon,
   SquarePen,
   X,
@@ -40,6 +43,19 @@ import { ContactAvatar } from './ContactAvatar';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
+import {
+  getSavedDesktopSidebarCollapsed,
+  setSavedDesktopSidebarCollapsed,
+} from '../utils/sidebarRailPreference';
+
+export function channelRailMonogram(name: string): string {
+  const stripped = name.replace(/^#+/, '').trim();
+  if (!stripped) return '#';
+  const letters = Array.from(stripped).filter((ch) => /[\p{L}\p{N}]/u.test(ch));
+  if (letters.length >= 2) return `${letters[0]}${letters[1]}`.toUpperCase();
+  if (letters.length === 1) return letters[0].toUpperCase();
+  return stripped.slice(0, 2).toUpperCase();
+}
 
 type FavoriteItem = { type: 'channel'; channel: Channel } | { type: 'contact'; contact: Contact };
 
@@ -164,6 +180,9 @@ interface SidebarProps {
   isConversationNotificationsEnabled?: (type: 'channel' | 'contact', id: string) => boolean;
   blockedKeys?: string[];
   blockedNames?: string[];
+  /** Desktop icon-rail collapse. Uncontrolled when omitted (reads localStorage). */
+  desktopCollapsed?: boolean;
+  onToggleDesktopCollapsed?: () => void;
 }
 
 function loadInitialSectionSortOrders(): SidebarSectionSortOrders {
@@ -192,7 +211,10 @@ export function Sidebar({
   isConversationNotificationsEnabled,
   blockedKeys = [],
   blockedNames = [],
+  desktopCollapsed: desktopCollapsedProp,
+  onToggleDesktopCollapsed,
 }: SidebarProps) {
+  const { t } = useTranslation();
   const isContactBlocked = useCallback(
     (c: Contact) =>
       blockedKeys.includes(c.public_key.toLowerCase()) ||
@@ -200,6 +222,19 @@ export function Sidebar({
     [blockedKeys, blockedNames]
   );
 
+  const [localDesktopCollapsed, setLocalDesktopCollapsed] = useState(
+    getSavedDesktopSidebarCollapsed
+  );
+  const desktopCollapsed = desktopCollapsedProp ?? localDesktopCollapsed;
+  const handleToggleDesktopCollapsed = () => {
+    if (onToggleDesktopCollapsed) {
+      onToggleDesktopCollapsed();
+      return;
+    }
+    const next = !desktopCollapsed;
+    setSavedDesktopSidebarCollapsed(next);
+    setLocalDesktopCollapsed(next);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const initialSectionSortOrders = useMemo(loadInitialSectionSortOrders, []);
   const [sectionSortOrders, setSectionSortOrders] = useState(initialSectionSortOrders);
@@ -630,16 +665,34 @@ export function Sidebar({
         row.contact?.type !== CONTACT_TYPE_REPEATER &&
         row.unreadCount > 0);
 
+    const unreadBadge = row.unreadCount > 0 && !row.muted && (
+      <span
+        className={cn(
+          'text-[0.625rem] font-semibold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
+          desktopCollapsed && 'md:absolute md:-top-1 md:-right-1 md:min-w-[1rem] md:px-1 md:py-0',
+          highlightUnread
+            ? 'bg-badge-mention text-badge-mention-foreground'
+            : 'bg-badge-unread/90 text-badge-unread-foreground'
+        )}
+        aria-label={`${row.unreadCount} unread message${row.unreadCount !== 1 ? 's' : ''}`}
+      >
+        {row.unreadCount}
+      </span>
+    );
+
     return (
       <div
         key={row.key}
+        title={row.name}
         className={cn(
           'px-3 py-2 cursor-pointer flex items-center gap-2 border-l-2 border-transparent hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           isActive(row.type, row.id) && 'bg-accent border-l-primary',
-          row.unreadCount > 0 && '[&_.name]:font-semibold [&_.name]:text-foreground'
+          row.unreadCount > 0 && '[&_.name]:font-semibold [&_.name]:text-foreground',
+          desktopCollapsed && 'md:justify-center md:px-1.5'
         )}
         role="button"
         tabIndex={0}
+        aria-label={row.name}
         aria-current={isActive(row.type, row.id) ? 'page' : undefined}
         onKeyDown={handleKeyboardActivate}
         onClick={() =>
@@ -650,16 +703,32 @@ export function Sidebar({
           })
         }
       >
-        {row.type === 'contact' && row.contact && (
-          <ContactAvatar
-            name={row.contact.name}
-            publicKey={row.contact.public_key}
-            size={24}
-            contactType={row.contact.type}
-          />
-        )}
-        <span className="name flex-1 truncate text-[0.8125rem]">{row.name}</span>
-        <span className="ml-auto flex items-center gap-1">
+        <span className={cn('relative', desktopCollapsed && 'md:shrink-0')}>
+          {row.type === 'contact' && row.contact && (
+            <ContactAvatar
+              name={row.contact.name}
+              publicKey={row.contact.public_key}
+              size={24}
+              contactType={row.contact.type}
+            />
+          )}
+          {row.type === 'channel' && desktopCollapsed && (
+            <span
+              className="hidden md:flex h-6 w-6 items-center justify-center rounded bg-muted text-[0.625rem] font-semibold uppercase leading-none text-muted-foreground"
+              aria-hidden="true"
+              data-testid="channel-rail-monogram"
+            >
+              {channelRailMonogram(row.name)}
+            </span>
+          )}
+          {desktopCollapsed && unreadBadge}
+        </span>
+        <span
+          className={cn('name flex-1 truncate text-[0.8125rem]', desktopCollapsed && 'md:hidden')}
+        >
+          {row.name}
+        </span>
+        <span className={cn('ml-auto flex items-center gap-1', desktopCollapsed && 'md:hidden')}>
           {row.muted ? (
             <span aria-label="Channel muted" title="Channel muted">
               <BellOff className="h-3.5 w-3.5 text-muted-foreground" />
@@ -671,19 +740,7 @@ export function Sidebar({
                   <Bell className="h-3.5 w-3.5 text-muted-foreground" />
                 </span>
               )}
-              {row.unreadCount > 0 && (
-                <span
-                  className={cn(
-                    'text-[0.625rem] font-semibold px-1.5 py-0.5 rounded-full min-w-[18px] text-center',
-                    highlightUnread
-                      ? 'bg-badge-mention text-badge-mention-foreground'
-                      : 'bg-badge-unread/90 text-badge-unread-foreground'
-                  )}
-                  aria-label={`${row.unreadCount} unread message${row.unreadCount !== 1 ? 's' : ''}`}
-                >
-                  {row.unreadCount}
-                </span>
-              )}
+              {!desktopCollapsed && unreadBadge}
             </>
           )}
         </span>
@@ -696,23 +753,28 @@ export function Sidebar({
     active = false,
     icon,
     label,
+    name,
     onClick,
   }: {
     key: string;
     active?: boolean;
     icon: React.ReactNode;
     label: React.ReactNode;
+    name: string;
     onClick: () => void;
   }) => (
     <div
       key={key}
       data-active={active ? 'true' : undefined}
+      title={name}
       className={cn(
         'sidebar-action-row px-3 py-2 cursor-pointer flex items-center gap-2 border-l-2 border-transparent hover:bg-accent transition-colors text-[0.8125rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        active && 'bg-accent border-l-primary'
+        active && 'bg-accent border-l-primary',
+        desktopCollapsed && 'md:justify-center md:px-1.5'
       )}
       role="button"
       tabIndex={0}
+      aria-label={name}
       aria-current={active ? 'page' : undefined}
       onKeyDown={handleKeyboardActivate}
       onClick={onClick}
@@ -720,7 +782,9 @@ export function Sidebar({
       <span className="sidebar-tool-icon" aria-hidden="true">
         {icon}
       </span>
-      <span className="sidebar-tool-label flex-1 truncate">{label}</span>
+      <span className={cn('sidebar-tool-label flex-1 truncate', desktopCollapsed && 'md:hidden')}>
+        {label}
+      </span>
     </div>
   );
 
@@ -752,6 +816,7 @@ export function Sidebar({
           key: 'tool-raw',
           active: isActive('raw', 'raw'),
           icon: <Logs className="h-4 w-4" />,
+          name: 'Packet Feed',
           label: 'Packet Feed',
           onClick: () =>
             handleSelectConversation({
@@ -764,6 +829,7 @@ export function Sidebar({
           key: 'tool-map',
           active: isActive('map', 'map'),
           icon: <Map className="h-4 w-4" />,
+          name: 'Node Map',
           label: 'Node Map',
           onClick: () =>
             handleSelectConversation({
@@ -776,6 +842,7 @@ export function Sidebar({
           key: 'tool-visualizer',
           active: isActive('visualizer', 'visualizer'),
           icon: <ChartNetwork className="h-4 w-4" />,
+          name: 'Mesh Visualizer',
           label: 'Mesh Visualizer',
           onClick: () =>
             handleSelectConversation({
@@ -788,6 +855,7 @@ export function Sidebar({
           key: 'tool-trace',
           active: isActive('trace', 'trace'),
           icon: <Cable className="h-4 w-4" />,
+          name: 'Trace',
           label: 'Trace',
           onClick: () =>
             handleSelectConversation({
@@ -800,6 +868,7 @@ export function Sidebar({
           key: 'tool-search',
           active: isActive('search', 'search'),
           icon: <SearchIcon className="h-4 w-4" />,
+          name: 'Message Search',
           label: 'Message Search',
           onClick: () =>
             handleSelectConversation({
@@ -812,6 +881,7 @@ export function Sidebar({
           key: 'tool-cracker',
           active: showCracker,
           icon: <LockOpen className="h-4 w-4" />,
+          name: showCracker ? 'Hide Channel Finder' : 'Show Channel Finder',
           label: (
             <>
               {showCracker ? 'Hide' : 'Show'} Channel Finder
@@ -842,7 +912,12 @@ export function Sidebar({
     const sectionSortOrder = sortSection ? sectionSortOrders[sortSection] : null;
 
     return (
-      <div className="flex justify-between items-center px-3 py-2 pt-3.5">
+      <div
+        className={cn(
+          'flex justify-between items-center px-3 py-2 pt-3.5',
+          desktopCollapsed && 'md:hidden'
+        )}
+      >
         <button
           className={cn(
             'flex items-center gap-1.5 text-[0.625rem] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded',
@@ -852,7 +927,11 @@ export function Sidebar({
           onClick={() => {
             if (!isSearching) onToggle();
           }}
-          title={effectiveCollapsed ? `Expand ${title}` : `Collapse ${title}`}
+          title={
+            effectiveCollapsed
+              ? t('sidebar.expandSection', { title })
+              : t('sidebar.collapseSection', { title })
+          }
         >
           {effectiveCollapsed ? (
             <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -898,29 +977,60 @@ export function Sidebar({
     );
   };
 
+  const showSectionBody = (sectionCollapsed: boolean) =>
+    desktopCollapsed || isSearching || !sectionCollapsed;
+
   return (
     <nav
-      className="sidebar w-60 h-full min-h-0 overflow-hidden bg-card border-r border-border flex flex-col"
+      className={cn(
+        'sidebar h-full min-h-0 overflow-hidden bg-card border-r border-border flex flex-col',
+        desktopCollapsed ? 'w-full md:w-14' : 'w-60'
+      )}
       aria-label="Conversations"
+      data-desktop-collapsed={desktopCollapsed ? 'true' : undefined}
     >
       {/* Header */}
-      <div className="px-3 py-2 border-b border-border">
+      <div
+        className={cn(
+          'px-3 py-2 border-b border-border',
+          desktopCollapsed && 'md:px-1.5 md:flex md:flex-col md:items-center md:gap-1.5'
+        )}
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={handleToggleDesktopCollapsed}
+          title={desktopCollapsed ? t('sidebar.expand') : t('sidebar.collapse')}
+          aria-label={desktopCollapsed ? t('sidebar.expand') : t('sidebar.collapse')}
+          aria-expanded={!desktopCollapsed}
+          className="hidden md:inline-flex h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+        >
+          {desktopCollapsed ? (
+            <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+          )}
+        </Button>
         <Button
           variant="outline"
           size="sm"
           onClick={onNewMessage}
           title="Add channel or contact"
           aria-label="Add channel or contact"
-          className="h-8 w-full justify-start gap-2 border-primary/20 bg-primary/5 px-3 text-[0.8125rem] text-primary hover:bg-primary/10 hover:text-primary"
+          className={cn(
+            'h-8 w-full justify-start gap-2 border-primary/20 bg-primary/5 px-3 text-[0.8125rem] text-primary hover:bg-primary/10 hover:text-primary',
+            desktopCollapsed && 'md:w-8 md:justify-center md:px-0 md:gap-0'
+          )}
         >
           <SquarePen className="h-4 w-4" />
-          <span>Add Channel/Contact</span>
+          <span className={cn(desktopCollapsed && 'md:hidden')}>Add Channel/Contact</span>
         </Button>
       </div>
 
       {/* List */}
       <div className="flex-1 min-h-0 overflow-y-auto [contain:layout_paint]">
-        <div className="px-3 py-2 border-b border-border/60">
+        <div className={cn('px-3 py-2 border-b border-border/60', desktopCollapsed && 'md:hidden')}>
           <div className="relative min-w-0">
             <Input
               type="text"
@@ -947,21 +1057,33 @@ export function Sidebar({
         {toolRows.length > 0 && (
           <>
             {renderSectionHeader('Tools', toolsCollapsed, () => setToolsCollapsed((prev) => !prev))}
-            {(isSearching || !toolsCollapsed) && toolRows}
+            {showSectionBody(toolsCollapsed) && toolRows}
           </>
         )}
 
         {/* Mark All Read */}
         {!query && Object.values(unreadCounts).some((c) => c > 0) && (
           <div
-            className="px-3 py-2 cursor-pointer flex items-center gap-2 border-l-2 border-transparent hover:bg-accent transition-colors text-[0.8125rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(
+              'px-3 py-2 cursor-pointer flex items-center gap-2 border-l-2 border-transparent hover:bg-accent transition-colors text-[0.8125rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              desktopCollapsed && 'md:justify-center md:px-1.5'
+            )}
             role="button"
             tabIndex={0}
+            title="Mark all as read"
+            aria-label="Mark all as read"
             onKeyDown={handleKeyboardActivate}
             onClick={onMarkAllRead}
           >
             <CheckCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <span className="flex-1 truncate text-muted-foreground">Mark all as read</span>
+            <span
+              className={cn(
+                'flex-1 truncate text-muted-foreground',
+                desktopCollapsed && 'md:hidden'
+              )}
+            >
+              Mark all as read
+            </span>
           </div>
         )}
 
@@ -976,7 +1098,7 @@ export function Sidebar({
               favoritesUnreadCount,
               favoritesHasMention
             )}
-            {(isSearching || !favoritesCollapsed) &&
+            {showSectionBody(favoritesCollapsed) &&
               favoriteRows.map((row) => renderConversationRow(row))}
           </>
         )}
@@ -992,7 +1114,7 @@ export function Sidebar({
               channelsUnreadCount,
               channelsHasMention
             )}
-            {(isSearching || !channelsCollapsed) &&
+            {showSectionBody(channelsCollapsed) &&
               channelRows.map((row) => renderConversationRow(row))}
           </>
         )}
@@ -1008,7 +1130,7 @@ export function Sidebar({
               contactsUnreadCount,
               contactsUnreadCount > 0
             )}
-            {(isSearching || !contactsCollapsed) &&
+            {showSectionBody(contactsCollapsed) &&
               contactRows.map((row) => renderConversationRow(row))}
           </>
         )}
@@ -1023,7 +1145,7 @@ export function Sidebar({
               'repeaters',
               repeatersUnreadCount
             )}
-            {(isSearching || !repeatersCollapsed) &&
+            {showSectionBody(repeatersCollapsed) &&
               repeaterRows.map((row) => renderConversationRow(row))}
           </>
         )}
@@ -1039,7 +1161,7 @@ export function Sidebar({
               roomsUnreadCount,
               roomsUnreadCount > 0
             )}
-            {(isSearching || !roomsCollapsed) && roomRows.map((row) => renderConversationRow(row))}
+            {showSectionBody(roomsCollapsed) && roomRows.map((row) => renderConversationRow(row))}
           </>
         )}
 
@@ -1049,7 +1171,12 @@ export function Sidebar({
           nonFavoriteChannels.length === 0 &&
           nonFavoriteRepeaters.length === 0 &&
           favoriteItems.length === 0 && (
-            <div className="p-5 text-center text-muted-foreground">
+            <div
+              className={cn(
+                'p-5 text-center text-muted-foreground',
+                desktopCollapsed && 'md:hidden'
+              )}
+            >
               {query ? 'No matches found' : 'No conversations yet'}
             </div>
           )}

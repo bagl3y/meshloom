@@ -6,8 +6,21 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+
+// Short curated list from docs.meshcore.io/cli_commands — not a live scrape.
+const FREQUENT_CLI_COMMANDS = [
+  { command: 'ver', hint: 'Firmware version' },
+  { command: 'clock', hint: 'UTC time' },
+  { command: 'clock sync', hint: 'Sync clock' },
+  { command: 'advert', hint: 'Flood advert' },
+  { command: 'advert.zerohop', hint: 'Zero-hop advert' },
+  { command: 'neighbors', hint: 'Nearby neighbors' },
+  { command: 'get name', hint: 'Node name' },
+  { command: 'reboot', hint: 'Reboot (no reply)' },
+] as const;
 
 export function ConsolePane({
   history,
@@ -18,9 +31,11 @@ export function ConsolePane({
   loading: boolean;
   onSend: (command: string) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [input, setInput] = useState('');
   // -1 = editing the live input; 0+ = index into sentCommands (most recent first)
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [helpOpen, setHelpOpen] = useState(false);
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevLoadingRef = useRef(loading);
@@ -59,6 +74,12 @@ export function ConsolePane({
     [historyIndex, sentCommands]
   );
 
+  const insertCommand = useCallback((command: string) => {
+    setInput(command);
+    setHistoryIndex(-1);
+    inputRef.current?.focus();
+  }, []);
+
   const handleSubmit = useCallback(
     async (e: FormEvent) => {
       e.preventDefault();
@@ -75,15 +96,51 @@ export function ConsolePane({
     <div className="border border-border rounded-lg overflow-hidden col-span-full">
       <div className="px-3 py-2 bg-muted/50 border-b border-border flex items-center justify-between gap-2">
         <h3 className="text-sm font-medium">Console</h3>
-        <a
-          href="https://docs.meshcore.io/cli_commands/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-primary hover:underline"
-        >
-          CLI docs
-        </a>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            aria-expanded={helpOpen}
+            aria-controls="repeater-cli-help"
+            onClick={() => setHelpOpen((open) => !open)}
+            className="text-xs text-primary hover:underline"
+          >
+            {t('repeater.help')}
+          </button>
+          <a
+            href="https://docs.meshcore.io/cli_commands/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-primary hover:underline"
+          >
+            {t('repeater.cliDocs')}
+          </a>
+        </div>
       </div>
+      {helpOpen && (
+        <div
+          id="repeater-cli-help"
+          className="px-3 py-2 border-b border-border bg-muted/30 space-y-1.5"
+        >
+          <p className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
+            Frequent commands
+          </p>
+          <ul className="flex flex-wrap gap-1.5">
+            {FREQUENT_CLI_COMMANDS.map((item) => (
+              <li key={item.command}>
+                <button
+                  type="button"
+                  title={item.hint}
+                  aria-label={`Insert ${item.command}`}
+                  onClick={() => insertCommand(item.command)}
+                  className="font-mono text-[0.625rem] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                >
+                  {item.command}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div
         ref={outputRef}
         className="h-48 overflow-y-auto p-3 font-mono text-xs bg-console-bg/50 text-console space-y-1"

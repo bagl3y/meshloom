@@ -9,6 +9,9 @@ import {
   getEffectiveContactRoute,
   isValidLocation,
   resolvePath,
+  resolveLocalHopDisplay,
+  resolveHopDisplay,
+  directoryHopLocation,
   formatDistance,
   formatHopCounts,
   formatPathHopWidths,
@@ -876,5 +879,141 @@ describe('formatPathHopWidths', () => {
         { path: '1A2B', path_len: 2, received_at: 1700000001 }, // 1-byte
       ])
     ).toBe('1B/2B');
+  });
+});
+
+describe('resolveLocalHopDisplay', () => {
+  const uniqueRepeater = createContact({
+    public_key: '1A2B' + 'A'.repeat(60),
+    name: 'HillTop',
+    type: CONTACT_TYPE_REPEATER,
+  });
+  const client = createContact({
+    public_key: '1A2B' + 'C'.repeat(60),
+    name: 'Alice',
+    type: 1,
+  });
+  const otherRepeater = createContact({
+    public_key: '1A2B' + 'D'.repeat(60),
+    name: 'Valley',
+    type: CONTACT_TYPE_REPEATER,
+  });
+
+  it('forces 1-byte hops to hex-only even with a unique type-2 match', () => {
+    expect(resolveLocalHopDisplay({ prefix: '1A', matches: [uniqueRepeater] })).toEqual({
+      kind: 'hex-only',
+    });
+  });
+
+  it('names a unique type-2 match at 2 bytes', () => {
+    expect(resolveLocalHopDisplay({ prefix: '1A2B', matches: [uniqueRepeater] })).toEqual({
+      kind: 'known',
+      contact: uniqueRepeater,
+    });
+  });
+
+  it('names a unique type-2 match at 3 bytes', () => {
+    const threeByte = createContact({
+      public_key: '1A2B3C' + 'A'.repeat(58),
+      name: 'Ridge',
+      type: CONTACT_TYPE_REPEATER,
+    });
+    expect(resolveLocalHopDisplay({ prefix: '1A2B3C', matches: [threeByte] })).toEqual({
+      kind: 'known',
+      contact: threeByte,
+    });
+  });
+
+  it('returns unknown for 2-byte hops with no matches', () => {
+    expect(resolveLocalHopDisplay({ prefix: 'FFFF', matches: [] })).toEqual({
+      kind: 'unknown',
+    });
+  });
+
+  it('returns unknown for 3-byte hops with no matches', () => {
+    expect(resolveLocalHopDisplay({ prefix: 'AABBCC', matches: [] })).toEqual({
+      kind: 'unknown',
+    });
+  });
+
+  it('returns ambiguous for 2-byte hops with multiple type-2 matches', () => {
+    expect(
+      resolveLocalHopDisplay({ prefix: '1A2B', matches: [uniqueRepeater, otherRepeater] })
+    ).toEqual({ kind: 'ambiguous', matches: [uniqueRepeater, otherRepeater] });
+  });
+
+  it('does not name a unique non-repeater at 2 bytes', () => {
+    expect(resolveLocalHopDisplay({ prefix: '1A2B', matches: [client] })).toEqual({
+      kind: 'unknown',
+    });
+  });
+});
+
+describe('resolveHopDisplay', () => {
+  const uniqueRepeater = createContact({
+    public_key: '1A2B' + 'A'.repeat(60),
+    name: 'HillTop',
+    type: CONTACT_TYPE_REPEATER,
+  });
+  const otherRepeater = createContact({
+    public_key: '1A2B' + 'B'.repeat(60),
+    name: 'Valley',
+    type: CONTACT_TYPE_REPEATER,
+  });
+  const directory = { name: 'RemoteHill', source: 'corescope' as const };
+
+  it('never lets CoreScope name a 1-byte hop', () => {
+    expect(resolveHopDisplay({ prefix: '1A', matches: [uniqueRepeater] }, directory)).toEqual({
+      kind: 'hex-only',
+    });
+  });
+
+  it('keeps a local unique type-2 over CoreScope', () => {
+    expect(resolveHopDisplay({ prefix: '1A2B', matches: [uniqueRepeater] }, directory)).toEqual({
+      kind: 'known',
+      contact: uniqueRepeater,
+    });
+  });
+
+  it('does not guess when local is ambiguous', () => {
+    expect(
+      resolveHopDisplay({ prefix: '1A2B', matches: [uniqueRepeater, otherRepeater] }, directory)
+    ).toEqual({ kind: 'ambiguous', matches: [uniqueRepeater, otherRepeater] });
+  });
+
+  it('uses CoreScope only for unknown 2-byte hops', () => {
+    expect(resolveHopDisplay({ prefix: 'FFFF', matches: [] }, directory)).toEqual({
+      kind: 'directory',
+      name: 'RemoteHill',
+      source: 'corescope',
+    });
+  });
+});
+
+describe('directoryHopLocation', () => {
+  const directoryGps = {
+    name: 'RemoteHill',
+    source: 'corescope' as const,
+    lat: 48.1,
+    lon: 2.2,
+  };
+
+  it('returns CoreScope GPS only when the hop is directory-only', () => {
+    expect(directoryHopLocation({ prefix: 'FFFF', matches: [] }, directoryGps)).toEqual({
+      lat: 48.1,
+      lon: 2.2,
+      name: 'RemoteHill',
+    });
+  });
+
+  it('does not use internet GPS when radio already knows the repeater', () => {
+    const local = createContact({
+      public_key: '1A2B' + 'A'.repeat(60),
+      name: 'HillTop',
+      type: CONTACT_TYPE_REPEATER,
+      lat: 47.0,
+      lon: 1.0,
+    });
+    expect(directoryHopLocation({ prefix: '1A2B', matches: [local] }, directoryGps)).toBeNull();
   });
 });

@@ -393,6 +393,9 @@ export interface AppSettings {
   auto_resend_channel: boolean;
   telemetry_interval_hours: number;
   telemetry_routed_hourly: boolean;
+  stale_contact_days?: number;
+  directory_enabled?: boolean;
+  directory_url?: string;
 }
 
 export interface AppSettingsUpdate {
@@ -407,6 +410,80 @@ export interface AppSettingsUpdate {
   discovery_blocked_types?: number[];
   telemetry_interval_hours?: number;
   telemetry_routed_hourly?: boolean;
+  stale_contact_days?: number;
+  directory_enabled?: boolean;
+  directory_url?: string;
+}
+
+export interface DirectoryHopHit {
+  name: string;
+  source: 'corescope';
+  hash_width: number;
+  public_key?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+}
+
+export interface DirectoryResolveHopsResponse {
+  resolved: Record<string, DirectoryHopHit>;
+}
+
+export interface DirectoryMapNode {
+  public_key: string;
+  name: string;
+  role: 'repeater';
+  lat: number;
+  lon: number;
+  source: 'corescope';
+}
+
+export interface DirectoryMapNodesResponse {
+  nodes: DirectoryMapNode[];
+}
+
+export interface ContactGroup {
+  id: number;
+  name: string;
+  sort_order: number;
+  created_at: number;
+  public_keys: string[];
+}
+
+export interface BackupContact {
+  public_key: string;
+  name: string | null;
+  type: number;
+  flags: number;
+  favorite: boolean;
+  first_seen?: number | null;
+  last_seen?: number | null;
+}
+
+export interface BackupChannel {
+  key: string;
+  name: string;
+  is_hashtag: boolean;
+  favorite: boolean;
+  muted: boolean;
+  flood_scope_override?: string | null;
+  path_hash_mode_override?: number | null;
+}
+
+export interface BackupExport {
+  format: string;
+  exported_at: number;
+  contacts: BackupContact[];
+  channels: BackupChannel[];
+  settings: AppSettings | null;
+  groups: ContactGroup[];
+}
+
+export interface BackupRestoreResult {
+  contacts_upserted: number;
+  channels_upserted: number;
+  settings_updated: boolean;
+  groups_upserted: number;
+  private_key_warning: string;
 }
 
 export interface TelemetrySchedule {

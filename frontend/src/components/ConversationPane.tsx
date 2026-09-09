@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type Ref } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { ChatHeader } from './ChatHeader';
 import { MessageInput, type MessageInputHandle } from './MessageInput';
@@ -70,7 +71,7 @@ interface ConversationPaneProps {
   onSelectConversation: (conversation: Conversation) => void;
   onOpenContactInfo: (publicKey: string, fromChannel?: boolean) => void;
   onOpenChannelInfo: (channelKey: string) => void;
-  onSenderClick: (sender: string) => void;
+  onSenderClick: (sender: string, quote?: string) => void;
   onChannelReferenceClick?: (channelName: string) => void;
   onLoadOlder: () => Promise<void>;
   onResendChannelMessage: (messageId: number, newTimestamp?: boolean) => Promise<void>;
@@ -79,6 +80,7 @@ interface ConversationPaneProps {
   onJumpToBottom: () => void;
   onDismissUnreadMarker: () => void;
   onSendMessage: (text: string) => Promise<void>;
+  onMessageDeleted?: (messageId: number) => void;
   onToggleNotifications: () => void;
   pushSupported?: boolean;
   pushSubscribed?: boolean;
@@ -91,6 +93,7 @@ interface ConversationPaneProps {
   onClearRepeaterAutoLogin: () => void;
   blockedKeys?: string[];
   blockedNames?: string[];
+  directoryEnabled?: boolean;
 }
 
 function LoadingPane({ label }: { label: string }) {
@@ -159,6 +162,7 @@ export function ConversationPane({
   onJumpToBottom,
   onDismissUnreadMarker,
   onSendMessage,
+  onMessageDeleted,
   onToggleNotifications,
   pushSupported,
   pushSubscribed,
@@ -171,7 +175,9 @@ export function ConversationPane({
   onClearRepeaterAutoLogin,
   blockedKeys,
   blockedNames,
+  directoryEnabled,
 }: ConversationPaneProps) {
+  const { t } = useTranslation();
   const [roomAuthenticated, setRoomAuthenticated] = useState(false);
   const activeContactIsRepeater = useMemo(() => {
     if (!activeConversation || activeConversation.type !== 'contact') return false;
@@ -216,6 +222,7 @@ export function ConversationPane({
               config={config}
               blockedKeys={blockedKeys}
               blockedNames={blockedNames}
+              directoryEnabled={directoryEnabled}
               onSelectContact={(contact) =>
                 onSelectConversation({
                   type: 'contact',
@@ -344,7 +351,8 @@ export function ConversationPane({
           onDismissUnreadMarker={
             activeConversation.type === 'channel' ? onDismissUnreadMarker : undefined
           }
-          onSenderClick={activeConversation.type === 'channel' ? onSenderClick : undefined}
+          onSenderClick={onSenderClick}
+          onSendMessage={onSendMessage}
           onChannelReferenceClick={onChannelReferenceClick}
           onLoadOlder={onLoadOlder}
           onResendChannelMessage={
@@ -359,6 +367,7 @@ export function ConversationPane({
           loadingNewer={loadingNewer}
           onLoadNewer={onLoadNewer}
           onJumpToBottom={onJumpToBottom}
+          onMessageDeleted={onMessageDeleted}
         />
       )}
       {showRoomChat && !(activeConversation.type === 'contact' && isPrefixOnlyActiveContact) ? (
@@ -367,11 +376,18 @@ export function ConversationPane({
           onSend={onSendMessage}
           disabled={!health?.radio_connected}
           conversationType={activeConversation.type}
+          conversationId={
+            activeConversation.type === 'contact' || activeConversation.type === 'channel'
+              ? activeConversation.id
+              : undefined
+          }
           senderName={config?.name}
+          radioLat={config?.lat}
+          radioLon={config?.lon}
           placeholder={
             !health?.radio_connected
-              ? 'Radio not connected'
-              : `Message ${activeConversation.name}...`
+              ? t('chat.radioNotConnected')
+              : t('chat.messageTo', { name: activeConversation.name })
           }
         />
       ) : null}

@@ -4,8 +4,9 @@ import os
 import platform
 import struct
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from fastapi import APIRouter
 from meshcore import EventType
@@ -147,10 +148,13 @@ class DebugSnapshotResponse(BaseModel):
 
 
 def _build_system_info() -> DebugSystemInfo:
+    sysconf = cast("Callable[[str], int] | None", getattr(os, "sysconf", None))
     try:
-        # os.sysconf is available on Linux/macOS
-        page_size = os.sysconf("SC_PAGE_SIZE")
-        page_count = os.sysconf("SC_PHYS_PAGES")
+        # os.sysconf is available on Linux/macOS; Windows pyright has no stub.
+        if sysconf is None:
+            raise AttributeError("os.sysconf is unavailable")
+        page_size = sysconf("SC_PAGE_SIZE")
+        page_count = sysconf("SC_PHYS_PAGES")
         total_ram_mb = (page_size * page_count) // (1024 * 1024)
     except (AttributeError, ValueError, OSError):
         total_ram_mb = 0

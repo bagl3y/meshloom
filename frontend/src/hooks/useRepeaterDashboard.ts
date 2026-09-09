@@ -25,12 +25,53 @@ import {
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 const MAX_CACHED_REPEATERS = 20;
+const MAX_STORED_CONSOLE_ENTRIES = 100;
+
+export const REPEATER_CONSOLE_HISTORY_KEY_PREFIX = 'remoteterm-repeater-console-history';
 
 interface ConsoleEntry {
   command: string;
   response: string;
   timestamp: number;
   outgoing: boolean;
+}
+
+function consoleHistoryStorageKey(publicKey: string): string {
+  return `${REPEATER_CONSOLE_HISTORY_KEY_PREFIX}:${publicKey}`;
+}
+
+function isConsoleEntry(value: unknown): value is ConsoleEntry {
+  if (!value || typeof value !== 'object') return false;
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry.command === 'string' &&
+    typeof entry.response === 'string' &&
+    typeof entry.timestamp === 'number' &&
+    typeof entry.outgoing === 'boolean'
+  );
+}
+
+function loadStoredConsoleHistory(publicKey: string): ConsoleEntry[] {
+  try {
+    const raw = localStorage.getItem(consoleHistoryStorageKey(publicKey));
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isConsoleEntry).slice(-MAX_STORED_CONSOLE_ENTRIES);
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredConsoleHistory(publicKey: string, history: ConsoleEntry[]): void {
+  try {
+    localStorage.setItem(
+      consoleHistoryStorageKey(publicKey),
+      JSON.stringify(history.slice(-MAX_STORED_CONSOLE_ENTRIES))
+    );
+  } catch {
+    // localStorage may be unavailable
+  }
 }
 
 interface PaneData {
@@ -236,7 +277,7 @@ export function useRepeaterDashboard(
   );
 
   const [consoleHistory, setConsoleHistory] = useState<ConsoleEntry[]>(
-    cachedState?.consoleHistory ?? []
+    cachedState?.consoleHistory ?? (conversationId ? loadStoredConsoleHistory(conversationId) : [])
   );
   const [consoleLoading, setConsoleLoading] = useState(false);
 
@@ -268,6 +309,7 @@ export function useRepeaterDashboard(
       paneStates,
       consoleHistory,
     });
+    saveStoredConsoleHistory(conversationId, consoleHistory);
   }, [
     consoleHistory,
     conversationId,

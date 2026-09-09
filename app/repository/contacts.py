@@ -282,6 +282,28 @@ class ContactRepository:
         return result
 
     @staticmethod
+    async def list_stale_public_keys(cutoff: int) -> list[str]:
+        """Public keys matching the bulk-delete last-heard-before filter.
+
+        A contact is stale when ``COALESCE(last_seen, 0)`` and ``first_seen``
+        are both at or before ``cutoff``. NULL ``first_seen`` excludes the row
+        (NEW_CONTACT / radio sync / POST contact leave RF timestamps unset).
+        Favorites are never returned — automatic purge must not remove them.
+        """
+        async with db.readonly() as conn:
+            async with conn.execute(
+                """
+                SELECT public_key FROM contacts
+                WHERE favorite = 0
+                  AND COALESCE(last_seen, 0) <= ?
+                  AND first_seen <= ?
+                """,
+                (cutoff, cutoff),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [row["public_key"] for row in rows]
+
+    @staticmethod
     async def get_all(limit: int = 100, offset: int = 0) -> list[Contact]:
         async with db.readonly() as conn:
             async with conn.execute(

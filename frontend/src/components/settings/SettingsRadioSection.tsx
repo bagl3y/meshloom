@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronDown, Download, MapPinned, Upload } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { ChevronDown, Download, MapPinned, Share2, Upload } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
@@ -29,6 +30,11 @@ import type {
   RadioRegionDiscoveryResponse,
   RadioStatsSnapshot,
 } from '../../types';
+
+function canShareRadioLocation(lat: number, lon: number): boolean {
+  if (lat === 0 && lon === 0) return false;
+  return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+}
 
 function formatUptime(secs: number): string {
   const days = Math.floor(secs / 86400);
@@ -178,6 +184,7 @@ export function SettingsRadioSection({
   onClose: () => void;
   className?: string;
 }) {
+  const { t } = useTranslation();
   // Radio config state
   const [name, setName] = useState('');
   const [lat, setLat] = useState('');
@@ -961,24 +968,46 @@ export function SettingsRadioSection({
 
       {/* ── Location ── */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <h3 className="text-base font-semibold tracking-tight">Location</h3>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleGetLocation}
-            disabled={gettingLocation}
-          >
-            {gettingLocation ? (
-              'Getting...'
-            ) : (
-              <>
-                <MapPinned className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                Use My Location
-              </>
-            )}
-          </Button>
+          <div className="flex flex-wrap justify-end gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!canShareRadioLocation(config.lat, config.lon)) {
+                  toast.error(t('share.noLocation'));
+                  return;
+                }
+                void navigator.clipboard
+                  .writeText(`${config.lat.toFixed(5)}, ${config.lon.toFixed(5)}`)
+                  .then(() => {
+                    toast.success(t('share.locationCopied'));
+                  });
+              }}
+              disabled={!canShareRadioLocation(config.lat, config.lon)}
+            >
+              <Share2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              {t('share.shareLocation')}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleGetLocation}
+              disabled={gettingLocation}
+            >
+              {gettingLocation ? (
+                'Getting...'
+              ) : (
+                <>
+                  <MapPinned className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  Use My Location
+                </>
+              )}
+            </Button>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">

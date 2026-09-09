@@ -5,11 +5,18 @@
  * behavior for both DM and channel conversations.
  */
 
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createRef } from 'react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { MessageInput } from '../components/MessageInput';
+import { MessageInput, type MessageInputHandle } from '../components/MessageInput';
+import i18n from '../i18n';
 import { toast } from '../components/ui/sonner';
+import {
+  conversationDraftStorageKey,
+  loadConversationDraft,
+  saveConversationDraft,
+} from '../utils/conversationDrafts';
 
 // Mock sonner (toast)
 vi.mock('../components/ui/sonner', () => ({
@@ -51,11 +58,11 @@ describe('MessageInput', () => {
   }
 
   function getInput() {
-    return screen.getByPlaceholderText('Type a message...') as HTMLTextAreaElement;
+    return screen.getByRole('textbox') as HTMLTextAreaElement;
   }
 
   function getSendButton() {
-    return screen.getByRole('button', { name: /send/i }) as HTMLButtonElement;
+    return screen.getByRole('button', { name: i18n.t('chat.send') }) as HTMLButtonElement;
   }
 
   describe('send button state', () => {
@@ -153,9 +160,11 @@ describe('MessageInput', () => {
       const text = 'x'.repeat(141);
       fireEvent.change(getInput(), { target: { value: text } });
       // Rendered in both desktop and mobile variants
-      expect(screen.getAllByText(/may impact multi-repeater hop delivery/).length).toBeGreaterThan(
-        0
-      );
+      expect(
+        screen.getAllByText(
+          (_, node) => node?.textContent?.includes(i18n.t('chat.multiHopWarn')) ?? false
+        ).length
+      ).toBeGreaterThan(0);
     });
 
     it('shows truncation warning when exceeding DM hard limit', () => {
@@ -164,14 +173,18 @@ describe('MessageInput', () => {
       const text = 'x'.repeat(157);
       fireEvent.change(getInput(), { target: { value: text } });
       // Rendered in both desktop and mobile variants
-      expect(screen.getAllByText(/likely truncated by radio/).length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText(
+          (_, node) => node?.textContent?.includes(i18n.t('chat.truncated')) ?? false
+        ).length
+      ).toBeGreaterThan(0);
     });
 
     it('shows no warning for short messages', () => {
       renderInput({ conversationType: 'contact' });
       fireEvent.change(getInput(), { target: { value: 'Hello' } });
-      expect(screen.queryByText(/truncated/)).toBeNull();
-      expect(screen.queryByText(/may impact/)).toBeNull();
+      expect(screen.queryByText(i18n.t('chat.truncated'))).toBeNull();
+      expect(screen.queryByText(i18n.t('chat.multiHopWarn'))).toBeNull();
     });
   });
 
@@ -202,10 +215,244 @@ describe('MessageInput', () => {
       fireEvent.click(getSendButton());
 
       expect(await screen.findByDisplayValue('Hello')).toBeTruthy();
-      expect(mockToast.error).toHaveBeenCalledWith('Radio did not confirm send', {
+      expect(mockToast.error).toHaveBeenCalledWith(i18n.t('chat.radioNoConfirm'), {
         description:
           'Send command was issued to the radio, but no response was heard back. The message may or may not have sent successfully.',
       });
+    });
+  });
+
+  describe('reply quote and drafts', () => {
+    const channelId = 'C3B889530D4F02DB5662EA13C417F530';
+
+    beforeEach(() => {
+      localStorage.clear();
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('prefixes @[Name] and shows a visual quote via startReply', () => {
+      const ref = createRef<MessageInputHandle>();
+      render(
+        <MessageInput
+          ref={ref}
+          onSend={onSend}
+          disabled={false}
+          conversationType="channel"
+          conversationId={channelId}
+        />
+      );
+
+      act(() => {
+        ref.current?.startReply('Alice', 'hello world');
+      });
+
+      expect(screen.getByText(i18n.t('chat.replyTo', { sender: 'Alice' }))).toBeInTheDocument();
+      expect(screen.getByText('hello world')).toBeInTheDocument();
+      expect(getInput().value).toBe('@[Alice] ');
+    });
+
+    it('saves a draft keyed by getStateKey and restores it on remount', () => {
+      const { unmount } = render(
+        <MessageInput
+          onSend={onSend}
+          disabled={false}
+          conversationType="channel"
+          conversationId={channelId}
+        />
+      );
+
+      fireEvent.change(getInput(), { target: { value: 'draft text' } });
+      expect(loadConversationDraft('channel', channelId)).toBe('draft text');
+      expect(localStorage.getItem(conversationDraftStorageKey('channel', channelId))).toBe(
+        'draft text'
+      );
+
+      unmount();
+      render(
+        <MessageInput
+          onSend={onSend}
+          disabled={false}
+          conversationType="channel"
+          conversationId={channelId}
+        />
+      );
+
+      expect(getInput().value).toBe('draft text');
+    });
+
+    it('deletes the draft key when the text is emptied', () => {
+      saveConversationDraft('channel', channelId, 'keep me');
+      render(
+        <MessageInput
+          onSend={onSend}
+          disabled={false}
+          conversationType="channel"
+          conversationId={channelId}
+        />
+      );
+
+      fireEvent.change(getInput(), { target: { value: '   ' } });
+      expect(localStorage.getItem(conversationDraftStorageKey('channel', channelId))).toBeNull();
+    });
+
+    it('sends a GIF chosen from Giphy search results', async () => {
+      localStorage.setItem('remoteterm-giphy-api-key', 'test-key');
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              id: 'gif42',
+              title: 'Party',
+              images: {
+                fixed_height_small: { url: 'https://media.giphy.com/media/gif42/giphy.gif' },
+              },
+            },
+          ],
+        }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      render(
+        <MessageInput
+          onSend={onSend}
+          disabled={false}
+          conversationType="channel"
+          conversationId={channelId}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('gif-picker-trigger'));
+      expect(await screen.findByRole('button', { name: 'Party' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Party' }));
+
+      await waitFor(() => {
+        expect(onSend).toHaveBeenCalledWith('g:gif42');
+      });
+      vi.unstubAllGlobals();
+    });
+
+    it('sends a compact g:<id> payload from a pasted Giphy URL', async () => {
+      render(
+        <MessageInput
+          onSend={onSend}
+          disabled={false}
+          conversationType="channel"
+          conversationId={channelId}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('gif-picker-trigger'));
+      expect(screen.getByTestId('gif-picker')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText(i18n.t('chat.gifPaste')), {
+        target: { value: 'https://giphy.com/gifs/funny-cat-abc123' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('chat.gifUse') }));
+
+      expect(await screen.findByTestId('gif-picker-trigger')).toBeInTheDocument();
+      expect(onSend).toHaveBeenCalledWith('g:abc123');
+      expect(screen.queryByTestId('gif-picker')).toBeNull();
+    });
+
+    it('inserts a composer emoji into the draft text', async () => {
+      render(
+        <MessageInput
+          onSend={onSend}
+          disabled={false}
+          conversationType="channel"
+          conversationId={channelId}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('emoji-picker-trigger'));
+      expect(screen.getByTestId('emoji-picker')).toBeInTheDocument();
+      fireEvent.click(screen.getAllByRole('button', { name: '👍' })[0]);
+
+      expect(getInput().value).toBe('👍');
+      expect(onSend).not.toHaveBeenCalled();
+    });
+
+    it('sends an Open location pin from radio coordinates', async () => {
+      render(
+        <MessageInput
+          onSend={onSend}
+          disabled={false}
+          conversationType="channel"
+          conversationId={channelId}
+          senderName="FR-06-PSCL-Base"
+          radioLat={43.58}
+          radioLon={7.12}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('share-location-trigger'));
+
+      await waitFor(() => {
+        expect(onSend).toHaveBeenCalledWith('m:43.580000,7.120000|FR-06-PSCL-Base|loc');
+      });
+    });
+
+    it('toasts when sharing location without radio coordinates', () => {
+      render(
+        <MessageInput
+          onSend={onSend}
+          disabled={false}
+          conversationType="channel"
+          conversationId={channelId}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('share-location-trigger'));
+      expect(onSend).not.toHaveBeenCalled();
+      expect(mockToast.error).toHaveBeenCalledWith(i18n.t('share.noLocation'));
+    });
+
+    it('prefixes a reply mention when sending a GIF', async () => {
+      const ref = createRef<MessageInputHandle>();
+      render(
+        <MessageInput
+          ref={ref}
+          onSend={onSend}
+          disabled={false}
+          conversationType="channel"
+          conversationId={channelId}
+        />
+      );
+
+      act(() => {
+        ref.current?.startReply('Alice', 'hello world');
+      });
+
+      fireEvent.click(screen.getByTestId('gif-picker-trigger'));
+      fireEvent.change(screen.getByLabelText(i18n.t('chat.gifPaste')), {
+        target: { value: 'g:xyz99' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('chat.gifUse') }));
+
+      await waitFor(() => {
+        expect(onSend).toHaveBeenCalledWith('@[Alice] g:xyz99');
+      });
+    });
+
+    it('clears the draft after a successful send', async () => {
+      render(
+        <MessageInput
+          onSend={onSend}
+          disabled={false}
+          conversationType="channel"
+          conversationId={channelId}
+        />
+      );
+
+      fireEvent.change(getInput(), { target: { value: 'Hello' } });
+      fireEvent.click(getSendButton());
+
+      expect(await screen.findByDisplayValue('')).toBeTruthy();
+      expect(localStorage.getItem(conversationDraftStorageKey('channel', channelId))).toBeNull();
     });
   });
 });

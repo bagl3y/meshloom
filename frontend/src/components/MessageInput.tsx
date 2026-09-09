@@ -10,14 +10,20 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
+import { MapPin, Smile, Sticker, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from './ui/button';
 import { toast } from './ui/sonner';
 import { cn } from '@/lib/utils';
+import { ComposerEmojiPicker } from './ComposerEmojiPicker';
+import { GifPicker } from './GifPicker';
 import {
   getTextReplaceEnabled,
   getTextReplaceMapJson,
   applyTextReplacements,
 } from '../utils/textReplace';
+import { loadConversationDraft, saveConversationDraft } from '../utils/conversationDrafts';
+import { formatGif, formatLocation } from '../utils/meshcoreOpenPayloads';
 
 // MeshCore message size limits (empirically determined from LoRa packet constraints)
 // Direct delivery allows ~156 bytes; multi-hop requires buffer for path growth.
@@ -42,8 +48,13 @@ interface MessageInputProps {
   placeholder?: string;
   /** Conversation type for character limit calculation */
   conversationType?: 'contact' | 'channel' | 'raw';
+  /** Channel key or contact public key — drafts are keyed by getStateKey(type, id). */
+  conversationId?: string;
   /** Sender name (radio name) for channel message limit calculation */
   senderName?: string;
+  /** Radio advert coordinates used to send an Open location pin. */
+  radioLat?: number | null;
+  radioLon?: number | null;
 }
 
 type LimitState = 'normal' | 'warning' | 'danger' | 'error';
@@ -51,15 +62,36 @@ type LimitState = 'normal' | 'warning' | 'danger' | 'error';
 export interface MessageInputHandle {
   appendText: (text: string) => void;
   focus: () => void;
+  startReply: (sender: string, quote: string) => void;
+}
+
+type DraftIdentity = { type: 'contact' | 'channel'; id: string };
+
+function draftIdentityOf(
+  conversationType?: 'contact' | 'channel' | 'raw',
+  conversationId?: string
+): DraftIdentity | null {
+  if ((conversationType === 'contact' || conversationType === 'channel') && conversationId) {
+    return { type: conversationType, id: conversationId };
+  }
+  return null;
 }
 
 export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(function MessageInput(
-  { onSend, disabled, placeholder, conversationType, senderName },
+  { onSend, disabled, placeholder, conversationType, conversationId, senderName, radioLat, radioLon },
   ref
 ) {
+  const { t } = useTranslation();
   const [text, setText] = useState('');
+  const [replyQuote, setReplyQuote] = useState<{ sender: string; quote: string } | null>(null);
   const [sending, setSending] = useState(false);
+  const [composerPanel, setComposerPanel] = useState<'gif' | 'emoji' | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef(text);
+  textRef.current = text;
+  const draftIdentity = draftIdentityOf(conversationType, conversationId);
+  const draftKeyRef = useRef<DraftIdentity | null>(null);
 
   /** Resize textarea to fit content, clamped between 1 row and ~6 rows. */
   const autoResize = useCallback(() => {
@@ -72,13 +104,57 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
 
   useImperativeHandle(ref, () => ({
     appendText: (appendedText: string) => {
-      setText((prev) => prev + appendedText);
+      setText((prev) => {
+        const next = prev + appendedText;
+        if (draftIdentity) saveConversationDraft(draftIdentity.type, draftIdentity.id, next);
+        return next;
+      });
       textareaRef.current?.focus();
     },
     focus: () => {
       textareaRef.current?.focus();
     },
+    startReply: (sender: string, quote: string) => {
+      setReplyQuote({ sender, quote });
+      const prefix = `@[${sender}] `;
+      setText((prev) => {
+        const next = prev.startsWith(prefix) ? prev : prefix + prev;
+        if (draftIdentity) saveConversationDraft(draftIdentity.type, draftIdentity.id, next);
+        return next;
+      });
+      textareaRef.current?.focus();
+    },
   }));
+
+  // Restore/save drafts when the conversation identity changes. Empty drafts delete the key.
+  useEffect(() => {
+    const previous = draftKeyRef.current;
+    const next = draftIdentityOf(conversationType, conversationId);
+    if (previous && (previous.type !== next?.type || previous.id !== next.id)) {
+      saveConversationDraft(previous.type, previous.id, textRef.current);
+    }
+    draftKeyRef.current = next;
+    if (!next) {
+      setText('');
+      setReplyQuote(null);
+      setComposerPanel(null);
+      return;
+    }
+    const loaded = loadConversationDraft(next.type, next.id);
+    setText(loaded);
+    textRef.current = loaded;
+    setReplyQuote(null);
+    setComposerPanel(null);
+  }, [conversationType, conversationId]);
+
+  useEffect(() => {
+    return () => {
+      const current = draftKeyRef.current;
+      if (current) {
+        saveConversationDraft(current.type, current.id, textRef.current);
+      }
+    };
+  }, []);
 
   // Re-measure height whenever text changes (covers programmatic updates like appendText)
   useEffect(() => {
@@ -117,16 +193,16 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
     if (!limits) return { limitState: 'normal', warningMessage: null };
 
     if (textByteLen >= limits.hardLimit) {
-      return { limitState: 'error', warningMessage: 'likely truncated by radio' };
+      return { limitState: 'error', warningMessage: t('chat.truncated') };
     }
     if (textByteLen >= limits.dangerAt) {
-      return { limitState: 'danger', warningMessage: 'may impact multi-repeater hop delivery' };
+      return { limitState: 'danger', warningMessage: t('chat.multiHopWarn') };
     }
     if (textByteLen >= limits.warningAt) {
-      return { limitState: 'warning', warningMessage: 'may impact multi-repeater hop delivery' };
+      return { limitState: 'warning', warningMessage: t('chat.multiHopWarn') };
     }
     return { limitState: 'normal', warningMessage: null };
-  }, [textByteLen, limits]);
+  }, [textByteLen, limits, t]);
 
   const remaining = limits ? limits.hardLimit - textByteLen : 0;
 
@@ -140,12 +216,16 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
       try {
         await onSend(trimmed);
         setText('');
+        setReplyQuote(null);
+        if (draftIdentity) {
+          saveConversationDraft(draftIdentity.type, draftIdentity.id, '');
+        }
       } catch (err) {
         console.error('Failed to send message:', err);
-        const description = err instanceof Error ? err.message : 'Check radio connection';
+        const description = err instanceof Error ? err.message : t('chat.checkRadio');
         const isRadioNoResponse =
           err instanceof Error && err.message.toLowerCase().includes(RADIO_NO_RESPONSE_SNIPPET);
-        toast.error(isRadioNoResponse ? 'Radio did not confirm send' : 'Failed to send message', {
+        toast.error(isRadioNoResponse ? t('chat.radioNoConfirm') : t('chat.failedToSend'), {
           description,
         });
         return;
@@ -155,33 +235,48 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
       // Refocus after React re-enables the textarea
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
-    [text, sending, disabled, onSend]
+    [text, sending, disabled, onSend, draftIdentity, t]
   );
 
-  const handleChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
-    const input = e.target;
-    const raw = input.value;
-    // Skip replacement during IME / dead-key composition to avoid garbling interim input
-    if (!e.nativeEvent || (e.nativeEvent as InputEvent).isComposing) {
-      setText(raw);
-      return;
-    }
-    if (getTextReplaceEnabled()) {
-      const result = applyTextReplacements(
-        raw,
-        input.selectionStart ?? raw.length,
-        getTextReplaceMapJson()
-      );
-      if (result) {
-        setText(result.text);
-        // Schedule cursor restore after React flushes the new value
-        const pos = result.cursor;
-        requestAnimationFrame(() => input.setSelectionRange(pos, pos));
+  const persistDraft = useCallback(
+    (next: string) => {
+      if (draftIdentity) {
+        saveConversationDraft(draftIdentity.type, draftIdentity.id, next);
+      }
+    },
+    [draftIdentity]
+  );
+
+  const handleChange = useCallback(
+    (e: ChangeEvent<HTMLTextAreaElement>) => {
+      const input = e.target;
+      const raw = input.value;
+      // Skip replacement during IME / dead-key composition to avoid garbling interim input
+      if (!e.nativeEvent || (e.nativeEvent as InputEvent).isComposing) {
+        setText(raw);
+        persistDraft(raw);
         return;
       }
-    }
-    setText(raw);
-  }, []);
+      if (getTextReplaceEnabled()) {
+        const result = applyTextReplacements(
+          raw,
+          input.selectionStart ?? raw.length,
+          getTextReplaceMapJson()
+        );
+        if (result) {
+          setText(result.text);
+          persistDraft(result.text);
+          // Schedule cursor restore after React flushes the new value
+          const pos = result.cursor;
+          requestAnimationFrame(() => input.setSelectionRange(pos, pos));
+          return;
+        }
+      }
+      setText(raw);
+      persistDraft(raw);
+    },
+    [persistDraft]
+  );
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -193,6 +288,74 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
     },
     [handleSubmit]
   );
+
+  const sendPayload = useCallback(
+    async (wire: string) => {
+      if (sending || disabled) return;
+      const payload = replyQuote ? `@[${replyQuote.sender}] ${wire}` : wire;
+      setSending(true);
+      try {
+        await onSend(payload);
+        setReplyQuote(null);
+        setComposerPanel(null);
+      } catch (err) {
+        console.error('Failed to send message:', err);
+        const description = err instanceof Error ? err.message : t('chat.checkRadio');
+        const isRadioNoResponse =
+          err instanceof Error && err.message.toLowerCase().includes(RADIO_NO_RESPONSE_SNIPPET);
+        toast.error(isRadioNoResponse ? t('chat.radioNoConfirm') : t('chat.failedToSend'), {
+          description,
+        });
+      } finally {
+        setSending(false);
+      }
+    },
+    [disabled, onSend, replyQuote, sending, t]
+  );
+
+  const insertEmoji = useCallback(
+    (emoji: string) => {
+      const el = textareaRef.current;
+      const start = el?.selectionStart ?? text.length;
+      const end = el?.selectionEnd ?? text.length;
+      const next = text.slice(0, start) + emoji + text.slice(end);
+      setText(next);
+      persistDraft(next);
+      requestAnimationFrame(() => {
+        const cursor = start + emoji.length;
+        el?.focus();
+        el?.setSelectionRange(cursor, cursor);
+      });
+    },
+    [persistDraft, text]
+  );
+
+  const sendLocation = useCallback(() => {
+    const wire = formatLocation(radioLat ?? 0, radioLon ?? 0, senderName || 'pin');
+    if (!wire) {
+      toast.error(t('share.noLocation'));
+      return;
+    }
+    void sendPayload(wire);
+  }, [radioLat, radioLon, sendPayload, senderName, t]);
+
+  useEffect(() => {
+    if (!composerPanel) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && pickerRef.current?.contains(target)) return;
+      setComposerPanel(null);
+    };
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setComposerPanel(null);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [composerPanel]);
 
   const canSubmit = text.trim().length > 0;
 
@@ -207,11 +370,85 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
       onSubmit={handleSubmit}
       autoComplete="off"
     >
-      <div className="flex gap-2 items-end">
+      {replyQuote && (
+        <div className="flex items-start gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
+              {t('chat.replyTo', { sender: replyQuote.sender })}
+            </p>
+            <p className="text-[0.8125rem] text-muted-foreground truncate">{replyQuote.quote}</p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 flex-shrink-0"
+            aria-label={t('chat.cancelReply')}
+            onClick={() => setReplyQuote(null)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+      <div ref={pickerRef} className="relative flex gap-2 items-end">
+        {composerPanel === 'gif' && (
+          <GifPicker
+            onSelect={(gifId) => {
+              void sendPayload(formatGif(gifId));
+            }}
+            onClose={() => setComposerPanel(null)}
+            disabled={disabled || sending}
+          />
+        )}
+        {composerPanel === 'emoji' && (
+          <ComposerEmojiPicker
+            onSelect={insertEmoji}
+            onClose={() => setComposerPanel(null)}
+            disabled={disabled || sending}
+          />
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 flex-shrink-0"
+          aria-label={t('chat.emoji')}
+          aria-expanded={composerPanel === 'emoji'}
+          data-testid="emoji-picker-trigger"
+          disabled={disabled || sending}
+          onClick={() => setComposerPanel((open) => (open === 'emoji' ? null : 'emoji'))}
+        >
+          <Smile className="h-5 w-5" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 flex-shrink-0"
+          aria-label={t('chat.gif')}
+          aria-expanded={composerPanel === 'gif'}
+          data-testid="gif-picker-trigger"
+          disabled={disabled || sending}
+          onClick={() => setComposerPanel((open) => (open === 'gif' ? null : 'gif'))}
+        >
+          <Sticker className="h-5 w-5" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 flex-shrink-0"
+          aria-label={t('share.shareLocation')}
+          data-testid="share-location-trigger"
+          disabled={disabled || sending}
+          onClick={sendLocation}
+        >
+          <MapPin className="h-5 w-5" />
+        </Button>
         <textarea
           ref={textareaRef}
           name="chat-message-input"
-          aria-label={placeholder || 'Type a message'}
+          aria-label={placeholder || t('chat.typeMessage')}
           data-lpignore="true"
           data-1p-ignore="true"
           data-bwignore="true"
@@ -219,7 +456,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
           value={text}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder || 'Type a message...'}
+          placeholder={placeholder || t('chat.typeMessagePlaceholder')}
           disabled={disabled || sending}
           className={cn(
             'flex-1 min-w-0 resize-none overflow-y-auto',
@@ -234,7 +471,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
           disabled={disabled || sending || !canSubmit}
           className="flex-shrink-0"
         >
-          {sending ? 'Sending...' : 'Send'}
+          {sending ? t('chat.sending') : t('chat.send')}
         </Button>
       </div>
       {showCharCounter && (

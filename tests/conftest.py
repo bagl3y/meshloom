@@ -30,8 +30,10 @@ async def test_db():
     """Create an in-memory test database with schema + migrations."""
     from app.repository import (
         channels,
+        contact_groups,
         contact_telemetry,
         contacts,
+        directory,
         messages,
         raw_packets,
         repeater_telemetry,
@@ -45,6 +47,8 @@ async def test_db():
     submodules = [
         contacts,
         channels,
+        contact_groups,
+        directory,
         messages,
         raw_packets,
         settings,
