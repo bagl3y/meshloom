@@ -87,13 +87,7 @@ usbipd attach --wsl --busid 3-8
 On Linux, the installer chooses a native systemd service or Docker and only offers radio transports that work on that host (USB / TCP / BLE). Use `bash -c` so prompts still have a terminal — do not pipe into `bash`.
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://github.com/bagl3y/meshloom/releases/latest/download/install.sh)"
-```
-
-Before the first GitHub release exists, use the copy on `main`:
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/bagl3y/meshloom/main/scripts/setup/install.sh)"
+/bin/bash -c "$(curl -fsSL https://get.meshloom.app)"
 ```
 
 Native Linux prefers the public apt/dnf repo when it is up, then a `.deb`/`.rpm` from the latest release, then a source clone. Docker writes a compose file that pulls `ghcr.io/bagl3y/meshloom` (USB needs rootful Docker on Linux; Docker Desktop is TCP only).

@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# Meshloom installer â€” self-contained (English + French).
+# Meshloom installer — self-contained (English + French).
 #
 # One-liner (keeps a real TTY for prompts; do not use curl | bash):
-#   /bin/bash -c "$(curl -fsSL https://github.com/bagl3y/meshloom/releases/latest/download/install.sh)"
-# Before the first release, use:
-#   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/bagl3y/meshloom/main/scripts/setup/install.sh)"
+#   /bin/bash -c "$(curl -fsSL https://get.meshloom.app)"
 #
 # Run from a checkout:
 #   bash scripts/setup/install.sh
@@ -42,7 +40,7 @@ AUTH_PASSWORD=""
 INSTALL_DIR=""
 IN_CHECKOUT=""
 
-# â”€â”€ i18n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── i18n ──────────────────────────────────────────────────────────────────────
 
 t() {
     local key="$1"
@@ -61,28 +59,28 @@ t() {
         fr:opt_docker) echo "Docker" ;;
         en:opt_browser) echo "Browser only (open an existing Meshloom)" ;;
         fr:opt_browser) echo "Navigateur seulement (ouvrir un Meshloom existant)" ;;
-        en:transports_full) echo "USB Â· TCP Â· BLE" ;;
-        fr:transports_full) echo "USB Â· TCP Â· BLE" ;;
-        en:transports_usb_tcp) echo "USB Â· TCP" ;;
-        fr:transports_usb_tcp) echo "USB Â· TCP" ;;
+        en:transports_full) echo "USB · TCP · BLE" ;;
+        fr:transports_full) echo "USB · TCP · BLE" ;;
+        en:transports_usb_tcp) echo "USB · TCP" ;;
+        fr:transports_usb_tcp) echo "USB · TCP" ;;
         en:transports_tcp) echo "TCP only" ;;
         fr:transports_tcp) echo "TCP seulement" ;;
         en:recommended) echo "recommended" ;;
-        fr:recommended) echo "recommandÃ©" ;;
+        fr:recommended) echo "recommandé" ;;
         en:choose_transport) echo "Radio transport" ;;
         fr:choose_transport) echo "Transport radio" ;;
         en:opt_serial_auto) echo "USB serial (auto-detect)" ;;
-        fr:opt_serial_auto) echo "USB sÃ©rie (auto-dÃ©tection)" ;;
+        fr:opt_serial_auto) echo "USB série (auto-détection)" ;;
         en:opt_serial) echo "USB serial (path)" ;;
-        fr:opt_serial) echo "USB sÃ©rie (chemin)" ;;
+        fr:opt_serial) echo "USB série (chemin)" ;;
         en:opt_tcp) echo "TCP" ;;
         fr:opt_tcp) echo "TCP" ;;
         en:opt_ble) echo "BLE (Bluetooth)" ;;
         fr:opt_ble) echo "BLE (Bluetooth)" ;;
         en:prompt_serial) echo "Serial device path" ;;
-        fr:prompt_serial) echo "Chemin du port sÃ©rie" ;;
+        fr:prompt_serial) echo "Chemin du port série" ;;
         en:prompt_tcp_host) echo "TCP host (IP or hostname)" ;;
-        fr:prompt_tcp_host) echo "HÃ´te TCP (IP ou nom)" ;;
+        fr:prompt_tcp_host) echo "Hôte TCP (IP ou nom)" ;;
         en:prompt_tcp_port) echo "TCP port" ;;
         fr:prompt_tcp_port) echo "Port TCP" ;;
         en:prompt_ble_addr) echo "BLE address (AA:BB:CC:DD:EE:FF)" ;;
@@ -90,15 +88,15 @@ t() {
         en:prompt_ble_pin) echo "BLE PIN" ;;
         fr:prompt_ble_pin) echo "PIN BLE" ;;
         en:prompt_dir) echo "Install directory" ;;
-        fr:prompt_dir) echo "RÃ©pertoire d'installation" ;;
+        fr:prompt_dir) echo "Répertoire d'installation" ;;
         en:missing) echo "Missing dependency" ;;
-        fr:missing) echo "DÃ©pendance absente" ;;
+        fr:missing) echo "Dépendance absente" ;;
         en:offer_install) echo "Install it now?" ;;
         fr:offer_install) echo "L'installer maintenant ?" ;;
         en:how_install) echo "Install it with:" ;;
         fr:how_install) echo "Installez-le avec :" ;;
         en:bots_warn) echo "Bots execute arbitrary Python on this machine. Leave them off on any network you do not fully trust." ;;
-        fr:bots_warn) echo "Les bots exÃ©cutent du Python arbitraire sur cette machine. Laissez-les dÃ©sactivÃ©s sur un rÃ©seau non entiÃ¨rement de confiance." ;;
+        fr:bots_warn) echo "Les bots exécutent du Python arbitraire sur cette machine. Laissez-les désactivés sur un réseau non entièrement de confiance." ;;
         en:enable_bots) echo "Enable bots?" ;;
         fr:enable_bots) echo "Activer les bots ?" ;;
         en:enable_auth) echo "Set up HTTP Basic Auth?" ;;
@@ -108,25 +106,25 @@ t() {
         en:auth_pass) echo "Password" ;;
         fr:auth_pass) echo "Mot de passe" ;;
         en:no_server) echo "Meshloom's server install targets Linux. On this OS, open a Meshloom already running on a Linux box, or use Docker with a TCP radio." ;;
-        fr:no_server) echo "L'install serveur Meshloom cible Linux. Sur cet OS, ouvrez un Meshloom dÃ©jÃ  installÃ© sur une box Linux, ou utilisez Docker avec une radio TCP." ;;
-        en:usb_elsewhere) echo "USB/BLE: install Meshloom on Linux (Pi, NASâ€¦) and plug the radio in there." ;;
-        fr:usb_elsewhere) echo "USB/BLE : installez Meshloom sur Linux (Pi, NASâ€¦) et branchez la radio lÃ -bas." ;;
+        fr:no_server) echo "L'install serveur Meshloom cible Linux. Sur cet OS, ouvrez un Meshloom déjà installé sur une box Linux, ou utilisez Docker avec une radio TCP." ;;
+        en:usb_elsewhere) echo "USB/BLE: install Meshloom on Linux (Pi, NAS…) and plug the radio in there." ;;
+        fr:usb_elsewhere) echo "USB/BLE : installez Meshloom sur Linux (Pi, NAS…) et branchez la radio là-bas." ;;
         en:done) echo "Installation complete." ;;
-        fr:done) echo "Installation terminÃ©e." ;;
+        fr:done) echo "Installation terminée." ;;
         en:open_at) echo "Open" ;;
         fr:open_at) echo "Ouvrez" ;;
         en:update_apt) echo "Later updates: sudo apt upgrade" ;;
-        fr:update_apt) echo "Mises Ã  jour : sudo apt upgrade" ;;
+        fr:update_apt) echo "Mises à jour : sudo apt upgrade" ;;
         en:update_dnf) echo "Later updates: sudo dnf upgrade" ;;
-        fr:update_dnf) echo "Mises Ã  jour : sudo dnf upgrade" ;;
+        fr:update_dnf) echo "Mises à jour : sudo dnf upgrade" ;;
         en:update_docker) echo "Later updates: sudo docker compose pull && sudo docker compose up -d" ;;
-        fr:update_docker) echo "Mises Ã  jour : sudo docker compose pull && sudo docker compose up -d" ;;
+        fr:update_docker) echo "Mises à jour : sudo docker compose pull && sudo docker compose up -d" ;;
         en:update_git) echo "Later updates: git pull && uv sync, then restart the service" ;;
-        fr:update_git) echo "Mises Ã  jour : git pull && uv sync, puis redÃ©marrer le service" ;;
+        fr:update_git) echo "Mises à jour : git pull && uv sync, puis redémarrer le service" ;;
         en:using_repo) echo "Using the Meshloom apt/dnf repository." ;;
-        fr:using_repo) echo "Utilisation du dÃ©pÃ´t apt/dnf Meshloom." ;;
+        fr:using_repo) echo "Utilisation du dépôt apt/dnf Meshloom." ;;
         en:using_asset) echo "Installing the package from the latest GitHub release." ;;
-        fr:using_asset) echo "Installation du paquet depuis la derniÃ¨re release GitHub." ;;
+        fr:using_asset) echo "Installation du paquet depuis la dernière release GitHub." ;;
         en:using_clone) echo "No package available yet; cloning the source." ;;
         fr:using_clone) echo "Aucun paquet disponible ; clonage du source." ;;
         en:invalid) echo "Invalid choice." ;;
@@ -145,7 +143,7 @@ choose_language() {
     echo -e "${BOLD}Meshloom${NC}"
     echo
     echo "  1) English"
-    echo "  2) FranÃ§ais"
+    echo "  2) Français"
     echo
     read -r -p "Language / Langue [1-2] (default: $([ "$default" = fr ] && echo 2 || echo 1)): " choice
     choice="${choice:-$([ "$default" = fr ] && echo 2 || echo 1)}"
@@ -156,7 +154,7 @@ choose_language() {
     echo
 }
 
-# â”€â”€ detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── detection ─────────────────────────────────────────────────────────────────
 
 detect_os() {
     case "$(uname -s)" in
@@ -239,7 +237,7 @@ release_asset_url() {
         | head -n 1
 }
 
-# â”€â”€ prompts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── prompts ───────────────────────────────────────────────────────────────────
 
 ask_required() {
     local prompt="$1" value=""
@@ -352,7 +350,7 @@ choose_install_mode() {
         esac
         if [ "$DOCKER_KIND" = "none" ]; then
             if [ "$OS_FAMILY" = "linux" ]; then
-                echo "  ${i}) $(t opt_docker)              USB Â· TCP"
+                echo "  ${i}) $(t opt_docker)              USB · TCP"
             else
                 echo "  ${i}) $(t opt_docker)              $(t transports_tcp)"
             fi
@@ -722,7 +720,7 @@ install_docker_stack() {
     echo "$(t update_docker)"
 }
 
-# â”€â”€ main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── main ──────────────────────────────────────────────────────────────────────
 
 choose_language
 echo -e "${BOLD}$(t title)${NC}"

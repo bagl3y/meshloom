@@ -18,3 +18,11 @@ def test_install_sh_en_fr_keys_match() -> None:
     fr = _keys("fr")
     assert en, "expected English message keys in install.sh"
     assert en == fr, f"i18n key mismatch en-fr={en - fr!r} fr-en={fr - en!r}"
+
+
+def test_install_sh_is_real_utf8() -> None:
+    text = INSTALL_SH.read_text(encoding="utf-8")
+    assert "Français" in text
+    assert "recommandé" in text
+    assert "FranÃ§ais" not in text
+    assert "recommandÃ©" not in text
