@@ -16,7 +16,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-REPO = "statico/remoteterm-meshcore"
+REPO = "bagl3y/meshloom"
 API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 PREBUILT_PREFIX = "Remote-Terminal-for-MeshCore/frontend/prebuilt/"
 

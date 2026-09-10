@@ -16,7 +16,7 @@ source "$SCRIPT_DIR/release_common.sh"
 
 # The Docker workflow builds and pushes the multi-arch image when the version
 # tag lands; this is only used for the summary at the end.
-DOCKER_IMAGE="ghcr.io/statico/remoteterm-meshcore"
+DOCKER_IMAGE="ghcr.io/bagl3y/meshloom"
 VERSION=""
 NOTES_FILE=""
 SKIP_QUALITY=0

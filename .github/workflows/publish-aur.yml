@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (no v prefix, e.g. 3.9.1)'
+        description: 'Version to publish (no v prefix, e.g. 4.0.1)'
         required: true
 
 concurrency:
@@ -57,7 +57,7 @@ jobs:
             pkg/aur/remoteterm-meshcore.sysusers
             pkg/aur/remoteterm-meshcore.tmpfiles
             pkg/aur/remoteterm.env
-          commit_username: statico
+          commit_username: bagl3y
           commit_email: ${{ secrets.AUR_COMMIT_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           commit_message: "Update to ${{ steps.version.outputs.version }}"

@@ -2,7 +2,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import type { HealthStatus } from '../../types';
 import { Separator } from '../ui/separator';
 
-const GITHUB_URL = 'https://github.com/statico/remoteterm-meshcore';
+const GITHUB_URL = 'https://github.com/bagl3y/meshloom';
 
 export function SettingsAboutSection({
   health,
@@ -59,7 +59,7 @@ export function SettingsAboutSection({
               components={{
                 author: (
                   <a
-                    href="https://jacksbrain.com"
+                    href="https://github.com/bagl3y"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-primary hover:underline"
@@ -75,21 +75,6 @@ export function SettingsAboutSection({
                 license: (
                   <a
                     href={`${GITHUB_URL}/blob/main/LICENSE.md`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline"
-                  />
-                ),
-              }}
-            />
-          </p>
-          <p>
-            <Trans
-              i18nKey="settings.about.kofi"
-              components={{
-                kofi: (
-                  <a
-                    href="https://ko-fi.com/jackkingsman"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-primary hover:underline"

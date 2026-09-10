@@ -477,7 +477,7 @@
       "tooltipNoise": "Plancher de bruit"
     },
     "about": {
-      "madeBy": "Fait avec amour et en open source par <author>Jack Kingsman</author>",
+      "madeBy": "Fait avec amour et en open source par <author>Pascal M</author>",
       "licensed": "Sous licence <license>MIT License</license>",
       "kofi": "Ce code est gratuit, et sans publicité, pour toujours. Si vous aimez mon travail, <kofi>offrez-moi un café !</kofi>",
       "github": "GitHub",

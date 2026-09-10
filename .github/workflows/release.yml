@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (no v prefix, e.g. 3.18.0)"
+        description: "Version to release (no v prefix, e.g. 4.0.0)"
         required: true
 
 permissions:

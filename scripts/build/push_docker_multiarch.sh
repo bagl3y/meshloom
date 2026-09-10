@@ -12,7 +12,7 @@ Usage: scripts/build/push_docker_multiarch.sh --version X.Y.Z [options]
 Options:
   --version VERSION         Release version (required)
   --git-hash HASH           Short git hash to tag alongside the version
-  --image IMAGE             Docker image name (default: ghcr.io/statico/remoteterm-meshcore)
+  --image IMAGE             Docker image name (default: ghcr.io/bagl3y/meshloom)
   --platforms CSV           Buildx platforms CSV (default: linux/amd64,linux/arm64)
   --help                    Show this message
 EOF
@@ -20,7 +20,7 @@ EOF
 
 VERSION=""
 GIT_HASH=""
-IMAGE="ghcr.io/statico/remoteterm-meshcore"
+IMAGE="ghcr.io/bagl3y/meshloom"
 PLATFORMS="linux/amd64,linux/arm64"
 
 while [ $# -gt 0 ]; do

@@ -1,15 +1,18 @@
-# RemoteTerm for MeshCore
+# Meshloom
 
-[![All Quality](https://github.com/statico/remoteterm-meshcore/actions/workflows/all-quality.yml/badge.svg)](https://github.com/statico/remoteterm-meshcore/actions/workflows/all-quality.yml)
-[![Docker](https://github.com/statico/remoteterm-meshcore/actions/workflows/docker.yml/badge.svg)](https://github.com/statico/remoteterm-meshcore/actions/workflows/docker.yml)
-[![CodeQL](https://github.com/statico/remoteterm-meshcore/actions/workflows/codeql.yml/badge.svg)](https://github.com/statico/remoteterm-meshcore/actions/workflows/codeql.yml)
-[![Release](https://img.shields.io/github/v/release/statico/remoteterm-meshcore?logo=github)](https://github.com/statico/remoteterm-meshcore/releases)
-[![Container](https://img.shields.io/badge/ghcr.io-statico%2Fremoteterm--meshcore-blue?logo=docker)](https://github.com/statico/remoteterm-meshcore/pkgs/container/remoteterm-meshcore)
-[![AUR](https://img.shields.io/aur/version/remoteterm-meshcore?logo=archlinux)](https://aur.archlinux.org/packages/remoteterm-meshcore)
-[![License](https://img.shields.io/github/license/statico/remoteterm-meshcore)](LICENSE.md)
+[![All Quality](https://github.com/bagl3y/meshloom/actions/workflows/all-quality.yml/badge.svg)](https://github.com/bagl3y/meshloom/actions/workflows/all-quality.yml)
+[![Docker](https://github.com/bagl3y/meshloom/actions/workflows/docker.yml/badge.svg)](https://github.com/bagl3y/meshloom/actions/workflows/docker.yml)
+[![CodeQL](https://github.com/bagl3y/meshloom/actions/workflows/codeql.yml/badge.svg)](https://github.com/bagl3y/meshloom/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/bagl3y/meshloom?logo=github)](https://github.com/bagl3y/meshloom/releases)
+[![Container](https://img.shields.io/badge/ghcr.io-bagl3y%2Fmeshloom-blue?logo=docker)](https://github.com/bagl3y/meshloom/pkgs/container/meshloom)
+[![License](https://img.shields.io/github/license/bagl3y/meshloom)](LICENSE.md)
 
 > [!NOTE]
-> This is a fork of [jkingsman/Remote-Terminal-for-MeshCore](https://github.com/jkingsman/Remote-Terminal-for-MeshCore), continued while the original author is on a [development pause](https://github.com/jkingsman/Remote-Terminal-for-MeshCore/issues/343). Hopefully this fork folds back into upstream later.
+> Meshloom is a fork of [RemoteTerm for MeshCore](https://github.com/jkingsman/Remote-Terminal-for-MeshCore) by Jack Kingsman. The history starts from [Ian Langworth's continuation](https://github.com/statico/remoteterm-meshcore) of that work during the upstream pause.
+>
+> Thank you both — this project exists because of the foundation you built, and the care you put into it.
+>
+> The fork is here so I can follow my own ideas. The philosophy will shift a little, without getting in the way of people who already used RemoteTerm. Original copyright remains in [LICENSE.md](LICENSE.md).
 
 Backend server + browser interface for MeshCore mesh radio networks, providing a rich, web-based power-user management and messaging system through a companion radio.
 
@@ -32,7 +35,7 @@ For advanced setup and troubleshooting see [README_ADVANCED.md](README_ADVANCED.
 ![Screenshot of the application's web interface](app_screenshot.png)
 
 > [!WARNING]
-> RemoteTerm does *full* management of the radio, meaning that once a radio is connected to RemoteTerm, all contacts/channels will be imported and offloaded to RemoteTerm and the contacts actually synced to the device will be governed by RemoteTerm. This means that RemoteTerm can be a poor fit for users who are looking to swap radios in and out, maintaining radio state (favorites, channels, etc.) irrespective of app usage.
+> Meshloom does *full* management of the radio, meaning that once a radio is connected, all contacts/channels will be imported and offloaded and the contacts actually synced to the device will be governed by the app. This means that Meshloom can be a poor fit for users who are looking to swap radios in and out, maintaining radio state (favorites, channels, etc.) irrespective of app usage.
 
 ## Requirements
 
@@ -82,8 +85,8 @@ usbipd attach --wsl --busid 3-8
 **This approach is recommended over Docker due to intermittent serial communications issues I've seen on \*nix systems.**
 
 ```bash
-git clone https://github.com/statico/remoteterm-meshcore.git
-cd remoteterm-meshcore
+git clone https://github.com/bagl3y/meshloom.git
+cd meshloom
 
 uv sync
 cd frontend && npm install && npm run build && cd ..
@@ -158,7 +161,7 @@ sudo docker compose up -d
 The example file and setup script default to the published GHCR image. To build locally from your checkout instead, replace:
 
 ```yaml
-image: ghcr.io/statico/remoteterm-meshcore:latest
+image: ghcr.io/bagl3y/meshloom:latest
 ```
 
 with:
@@ -211,7 +214,7 @@ Your data lives in the SQLite database at `MESHCORE_DATABASE_PATH` — `data/mes
 Clone and build:
 
 ```bash
-cd remoteterm-meshcore
+cd meshloom
 git pull
 uv sync
 cd frontend && npm install && npm run build && cd ..
