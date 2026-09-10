@@ -92,10 +92,8 @@ npm run build
 | `publish.sh` | Full release ceremony: quality gate, version bump, changelog, frontend build, Docker multi-arch push, GitHub release. |
 | `release_common.sh` | Shared shell helpers (version validation, formatting) sourced by other build scripts. |
 | `package_release_artifact.sh` | Builds the prebuilt-frontend release zip attached to GitHub releases. |
-| `push_docker_multiarch.sh` | Builds and pushes multi-arch Docker images (amd64 + arm64). |
 | `create_github_release.sh` | Creates a GitHub release with changelog notes and the release artifact. |
 | `build_nfpm_packages.sh` | Builds Meshloom `.deb` and `.rpm` packages with nFPM. |
-| `extract_release_notes.sh` | Extracts the latest version's notes from `CHANGELOG.md` for the release body. |
 | `collect_licenses.sh` | Gathers third-party license attributions into `LICENSES.md`. |
 | `print_frontend_licenses.cjs` | Helper that extracts frontend npm dependency licenses. |
 | `dump_api_specs.py` | Dumps the OpenAPI spec from the running backend (developer utility). |
