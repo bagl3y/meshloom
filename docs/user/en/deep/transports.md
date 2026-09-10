@@ -51,7 +51,7 @@ If a `by-id` path contains `:`, use a host-side alias without the colon.
 
 ## TCP
 
-Use TCP when the radio is reachable over the network:
+Use TCP when the radio is reachable over the network. To flash USB companion, repeater, or room-server firmware from the browser, see the [flasher](/en/flasher/).
 
 ```yaml
 environment:

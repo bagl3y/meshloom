@@ -57,7 +57,7 @@ Un chemin `by-id` contenant des `:` ne peut pas être écrit tel quel dans Compo
 
 ## TCP
 
-La radio est joignable sur le réseau, par exemple un nœud exposé par une passerelle ou un firmware compagnon en TCP.
+La radio est joignable sur le réseau, par exemple un nœud exposé par une passerelle ou un firmware compagnon en TCP. Pour poser un firmware companion USB, répéteur ou room server depuis le navigateur, voir le [flasher](/flasher/).
 
 ```yaml
 environment:
