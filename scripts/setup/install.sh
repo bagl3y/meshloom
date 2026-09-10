@@ -6,6 +6,8 @@
 #
 # Run from a checkout:
 #   bash scripts/setup/install.sh
+#
+# Answers are normalised (CR/whitespace) because some terminals send "2\r".
 
 set -euo pipefail
 
@@ -15,14 +17,7 @@ PAGES_BASE="https://bagl3y.github.io/meshloom"
 GHCR_IMAGE="ghcr.io/bagl3y/meshloom"
 API_RELEASES="https://api.github.com/repos/${REPO}/releases/latest"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m'
-
-ML_LANG=""
+ML_LANG="en"
 OS_FAMILY=""
 PKG_MGR=""
 DOCKER_KIND="" # none | linux-rootful | linux-rootless | desktop
@@ -39,119 +34,377 @@ AUTH_USERNAME=""
 AUTH_PASSWORD=""
 INSTALL_DIR=""
 IN_CHECKOUT=""
+STEP_TOTAL=4
+UI_CLEAR=1
+UI_COLOR=1
+INSTALL_LOG=""
 
 # ── i18n ──────────────────────────────────────────────────────────────────────
 
 t() {
     local key="$1"
     case "${ML_LANG}:${key}" in
-        en:title) echo "Meshloom installer" ;;
-        fr:title) echo "Installeur Meshloom" ;;
-        en:choose_lang) echo "Language / Langue" ;;
-        fr:choose_lang) echo "Langue / Language" ;;
-        en:detected) echo "This machine" ;;
-        fr:detected) echo "Cette machine" ;;
-        en:choose_install) echo "How do you want to install Meshloom?" ;;
-        fr:choose_install) echo "Comment installer Meshloom ?" ;;
-        en:opt_service) echo "Native systemd service" ;;
-        fr:opt_service) echo "Service systemd" ;;
-        en:opt_docker) echo "Docker" ;;
-        fr:opt_docker) echo "Docker" ;;
-        en:opt_browser) echo "Browser only (open an existing Meshloom)" ;;
-        fr:opt_browser) echo "Navigateur seulement (ouvrir un Meshloom existant)" ;;
-        en:transports_full) echo "USB · TCP · BLE" ;;
-        fr:transports_full) echo "USB · TCP · BLE" ;;
-        en:transports_usb_tcp) echo "USB · TCP" ;;
-        fr:transports_usb_tcp) echo "USB · TCP" ;;
-        en:transports_tcp) echo "TCP only" ;;
-        fr:transports_tcp) echo "TCP seulement" ;;
+        en:title) echo "Meshloom installation" ;;
+        fr:title) echo "Installation Meshloom" ;;
+        en:tagline) echo "Web interface for MeshCore mesh radio networks" ;;
+        fr:tagline) echo "Interface web pour réseaux radio maillés MeshCore" ;;
+        en:step) echo "Step" ;;
+        fr:step) echo "Étape" ;;
+        en:choice) echo "Your choice" ;;
+        fr:choice) echo "Votre choix" ;;
         en:recommended) echo "recommended" ;;
         fr:recommended) echo "recommandé" ;;
-        en:choose_transport) echo "Radio transport" ;;
-        fr:choose_transport) echo "Transport radio" ;;
-        en:opt_serial_auto) echo "USB serial (auto-detect)" ;;
-        fr:opt_serial_auto) echo "USB série (auto-détection)" ;;
-        en:opt_serial) echo "USB serial (path)" ;;
-        fr:opt_serial) echo "USB série (chemin)" ;;
-        en:opt_tcp) echo "TCP" ;;
-        fr:opt_tcp) echo "TCP" ;;
-        en:opt_ble) echo "BLE (Bluetooth)" ;;
-        fr:opt_ble) echo "BLE (Bluetooth)" ;;
+        en:hint_yes) echo "[Y/n]" ;;
+        fr:hint_yes) echo "[O/n]" ;;
+        en:hint_no) echo "[y/N]" ;;
+        fr:hint_no) echo "[o/N]" ;;
+        en:yes) echo "yes" ;;
+        fr:yes) echo "oui" ;;
+        en:no) echo "no" ;;
+        fr:no) echo "non" ;;
+        en:invalid) echo "That choice is not in the list." ;;
+        fr:invalid) echo "Ce choix ne figure pas dans la liste." ;;
+        en:required) echo "This value is required." ;;
+        fr:required) echo "Cette valeur est obligatoire." ;;
+        en:cancelled) echo "Cancelled." ;;
+        fr:cancelled) echo "Annulé." ;;
+        en:need_tty) echo "This installer asks questions, so it needs a terminal. Run: /bin/bash -c \"\$(curl -fsSL https://get.meshloom.app)\"" ;;
+        fr:need_tty) echo "Cette installation pose des questions et nécessite un terminal. Lancez : /bin/bash -c \"\$(curl -fsSL https://get.meshloom.app)\"" ;;
+        en:detected) echo "Detected" ;;
+        fr:detected) echo "Détecté" ;;
+        en:docker_ready) echo "Docker is available" ;;
+        fr:docker_ready) echo "Docker est disponible" ;;
+        en:docker_absent) echo "Docker is not installed yet" ;;
+        fr:docker_absent) echo "Docker n'est pas encore installé" ;;
+        en:step_method) echo "Installation method" ;;
+        fr:step_method) echo "Mode d'installation" ;;
+        en:q_method) echo "How should Meshloom run on this machine?" ;;
+        fr:q_method) echo "Comment Meshloom doit-il fonctionner sur cette machine ?" ;;
+        en:opt_service) echo "Install as a background service" ;;
+        fr:opt_service) echo "Installer comme service en arrière-plan" ;;
+        en:opt_service_desc) echo "Starts automatically with the machine. Works with USB, network and Bluetooth radios." ;;
+        fr:opt_service_desc) echo "Démarre automatiquement avec la machine. Compatible avec les radios USB, réseau et Bluetooth." ;;
+        en:opt_docker) echo "Run with Docker" ;;
+        fr:opt_docker) echo "Lancer avec Docker" ;;
+        en:opt_docker_desc_usb) echo "Runs in a container. This machine can use a USB radio or a radio on the network." ;;
+        fr:opt_docker_desc_usb) echo "Fonctionne dans un conteneur. Cette machine peut utiliser une radio USB ou une radio sur le réseau." ;;
+        en:opt_docker_desc_tcp) echo "Runs in a container. Here Docker cannot reach USB ports, so the radio must be on the network." ;;
+        fr:opt_docker_desc_tcp) echo "Fonctionne dans un conteneur. Ici Docker n'accède pas aux ports USB : la radio doit être sur le réseau." ;;
+        en:opt_browser) echo "Only open Meshloom in a browser" ;;
+        fr:opt_browser) echo "Ouvrir seulement Meshloom dans un navigateur" ;;
+        en:opt_browser_desc) echo "Installs nothing. Choose this if Meshloom already runs on another machine." ;;
+        fr:opt_browser_desc) echo "N'installe rien. À choisir si Meshloom fonctionne déjà sur une autre machine." ;;
+        en:note_linux_only) echo "The Meshloom server is built for Linux. On this system, use Docker with a radio on the network." ;;
+        fr:note_linux_only) echo "Le serveur Meshloom est conçu pour Linux. Sur ce système, utilisez Docker avec une radio sur le réseau." ;;
+        en:note_radio_elsewhere) echo "For a USB or Bluetooth radio, install Meshloom on a Linux machine (Raspberry Pi, NAS…) and plug the radio in there." ;;
+        fr:note_radio_elsewhere) echo "Pour une radio USB ou Bluetooth, installez Meshloom sur une machine Linux (Raspberry Pi, NAS…) et branchez-y la radio." ;;
+        en:step_radio) echo "Radio connection" ;;
+        fr:step_radio) echo "Connexion radio" ;;
+        en:q_radio) echo "How is your MeshCore radio connected?" ;;
+        fr:q_radio) echo "Comment votre radio MeshCore est-elle connectée ?" ;;
+        en:opt_serial_auto) echo "USB cable, detected automatically" ;;
+        fr:opt_serial_auto) echo "Câble USB, détection automatique" ;;
+        en:opt_serial_auto_desc) echo "The radio is plugged into this machine and is the only serial device." ;;
+        fr:opt_serial_auto_desc) echo "La radio est branchée sur cette machine et c'est le seul port série." ;;
+        en:opt_serial) echo "USB cable, chosen manually" ;;
+        fr:opt_serial) echo "Câble USB, choix manuel" ;;
+        en:opt_serial_desc) echo "Use this when several serial devices are plugged in." ;;
+        fr:opt_serial_desc) echo "À utiliser si plusieurs ports série sont branchés." ;;
+        en:opt_tcp) echo "On the network (TCP)" ;;
+        fr:opt_tcp) echo "Sur le réseau (TCP)" ;;
+        en:opt_tcp_desc) echo "The radio, or a companion device next to it, exposes a TCP port." ;;
+        fr:opt_tcp_desc) echo "La radio, ou un appareil compagnon à côté d'elle, expose un port TCP." ;;
+        en:opt_ble) echo "Bluetooth (BLE)" ;;
+        fr:opt_ble) echo "Bluetooth (BLE)" ;;
+        en:opt_ble_desc) echo "Pairs with the radio over Bluetooth. Needs its address and PIN." ;;
+        fr:opt_ble_desc) echo "Appairage avec la radio en Bluetooth. Nécessite son adresse et son code PIN." ;;
         en:prompt_serial) echo "Serial device path" ;;
         fr:prompt_serial) echo "Chemin du port série" ;;
-        en:prompt_tcp_host) echo "TCP host (IP or hostname)" ;;
-        fr:prompt_tcp_host) echo "Hôte TCP (IP ou nom)" ;;
+        en:hint_serial) echo "For example /dev/ttyUSB0 or /dev/ttyACM0." ;;
+        fr:hint_serial) echo "Par exemple /dev/ttyUSB0 ou /dev/ttyACM0." ;;
+        en:prompt_tcp_host) echo "Radio address" ;;
+        fr:prompt_tcp_host) echo "Adresse de la radio" ;;
+        en:hint_tcp_host) echo "IP address or hostname, for example 192.168.1.42." ;;
+        fr:hint_tcp_host) echo "Adresse IP ou nom d'hôte, par exemple 192.168.1.42." ;;
         en:prompt_tcp_port) echo "TCP port" ;;
         fr:prompt_tcp_port) echo "Port TCP" ;;
-        en:prompt_ble_addr) echo "BLE address (AA:BB:CC:DD:EE:FF)" ;;
-        fr:prompt_ble_addr) echo "Adresse BLE (AA:BB:CC:DD:EE:FF)" ;;
-        en:prompt_ble_pin) echo "BLE PIN" ;;
-        fr:prompt_ble_pin) echo "PIN BLE" ;;
-        en:prompt_dir) echo "Install directory" ;;
-        fr:prompt_dir) echo "Répertoire d'installation" ;;
-        en:missing) echo "Missing dependency" ;;
-        fr:missing) echo "Dépendance absente" ;;
-        en:offer_install) echo "Install it now?" ;;
-        fr:offer_install) echo "L'installer maintenant ?" ;;
-        en:how_install) echo "Install it with:" ;;
-        fr:how_install) echo "Installez-le avec :" ;;
-        en:bots_warn) echo "Bots execute arbitrary Python on this machine. Leave them off on any network you do not fully trust." ;;
-        fr:bots_warn) echo "Les bots exécutent du Python arbitraire sur cette machine. Laissez-les désactivés sur un réseau non entièrement de confiance." ;;
-        en:enable_bots) echo "Enable bots?" ;;
-        fr:enable_bots) echo "Activer les bots ?" ;;
-        en:enable_auth) echo "Set up HTTP Basic Auth?" ;;
-        fr:enable_auth) echo "Configurer HTTP Basic Auth ?" ;;
+        en:prompt_ble_addr) echo "Bluetooth address" ;;
+        fr:prompt_ble_addr) echo "Adresse Bluetooth" ;;
+        en:hint_ble_addr) echo "Six pairs separated by colons, for example AA:BB:CC:DD:EE:FF." ;;
+        fr:hint_ble_addr) echo "Six paires séparées par des deux-points, par exemple AA:BB:CC:DD:EE:FF." ;;
+        en:prompt_ble_pin) echo "Bluetooth PIN" ;;
+        fr:prompt_ble_pin) echo "Code PIN Bluetooth" ;;
+        en:hint_ble_pin) echo "Shown on the radio screen." ;;
+        fr:hint_ble_pin) echo "Affiché sur l'écran de la radio." ;;
+        en:step_security) echo "Security" ;;
+        fr:step_security) echo "Sécurité" ;;
+        en:bots_warn) echo "Bots let anyone who can reach Meshloom run code on this machine. Keep them off unless you fully trust the network." ;;
+        fr:bots_warn) echo "Les bots permettent à quiconque atteint Meshloom d'exécuter du code sur cette machine. Laissez-les désactivés sauf si vous avez pleine confiance dans le réseau." ;;
+        en:q_bots) echo "Enable bots?" ;;
+        fr:q_bots) echo "Activer les bots ?" ;;
+        en:auth_intro) echo "Meshloom can ask for a username and password before opening. This is one shared login, not user accounts." ;;
+        fr:auth_intro) echo "Meshloom peut demander un identifiant et un mot de passe avant de s'ouvrir. Il s'agit d'un accès partagé unique, pas de comptes utilisateurs." ;;
+        en:q_auth) echo "Ask for a username and password?" ;;
+        fr:q_auth) echo "Demander un identifiant et un mot de passe ?" ;;
         en:auth_user) echo "Username" ;;
         fr:auth_user) echo "Nom d'utilisateur" ;;
         en:auth_pass) echo "Password" ;;
         fr:auth_pass) echo "Mot de passe" ;;
-        en:no_server) echo "Meshloom's server install targets Linux. On this OS, open a Meshloom already running on a Linux box, or use Docker with a TCP radio." ;;
-        fr:no_server) echo "L'install serveur Meshloom cible Linux. Sur cet OS, ouvrez un Meshloom déjà installé sur une box Linux, ou utilisez Docker avec une radio TCP." ;;
-        en:usb_elsewhere) echo "USB/BLE: install Meshloom on Linux (Pi, NAS…) and plug the radio in there." ;;
-        fr:usb_elsewhere) echo "USB/BLE : installez Meshloom sur Linux (Pi, NAS…) et branchez la radio là-bas." ;;
-        en:done) echo "Installation complete." ;;
-        fr:done) echo "Installation terminée." ;;
-        en:open_at) echo "Open" ;;
-        fr:open_at) echo "Ouvrez" ;;
-        en:update_apt) echo "Later updates: sudo apt upgrade" ;;
-        fr:update_apt) echo "Mises à jour : sudo apt upgrade" ;;
-        en:update_dnf) echo "Later updates: sudo dnf upgrade" ;;
-        fr:update_dnf) echo "Mises à jour : sudo dnf upgrade" ;;
-        en:update_docker) echo "Later updates: sudo docker compose pull && sudo docker compose up -d" ;;
-        fr:update_docker) echo "Mises à jour : sudo docker compose pull && sudo docker compose up -d" ;;
-        en:update_git) echo "Later updates: git pull && uv sync, then restart the service" ;;
-        fr:update_git) echo "Mises à jour : git pull && uv sync, puis redémarrer le service" ;;
-        en:using_repo) echo "Using the Meshloom apt/dnf repository." ;;
-        fr:using_repo) echo "Utilisation du dépôt apt/dnf Meshloom." ;;
-        en:using_asset) echo "Installing the package from the latest GitHub release." ;;
-        fr:using_asset) echo "Installation du paquet depuis la dernière release GitHub." ;;
-        en:using_clone) echo "No package available yet; cloning the source." ;;
-        fr:using_clone) echo "Aucun paquet disponible ; clonage du source." ;;
-        en:invalid) echo "Invalid choice." ;;
-        fr:invalid) echo "Choix invalide." ;;
-        en:required) echo "This value is required." ;;
-        fr:required) echo "Cette valeur est obligatoire." ;;
+        en:step_install) echo "Installation" ;;
+        fr:step_install) echo "Installation" ;;
+        en:recap) echo "Summary" ;;
+        fr:recap) echo "Récapitulatif" ;;
+        en:recap_mode) echo "Method" ;;
+        fr:recap_mode) echo "Mode" ;;
+        en:recap_radio) echo "Radio" ;;
+        fr:recap_radio) echo "Radio" ;;
+        en:recap_bots) echo "Bots" ;;
+        fr:recap_bots) echo "Bots" ;;
+        en:recap_auth) echo "Password protection" ;;
+        fr:recap_auth) echo "Protection par mot de passe" ;;
+        en:q_confirm) echo "Start the installation?" ;;
+        fr:q_confirm) echo "Lancer l'installation ?" ;;
+        en:sudo_note) echo "Some steps need administrator rights; your password may be requested." ;;
+        fr:sudo_note) echo "Certaines étapes nécessitent les droits administrateur ; votre mot de passe peut être demandé." ;;
+        en:using_repo) echo "Installing from the Meshloom package repository." ;;
+        fr:using_repo) echo "Installation depuis le dépôt de paquets Meshloom." ;;
+        en:using_asset) echo "Installing the package from the latest release." ;;
+        fr:using_asset) echo "Installation du paquet depuis la dernière version publiée." ;;
+        en:using_clone) echo "No ready-made package for this system; installing from source." ;;
+        fr:using_clone) echo "Aucun paquet prêt pour ce système ; installation depuis les sources." ;;
+        en:prompt_dir) echo "Installation folder" ;;
+        fr:prompt_dir) echo "Dossier d'installation" ;;
+        en:missing) echo "Missing on this machine" ;;
+        fr:missing) echo "Absent de cette machine" ;;
+        en:offer_install) echo "Install it now?" ;;
+        fr:offer_install) echo "L'installer maintenant ?" ;;
+        en:how_install) echo "It can be installed with:" ;;
+        fr:how_install) echo "Il peut être installé avec :" ;;
+        en:wrote_config) echo "Configuration written to" ;;
+        fr:wrote_config) echo "Configuration écrite dans" ;;
+        en:q_start_now) echo "Start Meshloom now?" ;;
+        fr:q_start_now) echo "Démarrer Meshloom maintenant ?" ;;
+        en:docker_usb_needs_root) echo "Sharing a USB radio needs Docker running as root on Linux. Choose the network option, or install Meshloom as a service." ;;
+        fr:docker_usb_needs_root) echo "Le partage d'une radio USB nécessite Docker en mode root sur Linux. Choisissez l'option réseau, ou installez Meshloom comme service." ;;
+        en:working) echo "This can take a few minutes." ;;
+        fr:working) echo "Cela peut prendre quelques minutes." ;;
+        en:failed) echo "The installation stopped on an error. Last lines of the log:" ;;
+        fr:failed) echo "L'installation s'est arrêtée sur une erreur. Dernières lignes du journal :" ;;
+        en:log_at) echo "Full log" ;;
+        fr:log_at) echo "Journal complet" ;;
+        en:phase_ok) echo "Done" ;;
+        fr:phase_ok) echo "Terminé" ;;
+        en:done) echo "Meshloom is installed." ;;
+        fr:done) echo "Meshloom est installé." ;;
+        en:open_at) echo "Open in your browser" ;;
+        fr:open_at) echo "Ouvrez dans votre navigateur" ;;
+        en:open_lan) echo "From another device on the same network" ;;
+        fr:open_lan) echo "Depuis un autre appareil du même réseau" ;;
+        en:service_hint) echo "Check or restart it with: sudo systemctl status meshloom" ;;
+        fr:service_hint) echo "Vérifiez ou redémarrez-le avec : sudo systemctl status meshloom" ;;
+        en:update_apt) echo "To update later: sudo apt upgrade" ;;
+        fr:update_apt) echo "Pour mettre à jour plus tard : sudo apt upgrade" ;;
+        en:update_dnf) echo "To update later: sudo dnf upgrade" ;;
+        fr:update_dnf) echo "Pour mettre à jour plus tard : sudo dnf upgrade" ;;
+        en:update_docker) echo "To update later, in that folder: sudo docker compose pull && sudo docker compose up -d" ;;
+        fr:update_docker) echo "Pour mettre à jour plus tard, dans ce dossier : sudo docker compose pull && sudo docker compose up -d" ;;
+        en:update_git) echo "To update later: git pull, then restart the service" ;;
+        fr:update_git) echo "Pour mettre à jour plus tard : git pull, puis redémarrez le service" ;;
+        en:step_browser) echo "Open Meshloom" ;;
+        fr:step_browser) echo "Ouvrir Meshloom" ;;
+        en:browser_body) echo "Nothing was installed. Open the Meshloom already running on your network:" ;;
+        fr:browser_body) echo "Rien n'a été installé. Ouvrez le Meshloom déjà en service sur votre réseau :" ;;
+        en:browser_hint) echo "Its address is that machine's IP address followed by port 8000." ;;
+        fr:browser_hint) echo "Son adresse est l'adresse IP de cette machine suivie du port 8000." ;;
         *) echo "$key" ;;
     esac
 }
 
-choose_language() {
-    local default="en" choice
-    case "${LANG:-}${LC_ALL:-}${LC_MESSAGES:-}" in
-        fr*|FR*|*.FR) default="fr" ;;
+# ── UI ────────────────────────────────────────────────────────────────────────
+
+ui_b() { if [ "$UI_COLOR" = 1 ]; then printf '\033[1m%s\033[0m' "$1"; else printf '%s' "$1"; fi; }
+ui_dim() { if [ "$UI_COLOR" = 1 ]; then printf '\033[2m%s\033[0m\n' "$1"; else printf '%s\n' "$1"; fi; }
+ui_ok() { if [ "$UI_COLOR" = 1 ]; then printf '\033[0;32m%s\033[0m\n' "$1"; else printf '%s\n' "$1"; fi; }
+ui_warn() { if [ "$UI_COLOR" = 1 ]; then printf '\033[1;33m%s\033[0m\n' "$1"; else printf '%s\n' "$1"; fi; }
+ui_err() { if [ "$UI_COLOR" = 1 ]; then printf '\033[0;31m%s\033[0m\n' "$1" >&2; else printf '%s\n' "$1" >&2; fi; }
+
+ui_init() {
+    if [ ! -t 0 ]; then
+        printf '%s\n' "$(t need_tty)"
+        exit 1
+    fi
+    [ -t 1 ] || { UI_CLEAR=0; UI_COLOR=0; }
+    [ -n "${NO_COLOR:-}" ] && UI_COLOR=0
+    case "${TERM:-}" in
+        "" | dumb) UI_CLEAR=0; UI_COLOR=0 ;;
     esac
-    echo -e "${BOLD}Meshloom${NC}"
-    echo
-    echo "  1) English"
-    echo "  2) Français"
-    echo
-    read -r -p "Language / Langue [1-2] (default: $([ "$default" = fr ] && echo 2 || echo 1)): " choice
-    choice="${choice:-$([ "$default" = fr ] && echo 2 || echo 1)}"
-    case "$choice" in
-        2) ML_LANG="fr" ;;
-        *) ML_LANG="en" ;;
+    trap 'printf "\n%s\n" "$(t cancelled)"; exit 130' INT TERM
+}
+
+ui_screen() {
+    local label="$1" num="${2:-}"
+    if [ "$UI_CLEAR" = 1 ]; then
+        printf '\033[H\033[2J\033[3J'
+        printf '\n  %s\n' "$(ui_b Meshloom)"
+        ui_dim "  $(t tagline)"
+        printf '\n'
+        if [ -n "$num" ]; then
+            ui_dim "  $(t step) ${num}/${STEP_TOTAL}  ·  ${label}"
+        else
+            ui_dim "  ${label}"
+        fi
+        ui_dim "  ────────────────────────────────────────────────────────"
+        printf '\n'
+    else
+        printf '\n== '
+        [ -n "$num" ] && printf '[%s/%s] ' "$num" "$STEP_TOTAL"
+        printf '%s ==\n\n' "$label"
+    fi
+}
+
+ui_wrap() {
+    local indent="$1" width="$2" text="$3" pad line="" w
+    pad="$(printf '%*s' "$indent" '')"
+    # shellcheck disable=SC2086
+    for w in $text; do
+        if [ -z "$line" ]; then
+            line="$w"
+        elif [ $((${#line} + 1 + ${#w})) -le "$width" ]; then
+            line="$line $w"
+        else
+            ui_dim "${pad}${line}"
+            line="$w"
+        fi
+    done
+    [ -n "$line" ] && ui_dim "${pad}${line}"
+}
+
+ui_option() {
+    local n="$1" label="$2" desc="$3" badge="${4:-}"
+    printf '  %2s) %s' "$n" "$(ui_b "$label")"
+    if [ -n "$badge" ]; then
+        if [ "$UI_COLOR" = 1 ]; then
+            printf '  \033[0;32m· %s\033[0m' "$badge"
+        else
+            printf '  (%s)' "$badge"
+        fi
+    fi
+    printf '\n'
+    ui_wrap 6 70 "$desc"
+    printf '\n'
+}
+
+ui_norm() {
+    local s="${1//$'\r'/}"
+    s="${s#"${s%%[![:space:]]*}"}"
+    s="${s%"${s##*[![:space:]]}"}"
+    printf '%s' "$s"
+}
+
+ui_ask() {
+    local prompt="$1" default="${2:-}" hint="${3:-}" raw=""
+    [ -n "$hint" ] && ui_wrap 5 70 "$hint" >&2
+    if [ -n "$default" ]; then
+        printf '  → %s (%s) : ' "$prompt" "$default" >&2
+    else
+        printf '  → %s : ' "$prompt" >&2
+    fi
+    IFS= read -r raw || {
+        printf '\n%s\n' "$(t cancelled)" >&2
+        exit 130
+    }
+    raw="$(ui_norm "$raw")"
+    [ -n "$raw" ] || raw="$default"
+    printf '%s' "$raw"
+}
+
+ui_ask_secret() {
+    local prompt="$1" hint="${2:-}" raw=""
+    [ -n "$hint" ] && ui_wrap 5 70 "$hint" >&2
+    printf '  → %s : ' "$prompt" >&2
+    IFS= read -r -s raw || {
+        printf '\n%s\n' "$(t cancelled)" >&2
+        exit 130
+    }
+    printf '\n' >&2
+    ui_norm "$raw"
+}
+
+ui_ask_required() {
+    local prompt="$1" hint="${2:-}" value=""
+    while [ -z "$value" ]; do
+        value="$(ui_ask "$prompt" "" "$hint")"
+        if [ -z "$value" ]; then
+            ui_err "$(t required)"
+        fi
+    done
+    printf '%s' "$value"
+}
+
+ui_menu() {
+    local max="$1" default="${2:-1}" ans
+    while :; do
+        ans="$(ui_ask "$(t choice) [1-${max}]" "$default")"
+        case "$ans" in
+            '' | *[!0-9]*) ;;
+            *)
+                if [ "$ans" -ge 1 ] && [ "$ans" -le "$max" ]; then
+                    printf '%s' "$ans"
+                    return 0
+                fi
+                ;;
+        esac
+        ui_err "$(t invalid)"
+    done
+}
+
+ui_yesno() {
+    local q="$1" def="$2" ans
+    while :; do
+        if [ "$def" = y ]; then
+            ans="$(ui_ask "${q} $(t hint_yes)" "y")"
+        else
+            ans="$(ui_ask "${q} $(t hint_no)" "n")"
+        fi
+        case "$(printf '%s' "$ans" | tr 'A-Z' 'a-z')" in
+            y | yes | o | oui) return 0 ;;
+            n | no | non) return 1 ;;
+            *) ui_err "$(t invalid)" ;;
+        esac
+    done
+}
+
+os_label() {
+    case "$OS_FAMILY" in
+        linux) echo "Linux" ;;
+        darwin) echo "macOS" ;;
+        windows) echo "Windows" ;;
+        *) echo "$OS_FAMILY" ;;
     esac
-    echo
+}
+
+phase() {
+    printf '  · %s\n' "$1"
+}
+
+phase_ok() {
+    ui_ok "  ✓ $(t phase_ok)"
+}
+
+ensure_log() {
+    if [ -z "$INSTALL_LOG" ]; then
+        INSTALL_LOG="$(mktemp /tmp/meshloom-install.XXXXXX)"
+    fi
+}
+
+run_quiet() {
+    ensure_log
+    if ! "$@" >>"$INSTALL_LOG" 2>&1; then
+        ui_err "$(t failed)"
+        tail -n 20 "$INSTALL_LOG" >&2 || true
+        printf '  %s: %s\n' "$(t log_at)" "$INSTALL_LOG" >&2
+        exit 1
+    fi
 }
 
 # ── detection ─────────────────────────────────────────────────────────────────
@@ -160,7 +413,7 @@ detect_os() {
     case "$(uname -s)" in
         Linux) OS_FAMILY="linux" ;;
         Darwin) OS_FAMILY="darwin" ;;
-        MINGW*|MSYS*|CYGWIN*) OS_FAMILY="windows" ;;
+        MINGW* | MSYS* | CYGWIN*) OS_FAMILY="windows" ;;
         *) OS_FAMILY="other" ;;
     esac
     if command -v apt-get >/dev/null 2>&1; then
@@ -204,8 +457,8 @@ detect_checkout() {
 
 host_arch() {
     case "$(uname -m)" in
-        x86_64|amd64) echo "amd64" ;;
-        aarch64|arm64) echo "arm64" ;;
+        x86_64 | amd64) echo "amd64" ;;
+        aarch64 | arm64) echo "arm64" ;;
         *) echo "unknown" ;;
     esac
 }
@@ -223,80 +476,86 @@ http_ok() {
 }
 
 latest_release_tag() {
-    curl -fsSL --max-time 15 "$API_RELEASES" 2>/dev/null \
-        | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-        | head -n 1
+    curl -fsSL --max-time 15 "$API_RELEASES" 2>/dev/null |
+        sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
+        head -n 1
 }
 
 release_asset_url() {
     local suffix="$1"
-    curl -fsSL --max-time 15 "$API_RELEASES" 2>/dev/null \
-        | tr ',' '\n' \
-        | sed -n 's/.*"browser_download_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-        | grep -F "$suffix" \
-        | head -n 1
+    curl -fsSL --max-time 15 "$API_RELEASES" 2>/dev/null |
+        tr ',' '\n' |
+        sed -n 's/.*"browser_download_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
+        grep -F "$suffix" |
+        head -n 1
+}
+
+lan_ip() {
+    local ip=""
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    if [ -z "$ip" ] && command -v ip >/dev/null 2>&1; then
+        ip="$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit }}')"
+    fi
+    case "$ip" in
+        "" | 127.* | ::1) printf '' ;;
+        *) printf '%s' "$ip" ;;
+    esac
 }
 
 # ── prompts ───────────────────────────────────────────────────────────────────
 
-ask_required() {
-    local prompt="$1" value=""
-    while [ -z "$value" ]; do
-        read -r -p "${prompt}: " value
-        if [ -z "$value" ]; then
-            echo -e "${RED}$(t required)${NC}"
-        fi
-    done
-    printf '%s' "$value"
-}
-
 ensure_cmd() {
-    local cmd="$1" packages="$2"
+    local cmd="$1" packages="$2" yn
     if command -v "$cmd" >/dev/null 2>&1; then
         return 0
     fi
-    echo -e "${YELLOW}$(t missing): ${cmd}${NC}"
+    ui_warn "$(t missing): ${cmd}"
     if [ "$PKG_MGR" = "apt" ]; then
-        echo "$(t how_install) sudo apt-get install -y ${packages}"
-        read -r -p "$(t offer_install) [y/N]: " yn
-        if [[ "${yn:-N}" =~ ^[Yy]$ ]]; then
-            sudo apt-get update
-            # shellcheck disable=SC2086
-            sudo apt-get install -y $packages
-            return 0
-        fi
+        printf '  %s sudo apt-get install -y %s\n' "$(t how_install)" "$packages"
+        yn="$(ui_ask "$(t offer_install) $(t hint_no)" "n")"
+        case "$(printf '%s' "$yn" | tr 'A-Z' 'a-z')" in
+            y | yes | o | oui)
+                sudo apt-get update
+                # shellcheck disable=SC2086
+                sudo apt-get install -y $packages
+                ;;
+        esac
     elif [ "$PKG_MGR" = "dnf" ]; then
-        echo "$(t how_install) sudo dnf install -y ${packages}"
-        read -r -p "$(t offer_install) [y/N]: " yn
-        if [[ "${yn:-N}" =~ ^[Yy]$ ]]; then
-            # shellcheck disable=SC2086
-            sudo dnf install -y $packages
-            return 0
-        fi
+        printf '  %s sudo dnf install -y %s\n' "$(t how_install)" "$packages"
+        yn="$(ui_ask "$(t offer_install) $(t hint_no)" "n")"
+        case "$(printf '%s' "$yn" | tr 'A-Z' 'a-z')" in
+            y | yes | o | oui)
+                # shellcheck disable=SC2086
+                sudo dnf install -y $packages
+                ;;
+        esac
     else
-        echo "$(t how_install) your package manager, then re-run this installer."
+        printf '  %s your package manager, then re-run this installer.\n' "$(t how_install)"
     fi
     if ! command -v "$cmd" >/dev/null 2>&1; then
-        echo -e "${RED}$(t missing): ${cmd}${NC}"
+        ui_err "$(t missing): ${cmd}"
         exit 1
     fi
 }
 
 ensure_uv() {
+    local yn
     if command -v uv >/dev/null 2>&1; then
         return 0
     fi
-    echo -e "${YELLOW}$(t missing): uv${NC}"
-    echo "$(t how_install) curl -LsSf https://astral.sh/uv/install.sh | sh"
-    read -r -p "$(t offer_install) [y/N]: " yn
-    if [[ "${yn:-N}" =~ ^[Yy]$ ]]; then
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        # shellcheck disable=SC1090
-        [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
-        export PATH="$HOME/.local/bin:$PATH"
-    fi
+    ui_warn "$(t missing): uv"
+    printf '  %s curl -LsSf https://astral.sh/uv/install.sh | sh\n' "$(t how_install)"
+    yn="$(ui_ask "$(t offer_install) $(t hint_no)" "n")"
+    case "$(printf '%s' "$yn" | tr 'A-Z' 'a-z')" in
+        y | yes | o | oui)
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            # shellcheck disable=SC1090
+            [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
+            export PATH="$HOME/.local/bin:$PATH"
+            ;;
+    esac
     if ! command -v uv >/dev/null 2>&1; then
-        echo -e "${RED}$(t missing): uv${NC}"
+        ui_err "$(t missing): uv"
         exit 1
     fi
 }
@@ -317,7 +576,7 @@ ensure_docker() {
     if command -v docker-compose >/dev/null 2>&1; then
         return 0
     fi
-    echo -e "${YELLOW}$(t missing): docker compose${NC}"
+    ui_err "$(t missing): docker compose"
     exit 1
 }
 
@@ -329,58 +588,74 @@ compose_cmd() {
     fi
 }
 
+choose_language() {
+    local default=1 ans
+    case "$(printf '%s%s%s' "${LC_ALL:-}" "${LC_MESSAGES:-}" "${LANG:-}" | tr 'A-Z' 'a-z')" in
+        *fr*) default=2 ;;
+    esac
+    ui_screen "Language / Langue" ""
+    ui_option 1 "English" "Continue in English."
+    ui_option 2 "Français" "Continuer en français."
+    while :; do
+        ans="$(ui_ask "Language / Langue [1-2]" "$default")"
+        case "$(printf '%s' "$ans" | tr 'A-Z' 'a-z')" in
+            2 | fr | fra | français | francais | french)
+                ML_LANG="fr"
+                return 0
+                ;;
+            1 | en | eng | english | anglais)
+                ML_LANG="en"
+                return 0
+                ;;
+            *) ui_err "Invalid choice. / Choix invalide." ;;
+        esac
+    done
+}
+
 choose_install_mode() {
-    echo -e "${BOLD}$(t detected):${NC} ${CYAN}${OS_FAMILY}${NC}  Docker=${CYAN}${DOCKER_KIND}${NC}"
-    echo
-    echo "$(t choose_install)"
-    local i=1
+    local i=1 choice docker_desc
     SERVICE_IDX=""
     DOCKER_IDX=""
     BROWSER_IDX=""
+    ui_screen "$(t step_method)" 1
+    printf '  %s : %s' "$(t detected)" "$(os_label)"
+    if [ "$DOCKER_KIND" != "none" ]; then
+        printf ' · %s' "$(t docker_ready)"
+    else
+        printf ' · %s' "$(t docker_absent)"
+    fi
+    printf '\n\n'
+    printf '  %s\n\n' "$(t q_method)"
+    if [ "$OS_FAMILY" != "linux" ]; then
+        ui_warn "  $(t note_linux_only)"
+        ui_warn "  $(t note_radio_elsewhere)"
+        printf '\n'
+    fi
     if [ "$OS_FAMILY" = "linux" ]; then
-        echo "  ${i}) $(t opt_service)     $(t transports_full)     $(t recommended)"
+        ui_option "$i" "$(t opt_service)" "$(t opt_service_desc)" "$(t recommended)"
         SERVICE_IDX="$i"
         i=$((i + 1))
     fi
     if [ "$DOCKER_KIND" != "none" ] || [ "$OS_FAMILY" = "linux" ] || [ "$OS_FAMILY" = "darwin" ]; then
-        local dtrans
-        case "$DOCKER_KIND" in
-            linux-rootful) dtrans="$(t transports_usb_tcp)" ;;
-            *) dtrans="$(t transports_tcp)" ;;
-        esac
-        if [ "$DOCKER_KIND" = "none" ]; then
-            if [ "$OS_FAMILY" = "linux" ]; then
-                echo "  ${i}) $(t opt_docker)              USB · TCP"
-            else
-                echo "  ${i}) $(t opt_docker)              $(t transports_tcp)"
-            fi
+        if [ "$DOCKER_KIND" = "linux-rootful" ] || { [ "$DOCKER_KIND" = "none" ] && [ "$OS_FAMILY" = "linux" ]; }; then
+            docker_desc="$(t opt_docker_desc_usb)"
         else
-            echo "  ${i}) $(t opt_docker)              ${dtrans}"
+            docker_desc="$(t opt_docker_desc_tcp)"
         fi
+        ui_option "$i" "$(t opt_docker)" "$docker_desc"
         DOCKER_IDX="$i"
         i=$((i + 1))
     fi
-    echo "  ${i}) $(t opt_browser)"
+    ui_option "$i" "$(t opt_browser)" "$(t opt_browser_desc)"
     BROWSER_IDX="$i"
-    echo
-    if [ "$OS_FAMILY" != "linux" ]; then
-        echo -e "${YELLOW}$(t no_server)${NC}"
-        echo -e "${YELLOW}$(t usb_elsewhere)${NC}"
-        echo
-    fi
-    local choice
-    read -r -p "[1-${i}]: " choice
+    choice="$(ui_menu "$i" 1)"
     if [ -n "$SERVICE_IDX" ] && [ "$choice" = "$SERVICE_IDX" ]; then
         INSTALL_MODE="service"
     elif [ -n "$DOCKER_IDX" ] && [ "$choice" = "$DOCKER_IDX" ]; then
         INSTALL_MODE="docker"
-    elif [ "$choice" = "$BROWSER_IDX" ]; then
-        INSTALL_MODE="browser"
     else
-        echo -e "${RED}$(t invalid)${NC}"
-        exit 1
+        INSTALL_MODE="browser"
     fi
-    echo
 }
 
 docker_allows_usb() {
@@ -388,7 +663,8 @@ docker_allows_usb() {
 }
 
 choose_transport() {
-    local allow_usb="n" allow_ble="n"
+    local allow_usb="n" allow_ble="n" n=1 choice
+    local idx_auto="" idx_serial="" idx_tcp="" idx_ble=""
     if [ "$INSTALL_MODE" = "service" ]; then
         allow_usb="y"
         allow_ble="y"
@@ -396,78 +672,108 @@ choose_transport() {
         allow_usb="y"
     fi
 
-    echo "$(t choose_transport)"
-    local n=1
-    local idx_auto="" idx_serial="" idx_tcp="" idx_ble=""
+    ui_screen "$(t step_radio)" 2
+    printf '  %s\n\n' "$(t q_radio)"
     if [ "$allow_usb" = "y" ]; then
-        echo "  ${n}) $(t opt_serial_auto)"
+        ui_option "$n" "$(t opt_serial_auto)" "$(t opt_serial_auto_desc)"
         idx_auto="$n"
         n=$((n + 1))
-        echo "  ${n}) $(t opt_serial)"
+        ui_option "$n" "$(t opt_serial)" "$(t opt_serial_desc)"
         idx_serial="$n"
         n=$((n + 1))
     fi
-    echo "  ${n}) $(t opt_tcp)"
+    ui_option "$n" "$(t opt_tcp)" "$(t opt_tcp_desc)"
     idx_tcp="$n"
     n=$((n + 1))
     if [ "$allow_ble" = "y" ]; then
-        echo "  ${n}) $(t opt_ble)"
+        ui_option "$n" "$(t opt_ble)" "$(t opt_ble_desc)"
         idx_ble="$n"
         n=$((n + 1))
     fi
-    echo
-    local choice
-    read -r -p "[1-$((n - 1))]: " choice
+    choice="$(ui_menu $((n - 1)) 1)"
     if [ -n "$idx_auto" ] && [ "$choice" = "$idx_auto" ]; then
         TRANSPORT="serial-auto"
     elif [ -n "$idx_serial" ] && [ "$choice" = "$idx_serial" ]; then
         TRANSPORT="serial"
-        SERIAL_PORT="$(ask_required "$(t prompt_serial)")"
+        SERIAL_PORT="$(ui_ask_required "$(t prompt_serial)" "$(t hint_serial)")"
     elif [ "$choice" = "$idx_tcp" ]; then
         TRANSPORT="tcp"
-        TCP_HOST="$(ask_required "$(t prompt_tcp_host)")"
-        read -r -p "$(t prompt_tcp_port) [5000]: " TCP_PORT
+        TCP_HOST="$(ui_ask_required "$(t prompt_tcp_host)" "$(t hint_tcp_host)")"
+        TCP_PORT="$(ui_ask "$(t prompt_tcp_port)" "5000")"
         TCP_PORT="${TCP_PORT:-5000}"
     elif [ -n "$idx_ble" ] && [ "$choice" = "$idx_ble" ]; then
         TRANSPORT="ble"
-        BLE_ADDRESS="$(ask_required "$(t prompt_ble_addr)")"
-        read -r -s -p "$(t prompt_ble_pin): " BLE_PIN
-        echo
+        BLE_ADDRESS="$(ui_ask_required "$(t prompt_ble_addr)" "$(t hint_ble_addr)")"
+        BLE_PIN=""
         while [ -z "$BLE_PIN" ]; do
-            echo -e "${RED}$(t required)${NC}"
-            read -r -s -p "$(t prompt_ble_pin): " BLE_PIN
-            echo
+            BLE_PIN="$(ui_ask_secret "$(t prompt_ble_pin)" "$(t hint_ble_pin)")"
+            [ -n "$BLE_PIN" ] || ui_err "$(t required)"
         done
-    else
-        echo -e "${RED}$(t invalid)${NC}"
-        exit 1
     fi
-    echo
 }
 
 choose_bots_auth() {
-    echo -e "${YELLOW}$(t bots_warn)${NC}"
-    read -r -p "$(t enable_bots) [y/N]: " ENABLE_BOTS
-    ENABLE_BOTS="${ENABLE_BOTS:-N}"
-    echo
-    if [[ "$ENABLE_BOTS" =~ ^[Yy]$ ]]; then
-        read -r -p "$(t enable_auth) [Y/n]: " ENABLE_AUTH
-        ENABLE_AUTH="${ENABLE_AUTH:-Y}"
+    local auth_default="n"
+    ui_screen "$(t step_security)" 3
+    ui_warn "  $(t bots_warn)"
+    printf '\n'
+    if ui_yesno "$(t q_bots)" n; then
+        ENABLE_BOTS="Y"
+        auth_default="y"
     else
-        read -r -p "$(t enable_auth) [y/N]: " ENABLE_AUTH
-        ENABLE_AUTH="${ENABLE_AUTH:-N}"
+        ENABLE_BOTS="N"
     fi
-    echo
-    if [[ "$ENABLE_AUTH" =~ ^[Yy]$ ]]; then
-        AUTH_USERNAME="$(ask_required "$(t auth_user)")"
-        read -r -s -p "$(t auth_pass): " AUTH_PASSWORD
-        echo
+    printf '\n'
+    ui_wrap 2 70 "$(t auth_intro)"
+    printf '\n'
+    if ui_yesno "$(t q_auth)" "$auth_default"; then
+        ENABLE_AUTH="Y"
+        AUTH_USERNAME="$(ui_ask_required "$(t auth_user)")"
+        AUTH_PASSWORD=""
         while [ -z "$AUTH_PASSWORD" ]; do
-            echo -e "${RED}$(t required)${NC}"
-            read -r -s -p "$(t auth_pass): " AUTH_PASSWORD
-            echo
+            AUTH_PASSWORD="$(ui_ask_secret "$(t auth_pass)")"
+            [ -n "$AUTH_PASSWORD" ] || ui_err "$(t required)"
         done
+    else
+        ENABLE_AUTH="N"
     fi
+}
+
+recap_mode_label() {
+    case "$INSTALL_MODE" in
+        service) t opt_service ;;
+        docker) t opt_docker ;;
+        *) t opt_browser ;;
+    esac
+}
+
+recap_radio_label() {
+    case "$TRANSPORT" in
+        serial-auto) t opt_serial_auto ;;
+        serial) t opt_serial ;;
+        tcp) t opt_tcp ;;
+        ble) t opt_ble ;;
+        *) echo "$TRANSPORT" ;;
+    esac
+}
+
+confirm_install() {
+    ui_screen "$(t step_install)" 4
+    printf '  %s\n' "$(ui_b "$(t recap)")"
+    printf '    %s    %s\n' "$(t recap_mode)" "$(recap_mode_label)"
+    printf '    %s    %s\n' "$(t recap_radio)" "$(recap_radio_label)"
+    printf '    %s    %s\n' "$(t recap_bots)" "$([ "$ENABLE_BOTS" = Y ] && t yes || t no)"
+    printf '    %s    %s\n' "$(t recap_auth)" "$([ "$ENABLE_AUTH" = Y ] && t yes || t no)"
+    printf '\n'
+    ui_wrap 2 70 "$(t sudo_note)"
+    printf '\n'
+    if ! ui_yesno "$(t q_confirm)" y; then
+        printf '\n%s\n' "$(t cancelled)"
+        exit 130
+    fi
+    printf '\n'
+    ui_dim "  $(t working)"
+    sudo -v
 }
 
 write_meshloom_env() {
@@ -504,22 +810,22 @@ start_meshloom_unit() {
 }
 
 install_from_pages() {
-    echo -e "${GREEN}$(t using_repo)${NC}"
-    sudo mkdir -p /etc/apt/keyrings /etc/yum.repos.d
+    phase "$(t using_repo)"
+    run_quiet sudo mkdir -p /etc/apt/keyrings /etc/yum.repos.d
     if [ "$PKG_MGR" = "apt" ]; then
         if http_ok "${PAGES_BASE}/meshloom.gpg"; then
             curl -fsSL "${PAGES_BASE}/meshloom.gpg" | sudo tee /etc/apt/keyrings/meshloom.gpg >/dev/null
-            echo "deb [signed-by=/etc/apt/keyrings/meshloom.gpg] ${PAGES_BASE}/apt stable main" \
-                | sudo tee /etc/apt/sources.list.d/meshloom.list >/dev/null
+            echo "deb [signed-by=/etc/apt/keyrings/meshloom.gpg] ${PAGES_BASE}/apt stable main" |
+                sudo tee /etc/apt/sources.list.d/meshloom.list >/dev/null
         else
-            echo "deb [trusted=yes] ${PAGES_BASE}/apt stable main" \
-                | sudo tee /etc/apt/sources.list.d/meshloom.list >/dev/null
+            echo "deb [trusted=yes] ${PAGES_BASE}/apt stable main" |
+                sudo tee /etc/apt/sources.list.d/meshloom.list >/dev/null
         fi
-        sudo apt-get update
-        sudo apt-get install -y meshloom
+        run_quiet sudo apt-get update
+        run_quiet sudo apt-get install -y meshloom
     else
         if http_ok "${PAGES_BASE}/meshloom.asc"; then
-            sudo rpm --import "${PAGES_BASE}/meshloom.asc" || true
+            sudo rpm --import "${PAGES_BASE}/meshloom.asc" >/dev/null 2>&1 || true
         fi
         sudo tee /etc/yum.repos.d/meshloom.repo >/dev/null <<EOF
 [meshloom]
@@ -529,11 +835,12 @@ enabled=1
 gpgcheck=$(http_ok "${PAGES_BASE}/meshloom.asc" && echo 1 || echo 0)
 gpgkey=${PAGES_BASE}/meshloom.asc
 EOF
-        sudo dnf install -y meshloom
+        run_quiet sudo dnf install -y meshloom
     fi
     sudo mkdir -p /etc/meshloom
     write_meshloom_env /etc/meshloom/meshloom.env
     start_meshloom_unit
+    phase_ok
 }
 
 install_from_release_asset() {
@@ -547,18 +854,19 @@ install_from_release_asset() {
     fi
     url="$(release_asset_url "$suffix")"
     [ -n "$url" ] || return 1
-    echo -e "${GREEN}$(t using_asset)${NC}"
+    phase "$(t using_asset)"
     tmp="$(mktemp)"
-    curl -fL --max-time 180 "$url" -o "$tmp"
+    run_quiet curl -fL --max-time 180 "$url" -o "$tmp"
     if [ "$PKG_MGR" = "apt" ]; then
-        sudo apt-get install -y "$tmp"
+        run_quiet sudo apt-get install -y "$tmp"
     else
-        sudo dnf install -y "$tmp"
+        run_quiet sudo dnf install -y "$tmp"
     fi
     rm -f "$tmp"
     sudo mkdir -p /etc/meshloom
     write_meshloom_env /etc/meshloom/meshloom.env
     start_meshloom_unit
+    phase_ok
 }
 
 ensure_clone() {
@@ -567,7 +875,7 @@ ensure_clone() {
         return 0
     fi
     local default="${HOME}/meshloom" tag
-    read -r -p "$(t prompt_dir) [${default}]: " INSTALL_DIR
+    INSTALL_DIR="$(ui_ask "$(t prompt_dir)" "$default")"
     INSTALL_DIR="${INSTALL_DIR:-$default}"
     if [ -f "${INSTALL_DIR}/app/main.py" ]; then
         return 0
@@ -577,14 +885,14 @@ ensure_clone() {
     tag="$(latest_release_tag || true)"
     mkdir -p "$(dirname "$INSTALL_DIR")"
     if [ -n "$tag" ]; then
-        git clone --depth 1 --branch "$tag" "$GIT_URL" "$INSTALL_DIR"
+        run_quiet git clone --quiet --depth 1 --branch "$tag" "$GIT_URL" "$INSTALL_DIR"
     else
-        git clone --depth 1 "$GIT_URL" "$INSTALL_DIR"
+        run_quiet git clone --quiet --depth 1 "$GIT_URL" "$INSTALL_DIR"
     fi
 }
 
 run_service_from_source() {
-    echo -e "${YELLOW}$(t using_clone)${NC}"
+    phase "$(t using_clone)"
     ensure_clone
     ensure_cmd python3 "python3"
     ensure_uv
@@ -592,52 +900,62 @@ run_service_from_source() {
     export MESHLOOM_TRANSPORT="$TRANSPORT"
     export MESHLOOM_SERIAL_PORT="$SERIAL_PORT"
     export MESHLOOM_TCP_HOST="$TCP_HOST"
-    export MESHLOOM_TCP_PORT="$TCP_PORT"
     export MESHLOOM_BLE_ADDRESS="$BLE_ADDRESS"
     export MESHLOOM_BLE_PIN="$BLE_PIN"
     export MESHLOOM_ENABLE_BOTS="$ENABLE_BOTS"
     export MESHLOOM_ENABLE_AUTH="$ENABLE_AUTH"
     export MESHLOOM_AUTH_USERNAME="$AUTH_USERNAME"
     export MESHLOOM_AUTH_PASSWORD="$AUTH_PASSWORD"
+    export MESHLOOM_TCP_PORT="$TCP_PORT"
     if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
         export MESHLOOM_FRONTEND_MODE="build"
     else
         export MESHLOOM_FRONTEND_MODE="prebuilt"
     fi
-    bash "${INSTALL_DIR}/scripts/setup/install_service.sh"
+    run_quiet bash "${INSTALL_DIR}/scripts/setup/install_service.sh"
+    phase_ok
+}
+
+print_done_native() {
+    local ip
+    ip="$(lan_ip)"
+    printf '\n'
+    ui_ok "  $(t done)"
+    printf '  %s\n' "$(t open_at)"
+    printf '    %s\n' "http://127.0.0.1:8000"
+    if [ -n "$ip" ]; then
+        printf '  %s\n' "$(t open_lan)"
+        printf '    %s\n' "http://${ip}:8000"
+    fi
+    ui_dim "  $(t service_hint)"
 }
 
 install_native_service() {
     ensure_cmd curl "curl"
+    confirm_install
     if [ "$PKG_MGR" = "apt" ] && http_ok "${PAGES_BASE}/apt/dists/stable/Release"; then
         install_from_pages
-        echo
-        echo -e "${GREEN}$(t done)${NC}"
-        echo "$(t open_at) ${CYAN}http://$(hostname -I 2>/dev/null | awk '{print $1}'):8000${NC}"
-        echo "$(t update_apt)"
+        print_done_native
+        ui_dim "  $(t update_apt)"
         return
     fi
     if [ "$PKG_MGR" = "dnf" ] && http_ok "${PAGES_BASE}/rpm/$(rpm_arch)/repodata/repomd.xml"; then
         install_from_pages
-        echo
-        echo -e "${GREEN}$(t done)${NC}"
-        echo "$(t open_at) ${CYAN}http://$(hostname -I 2>/dev/null | awk '{print $1}'):8000${NC}"
-        echo "$(t update_dnf)"
+        print_done_native
+        ui_dim "  $(t update_dnf)"
         return
     fi
     if [ "$PKG_MGR" = "apt" ] || [ "$PKG_MGR" = "dnf" ]; then
         if install_from_release_asset; then
-            echo
-            echo -e "${GREEN}$(t done)${NC}"
-            echo "$(t open_at) ${CYAN}http://$(hostname -I 2>/dev/null | awk '{print $1}'):8000${NC}"
-            if [ "$PKG_MGR" = "apt" ]; then echo "$(t update_apt)"; else echo "$(t update_dnf)"; fi
+            print_done_native
+            if [ "$PKG_MGR" = "apt" ]; then ui_dim "  $(t update_apt)"; else ui_dim "  $(t update_dnf)"; fi
             return
         fi
     fi
     run_service_from_source
-    echo
-    echo -e "${GREEN}$(t done)${NC}"
-    echo "$(t update_git)"
+    printf '\n'
+    ui_ok "  $(t done)"
+    ui_dim "  $(t update_git)"
 }
 
 yaml_quote() {
@@ -668,8 +986,10 @@ write_docker_compose() {
         if [ "$TRANSPORT" = "serial" ] || [ "$TRANSPORT" = "serial-auto" ]; then
             local host_dev="${SERIAL_PORT:-/dev/ttyACM0}"
             if [ "$TRANSPORT" = "serial-auto" ]; then
-                if [ -e /dev/ttyACM0 ]; then host_dev="/dev/ttyACM0"
-                elif [ -e /dev/ttyUSB0 ]; then host_dev="/dev/ttyUSB0"
+                if [ -e /dev/ttyACM0 ]; then
+                    host_dev="/dev/ttyACM0"
+                elif [ -e /dev/ttyUSB0 ]; then
+                    host_dev="/dev/ttyUSB0"
                 fi
             fi
             echo "    devices:"
@@ -697,41 +1017,49 @@ write_docker_compose() {
 install_docker_stack() {
     ensure_docker
     detect_docker
-    if [ "$TRANSPORT" != "tcp" ] && ! docker_allows_usb; then
-        echo -e "${RED}USB passthrough needs rootful Docker on Linux.${NC}"
-        exit 1
-    fi
-    local default="${IN_CHECKOUT:-${HOME}/meshloom}"
-    read -r -p "$(t prompt_dir) [${default}]: " INSTALL_DIR
+    while [ "$TRANSPORT" != "tcp" ] && ! docker_allows_usb; do
+        ui_err "$(t docker_usb_needs_root)"
+        choose_transport
+    done
+    local default="${IN_CHECKOUT:-${HOME}/meshloom}" dc
+    INSTALL_DIR="$(ui_ask "$(t prompt_dir)" "$default")"
     INSTALL_DIR="${INSTALL_DIR:-$default}"
+    confirm_install
     mkdir -p "$INSTALL_DIR"
     write_docker_compose "$INSTALL_DIR"
-    echo -e "${GREEN}Wrote ${INSTALL_DIR}/docker-compose.yml${NC}"
-    local dc
+    ui_dim "  $(t wrote_config) ${INSTALL_DIR}/docker-compose.yml"
     dc="$(compose_cmd)"
-    read -r -p "sudo ${dc} up -d now? [Y/n]: " yn
-    yn="${yn:-Y}"
-    if [[ "$yn" =~ ^[Yy]$ ]]; then
-        (cd "$INSTALL_DIR" && sudo $dc pull && sudo $dc up -d)
+    if ui_yesno "$(t q_start_now)" y; then
+        phase "$(t working)"
+        run_quiet bash -c "cd \"$INSTALL_DIR\" && sudo $dc pull && sudo $dc up -d"
+        phase_ok
     fi
-    echo
-    echo -e "${GREEN}$(t done)${NC}"
-    echo "$(t open_at) ${CYAN}http://127.0.0.1:8000${NC}"
-    echo "$(t update_docker)"
+    printf '\n'
+    ui_ok "  $(t done)"
+    printf '  %s\n    %s\n' "$(t open_at)" "http://127.0.0.1:8000"
+    ui_dim "  $(t update_docker)"
+}
+
+show_browser_only() {
+    STEP_TOTAL=2
+    ui_screen "$(t step_browser)" 2
+    ui_wrap 2 70 "$(t browser_body)"
+    printf '\n'
+    ui_dim "  $(t browser_hint)"
+    printf '\n  http://<ip>:8000\n'
 }
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
+ui_init
 choose_language
-echo -e "${BOLD}$(t title)${NC}"
-echo
 detect_os
 detect_docker
 detect_checkout
 choose_install_mode
 
 if [ "$INSTALL_MODE" = "browser" ]; then
-    echo "$(t no_server)"
+    show_browser_only
     exit 0
 fi
 
