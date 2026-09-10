@@ -1,0 +1,96 @@
+---
+title: Variables et réglages
+description: Ce qui se décide dans l’environnement, ce qui vit dans la base.
+level: deep
+order: 14
+---
+
+Meshloom a deux surfaces de configuration, et elles ne se recouvrent pas.
+
+L’**environnement** décide de ce qui doit être connu avant que quoi que ce soit tourne : comment joindre la radio, où écrire la base, si les bots sont autorisés, si une authentification s’applique, quels contournements de diagnostic sont actifs. Ces variables sont lues au démarrage. Les changer implique de redémarrer le service.
+
+Les **réglages d’exécution** vivent dans la table `app_settings` de la base et se modifient à chaud via `GET` / `PATCH /api/settings`, c’est-à-dire depuis l’interface. Intervalle de publicité, portée de flood, listes de blocage, télémétrie suivie : rien de tout ça n’est une variable d’environnement.
+
+## Où écrire les variables
+
+| Installation | Emplacement |
+|--------------|-------------|
+| Paquet systemd | `/etc/meshloom/meshloom.env` |
+| Docker | bloc `environment:` du Compose, ou un `.env` |
+| Checkout | l’environnement du shell qui lance `uv run uvicorn` |
+
+Pour l’installation par paquet, `bash scripts/setup/install_service.sh` peut être rejoué pour réécrire ce fichier sans l’éditer à la main.
+
+## Connexion radio
+
+| Variable | Défaut | Description |
+|----------|--------|-------------|
+| `MESHCORE_SERIAL_PORT` | auto-détection | Port série de la radio |
+| `MESHCORE_SERIAL_BAUDRATE` | `115200` | Débit série |
+| `MESHCORE_TCP_HOST` | *(vide)* | Hôte TCP de la radio |
+| `MESHCORE_TCP_PORT` | `5000` | Port TCP |
+| `MESHCORE_BLE_ADDRESS` | *(vide)* | Adresse BLE de la radio |
+| `MESHCORE_BLE_PIN` | *(vide)* | Code PIN BLE, obligatoire avec l’adresse |
+
+Une seule variable de transport à la fois. Le détail des cas d’échec est dans [Transports radio](/docs/deep/transports/).
+
+## Serveur et données
+
+| Variable | Défaut | Description |
+|----------|--------|-------------|
+| `MESHCORE_DATABASE_PATH` | `data/meshcore.db` | Emplacement de la base SQLite |
+| `MESHCORE_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `MESHCORE_VAPID_SUBJECT` | `mailto:noreply@meshcore.local` | Sujet des jetons VAPID pour le push web |
+
+`MESHCORE_VAPID_SUBJECT` doit être un `mailto:` ou un `https:` réel si des appareils Apple sont concernés : APNs rejette le domaine `.local` par défaut avec `403 BadJwtToken`. Google FCM l’accepte. Voir [Notifications push](/docs/deep/push/).
+
+## Sécurité
+
+| Variable | Défaut | Description |
+|----------|--------|-------------|
+| `MESHCORE_DISABLE_BOTS` | `false` | Désactive entièrement le système de bots au démarrage |
+| `MESHCORE_BASIC_AUTH_USERNAME` | *(vide)* | Identifiant HTTP Basic pour toute l’application |
+| `MESHCORE_BASIC_AUTH_PASSWORD` | *(vide)* | Mot de passe associé |
+| `MESHCORE_ENABLE_LOCAL_PRIVATE_KEY_EXPORT` | `false` | Autorise `GET /api/radio/private-key` |
+
+Les deux variables d’authentification doivent être définies ensemble. L’une sans l’autre est une erreur de validation au démarrage. La portée exacte de chacune de ces options est décrite dans [Sécurité](/docs/deep/security/).
+
+## Diagnostic et contournements
+
+Ces variables existent pour diagnostiquer ou contourner des radios qui se comportent mal. Aucune n’est nécessaire en fonctionnement normal.
+
+| Variable | Défaut | Description |
+|----------|--------|-------------|
+| `MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK` | `false` | Fait passer l’audit radio d’un contrôle horaire à un sondage `get_msg()` toutes les 10 secondes |
+| `MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE` | `false` | Désactive la réutilisation des slots de salon et force `set_channel(...)` avant chaque envoi |
+| `MESHCORE_LOAD_WITH_AUTOEVICT` | `false` | Charge les contacts en mode autoevict, la radio évinçant elle-même les plus anciens |
+| `MESHCORE_SKIP_POST_CONNECT_SYNC` | `false` | Saute la synchronisation contacts/salons, la publicité de démarrage et les boucles périodiques |
+| `__CLOWNTOWN_DO_CLOCK_WRAPAROUND` | `false` | Très expérimental : tente un débordement d’horloge sur 32 bits quand la RTC est bloquée dans le futur |
+
+Trois précisions.
+
+`MESHCORE_ENABLE_MESSAGE_POLL_FALLBACK` ne crée pas une tâche : elle change la fréquence d’une tâche qui tourne toujours. Par défaut, cet audit passe une fois par heure et vérifie deux choses — si des messages sont restés sur la radio sans remonter par abonnement d’événement, et si les attentes de l’application sur les slots de salon correspondent encore à la réalité de la radio. En cas d’écart, une erreur apparaît dans l’interface et dans les logs.
+
+`MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE` retarde chaque envoi de salon d’environ 500 ms. À réserver aux cas où un autre client modifie les slots sous les pieds de Meshloom.
+
+`MESHCORE_SKIP_POST_CONNECT_SYNC` est une trappe de sortie de diagnostic. L’enregistrement des gestionnaires, l’export de clé, la synchronisation d’horloge et la récupération automatique des messages continuent ; c’est la prise en main des contacts et des salons qui est mise de côté. Utile quand l’état de la radio doit rester intact. Pas pour un usage normal.
+
+`__CLOWNTOWN_DO_CLOCK_WRAPAROUND` est un dernier recours pour un nœud dont l’horloge est coincée dans le futur, sans mode rescue ni temps GPS disponibles. Elle repose sur un comportement dépendant de la carte et peut ne pas être sûre ni efficace sur toutes les cibles MeshCore.
+
+## Réglages d’exécution en base
+
+Ce qui suit vit dans `app_settings` et se pilote depuis l’interface ou `PATCH /api/settings`. Ce n’est pas configurable par l’environnement.
+
+- `max_radio_contacts` — capacité de contacts visée sur la radio, base de calcul des remplissages et déchargements
+- `auto_decrypt_dm_on_advert` — déchiffrement historique des messages directs quand une clé devient connue
+- `advert_interval`, `last_advert_time` — publicité périodique, `0` désactive
+- `flood_scope`, `known_regions` — portée de flood régionale et liste de régions candidates au décodage
+- `blocked_keys`, `blocked_names`, `discovery_blocked_types` — listes de blocage
+- `tracked_telemetry_repeaters`, `tracked_telemetry_contacts`, `telemetry_interval_hours` — collecte de télémétrie
+- `auto_resend_channel` — renvoi automatique de salon
+- `last_message_times` — horodatages de tri côté serveur
+- `push_conversations`, `vapid_private_key`, `vapid_public_key` — état du push web
+
+Les intégrations MQTT, bots, webhooks, Apprise et SQS ne sont pas dans `app_settings` : elles vivent dans la table `fanout_configs` et se gèrent via `/api/fanout`. Voir [Fanout](/docs/deep/fanout/).
+
+Les conséquences radio de `max_radio_contacts`, `flood_scope` et `path_hash_mode` sont détaillées dans [Radio, contacts et salons](/docs/deep/radio/).
