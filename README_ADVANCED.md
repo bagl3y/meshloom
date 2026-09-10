@@ -108,7 +108,7 @@ Accept the browser warning, or use [mkcert](https://github.com/FiloSottile/mkcer
 
 ## Portainer GitOps
 
-For a stack that builds from this repo, use [`docker-compose.dev.yaml`](docker-compose.dev.yaml) as the Compose path and load the keys from [`.env.example`](.env.example) into the Portainer Environment section (or a local `.env`). See [README.md](README.md#install-path-3-portainer-gitops) for the variable list. Do not commit real radio hosts, ports, or VAPID addresses.
+For a stack that builds from this repo, use [`docker-compose.dev.yaml`](docker-compose.dev.yaml) as the Compose path and load the keys from [`.env.example`](.env.example) into the Portainer Environment section (or a local `.env`). Do not commit real radio hosts, ports, or VAPID addresses.
 
 ## Systemd Service
 
