@@ -1,0 +1,2 @@
+d /var/lib/meshloom 0750 meshloom meshloom
+d /etc/meshloom 0750 meshloom meshloom

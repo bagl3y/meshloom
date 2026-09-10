@@ -224,7 +224,7 @@ echo -e "  Example compose    : ${CYAN}${EXAMPLE_FILE}${NC}"
 echo -e "  Output compose     : ${CYAN}${COMPOSE_FILE}${NC}"
 echo
 
-if [ -f "$COMPOSE_FILE" ]; then
+if [ -f "$COMPOSE_FILE" ] && [ -z "${MESHLOOM_NONINTERACTIVE:-}" ]; then
     echo -e "${YELLOW}A local docker-compose.yml already exists.${NC}"
     read -r -p "Overwrite it? [y/N]: " OVERWRITE
     OVERWRITE="${OVERWRITE:-N}"
@@ -234,77 +234,127 @@ if [ -f "$COMPOSE_FILE" ]; then
     fi
 fi
 
-echo -e "${BOLD}─── Image Source ────────────────────────────────────────────────────${NC}"
-echo "How should Docker run Meshloom?"
-echo "  1) Use the published GHCR image (default)"
-echo "  2) Build locally from this checkout"
-echo
-read -r -p "Select image mode [1-2] (default: 1): " IMAGE_CHOICE
-IMAGE_CHOICE="${IMAGE_CHOICE:-1}"
+docker_allows_usb() {
+    [ "$(uname -s)" = "Linux" ] || return 1
+    docker info 2>/dev/null | grep -qi 'rootless' && return 1
+    return 0
+}
+
+if [ -n "${MESHLOOM_IMAGE_MODE:-}" ]; then
+    IMAGE_MODE="$MESHLOOM_IMAGE_MODE"
+else
+    echo -e "${BOLD}─── Image Source ────────────────────────────────────────────────────${NC}"
+    echo "How should Docker run Meshloom?"
+    echo "  1) Use the published GHCR image (default)"
+    echo "  2) Build locally from this checkout"
+    echo
+    read -r -p "Select image mode [1-2] (default: 1): " IMAGE_CHOICE
+    IMAGE_CHOICE="${IMAGE_CHOICE:-1}"
+    echo
+
+    case "$IMAGE_CHOICE" in
+        2) IMAGE_MODE="build" ;;
+        *) IMAGE_MODE="image" ;;
+    esac
+fi
+echo -e "${GREEN}Image mode: ${IMAGE_MODE}${NC}"
 echo
 
-case "$IMAGE_CHOICE" in
-    1)
-        IMAGE_MODE="image"
-        echo -e "${GREEN}Using published Docker image.${NC}"
-        ;;
-    2)
-        IMAGE_MODE="build"
-        echo -e "${GREEN}Using local Docker build.${NC}"
-        ;;
-    *)
-        IMAGE_MODE="image"
-        echo -e "${YELLOW}Invalid selection; defaulting to published Docker image.${NC}"
-        ;;
-esac
-echo
+prompt_docker_serial() {
+    TRANSPORT_MODE="serial"
+    find_serial_devices
 
-echo -e "${BOLD}─── Transport ───────────────────────────────────────────────────────${NC}"
-echo "How will the container reach your MeshCore radio?"
-echo "  1) Serial device passthrough (default)"
-echo "  2) TCP"
-echo "  3) BLE"
-echo
-echo "BLE can be configured here, but Docker Bluetooth access still requires manual compose customization."
-echo
-read -r -p "Select transport [1-3] (default: 1): " TRANSPORT_CHOICE
-TRANSPORT_CHOICE="${TRANSPORT_CHOICE:-1}"
-echo
+    if ((${#SERIAL_FOUND_HOST_PATHS[@]} == 0)); then
+        echo -e "${YELLOW}No serial devices were auto-detected.${NC}"
+        read -r -p "Serial device path on the host (default: /dev/ttyACM0): " SERIAL_HOST_PATH
+        SERIAL_HOST_PATH="${SERIAL_HOST_PATH:-/dev/ttyACM0}"
+    else
+        echo "Detected serial devices:"
+        for i in "${!SERIAL_FOUND_HOST_PATHS[@]}"; do
+            printf '  %d) %s (%s)\n' "$((i + 1))" "${SERIAL_FOUND_LABELS[$i]}" "${SERIAL_FOUND_DISPLAYS[$i]}"
+        done
+        echo "  m) Enter a path manually"
+        echo
+        read -r -p "Select serial device [1-${#SERIAL_FOUND_HOST_PATHS[@]} or m] (default: 1): " SERIAL_CHOICE
+        SERIAL_CHOICE="${SERIAL_CHOICE:-1}"
 
-case "$TRANSPORT_CHOICE" in
-    1)
-        TRANSPORT_MODE="serial"
-        find_serial_devices
-
-        if ((${#SERIAL_FOUND_HOST_PATHS[@]} == 0)); then
-            echo -e "${YELLOW}No serial devices were auto-detected.${NC}"
-            read -r -p "Serial device path on the host (default: /dev/ttyACM0): " SERIAL_HOST_PATH
-            SERIAL_HOST_PATH="${SERIAL_HOST_PATH:-/dev/ttyACM0}"
+        if [[ "$SERIAL_CHOICE" =~ ^[Mm]$ ]]; then
+            read -r -p "Serial device path on the host (default: ${SERIAL_FOUND_HOST_PATHS[0]}): " SERIAL_HOST_PATH
+            SERIAL_HOST_PATH="${SERIAL_HOST_PATH:-${SERIAL_FOUND_HOST_PATHS[0]}}"
+        elif [[ "$SERIAL_CHOICE" =~ ^[0-9]+$ ]] && [ "$SERIAL_CHOICE" -ge 1 ] && [ "$SERIAL_CHOICE" -le "${#SERIAL_FOUND_HOST_PATHS[@]}" ]; then
+            SERIAL_HOST_PATH="${SERIAL_FOUND_HOST_PATHS[$((SERIAL_CHOICE - 1))]}"
         else
-            echo "Detected serial devices:"
-            for i in "${!SERIAL_FOUND_HOST_PATHS[@]}"; do
-                printf '  %d) %s (%s)\n' "$((i + 1))" "${SERIAL_FOUND_LABELS[$i]}" "${SERIAL_FOUND_DISPLAYS[$i]}"
-            done
-            echo "  m) Enter a path manually"
-            echo
-            read -r -p "Select serial device [1-${#SERIAL_FOUND_HOST_PATHS[@]} or m] (default: 1): " SERIAL_CHOICE
-            SERIAL_CHOICE="${SERIAL_CHOICE:-1}"
-
-            if [[ "$SERIAL_CHOICE" =~ ^[Mm]$ ]]; then
-                read -r -p "Serial device path on the host (default: ${SERIAL_FOUND_HOST_PATHS[0]}): " SERIAL_HOST_PATH
-                SERIAL_HOST_PATH="${SERIAL_HOST_PATH:-${SERIAL_FOUND_HOST_PATHS[0]}}"
-            elif [[ "$SERIAL_CHOICE" =~ ^[0-9]+$ ]] && [ "$SERIAL_CHOICE" -ge 1 ] && [ "$SERIAL_CHOICE" -le "${#SERIAL_FOUND_HOST_PATHS[@]}" ]; then
-                SERIAL_HOST_PATH="${SERIAL_FOUND_HOST_PATHS[$((SERIAL_CHOICE - 1))]}"
-            else
-                SERIAL_HOST_PATH="${SERIAL_FOUND_HOST_PATHS[0]}"
-                echo -e "${YELLOW}Invalid selection; defaulting to ${SERIAL_HOST_PATH}.${NC}"
-            fi
+            SERIAL_HOST_PATH="${SERIAL_FOUND_HOST_PATHS[0]}"
+            echo -e "${YELLOW}Invalid selection; defaulting to ${SERIAL_HOST_PATH}.${NC}"
         fi
+    fi
 
-        normalize_serial_host_path_for_compose "$SERIAL_HOST_PATH"
-        echo -e "${GREEN}Serial passthrough: ${SERIAL_COMPOSE_HOST_PATH} -> ${SERIAL_CONTAINER_PATH}${NC}"
-        ;;
-    2)
+    normalize_serial_host_path_for_compose "$SERIAL_HOST_PATH"
+    echo -e "${GREEN}Serial passthrough: ${SERIAL_COMPOSE_HOST_PATH} -> ${SERIAL_CONTAINER_PATH}${NC}"
+}
+
+if [ -n "${MESHLOOM_TRANSPORT:-}" ]; then
+    case "$MESHLOOM_TRANSPORT" in
+        serial|serial-auto)
+            if ! docker_allows_usb; then
+                echo -e "${RED}Error: USB passthrough needs rootful Docker on Linux.${NC}"
+                exit 1
+            fi
+            TRANSPORT_MODE="serial"
+            SERIAL_HOST_PATH="${MESHLOOM_SERIAL_PORT:-/dev/ttyACM0}"
+            if [ "$MESHLOOM_TRANSPORT" = "serial-auto" ]; then
+                if [ -e /dev/ttyACM0 ]; then SERIAL_HOST_PATH="/dev/ttyACM0"
+                elif [ -e /dev/ttyUSB0 ]; then SERIAL_HOST_PATH="/dev/ttyUSB0"
+                fi
+            fi
+            normalize_serial_host_path_for_compose "$SERIAL_HOST_PATH"
+            echo -e "${GREEN}Serial passthrough: ${SERIAL_COMPOSE_HOST_PATH} -> ${SERIAL_CONTAINER_PATH}${NC}"
+            ;;
+        tcp)
+            TRANSPORT_MODE="tcp"
+            TCP_HOST="${MESHLOOM_TCP_HOST:-}"
+            TCP_PORT="${MESHLOOM_TCP_PORT:-5000}"
+            if [ -z "$TCP_HOST" ]; then
+                echo -e "${RED}Error: MESHLOOM_TCP_HOST is required.${NC}"
+                exit 1
+            fi
+            echo -e "${GREEN}TCP: ${TCP_HOST}:${TCP_PORT}${NC}"
+            ;;
+        *)
+            echo -e "${RED}Error: Docker installer does not support MESHLOOM_TRANSPORT=${MESHLOOM_TRANSPORT}${NC}"
+            exit 1
+            ;;
+    esac
+    echo
+else
+    echo -e "${BOLD}─── Transport ───────────────────────────────────────────────────────${NC}"
+    echo "How will the container reach your MeshCore radio?"
+    if docker_allows_usb; then
+        echo "  1) Serial device passthrough (default)"
+        echo "  2) TCP"
+        echo
+        read -r -p "Select transport [1-2] (default: 1): " TRANSPORT_CHOICE
+        TRANSPORT_CHOICE="${TRANSPORT_CHOICE:-1}"
+        echo
+        case "$TRANSPORT_CHOICE" in
+            2)
+                TRANSPORT_MODE="tcp"
+                read -r -p "TCP host (IP address or hostname): " TCP_HOST
+                while [ -z "$TCP_HOST" ]; do
+                    echo -e "${RED}TCP host is required.${NC}"
+                    read -r -p "TCP host: " TCP_HOST
+                done
+                read -r -p "TCP port (default: 5000): " TCP_PORT
+                TCP_PORT="${TCP_PORT:-5000}"
+                echo -e "${GREEN}TCP: ${TCP_HOST}:${TCP_PORT}${NC}"
+                ;;
+            *)
+                prompt_docker_serial
+                ;;
+        esac
+    else
+        echo "This host can only pass a TCP radio into Docker (USB needs rootful Linux Docker)."
+        echo
         TRANSPORT_MODE="tcp"
         read -r -p "TCP host (IP address or hostname): " TCP_HOST
         while [ -z "$TCP_HOST" ]; do
@@ -314,38 +364,17 @@ case "$TRANSPORT_CHOICE" in
         read -r -p "TCP port (default: 5000): " TCP_PORT
         TCP_PORT="${TCP_PORT:-5000}"
         echo -e "${GREEN}TCP: ${TCP_HOST}:${TCP_PORT}${NC}"
-        ;;
-    3)
-        TRANSPORT_MODE="ble"
-        read -r -p "BLE device address (e.g. AA:BB:CC:DD:EE:FF): " BLE_ADDRESS
-        while [ -z "$BLE_ADDRESS" ]; do
-            echo -e "${RED}BLE address is required.${NC}"
-            read -r -p "BLE device address: " BLE_ADDRESS
-        done
-        read -r -s -p "BLE PIN: " BLE_PIN
-        echo
-        while [ -z "$BLE_PIN" ]; do
-            echo -e "${RED}BLE PIN is required.${NC}"
-            read -r -s -p "BLE PIN: " BLE_PIN
-            echo
-        done
-        echo -e "${GREEN}BLE: ${BLE_ADDRESS}${NC}"
-        echo
-        echo -e "${RED}BLE Docker warning:${NC} Bluetooth access is not fully automated here."
-        echo -e "${RED}You will need to customize docker-compose.yml manually before BLE works.${NC}"
-        echo "That may include passing through Bluetooth devices, enabling privileged mode,"
-        echo "using host networking, or other host-specific Docker changes."
-        echo "If you want the easier path, use the regular Python launch flow for BLE instead."
-        BLE_MANUAL_WARNING=true
-        ;;
-    *)
-        TRANSPORT_MODE="serial"
-        SERIAL_HOST_PATH="/dev/ttyACM0"
-        echo -e "${YELLOW}Invalid selection; defaulting to serial passthrough at ${SERIAL_HOST_PATH}.${NC}"
-        ;;
-esac
-echo
+    fi
+    echo
+fi
 
+if [ -n "${MESHLOOM_NONINTERACTIVE:-}" ]; then
+    ENABLE_BOTS="${MESHLOOM_ENABLE_BOTS:-N}"
+    ENABLE_AUTH="${MESHLOOM_ENABLE_AUTH:-N}"
+    AUTH_USERNAME="${MESHLOOM_AUTH_USERNAME:-}"
+    AUTH_PASSWORD="${MESHLOOM_AUTH_PASSWORD:-}"
+    ENABLE_SNAKEOIL_TLS="${MESHLOOM_SNAKEOIL:-N}"
+else
 echo -e "${BOLD}─── Bot System ──────────────────────────────────────────────────────${NC}"
 echo -e "${YELLOW}Warning:${NC} The bot system executes arbitrary Python code on the server."
 echo "It is not recommended on untrusted networks."
@@ -372,8 +401,9 @@ echo
 read -r -p "Set up HTTP Basic Auth? [y/N]: " ENABLE_AUTH
 ENABLE_AUTH="${ENABLE_AUTH:-N}"
 echo
+fi
 
-if [[ "$ENABLE_AUTH" =~ ^[Yy]$ ]]; then
+if [[ "$ENABLE_AUTH" =~ ^[Yy]$ ]] && [ -z "${MESHLOOM_NONINTERACTIVE:-}" ]; then
     read -r -p "Username: " AUTH_USERNAME
     while [ -z "$AUTH_USERNAME" ]; do
         echo -e "${RED}Username cannot be empty.${NC}"
@@ -390,13 +420,15 @@ if [[ "$ENABLE_AUTH" =~ ^[Yy]$ ]]; then
 fi
 echo
 
-echo -e "${BOLD}─── HTTPS / Snakeoil TLS ────────────────────────────────────────────${NC}"
-echo "Generating a local self-signed certificate enables HTTPS-only browser features"
-echo "such as the channel key finder and, in some browsers, notifications."
-echo "Browsers will still warn that the certificate is untrusted."
-echo
-read -r -p "Generate and enable a snakeoil TLS certificate? [Y/n]: " ENABLE_SNAKEOIL_TLS
-ENABLE_SNAKEOIL_TLS="${ENABLE_SNAKEOIL_TLS:-Y}"
+if [ -z "${MESHLOOM_NONINTERACTIVE:-}" ]; then
+    echo -e "${BOLD}─── HTTPS / Snakeoil TLS ────────────────────────────────────────────${NC}"
+    echo "Generating a local self-signed certificate enables HTTPS-only browser features"
+    echo "such as the channel key finder and, in some browsers, notifications."
+    echo "Browsers will still warn that the certificate is untrusted."
+    echo
+    read -r -p "Generate and enable a snakeoil TLS certificate? [Y/n]: " ENABLE_SNAKEOIL_TLS
+    ENABLE_SNAKEOIL_TLS="${ENABLE_SNAKEOIL_TLS:-Y}"
+fi
 LOCAL_ACCESS_IP="$(detect_primary_local_ip)"
 if [[ "$ENABLE_SNAKEOIL_TLS" =~ ^[Yy]$ ]]; then
     ensure_snakeoil_requirements
@@ -408,7 +440,7 @@ else
 fi
 echo
 
-if [ "$(uname -s)" = "Linux" ]; then
+if [ "$(uname -s)" = "Linux" ] && [ -z "${MESHLOOM_NONINTERACTIVE:-}" ]; then
     echo -e "${BOLD}─── Container User ──────────────────────────────────────────────────${NC}"
     echo "The container runs as root by default for maximum serial compatibility."
     echo "You can override that and run as your host UID/GID instead to avoid"
@@ -472,12 +504,9 @@ mkdir -p "$REPO_DIR/data"
     echo "      MESHCORE_DATABASE_PATH: $(yaml_quote "data/meshcore.db")"
     if [ "$TRANSPORT_MODE" = "serial" ]; then
         echo "      MESHCORE_SERIAL_PORT: $(yaml_quote "$SERIAL_CONTAINER_PATH")"
-    elif [ "$TRANSPORT_MODE" = "tcp" ]; then
+    else
         echo "      MESHCORE_TCP_HOST: $(yaml_quote "$TCP_HOST")"
         echo "      MESHCORE_TCP_PORT: $(yaml_quote "$TCP_PORT")"
-    else
-        echo "      MESHCORE_BLE_ADDRESS: $(yaml_quote "$BLE_ADDRESS")"
-        echo "      MESHCORE_BLE_PIN: $(yaml_quote "$BLE_PIN")"
     fi
     if ! [[ "$ENABLE_BOTS" =~ ^[Yy]$ ]]; then
         echo "      MESHCORE_DISABLE_BOTS: $(yaml_quote "true")"
@@ -505,11 +534,6 @@ echo "  sudo docker compose pull && sudo docker compose up -d   # upgrade to the
 echo
 echo -e "${YELLOW}Note:${NC} serial passthrough generally needs ${BOLD}rootful Docker${NC}."
 echo "If Docker is running rootless on this host, serial-device mappings may fail even with a valid compose file."
-if [ "$TRANSPORT_MODE" = "ble" ] || [ "$BLE_MANUAL_WARNING" = true ]; then
-    echo
-    echo -e "${RED}BLE requires more than the generated env vars.${NC}"
-    echo -e "${RED}Before starting, edit docker-compose.yml for Bluetooth passthrough and any privileged/network settings your host requires.${NC}"
-fi
 echo
 echo -e "${GREEN}Your new docker file is ready at ${COMPOSE_FILE}.${NC}"
 echo -e "${GREEN}Feel free to edit it by hand as desired, or:${NC}"

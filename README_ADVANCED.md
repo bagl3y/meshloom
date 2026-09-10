@@ -112,7 +112,9 @@ For a stack that builds from this repo, use [`docker-compose.dev.yaml`](docker-c
 
 ## Systemd Service
 
-On Linux systems, this is the recommended installation method if you want Meshloom set up as a persistent systemd service that starts automatically on boot and restarts automatically if it crashes. Run the installer script from the repo root. It runs as your current user, installs from wherever you cloned the repo, and prints a quick-reference cheatsheet when done — no separate service account or path juggling required. The unit name is `meshloom`.
+On Linux, prefer the public one-liner in [README.md](README.md) (`install.sh`). That path installs the `meshloom` apt/dnf package when available (unit + `/etc/meshloom/meshloom.env` + `/var/lib/meshloom`), or falls back to a source checkout.
+
+From an existing clone, you can still run the checkout installer. It runs as your current user from the repo directory. The unit name is `meshloom`.
 
 ```bash
 bash scripts/setup/install_service.sh

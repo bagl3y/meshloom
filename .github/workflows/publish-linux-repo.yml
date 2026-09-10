@@ -1,0 +1,128 @@
+name: Publish Linux apt/dnf repo
+
+# Rebuilds a static apt + dnf repository from the latest release packages
+# and deploys it to GitHub Pages.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: linux-repo
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install repo tools
+        run: sudo apt-get update && sudo apt-get install -y apt-utils dpkg-dev createrepo-c gnupg
+
+      - name: Download release packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p incoming
+          gh release download --repo "${{ github.repository }}" --dir incoming --pattern "*.deb" --pattern "*.rpm" || true
+          ls -la incoming || true
+
+      - name: Import signing key
+        id: gpg
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.MESHLOOM_REPO_GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "${GPG_PRIVATE_KEY:-}" ]; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "No MESHLOOM_REPO_GPG_PRIVATE_KEY; publishing an unsigned repo."
+            exit 0
+          fi
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          KEY_ID="$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/ {print $5; exit}')"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+          echo "key_id=$KEY_ID" >> "$GITHUB_OUTPUT"
+          mkdir -p public
+          gpg --batch --armor --export "$KEY_ID" > public/meshloom.asc
+          gpg --batch --export "$KEY_ID" > public/meshloom.gpg
+
+      - name: Build apt and rpm trees
+        run: |
+          mkdir -p public/apt/pool/main public/apt/dists/stable/main/binary-amd64 public/apt/dists/stable/main/binary-arm64
+          mkdir -p public/rpm/x86_64 public/rpm/aarch64
+          shopt -s nullglob
+          for deb in incoming/*.deb; do
+            cp "$deb" public/apt/pool/main/
+          done
+          for rpm in incoming/*.rpm; do
+            case "$rpm" in
+              *aarch64*|*arm64*) cp "$rpm" public/rpm/aarch64/ ;;
+              *) cp "$rpm" public/rpm/x86_64/ ;;
+            esac
+          done
+          if compgen -G "public/apt/pool/main/*.deb" > /dev/null; then
+            (
+              cd public/apt
+              dpkg-scanpackages --arch amd64 pool /dev/null > dists/stable/main/binary-amd64/Packages
+              dpkg-scanpackages --arch arm64 pool /dev/null > dists/stable/main/binary-arm64/Packages
+              gzip -k -f dists/stable/main/binary-amd64/Packages
+              gzip -k -f dists/stable/main/binary-arm64/Packages
+              apt-ftparchive -o APT::FTPArchive::Release::Origin=Meshloom \
+                -o APT::FTPArchive::Release::Label=Meshloom \
+                -o APT::FTPArchive::Release::Suite=stable \
+                -o APT::FTPArchive::Release::Codename=stable \
+                -o APT::FTPArchive::Release::Architectures="amd64 arm64" \
+                -o APT::FTPArchive::Release::Components=main \
+                release dists/stable > dists/stable/Release
+            )
+          fi
+          if command -v createrepo_c >/dev/null; then
+            [ "$(ls -A public/rpm/x86_64 2>/dev/null)" ] && createrepo_c public/rpm/x86_64
+            [ "$(ls -A public/rpm/aarch64 2>/dev/null)" ] && createrepo_c public/rpm/aarch64
+          fi
+
+      - name: Sign metadata
+        if: steps.gpg.outputs.signed == 'true'
+        env:
+          KEY_ID: ${{ steps.gpg.outputs.key_id }}
+        run: |
+          if [ -f public/apt/dists/stable/Release ]; then
+            gpg --batch --yes --clearsign -u "$KEY_ID" \
+              -o public/apt/dists/stable/InRelease public/apt/dists/stable/Release
+            gpg --batch --yes --detach-sign -a -u "$KEY_ID" \
+              -o public/apt/dists/stable/Release.gpg public/apt/dists/stable/Release
+          fi
+          for arch in x86_64 aarch64; do
+            if [ -f "public/rpm/${arch}/repodata/repomd.xml" ]; then
+              gpg --batch --yes --detach-sign -a -u "$KEY_ID" \
+                -o "public/rpm/${arch}/repodata/repomd.xml.asc" \
+                "public/rpm/${arch}/repodata/repomd.xml"
+            fi
+          done
+
+      - name: Write index
+        run: |
+          cat > public/index.html <<'EOF'
+          <!doctype html>
+          <title>Meshloom Linux repo</title>
+          <p>apt: <code>https://bagl3y.github.io/meshloom/apt</code></p>
+          <p>dnf: <code>https://bagl3y.github.io/meshloom/rpm/\$basearch</code></p>
+          EOF
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

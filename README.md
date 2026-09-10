@@ -82,9 +82,25 @@ usbipd attach --wsl --busid 3-8
 ```
 </details>
 
+## Install (recommended)
+
+On Linux, the installer chooses a native systemd service or Docker and only offers radio transports that work on that host (USB / TCP / BLE). Use `bash -c` so prompts still have a terminal — do not pipe into `bash`.
+
+```bash
+/bin/bash -c "$(curl -fsSL https://github.com/bagl3y/meshloom/releases/latest/download/install.sh)"
+```
+
+Before the first GitHub release exists, use the copy on `main`:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/bagl3y/meshloom/main/scripts/setup/install.sh)"
+```
+
+Native Linux prefers the public apt/dnf repo when it is up, then a `.deb`/`.rpm` from the latest release, then a source clone. Docker writes a compose file that pulls `ghcr.io/bagl3y/meshloom` (USB needs rootful Docker on Linux; Docker Desktop is TCP only).
+
 ## Install Path 1: Clone And Build
 
-**This approach is recommended over Docker due to intermittent serial communications issues I've seen on \*nix systems.**
+**This approach is recommended over Docker when the radio is on USB, due to intermittent serial communications issues on \*nix containers.**
 
 ```bash
 git clone https://github.com/bagl3y/meshloom.git
@@ -141,7 +157,7 @@ bash scripts/setup/install_docker.sh
 
 Your local `docker-compose.yml` is gitignored so future pulls don't overwrite your Docker settings.
 
-The guided Docker flow can collect BLE settings, but BLE access from Docker still needs manual compose customization such as Bluetooth passthrough and possibly privileged mode or host networking. If you want the simpler path for BLE, use the regular Python launch flow instead.
+The guided Docker flow offers USB serial (rootful Linux Docker) or TCP. BLE is not supported in Docker; use the native service installer for Bluetooth.
 
 Then customize the local compose file for your transport and launch:
 
@@ -210,11 +226,16 @@ cp .env.example .env
 docker compose -f docker-compose.dev.yaml --env-file .env up --build
 ```
 
-There is no Meshloom package on the AUR yet.
-
 ## Updating
 
 Your data lives in the SQLite database at `MESHCORE_DATABASE_PATH` — `data/meshcore.db` by default. Update in place rather than reinstalling from scratch, and back that file up first (stop the app, then copy it). Schema migrations run automatically on startup, so an updated app will upgrade an existing database for you.
+
+Package (apt / dnf):
+
+```bash
+sudo apt upgrade    # Debian / Ubuntu
+sudo dnf upgrade    # Fedora / Rocky / Alma
+```
 
 Clone and build:
 

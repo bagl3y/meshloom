@@ -1,0 +1,43 @@
+name: meshloom
+arch: __NFPM_ARCH__
+platform: linux
+version: __NFPM_VERSION__
+release: "1"
+section: net
+priority: optional
+maintainer: "Pascal M <macri.pascal@gmail.com>"
+description: Web interface for MeshCore mesh radio networks
+vendor: Meshloom
+homepage: https://github.com/bagl3y/meshloom
+license: MIT
+contents:
+  - src: __STAGING__/opt/meshloom
+    dst: /opt/meshloom
+  - src: __PKGDIR__/meshloom.service
+    dst: /usr/lib/systemd/system/meshloom.service
+    file_info:
+      mode: 0644
+  - src: __PKGDIR__/meshloom.env
+    dst: /etc/meshloom/meshloom.env
+    type: config|noreplace
+    file_info:
+      mode: 0640
+  - src: __PKGDIR__/meshloom.sysusers
+    dst: /usr/lib/sysusers.d/meshloom.conf
+    file_info:
+      mode: 0644
+  - src: __PKGDIR__/meshloom.tmpfiles
+    dst: /usr/lib/tmpfiles.d/meshloom.conf
+    file_info:
+      mode: 0644
+scripts:
+  postinstall: __PKGDIR__/postinstall.sh
+  preremove: __PKGDIR__/preremove.sh
+  postremove: __PKGDIR__/postremove.sh
+overrides:
+  deb:
+    depends:
+      - libc6
+  rpm:
+    depends:
+      - glibc

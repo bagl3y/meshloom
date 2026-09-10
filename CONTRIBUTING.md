@@ -81,8 +81,6 @@ npm run build
 | `extended_quality.sh` | `all_quality.sh` plus e2e tests and Docker build matrix. Used for release validation. |
 | `e2e.sh` | Thin wrapper that runs Playwright e2e tests from `tests/e2e/`. |
 | `docker_ci.sh` | Builds the Docker image and runs a smoke test against it. |
-| `test_aur_package.sh` | Builds the AUR package in an Arch container, then installs and boots it in a second container with port 8000 exposed (hang finish). |
-| `run_aur_with_radio.sh` | Like `test_aur_package.sh` but passes through the host serial device for testing with a real radio (hang finish). |
 
 </details>
 
@@ -96,6 +94,7 @@ npm run build
 | `package_release_artifact.sh` | Builds the prebuilt-frontend release zip attached to GitHub releases. |
 | `push_docker_multiarch.sh` | Builds and pushes multi-arch Docker images (amd64 + arm64). |
 | `create_github_release.sh` | Creates a GitHub release with changelog notes and the release artifact. |
+| `build_nfpm_packages.sh` | Builds Meshloom `.deb` and `.rpm` packages with nFPM. |
 | `extract_release_notes.sh` | Extracts the latest version's notes from `CHANGELOG.md` for the release body. |
 | `collect_licenses.sh` | Gathers third-party license attributions into `LICENSES.md`. |
 | `print_frontend_licenses.cjs` | Helper that extracts frontend npm dependency licenses. |

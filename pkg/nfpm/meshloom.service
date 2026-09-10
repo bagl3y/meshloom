@@ -1,0 +1,27 @@
+[Unit]
+Description=Meshloom
+Documentation=https://github.com/bagl3y/meshloom
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=meshloom
+Group=meshloom
+WorkingDirectory=/opt/meshloom
+EnvironmentFile=/etc/meshloom/meshloom.env
+ExecStart=/opt/meshloom/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5s
+
+StateDirectory=meshloom
+
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ReadWritePaths=/opt/meshloom /var/lib/meshloom /etc/meshloom
+SupplementaryGroups=dialout
+
+[Install]
+WantedBy=multi-user.target

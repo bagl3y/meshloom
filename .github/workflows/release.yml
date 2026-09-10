@@ -1,12 +1,7 @@
 name: Release
 
-# Builds the prebuilt-frontend artifact and publishes the GitHub release for a
-# version tag. scripts/setup/fetch_prebuilt_frontend.py reads the latest
-# release's assets, so every release must carry this zip; doing it in CI keeps
-# that from depending on whoever happens to be cutting the release.
-#
-# Cut a release with scripts/build/publish.sh, which bumps the version and
-# pushes the commit, then push the matching tag:
+# Builds the prebuilt-frontend zip, Linux .deb/.rpm packages, and publishes
+# the GitHub release. Cut a release with scripts/build/publish.sh, then:
 #   git tag X.Y.Z && git push origin X.Y.Z
 
 on:
@@ -22,25 +17,27 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  version:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-        with:
-          # create_github_release.sh reads the version's CHANGELOG section.
-          fetch-depth: 0
-
       - name: Resolve version
         id: version
         run: |
           VERSION="${{ inputs.version || github.ref_name }}"
           echo "version=${VERSION#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
+  frontend:
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
         with:
           node-version: "24"
           cache: npm
@@ -50,10 +47,14 @@ jobs:
         run: npm ci
         working-directory: frontend
 
-      - name: Build release artifact
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+
+      - name: Package prebuilt zip
         id: artifact
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ needs.version.outputs.version }}"
           GIT_HASH="$(git rev-parse --short HEAD)"
           ASSET="meshloom-prebuilt-frontend-v${VERSION}-${GIT_HASH}.zip"
           scripts/build/package_release_artifact.sh \
@@ -63,14 +64,102 @@ jobs:
             --output "$ASSET"
           echo "asset=$ASSET" >> "$GITHUB_OUTPUT"
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-zip
+          path: ${{ steps.artifact.outputs.asset }}
+
+  nfpm:
+    needs: [version, frontend]
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install nFPM
+        run: |
+          NFPM_VER=2.46.3
+          case "$(uname -m)" in
+            aarch64|arm64) NFPM_ARCH=Linux_arm64 ;;
+            *) NFPM_ARCH=Linux_x86_64 ;;
+          esac
+          curl -fsSL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VER}/nfpm_${NFPM_VER}_${NFPM_ARCH}.tar.gz" \
+            | tar -xz nfpm
+          sudo install -m 0755 nfpm /usr/local/bin/nfpm
+          nfpm --version
+
+      - name: Build packages
+        run: |
+          chmod +x scripts/build/build_nfpm_packages.sh
+          scripts/build/build_nfpm_packages.sh \
+            --version "${{ needs.version.outputs.version }}" \
+            --arch "${{ matrix.arch }}" \
+            --output-dir dist \
+            --skip-frontend
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nfpm-${{ matrix.arch }}
+          path: dist/*
+
+  publish:
+    needs: [version, frontend, nfpm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-zip
+          path: artifacts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nfpm-amd64
+          path: artifacts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nfpm-arm64
+          path: artifacts
+
+      - name: Stage install.sh
+        run: cp scripts/setup/install.sh artifacts/install.sh
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Only used by a workflow_dispatch run, where the tag does not exist yet.
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          ASSET_ARGS=()
+          while IFS= read -r file; do
+            ASSET_ARGS+=(--asset "$file")
+          done < <(find artifacts -type f | sort)
           scripts/build/create_github_release.sh \
-            --version "${{ steps.version.outputs.version }}" \
+            --version "${{ needs.version.outputs.version }}" \
             --full-git-hash "$(git rev-parse HEAD)" \
-            --asset "${{ steps.artifact.outputs.asset }}"
+            "${ASSET_ARGS[@]}"

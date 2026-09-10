@@ -1,0 +1,54 @@
+name: nFPM packages
+
+# Build amd64 .deb/.rpm on pull requests so packaging breaks are caught
+# without publishing a release.
+
+on:
+  pull_request:
+    paths:
+      - "pkg/nfpm/**"
+      - "scripts/build/build_nfpm_packages.sh"
+      - "app/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "frontend/**"
+      - ".github/workflows/nfpm.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  nfpm-amd64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install nFPM
+        run: |
+          NFPM_VER=2.46.3
+          curl -fsSL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VER}/nfpm_${NFPM_VER}_Linux_x86_64.tar.gz" \
+            | tar -xz nfpm
+          sudo install -m 0755 nfpm /usr/local/bin/nfpm
+
+      - name: Build amd64 packages
+        run: |
+          chmod +x scripts/build/build_nfpm_packages.sh
+          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -n 1)"
+          scripts/build/build_nfpm_packages.sh \
+            --version "$VERSION" \
+            --arch amd64 \
+            --output-dir dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nfpm-amd64-pr
+          path: dist/*

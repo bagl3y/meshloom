@@ -79,143 +79,204 @@ require_minimum_version() {
 
 # ── transport selection ────────────────────────────────────────────────────────
 
-echo -e "${BOLD}─── Transport ───────────────────────────────────────────────────────${NC}"
-echo "How is your MeshCore radio connected?"
-echo "  1) Serial — auto-detect port (default)"
-echo "  2) Serial — specify port manually"
-echo "  3) TCP (network connection)"
-echo "  4) BLE (Bluetooth)"
-echo
-read -rp "Select transport [1-4] (default: 1): " TRANSPORT_CHOICE
-TRANSPORT_CHOICE="${TRANSPORT_CHOICE:-1}"
-echo
-
 NEED_DIALOUT=false
 SERIAL_PORT=""
 TCP_HOST=""
 TCP_PORT=""
 BLE_ADDRESS=""
 BLE_PIN=""
+TRANSPORT_CHOICE=""
 
-case "$TRANSPORT_CHOICE" in
-    1)
-        echo -e "${GREEN}Serial auto-detect selected.${NC}"
-        NEED_DIALOUT=true
-        ;;
-    2)
-        read -rp "Serial port path (default: /dev/ttyUSB0): " SERIAL_PORT
-        SERIAL_PORT="${SERIAL_PORT:-/dev/ttyUSB0}"
-        echo -e "${GREEN}Serial port: ${SERIAL_PORT}${NC}"
-        NEED_DIALOUT=true
-        ;;
-    3)
-        read -rp "TCP host (IP address or hostname): " TCP_HOST
-        while [ -z "$TCP_HOST" ]; do
-            echo -e "${RED}TCP host is required.${NC}"
-            read -rp "TCP host: " TCP_HOST
-        done
-        read -rp "TCP port (default: 5000): " TCP_PORT
-        TCP_PORT="${TCP_PORT:-5000}"
-        echo -e "${GREEN}TCP: ${TCP_HOST}:${TCP_PORT}${NC}"
-        ;;
-    4)
-        read -rp "BLE device address (e.g. AA:BB:CC:DD:EE:FF): " BLE_ADDRESS
-        while [ -z "$BLE_ADDRESS" ]; do
-            echo -e "${RED}BLE address is required.${NC}"
-            read -rp "BLE device address: " BLE_ADDRESS
-        done
-        read -rsp "BLE PIN: " BLE_PIN
-        echo
-        while [ -z "$BLE_PIN" ]; do
-            echo -e "${RED}BLE PIN is required.${NC}"
+if [ -n "${MESHLOOM_TRANSPORT:-}" ]; then
+    case "$MESHLOOM_TRANSPORT" in
+        serial-auto)
+            TRANSPORT_CHOICE=1
+            NEED_DIALOUT=true
+            echo -e "${GREEN}Serial auto-detect selected.${NC}"
+            ;;
+        serial)
+            TRANSPORT_CHOICE=2
+            SERIAL_PORT="${MESHLOOM_SERIAL_PORT:-/dev/ttyUSB0}"
+            NEED_DIALOUT=true
+            echo -e "${GREEN}Serial port: ${SERIAL_PORT}${NC}"
+            ;;
+        tcp)
+            TRANSPORT_CHOICE=3
+            TCP_HOST="${MESHLOOM_TCP_HOST:-}"
+            TCP_PORT="${MESHLOOM_TCP_PORT:-5000}"
+            if [ -z "$TCP_HOST" ]; then
+                echo -e "${RED}Error: MESHLOOM_TCP_HOST is required.${NC}"
+                exit 1
+            fi
+            echo -e "${GREEN}TCP: ${TCP_HOST}:${TCP_PORT}${NC}"
+            ;;
+        ble)
+            TRANSPORT_CHOICE=4
+            BLE_ADDRESS="${MESHLOOM_BLE_ADDRESS:-}"
+            BLE_PIN="${MESHLOOM_BLE_PIN:-}"
+            if [ -z "$BLE_ADDRESS" ] || [ -z "$BLE_PIN" ]; then
+                echo -e "${RED}Error: MESHLOOM_BLE_ADDRESS and MESHLOOM_BLE_PIN are required.${NC}"
+                exit 1
+            fi
+            echo -e "${GREEN}BLE: ${BLE_ADDRESS}${NC}"
+            ;;
+        *)
+            echo -e "${RED}Error: unknown MESHLOOM_TRANSPORT=${MESHLOOM_TRANSPORT}${NC}"
+            exit 1
+            ;;
+    esac
+    echo
+else
+    echo -e "${BOLD}─── Transport ───────────────────────────────────────────────────────${NC}"
+    echo "How is your MeshCore radio connected?"
+    echo "  1) Serial — auto-detect port (default)"
+    echo "  2) Serial — specify port manually"
+    echo "  3) TCP (network connection)"
+    echo "  4) BLE (Bluetooth)"
+    echo
+    read -rp "Select transport [1-4] (default: 1): " TRANSPORT_CHOICE
+    TRANSPORT_CHOICE="${TRANSPORT_CHOICE:-1}"
+    echo
+
+    case "$TRANSPORT_CHOICE" in
+        1)
+            echo -e "${GREEN}Serial auto-detect selected.${NC}"
+            NEED_DIALOUT=true
+            ;;
+        2)
+            read -rp "Serial port path (default: /dev/ttyUSB0): " SERIAL_PORT
+            SERIAL_PORT="${SERIAL_PORT:-/dev/ttyUSB0}"
+            echo -e "${GREEN}Serial port: ${SERIAL_PORT}${NC}"
+            NEED_DIALOUT=true
+            ;;
+        3)
+            read -rp "TCP host (IP address or hostname): " TCP_HOST
+            while [ -z "$TCP_HOST" ]; do
+                echo -e "${RED}TCP host is required.${NC}"
+                read -rp "TCP host: " TCP_HOST
+            done
+            read -rp "TCP port (default: 5000): " TCP_PORT
+            TCP_PORT="${TCP_PORT:-5000}"
+            echo -e "${GREEN}TCP: ${TCP_HOST}:${TCP_PORT}${NC}"
+            ;;
+        4)
+            read -rp "BLE device address (e.g. AA:BB:CC:DD:EE:FF): " BLE_ADDRESS
+            while [ -z "$BLE_ADDRESS" ]; do
+                echo -e "${RED}BLE address is required.${NC}"
+                read -rp "BLE device address: " BLE_ADDRESS
+            done
             read -rsp "BLE PIN: " BLE_PIN
             echo
-        done
-        echo -e "${GREEN}BLE: ${BLE_ADDRESS}${NC}"
-        ;;
-    *)
-        echo -e "${YELLOW}Invalid selection — defaulting to serial auto-detect.${NC}"
-        TRANSPORT_CHOICE=1
-        NEED_DIALOUT=true
-        ;;
-esac
-echo
+            while [ -z "$BLE_PIN" ]; do
+                echo -e "${RED}BLE PIN is required.${NC}"
+                read -rsp "BLE PIN: " BLE_PIN
+                echo
+            done
+            echo -e "${GREEN}BLE: ${BLE_ADDRESS}${NC}"
+            ;;
+        *)
+            echo -e "${YELLOW}Invalid selection — defaulting to serial auto-detect.${NC}"
+            TRANSPORT_CHOICE=1
+            NEED_DIALOUT=true
+            ;;
+    esac
+    echo
+fi
 
 # ── frontend install mode ──────────────────────────────────────────────────────
 
-echo -e "${BOLD}─── Frontend Assets ─────────────────────────────────────────────────${NC}"
-echo "How should the frontend be installed?"
-echo "  1) Build locally with npm (default, latest code, requires node/npm)"
-echo "  2) Download prebuilt frontend (fastest)"
-echo
-read -rp "Select frontend mode [1-2] (default: 1): " FRONTEND_CHOICE
-FRONTEND_CHOICE="${FRONTEND_CHOICE:-1}"
-echo
+if [ -n "${MESHLOOM_FRONTEND_MODE:-}" ]; then
+    FRONTEND_MODE="$MESHLOOM_FRONTEND_MODE"
+    echo -e "${GREEN}Frontend mode: ${FRONTEND_MODE}${NC}"
+    echo
+else
+    echo -e "${BOLD}─── Frontend Assets ─────────────────────────────────────────────────${NC}"
+    echo "How should the frontend be installed?"
+    echo "  1) Build locally with npm (default, latest code, requires node/npm)"
+    echo "  2) Download prebuilt frontend (fastest)"
+    echo
+    read -rp "Select frontend mode [1-2] (default: 1): " FRONTEND_CHOICE
+    FRONTEND_CHOICE="${FRONTEND_CHOICE:-1}"
+    echo
 
-case "$FRONTEND_CHOICE" in
-    1)
-        FRONTEND_MODE="build"
-        echo -e "${GREEN}Using local frontend build.${NC}"
-        ;;
-    2)
-        FRONTEND_MODE="prebuilt"
-        echo -e "${GREEN}Using prebuilt frontend download.${NC}"
-        ;;
-    *)
-        FRONTEND_MODE="build"
-        echo -e "${YELLOW}Invalid selection — defaulting to local frontend build.${NC}"
-        ;;
-esac
-echo
+    case "$FRONTEND_CHOICE" in
+        1)
+            FRONTEND_MODE="build"
+            echo -e "${GREEN}Using local frontend build.${NC}"
+            ;;
+        2)
+            FRONTEND_MODE="prebuilt"
+            echo -e "${GREEN}Using prebuilt frontend download.${NC}"
+            ;;
+        *)
+            FRONTEND_MODE="build"
+            echo -e "${YELLOW}Invalid selection — defaulting to local frontend build.${NC}"
+            ;;
+    esac
+    echo
+fi
 
 # ── bots ──────────────────────────────────────────────────────────────────────
-
-echo -e "${BOLD}─── Bot System ──────────────────────────────────────────────────────${NC}"
-echo -e "${YELLOW}Warning:${NC} The bot system executes arbitrary Python code on the server."
-echo    "It is not recommended on untrusted networks. You can always enable"
-echo    "it later by editing the service file."
-echo
-read -rp "Enable bots? [y/N]: " ENABLE_BOTS
-ENABLE_BOTS="${ENABLE_BOTS:-N}"
-echo
 
 ENABLE_AUTH="N"
 AUTH_USERNAME=""
 AUTH_PASSWORD=""
 
-if [[ "$ENABLE_BOTS" =~ ^[Yy] ]]; then
-    echo -e "${GREEN}Bots enabled.${NC}"
+if [ -n "${MESHLOOM_NONINTERACTIVE:-}" ]; then
+    ENABLE_BOTS="${MESHLOOM_ENABLE_BOTS:-N}"
+    ENABLE_AUTH="${MESHLOOM_ENABLE_AUTH:-N}"
+    AUTH_USERNAME="${MESHLOOM_AUTH_USERNAME:-}"
+    AUTH_PASSWORD="${MESHLOOM_AUTH_PASSWORD:-}"
+    if [[ "$ENABLE_BOTS" =~ ^[Yy] ]]; then
+        echo -e "${GREEN}Bots enabled.${NC}"
+    else
+        echo -e "${GREEN}Bots disabled.${NC}"
+    fi
+    echo
+else
+    echo -e "${BOLD}─── Bot System ──────────────────────────────────────────────────────${NC}"
+    echo -e "${YELLOW}Warning:${NC} The bot system executes arbitrary Python code on the server."
+    echo    "It is not recommended on untrusted networks. You can always enable"
+    echo    "it later by editing the service file."
+    echo
+    read -rp "Enable bots? [y/N]: " ENABLE_BOTS
+    ENABLE_BOTS="${ENABLE_BOTS:-N}"
     echo
 
-    echo -e "${BOLD}─── HTTP Basic Auth ─────────────────────────────────────────────────${NC}"
-    echo "With bots enabled, HTTP Basic Auth is strongly recommended if this"
-    echo "service will be accessible beyond your local machine."
-    echo
-    read -rp "Set up HTTP Basic Auth? [Y/n]: " ENABLE_AUTH
-    ENABLE_AUTH="${ENABLE_AUTH:-Y}"
-    echo
-
-    if [[ "$ENABLE_AUTH" =~ ^[Yy] ]]; then
-        read -rp "Username: " AUTH_USERNAME
-        while [ -z "$AUTH_USERNAME" ]; do
-            echo -e "${RED}Username cannot be empty.${NC}"
-            read -rp "Username: " AUTH_USERNAME
-        done
-        read -rsp "Password: " AUTH_PASSWORD
+    if [[ "$ENABLE_BOTS" =~ ^[Yy] ]]; then
+        echo -e "${GREEN}Bots enabled.${NC}"
         echo
-        while [ -z "$AUTH_PASSWORD" ]; do
-            echo -e "${RED}Password cannot be empty.${NC}"
+
+        echo -e "${BOLD}─── HTTP Basic Auth ─────────────────────────────────────────────────${NC}"
+        echo "With bots enabled, HTTP Basic Auth is strongly recommended if this"
+        echo "service will be accessible beyond your local machine."
+        echo
+        read -rp "Set up HTTP Basic Auth? [Y/n]: " ENABLE_AUTH
+        ENABLE_AUTH="${ENABLE_AUTH:-Y}"
+        echo
+
+        if [[ "$ENABLE_AUTH" =~ ^[Yy] ]]; then
+            read -rp "Username: " AUTH_USERNAME
+            while [ -z "$AUTH_USERNAME" ]; do
+                echo -e "${RED}Username cannot be empty.${NC}"
+                read -rp "Username: " AUTH_USERNAME
+            done
             read -rsp "Password: " AUTH_PASSWORD
             echo
-        done
-        echo -e "${GREEN}Basic Auth configured for user '${AUTH_USERNAME}'.${NC}"
-        echo -e "${YELLOW}Note:${NC} Basic Auth credentials are not safe over plain HTTP."
-        echo    "See README_ADVANCED.md for HTTPS setup."
+            while [ -z "$AUTH_PASSWORD" ]; do
+                echo -e "${RED}Password cannot be empty.${NC}"
+                read -rsp "Password: " AUTH_PASSWORD
+                echo
+            done
+            echo -e "${GREEN}Basic Auth configured for user '${AUTH_USERNAME}'.${NC}"
+            echo -e "${YELLOW}Note:${NC} Basic Auth credentials are not safe over plain HTTP."
+            echo    "See README_ADVANCED.md for HTTPS setup."
+        fi
+    else
+        echo -e "${GREEN}Bots disabled.${NC}"
     fi
-else
-    echo -e "${GREEN}Bots disabled.${NC}"
+    echo
 fi
-echo
 
 # ── python dependencies ────────────────────────────────────────────────────────
 
