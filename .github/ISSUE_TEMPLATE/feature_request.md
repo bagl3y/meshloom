@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea or improvement for RemoteTerm for MeshCore
+about: Suggest an idea or improvement for Meshloom
 title: ''
 labels: 'feature to add'
 assignees: ''
@@ -16,5 +16,5 @@ assignees: ''
 <!-- Optional: mockups, screenshots, links, how other clients handle it,
      or anything else that helps explain the idea. -->
 
-<!-- Optional, but helpful: which RemoteTerm version are you on? It may already
+<!-- Optional, but helpful: which Meshloom version are you on? It may already
      be in a newer release. -->

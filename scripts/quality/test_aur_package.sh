@@ -95,7 +95,7 @@ systemd-sysusers
 systemd-tmpfiles --create
 
 echo "============================================"
-echo " RemoteTerm installed — starting server"
+echo " Meshloom installed — starting server"
 echo "============================================"
 
 # Run as the remoteterm service user, matching the systemd unit

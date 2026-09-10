@@ -1,16 +1,16 @@
 # Home Assistant Integration
 
-RemoteTerm can publish mesh network data to Home Assistant via MQTT Discovery. Devices and entities appear automatically in HA -- no custom component or HACS install needed.
+Meshloom can publish mesh network data to Home Assistant via MQTT Discovery. Devices and entities appear automatically in HA -- no custom component or HACS install needed.
 
 ## Prerequisites
 
 - Home Assistant with the [MQTT integration](https://www.home-assistant.io/integrations/mqtt/) configured
-- An MQTT broker (e.g. Mosquitto) accessible to both HA and RemoteTerm
-- RemoteTerm running and connected to a radio
+- An MQTT broker (e.g. Mosquitto) accessible to both HA and Meshloom
+- Meshloom running and connected to a radio
 
 ## Setup
 
-1. In RemoteTerm, go to **Settings > Integrations > Add > Home Assistant MQTT Discovery**
+1. In Meshloom, go to **Settings > Integrations > Add > Home Assistant MQTT Discovery**
 2. Enter your MQTT broker host and port (same broker HA is connected to)
 3. Optionally enter broker username/password and TLS settings
 4. Select contacts for GPS tracking and repeaters for telemetry (see below)
@@ -21,7 +21,7 @@ Devices will appear in HA under **Settings > Devices & Services > MQTT** within 
 
 ## How MeshCore IDs Map Into Home Assistant
 
-RemoteTerm uses each node's public key to derive a stable short identifier for MQTT topics:
+Meshloom uses each node's public key to derive a stable short identifier for MQTT topics:
 
 - Full public key: `ae92577bae6c4f1d...`
 - Node ID: `ae92577bae6c` (the first 12 hex characters, lowercased)
@@ -34,7 +34,7 @@ When this README shows `<node_id>`, it always means that 12-character value. Nod
 
 **Entity IDs** are different — HA auto-generates them from the device name and entity name, not from the node ID. For example, a radio named "MyRadio" produces entities like `binary_sensor.myradio_connected` and `event.myradio_messages`. A contact named "Alice" produces `device_tracker.alice`. You can find your actual entity IDs in **Settings > Devices & Services > MQTT** in HA, and you can rename them in HA's UI without affecting the integration.
 
-You can also see the MQTT topic IDs in RemoteTerm's Home Assistant integration UI:
+You can also see the MQTT topic IDs in Meshloom's Home Assistant integration UI:
 
 - `What gets created in Home Assistant`
 - `Published topic summary`
@@ -54,7 +54,7 @@ Always created. Updates every 60 seconds.
 
 One device per tracked repeater selected in the HA integration. Updates when telemetry is collected (auto-collect cycle (~8 hours or variable in settings), or when you manually fetch from the repeater dashboard).
 
-Repeaters must first be added to the auto-telemetry tracking list in RemoteTerm's Radio settings section. Only auto-tracked repeaters appear in the HA integration's repeater picker.
+Repeaters must first be added to the auto-telemetry tracking list in Meshloom's Radio settings section. Only auto-tracked repeaters appear in the HA integration's repeater picker.
 
 | Entity | Type | Unit | Description |
 |--------|------|------|-------------|
@@ -66,7 +66,7 @@ Repeaters must first be added to the auto-telemetry tracking list in RemoteTerm'
 | `sensor.<repeater_name>_packets_sent` | -- | count | Total packets sent |
 | `sensor.<repeater_name>_uptime` | Duration | s | Uptime since last reboot |
 
-If RemoteTerm already has a cached telemetry snapshot for that repeater, it republishes it on startup so HA can populate the sensors immediately instead of waiting for the next collection cycle.
+If Meshloom already has a cached telemetry snapshot for that repeater, it republishes it on startup so HA can populate the sensors immediately instead of waiting for the next collection cycle.
 
 ### Contact Devices
 
@@ -74,7 +74,7 @@ One HA device per tracked contact, which can expose two kinds of entities.
 
 **GPS tracker** -- one `device_tracker`, populated from two sources:
 
-- **Advertisements** -- updates passively whenever RemoteTerm hears an advert carrying GPS coordinates from that contact. No radio commands are sent; it piggybacks on normal mesh traffic.
+- **Advertisements** -- updates passively whenever Meshloom hears an advert carrying GPS coordinates from that contact. No radio commands are sent; it piggybacks on normal mesh traffic.
 - **CayenneLPP telemetry** -- if the contact also reports a GPS reading in its LPP telemetry (and is tracked for contact telemetry collection), that reading updates the tracker too. GPS is routed to the tracker, not exposed as a numeric sensor.
 
 **CayenneLPP sensors** -- if the contact is tracked for telemetry collection and reports LPP readings, a numeric sensor is created per reading, auto-detected from the data (e.g. `sensor.<contact_name>_lpp_temperature_ch1`, `_lpp_voltage_ch1`).
@@ -450,8 +450,8 @@ actions:
 ### Devices don't appear in HA
 
 - Verify the MQTT integration is configured in HA (**Settings > Devices & Services > MQTT**) and shows "Connected"
-- Verify RemoteTerm's HA integration shows "Connected" (green dot)
-- Check that both HA and RemoteTerm are using the same MQTT broker
+- Verify Meshloom's HA integration shows "Connected" (green dot)
+- Check that both HA and Meshloom are using the same MQTT broker
 - Subscribe to discovery topics to verify messages are flowing:
   ```
   mosquitto_sub -h <broker> -t 'homeassistant/#' -v
@@ -467,25 +467,25 @@ mosquitto_pub -h <broker> -t 'homeassistant/sensor/meshcore_unknown/noise_floor/
 
 ### Repeater sensors show "Unknown" or "Unavailable"
 
-Repeater telemetry only updates when collected. Trigger a manual fetch by opening the repeater's dashboard in RemoteTerm and clicking "Status", or wait for the next auto-collect cycle (~8 hours).
+Repeater telemetry only updates when collected. Trigger a manual fetch by opening the repeater's dashboard in Meshloom and clicking "Status", or wait for the next auto-collect cycle (~8 hours).
 
-If RemoteTerm already has cached telemetry for that repeater, it republishes the last known values on startup. If the sensors are still unknown or unavailable, it usually means no telemetry has ever been collected for that repeater yet.
+If Meshloom already has cached telemetry for that repeater, it republishes the last known values on startup. If the sensors are still unknown or unavailable, it usually means no telemetry has ever been collected for that repeater yet.
 
 ### Contact device tracker shows "Unknown"
 
-The contact's GPS position only updates when RemoteTerm hears an advertisement from that node that includes GPS coordinates. If the contact's device doesn't broadcast GPS or hasn't advertised recently, the tracker will show as unknown.
+The contact's GPS position only updates when Meshloom hears an advertisement from that node that includes GPS coordinates. If the contact's device doesn't broadcast GPS or hasn't advertised recently, the tracker will show as unknown.
 
 ### Entity is "Unavailable"
 
-Radio health entities have a 120-second expiry. If RemoteTerm stops sending health updates (e.g. it's shut down or loses connection to the broker), HA marks the entities as unavailable after 2 minutes. Restart RemoteTerm or check the broker connection.
+Radio health entities have a 120-second expiry. If Meshloom stops sending health updates (e.g. it's shut down or loses connection to the broker), HA marks the entities as unavailable after 2 minutes. Restart Meshloom or check the broker connection.
 
 ## Removing the Integration
 
-Disabling or deleting the HA integration in RemoteTerm's settings publishes empty retained messages to all discovery topics, which removes the devices and entities from HA automatically.
+Disabling or deleting the HA integration in Meshloom's settings publishes empty retained messages to all discovery topics, which removes the devices and entities from HA automatically.
 
 ## Local Test Environment
 
-For local development, RemoteTerm includes a helper that starts Mosquitto and Home Assistant with MQTT preconfigured:
+For local development, Meshloom includes a helper that starts Mosquitto and Home Assistant with MQTT preconfigured:
 
 ```bash
 ./scripts/setup/start_ha_test_env.sh

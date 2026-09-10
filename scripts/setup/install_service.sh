@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install_service.sh
 #
-# Sets up RemoteTerm for MeshCore as a persistent systemd service running as
+# Sets up Meshloom as a persistent systemd service running as
 # the current user from the current repo directory. No separate service account
 # is needed. After installation, git pull and rebuilds work without any sudo -u
 # gymnastics.
@@ -18,13 +18,13 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-SERVICE_NAME="remoteterm"
+SERVICE_NAME="meshloom"
 REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 CURRENT_USER="$(id -un)"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 FRONTEND_MODE="build"
 
-echo -e "${BOLD}=== RemoteTerm for MeshCore — Service Installer ===${NC}"
+echo -e "${BOLD}=== Meshloom — Service Installer ===${NC}"
 echo
 
 # ── sanity checks ──────────────────────────────────────────────────────────────
@@ -299,7 +299,7 @@ systemd_escape_env_value() {
 
 generate_service_file() {
     echo "[Unit]"
-    echo "Description=RemoteTerm for MeshCore"
+    echo "Description=Meshloom"
     echo "After=network.target"
     echo ""
     echo "[Service]"
@@ -368,7 +368,7 @@ echo
 
 echo -e "${GREEN}${BOLD}=== Installation complete! ===${NC}"
 echo
-echo -e "RemoteTerm is running at ${CYAN}http://$(hostname -I | awk '{print $1}'):8000${NC}"
+echo -e "Meshloom is running at ${CYAN}http://$(hostname -I | awk '{print $1}'):8000${NC}"
 echo
 
 case "$TRANSPORT_CHOICE" in

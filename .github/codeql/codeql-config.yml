@@ -1,4 +1,4 @@
-name: "RemoteTerm CodeQL config"
+name: "Meshloom CodeQL config"
 
 # Exclude rules that flag intentional design decisions:
 # - AES-ECB is required by the MeshCore radio protocol wire format

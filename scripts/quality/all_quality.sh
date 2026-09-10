@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
-echo -e "${YELLOW}=== RemoteTerm Quality Checks ===${NC}"
+echo -e "${YELLOW}=== Meshloom Quality Checks ===${NC}"
 echo
 
 # --- Phase 1: Lint & Format ---

@@ -1114,7 +1114,7 @@ async def sync_contacts_from_radio(mc: MeshCore) -> dict:
                 "Failed to get contacts from radio: %s. "
                 "If you see this repeatedly, the radio may be visible on the "
                 "serial/TCP/BLE port but not responding to commands. Check for "
-                "another process with the serial port open (other RemoteTerm "
+                "another process with the serial port open (other Meshloom "
                 "instances, serial monitors, etc.), verify the firmware is "
                 "up-to-date and in client mode (not repeater), or try a "
                 "power cycle.",

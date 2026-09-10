@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Start a fresh Home Assistant + Mosquitto environment for testing the
 # mqtt_ha fanout integration. Runs everything on the host network so
-# RemoteTerm (running locally) can reach the broker at localhost:1883.
+# Meshloom (running locally) can reach the broker at localhost:1883.
 #
 # Usage:
 #   ./scripts/setup/start_ha_test_env.sh
@@ -11,7 +11,7 @@
 #   2. Mosquitto is at localhost:1883 (no auth)
 #   3. HA's MQTT integration is configured and connected to Mosquitto
 #
-# Then in RemoteTerm:
+# Then in Meshloom:
 #   Settings > Integrations > Add > Home Assistant
 #   Broker Host: 127.0.0.1  Port: 1883
 #   Select contacts/repeaters and save.
@@ -239,8 +239,8 @@ echo "  Mosquitto:       localhost:1883 (no auth)"
 echo "  MQTT integration: pre-configured"
 echo ""
 echo "  Next steps:"
-echo "    1. Start RemoteTerm as usual"
-echo "    2. In RemoteTerm: Settings > Integrations > Add > Home Assistant"
+echo "    1. Start Meshloom as usual"
+echo "    2. In Meshloom: Settings > Integrations > Add > Home Assistant"
 echo "    3. Set Broker Host: 127.0.0.1, Port: 1883"
 echo "    4. Select contacts for GPS tracking and/or repeaters for telemetry"
 echo "    5. Save and enable"

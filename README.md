@@ -8,11 +8,11 @@
 [![License](https://img.shields.io/github/license/bagl3y/meshloom)](LICENSE.md)
 
 > [!NOTE]
-> Meshloom is a fork of [RemoteTerm for MeshCore](https://github.com/jkingsman/Remote-Terminal-for-MeshCore) by Jack Kingsman. The history starts from [Ian Langworth's continuation](https://github.com/statico/remoteterm-meshcore) of that work during the upstream pause.
+> Meshloom is a fork of [Jack Kingsman's MeshCore web client](https://github.com/jkingsman/Remote-Terminal-for-MeshCore). The history starts from [Ian Langworth's continuation](https://github.com/statico/remoteterm-meshcore) during the upstream pause.
 >
 > Thank you both — this project exists because of the foundation you built, and the care you put into it.
 >
-> The fork is here so I can follow my own ideas. The philosophy will shift a little, without getting in the way of people who already used RemoteTerm. Original copyright remains in [LICENSE.md](LICENSE.md).
+> The fork is here so I can follow my own ideas. The philosophy will shift a little, without getting in the way of people who already used the original client. Original copyright remains in [LICENSE.md](LICENSE.md).
 
 Backend server + browser interface for MeshCore mesh radio networks, providing a rich, web-based power-user management and messaging system through a companion radio.
 
@@ -27,6 +27,8 @@ Connect your radio over Serial, TCP, or BLE, and then you can:
 * Forward packets, messages, and automatic repeater telemetry to MQTT, Home Assistant, LetsMesh, MeshRank, SQS, Apprise, etc.
 * Use the more recent 1.14+ firmwares which support multibyte pathing
 * Visualize the mesh as a map or node set, view repeater stats, and more!
+* Switch the UI between English and French
+* Locate a node from 0-hop coverage (`#locate`) and look up directory data via CoreScope
 
 For advanced setup and troubleshooting see [README_ADVANCED.md](README_ADVANCED.md). If you plan to contribute, read [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -102,10 +104,10 @@ Source checkouts expect a normal frontend build in `frontend/dist`.
 > `uv sync` is a required step, not an optional one. It creates an isolated `.venv` inside the checkout and installs every Python dependency there, so your distro's Python and its `apt`/`dnf` packages are never used — there is no list of `python3-*` system packages to install, and Debian/Ubuntu's PEP 668 "externally-managed-environment" restriction does not apply. If `uv run` fails with `ModuleNotFoundError: No module named 'meshcore'`, see [README_ADVANCED.md](README_ADVANCED.md#modulenotfounderror-no-module-named-meshcore).
 
 > [!TIP]
-> Running on lightweight hardware, or just don't want to build the frontend locally? From a cloned checkout, run `python3 scripts/setup/fetch_prebuilt_frontend.py` to fetch and unpack a prebuilt frontend into `frontend/prebuilt`, then start the app normally with `uv run uvicorn app.main:app --host 0.0.0.0 --port 8000`.
+> Running on lightweight hardware, or just don't want to build the frontend locally? After a Meshloom GitHub release exists, run `python3 scripts/setup/fetch_prebuilt_frontend.py` from a cloned checkout to unpack the prebuilt frontend into `frontend/prebuilt`, then start the app with `uv run uvicorn app.main:app --host 0.0.0.0 --port 8000`.
 
 > [!NOTE]
-> On Linux, you can also install RemoteTerm as a persistent `systemd` service that starts on boot and restarts automatically on failure:
+> On Linux, you can also install Meshloom as a persistent `systemd` service that starts on boot and restarts automatically on failure:
 >
 > ```bash
 > bash scripts/setup/install_service.sh
@@ -158,7 +160,7 @@ sudo docker compose up -d
 
 > If you switched to a local build (`build: .` instead of `image:`), use `sudo docker compose up -d --build` instead — `pull` only fetches remote images.
 
-The example file and setup script default to the published GHCR image. To build locally from your checkout instead, replace:
+The example file and setup script default to `ghcr.io/bagl3y/meshloom:latest` once a release image exists. Until then, build locally from your checkout. Replace
 
 ```yaml
 image: ghcr.io/bagl3y/meshloom:latest
@@ -184,32 +186,35 @@ To stop:
 sudo docker compose down
 ```
 
-## Install Path 3: Arch Linux (AUR)
+## Install Path 3: Portainer GitOps
 
-A [`remoteterm-meshcore`](https://aur.archlinux.org/packages/remoteterm-meshcore) package is available in the AUR. Install it with an AUR helper or build it manually:
+Point a Portainer stack at this repository and set the Compose path to `docker-compose.dev.yaml`. Portainer clones the repo and builds the image locally — that is the supported GitOps path.
+
+Copy [`.env.example`](.env.example) into the stack Environment section (or a local `.env` next to the compose file). Do not commit a real `.env`.
+
+| Variable | Example | Role |
+|----------|---------|------|
+| `MESHLOOM_HTTP_PORT` | `8123` | Host port published to `:8000` |
+| `MESHLOOM_DATA_PATH` | `/opt/docker/meshloom/data` | Host path mounted at `/app/data` |
+| `MESHCORE_DATABASE_PATH` | `data/meshcore.db` | SQLite file inside the container |
+| `MESHCORE_TCP_HOST` | `192.168.1.100` | Companion radio over TCP |
+| `MESHCORE_TCP_PORT` | `5000` | TCP port |
+| `MESHCORE_DISABLE_BOTS` | `false` | Set `true` on any network that is not fully trusted |
+| `MESHCORE_VAPID_SUBJECT` | `mailto:you@example.com` | Required for iOS/Safari Web Push |
+
+Local equivalent:
 
 ```bash
-# with an AUR helper
-yay -S remoteterm-meshcore
-
-# or manually
-git clone https://aur.archlinux.org/remoteterm-meshcore.git
-cd remoteterm-meshcore
-makepkg -si
+cp .env.example .env
+# edit .env
+docker compose -f docker-compose.dev.yaml --env-file .env up --build
 ```
 
-Configure your radio connection, then start the service:
-
-```bash
-sudo vi /etc/remoteterm-meshcore/remoteterm.env
-sudo systemctl enable --now remoteterm-meshcore
-```
-
-Access the app at http://localhost:8000.
+There is no Meshloom package on the AUR yet.
 
 ## Updating
 
-Your data lives in the SQLite database at `MESHCORE_DATABASE_PATH` — `data/meshcore.db` by default, or `/var/lib/remoteterm-meshcore/meshcore.db` for the AUR package. Update in place rather than reinstalling from scratch, and back that file up first (stop the app, then copy it). Schema migrations run automatically on startup, so an updated app will upgrade an existing database for you.
+Your data lives in the SQLite database at `MESHCORE_DATABASE_PATH` — `data/meshcore.db` by default. Update in place rather than reinstalling from scratch, and back that file up first (stop the app, then copy it). Schema migrations run automatically on startup, so an updated app will upgrade an existing database for you.
 
 Clone and build:
 
@@ -220,7 +225,7 @@ uv sync
 cd frontend && npm install && npm run build && cd ..
 ```
 
-If you use the prebuilt frontend instead of building it, run `python3 scripts/setup/fetch_prebuilt_frontend.py` in place of the `frontend` step. Then restart the app, or `sudo systemctl restart remoteterm` if you installed the systemd service.
+If you use the prebuilt frontend instead of building it, run `python3 scripts/setup/fetch_prebuilt_frontend.py` in place of the `frontend` step. Then restart the app, or `sudo systemctl restart meshloom` if you installed the systemd service.
 
 Docker:
 
@@ -231,19 +236,7 @@ sudo docker compose up -d
 
 This keeps your `./data` bind mount, so the database survives. If you switched to a local build (`build: .`), use `sudo docker compose up -d --build` instead.
 
-Arch Linux (AUR):
-
-```bash
-# with an AUR helper
-yay -Syu remoteterm-meshcore
-
-# or manually, from your checkout of the AUR repo
-git pull
-makepkg -si
-sudo systemctl restart remoteterm-meshcore
-```
-
-The AUR package keeps the database in `/var/lib/remoteterm-meshcore/`, which is untouched by package upgrades.
+Portainer GitOps: pull/redeploy the stack so Portainer rebuilds from `docker-compose.dev.yaml`. The database stays on `MESHLOOM_DATA_PATH`.
 
 ## Standard Environment Variables
 
@@ -285,7 +278,7 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 > [!WARNING]
-> **Windows + MQTT fanout:** Python's default Windows event loop (ProactorEventLoop) is not compatible with the MQTT libraries used by RemoteTerm. If you configure any MQTT integration, add `--loop none` to your uvicorn command:
+> **Windows + MQTT fanout:** Python's default Windows event loop (ProactorEventLoop) is not compatible with the MQTT libraries used by Meshloom. If you configure any MQTT integration, add `--loop none` to your uvicorn command:
 >
 > ```powershell
 > uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --loop none

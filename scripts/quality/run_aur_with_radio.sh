@@ -79,7 +79,7 @@ systemd-tmpfiles --create
 # Give the service user access to the serial device
 chmod 666 /dev/meshcore-radio
 
-echo "[3/3] Starting RemoteTerm..."
+echo "[3/3] Starting Meshloom..."
 cd /opt/remoteterm-meshcore
 exec su -s /bin/bash remoteterm -c "\
   MESHCORE_SERIAL_PORT=/dev/meshcore-radio \

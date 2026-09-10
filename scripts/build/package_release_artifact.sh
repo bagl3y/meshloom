@@ -24,7 +24,7 @@ VERSION=""
 GIT_HASH=""
 FULL_GIT_HASH=""
 OUTPUT_PATH=""
-BUNDLE_NAME="Remote-Terminal-for-MeshCore"
+BUNDLE_NAME="Meshloom"
 SKIP_PREBUILT_BUILD=0
 
 while [ $# -gt 0 ]; do
@@ -70,7 +70,7 @@ release_validate_version "$VERSION"
 REPO_ROOT="$(release_repo_root)"
 FULL_GIT_HASH="${FULL_GIT_HASH:-$(release_resolve_full_hash "$REPO_ROOT")}"
 GIT_HASH="${GIT_HASH:-$(release_resolve_short_hash "$REPO_ROOT" "$FULL_GIT_HASH")}"
-OUTPUT_PATH="${OUTPUT_PATH:-$REPO_ROOT/remoteterm-prebuilt-frontend-v${VERSION}-${GIT_HASH}.zip}"
+OUTPUT_PATH="${OUTPUT_PATH:-$REPO_ROOT/meshloom-prebuilt-frontend-v${VERSION}-${GIT_HASH}.zip}"
 # zip runs from the scratch dir below, so a relative --output would land there
 # and be wiped by the cleanup trap. Resolve it against the caller's cwd first.
 case "$OUTPUT_PATH" in

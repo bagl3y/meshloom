@@ -143,7 +143,7 @@ The test suite sends `!echo please give incoming message` to the echo channel (d
 
 Setup:
 1. Set up a second MeshCore radio within RF range of your test radio
-2. Run a RemoteTerm instance on the second radio
+2. Run a Meshloom instance on the second radio
 3. Configure a bot on the second radio that monitors the echo channel and replies when it sees the trigger. Example bot code:
    ```python
    def bot(sender_name, sender_key, message_text, is_dm,

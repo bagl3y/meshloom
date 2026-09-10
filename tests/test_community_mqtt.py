@@ -663,7 +663,7 @@ class TestPublishFailureSetsDisconnected:
 class TestCommunityModuleKeyUnavailable:
     """The module should explain a silent 'disconnected' caused by a missing radio key.
 
-    Regression coverage for issue #321: connecting RemoteTerm through a proxy
+    Regression coverage for issue #321: connecting Meshloom through a proxy
     (e.g. Meshmonitor) that doesn't forward the key-export command leaves the
     keystore empty, so community MQTT is never configured. Previously that
     showed a bare "Disconnected" with no reason.
@@ -954,7 +954,7 @@ class TestLwtAndStatusPublish:
             patch("app.fanout.community_mqtt._build_radio_info", return_value="915.0,250.0,10,8"),
             patch(
                 "app.fanout.community_mqtt._get_client_version",
-                return_value="RemoteTerm/2.4.0-abcdef",
+                return_value="Meshloom/2.4.0-abcdef",
             ),
             patch.object(pub, "publish", new_callable=AsyncMock) as mock_publish,
         ):
@@ -975,7 +975,7 @@ class TestLwtAndStatusPublish:
         assert payload["model"] == "T-Deck"
         assert payload["firmware_version"] == "v2.2.2 (Build: 2025-01-15)"
         assert payload["radio"] == "915.0,250.0,10,8"
-        assert payload["client_version"] == "RemoteTerm/2.4.0-abcdef"
+        assert payload["client_version"] == "Meshloom/2.4.0-abcdef"
         assert payload["stats"] == {"battery_mv": 4200}
 
     @pytest.mark.asyncio
@@ -1001,7 +1001,7 @@ class TestLwtAndStatusPublish:
             ) as mock_fetch,
             patch.object(pub, "_fetch_stats", new_callable=AsyncMock, return_value=None),
             patch("app.fanout.community_mqtt._build_radio_info", return_value="0,0,0,0"),
-            patch("app.fanout.community_mqtt._get_client_version", return_value="RemoteTerm/0-x"),
+            patch("app.fanout.community_mqtt._get_client_version", return_value="Meshloom/0-x"),
             patch.object(pub, "publish", new_callable=AsyncMock) as mock_publish,
         ):
             await pub._publish_status(settings)
@@ -1113,7 +1113,7 @@ class TestLwtAndStatusPublish:
             patch("app.fanout.community_mqtt._build_radio_info", return_value="0,0,0,0"),
             patch(
                 "app.fanout.community_mqtt._get_client_version",
-                return_value="RemoteTerm/0.0.0-unknown",
+                return_value="Meshloom/0.0.0-unknown",
             ),
             patch.object(pub, "publish", new_callable=AsyncMock) as mock_publish,
         ):
@@ -1469,7 +1469,7 @@ class TestPublishStatus:
             patch("app.fanout.community_mqtt._build_radio_info", return_value="915.0,250.0,10,8"),
             patch(
                 "app.fanout.community_mqtt._get_client_version",
-                return_value="RemoteTerm/2.4.0-abcdef",
+                return_value="Meshloom/2.4.0-abcdef",
             ),
             patch.object(pub, "publish", new_callable=AsyncMock) as mock_publish,
         ):
@@ -1484,7 +1484,7 @@ class TestPublishStatus:
         assert payload["model"] == "T-Deck"
         assert payload["firmware_version"] == "v2.2.2 (Build: 2025-01-15)"
         assert payload["radio"] == "915.0,250.0,10,8"
-        assert payload["client_version"] == "RemoteTerm/2.4.0-abcdef"
+        assert payload["client_version"] == "Meshloom/2.4.0-abcdef"
         assert payload["stats"] == stats
 
     @pytest.mark.asyncio
@@ -1511,7 +1511,7 @@ class TestPublishStatus:
             patch("app.fanout.community_mqtt._build_radio_info", return_value="0,0,0,0"),
             patch(
                 "app.fanout.community_mqtt._get_client_version",
-                return_value="RemoteTerm/0.0.0-unknown",
+                return_value="Meshloom/0.0.0-unknown",
             ),
             patch.object(pub, "publish", new_callable=AsyncMock) as mock_publish,
         ):
@@ -1546,7 +1546,7 @@ class TestPublishStatus:
             patch("app.fanout.community_mqtt._build_radio_info", return_value="0,0,0,0"),
             patch(
                 "app.fanout.community_mqtt._get_client_version",
-                return_value="RemoteTerm/0.0.0-unknown",
+                return_value="Meshloom/0.0.0-unknown",
             ),
             patch.object(pub, "publish", new_callable=AsyncMock),
         ):

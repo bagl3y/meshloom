@@ -251,7 +251,7 @@ export function formatOpenReaction(
 }
 
 /**
- * Map stored RemoteTerm message fields onto Open hash inputs.
+ * Map stored Meshloom message fields onto Open hash inputs.
  * Channel text is stored as "Name: body"; the hash uses the body only.
  * DMs omit senderName (Open 1:1 implicit).
  */

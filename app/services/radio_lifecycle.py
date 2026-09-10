@@ -386,7 +386,7 @@ async def connection_monitor_loop(radio_manager) -> None:
                     "The radio port appears open but the radio is not "
                     "responding to commands. Common causes: another "
                     "process has the serial port open (check for other "
-                    "RemoteTerm instances, serial monitors, etc.), the "
+                    "Meshloom instances, serial monitors, etc.), the "
                     "firmware is in repeater mode (not client), or the "
                     "radio needs a power cycle. Will keep retrying.",
                     consecutive_setup_failures,

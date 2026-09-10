@@ -18,7 +18,7 @@ frontend/prebuilt/
 frontend/.eslintcache
 
 # Release artifacts
-remoteterm-prebuilt-frontend-v*.zip
+meshloom-prebuilt-frontend-v*.zip
 
 # reference libraries
 references/

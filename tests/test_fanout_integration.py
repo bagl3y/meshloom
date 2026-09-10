@@ -1284,7 +1284,7 @@ class TestFanoutAppriseIntegration:
     async def test_apprise_delivers_outgoing_when_enabled(
         self, apprise_capture_server, integration_db
     ):
-        """Apprise can opt in to delivering RemoteTerm-originated messages."""
+        """Apprise can opt in to delivering Meshloom-originated messages."""
         cfg = await FanoutConfigRepository.create(
             config_type="apprise",
             name="Include Outgoing",

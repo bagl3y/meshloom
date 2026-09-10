@@ -55,7 +55,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           GIT_HASH="$(git rev-parse --short HEAD)"
-          ASSET="remoteterm-prebuilt-frontend-v${VERSION}-${GIT_HASH}.zip"
+          ASSET="meshloom-prebuilt-frontend-v${VERSION}-${GIT_HASH}.zip"
           scripts/build/package_release_artifact.sh \
             --version "$VERSION" \
             --git-hash "$GIT_HASH" \

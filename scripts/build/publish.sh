@@ -58,7 +58,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-echo -e "${YELLOW}=== RemoteTerm for MeshCore Publish Script ===${NC}"
+echo -e "${YELLOW}=== Meshloom Publish Script ===${NC}"
 echo
 
 if [ "$SKIP_QUALITY" -eq 0 ]; then
