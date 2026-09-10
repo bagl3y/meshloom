@@ -1,0 +1,18 @@
+# Portainer GitOps: Compose path = docker-compose.dev.yaml
+# Load the same keys via a .env (local) or the stack Environment section (Portainer).
+services:
+  meshloom:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${MESHLOOM_HTTP_PORT}:8000"
+    volumes:
+      - ${MESHLOOM_DATA_PATH}:/app/data
+    environment:
+      MESHCORE_DATABASE_PATH: "${MESHCORE_DATABASE_PATH}"
+      MESHCORE_TCP_HOST: "${MESHCORE_TCP_HOST}"
+      MESHCORE_TCP_PORT: "${MESHCORE_TCP_PORT}"
+      MESHCORE_DISABLE_BOTS: "${MESHCORE_DISABLE_BOTS}"
+      MESHCORE_VAPID_SUBJECT: "${MESHCORE_VAPID_SUBJECT}"
+    restart: unless-stopped
