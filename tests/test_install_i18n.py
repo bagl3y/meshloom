@@ -34,3 +34,42 @@ def test_release_asset_tempfile_uses_package_suffix() -> None:
     assert 'mktemp "/tmp/meshloom.XXXXXX${pkg_ext}"' in text
     assert 'pkg_ext=".deb"' in text
     assert 'pkg_ext=".rpm"' in text
+
+
+def test_release_asset_downloads_and_validates_before_install() -> None:
+    """4.1.1 shipped a mktemp immediately followed by apt-get install.
+
+    The empty tempfile made apt fail with "could not locate member control.tar".
+    Order is load-bearing: mktemp -> curl -> magic/size check -> apt/dnf.
+    """
+    text = INSTALL_SH.read_text(encoding="utf-8")
+    body = text.split("install_from_release_asset()", 1)[1].split("\nensure_clone()", 1)[0]
+
+    mktemp_at = body.index("mktemp ")
+    curl_at = body.index('curl -fL --max-time 180 "$url" -o "$tmp"')
+    valid_at = body.index('pkg_file_is_valid "$tmp"')
+    apt_at = body.index('apt-get install -y "$tmp"')
+    dnf_at = body.index('dnf install -y "$tmp"')
+
+    assert mktemp_at < curl_at < valid_at < apt_at
+    assert valid_at < dnf_at
+
+
+def test_package_validation_checks_real_magic_and_size() -> None:
+    text = INSTALL_SH.read_text(encoding="utf-8")
+    # "!<arch>\n" (deb ar header) and 0xEDABEEDB (rpm lead).
+    assert "213c617263683e0a" in text
+    assert "edabeedb" in text
+    assert '[ "$size" -ge 4096 ]' in text
+
+
+def test_release_asset_url_is_anchored_to_suffix() -> None:
+    """A .deb.asc / .rpm.sha256 sidecar must not be mistaken for the package."""
+    text = INSTALL_SH.read_text(encoding="utf-8")
+    assert 'grep -E "${pattern}\\$"' in text
+    assert "grep -F" not in text.split("release_asset_url()", 1)[1].split("\n}", 1)[0]
+
+
+def test_release_asset_failure_is_logged_with_url_and_size() -> None:
+    text = INSTALL_SH.read_text(encoding="utf-8")
+    assert "release asset unusable: url=${url} bytes=" in text
