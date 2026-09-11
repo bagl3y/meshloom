@@ -12,12 +12,7 @@ interface ObserverReachBadgeProps {
   className?: string;
 }
 
-export function ObserverReachBadge({
-  state,
-  variant,
-  onOpen,
-  className,
-}: ObserverReachBadgeProps) {
+export function ObserverReachBadge({ state, variant, onOpen, className }: ObserverReachBadgeProps) {
   const { t } = useTranslation();
   if (state?.status !== 'ok' || state.count <= 0) {
     return null;

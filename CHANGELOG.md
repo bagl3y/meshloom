@@ -1,3 +1,61 @@
+## [4.1.0] - 2026-09-11
+
+Flood messages can now show how many CoreScope MQTT observers heard the same packet, and chat metadata no longer wraps into the text.
+
+### Highlights
+
+* Optional **observer** ear on flood messages when CoreScope is enabled and at least one observer published the packet
+* Click the ear for the observer list, hop/distance summary, and a map
+* Date, time, observer count, path, and ACK sit on one line under the message body
+
+### Added
+
+* Feature: Persist firmware packet hashes on stored messages (`packet_hash`, `observer_reach_eligible`) so floods can be matched to CoreScope observations
+* Feature: `POST /api/directory/packets/reach-counts` and `GET /api/directory/packets/{hash}/reach` — batch counts for visible floods, then a detail photo (list + map). One opted-in CoreScope instance only (`directory_enabled` + `directory_url`)
+* Feature: Chat ear badge on channel floods, and on DMs only when a flood echo arrives. Hidden when the count is 0. Young floods refresh every 8s for 1 minute, then every 60s until 10 minutes; outgoing first lookup waits 20s
+
+### Changed
+
+* Misc: Message time, observer ear, hops / ACK, and region badge move to a single metadata row under the body. The sender name stays above incoming first-in-group messages
+
+### Fixed
+
+* Bug: Observer counts are looked up against the virtualizer’s oldest-first list, not the newest-first REST page
+* Bug: Replacing the `messages` array no longer cancels in-flight CoreScope count fetches
+* Bug: Empty CoreScope batch responses fall back to a per-hash GET so a live count can still appear
+* Bug: Observer detail map has a real height and Leaflet CSS, so the dialog is usable
+
+---
+
+### Français
+
+Les messages flood peuvent maintenant montrer combien d’observateurs MQTT CoreScope ont entendu le même paquet, et les métadonnées du chat ne se mélangent plus au texte.
+
+#### Points forts
+
+* Oreille **observateurs** optionnelle sur les floods quand CoreScope est activé et qu’au moins un observateur a publié le paquet
+* Clic sur l’oreille : liste des observateurs, résumé sauts / distance, et carte
+* Date, heure, nombre d’observateurs, chemin et ACK sur une seule ligne sous le message
+
+#### Ajouts
+
+* Fonction : conservation du hash firmware sur les messages stockés (`packet_hash`, `observer_reach_eligible`) pour les apparier aux observations CoreScope
+* Fonction : `POST /api/directory/packets/reach-counts` et `GET /api/directory/packets/{hash}/reach` — comptages par lot pour les floods visibles, puis une photo de détail (liste + carte). Une seule instance CoreScope opt-in (`directory_enabled` + `directory_url`)
+* Fonction : pastille oreille sur les floods canal, et sur les DM seulement si un écho flood arrive. Masquée si le compte est 0. Les floods jeunes se rafraîchissent toutes les 8 s pendant 1 minute, puis toutes les 60 s jusqu’à 10 minutes ; le premier lookup sortant attend 20 s
+
+#### Changements
+
+* Divers : l’heure, l’oreille, les sauts / ACK et le badge de région passent sur une seule ligne de métadonnées sous le corps. Le nom de l’expéditeur reste au-dessus des premiers messages d’un groupe entrant
+
+#### Corrections
+
+* Bug : les comptages d’observateurs sont lus sur la liste oldest-first du virtualizer, pas sur la page REST newest-first
+* Bug : remplacer le tableau `messages` n’annule plus les lookups CoreScope en cours
+* Bug : un lot CoreScope vide bascule sur un GET par hash pour qu’un compte puisse quand même apparaître
+* Bug : la carte de détail a une hauteur réelle et le CSS Leaflet, donc le dialogue est utilisable
+
+---
+
 ## [4.0.0] - 2026-09-11
 
 First public **Meshloom** release. This is a new product branch of Jack Kingsman’s [Remote Terminal for MeshCore](https://github.com/jkingsman/Remote-Terminal-for-MeshCore), via [Ian Langworth’s 3.19.0 line](https://github.com/statico/remoteterm-meshcore/releases/tag/3.19.0). The original MIT copyright stays in `LICENSE.md`.

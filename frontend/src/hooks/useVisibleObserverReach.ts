@@ -26,11 +26,7 @@ export function resetObserverReachCountCache(): void {
   lastFetchAt.clear();
 }
 
-function readyVisibleHashes(
-  messages: Message[],
-  visibleIndexes: number[],
-  now: number
-): string[] {
+function readyVisibleHashes(messages: Message[], visibleIndexes: number[], now: number): string[] {
   const hashes: string[] = [];
   const seen = new Set<string>();
   for (const index of visibleIndexes) {
@@ -120,11 +116,8 @@ export function useVisibleObserverReach(options: {
         const key = cacheKey(startedFor, hash);
         const cached = countCache.get(key);
         const last = lastFetchAt.get(key);
-        const msg = messagesRef.current.find(
-          (item) => item.packet_hash?.toUpperCase() === hash
-        );
-        const interval =
-          msg != null ? observerReachPollIntervalMs(messageAgeMs(msg, now)) : null;
+        const msg = messagesRef.current.find((item) => item.packet_hash?.toUpperCase() === hash);
+        const interval = msg != null ? observerReachPollIntervalMs(messageAgeMs(msg, now)) : null;
         const due =
           interval == null
             ? cached == null || now - cached.at >= STALE_REACH_CACHE_MS

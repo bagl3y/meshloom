@@ -21,7 +21,9 @@ const apiMocks = vi.hoisted(() => ({
   deleteMessage: vi.fn(async (_id: number) => ({ status: 'ok' })),
   getPacket: vi.fn(),
   getPacketObserverReachCounts: vi.fn(
-    async (_hashes: string[]): Promise<{
+    async (
+      _hashes: string[]
+    ): Promise<{
       directory_enabled: boolean;
       counts: Record<string, number>;
     }> => ({

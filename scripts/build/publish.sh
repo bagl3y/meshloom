@@ -27,7 +27,7 @@ Usage: scripts/build/publish.sh [options]
 
 Options:
   --version VERSION         Release version; prompts if omitted
-  --notes-file PATH         File containing changelog entry lines; prompts if omitted
+  --notes-file PATH         Changelog bullets if CHANGELOG.md has no [$VERSION] yet
   --skip-quality            Skip ./scripts/quality/all_quality.sh
   --help                    Show this message
 EOF
@@ -102,70 +102,78 @@ uv sync
 echo -e "${GREEN}Version updated to $VERSION${NC}"
 echo
 
-# Prompt for changelog entry
-RAW_CHANGELOG_INPUT_FILE="$(mktemp)"
-FORMATTED_CHANGELOG_INPUT_FILE="$(mktemp)"
-cleanup() {
-    rm -f "$RAW_CHANGELOG_INPUT_FILE" "$FORMATTED_CHANGELOG_INPUT_FILE"
-}
-trap cleanup EXIT
-
-if [ -n "$NOTES_FILE" ]; then
-    cp "$NOTES_FILE" "$RAW_CHANGELOG_INPUT_FILE"
-else
-    echo -e "${YELLOW}Enter changelog entry for version $VERSION${NC}"
-    echo -e "${YELLOW}(Enter your changes, then press Ctrl+D when done):${NC}"
-    echo
-    cat > "$RAW_CHANGELOG_INPUT_FILE"
-fi
-
-release_format_markdown_list "$RAW_CHANGELOG_INPUT_FILE" "$FORMATTED_CHANGELOG_INPUT_FILE"
-[ -s "$FORMATTED_CHANGELOG_INPUT_FILE" ] || release_die "Changelog entry cannot be empty"
-
-# Create changelog entry with date
-DATE=$(date +%Y-%m-%d)
-CHANGELOG_HEADER="## [$VERSION] - $DATE"
-
-# Prepend to CHANGELOG.md (after the title if it exists)
-if [ -f CHANGELOG.md ]; then
-    # Check if file starts with a title
-    if head -1 CHANGELOG.md | grep -q "^# "; then
-        # Insert after title line
-        {
-            head -1 CHANGELOG.md
-            echo
-            echo "$CHANGELOG_HEADER"
-            echo
-            cat "$FORMATTED_CHANGELOG_INPUT_FILE"
-            echo
-            tail -n +2 CHANGELOG.md
-        } > CHANGELOG.md.tmp
-        mv CHANGELOG.md.tmp CHANGELOG.md
-    else
-        # No title, prepend directly
-        {
-            echo "$CHANGELOG_HEADER"
-            echo
-            cat "$FORMATTED_CHANGELOG_INPUT_FILE"
-            echo
-            cat CHANGELOG.md
-        } > CHANGELOG.md.tmp
-        mv CHANGELOG.md.tmp CHANGELOG.md
+if release_changelog_has_version "$REPO_ROOT" "$VERSION"; then
+    echo -e "${GREEN}CHANGELOG.md already has [$VERSION]; leaving it as-is.${NC}"
+    if [ -n "$NOTES_FILE" ]; then
+        echo -e "${YELLOW}Ignoring --notes-file because that section already exists.${NC}"
     fi
+    echo
 else
-    # Create new changelog
-    {
-        echo "# Changelog"
-        echo
-        echo "$CHANGELOG_HEADER"
-        echo
-        cat "$FORMATTED_CHANGELOG_INPUT_FILE"
-    } > CHANGELOG.md
-fi
+    # Prompt for changelog entry
+    RAW_CHANGELOG_INPUT_FILE="$(mktemp)"
+    FORMATTED_CHANGELOG_INPUT_FILE="$(mktemp)"
+    cleanup() {
+        rm -f "$RAW_CHANGELOG_INPUT_FILE" "$FORMATTED_CHANGELOG_INPUT_FILE"
+    }
+    trap cleanup EXIT
 
-echo
-echo -e "${GREEN}Changelog updated!${NC}"
-echo
+    if [ -n "$NOTES_FILE" ]; then
+        cp "$NOTES_FILE" "$RAW_CHANGELOG_INPUT_FILE"
+    else
+        echo -e "${YELLOW}Enter changelog entry for version $VERSION${NC}"
+        echo -e "${YELLOW}(Enter your changes, then press Ctrl+D when done):${NC}"
+        echo
+        cat > "$RAW_CHANGELOG_INPUT_FILE"
+    fi
+
+    release_format_markdown_list "$RAW_CHANGELOG_INPUT_FILE" "$FORMATTED_CHANGELOG_INPUT_FILE"
+    [ -s "$FORMATTED_CHANGELOG_INPUT_FILE" ] || release_die "Changelog entry cannot be empty"
+
+    # Create changelog entry with date
+    DATE=$(date +%Y-%m-%d)
+    CHANGELOG_HEADER="## [$VERSION] - $DATE"
+
+    # Prepend to CHANGELOG.md (after the title if it exists)
+    if [ -f CHANGELOG.md ]; then
+        # Check if file starts with a title
+        if head -1 CHANGELOG.md | grep -q "^# "; then
+            # Insert after title line
+            {
+                head -1 CHANGELOG.md
+                echo
+                echo "$CHANGELOG_HEADER"
+                echo
+                cat "$FORMATTED_CHANGELOG_INPUT_FILE"
+                echo
+                tail -n +2 CHANGELOG.md
+            } > CHANGELOG.md.tmp
+            mv CHANGELOG.md.tmp CHANGELOG.md
+        else
+            # No title, prepend directly
+            {
+                echo "$CHANGELOG_HEADER"
+                echo
+                cat "$FORMATTED_CHANGELOG_INPUT_FILE"
+                echo
+                cat CHANGELOG.md
+            } > CHANGELOG.md.tmp
+            mv CHANGELOG.md.tmp CHANGELOG.md
+        fi
+    else
+        # Create new changelog
+        {
+            echo "# Changelog"
+            echo
+            echo "$CHANGELOG_HEADER"
+            echo
+            cat "$FORMATTED_CHANGELOG_INPUT_FILE"
+        } > CHANGELOG.md
+    fi
+
+    echo
+    echo -e "${GREEN}Changelog updated!${NC}"
+    echo
+fi
 
 # Commit the changes
 echo -e "${YELLOW}Committing changes...${NC}"

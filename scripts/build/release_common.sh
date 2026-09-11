@@ -51,6 +51,19 @@ release_format_markdown_list() {
     ' "$input_file" > "$output_file"
 }
 
+release_changelog_has_version() {
+    local repo_root="$1"
+    local version="$2"
+    local changelog_path="${3:-$repo_root/CHANGELOG.md}"
+
+    [ -f "$changelog_path" ] || return 1
+    awk -v ver="$version" '
+        BEGIN { header = "## [" ver "]" }
+        index($0, header) == 1 { found = 1; exit }
+        END { exit found ? 0 : 1 }
+    ' "$changelog_path"
+}
+
 release_extract_changelog_section() {
     local repo_root="$1"
     local version="$2"
