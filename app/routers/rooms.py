@@ -10,11 +10,11 @@ from app.models import (
     RepeaterLppTelemetryResponse,
     RepeaterStatusResponse,
 )
-from app.routers.contacts import _ensure_on_radio, _resolve_contact_or_404
 from app.routers.server_control import (
     prepare_authenticated_contact_connection,
     require_server_capable_contact,
 )
+from app.services.contact_access import ensure_on_radio, resolve_contact_or_404
 from app.services.radio_runtime import radio_runtime as radio_manager
 
 router = APIRouter(prefix="/contacts", tags=["rooms"])
@@ -28,7 +28,7 @@ def _require_room(contact) -> None:
 async def room_login(public_key: str, request: RepeaterLoginRequest) -> RepeaterLoginResponse:
     """Attempt room-server login and report whether auth was confirmed."""
     radio_manager.require_connected()
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_room(contact)
 
     async with radio_manager.radio_operation(
@@ -48,13 +48,13 @@ async def room_login(public_key: str, request: RepeaterLoginRequest) -> Repeater
 async def room_status(public_key: str) -> RepeaterStatusResponse:
     """Fetch status telemetry from a room server."""
     radio_manager.require_connected()
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_room(contact)
 
     async with radio_manager.radio_operation(
         "room_status", pause_polling=True, suspend_auto_fetch=True
     ) as mc:
-        await _ensure_on_radio(mc, contact)
+        await ensure_on_radio(mc, contact)
         status = await mc.commands.req_status_sync(contact.public_key, timeout=10, min_timeout=5)
 
     if status is None:
@@ -86,13 +86,13 @@ async def room_status(public_key: str) -> RepeaterStatusResponse:
 async def room_lpp_telemetry(public_key: str) -> RepeaterLppTelemetryResponse:
     """Fetch CayenneLPP telemetry from a room server."""
     radio_manager.require_connected()
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_room(contact)
 
     async with radio_manager.radio_operation(
         "room_lpp_telemetry", pause_polling=True, suspend_auto_fetch=True
     ) as mc:
-        await _ensure_on_radio(mc, contact)
+        await ensure_on_radio(mc, contact)
         telemetry = await mc.commands.req_telemetry_sync(
             contact.public_key, timeout=10, min_timeout=5
         )
@@ -115,13 +115,13 @@ async def room_lpp_telemetry(public_key: str) -> RepeaterLppTelemetryResponse:
 async def room_acl(public_key: str) -> RepeaterAclResponse:
     """Fetch ACL entries from a room server."""
     radio_manager.require_connected()
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_room(contact)
 
     async with radio_manager.radio_operation(
         "room_acl", pause_polling=True, suspend_auto_fetch=True
     ) as mc:
-        await _ensure_on_radio(mc, contact)
+        await ensure_on_radio(mc, contact)
         acl_data = await mc.commands.req_acl_sync(contact.public_key, timeout=10, min_timeout=5)
 
     acl_entries = []

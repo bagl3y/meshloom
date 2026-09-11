@@ -27,7 +27,6 @@ from app.models import (
     TelemetryHistoryEntry,
 )
 from app.repository import ContactRepository, RepeaterTelemetryRepository
-from app.routers.contacts import _ensure_on_radio, _resolve_contact_or_404
 from app.routers.server_control import (
     batch_cli_fetch,
     fetch_repeater_owner_info_binary,
@@ -35,6 +34,7 @@ from app.routers.server_control import (
     require_server_capable_contact,
     send_contact_cli_command,
 )
+from app.services.contact_access import ensure_on_radio, resolve_contact_or_404
 from app.services.radio_runtime import radio_runtime as radio_manager
 
 logger = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ def _require_repeater(contact: Contact) -> None:
 async def repeater_login(public_key: str, request: RepeaterLoginRequest) -> RepeaterLoginResponse:
     """Attempt repeater login and report whether auth was confirmed."""
     radio_manager.require_connected()
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
     async with radio_manager.radio_operation(
@@ -94,7 +94,7 @@ async def repeater_login(public_key: str, request: RepeaterLoginRequest) -> Repe
 async def repeater_status(public_key: str) -> RepeaterStatusResponse:
     """Fetch status telemetry from a repeater (single attempt, 10s timeout)."""
     radio_manager.require_connected()
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
     lpp_raw = None
@@ -102,7 +102,7 @@ async def repeater_status(public_key: str) -> RepeaterStatusResponse:
         "repeater_status", pause_polling=True, suspend_auto_fetch=True
     ) as mc:
         # Ensure contact is on radio for routing
-        await _ensure_on_radio(mc, contact)
+        await ensure_on_radio(mc, contact)
 
         status = await mc.commands.req_status_sync(contact.public_key, timeout=10, min_timeout=5)
 
@@ -167,18 +167,15 @@ async def repeater_status(public_key: str) -> RepeaterStatusResponse:
             data=status_dict,
         )
 
-        # Dispatch to fanout modules (e.g. HA MQTT discovery)
-        from app.fanout.manager import fanout_manager
+        from app.websocket import dispatch_telemetry_event
 
-        asyncio.create_task(
-            fanout_manager.broadcast_telemetry(
-                {
-                    "public_key": contact.public_key,
-                    "name": contact.name or contact.public_key[:12],
-                    "timestamp": now,
-                    **status_dict,
-                }
-            )
+        dispatch_telemetry_event(
+            {
+                "public_key": contact.public_key,
+                "name": contact.name or contact.public_key[:12],
+                "timestamp": now,
+                **status_dict,
+            }
         )
     except Exception as e:
         logger.warning("Failed to record telemetry history: %s", e)
@@ -200,7 +197,7 @@ async def repeater_status(public_key: str) -> RepeaterStatusResponse:
 )
 async def repeater_telemetry_history(public_key: str) -> list[TelemetryHistoryEntry]:
     """Return stored telemetry history for a repeater (read-only, no radio access)."""
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
     since = int(time.time()) - 30 * 86400
@@ -212,13 +209,13 @@ async def repeater_telemetry_history(public_key: str) -> list[TelemetryHistoryEn
 async def repeater_lpp_telemetry(public_key: str) -> RepeaterLppTelemetryResponse:
     """Fetch CayenneLPP sensor telemetry from a repeater (single attempt, 10s timeout)."""
     radio_manager.require_connected()
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
     async with radio_manager.radio_operation(
         "repeater_lpp_telemetry", pause_polling=True, suspend_auto_fetch=True
     ) as mc:
-        await _ensure_on_radio(mc, contact)
+        await ensure_on_radio(mc, contact)
 
         telemetry = await mc.commands.req_telemetry_sync(
             contact.public_key, timeout=10, min_timeout=5
@@ -241,14 +238,14 @@ async def repeater_lpp_telemetry(public_key: str) -> RepeaterLppTelemetryRespons
 async def repeater_neighbors(public_key: str) -> RepeaterNeighborsResponse:
     """Fetch neighbors from a repeater (single attempt, 10s timeout)."""
     radio_manager.require_connected()
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
     async with radio_manager.radio_operation(
         "repeater_neighbors", pause_polling=True, suspend_auto_fetch=True
     ) as mc:
         # Ensure contact is on radio for routing
-        await _ensure_on_radio(mc, contact)
+        await ensure_on_radio(mc, contact)
 
         neighbors_data = await mc.commands.fetch_all_neighbours(
             contact.public_key, timeout=10, min_timeout=5
@@ -276,14 +273,14 @@ async def repeater_neighbors(public_key: str) -> RepeaterNeighborsResponse:
 async def repeater_acl(public_key: str) -> RepeaterAclResponse:
     """Fetch ACL from a repeater (single attempt, 10s timeout)."""
     radio_manager.require_connected()
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
     async with radio_manager.radio_operation(
         "repeater_acl", pause_polling=True, suspend_auto_fetch=True
     ) as mc:
         # Ensure contact is on radio for routing
-        await _ensure_on_radio(mc, contact)
+        await ensure_on_radio(mc, contact)
 
         acl_data = await mc.commands.req_acl_sync(contact.public_key, timeout=10, min_timeout=5)
 
@@ -317,7 +314,7 @@ async def _batch_cli_fetch(
 async def repeater_node_info(public_key: str) -> RepeaterNodeInfoResponse:
     """Fetch repeater identity/location info via a small CLI batch."""
     radio_manager.require_connected()
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
     results = await _batch_cli_fetch(
@@ -337,7 +334,7 @@ async def repeater_node_info(public_key: str) -> RepeaterNodeInfoResponse:
 async def repeater_radio_settings(public_key: str) -> RepeaterRadioSettingsResponse:
     """Fetch radio settings from a repeater via radio/config CLI commands."""
     radio_manager.require_connected()
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
     results = await _batch_cli_fetch(
@@ -371,7 +368,7 @@ async def repeater_radio_settings(public_key: str) -> RepeaterRadioSettingsRespo
 async def repeater_advert_intervals(public_key: str) -> RepeaterAdvertIntervalsResponse:
     """Fetch advertisement intervals from a repeater via CLI commands."""
     radio_manager.require_connected()
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
     results = await _batch_cli_fetch(
@@ -395,7 +392,7 @@ async def repeater_owner_info(public_key: str) -> RepeaterOwnerInfoResponse:
     guest sees it blank. See issue #306.
     """
     radio_manager.require_connected()
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
     owner = await fetch_repeater_owner_info_binary(contact) or {}
@@ -504,7 +501,7 @@ async def request_anon_region_names(mc, contact: Contact) -> list[str] | None:
     guest fallback and the radio-wide region discovery sweep.
     """
     try:
-        await _ensure_on_radio(mc, contact)
+        await ensure_on_radio(mc, contact)
         await asyncio.sleep(1.0)  # settle after add_contact
         names = await mc.commands.req_regions_sync(contact.public_key, timeout=10, min_timeout=5)
     except Exception as exc:
@@ -544,7 +541,7 @@ async def repeater_regions(public_key: str) -> RepeaterRegionsResponse:
     list of flood-allowed region names. See issue #309.
     """
     radio_manager.require_connected()
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     _require_repeater(contact)
 
     results = await _batch_cli_fetch(contact, "repeater_regions", [("region", "regions")])
@@ -571,7 +568,7 @@ async def send_repeater_command(public_key: str, request: CommandRequest) -> Com
     """Send a CLI command to a repeater or room server."""
     radio_manager.require_connected()
 
-    contact = await _resolve_contact_or_404(public_key)
+    contact = await resolve_contact_or_404(public_key)
     require_server_capable_contact(contact)
     return await send_contact_cli_command(
         contact,

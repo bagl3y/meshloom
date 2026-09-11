@@ -248,6 +248,29 @@ class TestBroadcastEventFanout:
             mock_fm.broadcast_raw.assert_called_once_with({"data": "ff00"})
 
 
+class TestDispatchTelemetryEvent:
+    """Telemetry fanout is fire-and-forget and is not a WebSocket event."""
+
+    @pytest.mark.asyncio
+    async def test_dispatch_telemetry_does_not_broadcast_ws(self):
+        from app.websocket import dispatch_telemetry_event
+
+        payload = {"public_key": "aabb", "battery_volts": 3.9}
+
+        with (
+            patch("app.websocket.ws_manager") as mock_ws,
+            patch("app.fanout.manager.fanout_manager") as mock_fm,
+        ):
+            mock_ws.broadcast = AsyncMock()
+            mock_fm.broadcast_telemetry = AsyncMock()
+
+            dispatch_telemetry_event(payload)
+            await asyncio.sleep(0)
+
+            mock_ws.broadcast.assert_not_called()
+            mock_fm.broadcast_telemetry.assert_called_once_with(payload)
+
+
 class TestBroadcastErrorSuccessCodes:
     """Stable i18n codes on error/success toasts must not drop the English message."""
 

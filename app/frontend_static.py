@@ -1,4 +1,5 @@
 import logging
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -14,6 +15,41 @@ FRONTEND_BUILD_INSTRUCTIONS = (
     "Run 'cd frontend && npm install && npm run build', "
     "or use a release zip that includes frontend/prebuilt."
 )
+_FORWARDED_HOST_RE = re.compile(
+    r"^("
+    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*"
+    r"|\[(?:[0-9A-Fa-f:]+)\]"
+    r"|(?:\d{1,3}(?:\.\d{1,3}){3})"
+    r")(?::\d{1,5})?$"
+)
+
+
+def _sanitize_forwarded_proto(raw: str) -> str | None:
+    proto = raw.split(",")[0].strip().lower()
+    if proto in {"http", "https"}:
+        return proto
+    return None
+
+
+def _sanitize_forwarded_host(raw: str) -> str | None:
+    host = raw.split(",")[0].strip()
+    if not host or any(char in host for char in "@/?#\\") or "://" in host:
+        return None
+    if not _FORWARDED_HOST_RE.fullmatch(host):
+        return None
+    return host
+
+
+def _sanitize_forwarded_prefix(raw: str) -> str:
+    prefix = raw.strip()
+    if not prefix:
+        return ""
+    if not prefix.startswith("/") or any(char in prefix for char in "@?#\\") or "://" in prefix:
+        return ""
+    if ".." in prefix:
+        return ""
+    return prefix.rstrip("/")
 
 
 class CacheControlStaticFiles(StaticFiles):
@@ -51,22 +87,17 @@ def _resolve_request_base(request: Request) -> str:
     """
     forwarded_proto = request.headers.get("x-forwarded-proto")
     forwarded_host = request.headers.get("x-forwarded-host")
+    origin = str(request.base_url).rstrip("/")
 
     if forwarded_proto and forwarded_host:
-        proto = forwarded_proto.split(",")[0].strip()
-        host = forwarded_host.split(",")[0].strip()
+        proto = _sanitize_forwarded_proto(forwarded_proto)
+        host = _sanitize_forwarded_host(forwarded_host)
         if proto and host:
             origin = f"{proto}://{host}"
-        else:
-            origin = str(request.base_url).rstrip("/")
-    else:
-        origin = str(request.base_url).rstrip("/")
 
     # Sub-path prefix (e.g. /meshcore) communicated by the reverse proxy
-    prefix = (
-        (request.headers.get("x-forwarded-prefix") or request.headers.get("x-forwarded-path") or "")
-        .strip()
-        .rstrip("/")
+    prefix = _sanitize_forwarded_prefix(
+        request.headers.get("x-forwarded-prefix") or request.headers.get("x-forwarded-path") or ""
     )
 
     return f"{origin}{prefix}/"

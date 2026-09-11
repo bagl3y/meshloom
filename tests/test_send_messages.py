@@ -2081,3 +2081,67 @@ class TestChannelSendLockScope:
         ack_events = [entry for entry in broadcasts if entry["type"] == "message_acked"]
         assert len(message_events) == 1
         assert len(ack_events) == 1
+
+
+class _EmptyContentRepo:
+    async def get_by_content(self, **_kwargs):
+        return None
+
+
+class TestAllocateOutgoingSenderTimestamp:
+    @pytest.mark.asyncio
+    async def test_concurrent_allocations_get_distinct_timestamps(self):
+        message_send_service._pending_outgoing_timestamp_reservations.clear()
+        repo = _EmptyContentRepo()
+        first, second = await asyncio.gather(
+            message_send_service.allocate_outgoing_sender_timestamp(
+                message_repository=repo,
+                msg_type="CHAN",
+                conversation_key="channel-key",
+                text="hello",
+                requested_timestamp=100,
+            ),
+            message_send_service.allocate_outgoing_sender_timestamp(
+                message_repository=repo,
+                msg_type="CHAN",
+                conversation_key="channel-key",
+                text="hello",
+                requested_timestamp=100,
+            ),
+        )
+        assert {first, second} == {100, 101}
+        await message_send_service.release_outgoing_sender_timestamp(
+            msg_type="CHAN",
+            conversation_key="channel-key",
+            text="hello",
+            sender_timestamp=first,
+        )
+        await message_send_service.release_outgoing_sender_timestamp(
+            msg_type="CHAN",
+            conversation_key="channel-key",
+            text="hello",
+            sender_timestamp=second,
+        )
+        assert message_send_service._pending_outgoing_timestamp_reservations == {}
+
+    @pytest.mark.asyncio
+    async def test_release_clears_reservation_after_exception(self):
+        message_send_service._pending_outgoing_timestamp_reservations.clear()
+        allocated = await message_send_service.allocate_outgoing_sender_timestamp(
+            message_repository=_EmptyContentRepo(),
+            msg_type="PRIV",
+            conversation_key="contact-key",
+            text="boom",
+            requested_timestamp=50,
+        )
+        assert allocated == 50
+        try:
+            raise RuntimeError("send failed")
+        except RuntimeError:
+            await message_send_service.release_outgoing_sender_timestamp(
+                msg_type="PRIV",
+                conversation_key="contact-key",
+                text="boom",
+                sender_timestamp=allocated,
+            )
+        assert message_send_service._pending_outgoing_timestamp_reservations == {}

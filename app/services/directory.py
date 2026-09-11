@@ -30,6 +30,7 @@ from app.repository.directory import (
     DIRECTORY_SOURCE_CORESCOPE,
     DirectoryHopCacheRepository,
 )
+from app.services.ttl_lru import TtlLruCache
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +53,18 @@ PUBKEY_HEX_LEN = 64
 MAX_HOPS = 64
 _HEX_RE = re.compile(r"^[0-9A-Fa-f]+$")
 _SKIP_CONFIDENCE = frozenset({"no_match", "conflict", "ambiguous"})
+REACH_CACHE_MAX = 256
+NEIGHBORS_CACHE_MAX = 256
+SEARCH_CACHE_MAX = 64
+
 _nodes_cache: tuple[float, str, list[DirectoryMapNode]] | None = None
-_reach_cache: dict[tuple[str, str], tuple[float, DirectoryReachResponse]] = {}
-_neighbors_cache: dict[tuple[str, str], tuple[float, DirectoryNeighborsResponse]] = {}
-_search_cache: dict[tuple[str, str], tuple[float, DirectoryNodeSearchResponse]] = {}
+_reach_cache: TtlLruCache[tuple[str, str], DirectoryReachResponse] = TtlLruCache(REACH_CACHE_MAX)
+_neighbors_cache: TtlLruCache[tuple[str, str], DirectoryNeighborsResponse] = TtlLruCache(
+    NEIGHBORS_CACHE_MAX
+)
+_search_cache: TtlLruCache[tuple[str, str], DirectoryNodeSearchResponse] = TtlLruCache(
+    SEARCH_CACHE_MAX
+)
 
 
 def normalize_directory_origin(raw: str) -> str:
@@ -679,9 +688,9 @@ async def get_directory_node_reach(pubkey: str) -> DirectoryReachResponse:
     if origin is None:
         return DirectoryReachResponse()
     now = time.time()
-    cached = _reach_cache.get((origin, key))
-    if cached is not None and cached[0] > now:
-        return cached[1]
+    cached = _reach_cache.get((origin, key), now)
+    if cached is not None:
+        return cached
     payload = await _corescope_get_json(
         origin,
         f"/api/nodes/{key}/reach",
@@ -693,7 +702,7 @@ async def get_directory_node_reach(pubkey: str) -> DirectoryReachResponse:
         if payload is None
         else parse_corescope_reach(payload, key)
     )
-    _reach_cache[(origin, key)] = (now + REACH_CACHE_TTL_SECONDS, result)
+    _reach_cache.set((origin, key), result, now + REACH_CACHE_TTL_SECONDS, now)
     return result
 
 
@@ -703,9 +712,9 @@ async def get_directory_node_neighbors(pubkey: str) -> DirectoryNeighborsRespons
     if origin is None:
         return DirectoryNeighborsResponse()
     now = time.time()
-    cached = _neighbors_cache.get((origin, key))
-    if cached is not None and cached[0] > now:
-        return cached[1]
+    cached = _neighbors_cache.get((origin, key), now)
+    if cached is not None:
+        return cached
     payload = await _corescope_get_json(
         origin,
         f"/api/nodes/{key}/neighbors",
@@ -717,7 +726,7 @@ async def get_directory_node_neighbors(pubkey: str) -> DirectoryNeighborsRespons
         if payload is None
         else parse_corescope_neighbors(payload)
     )
-    _neighbors_cache[(origin, key)] = (now + NEIGHBORS_CACHE_TTL_SECONDS, result)
+    _neighbors_cache.set((origin, key), result, now + NEIGHBORS_CACHE_TTL_SECONDS, now)
     return result
 
 
@@ -730,9 +739,9 @@ async def search_directory_nodes(query: str) -> DirectoryNodeSearchResponse:
         return DirectoryNodeSearchResponse()
     now = time.time()
     cache_key = (origin, q.lower())
-    cached = _search_cache.get(cache_key)
-    if cached is not None and cached[0] > now:
-        return cached[1]
+    cached = _search_cache.get(cache_key, now)
+    if cached is not None:
+        return cached
     payload = await _corescope_get_json(
         origin,
         "/api/nodes/search",
@@ -740,5 +749,5 @@ async def search_directory_nodes(query: str) -> DirectoryNodeSearchResponse:
         params={"q": q},
     )
     result = parse_corescope_node_search(payload)
-    _search_cache[cache_key] = (now + SEARCH_CACHE_TTL_SECONDS, result)
+    _search_cache.set(cache_key, result, now + SEARCH_CACHE_TTL_SECONDS, now)
     return result

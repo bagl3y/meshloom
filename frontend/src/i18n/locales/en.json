@@ -184,7 +184,7 @@
     "backupTitle": "Backup & Restore",
     "backupKeyWarning": "The radio private key is stored in memory only and is <strong>not</strong> in these downloads. Keep a separate radio key backup if you need one.",
     "backupDbTitle": "Download SQLite database",
-    "backupDbHelp": "Consistent snapshot of meshcore.db. Restore of this file is operator-level: stop the server and replace the file yourself. This app will not overwrite the live database.",
+    "backupDbHelp": "Full snapshot of meshcore.db: mesh history, channel keys, VAPID keys, fanout configs (MQTT, webhooks, bots, SQS), and push subscriptions. Treat this file as a secret. The radio private key is the only thing missing (it lives in memory). Restore is operator-level: stop the server and replace the file yourself. This app will not overwrite the live database.",
     "backupDbDownload": "Download meshcore.db",
     "backupDbDownloading": "Downloading…",
     "backupDbFailed": "Database download failed",

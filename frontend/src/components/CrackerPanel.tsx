@@ -7,7 +7,15 @@ import { api } from '../api';
 import { toast } from './ui/sonner';
 import { cn } from '@/lib/utils';
 import { extractPacketPayloadHex } from '../utils/pathUtils';
-import { useRawPackets } from '../stores/rawPacketStore';
+import { getRawPackets, useRawPackets } from '../stores/rawPacketStore';
+
+function CrackerPacketSubscription({ onPackets }: { onPackets: (packets: RawPacket[]) => void }) {
+  const packets = useRawPackets();
+  useEffect(() => {
+    onPackets(packets);
+  }, [onPackets, packets]);
+  return null;
+}
 
 interface CrackedChannel {
   channelName: string;
@@ -38,7 +46,10 @@ export function CrackerPanel({
   visible = false,
 }: CrackerPanelProps) {
   const { t } = useTranslation();
-  const packets = useRawPackets();
+  const [packets, setPackets] = useState<RawPacket[]>(() => (visible ? getRawPackets() : []));
+  const handlePackets = useCallback((next: RawPacket[]) => {
+    setPackets(next);
+  }, []);
   const [isRunning, setIsRunning] = useState(false);
   const [maxLength, setMaxLength] = useState(6);
   const [maxLengthInput, setMaxLengthInput] = useState('6');
@@ -434,6 +445,7 @@ export function CrackerPanel({
 
   return (
     <div className="flex flex-col h-full p-3 gap-3 bg-background border-t border-border overflow-auto">
+      {visible && <CrackerPacketSubscription onPackets={handlePackets} />}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <label htmlFor="cracker-max-length" className="text-sm text-muted-foreground">

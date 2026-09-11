@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { Channel, HealthStatus, Contact, Message, MessagePath, RawPacket } from './types';
-import { parseWsEvent } from './wsEvents';
+import { isDispatchableWsEvent, parseWsEvent } from './wsEvents';
 
 interface ErrorEvent {
   message: string;
@@ -103,6 +103,10 @@ export function useWebSocket(options: UseWebSocketOptions) {
     ws.onmessage = (event) => {
       try {
         const msg = parseWsEvent(event.data);
+        if (!isDispatchableWsEvent(msg)) {
+          console.warn('Skipping WebSocket event with missing fields:', msg.type);
+          return;
+        }
         // Access handlers through ref to always use current versions
         const handlers = optionsRef.current;
 

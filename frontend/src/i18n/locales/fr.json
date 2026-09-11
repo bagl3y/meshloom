@@ -184,7 +184,7 @@
     "backupTitle": "Sauvegarde et restauration",
     "backupKeyWarning": "La clé privée de la radio est uniquement en mémoire et n’est <strong>pas</strong> dans ces téléchargements. Conservez une sauvegarde séparée de la clé radio si vous en avez besoin.",
     "backupDbTitle": "Télécharger la base SQLite",
-    "backupDbHelp": "Instantané cohérent de meshcore.db. Restaurer ce fichier est une opération manuelle : arrêter le serveur et remplacer le fichier. L’application n’écrasera pas la base en cours.",
+    "backupDbHelp": "Instantané intégral de meshcore.db : historique mesh, clés de canaux, clés VAPID, configs fanout (MQTT, webhooks, bots, SQS) et abonnements push. Traitez ce fichier comme un secret. Seule la clé privée radio en est absente (elle reste en mémoire). Restauration manuelle : arrêter le serveur et remplacer le fichier. L’application n’écrasera pas la base en cours.",
     "backupDbDownload": "Télécharger meshcore.db",
     "backupDbDownloading": "Téléchargement…",
     "backupDbFailed": "Échec du téléchargement de la base",

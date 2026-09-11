@@ -241,6 +241,10 @@ async def log_server_errors(request: Request, call_next):
         raise
     if response.status_code >= 500:
         logger.error("HTTP %d on %s %s", response.status_code, request.method, request.url.path)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Content-Security-Policy", "frame-ancestors 'none'")
     return response
 
 

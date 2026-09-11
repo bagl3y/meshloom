@@ -349,7 +349,7 @@ export function useVisualizer3DScene({
 
           const labelDiv = document.createElement('div');
           labelDiv.style.color = node.isAmbiguous ? COLORS.ambiguous : '#e5e7eb';
-          labelDiv.style.fontSize = '11px';
+          labelDiv.style.fontSize = '0.6875rem';
           labelDiv.style.fontFamily = 'sans-serif';
           labelDiv.style.textAlign = 'center';
           labelDiv.style.whiteSpace = 'nowrap';

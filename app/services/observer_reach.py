@@ -27,6 +27,7 @@ from app.services.directory import (
     _require_directory_origin,
 )
 from app.services.radio_runtime import radio_runtime
+from app.services.ttl_lru import TtlLruCache
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +41,13 @@ BATCH_FALLBACK_CONCURRENCY = 4
 CORESCOPE_BATCH_MAX = 200
 MESHLOOM_BATCH_MAX = 20
 
-_reach_cache: dict[tuple[str, str], tuple[float, list[ParsedObservation]]] = {}
-_observers_cache: dict[str, tuple[float, dict[str, ObserverGeo]]] = {}
-_spec_batch_cache: dict[str, tuple[float, bool]] = {}
+REACH_CACHE_MAX = 512
+OBSERVERS_CACHE_MAX = 16
+SPEC_BATCH_CACHE_MAX = 16
+
+_reach_cache: TtlLruCache[tuple[str, str], list[ParsedObservation]] = TtlLruCache(REACH_CACHE_MAX)
+_observers_cache: TtlLruCache[str, dict[str, ObserverGeo]] = TtlLruCache(OBSERVERS_CACHE_MAX)
+_spec_batch_cache: TtlLruCache[str, bool] = TtlLruCache(SPEC_BATCH_CACHE_MAX)
 
 
 @dataclass(frozen=True)
@@ -321,40 +326,40 @@ def _dedup_entries(
 
 async def _spec_supports_batch(origin: str) -> bool:
     now = time.time()
-    cached = _spec_batch_cache.get(origin)
-    if cached is not None and cached[0] > now:
-        return cached[1]
+    cached = _spec_batch_cache.get(origin, now)
+    if cached is not None:
+        return cached
     try:
         spec = await _corescope_get_json(origin, "/api/spec", timeout=SPEC_TIMEOUT_SECONDS)
     except HTTPException:
-        _spec_batch_cache[origin] = (now + SPEC_CACHE_TTL_SECONDS, False)
+        _spec_batch_cache.set(origin, False, now + SPEC_CACHE_TTL_SECONDS, now)
         return False
     supported = False
     if isinstance(spec, dict):
         paths = spec.get("paths")
         if isinstance(paths, dict):
             supported = "/api/packets/observations" in paths
-    _spec_batch_cache[origin] = (now + SPEC_CACHE_TTL_SECONDS, supported)
+    _spec_batch_cache.set(origin, supported, now + SPEC_CACHE_TTL_SECONDS, now)
     return supported
 
 
 async def _fetch_observers(origin: str) -> dict[str, ObserverGeo]:
     now = time.time()
-    cached = _observers_cache.get(origin)
-    if cached is not None and cached[0] > now:
-        return cached[1]
+    cached = _observers_cache.get(origin, now)
+    if cached is not None:
+        return cached
     payload = await _corescope_get_json(origin, "/api/observers", timeout=OBSERVERS_TIMEOUT_SECONDS)
     geos = parse_corescope_observers(payload)
-    _observers_cache[origin] = (now + OBSERVERS_CACHE_TTL_SECONDS, geos)
+    _observers_cache.set(origin, geos, now + OBSERVERS_CACHE_TTL_SECONDS, now)
     return geos
 
 
 async def _fetch_packet_observations(origin: str, hash_lower: str) -> list[ParsedObservation]:
     now = time.time()
     cache_key = (origin, hash_lower)
-    cached = _reach_cache.get(cache_key)
-    if cached is not None and cached[0] > now:
-        return cached[1]
+    cached = _reach_cache.get(cache_key, now)
+    if cached is not None:
+        return cached
     payload = await _corescope_get_json(
         origin,
         f"/api/packets/{hash_lower}",
@@ -362,7 +367,7 @@ async def _fetch_packet_observations(origin: str, hash_lower: str) -> list[Parse
         empty_on_404=True,
     )
     observations = parse_packet_observations(payload)
-    _reach_cache[cache_key] = (now + REACH_CACHE_TTL_SECONDS, observations)
+    _reach_cache.set(cache_key, observations, now + REACH_CACHE_TTL_SECONDS, now)
     return observations
 
 
@@ -373,9 +378,9 @@ async def _fetch_batch_or_fallback(
     result: dict[str, list[ParsedObservation]] = {}
     missing: list[str] = []
     for hash_lower in hashes_lower:
-        cached = _reach_cache.get((origin, hash_lower))
-        if cached is not None and cached[0] > now:
-            result[hash_lower] = cached[1]
+        cached = _reach_cache.get((origin, hash_lower), now)
+        if cached is not None:
+            result[hash_lower] = cached
         else:
             missing.append(hash_lower)
     if not missing:
@@ -402,9 +407,11 @@ async def _fetch_batch_or_fallback(
                 stored = canonical_packet_hash(hash_lower)
                 observations = parsed.get(stored or hash_lower.upper(), [])
                 if _usable_observations(observations):
-                    _reach_cache[(origin, hash_lower)] = (
-                        now + REACH_CACHE_TTL_SECONDS,
+                    _reach_cache.set(
+                        (origin, hash_lower),
                         observations,
+                        now + REACH_CACHE_TTL_SECONDS,
+                        now,
                     )
                     result[hash_lower] = observations
                 else:

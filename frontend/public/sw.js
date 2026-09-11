@@ -43,9 +43,13 @@ self.addEventListener("push", (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+function safePushUrlHash(urlHash) {
+  return typeof urlHash === "string" && urlHash.startsWith("#") ? urlHash : "";
+}
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const urlHash = event.notification.data?.url_hash || "";
+  const urlHash = safePushUrlHash(event.notification.data?.url_hash);
   // Use the SW registration scope as the base URL so subpath deployments
   // (e.g. archworks.co/meshcore/) navigate correctly.
   const base = self.registration.scope;

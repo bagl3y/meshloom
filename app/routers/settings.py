@@ -610,7 +610,9 @@ async def download_database_backup(background_tasks: BackgroundTasks) -> FileRes
     """Download a consistent snapshot of meshcore.db.
 
     The radio private key is NOT in this file (it lives in memory only).
-    This endpoint never replaces the live database.
+    Everything else in the live database is, including channel keys, VAPID
+    keys, fanout configs, and push subscriptions. This endpoint never
+    replaces the live database.
     """
     fd, tmp_path = tempfile.mkstemp(prefix="meshcore-backup-", suffix=".db")
     os.close(fd)

@@ -118,6 +118,13 @@ def broadcast_event(event_type: str, data: dict, *, realtime: bool = True) -> No
             asyncio.create_task(fanout_manager.broadcast_contact(data))
 
 
+def dispatch_telemetry_event(data: dict) -> None:
+    """Fire-and-forget fanout telemetry dispatch (not a WebSocket event)."""
+    from app.fanout.manager import fanout_manager
+
+    asyncio.create_task(fanout_manager.broadcast_telemetry(data))
+
+
 def broadcast_error(
     message: str,
     details: str | None = None,

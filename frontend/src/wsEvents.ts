@@ -59,6 +59,43 @@ interface RawWsEnvelope {
   data?: unknown;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** True when immediately-dereferenced payload fields are present. Extra fields are allowed. */
+export function isDispatchableWsEvent(event: ParsedWsEvent): boolean {
+  if (event.type === 'unknown' || event.type === 'pong') {
+    return true;
+  }
+  const data = event.data;
+  switch (event.type) {
+    case 'message':
+      return isRecord(data);
+    case 'contact':
+      return isRecord(data) && typeof data.public_key === 'string';
+    case 'contact_resolved':
+      return (
+        isRecord(data) && typeof data.previous_public_key === 'string' && isRecord(data.contact)
+      );
+    case 'contact_deleted':
+      return isRecord(data) && typeof data.public_key === 'string';
+    case 'channel_deleted':
+      return isRecord(data) && typeof data.key === 'string';
+    case 'message_acked':
+      return (
+        isRecord(data) && typeof data.message_id === 'number' && typeof data.ack_count === 'number'
+      );
+    case 'message_deleted':
+      return isRecord(data) && typeof data.message_id === 'number';
+    case 'error':
+    case 'success':
+      return isRecord(data) && typeof data.message === 'string';
+    default:
+      return true;
+  }
+}
+
 export function parseWsEvent(raw: string): ParsedWsEvent {
   const parsed: RawWsEnvelope = JSON.parse(raw);
   if (!parsed || typeof parsed !== 'object' || typeof parsed.type !== 'string') {

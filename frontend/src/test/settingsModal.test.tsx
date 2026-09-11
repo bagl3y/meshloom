@@ -970,6 +970,7 @@ describe('SettingsModal', () => {
     renderModal();
     openDatabaseSection();
 
+    expect(screen.getByText(i18n.t('settings.backupDbHelp'))).toBeInTheDocument();
     expect(screen.getByText(i18n.t('settings.database.purgeArchivalHelp'))).toBeInTheDocument();
 
     fireEvent.click(

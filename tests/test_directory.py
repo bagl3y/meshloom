@@ -388,3 +388,70 @@ class TestDirectoryReach:
         result = await get_directory_node_reach("aa" * 32)
         assert result.directory_enabled is False
         assert result.observers == []
+
+
+class TestDirectoryTtlLru:
+    def test_purge_expired_before_evicting_live_entries(self):
+        from app.services.ttl_lru import TtlLruCache
+
+        cache: TtlLruCache[str, str] = TtlLruCache(2)
+        cache.set("stale", "old", expires_at=10, now=0)
+        cache.set("live", "keep", expires_at=100, now=0)
+        cache.set("fresh", "new", expires_at=100, now=20)
+
+        assert cache.get("stale", now=20) is None
+        assert cache.get("live", now=20) == "keep"
+        assert cache.get("fresh", now=20) == "new"
+        assert len(cache) == 2
+
+    def test_evicts_least_recently_used_when_full(self):
+        from app.services.ttl_lru import TtlLruCache
+
+        cache: TtlLruCache[str, str] = TtlLruCache(2)
+        cache.set("a", "A", expires_at=100, now=0)
+        cache.set("b", "B", expires_at=100, now=0)
+        cache.set("c", "C", expires_at=100, now=0)
+
+        assert cache.get("a", now=1) is None
+        assert cache.get("b", now=1) == "B"
+        assert cache.get("c", now=1) == "C"
+
+    @pytest.mark.asyncio
+    async def test_reach_cache_drops_lru_entry(self, test_db):
+        from app.models import DirectoryReachResponse
+        from app.services import directory
+        from app.services.ttl_lru import TtlLruCache
+
+        reset_directory_nodes_cache()
+        await AppSettingsRepository.update(
+            directory_enabled=True, directory_url="https://corescope.test"
+        )
+        original = directory._reach_cache
+        directory._reach_cache = TtlLruCache[tuple[str, str], DirectoryReachResponse](2)
+
+        def _ok(pubkey: str) -> MagicMock:
+            response = MagicMock()
+            response.status_code = 200
+            response.json.return_value = {
+                "node": {"pubkey": pubkey, "name": pubkey[:4], "lat": 1.0, "lon": 2.0},
+                "direct_observers": [],
+            }
+            return response
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(
+            side_effect=[_ok("aa" * 32), _ok("bb" * 32), _ok("cc" * 32), _ok("aa" * 32)]
+        )
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        try:
+            with patch("app.services.directory.httpx.AsyncClient", return_value=mock_client):
+                await get_directory_node_reach("aa" * 32)
+                await get_directory_node_reach("bb" * 32)
+                await get_directory_node_reach("cc" * 32)
+                await get_directory_node_reach("aa" * 32)
+            assert mock_client.get.call_count == 4
+        finally:
+            directory._reach_cache = original
+            reset_directory_nodes_cache()

@@ -282,3 +282,35 @@ class TestObserverReachGate:
             with pytest.raises(HTTPException) as exc:
                 await get_packet_observer_reach("AABBCCDDEEFF0011")
         assert exc.value.status_code == 500
+
+
+class TestObserverReachTtlLru:
+    def test_observers_cache_purges_expired_before_eviction(self):
+        from app.services.ttl_lru import TtlLruCache
+
+        cache: TtlLruCache[str, dict[str, str]] = TtlLruCache(2)
+        cache.set("old-origin", {"obs": "gone"}, expires_at=5, now=0)
+        cache.set("keep-origin", {"obs": "stay"}, expires_at=50, now=0)
+        cache.set("new-origin", {"obs": "fresh"}, expires_at=50, now=10)
+
+        assert cache.get("old-origin", now=10) is None
+        assert cache.get("keep-origin", now=10) == {"obs": "stay"}
+        assert cache.get("new-origin", now=10) == {"obs": "fresh"}
+
+    def test_packet_reach_cache_evicts_lru(self):
+        from app.services import observer_reach
+        from app.services.ttl_lru import TtlLruCache
+
+        original = observer_reach._reach_cache
+        observer_reach._reach_cache = TtlLruCache(2)
+        try:
+            now = 1_000.0
+            observer_reach._reach_cache.set(("o", "aa"), [], now + 90, now)
+            observer_reach._reach_cache.set(("o", "bb"), [], now + 90, now)
+            observer_reach._reach_cache.set(("o", "cc"), [], now + 90, now)
+            assert observer_reach._reach_cache.get(("o", "aa"), now) is None
+            assert observer_reach._reach_cache.get(("o", "bb"), now) == []
+            assert observer_reach._reach_cache.get(("o", "cc"), now) == []
+        finally:
+            observer_reach._reach_cache = original
+            reset_observer_reach_cache()

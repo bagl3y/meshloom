@@ -162,6 +162,55 @@ def test_webmanifest_includes_forwarded_prefix(tmp_path):
         assert f"{expected_base}web-app-manifest-512x512.png" in icon_srcs
 
 
+def test_webmanifest_ignores_unsafe_forwarded_headers(tmp_path):
+    app = FastAPI()
+    dist_dir = tmp_path / "frontend" / "dist"
+    dist_dir.mkdir(parents=True)
+    (dist_dir / "index.html").write_text("<html><body>index page</body></html>")
+
+    registered = register_frontend_static_routes(app, dist_dir)
+    assert registered is True
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/site.webmanifest",
+            headers={
+                "x-forwarded-proto": "javascript",
+                "x-forwarded-host": "evil.example/path",
+                "x-forwarded-prefix": "meshcore",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["start_url"] == "http://testserver/"
+        assert data["scope"] == "http://testserver/"
+
+
+def test_webmanifest_ignores_forwarded_credentials_and_query_prefix(tmp_path):
+    app = FastAPI()
+    dist_dir = tmp_path / "frontend" / "dist"
+    dist_dir.mkdir(parents=True)
+    (dist_dir / "index.html").write_text("<html><body>index page</body></html>")
+
+    registered = register_frontend_static_routes(app, dist_dir)
+    assert registered is True
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/site.webmanifest",
+            headers={
+                "x-forwarded-proto": "https",
+                "x-forwarded-host": "user:pass@mesh.example.com",
+                "x-forwarded-prefix": "/meshcore?next=https://evil.example",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["start_url"] == "http://testserver/"
+
+
 def test_first_available_prefers_dist_over_prebuilt(tmp_path):
     app = FastAPI()
     frontend_dir = tmp_path / "frontend"

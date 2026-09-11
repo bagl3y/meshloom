@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseWsEvent } from '../wsEvents';
+import { isDispatchableWsEvent, parseWsEvent } from '../wsEvents';
 
 describe('wsEvents', () => {
   it('parses contact_deleted events', () => {
@@ -134,5 +134,43 @@ describe('wsEvents', () => {
     expect(() => parseWsEvent(JSON.stringify({ data: {} }))).toThrow(
       'Invalid WebSocket event envelope'
     );
+  });
+
+  it('accepts extra fields on known events', () => {
+    const event = parseWsEvent(
+      JSON.stringify({
+        type: 'contact_deleted',
+        data: { public_key: 'aa', extra: true },
+      })
+    );
+    expect(isDispatchableWsEvent(event)).toBe(true);
+  });
+
+  it('rejects known events missing immediately-dereferenced fields', () => {
+    expect(
+      isDispatchableWsEvent(parseWsEvent(JSON.stringify({ type: 'message', data: null })))
+    ).toBe(false);
+    expect(
+      isDispatchableWsEvent(parseWsEvent(JSON.stringify({ type: 'contact', data: { name: 'x' } })))
+    ).toBe(false);
+    expect(
+      isDispatchableWsEvent(parseWsEvent(JSON.stringify({ type: 'contact_deleted', data: {} })))
+    ).toBe(false);
+    expect(
+      isDispatchableWsEvent(parseWsEvent(JSON.stringify({ type: 'channel_deleted', data: {} })))
+    ).toBe(false);
+    expect(
+      isDispatchableWsEvent(
+        parseWsEvent(JSON.stringify({ type: 'message_acked', data: { message_id: 1 } }))
+      )
+    ).toBe(false);
+    expect(isDispatchableWsEvent(parseWsEvent(JSON.stringify({ type: 'error', data: {} })))).toBe(
+      false
+    );
+    expect(
+      isDispatchableWsEvent(
+        parseWsEvent(JSON.stringify({ type: 'success', data: { details: 'x' } }))
+      )
+    ).toBe(false);
   });
 });

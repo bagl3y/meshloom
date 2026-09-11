@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { api } from '../api';
+import { api, formatApiError } from '../api';
 import { takePrefetchOrFetch } from '../prefetch';
 import { toast } from '../components/ui/sonner';
 import i18n from '../i18n';
@@ -104,13 +104,7 @@ export function useAppSettings() {
       } catch {
         // If refetch also fails, leave optimistic state
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const detail = (err as any)?.body?.detail;
-      if (typeof detail === 'object' && detail?.message) {
-        toast.error(detail.message);
-      } else {
-        toast.error(i18n.t('toast.trackedTelemetryFailed'));
-      }
+      toast.error(formatApiError(err, i18n.t) || i18n.t('toast.trackedTelemetryFailed'));
     }
   }, []);
 
@@ -137,13 +131,7 @@ export function useAppSettings() {
       } catch {
         // If refetch also fails, leave optimistic state
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const detail = (err as any)?.body?.detail;
-      if (typeof detail === 'object' && detail?.message) {
-        toast.error(detail.message);
-      } else {
-        toast.error(i18n.t('toast.trackedContactTelemetryFailed'));
-      }
+      toast.error(formatApiError(err, i18n.t) || i18n.t('toast.trackedContactTelemetryFailed'));
     }
   }, []);
 

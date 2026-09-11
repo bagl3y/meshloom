@@ -256,6 +256,32 @@ describe('useWebSocket dispatch', () => {
     expect(onRawPacket.mock.calls[0][0]).toHaveProperty('id', 5);
   });
 
+  it('skips events missing required fields', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const handlers = {
+      onMessage: vi.fn(),
+      onContact: vi.fn(),
+      onContactDeleted: vi.fn(),
+      onChannelDeleted: vi.fn(),
+      onMessageAcked: vi.fn(),
+      onError: vi.fn(),
+      onSuccess: vi.fn(),
+    };
+    renderHook(() => useWebSocket(handlers));
+
+    fireMessage({ type: 'message', data: null });
+    fireMessage({ type: 'contact', data: { name: 'x' } });
+    fireMessage({ type: 'contact_deleted', data: {} });
+    fireMessage({ type: 'channel_deleted', data: {} });
+    fireMessage({ type: 'message_acked', data: { message_id: 1 } });
+    fireMessage({ type: 'error', data: {} });
+    fireMessage({ type: 'success', data: {} });
+
+    Object.values(handlers).forEach((fn) => expect(fn).not.toHaveBeenCalled());
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('malformed JSON calls no handlers (catch branch)', () => {
     const handlers = {
       onHealth: vi.fn(),

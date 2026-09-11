@@ -39,6 +39,27 @@ def test_openapi_includes_docs_metadata():
     assert tags["radio"].startswith("Radio configuration")
 
 
+def _assert_hardening_headers(response) -> None:
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["content-security-policy"] == "frame-ancestors 'none'"
+
+
+def test_hardening_headers_on_docs_openapi_and_errors():
+    with TestClient(app) as client:
+        docs = client.get("/docs")
+        openapi = client.get("/openapi.json")
+        missing = client.get("/api/definitely-not-an-endpoint")
+
+    assert docs.status_code == 200
+    assert openapi.status_code == 200
+    assert missing.status_code == 404
+    _assert_hardening_headers(docs)
+    _assert_hardening_headers(openapi)
+    _assert_hardening_headers(missing)
+
+
 def test_openapi_documents_common_error_responses():
     with TestClient(app) as client:
         response = client.get("/openapi.json")

@@ -19,7 +19,7 @@ from app.radio_sync import (
     _store_pending_direct_message,
     drain_pending_messages,
 )
-from app.routers.contacts import _ensure_on_radio
+from app.services.contact_access import ensure_on_radio
 from app.services.radio_runtime import radio_runtime as radio_manager
 
 if TYPE_CHECKING:
@@ -332,7 +332,7 @@ async def prepare_authenticated_contact_connection(
 
     try:
         logger.info("Adding %s %s to radio", contact_label, contact.public_key[:12])
-        await _ensure_on_radio(mc, contact)
+        await ensure_on_radio(mc, contact)
 
         response = await _attempt_server_login(
             mc,
@@ -373,7 +373,7 @@ async def prepare_authenticated_contact_connection(
             )
             return response
 
-        # Deliberately no _ensure_on_radio here — re-adding the contact would
+        # Deliberately no ensure_on_radio here — re-adding the contact would
         # restore the very route we just cleared, and the retry would go direct.
         flood_response = await _attempt_server_login(
             mc,
@@ -427,7 +427,7 @@ async def batch_cli_fetch(
         ) as mc:
             # Re-ensure contact is loaded each iteration; another operation
             # may have evicted it while we didn't hold the lock.
-            await _ensure_on_radio(mc, contact)
+            await ensure_on_radio(mc, contact)
             await asyncio.sleep(1.0)  # settle after add_contact
 
             # Clear any stale buffered CLI response from a prior command so it
@@ -509,7 +509,7 @@ async def fetch_repeater_owner_info_binary(
         operation_name, pause_polling=True, suspend_auto_fetch=True
     ) as mc:
         # Ensure contact is on radio for reply routing.
-        await _ensure_on_radio(mc, contact)
+        await ensure_on_radio(mc, contact)
         await asyncio.sleep(1.0)  # settle after add_contact
 
         send_result = await mc.commands.send_binary_req(
@@ -564,7 +564,7 @@ async def send_contact_cli_command(
         suspend_auto_fetch=True,
     ) as mc:
         logger.info("Adding %s %s to radio", label, contact.public_key[:12])
-        await _ensure_on_radio(mc, contact)
+        await ensure_on_radio(mc, contact)
         await asyncio.sleep(1.0)
 
         # Clear any stale buffered CLI response from a prior command so it
