@@ -323,7 +323,7 @@ jsdom has no layout engine, so none of this is observable from the vitest suite 
 
 ### Radio transport
 
-Radio transport (`serial` / `tcp` / `ble`) is configured in the web UI and stored on `app_settings` (`radio_transport`, `radio_serial_port`, `radio_serial_baudrate`, `radio_tcp_host` / `radio_tcp_port`, `radio_ble_address` / `radio_ble_pin`). It is not an environment variable. Empty `radio_serial_port` means auto-detect. Until transport is set, `HealthStatus.radio_state` is `paused` and `transport_configured` is false.
+Radio transport (`serial` / `tcp` / `ble`) is configured in the web UI and stored on `app_settings` (`radio_transport`, `radio_serial_port`, `radio_serial_baudrate`, `radio_tcp_host` / `radio_tcp_port`, `radio_ble_address` / `radio_ble_pin`). It is not an environment variable. Empty `radio_serial_port` means auto-detect. Until transport is set, `HealthStatus.radio_state` is `paused` and `transport_configured` is false. `RadioIdentityModal` is driven by health `radio_state` `identity_unbound_legacy` / `identity_mismatch` — not a dedicated WebSocket event. Unbound-legacy is an existing database with no bound key; bind-without-wipe keeps mesh history.
 
 ### Radio settings behavior
 

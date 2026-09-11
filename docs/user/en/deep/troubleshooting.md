@@ -23,6 +23,18 @@ For a package, put the variable in `/etc/meshloom/meshloom.env` and restart `mes
 
 Run `uv sync` from the repository root, verify `uv --version`, and always use `uv run uvicorn ...`. A system `/usr/bin/uvicorn` is the usual cause. Install `uv` with `curl -LsSf https://astral.sh/uv/install.sh | sh`.
 
+## Radio paused, transport not configured
+
+The status bar stays paused and **Connect** opens **Settings > Radio**. That is expected on a new install: transport is no longer chosen at install time. Set USB, TCP, or BLE there and apply. See [First launch](/en/docs/first-run/) and [Radio transports](/en/docs/deep/transports/).
+
+Leftover `MESHCORE_SERIAL_PORT`, `MESHCORE_TCP_HOST`, and `MESHCORE_BLE_ADDRESS` are no longer read at runtime. An existing database may import them once on the first startup after the upgrade.
+
+## “Radio not bound” or identity-mismatch dialog
+
+After an upgrade, a database that already has contacts or messages asks for confirmation even when the radio is the same. **Bind without wiping** keeps history. **New radio** wipes it. **Previous key: unknown** means the bind did not exist yet, not that another device is connected.
+
+If two different keys are shown, the radio changed. Bind-without-wipe is not offered.
+
 ## Full contact table
 
 Meshloom loads favorites and recent contacts so the radio can ACK DMs. If the table is full, empty it with another MeshCore client, lower the target, enable `MESHCORE_LOAD_WITH_AUTOEVICT=true`, or ignore the warning. **Messaging is not affected.** See [Radio, contacts, and channels](/en/docs/deep/radio/).

@@ -5,7 +5,7 @@ level: start
 order: 3
 ---
 
-The server is running and the radio is connected. Now open the page and see what is there.
+The server is running. Open the page, bind the radio, then look around.
 
 ```
 http://127.0.0.1:8000
@@ -13,11 +13,26 @@ http://127.0.0.1:8000
 
 From another device on the same network, use the machine’s IP address with port `8000`.
 
-## Check the radio link
+## Bind the radio
 
-At the top of the screen, a status bar shows what the radio is doing. It moves through **Radio connecting**, **Radio initializing**, and finally **Radio OK** when the link is established and synchronization is complete. The first connection takes a moment: the server reads the device configuration, retrieves its contacts and channels, and sets its clock.
+Transport — USB, TCP, or Bluetooth — is chosen in the web UI, not during install. Until it is set, the status bar stays paused and **Connect** opens **Settings > Radio**.
 
-If the bar says **Radio disconnected**, a **Reconnect** button appears beside it. A server that cannot find the radio retries by itself every few seconds, so reconnecting a cable or powering up the radio is usually enough. If the state does not change, the transport selected during installation is the first suspect: wrong serial port, wrong IP address, or rejected Bluetooth PIN. See [Radio transports](/en/docs/deep/transports/) and [Troubleshooting](/en/docs/deep/troubleshooting/).
+Pick the transport, enter the port, host, or BLE address and PIN, then apply. Details are in [Radio transports](/en/docs/deep/transports/).
+
+The bar then moves through **Radio connecting**, **Radio initializing**, and **Radio OK** when the link is up and synchronization is complete. The first connection takes a moment: the server reads the device configuration, retrieves its contacts and channels, and sets its clock.
+
+If the bar says **Radio disconnected**, a **Reconnect** button appears beside it. A server that cannot find the radio retries by itself every few seconds, so reconnecting a cable or powering up the radio is usually enough. If the state does not change: wrong serial port, wrong IP address, or rejected Bluetooth PIN. See [Troubleshooting](/en/docs/deep/troubleshooting/).
+
+## First identity bind
+
+Meshloom binds the database to the radio’s public key. A new install does this quietly. After upgrading an existing database, a dialog asks you to confirm.
+
+- **Bind without wiping** if this is the same radio: contacts and messages stay.
+- **New radio** if this is a different device: local mesh contacts and messages are wiped. Channels and server settings stay.
+
+**Previous key: unknown** means the database predates identity binding, not that the radio changed. If the new key is yours, bind without wiping.
+
+If a different radio is connected, the dialog shows both key prefixes. Bind-without-wipe is not offered: adopting the other identity requires a wipe.
 
 The status bar also shows the node name, its public key — click it to copy — and the battery level when the radio provides it.
 

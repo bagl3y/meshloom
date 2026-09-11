@@ -43,6 +43,8 @@ http://127.0.0.1:8000
 
 Depuis un autre appareil du même réseau, remplacez `127.0.0.1` par l’adresse IP de la machine, en gardant le port `8000`.
 
+Le transport radio se configure ensuite dans l’interface : [Premier lancement](/docs/first-run/).
+
 Attention à ne pas confondre deux adresses proches. `http://127.0.0.1:8000/docs` est la documentation technique de l’API que le serveur génère lui-même. Ce n’est pas cette documentation-ci.
 
 Pour vérifier ou redémarrer un service natif :

@@ -7,6 +7,8 @@ order: 15
 
 Meshloom manages the radio’s contacts and channels. The server keeps more state than the radio can hold and loads a working set onto the node.
 
+The database is bound to the radio’s public key. A different radio opens a dialog: adopting the new identity wipes local mesh contacts and messages; channels and server settings stay. A database that predates this bind asks once even for the historical radio — **Bind without wiping** in that case. See [First launch](/en/docs/first-run/).
+
 ## Why load contacts
 
 The radio can automatically ACK incoming direct messages when the sender is in its contact table. Meshloom enumerates the table, loads favorites first, targets about 80% of `max_radio_contacts`, and performs a full offload/reload around 95% occupancy.

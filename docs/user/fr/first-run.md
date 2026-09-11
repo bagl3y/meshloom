@@ -5,7 +5,7 @@ level: start
 order: 3
 ---
 
-Le serveur tourne, la radio est branchée. Reste à ouvrir la page et à regarder ce qui s’y passe.
+Le serveur tourne. Reste à ouvrir la page, lier la radio, puis regarder ce qui s’y passe.
 
 ```
 http://127.0.0.1:8000
@@ -13,11 +13,26 @@ http://127.0.0.1:8000
 
 Depuis un autre appareil du même réseau, la même adresse avec l’IP de la machine et le port `8000`.
 
-## Vérifier la liaison avec la radio
+## Lier la radio
 
-Tout en haut de l’écran, une barre d’état indique où en est la radio. Elle passe par plusieurs états : **Radio en connexion**, **Radio en initialisation**, puis **Radio OK** quand la liaison est établie et la synchronisation terminée. La première connexion prend un moment : le serveur lit la configuration de l’appareil, récupère ses contacts et ses salons, remet l’horloge à l’heure.
+Le transport — USB, TCP ou Bluetooth — se choisit dans l’interface, pas à l’installation. Tant qu’il n’est pas défini, la barre d’état reste en pause et un clic sur **Connecter** ouvre **Réglages > Radio**.
 
-Si la barre affiche **Radio déconnectée**, un bouton **Reconnecter** est disponible à côté. Un serveur qui ne trouve pas la radio réessaie de lui-même toutes les quelques secondes, donc un câble rebranché ou une radio rallumée finit par être vu sans rien cliquer. Si l’état ne bouge pas, le transport choisi à l’installation est le premier suspect : mauvais port série, mauvaise adresse IP, PIN Bluetooth refusé. Le détail est dans [Transports radio](/docs/deep/transports/) et [Dépannage](/docs/deep/troubleshooting/).
+Choisissez le transport, renseignez le port, l’hôte, ou l’adresse BLE et le PIN, puis appliquez. Les détails sont dans [Transports radio](/docs/deep/transports/).
+
+La barre passe ensuite par **Radio en connexion**, **Radio en initialisation**, puis **Radio OK** quand la liaison est établie et la synchronisation terminée. La première connexion prend un moment : le serveur lit la configuration de l’appareil, récupère ses contacts et ses salons, remet l’horloge à l’heure.
+
+Si la barre affiche **Radio déconnectée**, un bouton **Reconnecter** est disponible à côté. Un serveur qui ne trouve pas la radio réessaie de lui-même toutes les quelques secondes, donc un câble rebranché ou une radio rallumée finit par être vu sans rien cliquer. Si l’état ne bouge pas : mauvais port série, mauvaise adresse IP, PIN Bluetooth refusé. Voir [Dépannage](/docs/deep/troubleshooting/).
+
+## Première liaison d’identité
+
+Meshloom lie la base à la clé publique de la radio. Sur une installation neuve, c’est silencieux. Après une mise à jour d’une base qui existait déjà, un dialogue demande de confirmer.
+
+- **Lier sans effacer** si c’est la même radio : contacts et messages restent.
+- **Nouvelle radio** si c’est un autre appareil : contacts et messages mesh locaux sont effacés. Les salons et la config serveur restent.
+
+« Clé précédente : inconnue » veut dire que cette base précède le lien d’identité, pas que la radio a changé. Si la nouvelle clé est bien la vôtre, liez sans effacer.
+
+Si une autre radio est branchée, le dialogue affiche les deux préfixes de clé. Continuer sans effacer n’est alors pas proposé : adopter l’autre identité exige l’effacement.
 
 La barre d’état affiche aussi le nom du nœud, sa clé publique — cliquer dessus la copie — et son niveau de batterie quand la radio le remonte.
 

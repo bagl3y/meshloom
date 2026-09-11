@@ -33,6 +33,18 @@ Cause unique : uvicorn a tourné avec le Python système au lieu du virtualenv d
 - Lancer `uv --version`. Si ça échoue, `uv` n’est pas installé, ou autre chose du même nom traîne dans le `PATH`. Installation : `curl -LsSf https://astral.sh/uv/install.sh | sh`, puis redémarrer le shell.
 - Lancer `which uvicorn`. Si la réponse est `/usr/bin/uvicorn`, c’est un uvicorn système qui gagne. Passez toujours par `uv run uvicorn ...` depuis la racine du dépôt.
 
+## Radio en pause, transport non configuré
+
+La barre d’état reste en pause et **Connecter** ouvre **Réglages > Radio**. C’est normal sur une installation neuve : le transport n’est plus choisi à l’install. Configurez USB, TCP ou BLE dans cette page, puis appliquez. Voir [Premier lancement](/docs/first-run/) et [Transports radio](/docs/deep/transports/).
+
+Les anciennes variables `MESHCORE_SERIAL_PORT`, `MESHCORE_TCP_HOST` et `MESHCORE_BLE_ADDRESS` ne sont plus lues au runtime. Une base déjà existante peut les importer une seule fois au premier démarrage après la mise à jour.
+
+## Dialogue « radio non liée » ou « identité différente »
+
+Après une mise à jour, une base qui avait déjà des contacts ou des messages demande une confirmation, même si c’est la même radio. **Lier sans effacer** conserve l’historique. **Nouvelle radio** l’efface. « Clé précédente : inconnue » signifie que le lien n’existait pas encore, pas qu’un autre appareil est branché.
+
+Si deux clés différentes s’affichent, c’est un vrai changement de radio. Continuer sans effacer n’est pas proposé.
+
 ## Table de contacts pleine
 
 Symptôme : un avertissement indiquant que l’acquittement automatique des DM ne fonctionnera peut-être pas pour tous les contacts.

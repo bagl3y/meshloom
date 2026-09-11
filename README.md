@@ -16,13 +16,13 @@ Meshloom takes over radio contacts and channels. A poor fit if you swap radios a
 
 ## Install
 
-On Linux the installer offers a native systemd service or Docker, and only the radio transports that work on that host. Use `bash -c` so prompts still have a terminal — do not pipe into `bash`.
+On Linux the installer offers a native systemd service or Docker. Radio transport is configured in the web UI after install. Use `bash -c` so prompts still have a terminal — do not pipe into `bash`.
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://get.meshloom.app)"
 ```
 
-Then open http://127.0.0.1:8000. User-facing docs: https://meshloom.app/docs/.
+Then open http://127.0.0.1:8000 and choose the radio under **Settings > Radio**. User-facing docs: https://meshloom.app/docs/.
 
 From a checkout (development): [CONTRIBUTING.md](CONTRIBUTING.md). Docker image: `ghcr.io/bagl3y/meshloom`. Portainer, HTTPS, systemd, and extra environment variables: [README_ADVANCED.md](README_ADVANCED.md).
 

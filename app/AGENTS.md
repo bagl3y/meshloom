@@ -108,6 +108,8 @@ app/
 
 Transport is configured in the web UI and stored on `app_settings`: `radio_transport` (`serial` / `tcp` / `ble`), `radio_serial_port` (empty = auto-detect), `radio_serial_baudrate`, `radio_tcp_host` / `radio_tcp_port`, `radio_ble_address` / `radio_ble_pin`. Until `radio_transport` is set, the radio stays paused. Do not use `MESHCORE_SERIAL_PORT`, `MESHCORE_TCP_HOST`, or `MESHCORE_BLE_ADDRESS` as the configuration surface.
 
+Identity is bound to `radio_bound_public_key`. A live key that does not match, or an existing mesh history with no bound key (`identity_unbound_legacy`), closes ingest and pauses setup until adopt/reject. `pause_connection()` must not run while the post-connect operation lock is held.
+
 ### Connection lifecycle
 
 - `RadioManager.start_connection_monitor()` checks health every 5s.

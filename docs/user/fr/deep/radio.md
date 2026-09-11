@@ -9,6 +9,8 @@ Meshloom prend le contrôle des contacts et des salons de la radio. Ce n’est p
 
 La conséquence est nette. Si vous changez de radio en attendant que l’appareil conserve ses propres favoris indépendamment de l’application, Meshloom est un mauvais choix.
 
+La base est liée à la clé publique de la radio. Une autre radio ouvre un dialogue : adopter la nouvelle identité efface contacts et messages mesh locaux ; les salons et la config serveur restent. Une base qui précède ce lien demande une confirmation unique, même pour la radio historique — **Lier sans effacer** dans ce cas. Voir [Premier lancement](/docs/first-run/).
+
 ## Pourquoi charger des contacts sur la radio
 
 Une radio n’a de place que pour quelques centaines de contacts et une poignée de salons. Le serveur, lui, garde tout.
