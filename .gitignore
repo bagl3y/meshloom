@@ -17,11 +17,6 @@ frontend/dist/
 frontend/prebuilt/
 frontend/.eslintcache
 
-# Public website (Astro)
-website/node_modules/
-website/dist/
-website/.astro/
-
 # Release artifacts
 meshloom-prebuilt-frontend-v*.zip
 

@@ -22,7 +22,7 @@ On Linux the installer offers a native systemd service or Docker. Radio transpor
 /bin/bash -c "$(curl -fsSL https://get.meshloom.app)"
 ```
 
-Then open http://127.0.0.1:8000 and choose the radio under **Settings > Radio**. User-facing docs: https://meshloom.app/docs/.
+Then open http://127.0.0.1:8000 and choose the radio under **Settings > Radio**. User-facing docs live in [`docs/user/`](docs/user/) and are published at https://meshloom.app/docs/.
 
 From a checkout (development): [CONTRIBUTING.md](CONTRIBUTING.md). Docker image: `ghcr.io/bagl3y/meshloom`. Portainer, HTTPS, systemd, and extra environment variables: [README_ADVANCED.md](README_ADVANCED.md).
 
@@ -38,6 +38,6 @@ The database stays in place (`/var/lib/meshloom` for the package, `./data` for D
 
 ## More
 
-- Site and user docs: https://meshloom.app/docs/
+- User docs (source): [`docs/user/`](docs/user/) — published at https://meshloom.app/docs/
 - API docs once the server is up: http://127.0.0.1:8000/docs
 - Home Assistant: [README_HA.md](README_HA.md)
