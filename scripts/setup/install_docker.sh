@@ -10,6 +10,16 @@
 
 set -euo pipefail
 
+is_root() { [ "$(id -u)" -eq 0 ]; }
+
+priv() {
+    if is_root; then
+        printf '%s' "$*"
+    else
+        printf 'sudo %s' "$*"
+    fi
+}
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -38,10 +48,6 @@ TCP_HOST=""
 TCP_PORT="5000"
 BLE_ADDRESS=""
 BLE_PIN=""
-ENABLE_BOTS="N"
-ENABLE_AUTH="N"
-AUTH_USERNAME=""
-AUTH_PASSWORD=""
 RUN_AS_HOST_USER="N"
 ENABLE_SNAKEOIL_TLS="Y"
 BLE_MANUAL_WARNING=false
@@ -349,56 +355,8 @@ else
 fi
 
 if [ -n "${MESHLOOM_NONINTERACTIVE:-}" ]; then
-    ENABLE_BOTS="${MESHLOOM_ENABLE_BOTS:-N}"
-    ENABLE_AUTH="${MESHLOOM_ENABLE_AUTH:-N}"
-    AUTH_USERNAME="${MESHLOOM_AUTH_USERNAME:-}"
-    AUTH_PASSWORD="${MESHLOOM_AUTH_PASSWORD:-}"
     ENABLE_SNAKEOIL_TLS="${MESHLOOM_SNAKEOIL:-N}"
-else
-echo -e "${BOLD}─── Bot System ──────────────────────────────────────────────────────${NC}"
-echo -e "${YELLOW}Warning:${NC} The bot system executes arbitrary Python code on the server."
-echo "It is not recommended on untrusted networks."
-echo
-read -r -p "Enable bots? [y/N]: " ENABLE_BOTS
-ENABLE_BOTS="${ENABLE_BOTS:-N}"
-echo
-
-if [[ "$ENABLE_BOTS" =~ ^[Yy]$ ]]; then
-    echo -e "${GREEN}Bots enabled.${NC}"
-else
-    echo -e "${GREEN}Bots disabled.${NC}"
 fi
-echo
-
-echo -e "${BOLD}─── HTTP Basic Auth ─────────────────────────────────────────────────${NC}"
-if [[ "$ENABLE_BOTS" =~ ^[Yy]$ ]]; then
-    echo "With bots enabled, HTTP Basic Auth is strongly recommended if this"
-    echo "service will be reachable beyond your local machine."
-else
-    echo "HTTP Basic Auth adds a coarse access gate to the service."
-fi
-echo
-read -r -p "Set up HTTP Basic Auth? [y/N]: " ENABLE_AUTH
-ENABLE_AUTH="${ENABLE_AUTH:-N}"
-echo
-fi
-
-if [[ "$ENABLE_AUTH" =~ ^[Yy]$ ]] && [ -z "${MESHLOOM_NONINTERACTIVE:-}" ]; then
-    read -r -p "Username: " AUTH_USERNAME
-    while [ -z "$AUTH_USERNAME" ]; do
-        echo -e "${RED}Username cannot be empty.${NC}"
-        read -r -p "Username: " AUTH_USERNAME
-    done
-    read -r -s -p "Password: " AUTH_PASSWORD
-    echo
-    while [ -z "$AUTH_PASSWORD" ]; do
-        echo -e "${RED}Password cannot be empty.${NC}"
-        read -r -s -p "Password: " AUTH_PASSWORD
-        echo
-    done
-    echo -e "${GREEN}Basic Auth configured for user '${AUTH_USERNAME}'.${NC}"
-fi
-echo
 
 if [ -z "${MESHLOOM_NONINTERACTIVE:-}" ]; then
     echo -e "${BOLD}─── HTTPS / Snakeoil TLS ────────────────────────────────────────────${NC}"
@@ -482,13 +440,6 @@ mkdir -p "$REPO_DIR/data"
     fi
     echo "    environment:"
     echo "      MESHCORE_DATABASE_PATH: $(yaml_quote "data/meshcore.db")"
-    if ! [[ "$ENABLE_BOTS" =~ ^[Yy]$ ]]; then
-        echo "      MESHCORE_DISABLE_BOTS: $(yaml_quote "true")"
-    fi
-    if [[ "$ENABLE_AUTH" =~ ^[Yy]$ ]]; then
-        echo "      MESHCORE_BASIC_AUTH_USERNAME: $(yaml_quote "$AUTH_USERNAME")"
-        echo "      MESHCORE_BASIC_AUTH_PASSWORD: $(yaml_quote "$AUTH_PASSWORD")"
-    fi
     echo "    restart: unless-stopped"
 } >"$COMPOSE_FILE"
 
@@ -496,15 +447,15 @@ echo -e "${GREEN}Generated ${COMPOSE_FILE}.${NC}"
 echo
 echo -e "${BOLD}Docker commands${NC}"
 if [ "$IMAGE_MODE" = "build" ]; then
-    echo "  sudo docker compose up -d --build    # build the local image and start Meshloom in the background"
+    echo "  $(priv docker compose up -d --build)    # build the local image and start Meshloom in the background"
 else
-    echo "  sudo docker compose up -d            # start Meshloom in the background"
+    echo "  $(priv docker compose up -d)            # start Meshloom in the background"
 fi
-echo "  sudo docker compose logs -f          # follow the container logs live"
+echo "  $(priv docker compose logs -f)          # follow the container logs live"
 echo
-echo "  sudo docker compose down             # stop and remove the running container"
-echo "  sudo docker compose restart          # restart the container without changing the image"
-echo "  sudo docker compose pull && sudo docker compose up -d   # upgrade to the latest published image and restart"
+echo "  $(priv docker compose down)             # stop and remove the running container"
+echo "  $(priv docker compose restart)          # restart the container without changing the image"
+echo "  $(priv docker compose pull) && $(priv docker compose up -d)   # upgrade to the latest published image and restart"
 echo
 echo -e "${YELLOW}Note:${NC} serial passthrough generally needs ${BOLD}rootful Docker${NC}."
 echo "If Docker is running rootless on this host, serial-device mappings may fail even with a valid compose file."
@@ -513,7 +464,7 @@ echo -e "${GREEN}Your new docker file is ready at ${COMPOSE_FILE}.${NC}"
 echo -e "${GREEN}Feel free to edit it by hand as desired, or:${NC}"
 echo
 echo -e "${PURPLE}┌───────────────────────────────────────────────┐${NC}"
-echo -e "${PURPLE}│ Run ${GREEN}${BOLD}sudo docker compose up -d${NC}${PURPLE} to get started. │${NC}"
+echo -e "${PURPLE}│ Run ${GREEN}${BOLD}$(priv docker compose up -d)${NC}${PURPLE} to get started. │${NC}"
 echo -e "${PURPLE}└───────────────────────────────────────────────┘${NC}"
 if [[ "$ENABLE_SNAKEOIL_TLS" =~ ^[Yy]$ ]]; then
     echo
@@ -524,4 +475,4 @@ else
     echo -e "After the container starts, open ${CYAN}http://${LOCAL_ACCESS_IP}:8000${NC}. Note that this address may change if you use DHCP/have not configured a static IP for your host via your router."
 fi
 echo "If the interface does not appear, follow the logs to view errors with:"
-echo "  sudo docker compose logs -f"
+echo "  $(priv docker compose logs -f)"

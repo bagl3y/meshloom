@@ -11,6 +11,26 @@
 
 set -euo pipefail
 
+is_root() { [ "$(id -u)" -eq 0 ]; }
+
+# Privileged commands: run directly when already root so sudo is not required
+# (and is not assumed to exist) on root-only hosts.
+as_root() {
+    if is_root; then
+        "$@"
+    else
+        command sudo "$@"
+    fi
+}
+
+priv() {
+    if is_root; then
+        printf '%s' "$*"
+    else
+        printf 'sudo %s' "$*"
+    fi
+}
+
 REPO="bagl3y/meshloom"
 GIT_URL="https://github.com/${REPO}.git"
 PAGES_BASE="https://bagl3y.github.io/meshloom"
@@ -28,15 +48,10 @@ TCP_HOST=""
 TCP_PORT="5000"
 BLE_ADDRESS=""
 BLE_PIN=""
-ENABLE_BOTS="N"
-ENABLE_AUTH="N"
-AUTH_USERNAME=""
-AUTH_PASSWORD=""
 INSTALL_DIR=""
 IN_CHECKOUT=""
-STEP_TOTAL=4
-SECURITY_STEP=3
-INSTALL_STEP=4
+STEP_TOTAL=3
+INSTALL_STEP=3
 UI_CLEAR=1
 UI_COLOR=1
 INSTALL_LOG=""
@@ -138,20 +153,6 @@ t() {
         fr:prompt_ble_pin) echo "Code PIN Bluetooth" ;;
         en:hint_ble_pin) echo "Shown on the radio screen." ;;
         fr:hint_ble_pin) echo "Affiché sur l'écran de la radio." ;;
-        en:step_security) echo "Security" ;;
-        fr:step_security) echo "Sécurité" ;;
-        en:bots_warn) echo "Bots let anyone who can reach Meshloom run code on this machine. Keep them off unless you fully trust the network." ;;
-        fr:bots_warn) echo "Les bots permettent à quiconque atteint Meshloom d'exécuter du code sur cette machine. Laissez-les désactivés sauf si vous avez pleine confiance dans le réseau." ;;
-        en:q_bots) echo "Enable bots?" ;;
-        fr:q_bots) echo "Activer les bots ?" ;;
-        en:auth_intro) echo "Meshloom can ask for a username and password before opening. This is one shared login, not user accounts." ;;
-        fr:auth_intro) echo "Meshloom peut demander un identifiant et un mot de passe avant de s'ouvrir. Il s'agit d'un accès partagé unique, pas de comptes utilisateurs." ;;
-        en:q_auth) echo "Ask for a username and password?" ;;
-        fr:q_auth) echo "Demander un identifiant et un mot de passe ?" ;;
-        en:auth_user) echo "Username" ;;
-        fr:auth_user) echo "Nom d'utilisateur" ;;
-        en:auth_pass) echo "Password" ;;
-        fr:auth_pass) echo "Mot de passe" ;;
         en:step_install) echo "Installation" ;;
         fr:step_install) echo "Installation" ;;
         en:recap) echo "Summary" ;;
@@ -162,10 +163,6 @@ t() {
         fr:recap_radio) echo "Radio" ;;
         en:recap_radio_ui) echo "Configured in the web interface" ;;
         fr:recap_radio_ui) echo "À configurer dans l'interface web" ;;
-        en:recap_bots) echo "Bots" ;;
-        fr:recap_bots) echo "Bots" ;;
-        en:recap_auth) echo "Password protection" ;;
-        fr:recap_auth) echo "Protection par mot de passe" ;;
         en:q_confirm) echo "Start the installation?" ;;
         fr:q_confirm) echo "Lancer l'installation ?" ;;
         en:sudo_note) echo "Some steps need administrator rights; your password may be requested." ;;
@@ -204,14 +201,14 @@ t() {
         fr:open_at) echo "Ouvrez dans votre navigateur" ;;
         en:open_lan) echo "From another device on the same network" ;;
         fr:open_lan) echo "Depuis un autre appareil du même réseau" ;;
-        en:service_hint) echo "Check or restart it with: sudo systemctl status meshloom" ;;
-        fr:service_hint) echo "Vérifiez ou redémarrez-le avec : sudo systemctl status meshloom" ;;
-        en:update_apt) echo "To update later: sudo apt upgrade" ;;
-        fr:update_apt) echo "Pour mettre à jour plus tard : sudo apt upgrade" ;;
-        en:update_dnf) echo "To update later: sudo dnf upgrade" ;;
-        fr:update_dnf) echo "Pour mettre à jour plus tard : sudo dnf upgrade" ;;
-        en:update_docker) echo "To update later, in that folder: sudo docker compose pull && sudo docker compose up -d" ;;
-        fr:update_docker) echo "Pour mettre à jour plus tard, dans ce dossier : sudo docker compose pull && sudo docker compose up -d" ;;
+        en:service_hint) echo "Check or restart it with" ;;
+        fr:service_hint) echo "Vérifiez ou redémarrez-le avec" ;;
+        en:update_apt) echo "To update later" ;;
+        fr:update_apt) echo "Pour mettre à jour plus tard" ;;
+        en:update_dnf) echo "To update later" ;;
+        fr:update_dnf) echo "Pour mettre à jour plus tard" ;;
+        en:update_docker) echo "To update later, in that folder" ;;
+        fr:update_docker) echo "Pour mettre à jour plus tard, dans ce dossier" ;;
         en:update_git) echo "To update later: git pull, then restart the service" ;;
         fr:update_git) echo "Pour mettre à jour plus tard : git pull, puis redémarrez le service" ;;
         en:step_browser) echo "Open Meshloom" ;;
@@ -320,18 +317,6 @@ ui_ask() {
     raw="$(ui_norm "$raw")"
     [ -n "$raw" ] || raw="$default"
     printf '%s' "$raw"
-}
-
-ui_ask_secret() {
-    local prompt="$1" hint="${2:-}" raw=""
-    [ -n "$hint" ] && ui_wrap 5 70 "$hint" >&2
-    printf '  → %s : ' "$prompt" >&2
-    IFS= read -r -s raw || {
-        printf '\n%s\n' "$(t cancelled)" >&2
-        exit 130
-    }
-    printf '\n' >&2
-    ui_norm "$raw"
 }
 
 ui_ask_required() {
@@ -515,22 +500,22 @@ ensure_cmd() {
     fi
     ui_warn "$(t missing): ${cmd}"
     if [ "$PKG_MGR" = "apt" ]; then
-        printf '  %s sudo apt-get install -y %s\n' "$(t how_install)" "$packages"
+        printf '  %s %s\n' "$(t how_install)" "$(priv apt-get install -y $packages)"
         yn="$(ui_ask "$(t offer_install) $(t hint_no)" "n")"
         case "$(printf '%s' "$yn" | tr 'A-Z' 'a-z')" in
             y | yes | o | oui)
-                sudo apt-get update
+                as_root apt-get update
                 # shellcheck disable=SC2086
-                sudo apt-get install -y $packages
+                as_root apt-get install -y $packages
                 ;;
         esac
     elif [ "$PKG_MGR" = "dnf" ]; then
-        printf '  %s sudo dnf install -y %s\n' "$(t how_install)" "$packages"
+        printf '  %s %s\n' "$(t how_install)" "$(priv dnf install -y $packages)"
         yn="$(ui_ask "$(t offer_install) $(t hint_no)" "n")"
         case "$(printf '%s' "$yn" | tr 'A-Z' 'a-z')" in
             y | yes | o | oui)
                 # shellcheck disable=SC2086
-                sudo dnf install -y $packages
+                as_root dnf install -y $packages
                 ;;
         esac
     else
@@ -698,33 +683,6 @@ choose_transport() {
     fi
 }
 
-choose_bots_auth() {
-    local auth_default="n"
-    ui_screen "$(t step_security)" "$SECURITY_STEP"
-    ui_warn "  $(t bots_warn)"
-    printf '\n'
-    if ui_yesno "$(t q_bots)" n; then
-        ENABLE_BOTS="Y"
-        auth_default="y"
-    else
-        ENABLE_BOTS="N"
-    fi
-    printf '\n'
-    ui_wrap 2 70 "$(t auth_intro)"
-    printf '\n'
-    if ui_yesno "$(t q_auth)" "$auth_default"; then
-        ENABLE_AUTH="Y"
-        AUTH_USERNAME="$(ui_ask_required "$(t auth_user)")"
-        AUTH_PASSWORD=""
-        while [ -z "$AUTH_PASSWORD" ]; do
-            AUTH_PASSWORD="$(ui_ask_secret "$(t auth_pass)")"
-            [ -n "$AUTH_PASSWORD" ] || ui_err "$(t required)"
-        done
-    else
-        ENABLE_AUTH="N"
-    fi
-}
-
 recap_mode_label() {
     case "$INSTALL_MODE" in
         service) t opt_service ;;
@@ -748,18 +706,20 @@ confirm_install() {
     printf '  %s\n' "$(ui_b "$(t recap)")"
     printf '    %s    %s\n' "$(t recap_mode)" "$(recap_mode_label)"
     printf '    %s    %s\n' "$(t recap_radio)" "$(recap_radio_label)"
-    printf '    %s    %s\n' "$(t recap_bots)" "$([ "$ENABLE_BOTS" = Y ] && t yes || t no)"
-    printf '    %s    %s\n' "$(t recap_auth)" "$([ "$ENABLE_AUTH" = Y ] && t yes || t no)"
     printf '\n'
-    ui_wrap 2 70 "$(t sudo_note)"
-    printf '\n'
+    if ! is_root; then
+        ui_wrap 2 70 "$(t sudo_note)"
+        printf '\n'
+    fi
     if ! ui_yesno "$(t q_confirm)" y; then
         printf '\n%s\n' "$(t cancelled)"
         exit 130
     fi
     printf '\n'
     ui_dim "  $(t working)"
-    sudo -v
+    if ! is_root; then
+        command sudo -v
+    fi
 }
 
 write_meshloom_env() {
@@ -768,42 +728,35 @@ write_meshloom_env() {
         echo "# Generated by Meshloom install.sh"
         echo "# Radio transport is configured in the web UI (app_settings), not here."
         echo "MESHCORE_DATABASE_PATH=/var/lib/meshloom/meshcore.db"
-        if [[ ! "$ENABLE_BOTS" =~ ^[Yy]$ ]]; then
-            echo "MESHCORE_DISABLE_BOTS=true"
-        fi
-        if [[ "$ENABLE_AUTH" =~ ^[Yy]$ ]]; then
-            echo "MESHCORE_BASIC_AUTH_USERNAME=${AUTH_USERNAME}"
-            echo "MESHCORE_BASIC_AUTH_PASSWORD=${AUTH_PASSWORD}"
-        fi
-    } | sudo tee "$dest" >/dev/null
-    sudo chmod 640 "$dest"
+    } | as_root tee "$dest" >/dev/null
+    as_root chmod 640 "$dest"
 }
 
 start_meshloom_unit() {
-    sudo systemctl daemon-reload
-    sudo systemctl enable meshloom
-    sudo systemctl restart meshloom
+    as_root systemctl daemon-reload
+    as_root systemctl enable meshloom
+    as_root systemctl restart meshloom
 }
 
 install_from_pages() {
     phase "$(t using_repo)"
-    run_quiet sudo mkdir -p /etc/apt/keyrings /etc/yum.repos.d
+    run_quiet as_root mkdir -p /etc/apt/keyrings /etc/yum.repos.d
     if [ "$PKG_MGR" = "apt" ]; then
         if http_ok "${PAGES_BASE}/meshloom.gpg"; then
-            curl -fsSL "${PAGES_BASE}/meshloom.gpg" | sudo tee /etc/apt/keyrings/meshloom.gpg >/dev/null
+            curl -fsSL "${PAGES_BASE}/meshloom.gpg" | as_root tee /etc/apt/keyrings/meshloom.gpg >/dev/null
             echo "deb [signed-by=/etc/apt/keyrings/meshloom.gpg] ${PAGES_BASE}/apt stable main" |
-                sudo tee /etc/apt/sources.list.d/meshloom.list >/dev/null
+                as_root tee /etc/apt/sources.list.d/meshloom.list >/dev/null
         else
             echo "deb [trusted=yes] ${PAGES_BASE}/apt stable main" |
-                sudo tee /etc/apt/sources.list.d/meshloom.list >/dev/null
+                as_root tee /etc/apt/sources.list.d/meshloom.list >/dev/null
         fi
-        run_quiet sudo apt-get update
-        run_quiet sudo apt-get install -y meshloom
+        run_quiet as_root apt-get update
+        run_quiet as_root apt-get install -y meshloom
     else
         if http_ok "${PAGES_BASE}/meshloom.asc"; then
-            sudo rpm --import "${PAGES_BASE}/meshloom.asc" >/dev/null 2>&1 || true
+            as_root rpm --import "${PAGES_BASE}/meshloom.asc" >/dev/null 2>&1 || true
         fi
-        sudo tee /etc/yum.repos.d/meshloom.repo >/dev/null <<EOF
+        as_root tee /etc/yum.repos.d/meshloom.repo >/dev/null <<EOF
 [meshloom]
 name=Meshloom
 baseurl=${PAGES_BASE}/rpm/\$basearch
@@ -811,9 +764,9 @@ enabled=1
 gpgcheck=$(http_ok "${PAGES_BASE}/meshloom.asc" && echo 1 || echo 0)
 gpgkey=${PAGES_BASE}/meshloom.asc
 EOF
-        run_quiet sudo dnf install -y meshloom
+        run_quiet as_root dnf install -y meshloom
     fi
-    sudo mkdir -p /etc/meshloom
+    as_root mkdir -p /etc/meshloom
     write_meshloom_env /etc/meshloom/meshloom.env
     start_meshloom_unit
     phase_ok
@@ -834,12 +787,12 @@ install_from_release_asset() {
     tmp="$(mktemp)"
     run_quiet curl -fL --max-time 180 "$url" -o "$tmp"
     if [ "$PKG_MGR" = "apt" ]; then
-        run_quiet sudo apt-get install -y "$tmp"
+        run_quiet as_root apt-get install -y "$tmp"
     else
-        run_quiet sudo dnf install -y "$tmp"
+        run_quiet as_root dnf install -y "$tmp"
     fi
     rm -f "$tmp"
-    sudo mkdir -p /etc/meshloom
+    as_root mkdir -p /etc/meshloom
     write_meshloom_env /etc/meshloom/meshloom.env
     start_meshloom_unit
     phase_ok
@@ -873,10 +826,6 @@ run_service_from_source() {
     ensure_cmd python3 "python3"
     ensure_uv
     export MESHLOOM_NONINTERACTIVE=1
-    export MESHLOOM_ENABLE_BOTS="$ENABLE_BOTS"
-    export MESHLOOM_ENABLE_AUTH="$ENABLE_AUTH"
-    export MESHLOOM_AUTH_USERNAME="$AUTH_USERNAME"
-    export MESHLOOM_AUTH_PASSWORD="$AUTH_PASSWORD"
     if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
         export MESHLOOM_FRONTEND_MODE="build"
     else
@@ -897,7 +846,7 @@ print_done_native() {
         printf '  %s\n' "$(t open_lan)"
         printf '    %s\n' "http://${ip}:8000"
     fi
-    ui_dim "  $(t service_hint)"
+    ui_dim "  $(t service_hint): $(priv systemctl status meshloom)"
 }
 
 install_native_service() {
@@ -906,19 +855,19 @@ install_native_service() {
     if [ "$PKG_MGR" = "apt" ] && http_ok "${PAGES_BASE}/apt/dists/stable/Release"; then
         install_from_pages
         print_done_native
-        ui_dim "  $(t update_apt)"
+        ui_dim "  $(t update_apt): $(priv apt upgrade)"
         return
     fi
     if [ "$PKG_MGR" = "dnf" ] && http_ok "${PAGES_BASE}/rpm/$(rpm_arch)/repodata/repomd.xml"; then
         install_from_pages
         print_done_native
-        ui_dim "  $(t update_dnf)"
+        ui_dim "  $(t update_dnf): $(priv dnf upgrade)"
         return
     fi
     if [ "$PKG_MGR" = "apt" ] || [ "$PKG_MGR" = "dnf" ]; then
         if install_from_release_asset; then
             print_done_native
-            if [ "$PKG_MGR" = "apt" ]; then ui_dim "  $(t update_apt)"; else ui_dim "  $(t update_dnf)"; fi
+            if [ "$PKG_MGR" = "apt" ]; then ui_dim "  $(t update_apt): $(priv apt upgrade)"; else ui_dim "  $(t update_dnf): $(priv dnf upgrade)"; fi
             return
         fi
     fi
@@ -967,13 +916,6 @@ write_docker_compose() {
         fi
         echo "    environment:"
         echo "      MESHCORE_DATABASE_PATH: $(yaml_quote "data/meshcore.db")"
-        if [[ ! "$ENABLE_BOTS" =~ ^[Yy]$ ]]; then
-            echo "      MESHCORE_DISABLE_BOTS: $(yaml_quote "true")"
-        fi
-        if [[ "$ENABLE_AUTH" =~ ^[Yy]$ ]]; then
-            echo "      MESHCORE_BASIC_AUTH_USERNAME: $(yaml_quote "$AUTH_USERNAME")"
-            echo "      MESHCORE_BASIC_AUTH_PASSWORD: $(yaml_quote "$AUTH_PASSWORD")"
-        fi
         echo "    restart: unless-stopped"
     } >"${dir}/docker-compose.yml"
 }
@@ -995,13 +937,17 @@ install_docker_stack() {
     dc="$(compose_cmd)"
     if ui_yesno "$(t q_start_now)" y; then
         phase "$(t working)"
-        run_quiet bash -c "cd \"$INSTALL_DIR\" && sudo $dc pull && sudo $dc up -d"
+        (
+            cd "$INSTALL_DIR"
+            run_quiet as_root $dc pull
+            run_quiet as_root $dc up -d
+        )
         phase_ok
     fi
     printf '\n'
     ui_ok "  $(t done)"
     printf '  %s\n    %s\n' "$(t open_at)" "http://127.0.0.1:8000"
-    ui_dim "  $(t update_docker)"
+    ui_dim "  $(t update_docker): $(priv "$dc pull") && $(priv "$dc up -d")"
 }
 
 show_browser_only() {
@@ -1028,17 +974,14 @@ if [ "$INSTALL_MODE" = "browser" ]; then
 fi
 
 if [ "$INSTALL_MODE" = "docker" ]; then
-    STEP_TOTAL=4
-    SECURITY_STEP=3
-    INSTALL_STEP=4
+    STEP_TOTAL=3
+    INSTALL_STEP=3
     choose_transport
 else
-    STEP_TOTAL=3
-    SECURITY_STEP=2
-    INSTALL_STEP=3
+    STEP_TOTAL=2
+    INSTALL_STEP=2
     TRANSPORT="ui"
 fi
-choose_bots_auth
 
 if [ "$INSTALL_MODE" = "service" ]; then
     install_native_service

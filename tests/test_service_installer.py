@@ -238,9 +238,9 @@ class TestSystemdEscape:
     def test_function_present_in_installer(self):
         with open(SERVICE_SCRIPT, encoding="utf-8") as f:
             content = f.read()
-        assert "systemd_escape_env_value()" in content
-        assert 'systemd_escape_env_value "$AUTH_USERNAME"' in content
-        assert 'systemd_escape_env_value "$AUTH_PASSWORD"' in content
+        assert "as_root()" in content
+        assert "MESHCORE_BASIC_AUTH_USERNAME" not in content
+        assert "MESHCORE_DISABLE_BOTS" not in content
 
     def test_generated_unit_omits_transport_env(self):
         with open(SERVICE_SCRIPT, encoding="utf-8") as f:
@@ -248,7 +248,8 @@ class TestSystemdEscape:
         for var in _TRANSPORT_ENV_VARS:
             assert f"Environment={var}" not in content, var
         assert "Environment=MESHCORE_DATABASE_PATH" in content
-        assert "Environment=MESHCORE_DISABLE_BOTS=true" in content
+        assert "MESHCORE_DISABLE_BOTS" not in content
+        assert "MESHCORE_BASIC_AUTH" not in content
 
 
 class TestYamlQuote:
@@ -277,8 +278,8 @@ class TestYamlQuote:
         with open(DOCKER_SCRIPT, encoding="utf-8") as f:
             content = f.read()
         assert "yaml_quote()" in content
-        assert 'yaml_quote "$AUTH_USERNAME"' in content
-        assert 'yaml_quote "$AUTH_PASSWORD"' in content
+        assert "MESHCORE_BASIC_AUTH_USERNAME" not in content
+        assert "MESHCORE_DISABLE_BOTS" not in content
 
     def test_generated_compose_omits_transport_env(self):
         with open(DOCKER_SCRIPT, encoding="utf-8") as f:
@@ -287,6 +288,8 @@ class TestYamlQuote:
             assert var not in content, var
         assert "MESHCORE_DATABASE_PATH" in content
         assert "devices:" in content
+        assert "MESHCORE_DISABLE_BOTS" not in content
+        assert "MESHCORE_BASIC_AUTH" not in content
 
     def test_one_liner_omits_transport_env(self):
         with open(INSTALL_SCRIPT, encoding="utf-8") as f:
@@ -295,3 +298,6 @@ class TestYamlQuote:
             assert var not in content, var
         assert "MESHCORE_DATABASE_PATH" in content
         assert "devices:" in content
+        assert "as_root()" in content
+        assert "MESHCORE_DISABLE_BOTS" not in content
+        assert "MESHCORE_BASIC_AUTH" not in content

@@ -11,6 +11,24 @@
 
 set -e
 
+is_root() { [ "$(id -u)" -eq 0 ]; }
+
+as_root() {
+    if is_root; then
+        "$@"
+    else
+        command sudo "$@"
+    fi
+}
+
+priv() {
+    if is_root; then
+        printf '%s' "$*"
+    else
+        printf 'sudo %s' "$*"
+    fi
+}
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -114,68 +132,6 @@ else
     echo
 fi
 
-# ── bots ──────────────────────────────────────────────────────────────────────
-
-ENABLE_AUTH="N"
-AUTH_USERNAME=""
-AUTH_PASSWORD=""
-
-if [ -n "${MESHLOOM_NONINTERACTIVE:-}" ]; then
-    ENABLE_BOTS="${MESHLOOM_ENABLE_BOTS:-N}"
-    ENABLE_AUTH="${MESHLOOM_ENABLE_AUTH:-N}"
-    AUTH_USERNAME="${MESHLOOM_AUTH_USERNAME:-}"
-    AUTH_PASSWORD="${MESHLOOM_AUTH_PASSWORD:-}"
-    if [[ "$ENABLE_BOTS" =~ ^[Yy] ]]; then
-        echo -e "${GREEN}Bots enabled.${NC}"
-    else
-        echo -e "${GREEN}Bots disabled.${NC}"
-    fi
-    echo
-else
-    echo -e "${BOLD}─── Bot System ──────────────────────────────────────────────────────${NC}"
-    echo -e "${YELLOW}Warning:${NC} The bot system executes arbitrary Python code on the server."
-    echo    "It is not recommended on untrusted networks. You can always enable"
-    echo    "it later by editing the service file."
-    echo
-    read -rp "Enable bots? [y/N]: " ENABLE_BOTS
-    ENABLE_BOTS="${ENABLE_BOTS:-N}"
-    echo
-
-    if [[ "$ENABLE_BOTS" =~ ^[Yy] ]]; then
-        echo -e "${GREEN}Bots enabled.${NC}"
-        echo
-
-        echo -e "${BOLD}─── HTTP Basic Auth ─────────────────────────────────────────────────${NC}"
-        echo "With bots enabled, HTTP Basic Auth is strongly recommended if this"
-        echo "service will be accessible beyond your local machine."
-        echo
-        read -rp "Set up HTTP Basic Auth? [Y/n]: " ENABLE_AUTH
-        ENABLE_AUTH="${ENABLE_AUTH:-Y}"
-        echo
-
-        if [[ "$ENABLE_AUTH" =~ ^[Yy] ]]; then
-            read -rp "Username: " AUTH_USERNAME
-            while [ -z "$AUTH_USERNAME" ]; do
-                echo -e "${RED}Username cannot be empty.${NC}"
-                read -rp "Username: " AUTH_USERNAME
-            done
-            read -rsp "Password: " AUTH_PASSWORD
-            echo
-            while [ -z "$AUTH_PASSWORD" ]; do
-                echo -e "${RED}Password cannot be empty.${NC}"
-                read -rsp "Password: " AUTH_PASSWORD
-                echo
-            done
-            echo -e "${GREEN}Basic Auth configured for user '${AUTH_USERNAME}'.${NC}"
-            echo -e "${YELLOW}Note:${NC} Basic Auth credentials are not safe over plain HTTP."
-            echo    "See README_ADVANCED.md for HTTPS setup."
-        fi
-    else
-        echo -e "${GREEN}Bots disabled.${NC}"
-    fi
-    echo
-fi
-
 # ── python dependencies ────────────────────────────────────────────────────────
 
 echo -e "${YELLOW}Installing Python dependencies (uv sync)...${NC}"
@@ -221,10 +177,10 @@ mkdir -p "$REPO_DIR/data"
 
 # ── serial port access ─────────────────────────────────────────────────────────
 
-if [ "$NEED_DIALOUT" = true ]; then
+if [ "$NEED_DIALOUT" = true ] && ! is_root; then
     if ! id -nG "$CURRENT_USER" | grep -qw dialout; then
         echo -e "${YELLOW}Adding ${CURRENT_USER} to the 'dialout' group for serial port access...${NC}"
-        sudo usermod -aG dialout "$CURRENT_USER"
+        as_root usermod -aG dialout "$CURRENT_USER"
         echo -e "${GREEN}Done. You may need to log out and back in for this to take effect for${NC}"
         echo -e "${GREEN}manual runs; the service itself handles it via SupplementaryGroups.${NC}"
         echo
@@ -236,25 +192,13 @@ fi
 
 # ── systemd service file ───────────────────────────────────────────────────────
 
-if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
+if as_root systemctl is-active --quiet "$SERVICE_NAME"; then
     echo -e "${YELLOW}${SERVICE_NAME} is currently running; stopping it before applying changes...${NC}"
-    sudo systemctl stop "$SERVICE_NAME"
+    as_root systemctl stop "$SERVICE_NAME"
     echo
 fi
 
 echo -e "${YELLOW}Writing systemd service file to ${SERVICE_FILE}...${NC}"
-
-# Escape a value for use in a systemd Environment= directive.
-# Must handle: % (specifier expansion), " and \ (systemd.syntax unquoting),
-# and trailing backslash (line continuation). Wraps in double quotes so
-# spaces are preserved.
-systemd_escape_env_value() {
-    local v="$1"
-    v="${v//\\/\\\\}"   # \ → \\  (must be first)
-    v="${v//\"/\\\"}"   # " → \"
-    v="${v//%/%%}"      # % → %%
-    printf '"%s"' "$v"
-}
 
 generate_service_file() {
     echo "[Unit]"
@@ -270,19 +214,8 @@ generate_service_file() {
     echo "RestartSec=5"
     echo "Environment=MESHCORE_DATABASE_PATH=${REPO_DIR}/data/meshcore.db"
 
-    # Bots
-    if [[ ! "$ENABLE_BOTS" =~ ^[Yy] ]]; then
-        echo "Environment=MESHCORE_DISABLE_BOTS=true"
-    fi
-
-    # Basic auth
-    if [[ "$ENABLE_BOTS" =~ ^[Yy] ]] && [[ "$ENABLE_AUTH" =~ ^[Yy] ]]; then
-        echo "Environment=MESHCORE_BASIC_AUTH_USERNAME=$(systemd_escape_env_value "$AUTH_USERNAME")"
-        echo "Environment=MESHCORE_BASIC_AUTH_PASSWORD=$(systemd_escape_env_value "$AUTH_PASSWORD")"
-    fi
-
-    # Serial group access
-    if [ "$NEED_DIALOUT" = true ]; then
+    # Serial group access (root already has device access)
+    if [ "$NEED_DIALOUT" = true ] && ! is_root; then
         echo "SupplementaryGroups=dialout"
     fi
 
@@ -291,7 +224,7 @@ generate_service_file() {
     echo "WantedBy=multi-user.target"
 }
 
-generate_service_file | sudo tee "$SERVICE_FILE" > /dev/null
+generate_service_file | as_root tee "$SERVICE_FILE" > /dev/null
 
 echo -e "${GREEN}Service file written.${NC}"
 echo
@@ -299,15 +232,15 @@ echo
 # ── enable and start ───────────────────────────────────────────────────────────
 
 echo -e "${YELLOW}Reloading systemd and applying ${SERVICE_NAME}...${NC}"
-sudo systemctl daemon-reload
-sudo systemctl enable "$SERVICE_NAME"
-sudo systemctl start "$SERVICE_NAME"
+as_root systemctl daemon-reload
+as_root systemctl enable "$SERVICE_NAME"
+as_root systemctl start "$SERVICE_NAME"
 echo
 
 # ── status check ───────────────────────────────────────────────────────────────
 
 echo -e "${YELLOW}Service status:${NC}"
-sudo systemctl status "$SERVICE_NAME" --no-pager -l || true
+as_root systemctl status "$SERVICE_NAME" --no-pager -l || true
 echo
 
 # ── summary ────────────────────────────────────────────────────────────────────
@@ -324,16 +257,6 @@ else
     echo -e "  Frontend  : ${YELLOW}Prebuilt download${NC}"
 fi
 
-if [[ "$ENABLE_BOTS" =~ ^[Yy] ]]; then
-    echo -e "  Bots      : ${YELLOW}Enabled${NC}"
-    if [[ "$ENABLE_AUTH" =~ ^[Yy] ]]; then
-        echo -e "  Basic Auth: ${GREEN}Enabled (user: ${AUTH_USERNAME})${NC}"
-    else
-        echo -e "  Basic Auth: ${YELLOW}Not configured${NC}"
-    fi
-else
-    echo -e "  Bots      : ${GREEN}Disabled${NC} (edit ${SERVICE_FILE} to enable)"
-fi
 echo
 
 if [ "$FRONTEND_MODE" = "prebuilt" ]; then
@@ -352,15 +275,15 @@ echo -e "  cd ${REPO_DIR}"
 echo -e "  git pull"
 echo -e "  uv sync"
 echo -e "  cd frontend && npm install && npm run build && cd .."
-echo -e "  sudo systemctl restart ${SERVICE_NAME}"
+echo -e "  $(priv systemctl restart ${SERVICE_NAME})"
 echo
 echo -e "${YELLOW}Refresh prebuilt frontend only (skips local build):${NC}"
 echo -e "  python3 ${REPO_DIR}/scripts/setup/fetch_prebuilt_frontend.py"
-echo -e "  sudo systemctl restart ${SERVICE_NAME}"
+echo -e "  $(priv systemctl restart ${SERVICE_NAME})"
 echo
 echo -e "${YELLOW}View live logs (useful for troubleshooting):${NC}"
-echo -e "  sudo journalctl -u ${SERVICE_NAME} -f"
+echo -e "  $(priv journalctl -u ${SERVICE_NAME} -f)"
 echo
 echo -e "${YELLOW}Service control:${NC}"
-echo -e "  sudo systemctl start|stop|restart|status ${SERVICE_NAME}"
+echo -e "  $(priv "systemctl start|stop|restart|status ${SERVICE_NAME}")"
 echo -e "${BOLD}─────────────────────────────────────────────────────────────────────${NC}"
