@@ -3,6 +3,7 @@ import type { MessagePath } from '../../types';
 import { usePathHopWidth } from '../../contexts/PathHopWidthContext';
 import { formatHopCounts, formatPathHopWidths } from '../../utils/pathUtils';
 import { handleKeyboardActivate } from '../../utils/a11y';
+import { cn } from '@/lib/utils';
 import type { MessagePathSelection } from './MessagePathModalHost';
 
 // Clickable hop count badge that opens the path modal
@@ -14,6 +15,7 @@ interface HopCountBadgeProps {
   isOutgoingChan?: boolean;
   onOpen: (selection: MessagePathSelection) => void;
   variant: 'header' | 'inline';
+  className?: string;
 }
 
 export function HopCountBadge({
@@ -24,6 +26,7 @@ export function HopCountBadge({
   isOutgoingChan,
   onOpen,
   variant,
+  className,
 }: HopCountBadgeProps) {
   const { t } = useTranslation();
   const { showPathHopWidth } = usePathHopWidth();
@@ -31,14 +34,14 @@ export function HopCountBadge({
   const widthLabel = showPathHopWidth ? formatPathHopWidths(paths) : null;
   const label = widthLabel ? `(${hopInfo.display} · ${widthLabel})` : `(${hopInfo.display})`;
 
-  const className =
-    variant === 'header'
-      ? 'font-normal text-muted-foreground ml-1 text-[0.6875rem] cursor-pointer hover:text-primary hover:underline'
-      : 'text-[0.625rem] text-muted-foreground ml-1 cursor-pointer hover:text-primary hover:underline';
-
   return (
     <span
-      className={className}
+      className={cn(
+        variant === 'header'
+          ? 'font-normal text-muted-foreground ml-1 text-[0.6875rem] cursor-pointer hover:text-primary hover:underline'
+          : 'text-[0.625rem] text-muted-foreground ml-1 cursor-pointer hover:text-primary hover:underline',
+        className
+      )}
       role="button"
       tabIndex={0}
       onKeyDown={handleKeyboardActivate}

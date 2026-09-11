@@ -528,11 +528,14 @@ function renderTextWithMentions(
 }
 
 // Region scope badge for messages that arrived via a transport-routed (region-scoped) packet.
-function RegionBadge({ region }: { region: string }) {
+function RegionBadge({ region, className }: { region: string; className?: string }) {
   const { t } = useTranslation();
   return (
     <span
-      className="ml-1.5 align-middle text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
+      className={cn(
+        'ml-1.5 align-middle text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground',
+        className
+      )}
       title={t('messageList.regionalScope', { region })}
     >
       {region}
@@ -1555,7 +1558,7 @@ export function MessageList({
                   )}
                   <div
                     className={cn(
-                      'relative min-w-0 max-w-[85%] rounded-lg px-3 py-1.5 pr-7',
+                      'relative w-max min-w-0 max-w-[85%] rounded-lg px-3 py-1.5 pr-7',
                       msg.outgoing ? 'bg-msg-outgoing' : 'bg-msg-incoming',
                       highlightedMessageId === msg.id && 'message-highlight'
                     )}
@@ -1606,27 +1609,6 @@ export function MessageList({
                         ) : (
                           displaySender
                         )}
-                        <span className="font-normal text-muted-foreground ml-2 text-[0.6875rem]">
-                          {formatTime(msg.received_at)}
-                        </span>
-                        {!msg.outgoing && msg.paths && msg.paths.length > 0 && (
-                          <HopCountBadge
-                            paths={msg.paths}
-                            variant="header"
-                            senderInfo={getSenderInfo(msg, contact, directSenderName || sender)}
-                            messageId={msg.id}
-                            packetId={msg.packet_id}
-                            onOpen={openMessagePath}
-                          />
-                        )}
-                        {msg.region && <RegionBadge region={msg.region} />}
-                        {directoryEnabled && isObserverReachEligible(msg) && msg.packet_hash && (
-                          <ObserverReachBadge
-                            state={observerReachCounts[msg.packet_hash.toUpperCase()]}
-                            variant="header"
-                            onOpen={() => setObserverReachHash(msg.packet_hash!.toUpperCase())}
-                          />
-                        )}
                       </div>
                     )}
                     <div className="break-words whitespace-pre-wrap">
@@ -1642,36 +1624,36 @@ export function MessageList({
                             {i < arr.length - 1 && <br />}
                           </span>
                         ))}
-                      {!showAvatar && (
-                        <>
-                          <span className="text-[0.625rem] text-muted-foreground ml-2">
-                            {formatTime(msg.received_at)}
-                          </span>
-                          {!msg.outgoing && msg.paths && msg.paths.length > 0 && (
-                            <HopCountBadge
-                              paths={msg.paths}
-                              variant="inline"
-                              senderInfo={getSenderInfo(msg, contact, directSenderName || sender)}
-                              messageId={msg.id}
-                              packetId={msg.packet_id}
-                              onOpen={openMessagePath}
-                            />
-                          )}
-                          {msg.region && <RegionBadge region={msg.region} />}
-                          {directoryEnabled && isObserverReachEligible(msg) && msg.packet_hash && (
-                            <ObserverReachBadge
-                              state={observerReachCounts[msg.packet_hash.toUpperCase()]}
-                              variant="inline"
-                              onOpen={() => setObserverReachHash(msg.packet_hash!.toUpperCase())}
-                            />
-                          )}
-                        </>
+                    </div>
+                    <div
+                      data-testid="message-meta"
+                      className="mt-0.5 flex flex-nowrap items-baseline gap-x-1.5 whitespace-nowrap text-[0.625rem] text-muted-foreground"
+                    >
+                      <span>{formatTime(msg.received_at)}</span>
+                      {directoryEnabled && isObserverReachEligible(msg) && msg.packet_hash && (
+                        <ObserverReachBadge
+                          state={observerReachCounts[msg.packet_hash.toUpperCase()]}
+                          variant="inline"
+                          className="ml-0"
+                          onOpen={() => setObserverReachHash(msg.packet_hash!.toUpperCase())}
+                        />
+                      )}
+                      {!msg.outgoing && msg.paths && msg.paths.length > 0 && (
+                        <HopCountBadge
+                          paths={msg.paths}
+                          variant="inline"
+                          className="ml-0"
+                          senderInfo={getSenderInfo(msg, contact, directSenderName || sender)}
+                          messageId={msg.id}
+                          packetId={msg.packet_id}
+                          onOpen={openMessagePath}
+                        />
                       )}
                       {msg.outgoing &&
                         (msg.acked > 0 ? (
                           msg.paths && msg.paths.length > 0 ? (
                             <span
-                              className="text-muted-foreground cursor-pointer hover:text-primary"
+                              className="cursor-pointer hover:text-primary"
                               role="button"
                               tabIndex={0}
                               onKeyDown={handleKeyboardActivate}
@@ -1687,13 +1669,13 @@ export function MessageList({
                               }}
                               title={t('messageList.viewEchoPaths')}
                               aria-label={t('messageList.ackedAria', { count: msg.acked })}
-                            >{` ✓${msg.acked > 1 ? msg.acked : ''}`}</span>
+                            >{`✓${msg.acked > 1 ? msg.acked : ''}`}</span>
                           ) : (
-                            <span className="text-muted-foreground">{` ✓${msg.acked > 1 ? msg.acked : ''}`}</span>
+                            <span>{`✓${msg.acked > 1 ? msg.acked : ''}`}</span>
                           )
                         ) : onResendChannelMessage && msg.type === 'CHAN' ? (
                           <span
-                            className="text-muted-foreground cursor-pointer hover:text-primary"
+                            className="cursor-pointer hover:text-primary"
                             role="button"
                             tabIndex={0}
                             onKeyDown={handleKeyboardActivate}
@@ -1710,18 +1692,12 @@ export function MessageList({
                             title={t('messageList.messageStatus')}
                             aria-label={t('messageList.noEchoes')}
                           >
-                            {' '}
                             ?
                           </span>
                         ) : (
-                          <span
-                            className="text-muted-foreground"
-                            title={t('messageList.noRepeats')}
-                          >
-                            {' '}
-                            ?
-                          </span>
+                          <span title={t('messageList.noRepeats')}>?</span>
                         ))}
+                      {msg.region && <RegionBadge region={msg.region} className="ml-0" />}
                     </div>
                     <MessageReactionBadges emojis={attachedEmojis} />
                     {openActionsId === msg.id && (

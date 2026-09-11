@@ -9,9 +9,15 @@ interface ObserverReachBadgeProps {
   state?: ObserverReachCountState;
   variant: 'header' | 'inline';
   onOpen: () => void;
+  className?: string;
 }
 
-export function ObserverReachBadge({ state, variant, onOpen }: ObserverReachBadgeProps) {
+export function ObserverReachBadge({
+  state,
+  variant,
+  onOpen,
+  className,
+}: ObserverReachBadgeProps) {
   const { t } = useTranslation();
   if (state?.status !== 'ok' || state.count <= 0) {
     return null;
@@ -22,10 +28,11 @@ export function ObserverReachBadge({ state, variant, onOpen }: ObserverReachBadg
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-0.5 cursor-pointer hover:text-primary',
+        'inline-flex items-baseline gap-0.5 cursor-pointer hover:text-primary hover:underline',
         variant === 'header'
-          ? 'ml-1 text-[0.6875rem] text-muted-foreground'
-          : 'ml-1 text-[0.625rem] text-muted-foreground'
+          ? 'font-normal text-muted-foreground ml-1 text-[0.6875rem]'
+          : 'text-[0.625rem] text-muted-foreground ml-1',
+        className
       )}
       role="button"
       tabIndex={0}
@@ -38,8 +45,8 @@ export function ObserverReachBadge({ state, variant, onOpen }: ObserverReachBadg
       title={label}
       aria-label={label}
     >
-      <Ear className="h-3 w-3" aria-hidden="true" />
-      {count !== undefined && <span className="tabular-nums">{count}</span>}
+      <Ear className="h-[1em] w-[1em] shrink-0 self-center" aria-hidden="true" />
+      <span className="tabular-nums">{count}</span>
     </span>
   );
 }

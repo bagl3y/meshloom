@@ -15,6 +15,7 @@ import { PathHopWidthProvider } from '../contexts/PathHopWidthContext';
 import { RichPayloadProvider } from '../contexts/RichPayloadContext';
 import { CONTACT_TYPE_ROOM, type Contact, type Message } from '../types';
 import { formatOpenReaction } from '../utils/meshcoreOpenPayloads';
+import { formatTime } from '../utils/messageParser';
 
 const apiMocks = vi.hoisted(() => ({
   deleteMessage: vi.fn(async (_id: number) => ({ status: 'ok' })),
@@ -128,6 +129,43 @@ describe('MessageList channel sender rendering', () => {
     expect(
       screen.getByTitle(i18n.t('messageList.regionalScope', { region: 'nl-gr' }))
     ).toBeInTheDocument();
+  });
+
+  it('renders time, observer, path, and ack metadata on a row under the body', () => {
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            outgoing: true,
+            acked: 4,
+            text: 'Bonsoir comment ils vont tous?',
+            sender_name: 'Me',
+            paths: [{ path: 'AABB', path_len: 1, received_at: 1700000001 }],
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+      />
+    );
+
+    const meta = screen.getByTestId('message-meta');
+    expect(meta).toHaveTextContent(formatTime(1700000001));
+    expect(meta).toHaveTextContent('✓4');
+    expect(meta).not.toHaveTextContent('Bonsoir comment ils vont tous?');
+    expect(screen.getByText('Bonsoir comment ils vont tous?')).toBeInTheDocument();
+  });
+
+  it('keeps the incoming sender name above the body, not in the metadata row', () => {
+    render(
+      <MessageList
+        messages={[createMessage({ sender_name: 'Alice' })]}
+        contacts={[]}
+        loading={false}
+      />
+    );
+
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.getByTestId('message-meta')).not.toHaveTextContent('Alice');
   });
 
   it('does not render a region badge for unscoped messages', () => {
