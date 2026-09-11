@@ -48,11 +48,7 @@ def _identity_writes_allowed() -> bool:
     """Background radio loops must not write while the identity gate is closed."""
     from app.services.radio_ingest_gate import ingest_allowed
 
-    return (
-        radio_manager.is_connected
-        and radio_manager.is_setup_complete
-        and ingest_allowed()
-    )
+    return radio_manager.is_connected and radio_manager.is_setup_complete and ingest_allowed()
 
 
 DEFAULT_MAX_CHANNELS = 40
