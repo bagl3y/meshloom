@@ -828,7 +828,9 @@ export function MessageList({
   const { counts: observerReachCounts } = useVisibleObserverReach({
     directoryEnabled,
     conversationKey,
-    messages,
+    // Virtual rows index sortedMessages, not the raw prop: the REST latest page
+    // arrives newest-first, so indexing `messages` looks up mirrored rows.
+    messages: sortedMessages,
     visibleIndexes,
   });
   const [observerReachHash, setObserverReachHash] = useState<string | null>(null);

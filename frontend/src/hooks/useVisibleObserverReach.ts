@@ -148,13 +148,14 @@ export function useVisibleObserverReach(options: {
       }
 
       void (async () => {
+        const requested = toFetch.slice(0, BATCH_MAX);
         try {
-          const response = await api.getPacketObserverReachCounts(toFetch.slice(0, BATCH_MAX));
+          const response = await api.getPacketObserverReachCounts(requested);
           if (cancelled || conversationRef.current !== startedFor) return;
           const fetchedAt = Date.now();
           if (!response.directory_enabled) {
             const disabled: Record<string, ObserverReachCountState> = {};
-            for (const hash of toFetch) {
+            for (const hash of requested) {
               const state: ObserverReachCountState = { status: 'error' };
               const key = cacheKey(startedFor, hash);
               countCache.set(key, { at: fetchedAt, state });
@@ -165,7 +166,7 @@ export function useVisibleObserverReach(options: {
             return;
           }
           const fetched: Record<string, ObserverReachCountState> = {};
-          for (const hash of toFetch) {
+          for (const hash of requested) {
             const count = response.counts[hash] ?? response.counts[hash.toLowerCase()];
             const state: ObserverReachCountState =
               typeof count === 'number' ? { status: 'ok', count } : { status: 'error' };
@@ -179,7 +180,7 @@ export function useVisibleObserverReach(options: {
           if (cancelled || conversationRef.current !== startedFor) return;
           const fetchedAt = Date.now();
           const failed: Record<string, ObserverReachCountState> = {};
-          for (const hash of toFetch) {
+          for (const hash of requested) {
             const state: ObserverReachCountState = { status: 'error' };
             const key = cacheKey(startedFor, hash);
             countCache.set(key, { at: fetchedAt, state });
