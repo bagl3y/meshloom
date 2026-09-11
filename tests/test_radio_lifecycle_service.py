@@ -230,3 +230,50 @@ class TestRunPostConnectSetup:
         assert radio_manager.firmware_version == "1.2.3"
         assert radio_manager.path_hash_mode == 2
         assert radio_manager.path_hash_mode_supported is True
+
+    @pytest.mark.asyncio
+    async def test_identity_gate_does_not_deadlock_on_nested_pause(self, monkeypatch):
+        import asyncio
+
+        async def _stop(_mc):
+            return "stop"
+
+        monkeypatch.setattr(
+            "app.services.radio_identity.evaluate_connected_identity",
+            _stop,
+        )
+
+        lock = asyncio.Lock()
+        radio_manager = MagicMock()
+        radio_manager.meshcore = MagicMock()
+        radio_manager._setup_lock = None
+        radio_manager._setup_in_progress = False
+        radio_manager._setup_complete = False
+        radio_manager.connection_desired = True
+        radio_manager._last_connected = True
+        radio_manager.connection_info = "TCP: test:4000"
+
+        async def _acquire(_name, *, blocking=True):
+            await lock.acquire()
+
+        def _release(_name):
+            if lock.locked():
+                lock.release()
+
+        async def _pause():
+            radio_manager.connection_desired = False
+            await lock.acquire()
+
+        radio_manager._acquire_operation_lock = _acquire
+        radio_manager._release_operation_lock = _release
+        radio_manager.pause_connection = AsyncMock(side_effect=_pause)
+
+        with patch("app.websocket.broadcast_health") as mock_broadcast:
+            await asyncio.wait_for(run_post_connect_setup(radio_manager), timeout=1)
+
+        radio_manager.pause_connection.assert_not_awaited()
+        assert radio_manager.connection_desired is False
+        assert radio_manager._last_connected is False
+        assert radio_manager._setup_complete is False
+        mock_broadcast.assert_called_once_with(False, "TCP: test:4000")
+        assert lock.locked() is False

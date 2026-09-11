@@ -65,7 +65,12 @@ async def run_post_connect_setup(radio_manager) -> None:
                 identity_decision = await evaluate_connected_identity(mc)
                 if identity_decision != "continue":
                     logger.warning("Radio identity gate blocked post-connect setup")
-                    await radio_manager.pause_connection()
+                    # Do not call pause_connection() here: it disconnects under
+                    # the same non-reentrant operation lock and deadlocks.
+                    # prepare_connected_radio() tears the transport down after
+                    # this setup body releases the lock.
+                    radio_manager.connection_desired = False
+                    radio_manager._last_connected = False
                     broadcast_health(False, radio_manager.connection_info)
                     return
 
