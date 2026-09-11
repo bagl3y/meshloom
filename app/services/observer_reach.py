@@ -364,15 +364,22 @@ async def _fetch_batch_or_fallback(
                 raise
         parsed = parse_batch_observations(payload) if payload is not None else None
         if parsed is not None:
+            still_missing: list[str] = []
             for hash_lower in missing:
                 stored = canonical_packet_hash(hash_lower)
                 observations = parsed.get(stored or hash_lower.upper(), [])
-                _reach_cache[(origin, hash_lower)] = (
-                    now + REACH_CACHE_TTL_SECONDS,
-                    observations,
-                )
-                result[hash_lower] = observations
-            return result
+                if observations:
+                    _reach_cache[(origin, hash_lower)] = (
+                        now + REACH_CACHE_TTL_SECONDS,
+                        observations,
+                    )
+                    result[hash_lower] = observations
+                else:
+                    # Memory-only batch can miss packets that SQLite detail still has.
+                    still_missing.append(hash_lower)
+            if not still_missing:
+                return result
+            missing = still_missing
 
     semaphore = asyncio.Semaphore(BATCH_FALLBACK_CONCURRENCY)
 

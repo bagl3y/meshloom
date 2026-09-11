@@ -13,14 +13,11 @@ interface ObserverReachBadgeProps {
 
 export function ObserverReachBadge({ state, variant, onOpen }: ObserverReachBadgeProps) {
   const { t } = useTranslation();
-  const isError = state?.status === 'error';
-  const count = state?.status === 'ok' ? state.count : undefined;
-  const label =
-    count === undefined
-      ? isError
-        ? t('messageList.observerReachUnavailable')
-        : t('messageList.observerReachLoading')
-      : t('messageList.observerReachAria', { count });
+  if (state?.status !== 'ok' || state.count <= 0) {
+    return null;
+  }
+  const count = state.count;
+  const label = t('messageList.observerReachAria', { count });
 
   return (
     <span
@@ -28,8 +25,7 @@ export function ObserverReachBadge({ state, variant, onOpen }: ObserverReachBadg
         'inline-flex items-center gap-0.5 cursor-pointer hover:text-primary',
         variant === 'header'
           ? 'ml-1 text-[0.6875rem] text-muted-foreground'
-          : 'ml-1 text-[0.625rem] text-muted-foreground',
-        isError && 'text-warning'
+          : 'ml-1 text-[0.625rem] text-muted-foreground'
       )}
       role="button"
       tabIndex={0}

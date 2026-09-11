@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageList } from '../components/MessageList';
+import { resetObserverReachCountCache } from '../hooks/useVisibleObserverReach';
 import i18n from '../i18n';
 import sliceEn from '../i18n/locales/slices/b.en.json';
 import sliceFr from '../i18n/locales/slices/b.fr.json';
@@ -18,10 +19,15 @@ import { formatOpenReaction } from '../utils/meshcoreOpenPayloads';
 const apiMocks = vi.hoisted(() => ({
   deleteMessage: vi.fn(async (_id: number) => ({ status: 'ok' })),
   getPacket: vi.fn(),
-  getPacketObserverReachCounts: vi.fn(async (_hashes: string[]) => ({
-    directory_enabled: true,
-    counts: { AABBCCDDEEFF0011: 3 },
-  })),
+  getPacketObserverReachCounts: vi.fn(
+    async (_hashes: string[]): Promise<{
+      directory_enabled: boolean;
+      counts: Record<string, number>;
+    }> => ({
+      directory_enabled: true,
+      counts: { AABBCCDDEEFF0011: 3 },
+    })
+  ),
   getPacketObserverReach: vi.fn(async (_hash: string) => ({
     directory_enabled: true,
     packet_hash: 'AABBCCDDEEFF0011',
@@ -70,8 +76,13 @@ describe('MessageList channel sender rendering', () => {
   beforeEach(() => {
     apiMocks.deleteMessage.mockClear();
     apiMocks.getPacket.mockClear();
-    apiMocks.getPacketObserverReachCounts.mockClear();
+    apiMocks.getPacketObserverReachCounts.mockReset();
+    apiMocks.getPacketObserverReachCounts.mockResolvedValue({
+      directory_enabled: true,
+      counts: { AABBCCDDEEFF0011: 3 },
+    });
     apiMocks.getPacketObserverReach.mockClear();
+    resetObserverReachCountCache();
     scrollIntoViewMock.mockReset();
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
       configurable: true,
@@ -908,6 +919,7 @@ describe('MessageList Open reactions and replies', () => {
     expect(
       await screen.findByRole('heading', { name: i18n.t('messageList.observerReachTitle') })
     ).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('messageList.observerReachCaveat'))).toBeInTheDocument();
     expect(apiMocks.getPacketObserverReach).toHaveBeenCalledWith('AABBCCDDEEFF0011');
   });
 
@@ -954,5 +966,59 @@ describe('MessageList Open reactions and replies', () => {
     apiMocks.getPacketObserverReachCounts.mockClear();
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(apiMocks.getPacketObserverReachCounts).not.toHaveBeenCalled();
+  });
+
+  it('hides the ear when the observer count is zero', async () => {
+    apiMocks.getPacketObserverReachCounts.mockResolvedValue({
+      directory_enabled: true,
+      counts: { BBBBCCDDEEFF0011: 0 },
+    });
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            sender_name: 'Alice',
+            packet_hash: 'BBBBCCDDEEFF0011',
+            observer_reach_eligible: true,
+            received_at: Math.floor(Date.now() / 1000) - 120,
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+        directoryEnabled
+        conversationKey="C3B889530D4F02DB5662EA13C417F530"
+      />
+    );
+
+    await waitFor(() => {
+      expect(apiMocks.getPacketObserverReachCounts).toHaveBeenCalled();
+    });
+    expect(screen.queryByTestId('observer-reach-badge')).not.toBeInTheDocument();
+  });
+
+  it('shows a single ear on an outgoing flood message', async () => {
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            outgoing: true,
+            acked: 1,
+            sender_name: 'Me',
+            text: 'hello',
+            packet_hash: 'AABBCCDDEEFF0011',
+            observer_reach_eligible: true,
+            received_at: Math.floor(Date.now() / 1000) - 60,
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+        directoryEnabled
+        conversationKey="C3B889530D4F02DB5662EA13C417F530"
+      />
+    );
+
+    const badges = await screen.findAllByTestId('observer-reach-badge');
+    expect(badges).toHaveLength(1);
+    expect(badges[0]).toHaveTextContent('3');
   });
 });

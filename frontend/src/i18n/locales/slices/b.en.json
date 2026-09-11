@@ -37,7 +37,7 @@
     "observerReachLoading": "Loading observers…",
     "observerReachUnavailable": "CoreScope observers unavailable",
     "observerReachTitle": "Observers",
-    "observerReachCaveat": "Observers seen by this CoreScope instance only. A region with no MQTT ear is a gap, not proof the flood stopped. Distance is geodesic, not the mesh path.",
+    "observerReachCaveat": "Your message was heard by these observers:",
     "observerReachCount": "Observers",
     "observerReachMaxHops": "Max hops",
     "observerReachMaxDistance": "Max distance",

@@ -1720,16 +1720,6 @@ export function MessageList({
                             ?
                           </span>
                         ))}
-                      {msg.outgoing &&
-                        directoryEnabled &&
-                        isObserverReachEligible(msg) &&
-                        msg.packet_hash && (
-                          <ObserverReachBadge
-                            state={observerReachCounts[msg.packet_hash.toUpperCase()]}
-                            variant="inline"
-                            onOpen={() => setObserverReachHash(msg.packet_hash!.toUpperCase())}
-                          />
-                        )}
                     </div>
                     <MessageReactionBadges emojis={attachedEmojis} />
                     {openActionsId === msg.id && (

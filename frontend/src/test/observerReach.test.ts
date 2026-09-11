@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Message } from '../types';
-import { isObserverReachEligible } from '../utils/observerReach';
+import {
+  isObserverReachEligible,
+  MID_POLL_MS,
+  MID_REACH_MS,
+  observerReachPollIntervalMs,
+  YOUNG_POLL_MS,
+  YOUNG_REACH_MS,
+} from '../utils/observerReach';
 
 function message(overrides: Partial<Message> = {}): Message {
   return {
@@ -61,5 +68,22 @@ describe('isObserverReachEligible', () => {
 
   it('rejects messages without a hash', () => {
     expect(isObserverReachEligible(message({ packet_hash: null }))).toBe(false);
+  });
+});
+
+describe('observerReachPollIntervalMs', () => {
+  it('polls every 8s under one minute', () => {
+    expect(observerReachPollIntervalMs(30_000)).toBe(YOUNG_POLL_MS);
+    expect(observerReachPollIntervalMs(YOUNG_REACH_MS - 1)).toBe(YOUNG_POLL_MS);
+  });
+
+  it('polls every 60s between one and ten minutes', () => {
+    expect(observerReachPollIntervalMs(YOUNG_REACH_MS)).toBe(MID_POLL_MS);
+    expect(observerReachPollIntervalMs(MID_REACH_MS - 1)).toBe(MID_POLL_MS);
+  });
+
+  it('stops polling after ten minutes', () => {
+    expect(observerReachPollIntervalMs(MID_REACH_MS)).toBeNull();
+    expect(observerReachPollIntervalMs(15 * 60_000)).toBeNull();
   });
 });

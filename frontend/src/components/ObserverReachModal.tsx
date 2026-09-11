@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 
 import { api, formatApiError } from '../api';
 import { useDistanceUnit } from '../contexts/DistanceUnitContext';
@@ -24,7 +25,13 @@ function InvalidateOnResize() {
       map.invalidateSize();
     });
     observer.observe(container);
-    return () => observer.disconnect();
+    const timer = window.setTimeout(() => {
+      map.invalidateSize();
+    }, 150);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timer);
+    };
   }, [map]);
   return null;
 }
@@ -39,14 +46,14 @@ function ObserverMiniMap({ observers }: { observers: ObserverReachEntry[] }) {
   const center: [number, number] = [valid[0].lat, valid[0].lon];
   return (
     <div
-      className="min-h-48 flex-1 rounded border border-border overflow-hidden"
+      className="h-48 rounded border border-border overflow-hidden"
       role="img"
       aria-label={t('messageList.observerReachMapAria')}
     >
       <MapContainer
         center={center}
         zoom={6}
-        className="h-full w-full"
+        className="h-48 w-full"
         style={{ background: '#1a1a2e' }}
       >
         <InvalidateOnResize />

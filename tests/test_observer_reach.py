@@ -217,6 +217,46 @@ class TestObserverReachGate:
         mock_client.post.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_empty_batch_falls_back_to_packet_detail(self, test_db):
+        reset_observer_reach_cache()
+        await AppSettingsRepository.update(
+            directory_enabled=True, directory_url="https://corescope.test"
+        )
+        spec = MagicMock()
+        spec.status_code = 200
+        spec.json.return_value = {
+            "openapi": "3.0.3",
+            "paths": {"/api/packets/observations": {"post": {}}},
+        }
+        spec.content = b"{}"
+        batch = MagicMock()
+        batch.status_code = 200
+        batch.json.return_value = {"results": {"aabbccddeeff0011": []}}
+        batch.content = b"{}"
+        packet = MagicMock()
+        packet.status_code = 200
+        packet.json.return_value = {
+            "observations": [{"observer_id": "obs-1", "observer_name": "Lyon", "path_json": []}]
+        }
+        packet.content = b"{}"
+        observers = MagicMock()
+        observers.status_code = 200
+        observers.json.return_value = {"observers": []}
+        observers.content = b"{}"
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=[spec, packet, observers])
+        mock_client.post = AsyncMock(return_value=batch)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.services.directory.httpx.AsyncClient", return_value=mock_client):
+            result = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+
+        assert result.counts["AABBCCDDEEFF0011"] == 1
+        mock_client.post.assert_called()
+
+    @pytest.mark.asyncio
     async def test_corescope_5xx_is_not_zero(self, test_db):
         reset_observer_reach_cache()
         await AppSettingsRepository.update(
