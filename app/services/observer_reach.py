@@ -127,9 +127,12 @@ def parse_batch_observations(payload: object) -> dict[str, list[ParsedObservatio
         if stored is None:
             continue
         if isinstance(value, dict) and "observations" in value:
-            parsed[stored] = parse_packet_observations(value)
+            observations = parse_packet_observations(value)
         else:
-            parsed[stored] = parse_packet_observations(value)
+            observations = parse_packet_observations(value)
+        if not _usable_observations(observations):
+            observations = _count_only_observations(value)
+        parsed[stored] = observations
     return parsed
 
 
@@ -169,9 +172,39 @@ def parse_corescope_observers(payload: object) -> dict[str, ObserverGeo]:
     return by_id
 
 
+def _observation_id(raw_id: object) -> str:
+    if isinstance(raw_id, str) and raw_id.strip():
+        return raw_id.strip()
+    if isinstance(raw_id, int) and raw_id >= 0:
+        return str(raw_id)
+    return ""
+
+
+def _usable_observations(observations: list[ParsedObservation]) -> bool:
+    return any(item.observer_id or item.public_key or item.observer_name for item in observations)
+
+
+def _count_only_observations(value: object) -> list[ParsedObservation]:
+    if not isinstance(value, dict):
+        return []
+    raw = value.get("observation_count") or value.get("observer_count") or value.get("count")
+    if not isinstance(raw, int) or raw <= 0:
+        return []
+    return [
+        ParsedObservation(
+            observer_id=f"count-{index}",
+            observer_name=None,
+            public_key=None,
+            hops=None,
+            snr=None,
+        )
+        for index in range(raw)
+    ]
+
+
 def _parse_one_observation(item: dict[str, object]) -> ParsedObservation:
     raw_id = item.get("observer_id") or item.get("id") or item.get("observer")
-    observer_id = raw_id.strip() if isinstance(raw_id, str) and raw_id.strip() else ""
+    observer_id = _observation_id(raw_id)
     name_raw = item.get("observer_name") or item.get("name")
     name = name_raw.strip() if isinstance(name_raw, str) and name_raw.strip() else None
     pubkey_raw = item.get("public_key") or item.get("pubkey")
@@ -368,7 +401,7 @@ async def _fetch_batch_or_fallback(
             for hash_lower in missing:
                 stored = canonical_packet_hash(hash_lower)
                 observations = parsed.get(stored or hash_lower.upper(), [])
-                if observations:
+                if _usable_observations(observations):
                     _reach_cache[(origin, hash_lower)] = (
                         now + REACH_CACHE_TTL_SECONDS,
                         observations,

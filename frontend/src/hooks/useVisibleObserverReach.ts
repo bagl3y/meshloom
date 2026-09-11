@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../api';
 import type { Message, ObserverReachCountState } from '../types';
@@ -26,6 +26,24 @@ export function resetObserverReachCountCache(): void {
   lastFetchAt.clear();
 }
 
+function readyVisibleHashes(
+  messages: Message[],
+  visibleIndexes: number[],
+  now: number
+): string[] {
+  const hashes: string[] = [];
+  const seen = new Set<string>();
+  for (const index of visibleIndexes) {
+    const msg = messages[index];
+    if (!msg || !isObserverReachEligible(msg) || !isOutgoingReachReady(msg, now)) continue;
+    const hash = msg.packet_hash!.toUpperCase();
+    if (seen.has(hash)) continue;
+    seen.add(hash);
+    hashes.push(hash);
+  }
+  return hashes;
+}
+
 export function useVisibleObserverReach(options: {
   directoryEnabled: boolean;
   conversationKey: string | undefined;
@@ -39,6 +57,15 @@ export function useVisibleObserverReach(options: {
   const [delayTick, setDelayTick] = useState(0);
   const conversationRef = useRef(conversationKey);
   conversationRef.current = conversationKey;
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const indexesRef = useRef(visibleIndexes);
+  indexesRef.current = visibleIndexes;
+
+  const hashSignature = useMemo(() => {
+    if (!directoryEnabled || !conversationKey) return '';
+    return readyVisibleHashes(messages, visibleIndexes, Date.now()).join(',');
+  }, [directoryEnabled, conversationKey, messages, visibleIndexes, delayTick]);
 
   useEffect(() => {
     if (!directoryEnabled || !conversationKey) {
@@ -54,8 +81,8 @@ export function useVisibleObserverReach(options: {
         if (wait <= 0) return;
         soonest = soonest === null ? wait : Math.min(soonest, wait);
       };
-      for (const index of visibleIndexes) {
-        const msg = messages[index];
+      for (const index of indexesRef.current) {
+        const msg = messagesRef.current[index];
         if (!msg || !isObserverReachEligible(msg)) continue;
         if (!isOutgoingReachReady(msg, now)) {
           consider(msg.received_at * 1000 + OUTGOING_REACH_DELAY_MS - now);
@@ -86,19 +113,18 @@ export function useVisibleObserverReach(options: {
     const debounceTimer = window.setTimeout(() => {
       const now = Date.now();
       const toFetch: string[] = [];
-      const seen = new Set<string>();
       const fromCache: Record<string, ObserverReachCountState> = {};
 
-      for (const index of visibleIndexes) {
-        const msg = messages[index];
-        if (!msg || !isObserverReachEligible(msg) || !isOutgoingReachReady(msg, now)) continue;
-        const hash = msg.packet_hash!.toUpperCase();
-        if (seen.has(hash)) continue;
-        seen.add(hash);
+      const visibleHashes = hashSignature ? hashSignature.split(',') : [];
+      for (const hash of visibleHashes) {
         const key = cacheKey(startedFor, hash);
         const cached = countCache.get(key);
         const last = lastFetchAt.get(key);
-        const interval = observerReachPollIntervalMs(messageAgeMs(msg, now));
+        const msg = messagesRef.current.find(
+          (item) => item.packet_hash?.toUpperCase() === hash
+        );
+        const interval =
+          msg != null ? observerReachPollIntervalMs(messageAgeMs(msg, now)) : null;
         const due =
           interval == null
             ? cached == null || now - cached.at >= STALE_REACH_CACHE_MS
@@ -172,7 +198,7 @@ export function useVisibleObserverReach(options: {
       window.clearTimeout(debounceTimer);
       if (wakeTimer != null) window.clearTimeout(wakeTimer);
     };
-  }, [directoryEnabled, conversationKey, messages, visibleIndexes, delayTick]);
+  }, [directoryEnabled, conversationKey, hashSignature, delayTick]);
 
   return { counts };
 }

@@ -96,4 +96,32 @@ describe('useVisibleObserverReach', () => {
     });
     expect(getCounts).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps counts when the messages array is replaced with the same hashes', async () => {
+    const receivedAt = Math.floor(Date.now() / 1000) - 15 * 60;
+    const first = channelMessage(receivedAt);
+    const { rerender, result } = renderHook(
+      ({ messages }: { messages: Message[] }) =>
+        useVisibleObserverReach({
+          directoryEnabled: true,
+          conversationKey: 'C3B889530D4F02DB5662EA13C417F530',
+          messages,
+          visibleIndexes: [0],
+        }),
+      { initialProps: { messages: [first] } }
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(getCounts).toHaveBeenCalledTimes(1);
+    expect(result.current.counts.AABBCCDDEEFF0011).toEqual({ status: 'ok', count: 2 });
+
+    rerender({ messages: [{ ...first }] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(getCounts).toHaveBeenCalledTimes(1);
+    expect(result.current.counts.AABBCCDDEEFF0011).toEqual({ status: 'ok', count: 2 });
+  });
 });

@@ -86,6 +86,13 @@ class TestObservationParsers:
     def test_batch_rejects_ingest_shaped_body(self):
         assert parse_batch_observations({"accepted": 2}) is None
 
+    def test_batch_count_only_payload(self):
+        parsed = parse_batch_observations(
+            {"results": {"aabbccddeeff0011": {"observation_count": 4}}}
+        )
+        assert parsed is not None
+        assert len(parsed["AABBCCDDEEFF0011"]) == 4
+
     def test_observers_join(self):
         geos = parse_corescope_observers(
             {
