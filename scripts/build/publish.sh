@@ -20,6 +20,7 @@ DOCKER_IMAGE="ghcr.io/bagl3y/meshloom"
 VERSION=""
 NOTES_FILE=""
 SKIP_QUALITY=0
+SKIP_LICENSES=0
 
 usage() {
     cat <<'EOF'
@@ -29,6 +30,7 @@ Options:
   --version VERSION         Release version; prompts if omitted
   --notes-file PATH         Changelog bullets if CHANGELOG.md has no [$VERSION] yet
   --skip-quality            Skip ./scripts/quality/all_quality.sh
+  --skip-licenses           Skip regenerating LICENSES.md
   --help                    Show this message
 EOF
 }
@@ -45,6 +47,10 @@ while [ $# -gt 0 ]; do
             ;;
         --skip-quality)
             SKIP_QUALITY=1
+            shift
+            ;;
+        --skip-licenses)
+            SKIP_LICENSES=1
             shift
             ;;
         --help)
@@ -68,10 +74,12 @@ if [ "$SKIP_QUALITY" -eq 0 ]; then
     echo
 fi
 
-echo -e "${YELLOW}Regenerating LICENSES.md...${NC}"
-bash scripts/build/collect_licenses.sh LICENSES.md
-echo -e "${GREEN}LICENSES.md updated!${NC}"
-echo
+if [ "$SKIP_LICENSES" -eq 0 ]; then
+    echo -e "${YELLOW}Regenerating LICENSES.md...${NC}"
+    bash scripts/build/collect_licenses.sh LICENSES.md
+    echo -e "${GREEN}LICENSES.md updated!${NC}"
+    echo
+fi
 
 # Prompt for version
 echo -e "${YELLOW}Current versions:${NC}"

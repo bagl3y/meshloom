@@ -68,15 +68,7 @@ echo -e "${GREEN}Passed!${NC}"
 
 echo -ne "${BLUE}[vitest]${NC} "
 cd "$REPO_ROOT/frontend"
-vitest_log="$(mktemp)"
-if npx --quiet vitest run --reporter=dot >"$vitest_log" 2>&1; then
-    tail -5 "$vitest_log"
-else
-    cat "$vitest_log"
-    rm -f "$vitest_log"
-    exit 1
-fi
-rm -f "$vitest_log"
+npx --quiet vitest run --reporter=dot
 echo -e "${GREEN}Passed!${NC}"
 
 echo -ne "${BLUE}[build]${NC} "

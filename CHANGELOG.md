@@ -1,3 +1,31 @@
+## [4.1.2] - 2026-09-11
+
+The Linux one-liner actually downloads the GitHub package again before installing it. 4.1.1 named the tempfile `.deb` but skipped the download, so apt tried to install an empty file.
+
+### Highlights
+
+* Service install from the latest published `.deb` / `.rpm` downloads the package again
+
+### Fixed
+
+* Bug: the installer created an empty `/tmp/meshloom.*.deb` and `apt-get install` failed with `could not locate member control.tar` / `read, still have 8 to read but none left`
+
+---
+
+### Français
+
+L’installeur Linux retélécharge le paquet GitHub avant de l’installer. La 4.1.1 nommait le fichier temporaire `.deb` mais sautait le téléchargement, donc apt installait un fichier vide.
+
+#### Points forts
+
+* L’installation service depuis le `.deb` / `.rpm` publié retélécharge le paquet
+
+#### Corrections
+
+* Bug : l’installeur créait un `/tmp/meshloom.*.deb` vide et `apt-get install` échouait avec `could not locate member control.tar` / `read, still have 8 to read but none left`
+
+---
+
 ## [4.1.1] - 2026-09-11
 
 The Linux one-liner can install the latest GitHub `.deb` again. Apt was rejecting a valid package because the tempfile had no `.deb` suffix.

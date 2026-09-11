@@ -788,6 +788,11 @@ install_from_release_asset() {
     phase "$(t using_asset)"
     # apt only accepts local files whose name ends in .deb / .ddeb / .changes.
     tmp="$(mktemp "/tmp/meshloom.XXXXXX${pkg_ext}")"
+    run_quiet curl -fL --max-time 180 "$url" -o "$tmp"
+    if [ ! -s "$tmp" ]; then
+        rm -f "$tmp"
+        return 1
+    fi
     if [ "$PKG_MGR" = "apt" ]; then
         run_quiet as_root apt-get install -y "$tmp"
     else
