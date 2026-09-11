@@ -5,6 +5,86 @@ interface RadioSettings {
   cr: number;
 }
 
+export type RadioTransportKind = 'serial' | 'tcp' | 'ble';
+
+export type RadioIdentityGateState = 'identity_mismatch' | 'identity_unbound_legacy';
+
+export function isRadioIdentityGate(
+  state: string | null | undefined
+): state is RadioIdentityGateState {
+  return state === 'identity_mismatch' || state === 'identity_unbound_legacy';
+}
+
+export function publicKeyPrefix(key: string | null | undefined): string {
+  if (!key) return '';
+  return key.slice(0, 12).toLowerCase();
+}
+
+export interface RadioSerialPortInfo {
+  path: string;
+  description: string;
+}
+
+export interface RadioBleDeviceInfo {
+  address: string;
+  name: string | null;
+}
+
+export interface RadioTransportCapabilities {
+  tcp: boolean;
+  serial: boolean;
+  ble: boolean;
+  serial_unavailable_reason: string | null;
+  ble_unavailable_reason: string | null;
+}
+
+export interface RadioTransportConfig {
+  configured: boolean;
+  transport: RadioTransportKind | null;
+  serial_port: string;
+  serial_baudrate: number;
+  tcp_host: string;
+  tcp_port: number;
+  ble_address: string;
+  ble_pin_configured: boolean;
+  bound_public_key: string | null;
+  capabilities: RadioTransportCapabilities;
+  serial_ports: RadioSerialPortInfo[];
+}
+
+export interface RadioTransportUpdate {
+  transport: RadioTransportKind;
+  serial_port?: string | null;
+  serial_baudrate?: number | null;
+  tcp_host?: string | null;
+  tcp_port?: number | null;
+  ble_address?: string | null;
+  ble_pin?: string | null;
+}
+
+export interface RadioIdentityInfo {
+  previous_public_key: string | null;
+  new_public_key: string | null;
+  new_name: string | null;
+  mesh_contacts: number;
+  mesh_messages: number;
+  last_activity: number | null;
+}
+
+export interface RadioIdentityActionResponse {
+  status: string;
+  radio_state:
+    | 'connected'
+    | 'initializing'
+    | 'connecting'
+    | 'disconnected'
+    | 'paused'
+    | 'identity_mismatch'
+    | 'identity_unbound_legacy';
+  bound_public_key: string | null;
+  connected: boolean;
+}
+
 export interface RadioConfig {
   public_key: string;
   name: string;
@@ -106,8 +186,17 @@ export interface HealthStatus {
   status: string;
   radio_connected: boolean;
   radio_initializing: boolean;
-  radio_state?: 'connected' | 'initializing' | 'connecting' | 'disconnected' | 'paused';
+  radio_state?:
+    | 'connected'
+    | 'initializing'
+    | 'connecting'
+    | 'disconnected'
+    | 'paused'
+    | 'identity_mismatch'
+    | 'identity_unbound_legacy';
   connection_info: string | null;
+  transport_configured?: boolean;
+  identity?: RadioIdentityInfo | null;
   app_info?: AppInfo | null;
   radio_device_info?: {
     model: string | null;

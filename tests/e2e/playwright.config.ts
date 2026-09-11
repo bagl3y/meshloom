@@ -54,6 +54,9 @@ export default defineConfig({
       else
         echo "[e2e] $(date +%T.%3N) frontend/dist exists — skipping build"
       fi
+      echo "[e2e] $(date +%T.%3N) Seeding radio_transport=serial into the temp DB..."
+      uv run python tests/e2e/seed_radio_transport.py
+      unset MESHCORE_SERIAL_PORT MESHCORE_SERIAL_BAUDRATE MESHCORE_TCP_HOST MESHCORE_TCP_PORT MESHCORE_BLE_ADDRESS MESHCORE_BLE_PIN
       echo "[e2e] $(date +%T.%3N) Launching uvicorn..."
       uv run uvicorn app.main:app --host 127.0.0.1 --port 8001
     '`,
@@ -63,7 +66,7 @@ export default defineConfig({
     timeout: 180_000,
     env: {
       MESHCORE_DATABASE_PATH: path.join(tmpDir, 'e2e-test.db'),
-      // Pass through the serial port from the environment
+      // Leftover env is copied into radio_serial_port by the seed, then unset.
       ...(process.env.MESHCORE_SERIAL_PORT
         ? { MESHCORE_SERIAL_PORT: process.env.MESHCORE_SERIAL_PORT }
         : {}),

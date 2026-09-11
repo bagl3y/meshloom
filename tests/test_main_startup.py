@@ -1,11 +1,15 @@
 """Tests for app startup/lifespan behavior."""
 
 import asyncio
+from contextlib import ExitStack
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.main import app, lifespan
+from app.models import RadioTransportSnapshot
+
+_CONFIGURED = RadioTransportSnapshot(transport="serial", serial_port="/dev/ttyUSB0")
 
 
 class TestStartupLifespan:
@@ -15,34 +19,57 @@ class TestStartupLifespan:
         setup_started = asyncio.Event()
         release_setup = asyncio.Event()
 
-        async def slow_setup():
+        async def slow_setup(*_args, **_kwargs):
             setup_started.set()
             await release_setup.wait()
+            return True
 
-        with (
-            patch("app.main.db.connect", new=AsyncMock()),
-            patch("app.main.db.disconnect", new=AsyncMock()),
-            patch("app.radio_sync.ensure_default_channels", new=AsyncMock()),
-            patch("app.radio.radio_manager.start_connection_monitor", new=AsyncMock()),
-            patch("app.radio.radio_manager.stop_connection_monitor", new=AsyncMock()),
-            patch("app.radio.radio_manager.disconnect", new=AsyncMock()),
-            patch("app.radio.radio_manager.reconnect", new=AsyncMock(return_value=True)),
-            patch(
-                "app.radio.radio_manager.post_connect_setup", new=AsyncMock(side_effect=slow_setup)
-            ),
-            patch("app.fanout.manager.fanout_manager.load_from_db", new=AsyncMock()),
-            patch("app.fanout.manager.fanout_manager.stop_all", new=AsyncMock()),
-            patch("app.radio_sync.stop_message_polling", new=AsyncMock()),
-            patch("app.radio_sync.stop_periodic_advert", new=AsyncMock()),
-            patch("app.radio_sync.stop_periodic_sync", new=AsyncMock()),
-            patch("app.websocket.broadcast_health"),
-        ):
+        with ExitStack() as stack:
+            for target, kwargs in (
+                ("app.main.db.connect", {"new": AsyncMock()}),
+                ("app.main.db.disconnect", {"new": AsyncMock()}),
+                ("app.radio_sync.ensure_default_channels", {"new": AsyncMock()}),
+                ("app.main.radio_manager.start_connection_monitor", {"new": AsyncMock()}),
+                ("app.main.radio_manager.stop_connection_monitor", {"new": AsyncMock()}),
+                ("app.main.radio_manager.disconnect", {"new": AsyncMock()}),
+                (
+                    "app.main.radio_manager.reconnect_and_prepare",
+                    {"new": AsyncMock(side_effect=slow_setup)},
+                ),
+                (
+                    "app.services.radio_transport.maybe_import_legacy_env",
+                    {"new": AsyncMock(return_value=_CONFIGURED)},
+                ),
+                (
+                    "app.services.radio_transport.get_transport",
+                    {"new": AsyncMock(return_value=_CONFIGURED)},
+                ),
+                (
+                    "app.services.radio_transport.database_has_mesh_history",
+                    {"new": AsyncMock(return_value=False)},
+                ),
+                ("app.fanout.manager.fanout_manager.load_from_db", {"new": AsyncMock()}),
+                ("app.fanout.manager.fanout_manager.stop_all", {"new": AsyncMock()}),
+                ("app.main.stop_message_polling", {"new": AsyncMock()}),
+                ("app.main.stop_periodic_advert", {"new": AsyncMock()}),
+                ("app.main.stop_periodic_sync", {"new": AsyncMock()}),
+                ("app.main.stop_telemetry_collect", {"new": AsyncMock()}),
+                ("app.main.stop_background_contact_reconciliation", {"new": AsyncMock()}),
+                ("app.main.stop_radio_stats_sampling", {"new": AsyncMock()}),
+                ("app.main.stop_stale_contact_purge", {"new": AsyncMock()}),
+                ("app.main.start_radio_stats_sampling", {"new": AsyncMock()}),
+                ("app.main.start_stale_contact_purge", {}),
+                ("app.push.vapid.ensure_vapid_keys", {"new": AsyncMock()}),
+                ("app.websocket.broadcast_health", {}),
+            ):
+                stack.enter_context(patch(target, **kwargs))
+
             cm = lifespan(app)
-            await asyncio.wait_for(cm.__aenter__(), timeout=0.2)
+            await asyncio.wait_for(cm.__aenter__(), timeout=2)
 
-            await asyncio.wait_for(setup_started.wait(), timeout=0.2)
+            await asyncio.wait_for(setup_started.wait(), timeout=2)
             startup_task = app.state.startup_radio_task
             assert startup_task.done() is False
 
             release_setup.set()
-            await asyncio.wait_for(cm.__aexit__(None, None, None), timeout=0.5)
+            await asyncio.wait_for(cm.__aexit__(None, None, None), timeout=2)

@@ -15,21 +15,54 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
-import { api } from '../../api';
+import { api, formatApiError } from '../../api';
 import { RADIO_PRESETS } from '../../utils/radioPresets';
 import { stripRegionScopePrefix } from '../../utils/regionScope';
-import type {
-  AppSettings,
-  AppSettingsUpdate,
-  HealthStatus,
-  RadioAdvertMode,
-  RadioConfig,
-  RadioConfigUpdate,
-  RadioDiscoveryResponse,
-  RadioDiscoveryTarget,
-  RadioRegionDiscoveryResponse,
-  RadioStatsSnapshot,
+import {
+  isRadioIdentityGate,
+  type AppSettings,
+  type AppSettingsUpdate,
+  type HealthStatus,
+  type RadioAdvertMode,
+  type RadioBleDeviceInfo,
+  type RadioConfig,
+  type RadioConfigUpdate,
+  type RadioDiscoveryResponse,
+  type RadioDiscoveryTarget,
+  type RadioRegionDiscoveryResponse,
+  type RadioStatsSnapshot,
+  type RadioTransportConfig,
+  type RadioTransportKind,
+  type RadioTransportUpdate,
 } from '../../types';
+
+const EMPTY_TRANSPORT: RadioTransportConfig = {
+  configured: false,
+  transport: null,
+  serial_port: '',
+  serial_baudrate: 115200,
+  tcp_host: '',
+  tcp_port: 5000,
+  ble_address: '',
+  ble_pin_configured: false,
+  bound_public_key: null,
+  capabilities: {
+    tcp: true,
+    serial: false,
+    ble: false,
+    serial_unavailable_reason: null,
+    ble_unavailable_reason: null,
+  },
+  serial_ports: [],
+};
+
+function defaultKind(transport: RadioTransportConfig): RadioTransportKind {
+  if (transport.transport) return transport.transport;
+  if (transport.capabilities.serial) return 'serial';
+  if (transport.capabilities.tcp) return 'tcp';
+  if (transport.capabilities.ble) return 'ble';
+  return 'serial';
+}
 
 function canShareRadioLocation(lat: number, lon: number): boolean {
   if (lat === 0 && lon === 0) return false;
@@ -169,6 +202,298 @@ function RadioDetailsCollapsible({ stats }: { stats: RadioStatsSnapshot }) {
   );
 }
 
+function RadioTransportPanel({
+  health,
+  onHealthRefresh,
+}: {
+  health: HealthStatus | null;
+  onHealthRefresh?: () => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const [snapshot, setSnapshot] = useState<RadioTransportConfig>(EMPTY_TRANSPORT);
+  const [kind, setKind] = useState<RadioTransportKind>('serial');
+  const [serialPort, setSerialPort] = useState('');
+  const [serialBaudrate, setSerialBaudrate] = useState('115200');
+  const [tcpHost, setTcpHost] = useState('');
+  const [tcpPort, setTcpPort] = useState('5000');
+  const [bleAddress, setBleAddress] = useState('');
+  const [blePin, setBlePin] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [bleDevices, setBleDevices] = useState<RadioBleDeviceInfo[]>([]);
+
+  const applySnapshot = (next: RadioTransportConfig) => {
+    setSnapshot(next);
+    setKind(defaultKind(next));
+    setSerialPort(next.serial_port);
+    setSerialBaudrate(String(next.serial_baudrate || 115200));
+    setTcpHost(next.tcp_host);
+    setTcpPort(String(next.tcp_port || 5000));
+    setBleAddress(next.ble_address);
+    setBlePin('');
+    setBleDevices([]);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const next = await api.getRadioTransport();
+        if (!cancelled) {
+          applySnapshot(next);
+          setLoadError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError(formatApiError(err, t) || t('settings.radio.loadTransportFailed'));
+        }
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
+
+  const capabilities = snapshot.capabilities;
+  const showSerial = capabilities.serial || snapshot.transport === 'serial' || kind === 'serial';
+  const showTcp = capabilities.tcp || snapshot.transport === 'tcp' || kind === 'tcp';
+  const showBle = capabilities.ble || snapshot.transport === 'ble' || kind === 'ble';
+  const savedPortMissing =
+    Boolean(serialPort) && !snapshot.serial_ports.some((port) => port.path === serialPort);
+
+  const handleScanBle = async () => {
+    setScanning(true);
+    setSaveError(null);
+    try {
+      const result = await api.scanRadioBle();
+      setBleDevices(result.devices);
+      if (result.devices.length === 0) {
+        toast.info(t('settings.radio.bleNoDevices'));
+      }
+    } catch (err) {
+      setSaveError(formatApiError(err, t) || t('settings.radio.transportSaveFailed'));
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleApply = async () => {
+    setSaveError(null);
+    setBusy(true);
+    try {
+      const body: RadioTransportUpdate = { transport: kind };
+      if (kind === 'serial') {
+        body.serial_port = serialPort;
+        const baud = parseInt(serialBaudrate, 10);
+        if (!Number.isNaN(baud)) body.serial_baudrate = baud;
+      } else if (kind === 'tcp') {
+        body.tcp_host = tcpHost;
+        const port = parseInt(tcpPort, 10);
+        if (!Number.isNaN(port)) body.tcp_port = port;
+      } else {
+        body.ble_address = bleAddress;
+        if (blePin.trim()) body.ble_pin = blePin.trim();
+      }
+      const next = await api.updateRadioTransport(body);
+      applySnapshot(next);
+      toast.success(t('settings.radio.transportSaved'));
+      await onHealthRefresh?.();
+    } catch (err) {
+      setSaveError(formatApiError(err, t) || t('settings.radio.transportSaveFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <h4 className="text-sm font-semibold">{t('settings.radio.transport')}</h4>
+      <p className="text-[0.8125rem] text-muted-foreground">{t('settings.radio.transportHelp')}</p>
+      {loadError && (
+        <p className="text-sm text-destructive" role="alert">
+          {loadError}
+        </p>
+      )}
+      <fieldset className="space-y-2">
+        <legend className="sr-only">{t('settings.radio.transport')}</legend>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {showSerial && (
+            <Button
+              type="button"
+              variant="outline"
+              aria-pressed={kind === 'serial'}
+              className={kind === 'serial' ? 'border-primary/50 bg-primary/10' : ''}
+              onClick={() => setKind('serial')}
+            >
+              {t('settings.radio.transportSerial')}
+            </Button>
+          )}
+          {showTcp && (
+            <Button
+              type="button"
+              variant="outline"
+              aria-pressed={kind === 'tcp'}
+              className={kind === 'tcp' ? 'border-primary/50 bg-primary/10' : ''}
+              onClick={() => setKind('tcp')}
+            >
+              {t('settings.radio.transportTcp')}
+            </Button>
+          )}
+          {showBle && (
+            <Button
+              type="button"
+              variant="outline"
+              aria-pressed={kind === 'ble'}
+              className={kind === 'ble' ? 'border-primary/50 bg-primary/10' : ''}
+              onClick={() => setKind('ble')}
+            >
+              {t('settings.radio.transportBle')}
+            </Button>
+          )}
+        </div>
+      </fieldset>
+
+      {kind === 'serial' && (
+        <div className="space-y-2">
+          <Label htmlFor="radio-serial-port">{t('settings.radio.serialPort')}</Label>
+          <select
+            id="radio-serial-port"
+            value={serialPort}
+            onChange={(e) => setSerialPort(e.target.value)}
+            className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          >
+            <option value="">{t('settings.radio.serialAutoDetect')}</option>
+            {snapshot.serial_ports.map((port) => (
+              <option key={port.path} value={port.path}>
+                {port.description ? `${port.path} — ${port.description}` : port.path}
+              </option>
+            ))}
+            {savedPortMissing && (
+              <option value={serialPort}>
+                {serialPort} ({t('settings.radio.serialPortUnavailable')})
+              </option>
+            )}
+          </select>
+          {!capabilities.serial && capabilities.serial_unavailable_reason && (
+            <p className="text-[0.8125rem] text-muted-foreground">
+              {t('settings.radio.serialUnavailable', {
+                reason: capabilities.serial_unavailable_reason,
+              })}
+            </p>
+          )}
+          <Label htmlFor="radio-serial-baud">{t('settings.radio.serialBaudrate')}</Label>
+          <Input
+            id="radio-serial-baud"
+            type="number"
+            value={serialBaudrate}
+            onChange={(e) => setSerialBaudrate(e.target.value)}
+          />
+        </div>
+      )}
+
+      {kind === 'tcp' && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="radio-tcp-host">{t('settings.radio.tcpHost')}</Label>
+            <Input
+              id="radio-tcp-host"
+              value={tcpHost}
+              onChange={(e) => setTcpHost(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="radio-tcp-port">{t('settings.radio.tcpPort')}</Label>
+            <Input
+              id="radio-tcp-port"
+              type="number"
+              value={tcpPort}
+              onChange={(e) => setTcpPort(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+
+      {kind === 'ble' && (
+        <div className="space-y-2">
+          <Label htmlFor="radio-ble-address">{t('settings.radio.bleAddress')}</Label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              id="radio-ble-address"
+              value={bleAddress}
+              onChange={(e) => setBleAddress(e.target.value)}
+              className="font-mono"
+            />
+            {capabilities.ble && (
+              <Button type="button" variant="outline" onClick={handleScanBle} disabled={scanning}>
+                {scanning ? t('settings.radio.bleScanning') : t('settings.radio.bleScan')}
+              </Button>
+            )}
+          </div>
+          {!capabilities.ble && capabilities.ble_unavailable_reason && (
+            <p className="text-[0.8125rem] text-muted-foreground">
+              {t('settings.radio.bleUnavailable', {
+                reason: capabilities.ble_unavailable_reason,
+              })}
+            </p>
+          )}
+          {bleDevices.length > 0 && (
+            <div className="space-y-1">
+              {bleDevices.map((device) => (
+                <Button
+                  key={device.address}
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-start font-mono text-xs"
+                  onClick={() => setBleAddress(device.address)}
+                >
+                  {device.name ? `${device.name} — ${device.address}` : device.address}
+                </Button>
+              ))}
+            </div>
+          )}
+          <Label htmlFor="radio-ble-pin">{t('settings.radio.blePin')}</Label>
+          <Input
+            id="radio-ble-pin"
+            type="password"
+            autoComplete="off"
+            value={blePin}
+            onChange={(e) => setBlePin(e.target.value)}
+            placeholder={t('settings.radio.blePinPlaceholder')}
+          />
+          {snapshot.ble_pin_configured && (
+            <p className="text-[0.8125rem] text-muted-foreground">
+              {t('settings.radio.blePinConfigured')}
+            </p>
+          )}
+        </div>
+      )}
+
+      {saveError && (
+        <p className="text-sm text-destructive" role="alert">
+          {saveError}
+        </p>
+      )}
+      <Button
+        type="button"
+        variant="outline"
+        onClick={handleApply}
+        disabled={busy}
+        className="w-full"
+      >
+        {busy ? t('settings.radio.applyingTransport') : t('settings.radio.applyTransport')}
+      </Button>
+      {health?.transport_configured === false && (
+        <p className="text-[0.8125rem] text-muted-foreground">
+          {t('settings.radio.saveTransportFirst')}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function SettingsRadioSection({
   config,
   health,
@@ -187,12 +512,13 @@ export function SettingsRadioSection({
   regionDiscovery,
   regionDiscoveryLoading,
   onDiscoverRegions,
+  onHealthRefresh,
   onClose,
   className,
 }: {
-  config: RadioConfig;
+  config: RadioConfig | null;
   health: HealthStatus | null;
-  appSettings: AppSettings;
+  appSettings: AppSettings | null;
   pageMode: boolean;
   onSave: (update: RadioConfigUpdate) => Promise<void>;
   onSaveAppSettings: (update: AppSettingsUpdate) => Promise<void>;
@@ -207,6 +533,7 @@ export function SettingsRadioSection({
   regionDiscovery: RadioRegionDiscoveryResponse | null;
   regionDiscoveryLoading: boolean;
   onDiscoverRegions: (publicKeys?: string[]) => Promise<void>;
+  onHealthRefresh?: () => Promise<void>;
   onClose: () => void;
   className?: string;
 }) {
@@ -251,6 +578,7 @@ export function SettingsRadioSection({
   const [connectionBusy, setConnectionBusy] = useState(false);
 
   useEffect(() => {
+    if (!config) return;
     setName(config.name);
     setLat(String(config.lat));
     setLon(String(config.lon));
@@ -268,6 +596,7 @@ export function SettingsRadioSection({
   }, [config]);
 
   useEffect(() => {
+    if (!appSettings) return;
     setAdvertIntervalHours(String(Math.round(appSettings.advert_interval / 3600)));
     setFloodScope(stripRegionScopePrefix(appSettings.flood_scope));
     setKnownRegions((appSettings.known_regions ?? []).join('\n'));
@@ -355,19 +684,19 @@ export function SettingsRadioSection({
       lat: parsedLat,
       lon: parsedLon,
       tx_power: parsedTxPower,
-      ...(advertLocationSource !== (config.advert_location_source ?? 'current')
+      ...(advertLocationSource !== (config?.advert_location_source ?? 'current')
         ? { advert_location_source: advertLocationSource }
         : {}),
-      ...(multiAcksEnabled !== (config.multi_acks_enabled ?? false)
+      ...(multiAcksEnabled !== (config?.multi_acks_enabled ?? false)
         ? { multi_acks_enabled: multiAcksEnabled }
         : {}),
-      ...(telemetryModeBase !== (config.telemetry_mode_base ?? 0)
+      ...(telemetryModeBase !== (config?.telemetry_mode_base ?? 0)
         ? { telemetry_mode_base: telemetryModeBase }
         : {}),
-      ...(telemetryModeLoc !== (config.telemetry_mode_loc ?? 0)
+      ...(telemetryModeLoc !== (config?.telemetry_mode_loc ?? 0)
         ? { telemetry_mode_loc: telemetryModeLoc }
         : {}),
-      ...(telemetryModeEnv !== (config.telemetry_mode_env ?? 0)
+      ...(telemetryModeEnv !== (config?.telemetry_mode_env ?? 0)
         ? { telemetry_mode_env: telemetryModeEnv }
         : {}),
       radio: {
@@ -376,7 +705,7 @@ export function SettingsRadioSection({
         sf: parsedSf,
         cr: parsedCr,
       },
-      ...(config.path_hash_mode_supported &&
+      ...(config?.path_hash_mode_supported &&
       !isNaN(parsedPathHashMode) &&
       parsedPathHashMode !== config.path_hash_mode
         ? { path_hash_mode: parsedPathHashMode }
@@ -453,6 +782,9 @@ export function SettingsRadioSection({
 
     try {
       const update: AppSettingsUpdate = {};
+      if (!appSettings) {
+        return;
+      }
       if (floodScope !== stripRegionScopePrefix(appSettings.flood_scope)) {
         update.flood_scope = floodScope;
       }
@@ -487,6 +819,9 @@ export function SettingsRadioSection({
     setAdvertIntervalBusy(true);
 
     try {
+      if (!appSettings) {
+        return;
+      }
       const hours = parseInt(advertIntervalHours, 10);
       const newAdvertInterval = isNaN(hours) ? 0 : hours * 3600;
       if (newAdvertInterval !== appSettings.advert_interval) {
@@ -551,17 +886,17 @@ export function SettingsRadioSection({
   const buildConfigProfile = () => ({
     version: 1,
     exported_at: new Date().toISOString(),
-    name: config.name,
-    lat: config.lat,
-    lon: config.lon,
-    tx_power: config.tx_power,
-    radio: { ...config.radio },
-    path_hash_mode: config.path_hash_mode,
-    advert_location_source: config.advert_location_source ?? 'current',
-    multi_acks_enabled: config.multi_acks_enabled ?? false,
-    telemetry_mode_base: config.telemetry_mode_base ?? 0,
-    telemetry_mode_loc: config.telemetry_mode_loc ?? 0,
-    telemetry_mode_env: config.telemetry_mode_env ?? 0,
+    name: config?.name ?? '',
+    lat: config?.lat ?? 0,
+    lon: config?.lon ?? 0,
+    tx_power: config?.tx_power ?? 0,
+    radio: { ...(config?.radio ?? { freq: 0, bw: 0, sf: 0, cr: 0 }) },
+    path_hash_mode: config?.path_hash_mode ?? 0,
+    advert_location_source: config?.advert_location_source ?? 'current',
+    multi_acks_enabled: config?.multi_acks_enabled ?? false,
+    telemetry_mode_base: config?.telemetry_mode_base ?? 0,
+    telemetry_mode_loc: config?.telemetry_mode_loc ?? 0,
+    telemetry_mode_env: config?.telemetry_mode_env ?? 0,
   });
 
   const downloadJson = (profile: object, suffix: string) => {
@@ -569,7 +904,7 @@ export function SettingsRadioSection({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const safeName = (config.name || 'radio').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeName = (config?.name || 'radio').replace(/[^a-zA-Z0-9_-]/g, '_');
     const timestamp = new Date()
       .toLocaleString(undefined, {
         year: 'numeric',
@@ -643,9 +978,10 @@ export function SettingsRadioSection({
     const radio = data.radio as { freq: number; bw: number; sf: number; cr: number };
     const update: RadioConfigUpdate = {
       name: data.name as string,
-      lat: typeof data.lat === 'number' ? data.lat : config.lat,
-      lon: typeof data.lon === 'number' ? data.lon : config.lon,
-      tx_power: typeof data.tx_power === 'number' ? (data.tx_power as number) : config.tx_power,
+      lat: typeof data.lat === 'number' ? data.lat : (config?.lat ?? 0),
+      lon: typeof data.lon === 'number' ? data.lon : (config?.lon ?? 0),
+      tx_power:
+        typeof data.tx_power === 'number' ? (data.tx_power as number) : (config?.tx_power ?? 0),
       radio,
     };
     if (data.advert_location_source === 'off' || data.advert_location_source === 'current')
@@ -658,7 +994,7 @@ export function SettingsRadioSection({
       update.telemetry_mode_loc = data.telemetry_mode_loc as number;
     if (typeof data.telemetry_mode_env === 'number')
       update.telemetry_mode_env = data.telemetry_mode_env as number;
-    if (config.path_hash_mode_supported && typeof data.path_hash_mode === 'number')
+    if (config?.path_hash_mode_supported && typeof data.path_hash_mode === 'number')
       update.path_hash_mode = data.path_hash_mode as number;
     return update;
   };
@@ -722,6 +1058,8 @@ export function SettingsRadioSection({
 
   const radioState =
     health?.radio_state ?? (health?.radio_initializing ? 'initializing' : 'disconnected');
+  const transportConfigured = health?.transport_configured !== false;
+  const identityGate = isRadioIdentityGate(radioState);
   const connectionActionLabel =
     radioState === 'paused'
       ? t('settings.radio.reconnect')
@@ -744,7 +1082,11 @@ export function SettingsRadioSection({
             ? health?.connection_info
               ? t('settings.radio.pausedWith', { info: health.connection_info })
               : t('settings.radio.paused')
-            : t('settings.radio.notConnected');
+            : radioState === 'identity_mismatch'
+              ? t('settings.radio.identityMismatch')
+              : radioState === 'identity_unbound_legacy'
+                ? t('settings.radio.identityUnbound')
+                : t('settings.radio.notConnected');
 
   const deviceInfoLabel = useMemo(() => {
     const info = health?.radio_device_info;
@@ -783,6 +1125,13 @@ export function SettingsRadioSection({
   }, [health?.radio_device_info, t]);
 
   const handleConnectionAction = async () => {
+    if (identityGate) {
+      return;
+    }
+    if (radioState === 'paused' && !transportConfigured) {
+      toast.info(t('settings.radio.saveTransportFirst'));
+      return;
+    }
     setConnectionBusy(true);
     try {
       if (radioState === 'paused') {
@@ -812,7 +1161,9 @@ export function SettingsRadioSection({
             className={`w-2 h-2 rounded-full ${
               radioState === 'connected'
                 ? 'bg-status-connected'
-                : radioState === 'initializing' || radioState === 'connecting'
+                : radioState === 'initializing' ||
+                    radioState === 'connecting' ||
+                    isRadioIdentityGate(radioState)
                   ? 'bg-warning'
                   : 'bg-status-disconnected'
             }`}
@@ -831,11 +1182,15 @@ export function SettingsRadioSection({
 
         {health?.radio_stats && <RadioDetailsCollapsible stats={health.radio_stats} />}
 
+        <RadioTransportPanel health={health} onHealthRefresh={onHealthRefresh} />
+
         <Button
           type="button"
           variant="outline"
           onClick={handleConnectionAction}
-          disabled={connectionBusy}
+          disabled={
+            connectionBusy || identityGate || (radioState === 'paused' && !transportConfigured)
+          }
           className="w-full"
         >
           {connectionBusy
@@ -847,716 +1202,743 @@ export function SettingsRadioSection({
         </p>
       </div>
 
-      <Separator />
+      {!config || !appSettings ? (
+        <p className="text-[0.8125rem] text-muted-foreground">
+          {t('settings.radio.unavailableUntilConnected')}
+        </p>
+      ) : (
+        <>
+          <Separator />
 
-      {/* ── Identity ── */}
-      <div className="space-y-2">
-        <h3 className="text-base font-semibold tracking-tight">{t('settings.radio.identity')}</h3>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="name">{t('settings.radio.radioName')}</Label>
-        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="public-key">{t('settings.radio.publicKey')}</Label>
-        <Input id="public-key" value={config.public_key} disabled className="font-mono text-xs" />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="private-key">{t('settings.radio.setPrivateKey')}</Label>
-        <Input
-          id="private-key"
-          type="password"
-          autoComplete="off"
-          value={privateKey}
-          onChange={(e) => setPrivateKey(e.target.value)}
-          placeholder={t('settings.radio.privateKeyPlaceholder')}
-        />
-        <Button
-          onClick={handleSetPrivateKey}
-          disabled={identityBusy || identityRebooting || !privateKey.trim()}
-          className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
-          variant="outline"
-        >
-          {identityBusy || identityRebooting
-            ? t('settings.radio.settingRebooting')
-            : t('settings.radio.setKeyReboot')}
-        </Button>
-      </div>
-
-      {identityError && (
-        <div className="text-sm text-destructive" role="alert">
-          {identityError}
-        </div>
-      )}
-
-      <Separator />
-
-      {/* ── Radio Parameters ── */}
-      <div className="space-y-2">
-        <h3 className="text-base font-semibold tracking-tight">{t('settings.radio.parameters')}</h3>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="preset">{t('settings.radio.preset')}</Label>
-        <select
-          id="preset"
-          value={currentPreset}
-          onChange={(e) => handlePresetChange(e.target.value)}
-          className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-        >
-          <option value="custom">{t('settings.radio.custom')}</option>
-          {RADIO_PRESETS.map((preset) => (
-            <option key={preset.name} value={preset.name}>
-              {preset.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="freq">{t('settings.radio.frequency')}</Label>
-          <Input
-            id="freq"
-            type="number"
-            step="any"
-            value={freq}
-            onChange={(e) => setFreq(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="bw">{t('settings.radio.bandwidth')}</Label>
-          <Input
-            id="bw"
-            type="number"
-            step="any"
-            value={bw}
-            onChange={(e) => setBw(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="sf">{t('settings.radio.spreadingFactor')}</Label>
-          <Input
-            id="sf"
-            type="number"
-            min="7"
-            max="12"
-            value={sf}
-            onChange={(e) => setSf(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="cr">{t('settings.radio.codingRate')}</Label>
-          <Input
-            id="cr"
-            type="number"
-            min="5"
-            max="8"
-            value={cr}
-            onChange={(e) => setCr(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="tx-power">{t('settings.radio.txPower')}</Label>
-          <Input
-            id="tx-power"
-            type="number"
-            value={txPower}
-            onChange={(e) => setTxPower(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="max-tx">{t('settings.radio.maxTxPower')}</Label>
-          <Input id="max-tx" type="number" value={config.max_tx_power} disabled />
-        </div>
-      </div>
-
-      {config.path_hash_mode_supported && (
-        <div className="space-y-2">
-          <Label htmlFor="path-hash-mode">{t('settings.radio.pathHashMode')}</Label>
-          <select
-            id="path-hash-mode"
-            value={pathHashMode}
-            onChange={(e) => setPathHashMode(e.target.value)}
-            className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          >
-            <option value="0">{t('settings.radio.pathHash1')}</option>
-            <option value="1">{t('settings.radio.pathHash2')}</option>
-            <option value="2">{t('settings.radio.pathHash3')}</option>
-          </select>
-          <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-xs text-warning">
-            <p className="font-semibold mb-1">{t('settings.radio.compatWarning')}</p>
-            <p>{t('settings.radio.compatWarningBody')}</p>
-          </div>
-        </div>
-      )}
-
-      <Separator />
-
-      {/* ── Location ── */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-base font-semibold tracking-tight">{t('settings.radio.location')}</h3>
-          <div className="flex flex-wrap justify-end gap-1.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (!canShareRadioLocation(config.lat, config.lon)) {
-                  toast.error(t('share.noLocation'));
-                  return;
-                }
-                void navigator.clipboard
-                  .writeText(`${config.lat.toFixed(5)}, ${config.lon.toFixed(5)}`)
-                  .then(() => {
-                    toast.success(t('share.locationCopied'));
-                  });
-              }}
-              disabled={!canShareRadioLocation(config.lat, config.lon)}
-            >
-              <Share2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
-              {t('share.shareLocation')}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleGetLocation}
-              disabled={gettingLocation}
-            >
-              {gettingLocation ? (
-                t('settings.radio.getting')
-              ) : (
-                <>
-                  <MapPinned className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  {t('settings.radio.useMyLocation')}
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
+          {/* ── Identity ── */}
           <div className="space-y-2">
-            <Label htmlFor="lat" className="text-xs text-muted-foreground">
-              {t('settings.radio.latitude')}
-            </Label>
-            <Input
-              id="lat"
-              type="number"
-              step="any"
-              value={lat}
-              onChange={(e) => setLat(e.target.value)}
-            />
+            <h3 className="text-base font-semibold tracking-tight">
+              {t('settings.radio.identity')}
+            </h3>
           </div>
+
           <div className="space-y-2">
-            <Label htmlFor="lon" className="text-xs text-muted-foreground">
-              {t('settings.radio.longitude')}
-            </Label>
+            <Label htmlFor="name">{t('settings.radio.radioName')}</Label>
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="public-key">{t('settings.radio.publicKey')}</Label>
             <Input
-              id="lon"
-              type="number"
-              step="any"
-              value={lon}
-              onChange={(e) => setLon(e.target.value)}
+              id="public-key"
+              value={config.public_key}
+              disabled
+              className="font-mono text-xs"
             />
           </div>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="advert-location-source">{t('settings.radio.advertLocationSource')}</Label>
-          <select
-            id="advert-location-source"
-            value={advertLocationSource}
-            onChange={(e) => setAdvertLocationSource(e.target.value as 'off' | 'current')}
-            className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          >
-            <option value="off">{t('settings.radio.advertOff')}</option>
-            <option value="current">{t('settings.radio.includeLocation')}</option>
-          </select>
-          <p className="text-[0.8125rem] text-muted-foreground">
-            {t('settings.radio.advertLocationHelp')}
-          </p>
-        </div>
-      </div>
 
-      <Separator />
-
-      {/* ── Telemetry Sharing ── */}
-      <div className="space-y-3">
-        <h3 className="text-base font-semibold tracking-tight">
-          {t('settings.radio.telemetrySharing')}
-        </h3>
-        <p className="text-[0.8125rem] text-muted-foreground">
-          {t('settings.radio.telemetrySharingHelp')}
-        </p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="telemetry-mode-base" className="text-sm">
-              {t('settings.radio.batteryBase')}
-            </Label>
-            <select
-              id="telemetry-mode-base"
-              value={telemetryModeBase}
-              onChange={(e) => setTelemetryModeBase(Number(e.target.value))}
-              className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            >
-              <option value={0}>{t('settings.radio.deny')}</option>
-              <option value={1}>{t('settings.radio.perContact')}</option>
-              <option value={2}>{t('settings.radio.allowAll')}</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="telemetry-mode-loc" className="text-sm">
-              {t('settings.radio.locationMode')}
-            </Label>
-            <select
-              id="telemetry-mode-loc"
-              value={telemetryModeLoc}
-              onChange={(e) => setTelemetryModeLoc(Number(e.target.value))}
-              className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            >
-              <option value={0}>{t('settings.radio.deny')}</option>
-              <option value={1}>{t('settings.radio.perContact')}</option>
-              <option value={2}>{t('settings.radio.allowAll')}</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="telemetry-mode-env" className="text-sm">
-              {t('settings.radio.envSensors')}
-            </Label>
-            <select
-              id="telemetry-mode-env"
-              value={telemetryModeEnv}
-              onChange={(e) => setTelemetryModeEnv(Number(e.target.value))}
-              className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            >
-              <option value={0}>{t('settings.radio.deny')}</option>
-              <option value={1}>{t('settings.radio.perContact')}</option>
-              <option value={2}>{t('settings.radio.allowAll')}</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {error && (
-        <div className="text-sm text-destructive" role="alert">
-          {error}
-        </div>
-      )}
-
-      <div className="flex gap-2">
-        <Button
-          onClick={handleSave}
-          disabled={busy || rebooting}
-          variant="outline"
-          className="flex-1"
-        >
-          {busy && !rebooting ? t('settings.radio.saving') : t('settings.radio.saveConfig')}
-        </Button>
-        <Button onClick={handleSaveAndReboot} disabled={busy || rebooting} className="flex-1">
-          {rebooting ? t('settings.radio.rebooting') : t('settings.radio.saveConfigReboot')}
-        </Button>
-      </div>
-      <p className="text-[0.8125rem] text-muted-foreground">{t('settings.radio.rebootHelp')}</p>
-
-      <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={handleExportConfig} className="flex-1">
-          <Download className="mr-1.5 h-4 w-4" aria-hidden="true" />
-          {t('settings.radio.exportConfig')}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => importInputRef.current?.click()}
-          disabled={busy || rebooting}
-          className="flex-1"
-        >
-          <Upload className="mr-1.5 h-4 w-4" aria-hidden="true" />
-          {t('settings.radio.importReboot')}
-        </Button>
-        <input
-          ref={importInputRef}
-          type="file"
-          accept=".json"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleImportConfig(file);
-          }}
-        />
-      </div>
-      <p className="text-[0.8125rem] text-muted-foreground">{t('settings.radio.exportHelp')}</p>
-
-      <Separator />
-
-      {/* ── Messaging ── */}
-      <div className="space-y-2">
-        <h3 className="text-base font-semibold tracking-tight">{t('settings.radio.messaging')}</h3>
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
-          <Checkbox
-            id="multi-acks-enabled"
-            checked={multiAcksEnabled}
-            onCheckedChange={(checked) => setMultiAcksEnabled(checked === true)}
-            className="mt-0.5"
-          />
-          <div className="space-y-1">
-            <Label htmlFor="multi-acks-enabled">{t('settings.radio.multiAcks')}</Label>
-            <p className="text-[0.8125rem] text-muted-foreground">
-              {t('settings.radio.multiAcksHelp')}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
-          <Checkbox
-            id="auto-resend-channel"
-            checked={appSettings.auto_resend_channel}
-            onCheckedChange={(checked) =>
-              onSaveAppSettings({ auto_resend_channel: checked === true })
-            }
-            className="mt-0.5"
-          />
-          <div className="space-y-1">
-            <Label htmlFor="auto-resend-channel">{t('settings.radio.autoResend')}</Label>
-            <p className="text-[0.8125rem] text-muted-foreground">
-              {t('settings.radio.autoResendHelp')}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="flood-scope">{t('settings.radio.floodScope')}</Label>
-        <Input
-          id="flood-scope"
-          value={floodScope}
-          onChange={(e) => setFloodScope(e.target.value)}
-          placeholder="MyRegion"
-        />
-        <p className="text-[0.8125rem] text-muted-foreground">
-          {t('settings.radio.floodScopeHelp')}
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="known-regions">{t('settings.radio.knownRegions')}</Label>
-        <textarea
-          id="known-regions"
-          value={knownRegions}
-          onChange={(e) => setKnownRegions(e.target.value)}
-          rows={4}
-          placeholder={'nl-gr\nde-by\nMyRegion'}
-          spellCheck={false}
-          className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-        />
-        <p className="text-[0.8125rem] text-muted-foreground">
-          {t('settings.radio.knownRegionsHelp')}
-        </p>
-
-        <div className="space-y-2 rounded-md border border-input bg-muted/20 p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
-              {t('settings.radio.discoverRegionsTitle')}
-            </span>
+          <div className="space-y-2">
+            <Label htmlFor="private-key">{t('settings.radio.setPrivateKey')}</Label>
+            <Input
+              id="private-key"
+              type="password"
+              autoComplete="off"
+              value={privateKey}
+              onChange={(e) => setPrivateKey(e.target.value)}
+              placeholder={t('settings.radio.privateKeyPlaceholder')}
+            />
             <Button
-              type="button"
+              onClick={handleSetPrivateKey}
+              disabled={identityBusy || identityRebooting || !privateKey.trim()}
+              className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
               variant="outline"
-              size="sm"
-              onClick={handleDiscoverRegions}
-              disabled={regionDiscoveryLoading || !health?.radio_connected}
             >
-              {regionDiscoveryLoading
-                ? t('settings.radio.askingRepeaters')
-                : t('settings.radio.discoverRegions')}
+              {identityBusy || identityRebooting
+                ? t('settings.radio.settingRebooting')
+                : t('settings.radio.setKeyReboot')}
             </Button>
           </div>
-          <p className="text-[0.8125rem] text-muted-foreground">
-            {t('settings.radio.discoverRegionsHelp')}
-          </p>
-          {!health?.radio_connected && (
-            <p className="text-sm text-destructive">{t('chat.radioNotConnected')}</p>
-          )}
-          {regionDiscovery && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">
-                {t('settings.radio.regionsAnswered', {
-                  answered: regionDiscovery.repeaters_answered,
-                  queried: regionDiscovery.repeaters_queried,
-                  count: regionDiscovery.repeaters_queried,
-                })}
-                {regionDiscovery.regions.length > 0
-                  ? t('settings.radio.regionsFound', { count: regionDiscovery.regions.length })
-                  : ''}
-              </p>
-              {regionDiscovery.regions.length > 0 ? (
-                <>
-                  <div className="flex flex-wrap gap-1.5">
-                    {regionDiscovery.regions.map((region) => (
-                      <span
-                        key={region}
-                        className="text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 font-mono"
-                      >
-                        {region}
-                      </span>
-                    ))}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddDiscoveredRegions}
-                    className="border-success/50 text-success hover:bg-success/10"
-                  >
-                    {t('settings.radio.addToKnown')}
-                  </Button>
-                </>
-              ) : (
-                regionDiscovery.repeaters_queried > 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    {t('settings.radio.noRegionsReported')}
-                  </p>
-                )
-              )}
-            </div>
-          )}
-        </div>
-      </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="max-contacts">{t('settings.radio.maxContacts')}</Label>
-        <Input
-          id="max-contacts"
-          type="number"
-          min="1"
-          max="1000"
-          value={maxRadioContacts}
-          onChange={(e) => setMaxRadioContacts(e.target.value)}
-        />
-        <p className="text-[0.8125rem] text-muted-foreground">
-          {t('settings.radio.maxContactsHelp')}
-        </p>
-        {health?.radio_device_info?.max_contacts != null &&
-          Number(maxRadioContacts) > health.radio_device_info.max_contacts && (
-            <p className="text-xs text-warning">
-              {t('settings.radio.maxContactsWarn', {
-                max: health.radio_device_info.max_contacts,
-              })}
-            </p>
-          )}
-      </div>
-
-      {floodError && (
-        <div className="text-sm text-destructive" role="alert">
-          {floodError}
-        </div>
-      )}
-
-      <Button onClick={handleSaveFloodSettings} disabled={floodBusy} className="w-full">
-        {floodBusy ? t('settings.radio.saving') : t('settings.radio.saveMessaging')}
-      </Button>
-
-      <Separator />
-
-      {/* ── Advertising & Discovery ── */}
-      <div className="space-y-5">
-        <h3 className="text-base font-semibold tracking-tight">
-          {t('settings.radio.advertDiscovery')}
-        </h3>
-
-        <div className="space-y-2">
-          <Label htmlFor="advert-interval">{t('settings.radio.advertInterval')}</Label>
-          <div className="flex items-center gap-2">
-            <Input
-              id="advert-interval"
-              type="number"
-              min="0"
-              value={advertIntervalHours}
-              onChange={(e) => setAdvertIntervalHours(e.target.value)}
-              className="w-28"
-            />
-            <span className="text-sm text-muted-foreground">{t('settings.radio.hoursOff')}</span>
-          </div>
-          <p className="text-[0.8125rem] text-muted-foreground">
-            {t('settings.radio.advertIntervalHelp')}
-          </p>
-          {advertIntervalError && (
+          {identityError && (
             <div className="text-sm text-destructive" role="alert">
-              {advertIntervalError}
+              {identityError}
             </div>
           )}
-          <Button
-            onClick={handleSaveAdvertInterval}
-            disabled={advertIntervalBusy}
-            className="w-full"
-          >
-            {advertIntervalBusy
-              ? t('settings.radio.saving')
-              : t('settings.radio.saveAdvertInterval')}
-          </Button>
-        </div>
 
-        <div className="space-y-2">
-          <h4 className="text-sm font-semibold">{t('settings.radio.sendAdvert')}</h4>
-          <p className="text-[0.8125rem] text-muted-foreground">
-            {t('settings.radio.sendAdvertHelp')}
-          </p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Button
-              onClick={() => handleAdvertise('flood')}
-              disabled={advertisingMode !== null || !health?.radio_connected}
-              className="w-full bg-warning hover:bg-warning/90 text-warning-foreground"
-            >
-              {advertisingMode === 'flood'
-                ? t('settings.radio.sending')
-                : t('settings.radio.sendFlood')}
-            </Button>
-            <Button
-              onClick={() => handleAdvertise('zero_hop')}
-              disabled={advertisingMode !== null || !health?.radio_connected}
-              className="w-full"
-            >
-              {advertisingMode === 'zero_hop'
-                ? t('settings.radio.sending')
-                : t('settings.radio.sendZeroHop')}
-            </Button>
+          <Separator />
+
+          {/* ── Radio Parameters ── */}
+          <div className="space-y-2">
+            <h3 className="text-base font-semibold tracking-tight">
+              {t('settings.radio.parameters')}
+            </h3>
           </div>
-          {!health?.radio_connected && (
-            <p className="text-sm text-destructive">{t('chat.radioNotConnected')}</p>
-          )}
-        </div>
 
-        <div className="space-y-3">
-          <h4 className="text-sm font-semibold">{t('settings.radio.meshDiscovery')}</h4>
-          <p className="text-[0.8125rem] text-muted-foreground">
-            {t('settings.radio.meshDiscoveryHelp')}
-          </p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            {[
-              { target: 'repeaters', label: t('settings.radio.discoverRepeaters') },
-              { target: 'sensors', label: t('settings.radio.discoverSensors') },
-              { target: 'all', label: t('settings.radio.discoverBoth') },
-            ].map(({ target, label }) => (
-              <Button
-                key={target}
-                type="button"
-                variant="outline"
-                onClick={() => handleDiscover(target as RadioDiscoveryTarget)}
-                disabled={meshDiscoveryLoadingTarget !== null || !health?.radio_connected}
-                className="w-full"
+          <div className="space-y-2">
+            <Label htmlFor="preset">{t('settings.radio.preset')}</Label>
+            <select
+              id="preset"
+              value={currentPreset}
+              onChange={(e) => handlePresetChange(e.target.value)}
+              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              <option value="custom">{t('settings.radio.custom')}</option>
+              {RADIO_PRESETS.map((preset) => (
+                <option key={preset.name} value={preset.name}>
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="freq">{t('settings.radio.frequency')}</Label>
+              <Input
+                id="freq"
+                type="number"
+                step="any"
+                value={freq}
+                onChange={(e) => setFreq(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bw">{t('settings.radio.bandwidth')}</Label>
+              <Input
+                id="bw"
+                type="number"
+                step="any"
+                value={bw}
+                onChange={(e) => setBw(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="sf">{t('settings.radio.spreadingFactor')}</Label>
+              <Input
+                id="sf"
+                type="number"
+                min="7"
+                max="12"
+                value={sf}
+                onChange={(e) => setSf(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cr">{t('settings.radio.codingRate')}</Label>
+              <Input
+                id="cr"
+                type="number"
+                min="5"
+                max="8"
+                value={cr}
+                onChange={(e) => setCr(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="tx-power">{t('settings.radio.txPower')}</Label>
+              <Input
+                id="tx-power"
+                type="number"
+                value={txPower}
+                onChange={(e) => setTxPower(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="max-tx">{t('settings.radio.maxTxPower')}</Label>
+              <Input id="max-tx" type="number" value={config.max_tx_power} disabled />
+            </div>
+          </div>
+
+          {config.path_hash_mode_supported && (
+            <div className="space-y-2">
+              <Label htmlFor="path-hash-mode">{t('settings.radio.pathHashMode')}</Label>
+              <select
+                id="path-hash-mode"
+                value={pathHashMode}
+                onChange={(e) => setPathHashMode(e.target.value)}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               >
-                {meshDiscoveryLoadingTarget === target ? t('settings.radio.listening') : label}
-              </Button>
-            ))}
+                <option value="0">{t('settings.radio.pathHash1')}</option>
+                <option value="1">{t('settings.radio.pathHash2')}</option>
+                <option value="2">{t('settings.radio.pathHash3')}</option>
+              </select>
+              <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-xs text-warning">
+                <p className="font-semibold mb-1">{t('settings.radio.compatWarning')}</p>
+                <p>{t('settings.radio.compatWarningBody')}</p>
+              </div>
+            </div>
+          )}
+
+          <Separator />
+
+          {/* ── Location ── */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-base font-semibold tracking-tight">
+                {t('settings.radio.location')}
+              </h3>
+              <div className="flex flex-wrap justify-end gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (!canShareRadioLocation(config.lat, config.lon)) {
+                      toast.error(t('share.noLocation'));
+                      return;
+                    }
+                    void navigator.clipboard
+                      .writeText(`${config.lat.toFixed(5)}, ${config.lon.toFixed(5)}`)
+                      .then(() => {
+                        toast.success(t('share.locationCopied'));
+                      });
+                  }}
+                  disabled={!canShareRadioLocation(config.lat, config.lon)}
+                >
+                  <Share2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  {t('share.shareLocation')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGetLocation}
+                  disabled={gettingLocation}
+                >
+                  {gettingLocation ? (
+                    t('settings.radio.getting')
+                  ) : (
+                    <>
+                      <MapPinned className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                      {t('settings.radio.useMyLocation')}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="lat" className="text-xs text-muted-foreground">
+                  {t('settings.radio.latitude')}
+                </Label>
+                <Input
+                  id="lat"
+                  type="number"
+                  step="any"
+                  value={lat}
+                  onChange={(e) => setLat(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lon" className="text-xs text-muted-foreground">
+                  {t('settings.radio.longitude')}
+                </Label>
+                <Input
+                  id="lon"
+                  type="number"
+                  step="any"
+                  value={lon}
+                  onChange={(e) => setLon(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="advert-location-source">
+                {t('settings.radio.advertLocationSource')}
+              </Label>
+              <select
+                id="advert-location-source"
+                value={advertLocationSource}
+                onChange={(e) => setAdvertLocationSource(e.target.value as 'off' | 'current')}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                <option value="off">{t('settings.radio.advertOff')}</option>
+                <option value="current">{t('settings.radio.includeLocation')}</option>
+              </select>
+              <p className="text-[0.8125rem] text-muted-foreground">
+                {t('settings.radio.advertLocationHelp')}
+              </p>
+            </div>
           </div>
-          {!health?.radio_connected && (
-            <p className="text-sm text-destructive">{t('chat.radioNotConnected')}</p>
-          )}
-          {discoverError && (
-            <p className="text-sm text-destructive" role="alert">
-              {discoverError}
+
+          <Separator />
+
+          {/* ── Telemetry Sharing ── */}
+          <div className="space-y-3">
+            <h3 className="text-base font-semibold tracking-tight">
+              {t('settings.radio.telemetrySharing')}
+            </h3>
+            <p className="text-[0.8125rem] text-muted-foreground">
+              {t('settings.radio.telemetrySharingHelp')}
             </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="telemetry-mode-base" className="text-sm">
+                  {t('settings.radio.batteryBase')}
+                </Label>
+                <select
+                  id="telemetry-mode-base"
+                  value={telemetryModeBase}
+                  onChange={(e) => setTelemetryModeBase(Number(e.target.value))}
+                  className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                >
+                  <option value={0}>{t('settings.radio.deny')}</option>
+                  <option value={1}>{t('settings.radio.perContact')}</option>
+                  <option value={2}>{t('settings.radio.allowAll')}</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="telemetry-mode-loc" className="text-sm">
+                  {t('settings.radio.locationMode')}
+                </Label>
+                <select
+                  id="telemetry-mode-loc"
+                  value={telemetryModeLoc}
+                  onChange={(e) => setTelemetryModeLoc(Number(e.target.value))}
+                  className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                >
+                  <option value={0}>{t('settings.radio.deny')}</option>
+                  <option value={1}>{t('settings.radio.perContact')}</option>
+                  <option value={2}>{t('settings.radio.allowAll')}</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="telemetry-mode-env" className="text-sm">
+                  {t('settings.radio.envSensors')}
+                </Label>
+                <select
+                  id="telemetry-mode-env"
+                  value={telemetryModeEnv}
+                  onChange={(e) => setTelemetryModeEnv(Number(e.target.value))}
+                  className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                >
+                  <option value={0}>{t('settings.radio.deny')}</option>
+                  <option value={1}>{t('settings.radio.perContact')}</option>
+                  <option value={2}>{t('settings.radio.allowAll')}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <div className="text-sm text-destructive" role="alert">
+              {error}
+            </div>
           )}
-          {meshDiscovery && (
-            <div className="space-y-2 rounded-md border border-input bg-muted/20 p-3">
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-sm font-medium">
-                  {t('settings.radio.lastSweep', { count: meshDiscovery.results.length })}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('settings.radio.listenWindow', {
-                    seconds: meshDiscovery.duration_seconds.toFixed(0),
-                  })}
+
+          <div className="flex gap-2">
+            <Button
+              onClick={handleSave}
+              disabled={busy || rebooting}
+              variant="outline"
+              className="flex-1"
+            >
+              {busy && !rebooting ? t('settings.radio.saving') : t('settings.radio.saveConfig')}
+            </Button>
+            <Button onClick={handleSaveAndReboot} disabled={busy || rebooting} className="flex-1">
+              {rebooting ? t('settings.radio.rebooting') : t('settings.radio.saveConfigReboot')}
+            </Button>
+          </div>
+          <p className="text-[0.8125rem] text-muted-foreground">{t('settings.radio.rebootHelp')}</p>
+
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleExportConfig} className="flex-1">
+              <Download className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              {t('settings.radio.exportConfig')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => importInputRef.current?.click()}
+              disabled={busy || rebooting}
+              className="flex-1"
+            >
+              <Upload className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              {t('settings.radio.importReboot')}
+            </Button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImportConfig(file);
+              }}
+            />
+          </div>
+          <p className="text-[0.8125rem] text-muted-foreground">{t('settings.radio.exportHelp')}</p>
+
+          <Separator />
+
+          {/* ── Messaging ── */}
+          <div className="space-y-2">
+            <h3 className="text-base font-semibold tracking-tight">
+              {t('settings.radio.messaging')}
+            </h3>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+              <Checkbox
+                id="multi-acks-enabled"
+                checked={multiAcksEnabled}
+                onCheckedChange={(checked) => setMultiAcksEnabled(checked === true)}
+                className="mt-0.5"
+              />
+              <div className="space-y-1">
+                <Label htmlFor="multi-acks-enabled">{t('settings.radio.multiAcks')}</Label>
+                <p className="text-[0.8125rem] text-muted-foreground">
+                  {t('settings.radio.multiAcksHelp')}
                 </p>
               </div>
-              {meshDiscovery.results.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {t('settings.radio.noNodesResponded')}
+            </div>
+
+            <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+              <Checkbox
+                id="auto-resend-channel"
+                checked={appSettings.auto_resend_channel}
+                onCheckedChange={(checked) =>
+                  onSaveAppSettings({ auto_resend_channel: checked === true })
+                }
+                className="mt-0.5"
+              />
+              <div className="space-y-1">
+                <Label htmlFor="auto-resend-channel">{t('settings.radio.autoResend')}</Label>
+                <p className="text-[0.8125rem] text-muted-foreground">
+                  {t('settings.radio.autoResendHelp')}
                 </p>
-              ) : (
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="flood-scope">{t('settings.radio.floodScope')}</Label>
+            <Input
+              id="flood-scope"
+              value={floodScope}
+              onChange={(e) => setFloodScope(e.target.value)}
+              placeholder="MyRegion"
+            />
+            <p className="text-[0.8125rem] text-muted-foreground">
+              {t('settings.radio.floodScopeHelp')}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="known-regions">{t('settings.radio.knownRegions')}</Label>
+            <textarea
+              id="known-regions"
+              value={knownRegions}
+              onChange={(e) => setKnownRegions(e.target.value)}
+              rows={4}
+              placeholder={'nl-gr\nde-by\nMyRegion'}
+              spellCheck={false}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <p className="text-[0.8125rem] text-muted-foreground">
+              {t('settings.radio.knownRegionsHelp')}
+            </p>
+
+            <div className="space-y-2 rounded-md border border-input bg-muted/20 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium">
+                  {t('settings.radio.discoverRegionsTitle')}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDiscoverRegions}
+                  disabled={regionDiscoveryLoading || !health?.radio_connected}
+                >
+                  {regionDiscoveryLoading
+                    ? t('settings.radio.askingRepeaters')
+                    : t('settings.radio.discoverRegions')}
+                </Button>
+              </div>
+              <p className="text-[0.8125rem] text-muted-foreground">
+                {t('settings.radio.discoverRegionsHelp')}
+              </p>
+              {!health?.radio_connected && (
+                <p className="text-sm text-destructive">{t('chat.radioNotConnected')}</p>
+              )}
+              {regionDiscovery && (
                 <div className="space-y-2">
-                  {meshDiscovery.results.map((result) => (
-                    <div
-                      key={result.public_key}
-                      className="rounded-md border border-input bg-background px-3 py-2"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-medium">
-                          {result.name ?? <span className="capitalize">{result.node_type}</span>}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {t('settings.radio.heardCount', { count: result.heard_count })}
-                        </span>
+                  <p className="text-sm font-medium">
+                    {t('settings.radio.regionsAnswered', {
+                      answered: regionDiscovery.repeaters_answered,
+                      queried: regionDiscovery.repeaters_queried,
+                      count: regionDiscovery.repeaters_queried,
+                    })}
+                    {regionDiscovery.regions.length > 0
+                      ? t('settings.radio.regionsFound', { count: regionDiscovery.regions.length })
+                      : ''}
+                  </p>
+                  {regionDiscovery.regions.length > 0 ? (
+                    <>
+                      <div className="flex flex-wrap gap-1.5">
+                        {regionDiscovery.regions.map((region) => (
+                          <span
+                            key={region}
+                            className="text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 font-mono"
+                          >
+                            {region}
+                          </span>
+                        ))}
                       </div>
-                      {result.name && (
-                        <p className="text-xs capitalize text-muted-foreground">
-                          {result.node_type}
-                        </p>
-                      )}
-                      <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
-                        {result.public_key}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddDiscoveredRegions}
+                        className="border-success/50 text-success hover:bg-success/10"
+                      >
+                        {t('settings.radio.addToKnown')}
+                      </Button>
+                    </>
+                  ) : (
+                    regionDiscovery.repeaters_queried > 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        {t('settings.radio.noRegionsReported')}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {t('settings.radio.heardHere', {
-                          snr: result.local_snr ?? t('settings.radio.na'),
-                          rssi: result.local_rssi ?? t('settings.radio.na'),
-                          remote: result.remote_snr ?? t('settings.radio.na'),
-                        })}
-                      </p>
-                    </div>
-                  ))}
+                    )
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      {/* ── Private Key Import Warning ── */}
-      <Dialog
-        open={keyImportDialogOpen}
-        onOpenChange={(open) => {
-          setKeyImportDialogOpen(open);
-          if (!open) pendingImportRef.current = null;
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('settings.radio.importKeyTitle')}</DialogTitle>
-            <DialogDescription>{t('settings.radio.importKeyBody')}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setKeyImportDialogOpen(false);
-                pendingImportRef.current = null;
-              }}
-            >
-              {t('settings.radio.cancel')}
-            </Button>
-            <Button
-              onClick={handleConfirmKeyImport}
-              className="border-destructive/50 text-destructive hover:bg-destructive/10"
-              variant="outline"
-            >
-              {t('settings.radio.importConfigKey')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div className="space-y-2">
+            <Label htmlFor="max-contacts">{t('settings.radio.maxContacts')}</Label>
+            <Input
+              id="max-contacts"
+              type="number"
+              min="1"
+              max="1000"
+              value={maxRadioContacts}
+              onChange={(e) => setMaxRadioContacts(e.target.value)}
+            />
+            <p className="text-[0.8125rem] text-muted-foreground">
+              {t('settings.radio.maxContactsHelp')}
+            </p>
+            {health?.radio_device_info?.max_contacts != null &&
+              Number(maxRadioContacts) > health.radio_device_info.max_contacts && (
+                <p className="text-xs text-warning">
+                  {t('settings.radio.maxContactsWarn', {
+                    max: health.radio_device_info.max_contacts,
+                  })}
+                </p>
+              )}
+          </div>
+
+          {floodError && (
+            <div className="text-sm text-destructive" role="alert">
+              {floodError}
+            </div>
+          )}
+
+          <Button onClick={handleSaveFloodSettings} disabled={floodBusy} className="w-full">
+            {floodBusy ? t('settings.radio.saving') : t('settings.radio.saveMessaging')}
+          </Button>
+
+          <Separator />
+
+          {/* ── Advertising & Discovery ── */}
+          <div className="space-y-5">
+            <h3 className="text-base font-semibold tracking-tight">
+              {t('settings.radio.advertDiscovery')}
+            </h3>
+
+            <div className="space-y-2">
+              <Label htmlFor="advert-interval">{t('settings.radio.advertInterval')}</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="advert-interval"
+                  type="number"
+                  min="0"
+                  value={advertIntervalHours}
+                  onChange={(e) => setAdvertIntervalHours(e.target.value)}
+                  className="w-28"
+                />
+                <span className="text-sm text-muted-foreground">
+                  {t('settings.radio.hoursOff')}
+                </span>
+              </div>
+              <p className="text-[0.8125rem] text-muted-foreground">
+                {t('settings.radio.advertIntervalHelp')}
+              </p>
+              {advertIntervalError && (
+                <div className="text-sm text-destructive" role="alert">
+                  {advertIntervalError}
+                </div>
+              )}
+              <Button
+                onClick={handleSaveAdvertInterval}
+                disabled={advertIntervalBusy}
+                className="w-full"
+              >
+                {advertIntervalBusy
+                  ? t('settings.radio.saving')
+                  : t('settings.radio.saveAdvertInterval')}
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">{t('settings.radio.sendAdvert')}</h4>
+              <p className="text-[0.8125rem] text-muted-foreground">
+                {t('settings.radio.sendAdvertHelp')}
+              </p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Button
+                  onClick={() => handleAdvertise('flood')}
+                  disabled={advertisingMode !== null || !health?.radio_connected}
+                  className="w-full bg-warning hover:bg-warning/90 text-warning-foreground"
+                >
+                  {advertisingMode === 'flood'
+                    ? t('settings.radio.sending')
+                    : t('settings.radio.sendFlood')}
+                </Button>
+                <Button
+                  onClick={() => handleAdvertise('zero_hop')}
+                  disabled={advertisingMode !== null || !health?.radio_connected}
+                  className="w-full"
+                >
+                  {advertisingMode === 'zero_hop'
+                    ? t('settings.radio.sending')
+                    : t('settings.radio.sendZeroHop')}
+                </Button>
+              </div>
+              {!health?.radio_connected && (
+                <p className="text-sm text-destructive">{t('chat.radioNotConnected')}</p>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold">{t('settings.radio.meshDiscovery')}</h4>
+              <p className="text-[0.8125rem] text-muted-foreground">
+                {t('settings.radio.meshDiscoveryHelp')}
+              </p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {[
+                  { target: 'repeaters', label: t('settings.radio.discoverRepeaters') },
+                  { target: 'sensors', label: t('settings.radio.discoverSensors') },
+                  { target: 'all', label: t('settings.radio.discoverBoth') },
+                ].map(({ target, label }) => (
+                  <Button
+                    key={target}
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleDiscover(target as RadioDiscoveryTarget)}
+                    disabled={meshDiscoveryLoadingTarget !== null || !health?.radio_connected}
+                    className="w-full"
+                  >
+                    {meshDiscoveryLoadingTarget === target ? t('settings.radio.listening') : label}
+                  </Button>
+                ))}
+              </div>
+              {!health?.radio_connected && (
+                <p className="text-sm text-destructive">{t('chat.radioNotConnected')}</p>
+              )}
+              {discoverError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {discoverError}
+                </p>
+              )}
+              {meshDiscovery && (
+                <div className="space-y-2 rounded-md border border-input bg-muted/20 p-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-sm font-medium">
+                      {t('settings.radio.lastSweep', { count: meshDiscovery.results.length })}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {t('settings.radio.listenWindow', {
+                        seconds: meshDiscovery.duration_seconds.toFixed(0),
+                      })}
+                    </p>
+                  </div>
+                  {meshDiscovery.results.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      {t('settings.radio.noNodesResponded')}
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {meshDiscovery.results.map((result) => (
+                        <div
+                          key={result.public_key}
+                          className="rounded-md border border-input bg-background px-3 py-2"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-medium">
+                              {result.name ?? (
+                                <span className="capitalize">{result.node_type}</span>
+                              )}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {t('settings.radio.heardCount', { count: result.heard_count })}
+                            </span>
+                          </div>
+                          {result.name && (
+                            <p className="text-xs capitalize text-muted-foreground">
+                              {result.node_type}
+                            </p>
+                          )}
+                          <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                            {result.public_key}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {t('settings.radio.heardHere', {
+                              snr: result.local_snr ?? t('settings.radio.na'),
+                              rssi: result.local_rssi ?? t('settings.radio.na'),
+                              remote: result.remote_snr ?? t('settings.radio.na'),
+                            })}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Private Key Import Warning ── */}
+          <Dialog
+            open={keyImportDialogOpen}
+            onOpenChange={(open) => {
+              setKeyImportDialogOpen(open);
+              if (!open) pendingImportRef.current = null;
+            }}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{t('settings.radio.importKeyTitle')}</DialogTitle>
+                <DialogDescription>{t('settings.radio.importKeyBody')}</DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setKeyImportDialogOpen(false);
+                    pendingImportRef.current = null;
+                  }}
+                >
+                  {t('settings.radio.cancel')}
+                </Button>
+                <Button
+                  onClick={handleConfirmKeyImport}
+                  className="border-destructive/50 text-destructive hover:bg-destructive/10"
+                  variant="outline"
+                >
+                  {t('settings.radio.importConfigKey')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
     </div>
   );
 }

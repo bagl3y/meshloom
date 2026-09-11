@@ -9,7 +9,16 @@ import pytest
 from meshcore import EventType
 from serial.serialutil import SerialException
 
+from app.models import RadioTransportSnapshot
 from app.services.flood_scope import FORCE_UNSCOPED_FRAME
+
+
+def _snapshot(**kwargs) -> RadioTransportSnapshot:
+    return RadioTransportSnapshot(**kwargs)
+
+
+def _patch_transport(snapshot: RadioTransportSnapshot):
+    return patch("app.radio.get_transport", new=AsyncMock(return_value=snapshot))
 
 
 class TestRadioManagerConnect:
@@ -24,12 +33,9 @@ class TestRadioManagerConnect:
         mock_mc.is_connected = True
 
         with (
-            patch("app.radio.settings") as mock_settings,
+            _patch_transport(_snapshot(transport="serial", serial_port="/dev/ttyUSB0")),
             patch("app.radio.MeshCore") as mock_meshcore,
         ):
-            mock_settings.connection_type = "serial"
-            mock_settings.serial_port = "/dev/ttyUSB0"
-            mock_settings.serial_baudrate = 115200
             mock_meshcore.create_serial = AsyncMock(return_value=mock_mc)
 
             rm = RadioManager()
@@ -53,13 +59,10 @@ class TestRadioManagerConnect:
         mock_mc.is_connected = True
 
         with (
-            patch("app.radio.settings") as mock_settings,
+            _patch_transport(_snapshot(transport="serial", serial_port="")),
             patch("app.radio.MeshCore") as mock_meshcore,
             patch("app.radio.find_radio_port", new_callable=AsyncMock) as mock_find,
         ):
-            mock_settings.connection_type = "serial"
-            mock_settings.serial_port = ""
-            mock_settings.serial_baudrate = 115200
             mock_find.return_value = "/dev/ttyACM0"
             mock_meshcore.create_serial = AsyncMock(return_value=mock_mc)
 
@@ -75,17 +78,42 @@ class TestRadioManagerConnect:
         from app.radio import RadioManager
 
         with (
-            patch("app.radio.settings") as mock_settings,
+            _patch_transport(_snapshot(transport="serial", serial_port="")),
             patch("app.radio.find_radio_port", new_callable=AsyncMock) as mock_find,
         ):
-            mock_settings.connection_type = "serial"
-            mock_settings.serial_port = ""
-            mock_settings.serial_baudrate = 115200
             mock_find.return_value = None
 
             rm = RadioManager()
             with pytest.raises(RuntimeError, match="No MeshCore radio found"):
                 await rm.connect()
+
+    @pytest.mark.asyncio
+    async def test_connect_unconfigured_raises(self):
+        """Unconfigured transport must fail closed instead of auto-detecting."""
+        from app.radio import RadioManager
+
+        with _patch_transport(_snapshot()):
+            rm = RadioManager()
+            with pytest.raises(RuntimeError, match="Radio transport is not configured"):
+                await rm.connect()
+            assert rm._last_connected is False
+            assert rm.meshcore is None
+
+    @pytest.mark.asyncio
+    async def test_connect_serial_none_fail_closed(self):
+        """create_serial returning None must not mark the radio connected."""
+        from app.radio import RadioManager
+
+        with (
+            _patch_transport(_snapshot(transport="serial", serial_port="/dev/ttyUSB0")),
+            patch("app.radio.MeshCore") as mock_meshcore,
+        ):
+            mock_meshcore.create_serial = AsyncMock(return_value=None)
+            rm = RadioManager()
+            with pytest.raises(RuntimeError, match="Failed to open serial connection"):
+                await rm.connect()
+            assert rm._last_connected is False
+            assert rm.meshcore is None
 
     @pytest.mark.asyncio
     async def test_connect_tcp(self):
@@ -96,12 +124,9 @@ class TestRadioManagerConnect:
         mock_mc.is_connected = True
 
         with (
-            patch("app.radio.settings") as mock_settings,
+            _patch_transport(_snapshot(transport="tcp", tcp_host="192.168.1.100", tcp_port=4000)),
             patch("app.radio.MeshCore") as mock_meshcore,
         ):
-            mock_settings.connection_type = "tcp"
-            mock_settings.tcp_host = "192.168.1.100"
-            mock_settings.tcp_port = 4000
             mock_meshcore.create_tcp = AsyncMock(return_value=mock_mc)
 
             rm = RadioManager()
@@ -125,12 +150,15 @@ class TestRadioManagerConnect:
         mock_mc.is_connected = True
 
         with (
-            patch("app.radio.settings") as mock_settings,
+            _patch_transport(
+                _snapshot(
+                    transport="ble",
+                    ble_address="AA:BB:CC:DD:EE:FF",
+                    ble_pin="123456",
+                )
+            ),
             patch("app.radio.MeshCore") as mock_meshcore,
         ):
-            mock_settings.connection_type = "ble"
-            mock_settings.ble_address = "AA:BB:CC:DD:EE:FF"
-            mock_settings.ble_pin = "123456"
             mock_meshcore.create_ble = AsyncMock(return_value=mock_mc)
 
             rm = RadioManager()
@@ -156,12 +184,9 @@ class TestRadioManagerConnect:
         new_mc.is_connected = True
 
         with (
-            patch("app.radio.settings") as mock_settings,
+            _patch_transport(_snapshot(transport="tcp", tcp_host="10.0.0.1", tcp_port=4000)),
             patch("app.radio.MeshCore") as mock_meshcore,
         ):
-            mock_settings.connection_type = "tcp"
-            mock_settings.tcp_host = "10.0.0.1"
-            mock_settings.tcp_port = 4000
             mock_meshcore.create_tcp = AsyncMock(return_value=new_mc)
 
             rm = RadioManager()
@@ -527,14 +552,15 @@ class TestReconnectLock:
             )
         )
 
+        rm._transport_snapshot = _snapshot(
+            transport="serial",
+            serial_port="/dev/serial/by-id/test-radio",
+        )
+
         with (
-            patch("app.radio.settings") as mock_settings,
             patch("app.websocket.broadcast_health"),
             patch("app.websocket.broadcast_error") as mock_broadcast_error,
         ):
-            mock_settings.connection_type = "serial"
-            mock_settings.serial_port = "/dev/serial/by-id/test-radio"
-
             result = await rm.reconnect(broadcast_on_success=False)
 
         assert result is False
@@ -772,6 +798,15 @@ class TestSerialDeviceProbe:
 
 class TestPostConnectSetupOrdering:
     """Tests for post_connect_setup() — verifies drain-before-auto-fetch ordering."""
+
+    @pytest.fixture(autouse=True)
+    def _allow_identity_gate(self):
+        """Identity evaluation is Vague 2+; these tests isolate setup ordering."""
+        with patch(
+            "app.services.radio_identity.evaluate_connected_identity",
+            new=AsyncMock(return_value="continue"),
+        ):
+            yield
 
     @pytest.mark.asyncio
     async def test_drain_runs_before_auto_fetch(self):
@@ -1122,3 +1157,67 @@ class TestPostConnectSetupOrdering:
         assert rm._last_connected is True
         mock_broadcast_error.assert_not_called()
         mock_broadcast_health.assert_called_once_with(True, "Serial: /dev/ttyUSB0")
+
+
+class TestDetectSerialDevices:
+    """detect_serial_devices must include pyserial COM ports (Windows)."""
+
+    def test_includes_com_port_from_list_ports(self):
+        from app.radio import detect_serial_devices
+
+        fake = MagicMock()
+        fake.device = "COM3"
+        with patch("app.radio.list_ports.comports", return_value=[fake]):
+            devices = detect_serial_devices()
+        assert "COM3" in devices
+
+
+class TestMaybeImportLegacyEnv:
+    """One-shot leftover MESHCORE_* transport env import into app_settings."""
+
+    @pytest.mark.asyncio
+    async def test_new_database_ignores_env(self, test_db, monkeypatch):
+        from app.services.radio_transport import maybe_import_legacy_env
+
+        monkeypatch.setenv("MESHCORE_SERIAL_PORT", "/dev/ttyUSB0")
+        with patch("app.repository.radio_transport.db", test_db):
+            snapshot = await maybe_import_legacy_env(existing_database=False)
+
+        assert snapshot.env_imported is True
+        assert snapshot.transport is None
+        assert snapshot.configured is False
+        assert snapshot.serial_port == ""
+
+    @pytest.mark.asyncio
+    async def test_existing_empty_transport_imports_env(self, test_db, monkeypatch):
+        from app.repository.radio_transport import RadioTransportRepository
+        from app.services.radio_transport import maybe_import_legacy_env
+
+        monkeypatch.setenv("MESHCORE_TCP_HOST", "192.168.1.50")
+        monkeypatch.setenv("MESHCORE_TCP_PORT", "4000")
+        with patch("app.repository.radio_transport.db", test_db):
+            current = await RadioTransportRepository.get()
+            assert current.transport is None
+            assert current.env_imported is False
+            snapshot = await maybe_import_legacy_env(existing_database=True)
+
+        assert snapshot.env_imported is True
+        assert snapshot.transport == "tcp"
+        assert snapshot.tcp_host == "192.168.1.50"
+        assert snapshot.tcp_port == 4000
+
+    @pytest.mark.asyncio
+    async def test_cleared_transport_does_not_reimport_leftover_env(self, test_db, monkeypatch):
+        from app.repository.radio_transport import RadioTransportRepository
+        from app.services.radio_transport import maybe_import_legacy_env
+
+        monkeypatch.setenv("MESHCORE_SERIAL_PORT", "/dev/ttyUSB0")
+        with patch("app.repository.radio_transport.db", test_db):
+            imported = await maybe_import_legacy_env(existing_database=True)
+            assert imported.transport == "serial"
+            await RadioTransportRepository.save(RadioTransportSnapshot(env_imported=True))
+            snapshot = await maybe_import_legacy_env(existing_database=True)
+
+        assert snapshot.env_imported is True
+        assert snapshot.transport is None
+        assert snapshot.serial_port == ""

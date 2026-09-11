@@ -20,6 +20,7 @@ from app.services.dm_ingest import (
     resolve_direct_message_sender_metadata,
     resolve_fallback_direct_message_context,
 )
+from app.services.radio_ingest_gate import ingest_allowed
 from app.websocket import broadcast_event
 
 if TYPE_CHECKING:
@@ -55,6 +56,9 @@ async def on_contact_message(event: "Event") -> None:
     This handler adapts CONTACT_MSG_RECV payloads into the shared DM ingest
     workflow, which reconciles duplicates against the packet pipeline when possible.
     """
+    if not ingest_allowed():
+        logger.debug("Skipping CONTACT_MSG_RECV because radio ingest is closed")
+        return
     payload = event.payload
 
     # Skip CLI command responses (txt_type=1) - these are handled by the command endpoint
@@ -138,6 +142,9 @@ async def on_rx_log_data(event: "Event") -> None:
     This is the unified entry point for all RF packets. The packet processor
     handles channel messages (GROUP_TEXT) and advertisements (ADVERT).
     """
+    if not ingest_allowed():
+        logger.debug("Skipping RX_LOG_DATA because radio ingest is closed")
+        return
     payload = event.payload
     logger.debug("Received RX log data packet")
 
@@ -157,6 +164,9 @@ async def on_rx_log_data(event: "Event") -> None:
 
 async def on_path_update(event: "Event") -> None:
     """Handle path update events."""
+    if not ingest_allowed():
+        logger.debug("Skipping PATH_UPDATE because radio ingest is closed")
+        return
     payload = event.payload
     public_key = str(payload.get("public_key", "")).lower()
     pubkey_prefix = str(payload.get("pubkey_prefix", "")).lower()
@@ -227,6 +237,9 @@ async def on_new_contact(event: "Event") -> None:
     This is different from RF advertisements - these are contacts synced
     from the radio's stored contact list.
     """
+    if not ingest_allowed():
+        logger.debug("Skipping NEW_CONTACT because radio ingest is closed")
+        return
     payload = event.payload
     public_key = payload.get("public_key", "")
 
@@ -300,6 +313,9 @@ async def on_new_contact(event: "Event") -> None:
 
 async def on_ack(event: "Event") -> None:
     """Handle ACK events for direct messages."""
+    if not ingest_allowed():
+        logger.debug("Skipping ACK because radio ingest is closed")
+        return
     payload = event.payload
     ack_code = payload.get("code", "")
 
@@ -313,6 +329,48 @@ async def on_ack(event: "Event") -> None:
         logger.info("ACK received for code %s", ack_code)
     else:
         logger.debug("ACK code %s does not match any pending messages", ack_code)
+
+
+async def on_library_connected(event: "Event") -> None:
+    """Re-run the identity gate when meshcore_py auto-reconnects the transport."""
+    payload = event.payload if isinstance(getattr(event, "payload", None), dict) else {}
+    if not payload.get("reconnected"):
+        return
+    from app.services.radio_identity import evaluate_connected_identity
+    from app.services.radio_ingest_gate import deny_ingest
+    from app.services.radio_runtime import radio_runtime
+    from app.websocket import broadcast_health
+
+    deny_ingest()
+    radio_runtime._setup_complete = False
+    mc = radio_runtime.meshcore
+    if mc is None:
+        return
+    decision = await evaluate_connected_identity(mc)
+    if decision != "continue":
+        logger.warning("Library reconnect blocked by radio identity gate")
+        await radio_runtime.pause_connection()
+        broadcast_health(False, radio_runtime.connection_info)
+
+
+async def on_library_disconnected(_event: "Event") -> None:
+    """Close ingest as soon as meshcore_py drops the transport."""
+    from app.services.radio_ingest_gate import deny_ingest
+    from app.services.radio_runtime import radio_runtime
+
+    deny_ingest()
+    radio_runtime._setup_complete = False
+
+
+def unregister_event_handlers() -> None:
+    """Drop MeshCore subscriptions without registering replacements."""
+    global _active_subscriptions
+    for sub in _active_subscriptions:
+        try:
+            sub.unsubscribe()
+        except Exception:
+            pass
+    _active_subscriptions.clear()
 
 
 def register_event_handlers(meshcore) -> None:
@@ -343,4 +401,10 @@ def register_event_handlers(meshcore) -> None:
     _active_subscriptions.append(meshcore.subscribe(EventType.PATH_UPDATE, on_path_update))
     _active_subscriptions.append(meshcore.subscribe(EventType.NEW_CONTACT, on_new_contact))
     _active_subscriptions.append(meshcore.subscribe(EventType.ACK, on_ack))
+    if hasattr(EventType, "CONNECTED"):
+        _active_subscriptions.append(meshcore.subscribe(EventType.CONNECTED, on_library_connected))
+    if hasattr(EventType, "DISCONNECTED"):
+        _active_subscriptions.append(
+            meshcore.subscribe(EventType.DISCONNECTED, on_library_disconnected)
+        )
     logger.info("Event handlers registered")

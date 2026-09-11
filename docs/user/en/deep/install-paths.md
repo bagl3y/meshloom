@@ -13,7 +13,7 @@ The [Installer](/en/docs/install/) one-liner covers the common case. This page e
 /bin/bash -c "$(curl -fsSL https://get.meshloom.app)"
 ```
 
-`/bin/bash -c` matters because the script asks questions. On Linux it offers native systemd or Docker and only offers transports usable on that machine.
+`/bin/bash -c` matters because the script asks questions. On Linux it offers native systemd or Docker. Docker may ask USB versus network only to emit a Compose `devices:` mapping. Radio transport itself is configured in the web UI.
 
 Native systemd installation uses `apt-get` or `dnf` when a package is available. It installs:
 
@@ -35,14 +35,14 @@ From an existing checkout:
 bash scripts/setup/install_service.sh
 ```
 
-The script is repeatable. Run it again to change the transport, bot setting, or authentication credentials. It stops the service, rewrites the unit, reloads systemd, and starts it with the new configuration.
+The script is repeatable. Run it again to change the bot setting or authentication credentials. It stops the service, rewrites the unit, reloads systemd, and starts it with the new configuration. Radio transport is configured in the web UI, not in the unit file.
 
 ## Docker
 
 The image is `ghcr.io/bagl3y/meshloom`. The repository includes `docker-compose.example.yml`. Important parts are:
 
 - `./data:/app/data` for the SQLite database
-- the radio device mapping, or `MESHCORE_TCP_HOST` / `MESHCORE_TCP_PORT`
+- an optional radio `devices:` mapping for USB (TCP and BLE are configured in the UI)
 - `MESHCORE_DATABASE_PATH: data/meshcore.db`
 - `restart: unless-stopped`
 
@@ -56,13 +56,11 @@ For a stack built from the repository, use [`docker-compose.dev.yaml`](https://g
 MESHLOOM_HTTP_PORT=8123
 MESHLOOM_DATA_PATH=/opt/docker/meshloom/data
 MESHCORE_DATABASE_PATH=data/meshcore.db
-MESHCORE_TCP_HOST=192.168.1.100
-MESHCORE_TCP_PORT=5000
 MESHCORE_DISABLE_BOTS=false
 MESHCORE_VAPID_SUBJECT=mailto:you@example.com
 ```
 
-Do not commit real radio hosts, ports, or VAPID addresses.
+Do not commit real VAPID addresses. Radio host and port are set in the web UI.
 
 ## From a checkout
 

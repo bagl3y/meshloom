@@ -15,7 +15,7 @@ Un script d’installation fait le travail et pose des questions, en français o
 
 ## Pourquoi `/bin/bash -c`
 
-Cette forme n’est pas décorative. Le script est interactif : il demande le mode d’installation, le type de radio, un mot de passe éventuel. Avec `/bin/bash -c "$(...)"`, le téléchargement se termine d’abord, puis le script s’exécute avec le terminal disponible pour ses questions.
+Cette forme n’est pas décorative. Le script est interactif : il demande le mode d’installation, un mapping USB optionnel pour Docker, un mot de passe éventuel. Avec `/bin/bash -c "$(...)"`, le téléchargement se termine d’abord, puis le script s’exécute avec le terminal disponible pour ses questions.
 
 Si on l’envoie dans un tube — `curl … | bash` — l’entrée du script est occupée par le téléchargement. Les questions n’ont plus de terminal pour s’afficher et l’installation part de travers. Gardez le `/bin/bash -c`.
 
@@ -25,14 +25,9 @@ Trois blocs de questions, dans cet ordre.
 
 **Le mode.** Un service natif géré par systemd, ou Docker. Le service natif démarre automatiquement avec la machine et sait parler à une radio USB, réseau ou Bluetooth. Docker fonctionne dans un conteneur, ce qui isole l’installation mais restreint l’accès au matériel : partager une radio USB avec un conteneur suppose un Docker en mode root sur Linux. Si ce n’est pas le cas, le script le dit et propose la radio réseau.
 
-**La radio.** Le script ne propose que les transports que cette machine peut réellement atteindre :
+**La radio.** Le transport se configure dans l’interface après l’installation, pas par variable d’environnement. Une installation systemd native ne demande ni port série, ni hôte TCP, ni PIN BLE. Docker peut encore demander USB ou réseau, uniquement pour émettre un mapping Compose `devices:` pour une radio USB.
 
-- Câble USB, en détection automatique quand la radio est le seul port série branché.
-- Câble USB, avec chemin saisi à la main — `/dev/ttyUSB0`, `/dev/ttyACM0` — quand plusieurs appareils série sont présents.
-- Réseau (TCP), quand la radio ou un appareil compagnon à côté d’elle expose un port. Il faut une adresse IP ou un nom d’hôte, plus un port.
-- Bluetooth (BLE), avec l’adresse de l’appareil et le code PIN affiché sur son écran.
-
-Un seul transport à la fois. Les détails de chacun sont dans [Transports radio](/docs/deep/transports/).
+Les détails de chaque transport sont dans [Transports radio](/docs/deep/transports/).
 
 **La sécurité.** Les bots exécutent du code sur la machine : le script les laisse désactivés par défaut, et c’est le bon réglage tant que le réseau n’est pas entièrement de confiance. Il propose aussi de demander un identifiant et un mot de passe à l’ouverture. Il s’agit d’un accès partagé unique, pas de comptes utilisateurs. Voir [Un réseau de confiance](/docs/trust/).
 

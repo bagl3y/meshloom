@@ -20,7 +20,32 @@
     "batteryTitle": "Batterie : {{pct}} % ({{volts}} V)",
     "batteryAria": "Batterie {{pct}} pour cent",
     "themeClassic": "Passer au thème classique",
-    "themeLight": "Passer au thème clair"
+    "themeLight": "Passer au thème clair",
+    "radioIdentityMismatch": "Identité radio différente",
+    "radioIdentityUnbound": "Radio historique non liée",
+    "reviewIdentity": "Vérifier l’identité"
+  },
+  "radioIdentity": {
+    "mismatchTitle": "Cette radio ne correspond pas à l’identité enregistrée",
+    "mismatchBody": "La radio connectée a une clé publique différente de l’identité liée à cette instance Meshloom. L’adopter efface les contacts et messages mesh locaux avant de lier la nouvelle radio.",
+    "unboundTitle": "Cette radio n’est pas liée à cette instance",
+    "unboundBody": "Cette base Meshloom précède le lien d’identité radio. Confirmez qu’il s’agit de la radio historique pour conserver les données mesh, ou traitez-la comme une nouvelle radio et effacez les contacts et messages mesh locaux.",
+    "previousKey": "Clé précédente",
+    "newKey": "Nouvelle clé",
+    "newName": "Nom de la radio",
+    "meshContacts": "{{count}} contacts mesh",
+    "meshMessages": "{{count}} messages mesh",
+    "lastActivity": "Dernière activité",
+    "lastActivityNever": "Aucune activité enregistrée",
+    "unknownKey": "Inconnue",
+    "reject": "Annuler",
+    "wipeContinue": "Effacer et continuer",
+    "bindWithoutWipe": "Lier sans effacer",
+    "newRadio": "Nouvelle radio",
+    "adopting": "Adoption…",
+    "rejecting": "Annulation…",
+    "adoptFailed": "Impossible d’adopter l’identité radio",
+    "rejectFailed": "Impossible de refuser l’identité radio"
   },
   "security": {
     "title": "L’exécution non protégée de bots est activée",

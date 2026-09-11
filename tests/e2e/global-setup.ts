@@ -27,7 +27,8 @@ export default async function globalSetup(_config: FullConfig) {
       if (!health.radio_connected) {
         throw new Error(
           'Radio not connected — E2E tests require hardware. ' +
-            'Set MESHCORE_SERIAL_PORT if auto-detection fails.'
+            'Confirm the radio is powered and reachable over serial ' +
+            '(e2e seeds radio_transport=serial; empty radio_serial_port auto-detects).'
         );
       }
       if (health.radio_initializing) {

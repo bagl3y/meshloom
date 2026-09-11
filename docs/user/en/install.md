@@ -15,7 +15,7 @@ An installation script does the work and asks questions in English or French. Pa
 
 ## Why `/bin/bash -c`
 
-This form is not decoration. The script is interactive: it asks for the installation mode, radio type, and an optional password. With `/bin/bash -c "$(...)"`, the download finishes first, then the script runs with the terminal available for its questions.
+This form is not decoration. The script is interactive: it asks for the installation mode, an optional USB device mapping for Docker, and an optional password. With `/bin/bash -c "$(...)"`, the download finishes first, then the script runs with the terminal available for its questions.
 
 If you pipe it — `curl … | bash` — the script’s input is occupied by the download. Its questions no longer have a terminal to use, and the installation goes wrong. Keep the `/bin/bash -c`.
 
@@ -25,14 +25,9 @@ Three groups of questions, in this order.
 
 **The mode.** A native service managed by systemd, or Docker. The native service starts automatically with the machine and can talk to a USB, network, or Bluetooth radio. Docker runs in a container, which isolates the installation but restricts hardware access: sharing a USB radio with a container requires root-mode Docker on Linux. If that is not available, the script suggests a network radio.
 
-**The radio.** The script offers only transports this machine can actually reach:
+**The radio.** Transport is configured in the web UI after install, not with environment variables. A native systemd install does not ask for a serial port, TCP host, or BLE PIN. Docker may still ask USB versus network, only to emit a Compose `devices:` mapping for a USB radio.
 
-- USB cable, with automatic detection when the radio is the only serial port connected.
-- USB cable, with a path entered by hand — `/dev/ttyUSB0`, `/dev/ttyACM0` — when several serial devices are present.
-- Network (TCP), when the radio or a companion device next to it exposes a port. You need an IP address or hostname, plus a port.
-- Bluetooth (BLE), with the device address and the PIN shown on its screen.
-
-One transport at a time. Details for each are in [Radio transports](/en/docs/deep/transports/).
+Details for each transport are in [Radio transports](/en/docs/deep/transports/).
 
 **Security.** Bots execute code on the machine: the script leaves them disabled by default, which is the right setting while the network is not fully trusted. It also offers to require a username and password on entry. This is one shared login, not user accounts. See [A trusted network](/en/docs/trust/).
 

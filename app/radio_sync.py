@@ -43,6 +43,18 @@ from app.websocket import broadcast_error, broadcast_event
 
 logger = logging.getLogger(__name__)
 
+
+def _identity_writes_allowed() -> bool:
+    """Background radio loops must not write while the identity gate is closed."""
+    from app.services.radio_ingest_gate import ingest_allowed
+
+    return (
+        radio_manager.is_connected
+        and radio_manager.is_setup_complete
+        and ingest_allowed()
+    )
+
+
 DEFAULT_MAX_CHANNELS = 40
 _GET_CONTACTS_TIMEOUT = 10
 
@@ -654,7 +666,7 @@ async def _message_poll_loop():
                 MESSAGE_POLL_INTERVAL if aggressive_fallback else MESSAGE_POLL_AUDIT_INTERVAL
             )
 
-            if radio_manager.is_connected and not is_polling_paused():
+            if _identity_writes_allowed() and not is_polling_paused():
                 try:
                     async with radio_manager.radio_operation(
                         "message_poll_loop",
@@ -800,7 +812,7 @@ async def _periodic_advert_loop():
 
             # Try to send - send_advertisement() handles all checks
             # (disabled, throttled, not connected)
-            if radio_manager.is_connected:
+            if _identity_writes_allowed():
                 try:
                     async with radio_manager.radio_operation(
                         "periodic_advertisement",
@@ -1028,7 +1040,7 @@ async def _periodic_sync_loop():
         try:
             await asyncio.sleep(SYNC_INTERVAL)
             cleanup_expired_acks()
-            if not radio_manager.is_connected:
+            if not _identity_writes_allowed():
                 continue
 
             try:
@@ -1072,6 +1084,14 @@ async def stop_periodic_sync():
 # Throttling for contact sync to radio
 _last_contact_sync: float = 0.0
 CONTACT_SYNC_THROTTLE_SECONDS = 30  # Don't sync more than once per 30 seconds
+
+
+def reset_contact_sync_throttle() -> None:
+    """Clear the contact-sync throttle after an identity wipe."""
+    global _last_contact_sync
+    _last_contact_sync = 0.0
+
+
 CONTACT_RECONCILE_BATCH_SIZE = 2
 CONTACT_RECONCILE_YIELD_SECONDS = 0.05
 CONTACT_RECONCILE_BUSY_BACKOFF_SECONDS = 2.0

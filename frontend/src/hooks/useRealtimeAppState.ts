@@ -157,7 +157,10 @@ export function useRealtimeAppState({
           } else {
             if (nextRadioState === 'paused') {
               toast.success(i18n.t('toast.radioPaused'));
-            } else {
+            } else if (
+              nextRadioState !== 'identity_mismatch' &&
+              nextRadioState !== 'identity_unbound_legacy'
+            ) {
               toast.error(i18n.t('toast.radioDisconnected'), {
                 description: i18n.t('toast.radioDisconnectedDetail'),
               });

@@ -20,9 +20,6 @@ def _auth_header(username: str, password: str) -> dict[str, str]:
 
 def _build_app(*, username: str = "", password: str = "") -> FastAPI:
     settings = Settings(
-        serial_port="",
-        tcp_host="",
-        ble_address="",
         basic_auth_username=username,
         basic_auth_password=password,
     )

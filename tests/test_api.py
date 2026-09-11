@@ -203,26 +203,36 @@ class TestHealthEndpoint:
 class TestDebugEndpoint:
     """Test the debug support snapshot endpoint."""
 
-    def test_build_environment_exposes_env_settings(self):
-        """_build_environment should expose env config without secrets."""
+    @pytest.mark.asyncio
+    async def test_build_environment_exposes_transport_snapshot_without_pin(self):
+        """_build_environment should expose repository transport without secrets."""
         from app.config import Settings
+        from app.models import RadioTransportSnapshot
         from app.routers.debug import _build_environment
 
-        with patch(
-            "app.routers.debug.settings",
-            Settings(
-                serial_port="/dev/ttyUSB0",
-                serial_baudrate=115200,
-                log_level="DEBUG",
-                database_path="data/test.db",
+        snapshot = RadioTransportSnapshot(
+            transport="serial",
+            serial_port="/dev/ttyUSB0",
+            serial_baudrate=115200,
+            ble_pin="secret-pin",
+        )
+        with (
+            patch(
+                "app.routers.debug.settings",
+                Settings(
+                    log_level="DEBUG",
+                    database_path="data/test.db",
+                ),
             ),
+            patch("app.routers.debug.get_transport", new=AsyncMock(return_value=snapshot)),
         ):
-            env = _build_environment()
+            env = await _build_environment()
 
         assert env.connection_type == "serial"
         assert env.serial_port == "/dev/ttyUSB0"
         assert env.log_level == "DEBUG"
         assert env.database_path == "data/test.db"
+        assert env.ble_address == ""
         assert not hasattr(env, "ble_pin")
         assert not hasattr(env, "basic_auth_password")
         assert not hasattr(env, "basic_auth_username")

@@ -9,12 +9,16 @@ from pathlib import Path
 
 from meshcore import MeshCore
 from serial.serialutil import SerialException
+from serial.tools import list_ports
 
 from app.config import settings
 from app.keystore import clear_keys
+from app.models import RadioTransportSnapshot
+from app.services.radio_transport import get_transport, is_tcp
 
 logger = logging.getLogger(__name__)
 MAX_FRONTEND_RECONNECT_ERROR_BROADCASTS = 3
+LIFECYCLE_LOCK_TIMEOUT_SECONDS = 20
 _SERIAL_PORT_ERROR_RE = re.compile(r"could not open port (?P<port>.+?):")
 
 
@@ -31,44 +35,51 @@ class RadioDisconnectedError(RadioOperationError):
 
 
 def detect_serial_devices() -> list[str]:
-    """Detect available serial devices based on platform."""
+    """Detect available serial devices, including Windows COM ports."""
     devices: list[str] = []
-    system = platform.system()
+    seen: set[str] = set()
+    resolved_paths: set[str] = set()
 
+    def _add(device: str) -> None:
+        if not device or device in seen:
+            return
+        try:
+            resolved = str(Path(device).resolve())
+        except OSError:
+            resolved = device
+        if resolved in resolved_paths:
+            return
+        seen.add(device)
+        resolved_paths.add(resolved)
+        devices.append(device)
+
+    try:
+        for info in list_ports.comports():
+            device = getattr(info, "device", None)
+            if device:
+                _add(device)
+    except Exception:
+        logger.debug("list_ports.comports() failed", exc_info=True)
+
+    system = platform.system()
     if system == "Darwin":
-        # macOS: Use /dev/cu.* devices (callout devices, preferred over tty.*)
-        patterns = [
+        for pattern in (
             "/dev/cu.usb*",
             "/dev/cu.wchusbserial*",
             "/dev/cu.SLAB_USBtoUART*",
-        ]
-        for pattern in patterns:
-            devices.extend(glob.glob(pattern))
-        devices.sort()
+        ):
+            for device in glob.glob(pattern):
+                _add(device)
     else:
-        # Linux: Prefer /dev/serial/by-id/ for persistent naming
         by_id_path = Path("/dev/serial/by-id")
         if by_id_path.is_dir():
-            devices.extend(str(p) for p in by_id_path.iterdir())
+            for path in by_id_path.iterdir():
+                _add(str(path))
+        for pattern in ("/dev/ttyACM*", "/dev/ttyUSB*"):
+            for device in glob.glob(pattern):
+                _add(device)
 
-        # Also check /dev/ttyACM* and /dev/ttyUSB* as fallback
-        resolved_paths = set()
-        for dev in devices:
-            try:
-                resolved_paths.add(str(Path(dev).resolve()))
-            except OSError:
-                pass
-
-        for pattern in ["/dev/ttyACM*", "/dev/ttyUSB*"]:
-            for dev in glob.glob(pattern):
-                try:
-                    if str(Path(dev).resolve()) not in resolved_paths:
-                        devices.append(dev)
-                except OSError:
-                    devices.append(dev)
-
-        devices.sort()
-
+    devices.sort()
     return devices
 
 
@@ -81,9 +92,28 @@ def _extract_serial_port_from_error(exc: Exception) -> str | None:
     return None
 
 
-def _format_reconnect_failure(exc: Exception) -> tuple[str, str, bool]:
+def _format_reconnect_failure(
+    exc: Exception,
+    *,
+    snapshot: RadioTransportSnapshot | None = None,
+    connection_info: str | None = None,
+) -> tuple[str, str, bool]:
     """Return log message, frontend detail, and whether to log a traceback."""
-    if settings.connection_type == "serial":
+    connection_type = None
+    serial_port = ""
+    if snapshot is not None and snapshot.configured:
+        connection_type = snapshot.connection_type
+        serial_port = snapshot.serial_port
+    elif connection_info:
+        if connection_info.startswith("Serial:"):
+            connection_type = "serial"
+            serial_port = connection_info.split(":", 1)[1].strip()
+        elif connection_info.startswith("TCP:"):
+            connection_type = "tcp"
+        elif connection_info.startswith("BLE:"):
+            connection_type = "ble"
+
+    if connection_type == "serial":
         if isinstance(exc, RuntimeError) and str(exc).startswith("No MeshCore radio found"):
             message = (
                 "Could not find a MeshCore radio on any serial port. "
@@ -92,7 +122,7 @@ def _format_reconnect_failure(exc: Exception) -> tuple[str, str, bool]:
             return (message, message, False)
 
         if isinstance(exc, SerialException):
-            port = settings.serial_port or _extract_serial_port_from_error(exc) or "the serial port"
+            port = serial_port or _extract_serial_port_from_error(exc) or "the serial port"
             message = (
                 f"Could not connect to serial port {port}. "
                 "Did the radio get disconnected or change serial ports?"
@@ -157,12 +187,14 @@ class RadioManager:
     def __init__(self):
         self._meshcore: MeshCore | None = None
         self._connection_info: str | None = None
+        self._transport_snapshot: RadioTransportSnapshot | None = None
         self._connection_desired: bool = True
         self._reconnect_task: asyncio.Task | None = None
         self._last_connected: bool = False
         self._reconnect_lock: asyncio.Lock | None = None
         self._operation_lock: asyncio.Lock | None = None
         self._setup_lock: asyncio.Lock | None = None
+        self._lifecycle_lock: asyncio.Lock | None = None
         self._setup_in_progress: bool = False
         self._setup_complete: bool = False
         self._frontend_reconnect_error_broadcasts: int = 0
@@ -313,7 +345,7 @@ class RadioManager:
             return False
         if self._connection_info:
             return not self._connection_info.startswith("TCP:")
-        return settings.connection_type != "tcp"
+        return not is_tcp(self._transport_snapshot)
 
     def get_channel_send_cache_capacity(self) -> int:
         """Return the app-managed channel cache capacity for the current session."""
@@ -433,6 +465,10 @@ class RadioManager:
     def connection_desired(self) -> bool:
         return self._connection_desired
 
+    @connection_desired.setter
+    def connection_desired(self, value: bool) -> None:
+        self._connection_desired = bool(value)
+
     def resume_connection(self) -> None:
         """Allow connection monitor and manual reconnects to establish transport again."""
         self._connection_desired = True
@@ -458,6 +494,38 @@ class RadioManager:
 
         broadcast_error("Reconnection failed", details, code="reconnection_failed")
 
+    def _note_library_transport_lost(self) -> None:
+        """Close ingest as soon as meshcore_py detects a transport drop."""
+        from app.services.radio_ingest_gate import deny_ingest
+
+        deny_ingest()
+        self._setup_complete = False
+
+    def _install_library_reconnect_gate(self, mc: MeshCore) -> None:
+        """Deny ingest on the library disconnect callback, not DISCONNECTED.
+
+        meshcore_py only emits DISCONNECTED when auto_reconnect is off or
+        exhausted. With auto_reconnect=True the drop goes through
+        handle_disconnect() and never reaches our event handler.
+        """
+        connection_manager = getattr(mc, "connection_manager", None)
+        if connection_manager is None or getattr(
+            connection_manager, "_meshloom_disconnect_gated", False
+        ):
+            return
+
+        original = connection_manager.handle_disconnect
+
+        async def _gated_handle_disconnect(reason: str = "unknown"):
+            self._note_library_transport_lost()
+            return await original(reason)
+
+        connection_manager.handle_disconnect = _gated_handle_disconnect
+        connection_manager._meshloom_disconnect_gated = True
+        transport_cx = getattr(connection_manager, "connection", None)
+        if transport_cx is not None and hasattr(transport_cx, "set_disconnect_callback"):
+            transport_cx.set_disconnect_callback(connection_manager.handle_disconnect)
+
     async def _disable_meshcore_auto_reconnect(self, mc: MeshCore) -> None:
         """Disable library-managed reconnects so manual teardown fully releases transport."""
         connection_manager = getattr(mc, "connection_manager", None)
@@ -479,41 +547,57 @@ class RadioManager:
         finally:
             connection_manager._reconnect_task = None
 
+    async def _load_transport(self) -> RadioTransportSnapshot:
+        """Read and cache the UX-owned transport snapshot."""
+        snapshot = await get_transport()
+        self._transport_snapshot = snapshot
+        return snapshot
+
     async def connect(self) -> None:
         """Connect to the radio using the configured transport."""
         if self._meshcore is not None:
             await self.disconnect()
 
-        connection_type = settings.connection_type
-        if connection_type == "tcp":
+        snapshot = await self._load_transport()
+        if snapshot.transport is None:
+            raise RuntimeError(
+                "Radio transport is not configured. Configure it in Meshloom before connecting."
+            )
+        if snapshot.transport == "tcp":
             await self._connect_tcp()
-        elif connection_type == "ble":
+        elif snapshot.transport == "ble":
             await self._connect_ble()
         else:
             await self._connect_serial()
+        if self._meshcore is not None:
+            self._install_library_reconnect_gate(self._meshcore)
 
     async def _connect_serial(self) -> None:
         """Connect to the radio over serial."""
-        port = settings.serial_port
+        snapshot = await self._load_transport()
+        if snapshot.transport is None:
+            raise RuntimeError(
+                "Radio transport is not configured. Configure it in Meshloom before connecting."
+            )
+        port = snapshot.serial_port
+        baudrate = snapshot.serial_baudrate
 
-        # Auto-detect if no port specified
         if not port:
             logger.info("No serial port specified, auto-detecting...")
-            port = await find_radio_port(settings.serial_baudrate)
+            port = await find_radio_port(baudrate)
             if not port:
-                raise RuntimeError("No MeshCore radio found. Please specify MESHCORE_SERIAL_PORT.")
+                raise RuntimeError("No MeshCore radio found. Please specify a serial port.")
 
-        logger.debug(
-            "Connecting to radio at %s (baud %d)",
-            port,
-            settings.serial_baudrate,
-        )
-        self._meshcore = await MeshCore.create_serial(
+        logger.debug("Connecting to radio at %s (baud %d)", port, baudrate)
+        mc = await MeshCore.create_serial(
             port=port,
-            baudrate=settings.serial_baudrate,
+            baudrate=baudrate,
             auto_reconnect=True,
             max_reconnect_attempts=10,
         )
+        if mc is None:
+            raise RuntimeError(f"Failed to open serial connection to {port}")
+        self._meshcore = mc
         self._connection_info = f"Serial: {port}"
         self._last_connected = True
         self._setup_complete = False
@@ -521,16 +605,24 @@ class RadioManager:
 
     async def _connect_tcp(self) -> None:
         """Connect to the radio over TCP."""
-        host = settings.tcp_host
-        port = settings.tcp_port
+        snapshot = await self._load_transport()
+        if snapshot.transport is None:
+            raise RuntimeError(
+                "Radio transport is not configured. Configure it in Meshloom before connecting."
+            )
+        host = snapshot.tcp_host
+        port = snapshot.tcp_port
 
         logger.debug("Connecting to radio at %s:%d (TCP)", host, port)
-        self._meshcore = await MeshCore.create_tcp(
+        mc = await MeshCore.create_tcp(
             host=host,
             port=port,
             auto_reconnect=True,
             max_reconnect_attempts=10,
         )
+        if mc is None:
+            raise RuntimeError(f"Failed to open TCP connection to {host}:{port}")
+        self._meshcore = mc
         self._connection_info = f"TCP: {host}:{port}"
         self._last_connected = True
         self._setup_complete = False
@@ -538,16 +630,24 @@ class RadioManager:
 
     async def _connect_ble(self) -> None:
         """Connect to the radio over BLE."""
-        address = settings.ble_address
-        pin = settings.ble_pin
+        snapshot = await self._load_transport()
+        if snapshot.transport is None:
+            raise RuntimeError(
+                "Radio transport is not configured. Configure it in Meshloom before connecting."
+            )
+        address = snapshot.ble_address
+        pin = snapshot.ble_pin
 
         logger.debug("Connecting to radio at %s (BLE)", address)
-        self._meshcore = await MeshCore.create_ble(
+        mc = await MeshCore.create_ble(
             address=address,
             pin=pin,
             auto_reconnect=True,
             max_reconnect_attempts=15,
         )
+        if mc is None:
+            raise RuntimeError(f"Failed to open BLE connection to {address}")
+        self._meshcore = mc
         self._connection_info = f"BLE: {address}"
         self._last_connected = True
         self._setup_complete = False
@@ -563,6 +663,11 @@ class RadioManager:
             return
 
         await stop_background_contact_reconciliation()
+        from app.event_handlers import unregister_event_handlers
+        from app.services.radio_ingest_gate import deny_ingest
+
+        deny_ingest()
+        unregister_event_handlers()
         await self._acquire_operation_lock("disconnect", blocking=True)
         try:
             mc = self._meshcore
@@ -616,7 +721,7 @@ class RadioManager:
                     except Exception:
                         pass
 
-                # Try to connect (will auto-detect if no port specified)
+                # Try to connect (serial auto-detects only when transport is serial)
                 await self.connect()
 
                 if not self._connection_desired:
@@ -635,10 +740,42 @@ class RadioManager:
                     return False
 
             except Exception as e:
-                log_message, frontend_detail, include_traceback = _format_reconnect_failure(e)
+                log_message, frontend_detail, include_traceback = _format_reconnect_failure(
+                    e,
+                    snapshot=self._transport_snapshot,
+                    connection_info=self._connection_info,
+                )
                 logger.warning(log_message, exc_info=include_traceback)
                 self._broadcast_reconnect_error_if_needed(frontend_detail)
                 return False
+
+    @asynccontextmanager
+    async def lifecycle_transition(self, name: str):
+        """Serialize transport/identity changes outside radio_operation/_setup_lock.
+
+        Sequence for callers: stop monitor + close ingest, then mutate, then
+        the monitor is restarted on exit. Timed acquisition fails with 503.
+        """
+        if self._lifecycle_lock is None:
+            self._lifecycle_lock = asyncio.Lock()
+        try:
+            await asyncio.wait_for(
+                self._lifecycle_lock.acquire(),
+                timeout=LIFECYCLE_LOCK_TIMEOUT_SECONDS,
+            )
+        except TimeoutError as exc:
+            raise RadioOperationBusyError(f"Radio lifecycle is busy ({name})") from exc
+        from app.services.radio_ingest_gate import deny_ingest
+
+        await self.stop_connection_monitor()
+        deny_ingest()
+        try:
+            yield
+        finally:
+            try:
+                await self.start_connection_monitor()
+            finally:
+                self._lifecycle_lock.release()
 
     async def start_connection_monitor(self) -> None:
         """Start background task to monitor connection and auto-reconnect."""

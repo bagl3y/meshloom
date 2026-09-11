@@ -27,8 +27,12 @@ import type {
   MessagesAroundResponse,
   RawPacket,
   RadioAdvertMode,
+  RadioBleDeviceInfo,
   RadioConfig,
   RadioConfigUpdate,
+  RadioIdentityActionResponse,
+  RadioTransportConfig,
+  RadioTransportUpdate,
   RadioDiscoveryResponse,
   RadioRegionDiscoveryResponse,
   RadioTraceHopRequest,
@@ -204,6 +208,25 @@ export const api = {
     ),
   reconnectRadio: () =>
     fetchJson<{ status: string; message: string; connected: boolean }>('/radio/reconnect', {
+      method: 'POST',
+    }),
+  getRadioTransport: () => fetchJson<RadioTransportConfig>('/radio/transport'),
+  updateRadioTransport: (body: RadioTransportUpdate) =>
+    fetchJson<RadioTransportConfig>('/radio/transport', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  scanRadioBle: () =>
+    fetchJson<{ devices: RadioBleDeviceInfo[] }>('/radio/transport/ble-scan', {
+      method: 'POST',
+    }),
+  adoptRadioIdentity: (body: { confirm_wipe: boolean }) =>
+    fetchJson<RadioIdentityActionResponse>('/radio/identity/adopt', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  rejectRadioIdentity: () =>
+    fetchJson<RadioIdentityActionResponse>('/radio/identity/reject', {
       method: 'POST',
     }),
 

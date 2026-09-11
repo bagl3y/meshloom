@@ -321,6 +321,10 @@ The message list is windowed with `@tanstack/react-virtual`; only the visible ro
 
 jsdom has no layout engine, so none of this is observable from the vitest suite — it needs a real browser.
 
+### Radio transport
+
+Radio transport (`serial` / `tcp` / `ble`) is configured in the web UI and stored on `app_settings` (`radio_transport`, `radio_serial_port`, `radio_serial_baudrate`, `radio_tcp_host` / `radio_tcp_port`, `radio_ble_address` / `radio_ble_pin`). It is not an environment variable. Empty `radio_serial_port` means auto-detect. Until transport is set, `HealthStatus.radio_state` is `paused` and `transport_configured` is false.
+
 ### Radio settings behavior
 
 - `SettingsRadioSection.tsx` surfaces `path_hash_mode` only when `config.path_hash_mode_supported` is true.
@@ -400,7 +404,7 @@ Distance/validation helpers used by path + map UI.
 
 Note: MQTT, bot, and community MQTT settings were migrated to the `fanout_configs` table (managed via `/api/fanout`). They are no longer part of `AppSettings`.
 
-`HealthStatus` includes `fanout_statuses: Record<string, FanoutStatusEntry>` mapping config IDs to `{name, type, status}`. Also includes `bots_disabled: boolean`.
+`HealthStatus` includes `fanout_statuses: Record<string, FanoutStatusEntry>` mapping config IDs to `{name, type, status}`. Also includes `bots_disabled: boolean`, `transport_configured`, and `radio_state` (`paused` when transport is unset).
 
 `FanoutConfig` represents a single fanout integration: `{id, type, name, enabled, config, scope, sort_order, created_at}`.
 

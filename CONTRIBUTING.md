@@ -19,17 +19,12 @@ uv sync
 uv run uvicorn app.main:app --reload
 ```
 
-With an explicit serial port:
-
-```bash
-MESHCORE_SERIAL_PORT=/dev/ttyUSB0 uv run uvicorn app.main:app --reload
-```
+Radio transport is configured in the web UI after startup (`app_settings.radio_transport`). An empty serial port means auto-detect. Do not set `MESHCORE_SERIAL_PORT` / `MESHCORE_TCP_HOST` / `MESHCORE_BLE_ADDRESS` to choose a transport.
 
 On Windows (PowerShell):
 
 ```powershell
 uv sync
-$env:MESHCORE_SERIAL_PORT="COM8"
 uv run uvicorn app.main:app --reload
 ```
 
@@ -109,7 +104,7 @@ E2E tests exercise the full stack (backend + frontend + real radio hardware) via
 
 ### Hardware requirements
 
-- A MeshCore radio connected via serial (auto-detected, or set `MESHCORE_SERIAL_PORT`)
+- A MeshCore radio connected via serial (the harness seeds `radio_transport=serial`; empty `radio_serial_port` auto-detects)
 - The radio must be powered on and past its startup sequence before tests begin
 
 ### Running
@@ -159,7 +154,7 @@ All E2E environment configuration is centralized in `tests/e2e/helpers/env.ts` w
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `MESHCORE_SERIAL_PORT` | auto-detect | Serial port for the test radio |
+| `MESHCORE_SERIAL_PORT` | *(optional leftover)* | Copied into `radio_serial_port` by the e2e seed before the server starts; not read by the server as transport config |
 | `E2E_ECHO_CHANNEL` | `#flightless` | Channel the echo bot monitors for traffic generation |
 | `E2E_ECHO_TRIGGER_MESSAGE` | `!echo please give incoming message` | Message sent to nudge the echo bot |
 | `E2E_PARTNER_RADIO_PUBKEY` | *(maintainer's test node)* | 64-char hex public key of a node that will ACK DMs from your radio |

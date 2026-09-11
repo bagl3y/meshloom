@@ -59,7 +59,17 @@ async def run_post_connect_setup(radio_manager) -> None:
                 if not mc:
                     return
 
-                # Register event handlers against the locked, current transport.
+                from app.services.radio_identity import evaluate_connected_identity
+                from app.websocket import broadcast_health
+
+                identity_decision = await evaluate_connected_identity(mc)
+                if identity_decision != "continue":
+                    logger.warning("Radio identity gate blocked post-connect setup")
+                    await radio_manager.pause_connection()
+                    broadcast_health(False, radio_manager.connection_info)
+                    return
+
+                # Register event handlers only after the identity is accepted.
                 register_event_handlers(mc)
 
                 await export_and_store_private_key(mc)

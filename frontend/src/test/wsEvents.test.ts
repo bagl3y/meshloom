@@ -77,6 +77,40 @@ describe('wsEvents', () => {
     });
   });
 
+  it('keeps identity fields on health events instead of a new event type', () => {
+    const event = parseWsEvent(
+      JSON.stringify({
+        type: 'health',
+        data: {
+          status: 'degraded',
+          radio_connected: false,
+          radio_state: 'identity_mismatch',
+          transport_configured: true,
+          identity: {
+            previous_public_key: 'aa',
+            new_public_key: 'bb',
+            mesh_contacts: 1,
+            mesh_messages: 2,
+            last_activity: null,
+          },
+        },
+      })
+    );
+
+    expect(event.type).toBe('health');
+    expect(event).toMatchObject({
+      type: 'health',
+      data: {
+        radio_state: 'identity_mismatch',
+        transport_configured: true,
+        identity: {
+          previous_public_key: 'aa',
+          new_public_key: 'bb',
+        },
+      },
+    });
+  });
+
   it('parses channel_deleted events', () => {
     const event = parseWsEvent(JSON.stringify({ type: 'channel_deleted', data: { key: 'bb' } }));
 

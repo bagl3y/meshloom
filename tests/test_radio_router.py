@@ -1,7 +1,7 @@
 """Tests for radio router endpoint logic."""
 
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
@@ -12,9 +12,12 @@ from pydantic import ValidationError
 from app.models import (
     CONTACT_TYPE_REPEATER,
     Contact,
+    RadioIdentityAdoptRequest,
     RadioRegionDiscoveryRequest,
     RadioTraceHopRequest,
     RadioTraceRequest,
+    RadioTransportSnapshot,
+    RadioTransportUpdate,
 )
 from app.radio import RadioManager, radio_manager
 from app.routers.radio import (
@@ -25,19 +28,52 @@ from app.routers.radio import (
     RadioDiscoveryRequest,
     RadioSettings,
     _dedupe_region_names,
+    adopt_radio_identity,
     disconnect_radio,
     discover_mesh,
     discover_regions,
     get_private_key,
     get_radio_config,
+    get_radio_transport,
+    post_radio_ble_scan,
+    put_radio_transport,
     reboot_radio,
     reconnect_radio,
+    reject_radio_identity,
     send_advertisement,
     set_private_key,
     trace_path,
     update_radio_config,
 )
 from app.services.radio_runtime import RadioRuntime
+
+_CONFIGURED_TRANSPORT = RadioTransportSnapshot(transport="serial", serial_port="/dev/ttyUSB0")
+
+
+def _patch_configured_transport():
+    return patch(
+        "app.routers.radio.get_transport",
+        new=AsyncMock(return_value=_CONFIGURED_TRANSPORT),
+    )
+
+
+@contextmanager
+def _same_identity_private_key():
+    with (
+        patch("app.decoder.derive_public_key", return_value=bytes.fromhex("aa" * 32)),
+        patch("app.keystore.get_public_key", return_value=bytes.fromhex("aa" * 32)),
+        patch(
+            "app.services.radio_transport.get_transport",
+            new=AsyncMock(
+                return_value=RadioTransportSnapshot(
+                    transport="serial",
+                    serial_port="/dev/ttyUSB0",
+                    bound_public_key="aa" * 32,
+                )
+            ),
+        ),
+    ):
+        yield
 
 
 def _radio_result(event_type=EventType.OK, payload=None):
@@ -343,6 +379,7 @@ class TestPrivateKeyImport:
         with (
             patch("app.routers.radio.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
+            _same_identity_private_key(),
         ):
             with pytest.raises(HTTPException) as exc:
                 await set_private_key(PrivateKeyUpdate(private_key="aa" * 64))
@@ -868,6 +905,7 @@ class TestTracePath:
         with (
             patch("app.routers.radio.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
+            _same_identity_private_key(),
             patch(
                 "app.keystore.export_and_store_private_key",
                 new_callable=AsyncMock,
@@ -886,6 +924,7 @@ class TestTracePath:
         with (
             patch("app.routers.radio.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
+            _same_identity_private_key(),
             patch(
                 "app.keystore.export_and_store_private_key",
                 new_callable=AsyncMock,
@@ -907,6 +946,7 @@ class TestTracePath:
         with (
             patch("app.routers.radio.radio_manager.require_connected", return_value=mc),
             patch.object(radio_manager, "_meshcore", mc),
+            _same_identity_private_key(),
             patch(
                 "app.keystore.export_and_store_private_key",
                 new_callable=AsyncMock,
@@ -1028,7 +1068,10 @@ class TestRebootAndReconnect:
         mock_rm.is_reconnecting = True
         mock_rm.radio_operation = _noop_radio_operation()
 
-        with patch("app.routers.radio.radio_manager", _runtime(mock_rm)):
+        with (
+            patch("app.routers.radio.radio_manager", _runtime(mock_rm)),
+            _patch_configured_transport(),
+        ):
             result = await reboot_radio()
 
         assert result["status"] == "pending"
@@ -1045,7 +1088,10 @@ class TestRebootAndReconnect:
         mock_rm.radio_operation = _noop_radio_operation()
         mock_rm.connection_info = "TCP: test:4000"
 
-        with patch("app.routers.radio.radio_manager", _runtime(mock_rm)):
+        with (
+            patch("app.routers.radio.radio_manager", _runtime(mock_rm)),
+            _patch_configured_transport(),
+        ):
             result = await reboot_radio()
 
         assert result["status"] == "ok"
@@ -1074,11 +1120,32 @@ class TestRebootAndReconnect:
         mock_rm.reconnect = AsyncMock(return_value=False)
         mock_rm.radio_operation = _noop_radio_operation()
 
-        with patch("app.routers.radio.radio_manager", _runtime(mock_rm)):
+        with (
+            patch("app.routers.radio.radio_manager", _runtime(mock_rm)),
+            _patch_configured_transport(),
+        ):
             with pytest.raises(HTTPException) as exc:
                 await reconnect_radio()
 
         assert exc.value.status_code == 423
+
+    @pytest.mark.asyncio
+    async def test_reconnect_409_when_transport_unconfigured(self):
+        mock_rm = MagicMock()
+        mock_rm.is_connected = False
+        mock_rm.radio_operation = _noop_radio_operation()
+
+        with (
+            patch("app.routers.radio.radio_manager", _runtime(mock_rm)),
+            patch(
+                "app.routers.radio.get_transport",
+                new=AsyncMock(return_value=RadioTransportSnapshot()),
+            ),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await reconnect_radio()
+
+        assert exc.value.status_code == 409
 
     @pytest.mark.asyncio
     async def test_disconnect_pauses_connection_attempts_and_broadcasts_health(self):
@@ -1291,3 +1358,206 @@ class TestDiscoverRegions:
 
         assert response.repeaters_queried == 2
         assert anon.await_count == 2
+
+
+def _noop_lifecycle(_name: str):
+    @asynccontextmanager
+    async def _ctx():
+        yield
+
+    return _ctx()
+
+
+class TestRadioTransportApi:
+    @pytest.mark.asyncio
+    async def test_get_transport_hides_ble_pin(self, test_db):
+        from app.repository.radio_transport import RadioTransportRepository
+
+        await RadioTransportRepository.save(
+            RadioTransportSnapshot(
+                transport="ble",
+                ble_address="AA:BB:CC:DD:EE:FF",
+                ble_pin="123456",
+            )
+        )
+        with (
+            patch(
+                "app.services.radio_transport.probe_serial_ports",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.radio_transport.probe_ble_available",
+                new=AsyncMock(return_value=(True, None)),
+            ),
+        ):
+            response = await get_radio_transport()
+
+        assert response.configured is True
+        assert response.transport == "ble"
+        assert response.ble_pin_configured is True
+        assert not hasattr(response, "ble_pin")
+
+    @pytest.mark.asyncio
+    async def test_put_identical_transport_is_noop(self, test_db):
+        from app.repository.radio_transport import RadioTransportRepository
+
+        await RadioTransportRepository.save(
+            RadioTransportSnapshot(transport="tcp", tcp_host="10.0.0.8", tcp_port=5000)
+        )
+        mock_rm = MagicMock()
+        mock_rm.lifecycle_transition = _noop_lifecycle
+        mock_rm.disconnect = AsyncMock()
+
+        with patch("app.routers.radio.radio_manager", _runtime(mock_rm)):
+            response = await put_radio_transport(
+                RadioTransportUpdate(transport="tcp", tcp_host="10.0.0.8", tcp_port=5000)
+            )
+
+        assert response.transport == "tcp"
+        mock_rm.disconnect.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_ble_scan_without_adapter_returns_422(self):
+        with patch(
+            "app.routers.radio.scan_ble_devices",
+            new=AsyncMock(side_effect=RuntimeError("BLE adapter not found")),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await post_radio_ble_scan()
+
+        assert exc.value.status_code == 422
+
+
+class TestRadioIdentityRoutes:
+    @pytest.mark.asyncio
+    async def test_reject_without_snapshot_pauses_and_clears_transport(self, test_db):
+        from app.repository.radio_transport import RadioTransportRepository
+
+        await RadioTransportRepository.save(
+            RadioTransportSnapshot(
+                transport="serial",
+                serial_port="/dev/ttyUSB0",
+                bound_public_key="aa" * 32,
+                identity_state="identity_mismatch",
+                previous_transport=None,
+                mismatch_new_public_key="bb" * 32,
+            )
+        )
+        mock_rm = MagicMock()
+        mock_rm.lifecycle_transition = _noop_lifecycle
+        mock_rm.pause_connection = AsyncMock()
+        mock_rm.connection_info = None
+
+        with (
+            patch("app.routers.radio.radio_manager", _runtime(mock_rm)),
+            patch("app.routers.radio.broadcast_health"),
+        ):
+            result = await reject_radio_identity()
+
+        assert result.status == "ok"
+        assert result.radio_state == "paused"
+        assert result.connected is False
+        snapshot = await RadioTransportRepository.get()
+        assert snapshot.transport is None
+        assert snapshot.identity_state is None
+        mock_rm.pause_connection.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_import_different_private_key_opens_gate_without_mutating(self, test_db):
+        from app.repository.radio_transport import RadioTransportRepository
+        from app.services.radio_ingest_gate import ingest_allowed
+
+        await RadioTransportRepository.save(
+            RadioTransportSnapshot(
+                transport="serial",
+                serial_port="/dev/ttyUSB0",
+                bound_public_key="aa" * 32,
+            )
+        )
+        mc = _mock_meshcore_with_info()
+        mc.commands.import_private_key = AsyncMock()
+
+        with (
+            patch("app.routers.radio.radio_manager.require_connected", return_value=mc),
+            patch.object(radio_manager, "_meshcore", mc),
+            patch("app.decoder.derive_public_key", return_value=bytes.fromhex("bb" * 32)),
+            patch("app.keystore.get_public_key", return_value=bytes.fromhex("aa" * 32)),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await set_private_key(PrivateKeyUpdate(private_key="cc" * 64))
+
+        assert exc.value.status_code == 409
+        mc.commands.import_private_key.assert_not_awaited()
+        assert ingest_allowed() is False
+        snapshot = await RadioTransportRepository.get()
+        assert snapshot.identity_state == "identity_mismatch"
+        assert snapshot.mismatch_new_public_key == "bb" * 32
+
+    @pytest.mark.asyncio
+    async def test_reject_without_open_gate_is_409(self, test_db):
+        from app.repository.radio_transport import RadioTransportRepository
+
+        await RadioTransportRepository.save(
+            RadioTransportSnapshot(transport="serial", serial_port="/dev/ttyUSB0")
+        )
+        with pytest.raises(HTTPException) as exc:
+            await reject_radio_identity()
+
+        assert exc.value.status_code == 409
+        snapshot = await RadioTransportRepository.get()
+        assert snapshot.transport == "serial"
+        assert snapshot.serial_port == "/dev/ttyUSB0"
+
+    @pytest.mark.asyncio
+    async def test_adopt_mismatch_without_wipe_is_409(self, test_db):
+        from app.repository.radio_transport import RadioTransportRepository
+
+        await RadioTransportRepository.save(
+            RadioTransportSnapshot(
+                transport="serial",
+                bound_public_key="aa" * 32,
+                identity_state="identity_mismatch",
+                mismatch_new_public_key="bb" * 32,
+            )
+        )
+        with pytest.raises(HTTPException) as exc:
+            await adopt_radio_identity(RadioIdentityAdoptRequest(confirm_wipe=False))
+
+        assert exc.value.status_code == 409
+        snapshot = await RadioTransportRepository.get()
+        assert snapshot.bound_public_key == "aa" * 32
+        assert snapshot.identity_state == "identity_mismatch"
+
+    @pytest.mark.asyncio
+    async def test_reject_restores_ble_pin(self, test_db):
+        from app.repository.radio_transport import RadioTransportRepository
+
+        await RadioTransportRepository.save(
+            RadioTransportSnapshot(
+                transport="tcp",
+                tcp_host="10.0.0.8",
+                bound_public_key="aa" * 32,
+                identity_state="identity_mismatch",
+                previous_transport={
+                    "transport": "ble",
+                    "ble_address": "AA:BB:CC:DD:EE:FF",
+                    "ble_pin": "654321",
+                },
+            )
+        )
+        mock_rm = MagicMock()
+        mock_rm.lifecycle_transition = _noop_lifecycle
+        mock_rm.pause_connection = AsyncMock()
+        mock_rm.connection_info = None
+
+        with (
+            patch("app.routers.radio.radio_manager", _runtime(mock_rm)),
+            patch("app.routers.radio.broadcast_health"),
+        ):
+            await reject_radio_identity()
+
+        snapshot = await RadioTransportRepository.get()
+        assert snapshot.transport == "ble"
+        assert snapshot.ble_address == "AA:BB:CC:DD:EE:FF"
+        assert snapshot.ble_pin == "654321"
+        assert snapshot.identity_state is None

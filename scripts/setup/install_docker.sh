@@ -312,13 +312,7 @@ if [ -n "${MESHLOOM_TRANSPORT:-}" ]; then
             ;;
         tcp)
             TRANSPORT_MODE="tcp"
-            TCP_HOST="${MESHLOOM_TCP_HOST:-}"
-            TCP_PORT="${MESHLOOM_TCP_PORT:-5000}"
-            if [ -z "$TCP_HOST" ]; then
-                echo -e "${RED}Error: MESHLOOM_TCP_HOST is required.${NC}"
-                exit 1
-            fi
-            echo -e "${GREEN}TCP: ${TCP_HOST}:${TCP_PORT}${NC}"
+            echo -e "${GREEN}Network radio: no USB device mapping. Configure TCP in the web UI.${NC}"
             ;;
         *)
             echo -e "${RED}Error: Docker installer does not support MESHLOOM_TRANSPORT=${MESHLOOM_TRANSPORT}${NC}"
@@ -339,31 +333,17 @@ else
         case "$TRANSPORT_CHOICE" in
             2)
                 TRANSPORT_MODE="tcp"
-                read -r -p "TCP host (IP address or hostname): " TCP_HOST
-                while [ -z "$TCP_HOST" ]; do
-                    echo -e "${RED}TCP host is required.${NC}"
-                    read -r -p "TCP host: " TCP_HOST
-                done
-                read -r -p "TCP port (default: 5000): " TCP_PORT
-                TCP_PORT="${TCP_PORT:-5000}"
-                echo -e "${GREEN}TCP: ${TCP_HOST}:${TCP_PORT}${NC}"
+                echo -e "${GREEN}Network radio: no USB device mapping. Configure TCP in the web UI.${NC}"
                 ;;
             *)
                 prompt_docker_serial
                 ;;
         esac
     else
-        echo "This host can only pass a TCP radio into Docker (USB needs rootful Linux Docker)."
+        echo "This host can only pass a network radio into Docker (USB needs rootful Linux Docker)."
         echo
         TRANSPORT_MODE="tcp"
-        read -r -p "TCP host (IP address or hostname): " TCP_HOST
-        while [ -z "$TCP_HOST" ]; do
-            echo -e "${RED}TCP host is required.${NC}"
-            read -r -p "TCP host: " TCP_HOST
-        done
-        read -r -p "TCP port (default: 5000): " TCP_PORT
-        TCP_PORT="${TCP_PORT:-5000}"
-        echo -e "${GREEN}TCP: ${TCP_HOST}:${TCP_PORT}${NC}"
+        echo -e "${GREEN}Network radio: no USB device mapping. Configure TCP in the web UI.${NC}"
     fi
     echo
 fi
@@ -502,12 +482,6 @@ mkdir -p "$REPO_DIR/data"
     fi
     echo "    environment:"
     echo "      MESHCORE_DATABASE_PATH: $(yaml_quote "data/meshcore.db")"
-    if [ "$TRANSPORT_MODE" = "serial" ]; then
-        echo "      MESHCORE_SERIAL_PORT: $(yaml_quote "$SERIAL_CONTAINER_PATH")"
-    else
-        echo "      MESHCORE_TCP_HOST: $(yaml_quote "$TCP_HOST")"
-        echo "      MESHCORE_TCP_PORT: $(yaml_quote "$TCP_PORT")"
-    fi
     if ! [[ "$ENABLE_BOTS" =~ ^[Yy]$ ]]; then
         echo "      MESHCORE_DISABLE_BOTS: $(yaml_quote "true")"
     fi

@@ -7,9 +7,9 @@ order: 14
 
 Meshloom a deux surfaces de configuration, et elles ne se recouvrent pas.
 
-L’**environnement** décide de ce qui doit être connu avant que quoi que ce soit tourne : comment joindre la radio, où écrire la base, si les bots sont autorisés, si une authentification s’applique, quels contournements de diagnostic sont actifs. Ces variables sont lues au démarrage. Les changer implique de redémarrer le service.
+L’**environnement** décide de ce qui doit être connu avant que quoi que ce soit tourne : où écrire la base, si les bots sont autorisés, si une authentification s’applique, quels contournements de diagnostic sont actifs. Ces variables sont lues au démarrage. Les changer implique de redémarrer le service.
 
-Les **réglages d’exécution** vivent dans la table `app_settings` de la base et se modifient à chaud via `GET` / `PATCH /api/settings`, c’est-à-dire depuis l’interface. Intervalle de publicité, portée de flood, listes de blocage, télémétrie suivie : rien de tout ça n’est une variable d’environnement.
+Les **réglages d’exécution** vivent dans la table `app_settings` de la base et se modifient à chaud depuis l’interface ou via `GET` / `PATCH /api/settings`. Le transport radio est un réglage d’exécution, pas une variable d’environnement. Voir [Transports radio](/docs/deep/transports/).
 
 ## Où écrire les variables
 
@@ -23,16 +23,19 @@ Pour l’installation par paquet, `bash scripts/setup/install_service.sh` peut �
 
 ## Connexion radio
 
-| Variable | Défaut | Description |
-|----------|--------|-------------|
-| `MESHCORE_SERIAL_PORT` | auto-détection | Port série de la radio |
-| `MESHCORE_SERIAL_BAUDRATE` | `115200` | Débit série |
-| `MESHCORE_TCP_HOST` | *(vide)* | Hôte TCP de la radio |
-| `MESHCORE_TCP_PORT` | `5000` | Port TCP |
-| `MESHCORE_BLE_ADDRESS` | *(vide)* | Adresse BLE de la radio |
-| `MESHCORE_BLE_PIN` | *(vide)* | Code PIN BLE, obligatoire avec l’adresse |
+Le transport se configure dans l’interface et est stocké dans `app_settings` :
 
-Une seule variable de transport à la fois. Le détail des cas d’échec est dans [Transports radio](/docs/deep/transports/).
+| Colonne | Défaut | Description |
+|---------|--------|-------------|
+| `radio_transport` | *(non défini / en pause)* | `serial`, `tcp` ou `ble` |
+| `radio_serial_port` | vide | Port série ; vide = auto-détection |
+| `radio_serial_baudrate` | `115200` | Débit série |
+| `radio_tcp_host` | vide | Hôte TCP de la radio |
+| `radio_tcp_port` | `5000` | Port TCP |
+| `radio_ble_address` | vide | Adresse BLE de la radio |
+| `radio_ble_pin` | vide | Code PIN BLE, obligatoire avec BLE |
+
+Tant que `radio_transport` n’est pas défini, la radio reste en pause. Ne définissez pas `MESHCORE_SERIAL_PORT`, `MESHCORE_TCP_HOST` ni `MESHCORE_BLE_ADDRESS` pour choisir un transport.
 
 ## Serveur et données
 
@@ -81,6 +84,7 @@ Trois précisions.
 
 Ce qui suit vit dans `app_settings` et se pilote depuis l’interface ou `PATCH /api/settings`. Ce n’est pas configurable par l’environnement.
 
+- `radio_transport`, `radio_serial_port`, `radio_serial_baudrate`, `radio_tcp_host`, `radio_tcp_port`, `radio_ble_address`, `radio_ble_pin`
 - `max_radio_contacts` — capacité de contacts visée sur la radio, base de calcul des remplissages et déchargements
 - `auto_decrypt_dm_on_advert` — déchiffrement historique des messages directs quand une clé devient connue
 - `advert_interval`, `last_advert_time` — publicité périodique, `0` désactive

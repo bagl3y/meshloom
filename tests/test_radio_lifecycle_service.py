@@ -9,6 +9,20 @@ from app.services.radio_lifecycle import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _accept_radio_identity(monkeypatch):
+    async def _continue(_mc):
+        from app.services.radio_ingest_gate import allow_ingest, begin_connection_session
+
+        allow_ingest(begin_connection_session())
+        return "continue"
+
+    monkeypatch.setattr(
+        "app.services.radio_identity.evaluate_connected_identity",
+        _continue,
+    )
+
+
 class TestPrepareConnectedRadio:
     @pytest.mark.asyncio
     async def test_runs_setup_then_broadcasts_health(self):

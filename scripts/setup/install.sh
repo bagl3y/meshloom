@@ -35,6 +35,8 @@ AUTH_PASSWORD=""
 INSTALL_DIR=""
 IN_CHECKOUT=""
 STEP_TOTAL=4
+SECURITY_STEP=3
+INSTALL_STEP=4
 UI_CLEAR=1
 UI_COLOR=1
 INSTALL_LOG=""
@@ -100,8 +102,8 @@ t() {
         fr:note_radio_elsewhere) echo "Pour une radio USB ou Bluetooth, installez Meshloom sur une machine Linux (Raspberry Pi, NAS…) et branchez-y la radio." ;;
         en:step_radio) echo "Radio connection" ;;
         fr:step_radio) echo "Connexion radio" ;;
-        en:q_radio) echo "How is your MeshCore radio connected?" ;;
-        fr:q_radio) echo "Comment votre radio MeshCore est-elle connectée ?" ;;
+        en:q_radio) echo "Should Docker map a USB radio, or will you configure a network radio in the web interface?" ;;
+        fr:q_radio) echo "Docker doit-il mapper une radio USB, ou configurerez-vous une radio réseau dans l'interface ?" ;;
         en:opt_serial_auto) echo "USB cable, detected automatically" ;;
         fr:opt_serial_auto) echo "Câble USB, détection automatique" ;;
         en:opt_serial_auto_desc) echo "The radio is plugged into this machine and is the only serial device." ;;
@@ -112,8 +114,8 @@ t() {
         fr:opt_serial_desc) echo "À utiliser si plusieurs ports série sont branchés." ;;
         en:opt_tcp) echo "On the network (TCP)" ;;
         fr:opt_tcp) echo "Sur le réseau (TCP)" ;;
-        en:opt_tcp_desc) echo "The radio, or a companion device next to it, exposes a TCP port." ;;
-        fr:opt_tcp_desc) echo "La radio, ou un appareil compagnon à côté d'elle, expose un port TCP." ;;
+        en:opt_tcp_desc) echo "No USB mapping. Choose TCP in the web interface after install." ;;
+        fr:opt_tcp_desc) echo "Pas de mapping USB. Choisissez TCP dans l'interface après l'installation." ;;
         en:opt_ble) echo "Bluetooth (BLE)" ;;
         fr:opt_ble) echo "Bluetooth (BLE)" ;;
         en:opt_ble_desc) echo "Pairs with the radio over Bluetooth. Needs its address and PIN." ;;
@@ -158,6 +160,8 @@ t() {
         fr:recap_mode) echo "Mode" ;;
         en:recap_radio) echo "Radio" ;;
         fr:recap_radio) echo "Radio" ;;
+        en:recap_radio_ui) echo "Configured in the web interface" ;;
+        fr:recap_radio_ui) echo "À configurer dans l'interface web" ;;
         en:recap_bots) echo "Bots" ;;
         fr:recap_bots) echo "Bots" ;;
         en:recap_auth) echo "Password protection" ;;
@@ -663,12 +667,11 @@ docker_allows_usb() {
 }
 
 choose_transport() {
-    local allow_usb="n" allow_ble="n" n=1 choice
-    local idx_auto="" idx_serial="" idx_tcp="" idx_ble=""
-    if [ "$INSTALL_MODE" = "service" ]; then
-        allow_usb="y"
-        allow_ble="y"
-    elif [ "$INSTALL_MODE" = "docker" ] && docker_allows_usb; then
+    # Docker only: USB vs network, solely to emit compose devices: mapping.
+    # systemd installs configure transport in the web UI (app_settings).
+    local allow_usb="n" n=1 choice
+    local idx_auto="" idx_serial="" idx_tcp=""
+    if docker_allows_usb; then
         allow_usb="y"
     fi
 
@@ -684,12 +687,6 @@ choose_transport() {
     fi
     ui_option "$n" "$(t opt_tcp)" "$(t opt_tcp_desc)"
     idx_tcp="$n"
-    n=$((n + 1))
-    if [ "$allow_ble" = "y" ]; then
-        ui_option "$n" "$(t opt_ble)" "$(t opt_ble_desc)"
-        idx_ble="$n"
-        n=$((n + 1))
-    fi
     choice="$(ui_menu $((n - 1)) 1)"
     if [ -n "$idx_auto" ] && [ "$choice" = "$idx_auto" ]; then
         TRANSPORT="serial-auto"
@@ -698,23 +695,12 @@ choose_transport() {
         SERIAL_PORT="$(ui_ask_required "$(t prompt_serial)" "$(t hint_serial)")"
     elif [ "$choice" = "$idx_tcp" ]; then
         TRANSPORT="tcp"
-        TCP_HOST="$(ui_ask_required "$(t prompt_tcp_host)" "$(t hint_tcp_host)")"
-        TCP_PORT="$(ui_ask "$(t prompt_tcp_port)" "5000")"
-        TCP_PORT="${TCP_PORT:-5000}"
-    elif [ -n "$idx_ble" ] && [ "$choice" = "$idx_ble" ]; then
-        TRANSPORT="ble"
-        BLE_ADDRESS="$(ui_ask_required "$(t prompt_ble_addr)" "$(t hint_ble_addr)")"
-        BLE_PIN=""
-        while [ -z "$BLE_PIN" ]; do
-            BLE_PIN="$(ui_ask_secret "$(t prompt_ble_pin)" "$(t hint_ble_pin)")"
-            [ -n "$BLE_PIN" ] || ui_err "$(t required)"
-        done
     fi
 }
 
 choose_bots_auth() {
     local auth_default="n"
-    ui_screen "$(t step_security)" 3
+    ui_screen "$(t step_security)" "$SECURITY_STEP"
     ui_warn "  $(t bots_warn)"
     printf '\n'
     if ui_yesno "$(t q_bots)" n; then
@@ -752,13 +738,13 @@ recap_radio_label() {
         serial-auto) t opt_serial_auto ;;
         serial) t opt_serial ;;
         tcp) t opt_tcp ;;
-        ble) t opt_ble ;;
+        ui) t recap_radio_ui ;;
         *) echo "$TRANSPORT" ;;
     esac
 }
 
 confirm_install() {
-    ui_screen "$(t step_install)" 4
+    ui_screen "$(t step_install)" "$INSTALL_STEP"
     printf '  %s\n' "$(ui_b "$(t recap)")"
     printf '    %s    %s\n' "$(t recap_mode)" "$(recap_mode_label)"
     printf '    %s    %s\n' "$(t recap_radio)" "$(recap_radio_label)"
@@ -780,18 +766,8 @@ write_meshloom_env() {
     local dest="$1"
     {
         echo "# Generated by Meshloom install.sh"
+        echo "# Radio transport is configured in the web UI (app_settings), not here."
         echo "MESHCORE_DATABASE_PATH=/var/lib/meshloom/meshcore.db"
-        case "$TRANSPORT" in
-            serial) echo "MESHCORE_SERIAL_PORT=${SERIAL_PORT}" ;;
-            tcp)
-                echo "MESHCORE_TCP_HOST=${TCP_HOST}"
-                echo "MESHCORE_TCP_PORT=${TCP_PORT}"
-                ;;
-            ble)
-                echo "MESHCORE_BLE_ADDRESS=${BLE_ADDRESS}"
-                echo "MESHCORE_BLE_PIN=${BLE_PIN}"
-                ;;
-        esac
         if [[ ! "$ENABLE_BOTS" =~ ^[Yy]$ ]]; then
             echo "MESHCORE_DISABLE_BOTS=true"
         fi
@@ -897,16 +873,10 @@ run_service_from_source() {
     ensure_cmd python3 "python3"
     ensure_uv
     export MESHLOOM_NONINTERACTIVE=1
-    export MESHLOOM_TRANSPORT="$TRANSPORT"
-    export MESHLOOM_SERIAL_PORT="$SERIAL_PORT"
-    export MESHLOOM_TCP_HOST="$TCP_HOST"
-    export MESHLOOM_BLE_ADDRESS="$BLE_ADDRESS"
-    export MESHLOOM_BLE_PIN="$BLE_PIN"
     export MESHLOOM_ENABLE_BOTS="$ENABLE_BOTS"
     export MESHLOOM_ENABLE_AUTH="$ENABLE_AUTH"
     export MESHLOOM_AUTH_USERNAME="$AUTH_USERNAME"
     export MESHLOOM_AUTH_PASSWORD="$AUTH_PASSWORD"
-    export MESHLOOM_TCP_PORT="$TCP_PORT"
     if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
         export MESHLOOM_FRONTEND_MODE="build"
     else
@@ -997,12 +967,6 @@ write_docker_compose() {
         fi
         echo "    environment:"
         echo "      MESHCORE_DATABASE_PATH: $(yaml_quote "data/meshcore.db")"
-        if [ "$TRANSPORT" = "serial" ] || [ "$TRANSPORT" = "serial-auto" ]; then
-            echo "      MESHCORE_SERIAL_PORT: $(yaml_quote "/dev/meshcore-radio")"
-        else
-            echo "      MESHCORE_TCP_HOST: $(yaml_quote "$TCP_HOST")"
-            echo "      MESHCORE_TCP_PORT: $(yaml_quote "$TCP_PORT")"
-        fi
         if [[ ! "$ENABLE_BOTS" =~ ^[Yy]$ ]]; then
             echo "      MESHCORE_DISABLE_BOTS: $(yaml_quote "true")"
         fi
@@ -1063,7 +1027,17 @@ if [ "$INSTALL_MODE" = "browser" ]; then
     exit 0
 fi
 
-choose_transport
+if [ "$INSTALL_MODE" = "docker" ]; then
+    STEP_TOTAL=4
+    SECURITY_STEP=3
+    INSTALL_STEP=4
+    choose_transport
+else
+    STEP_TOTAL=3
+    SECURITY_STEP=2
+    INSTALL_STEP=3
+    TRANSPORT="ui"
+fi
 choose_bots_auth
 
 if [ "$INSTALL_MODE" = "service" ]; then

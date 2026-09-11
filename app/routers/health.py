@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.models import RadioHealthState, RadioIdentityInfo
 from app.repository import RawPacketRepository
 from app.services.radio_runtime import radio_runtime as radio_manager
 from app.services.radio_stats import get_latest_radio_stats
@@ -61,8 +62,10 @@ class HealthResponse(BaseModel):
     status: str
     radio_connected: bool
     radio_initializing: bool = False
-    radio_state: str = "disconnected"
+    radio_state: RadioHealthState = "disconnected"
     connection_info: str | None
+    transport_configured: bool = False
+    identity: RadioIdentityInfo | None = None
     app_info: AppInfoResponse | None = None
     radio_device_info: RadioDeviceInfoResponse | None = None
     radio_stats: RadioStatsSnapshot | None = None
@@ -135,6 +138,20 @@ async def build_health_data(radio_connected: bool, connection_info: str | None) 
     else:
         radio_state = "disconnected"
 
+    transport_configured = False
+    identity = None
+    try:
+        from app.services.radio_identity import identity_health_info
+        from app.services.radio_transport import get_transport
+
+        snapshot = await get_transport()
+        transport_configured = snapshot.configured
+        if snapshot.identity_state in ("identity_mismatch", "identity_unbound_legacy"):
+            radio_state = snapshot.identity_state
+            identity = await identity_health_info()
+    except Exception:
+        pass
+
     radio_device_info = None
     device_info_loaded = getattr(radio_manager, "device_info_loaded", False)
     if radio_connected and device_info_loaded:
@@ -190,6 +207,8 @@ async def build_health_data(radio_connected: bool, connection_info: str | None) 
         "bots_disabled": bots_disabled_source is not None,
         "bots_disabled_source": bots_disabled_source,
         "basic_auth_enabled": _read_optional_bool_setting("basic_auth_enabled"),
+        "transport_configured": transport_configured,
+        "identity": identity,
     }
 
 

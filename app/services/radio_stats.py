@@ -190,6 +190,13 @@ def get_noise_floor_history() -> dict:
     }
 
 
+def clear_latest_radio_stats() -> None:
+    """Drop in-memory local-radio samples after an identity wipe."""
+    global _latest_stats
+    _latest_stats = {}
+    _noise_floor_samples.clear()
+
+
 def get_latest_radio_stats() -> dict[str, Any]:
     """Return the most recent radio stats snapshot (for health endpoint)."""
     return dict(_latest_stats)

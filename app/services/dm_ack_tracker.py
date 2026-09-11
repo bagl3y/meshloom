@@ -73,6 +73,12 @@ def pop_pending_ack(ack_code: str) -> int | None:
     return message_id
 
 
+def clear_all() -> None:
+    """Drop all pending and buffered ACK state (identity wipe)."""
+    _pending_acks.clear()
+    _buffered_acks.clear()
+
+
 def clear_pending_acks_for_message(message_id: int) -> None:
     """Remove any still-pending ACK codes for a message once one ACK wins."""
     sibling_codes = [

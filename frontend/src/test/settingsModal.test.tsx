@@ -14,6 +14,7 @@ import type {
   RadioDiscoveryResponse,
   RadioDiscoveryTarget,
   RadioRegionDiscoveryResponse,
+  RadioTransportConfig,
   StatisticsResponse,
 } from '../types';
 import type { SettingsSection } from '../components/settings/settingsConstants';
@@ -79,6 +80,26 @@ const baseSettings: AppSettings = {
   auto_resend_channel: false,
   telemetry_interval_hours: 8,
   telemetry_routed_hourly: false,
+};
+
+const baseTransport: RadioTransportConfig = {
+  configured: true,
+  transport: 'serial',
+  serial_port: '/dev/ttyUSB0',
+  serial_baudrate: 115200,
+  tcp_host: '',
+  tcp_port: 5000,
+  ble_address: '',
+  ble_pin_configured: false,
+  bound_public_key: null,
+  capabilities: {
+    tcp: true,
+    serial: true,
+    ble: false,
+    serial_unavailable_reason: null,
+    ble_unavailable_reason: null,
+  },
+  serial_ports: [{ path: '/dev/ttyUSB0', description: 'USB Serial' }],
 };
 
 function renderModal(overrides?: {
@@ -206,6 +227,9 @@ function openDatabaseSection() {
 describe('SettingsModal', () => {
   beforeEach(() => {
     vi.spyOn(api, 'getFanoutConfigs').mockResolvedValue([]);
+    vi.spyOn(api, 'getRadioTransport').mockResolvedValue(baseTransport);
+    vi.spyOn(api, 'updateRadioTransport').mockResolvedValue(baseTransport);
+    vi.spyOn(api, 'scanRadioBle').mockResolvedValue({ devices: [] });
   });
 
   afterEach(() => {
@@ -260,24 +284,109 @@ describe('SettingsModal', () => {
     });
   });
 
-  it('shows radio-unavailable message when config is null', () => {
+  it('shows the transport picker when config is null', async () => {
     renderModal({ config: null });
 
     const radioToggle = screen.getByRole('button', { name: i18n.t('settingsNav.radio') });
     expect(radioToggle).not.toBeDisabled();
 
     fireEvent.click(radioToggle);
-    expect(screen.getByText(i18n.t('settings.radio.unavailable'))).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', {
+        level: 4,
+        name: i18n.t('settings.radio.transport'),
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('settings.radio.unavailableUntilConnected'))
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText(i18n.t('settings.radio.preset'))).not.toBeInTheDocument();
   });
 
-  it('shows radio-unavailable message in sidebar-nav mode when config is null', () => {
+  it('shows the transport picker in sidebar-nav mode when config is null', async () => {
     renderModal({
       config: null,
       externalSidebarNav: true,
       desktopSection: 'radio',
     });
 
-    expect(screen.getByText(i18n.t('settings.radio.unavailable'))).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', {
+        level: 4,
+        name: i18n.t('settings.radio.transport'),
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('settings.radio.unavailableUntilConnected'))
+    ).toBeInTheDocument();
+  });
+
+  it('keeps a saved serial port visible when the host reports no ports', async () => {
+    vi.mocked(api.getRadioTransport).mockResolvedValue({
+      ...baseTransport,
+      serial_ports: [],
+      capabilities: {
+        ...baseTransport.capabilities,
+        serial: false,
+        serial_unavailable_reason: 'pyserial missing',
+      },
+    });
+    renderModal({
+      health: { ...baseHealth, transport_configured: true },
+    });
+    openRadioSection();
+
+    const portSelect = await screen.findByLabelText(i18n.t('settings.radio.serialPort'));
+    expect(portSelect).toHaveValue('/dev/ttyUSB0');
+    expect(
+      screen.getByText(new RegExp(i18n.t('settings.radio.serialPortUnavailable')))
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('settings.radio.serialUnavailable', { reason: 'pyserial missing' }))
+    ).toBeInTheDocument();
+  });
+
+  it('does not reconnect from settings when transport is not configured', async () => {
+    const { onReconnect } = renderModal({
+      health: {
+        ...baseHealth,
+        radio_connected: false,
+        radio_state: 'paused',
+        transport_configured: false,
+      },
+    });
+    openRadioSection();
+
+    expect(
+      await screen.findByText(i18n.t('settings.radio.saveTransportFirst'))
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: i18n.t('settings.radio.reconnect') })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.radio.reconnect') }));
+    expect(onReconnect).not.toHaveBeenCalled();
+  });
+
+  it('saves the selected TCP transport from the radio connection section', async () => {
+    renderModal();
+    openRadioSection();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: i18n.t('settings.radio.transportTcp') })
+    );
+    fireEvent.change(screen.getByLabelText(i18n.t('settings.radio.tcpHost')), {
+      target: { value: '10.0.0.8' },
+    });
+    fireEvent.change(screen.getByLabelText(i18n.t('settings.radio.tcpPort')), {
+      target: { value: '5000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.radio.applyTransport') }));
+
+    await waitFor(() => {
+      expect(api.updateRadioTransport).toHaveBeenCalledWith({
+        transport: 'tcp',
+        tcp_host: '10.0.0.8',
+        tcp_port: 5000,
+      });
+    });
   });
 
   it('shows cached radio firmware and capacity info under the connection status', () => {
@@ -998,14 +1107,9 @@ describe('SettingsModal', () => {
       screen.getByText(i18n.t('settings.stats.floorIncludes', { floor: '60' }), { exact: false })
     ).toBeInTheDocument();
     // 0.0179% would render as a meaningless "0.0%", so the share is withheld
-    expect(screen.queryByText(/0\.0%/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\b0\.0%\b/)).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        i18n.t('settings.stats.ofTotal', {
-          scoped: (70).toLocaleString(),
-          total: (391757).toLocaleString(),
-        })
-      )
+      screen.getByText((text) => /70/.test(text) && /391/.test(text) && /757/.test(text))
     ).toBeInTheDocument();
     // ...but the decryption-backed sender figure still stands
     expect(

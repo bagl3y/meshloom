@@ -18,6 +18,7 @@ from app.radio_sync import get_contacts_selected_for_radio_sync, get_radio_chann
 from app.repository import AppSettingsRepository, MessageRepository, StatisticsRepository
 from app.routers.health import FanoutStatusResponse, build_health_data
 from app.services.radio_runtime import radio_runtime
+from app.services.radio_transport import get_transport
 from app.version_info import get_app_build_info, git_output
 
 logger = logging.getLogger(__name__)
@@ -222,14 +223,15 @@ def _coerce_live_max_channels(device_info: dict[str, Any] | None) -> int | None:
         return None
 
 
-def _build_environment() -> DebugEnvironment:
+async def _build_environment() -> DebugEnvironment:
+    snapshot = await get_transport()
     return DebugEnvironment(
-        connection_type=settings.connection_type,
-        serial_port=settings.serial_port,
-        serial_baudrate=settings.serial_baudrate,
-        tcp_host=settings.tcp_host,
-        tcp_port=settings.tcp_port,
-        ble_address=settings.ble_address,
+        connection_type=snapshot.connection_type,
+        serial_port=snapshot.serial_port,
+        serial_baudrate=snapshot.serial_baudrate,
+        tcp_host=snapshot.tcp_host,
+        tcp_port=snapshot.tcp_port,
+        ble_address=snapshot.ble_address,
         log_level=settings.log_level,
         database_path=settings.database_path,
         disable_bots=settings.disable_bots,
@@ -429,7 +431,7 @@ async def debug_support_snapshot() -> DebugSnapshotResponse:
         captured_at=datetime.now(UTC).isoformat(),
         system=_build_system_info(),
         application=_build_application_info(),
-        environment=_build_environment(),
+        environment=await _build_environment(),
         health=_build_debug_health_summary(health_data, radio_state=radio_state),
         settings=_build_debug_app_settings(app_settings),
         runtime=DebugRuntimeInfo(

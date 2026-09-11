@@ -17,6 +17,16 @@ import subprocess
 
 SERVICE_SCRIPT = "scripts/setup/install_service.sh"
 DOCKER_SCRIPT = "scripts/setup/install_docker.sh"
+INSTALL_SCRIPT = "scripts/setup/install.sh"
+
+_TRANSPORT_ENV_VARS = (
+    "MESHCORE_SERIAL_PORT",
+    "MESHCORE_SERIAL_BAUDRATE",
+    "MESHCORE_TCP_HOST",
+    "MESHCORE_TCP_PORT",
+    "MESHCORE_BLE_ADDRESS",
+    "MESHCORE_BLE_PIN",
+)
 
 # ---------------------------------------------------------------------------
 # Brutal test strings — shared across both formats
@@ -226,11 +236,19 @@ class TestSystemdEscape:
         assert not failures, "Not double-quoted:\n" + "\n".join(failures)
 
     def test_function_present_in_installer(self):
-        with open(SERVICE_SCRIPT) as f:
+        with open(SERVICE_SCRIPT, encoding="utf-8") as f:
             content = f.read()
         assert "systemd_escape_env_value()" in content
         assert 'systemd_escape_env_value "$AUTH_USERNAME"' in content
         assert 'systemd_escape_env_value "$AUTH_PASSWORD"' in content
+
+    def test_generated_unit_omits_transport_env(self):
+        with open(SERVICE_SCRIPT, encoding="utf-8") as f:
+            content = f.read()
+        for var in _TRANSPORT_ENV_VARS:
+            assert f"Environment={var}" not in content, var
+        assert "Environment=MESHCORE_DATABASE_PATH" in content
+        assert "Environment=MESHCORE_DISABLE_BOTS=true" in content
 
 
 class TestYamlQuote:
@@ -256,8 +274,24 @@ class TestYamlQuote:
         assert not failures, "Not single-quoted:\n" + "\n".join(failures)
 
     def test_function_present_in_installer(self):
-        with open(DOCKER_SCRIPT) as f:
+        with open(DOCKER_SCRIPT, encoding="utf-8") as f:
             content = f.read()
         assert "yaml_quote()" in content
         assert 'yaml_quote "$AUTH_USERNAME"' in content
         assert 'yaml_quote "$AUTH_PASSWORD"' in content
+
+    def test_generated_compose_omits_transport_env(self):
+        with open(DOCKER_SCRIPT, encoding="utf-8") as f:
+            content = f.read()
+        for var in _TRANSPORT_ENV_VARS:
+            assert var not in content, var
+        assert "MESHCORE_DATABASE_PATH" in content
+        assert "devices:" in content
+
+    def test_one_liner_omits_transport_env(self):
+        with open(INSTALL_SCRIPT, encoding="utf-8") as f:
+            content = f.read()
+        for var in _TRANSPORT_ENV_VARS:
+            assert var not in content, var
+        assert "MESHCORE_DATABASE_PATH" in content
+        assert "devices:" in content

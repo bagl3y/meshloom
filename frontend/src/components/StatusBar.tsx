@@ -9,7 +9,7 @@ import {
   Moon,
   Sun,
 } from 'lucide-react';
-import type { HealthStatus, RadioConfig } from '../types';
+import { isRadioIdentityGate, type HealthStatus, type RadioConfig } from '../types';
 import { api } from '../api';
 import { toast } from './ui/sonner';
 import { handleKeyboardActivate } from '../utils/a11y';
@@ -35,6 +35,8 @@ interface StatusBarProps {
   config: RadioConfig | null;
   settingsMode?: boolean;
   onSettingsClick: () => void;
+  onOpenRadioSettings?: () => void;
+  onOpenIdentityModal?: () => void;
   onMenuClick?: () => void;
 }
 
@@ -43,6 +45,8 @@ export function StatusBar({
   config,
   settingsMode = false,
   onSettingsClick,
+  onOpenRadioSettings,
+  onOpenIdentityModal,
   onMenuClick,
 }: StatusBarProps) {
   const { t } = useTranslation();
@@ -83,16 +87,22 @@ export function StatusBar({
         ? 'connected'
         : 'disconnected');
   const connected = health?.radio_connected ?? false;
+  const identityGate = isRadioIdentityGate(radioState);
+  const needsTransport = health?.transport_configured === false;
   const statusLabel =
-    radioState === 'paused'
-      ? t('statusBar.radioPaused')
-      : radioState === 'connecting'
-        ? t('statusBar.radioConnecting')
-        : radioState === 'initializing'
-          ? t('statusBar.radioInitializing')
-          : connected
-            ? t('statusBar.radioOk')
-            : t('statusBar.radioDisconnected');
+    radioState === 'identity_mismatch'
+      ? t('statusBar.radioIdentityMismatch')
+      : radioState === 'identity_unbound_legacy'
+        ? t('statusBar.radioIdentityUnbound')
+        : radioState === 'paused'
+          ? t('statusBar.radioPaused')
+          : radioState === 'connecting'
+            ? t('statusBar.radioConnecting')
+            : radioState === 'initializing'
+              ? t('statusBar.radioInitializing')
+              : connected
+                ? t('statusBar.radioOk')
+                : t('statusBar.radioDisconnected');
   const [reconnecting, setReconnecting] = useState(false);
   // Track the *effective* theme (follow-os is resolved to original/light) so the
   // toggle icon and action match what the user currently sees rendered.
@@ -162,7 +172,16 @@ export function StatusBar({
     };
   }, []);
 
-  const handleReconnect = async () => {
+  const handleConnectAction = async () => {
+    if (identityGate) {
+      onOpenIdentityModal?.();
+      return;
+    }
+    if (needsTransport) {
+      window.location.hash = '#settings/radio';
+      onOpenRadioSettings?.();
+      return;
+    }
     setReconnecting(true);
     try {
       const result = await api.reconnectRadio();
@@ -218,7 +237,7 @@ export function StatusBar({
         <div
           className={cn(
             'w-2 h-2 rounded-full transition-colors',
-            radioState === 'initializing' || radioState === 'connecting'
+            radioState === 'initializing' || radioState === 'connecting' || identityGate
               ? 'bg-warning'
               : connected
                 ? pulseKind
@@ -269,17 +288,19 @@ export function StatusBar({
         </div>
       )}
 
-      {(radioState === 'disconnected' || radioState === 'paused') && (
+      {(radioState === 'disconnected' || radioState === 'paused' || identityGate) && (
         <button
-          onClick={handleReconnect}
+          onClick={handleConnectAction}
           disabled={reconnecting}
           className="px-3 py-1 bg-warning/10 border border-warning/20 text-warning rounded-md text-xs cursor-pointer hover:bg-warning/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {reconnecting
             ? t('statusBar.reconnecting')
-            : radioState === 'paused'
-              ? t('statusBar.connect')
-              : t('statusBar.reconnect')}
+            : identityGate
+              ? t('statusBar.reviewIdentity')
+              : needsTransport || radioState === 'paused'
+                ? t('statusBar.connect')
+                : t('statusBar.reconnect')}
         </button>
       )}
       <button

@@ -1414,3 +1414,119 @@ class StatisticsResponse(BaseModel):
 class TelemetryHistoryEntry(BaseModel):
     timestamp: int
     data: dict
+
+
+RadioTransportKind = Literal["serial", "tcp", "ble"]
+RadioIdentityState = Literal["identity_mismatch", "identity_unbound_legacy"]
+RadioHealthState = Literal[
+    "connected",
+    "initializing",
+    "connecting",
+    "disconnected",
+    "paused",
+    "identity_mismatch",
+    "identity_unbound_legacy",
+]
+
+
+class RadioTransportSnapshot(BaseModel):
+    """Persisted radio transport + identity binding. PIN is internal-only."""
+
+    transport: RadioTransportKind | None = None
+    serial_port: str = ""
+    serial_baudrate: int = 115200
+    tcp_host: str = ""
+    tcp_port: int = 5000
+    ble_address: str = ""
+    ble_pin: str = ""
+    bound_public_key: str | None = None
+    identity_state: RadioIdentityState | None = None
+    previous_transport: dict[str, object] | None = None
+    mismatch_previous_public_key: str | None = None
+    mismatch_new_public_key: str | None = None
+    mismatch_new_name: str | None = None
+    env_imported: bool = False
+
+    @property
+    def configured(self) -> bool:
+        return self.transport is not None
+
+    @property
+    def connection_type(self) -> RadioTransportKind:
+        if self.transport in ("tcp", "ble", "serial"):
+            return self.transport
+        return "serial"
+
+
+class RadioTransportUpdate(BaseModel):
+    """PUT /api/radio/transport body. Exactly one transport family may be set."""
+
+    transport: RadioTransportKind
+    serial_port: str | None = None
+    serial_baudrate: int | None = Field(default=None, ge=1200, le=921600)
+    tcp_host: str | None = None
+    tcp_port: int | None = Field(default=None, ge=1, le=65535)
+    ble_address: str | None = None
+    ble_pin: str | None = None
+
+
+class RadioSerialPortInfo(BaseModel):
+    path: str
+    description: str = ""
+
+
+class RadioBleDeviceInfo(BaseModel):
+    address: str
+    name: str | None = None
+
+
+class RadioTransportCapabilities(BaseModel):
+    tcp: bool = True
+    serial: bool = False
+    ble: bool = False
+    serial_unavailable_reason: str | None = None
+    ble_unavailable_reason: str | None = None
+
+
+class RadioTransportResponse(BaseModel):
+    """GET /api/radio/transport. Never includes the BLE PIN."""
+
+    configured: bool
+    transport: RadioTransportKind | None = None
+    serial_port: str = ""
+    serial_baudrate: int = 115200
+    tcp_host: str = ""
+    tcp_port: int = 5000
+    ble_address: str = ""
+    ble_pin_configured: bool = False
+    bound_public_key: str | None = None
+    capabilities: RadioTransportCapabilities = Field(default_factory=RadioTransportCapabilities)
+    serial_ports: list[RadioSerialPortInfo] = Field(default_factory=list)
+
+
+class RadioBleScanResponse(BaseModel):
+    devices: list[RadioBleDeviceInfo] = Field(default_factory=list)
+
+
+class RadioIdentityInfo(BaseModel):
+    """Persistent identity gate details for health REST/WS. No secrets."""
+
+    previous_public_key: str | None = None
+    new_public_key: str | None = None
+    new_name: str | None = None
+    mesh_contacts: int = 0
+    mesh_messages: int = 0
+    last_activity: int | None = None
+
+
+class RadioIdentityAdoptRequest(BaseModel):
+    """Optional confirm payload for adopt. Empty body is allowed."""
+
+    confirm_wipe: bool = True
+
+
+class RadioIdentityActionResponse(BaseModel):
+    status: str = "ok"
+    radio_state: RadioHealthState
+    bound_public_key: str | None = None
+    connected: bool = False

@@ -30,6 +30,7 @@ import { getStateKey } from './utils/conversationState';
 import type { BulkCreateHashtagChannelsResult, Channel, Conversation, Message } from './types';
 import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM } from './types';
 import { shouldAutoFocusInput } from './utils/autoFocusInput';
+import { resetClientStateAfterIdentityAdopt } from './utils/identityAdoptReset';
 
 interface ChannelUnreadMarker {
   channelId: string;
@@ -419,6 +420,34 @@ export function App() {
     removeMessage,
     notifyIncomingMessage,
   });
+  const handleIdentityAdopted = useCallback(async () => {
+    resetClientStateAfterIdentityAdopt();
+    setContacts([]);
+    handleSelectConversation({
+      type: 'map',
+      id: 'map',
+      name: 'Node Map',
+    });
+    window.history.replaceState(null, '', '#map');
+    await Promise.all([
+      api.getChannels().then(setChannels).catch(console.error),
+      fetchAppSettings(),
+      fetchAllContacts().then(setContacts).catch(console.error),
+      handleHealthRefresh(),
+      fetchConfig(),
+      refreshUnreads(),
+    ]);
+  }, [
+    fetchAllContacts,
+    fetchAppSettings,
+    fetchConfig,
+    handleHealthRefresh,
+    handleSelectConversation,
+    refreshUnreads,
+    setChannels,
+    setContacts,
+  ]);
+
   const handleVisibilityPolicyChanged = useCallback(() => {
     clearConversationMessages();
     reloadCurrentConversation();
@@ -818,6 +847,7 @@ export function App() {
             contactInfoPaneProps={contactInfoPaneProps}
             channelInfoPaneProps={channelInfoPaneProps}
             onRepeaterAutoLogin={handleRepeaterAutoLogin}
+            onIdentityAdopted={handleIdentityAdopted}
           />
         </PathHopWidthProvider>
       </RichPayloadProvider>

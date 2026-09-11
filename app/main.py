@@ -13,8 +13,11 @@ import sys
 if sys.platform == "win32":
     import asyncio as _asyncio
 
-    _loop = _asyncio.get_event_loop()
-    _is_proactor = type(_loop).__name__ == "ProactorEventLoop"
+    try:
+        _loop = _asyncio.get_event_loop()
+    except RuntimeError:
+        _loop = None
+    _is_proactor = _loop is not None and type(_loop).__name__ == "ProactorEventLoop"
     if _is_proactor:
         print(
             "\n" + "!" * 78 + "\n"
@@ -92,6 +95,15 @@ logger = logging.getLogger(__name__)
 
 async def _startup_radio_connect_and_setup() -> None:
     """Connect/setup the radio in the background so HTTP serving can start immediately."""
+    if not radio_manager.connection_desired:
+        logger.info("Radio connection not desired; skipping startup connect")
+        return
+    from app.services.radio_transport import get_transport
+
+    snapshot = await get_transport()
+    if not snapshot.configured:
+        logger.info("Radio transport is not configured; skipping startup connect")
+        return
     try:
         connected = await radio_manager.reconnect_and_prepare(broadcast_on_success=True)
         if connected:
@@ -105,8 +117,28 @@ async def _startup_radio_connect_and_setup() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage database and radio connection lifecycle."""
+    db_path = Path(server_settings.database_path)
+    file_existed = db_path.is_file() and db_path.stat().st_size > 0
+
     await db.connect()
     logger.info("Database connected")
+
+    from app.services.radio_transport import (
+        database_has_mesh_history,
+        get_transport,
+        maybe_import_legacy_env,
+    )
+
+    existing_database = file_existed
+    if not existing_database:
+        current = await get_transport()
+        if not current.env_imported and await database_has_mesh_history():
+            existing_database = True
+
+    snapshot = await maybe_import_legacy_env(existing_database=existing_database)
+    radio_manager.connection_desired = snapshot.configured
+    if not snapshot.configured:
+        logger.info("Radio transport is not configured; connection attempts stay paused")
 
     # Initialize VAPID keys for Web Push (generates on first run)
     from app.push.vapid import ensure_vapid_keys

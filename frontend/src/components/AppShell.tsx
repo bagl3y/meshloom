@@ -18,6 +18,7 @@ import { ContactInfoPane } from './ContactInfoPane';
 import { ChannelInfoPane } from './ChannelInfoPane';
 import { CommandPalette } from './CommandPalette';
 import { SecurityWarningModal } from './SecurityWarningModal';
+import { RadioIdentityModal } from './RadioIdentityModal';
 import { Toaster } from './ui/sonner';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from './ui/sheet';
 import {
@@ -87,6 +88,7 @@ interface AppShellProps {
   contactInfoPaneProps: ContactInfoPaneProps;
   channelInfoPaneProps: ChannelInfoPaneProps;
   onRepeaterAutoLogin: (publicKey: string, displayName: string) => void;
+  onIdentityAdopted: () => void | Promise<void>;
 }
 
 export function AppShell({
@@ -117,6 +119,7 @@ export function AppShell({
   contactInfoPaneProps,
   channelInfoPaneProps,
   onRepeaterAutoLogin,
+  onIdentityAdopted,
 }: AppShellProps) {
   const { t } = useTranslation();
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(
@@ -163,6 +166,8 @@ export function AppShell({
   if (conversationPaneProps.activeConversation?.type === 'search') {
     searchMounted.current = true;
   }
+
+  const [identityModalForced, setIdentityModalForced] = useState(false);
 
   const crackerMounted = useRef(false);
   if (showCracker) {
@@ -321,6 +326,8 @@ export function AppShell({
         config={statusProps.config}
         settingsMode={showSettings}
         onSettingsClick={onToggleSettingsView}
+        onOpenRadioSettings={() => handleOpenSettings('radio')}
+        onOpenIdentityModal={() => setIdentityModalForced(true)}
         onMenuClick={showSettings ? undefined : () => onSidebarOpenChange(true)}
       />
       <div data-toast-anchor="statusbar" aria-hidden="true" />
@@ -446,6 +453,15 @@ export function AppShell({
         onRepeaterAutoLogin={onRepeaterAutoLogin}
       />
       <SecurityWarningModal health={statusProps.health} />
+      <RadioIdentityModal
+        health={statusProps.health}
+        forceOpen={identityModalForced}
+        onAdopted={onIdentityAdopted}
+        onResolved={async () => {
+          setIdentityModalForced(false);
+          await settingsProps.onHealthRefresh();
+        }}
+      />
       <ContactInfoPane {...contactInfoPaneProps} />
       <ChannelInfoPane {...channelInfoPaneProps} />
       <Toaster

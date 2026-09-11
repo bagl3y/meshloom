@@ -7,7 +7,7 @@ order: 14
 
 Meshloom has two configuration surfaces.
 
-The **environment** covers what must be known before startup: radio transport, database location, bots, authentication, and diagnostic switches. Changing it requires a restart. **Runtime settings** live in `app_settings` and are changed through `GET` / `PATCH /api/settings`.
+The **environment** covers what must be known before startup: database location, bots, authentication, and diagnostic switches. Changing it requires a restart. **Runtime settings** live in `app_settings` and are changed through the UI or `GET` / `PATCH /api/settings`. Radio transport is a runtime setting, not an environment variable. See [Radio transports](/en/docs/deep/transports/).
 
 ## Where variables go
 
@@ -19,16 +19,19 @@ The **environment** covers what must be known before startup: radio transport, d
 
 ## Radio connection
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MESHCORE_SERIAL_PORT` | auto-detect | Radio serial port |
-| `MESHCORE_SERIAL_BAUDRATE` | `115200` | Serial speed |
-| `MESHCORE_TCP_HOST` | *(empty)* | Radio TCP host |
-| `MESHCORE_TCP_PORT` | `5000` | TCP port |
-| `MESHCORE_BLE_ADDRESS` | *(empty)* | Radio BLE address |
-| `MESHCORE_BLE_PIN` | *(empty)* | BLE PIN, required with the address |
+Radio transport is configured in the web interface and stored on `app_settings`:
 
-Only one transport may be configured. See [Radio transports](/en/docs/deep/transports/).
+| Column | Default | Description |
+|--------|---------|-------------|
+| `radio_transport` | *(unset / paused)* | `serial`, `tcp`, or `ble` |
+| `radio_serial_port` | empty | Serial port; empty means auto-detect |
+| `radio_serial_baudrate` | `115200` | Serial speed |
+| `radio_tcp_host` | empty | Radio TCP host |
+| `radio_tcp_port` | `5000` | TCP port |
+| `radio_ble_address` | empty | Radio BLE address |
+| `radio_ble_pin` | empty | BLE PIN, required with BLE |
+
+Until `radio_transport` is set, the radio stays paused. Do not set `MESHCORE_SERIAL_PORT`, `MESHCORE_TCP_HOST`, or `MESHCORE_BLE_ADDRESS` to choose a transport.
 
 ## Server and data
 
@@ -67,6 +70,7 @@ The message poll task always exists; the fallback variable changes its frequency
 
 These live in `app_settings` and are controlled through the UI or `PATCH /api/settings`:
 
+- `radio_transport`, `radio_serial_port`, `radio_serial_baudrate`, `radio_tcp_host`, `radio_tcp_port`, `radio_ble_address`, `radio_ble_pin`
 - `max_radio_contacts`
 - `auto_decrypt_dm_on_advert`
 - `advert_interval`, `last_advert_time`

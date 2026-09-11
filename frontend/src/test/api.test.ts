@@ -322,6 +322,34 @@ describe('fetchJson (via api methods)', () => {
       expect(JSON.parse(options.body)).toEqual({ name: 'NewName' });
     });
 
+    it('calls radio transport and identity endpoints', async () => {
+      installMockFetch();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ status: 'ok' }),
+      });
+
+      await api.getRadioTransport();
+      await api.updateRadioTransport({ transport: 'tcp', tcp_host: '10.0.0.1', tcp_port: 5000 });
+      await api.scanRadioBle();
+      await api.adoptRadioIdentity({ confirm_wipe: false });
+      await api.rejectRadioIdentity();
+
+      expect(mockFetch.mock.calls.map(([url, options]) => [url, options.method])).toEqual([
+        ['./api/radio/transport', undefined],
+        ['./api/radio/transport', 'PUT'],
+        ['./api/radio/transport/ble-scan', 'POST'],
+        ['./api/radio/identity/adopt', 'POST'],
+        ['./api/radio/identity/reject', 'POST'],
+      ]);
+      expect(JSON.parse(mockFetch.mock.calls[1][1].body)).toEqual({
+        transport: 'tcp',
+        tcp_host: '10.0.0.1',
+        tcp_port: 5000,
+      });
+      expect(JSON.parse(mockFetch.mock.calls[3][1].body)).toEqual({ confirm_wipe: false });
+    });
+
     it('sends PUT with JSON body for setPrivateKey', async () => {
       installMockFetch();
       mockFetch.mockResolvedValueOnce({

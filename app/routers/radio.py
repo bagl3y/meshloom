@@ -13,9 +13,13 @@ from app.models import (
     CONTACT_TYPE_REPEATER,
     Contact,
     ContactUpsert,
+    RadioBleDeviceInfo,
+    RadioBleScanResponse,
     RadioDiscoveryRequest,
     RadioDiscoveryResponse,
     RadioDiscoveryResult,
+    RadioIdentityActionResponse,
+    RadioIdentityAdoptRequest,
     RadioRegionDiscoveryRepeater,
     RadioRegionDiscoveryRequest,
     RadioRegionDiscoveryResponse,
@@ -23,10 +27,19 @@ from app.models import (
     RadioTraceNode,
     RadioTraceRequest,
     RadioTraceResponse,
+    RadioTransportResponse,
+    RadioTransportUpdate,
 )
+from app.radio import RadioOperationBusyError
 from app.radio_sync import send_advertisement as do_send_advertisement
 from app.radio_sync import sync_radio_time
 from app.repository import ContactRepository
+from app.repository.radio_transport import (
+    RadioTransportRepository,
+    apply_saved_transport,
+    snapshot_restore_dict,
+    validate_transport_update,
+)
 from app.routers.repeaters import request_anon_region_names
 from app.routers.server_control import _monotonic
 from app.services.contact_reconciliation import (
@@ -41,6 +54,11 @@ from app.services.radio_commands import (
     import_private_key_and_refresh_keystore,
 )
 from app.services.radio_runtime import radio_runtime as radio_manager
+from app.services.radio_transport import (
+    build_transport_response,
+    get_transport,
+    scan_ble_devices,
+)
 from app.websocket import broadcast_event, broadcast_health
 
 logger = logging.getLogger(__name__)
@@ -449,9 +467,35 @@ async def set_private_key(update: PrivateKeyUpdate) -> dict:
         raise HTTPException(status_code=400, detail="Invalid hex string for private key") from None
 
     logger.info("Importing private key")
-    async with radio_manager.radio_operation("import_private_key") as mc:
-        from app.keystore import export_and_store_private_key
+    from app.decoder import derive_public_key
+    from app.keystore import export_and_store_private_key, get_public_key
+    from app.repository.radio_transport import RadioTransportRepository, snapshot_restore_dict
+    from app.services.radio_ingest_gate import deny_ingest
+    from app.services.radio_transport import get_transport
 
+    try:
+        derived = derive_public_key(key_bytes).hex().lower()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid private key") from exc
+
+    current_pub = get_public_key()
+    current_hex = current_pub.hex().lower() if current_pub else None
+    snapshot = await get_transport()
+    bound = (snapshot.bound_public_key or current_hex or "").lower()
+    if bound and derived != bound:
+        deny_ingest()
+        await RadioTransportRepository.set_identity_gate(
+            state="identity_mismatch",
+            previous_public_key=bound or None,
+            new_public_key=derived,
+            previous_transport=snapshot_restore_dict(snapshot) if snapshot.configured else None,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="Private key changes radio identity; adopt or reject in Settings",
+        )
+
+    async with radio_manager.radio_operation("import_private_key") as mc:
         try:
             await import_private_key_and_refresh_keystore(
                 mc,
@@ -743,8 +787,20 @@ async def trace_path(request: RadioTraceRequest) -> RadioTraceResponse:
     )
 
 
+async def _require_transport_ready() -> None:
+    snapshot = await get_transport()
+    if not snapshot.configured:
+        raise HTTPException(status_code=409, detail="Radio transport is not configured")
+    if snapshot.identity_state:
+        raise HTTPException(
+            status_code=409,
+            detail="Radio identity gate is open; adopt or reject before reconnecting",
+        )
+
+
 async def _attempt_reconnect() -> dict:
     """Shared reconnection logic for reboot and reconnect endpoints."""
+    await _require_transport_ready()
     radio_manager.resume_connection()
 
     if radio_manager.is_reconnecting:
@@ -769,6 +825,175 @@ async def _attempt_reconnect() -> dict:
         )
 
     return {"status": "ok", "message": "Reconnected successfully", "connected": True}
+
+
+@router.get("/transport", response_model=RadioTransportResponse)
+async def get_radio_transport() -> RadioTransportResponse:
+    return await build_transport_response()
+
+
+def _transport_fields_equal(left, right) -> bool:
+    return (
+        left.transport == right.transport
+        and left.serial_port == right.serial_port
+        and left.serial_baudrate == right.serial_baudrate
+        and left.tcp_host == right.tcp_host
+        and left.tcp_port == right.tcp_port
+        and left.ble_address == right.ble_address
+        and left.ble_pin == right.ble_pin
+    )
+
+
+@router.put("/transport", response_model=RadioTransportResponse)
+async def put_radio_transport(update: RadioTransportUpdate) -> RadioTransportResponse:
+    current = await get_transport()
+    try:
+        validate_transport_update(
+            update.transport,
+            serial_port=update.serial_port,
+            tcp_host=update.tcp_host,
+            ble_address=update.ble_address,
+            ble_pin=update.ble_pin if update.ble_pin is not None else current.ble_pin,
+        )
+        next_snapshot = apply_saved_transport(
+            current,
+            transport=update.transport,
+            serial_port=update.serial_port,
+            serial_baudrate=update.serial_baudrate,
+            tcp_host=update.tcp_host,
+            tcp_port=update.tcp_port,
+            ble_address=update.ble_address,
+            ble_pin=update.ble_pin,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not current.identity_state and _transport_fields_equal(current, next_snapshot):
+        return await build_transport_response()
+    try:
+        async with radio_manager.lifecycle_transition("put_transport"):
+            if current.identity_state:
+                await RadioTransportRepository.clear_identity_gate()
+                current = await get_transport()
+                next_snapshot = apply_saved_transport(
+                    current,
+                    transport=update.transport,
+                    serial_port=update.serial_port,
+                    serial_baudrate=update.serial_baudrate,
+                    tcp_host=update.tcp_host,
+                    tcp_port=update.tcp_port,
+                    ble_address=update.ble_address,
+                    ble_pin=update.ble_pin,
+                )
+            if current.configured:
+                next_snapshot.previous_transport = snapshot_restore_dict(current)
+            await radio_manager.disconnect()
+            await RadioTransportRepository.save(next_snapshot)
+            radio_manager.resume_connection()
+            try:
+                await _reconnect_and_prepare(broadcast_on_success=True)
+            except Exception:
+                logger.exception("Reconnect after transport update failed")
+    except RadioOperationBusyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return await build_transport_response()
+
+
+@router.post("/transport/ble-scan", response_model=RadioBleScanResponse)
+async def post_radio_ble_scan() -> RadioBleScanResponse:
+    try:
+        devices = await scan_ble_devices()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return RadioBleScanResponse(
+        devices=[RadioBleDeviceInfo(address=address, name=name) for address, name in devices]
+    )
+
+
+@router.post("/identity/adopt", response_model=RadioIdentityActionResponse)
+async def adopt_radio_identity(
+    request: RadioIdentityAdoptRequest | None = None,
+) -> RadioIdentityActionResponse:
+    snapshot = await get_transport()
+    if snapshot.identity_state not in ("identity_mismatch", "identity_unbound_legacy"):
+        raise HTTPException(status_code=409, detail="No radio identity gate is open")
+    confirm_wipe = True if request is None else request.confirm_wipe
+    if snapshot.identity_state == "identity_mismatch" and not confirm_wipe:
+        raise HTTPException(
+            status_code=409,
+            detail="Adopting a different radio identity requires wiping mesh history",
+        )
+    new_key = snapshot.mismatch_new_public_key or snapshot.bound_public_key
+    from app.services.radio_identity import (
+        clear_ha_after_identity_wipe,
+        snapshot_ha_retained_topics,
+        wipe_mesh_identity_data,
+    )
+
+    try:
+        async with radio_manager.lifecycle_transition("identity_adopt"):
+            ha_topics = await snapshot_ha_retained_topics() if confirm_wipe else []
+            if confirm_wipe:
+                await wipe_mesh_identity_data()
+                await clear_ha_after_identity_wipe(ha_topics)
+            if new_key:
+                snapshot = await RadioTransportRepository.bind_public_key(new_key)
+            else:
+                snapshot = await RadioTransportRepository.clear_identity_gate()
+            radio_manager.resume_connection()
+            connected = False
+            try:
+                connected = await _reconnect_and_prepare(broadcast_on_success=True)
+            except Exception:
+                logger.exception("Reconnect after identity adopt failed")
+    except RadioOperationBusyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return RadioIdentityActionResponse(
+        status="ok",
+        radio_state="connected" if connected else "paused",
+        bound_public_key=snapshot.bound_public_key,
+        connected=bool(connected),
+    )
+
+
+@router.post("/identity/reject", response_model=RadioIdentityActionResponse)
+async def reject_radio_identity() -> RadioIdentityActionResponse:
+    snapshot = await get_transport()
+    if snapshot.identity_state not in ("identity_mismatch", "identity_unbound_legacy"):
+        raise HTTPException(status_code=409, detail="No radio identity gate is open")
+    previous = snapshot.previous_transport
+    try:
+        async with radio_manager.lifecycle_transition("identity_reject"):
+            await RadioTransportRepository.clear_identity_gate()
+            if isinstance(previous, dict) and previous.get("transport") in ("serial", "tcp", "ble"):
+                restored = snapshot.model_copy(deep=True)
+                restored.transport = previous.get("transport")  # type: ignore[assignment]
+                restored.serial_port = str(previous.get("serial_port") or "")
+                baud_raw = previous.get("serial_baudrate")
+                restored.serial_baudrate = int(baud_raw) if isinstance(baud_raw, int) else 115200
+                restored.tcp_host = str(previous.get("tcp_host") or "")
+                port_raw = previous.get("tcp_port")
+                restored.tcp_port = int(port_raw) if isinstance(port_raw, int) else 5000
+                restored.ble_address = str(previous.get("ble_address") or "")
+                restored.ble_pin = str(previous.get("ble_pin") or "")
+                restored.identity_state = None
+                restored.previous_transport = None
+                await RadioTransportRepository.save(restored)
+            else:
+                cleared = snapshot.model_copy(deep=True)
+                cleared.transport = None
+                cleared.identity_state = None
+                cleared.previous_transport = None
+                await RadioTransportRepository.save(cleared)
+            await radio_manager.pause_connection()
+            broadcast_health(False, radio_manager.connection_info)
+    except RadioOperationBusyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return RadioIdentityActionResponse(
+        status="ok",
+        radio_state="paused",
+        bound_public_key=snapshot.bound_public_key,
+        connected=False,
+    )
 
 
 @router.post("/disconnect")

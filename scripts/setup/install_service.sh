@@ -77,111 +77,9 @@ require_minimum_version() {
     fi
 }
 
-# ── transport selection ────────────────────────────────────────────────────────
-
-NEED_DIALOUT=false
-SERIAL_PORT=""
-TCP_HOST=""
-TCP_PORT=""
-BLE_ADDRESS=""
-BLE_PIN=""
-TRANSPORT_CHOICE=""
-
-if [ -n "${MESHLOOM_TRANSPORT:-}" ]; then
-    case "$MESHLOOM_TRANSPORT" in
-        serial-auto)
-            TRANSPORT_CHOICE=1
-            NEED_DIALOUT=true
-            echo -e "${GREEN}Serial auto-detect selected.${NC}"
-            ;;
-        serial)
-            TRANSPORT_CHOICE=2
-            SERIAL_PORT="${MESHLOOM_SERIAL_PORT:-/dev/ttyUSB0}"
-            NEED_DIALOUT=true
-            echo -e "${GREEN}Serial port: ${SERIAL_PORT}${NC}"
-            ;;
-        tcp)
-            TRANSPORT_CHOICE=3
-            TCP_HOST="${MESHLOOM_TCP_HOST:-}"
-            TCP_PORT="${MESHLOOM_TCP_PORT:-5000}"
-            if [ -z "$TCP_HOST" ]; then
-                echo -e "${RED}Error: MESHLOOM_TCP_HOST is required.${NC}"
-                exit 1
-            fi
-            echo -e "${GREEN}TCP: ${TCP_HOST}:${TCP_PORT}${NC}"
-            ;;
-        ble)
-            TRANSPORT_CHOICE=4
-            BLE_ADDRESS="${MESHLOOM_BLE_ADDRESS:-}"
-            BLE_PIN="${MESHLOOM_BLE_PIN:-}"
-            if [ -z "$BLE_ADDRESS" ] || [ -z "$BLE_PIN" ]; then
-                echo -e "${RED}Error: MESHLOOM_BLE_ADDRESS and MESHLOOM_BLE_PIN are required.${NC}"
-                exit 1
-            fi
-            echo -e "${GREEN}BLE: ${BLE_ADDRESS}${NC}"
-            ;;
-        *)
-            echo -e "${RED}Error: unknown MESHLOOM_TRANSPORT=${MESHLOOM_TRANSPORT}${NC}"
-            exit 1
-            ;;
-    esac
-    echo
-else
-    echo -e "${BOLD}─── Transport ───────────────────────────────────────────────────────${NC}"
-    echo "How is your MeshCore radio connected?"
-    echo "  1) Serial — auto-detect port (default)"
-    echo "  2) Serial — specify port manually"
-    echo "  3) TCP (network connection)"
-    echo "  4) BLE (Bluetooth)"
-    echo
-    read -rp "Select transport [1-4] (default: 1): " TRANSPORT_CHOICE
-    TRANSPORT_CHOICE="${TRANSPORT_CHOICE:-1}"
-    echo
-
-    case "$TRANSPORT_CHOICE" in
-        1)
-            echo -e "${GREEN}Serial auto-detect selected.${NC}"
-            NEED_DIALOUT=true
-            ;;
-        2)
-            read -rp "Serial port path (default: /dev/ttyUSB0): " SERIAL_PORT
-            SERIAL_PORT="${SERIAL_PORT:-/dev/ttyUSB0}"
-            echo -e "${GREEN}Serial port: ${SERIAL_PORT}${NC}"
-            NEED_DIALOUT=true
-            ;;
-        3)
-            read -rp "TCP host (IP address or hostname): " TCP_HOST
-            while [ -z "$TCP_HOST" ]; do
-                echo -e "${RED}TCP host is required.${NC}"
-                read -rp "TCP host: " TCP_HOST
-            done
-            read -rp "TCP port (default: 5000): " TCP_PORT
-            TCP_PORT="${TCP_PORT:-5000}"
-            echo -e "${GREEN}TCP: ${TCP_HOST}:${TCP_PORT}${NC}"
-            ;;
-        4)
-            read -rp "BLE device address (e.g. AA:BB:CC:DD:EE:FF): " BLE_ADDRESS
-            while [ -z "$BLE_ADDRESS" ]; do
-                echo -e "${RED}BLE address is required.${NC}"
-                read -rp "BLE device address: " BLE_ADDRESS
-            done
-            read -rsp "BLE PIN: " BLE_PIN
-            echo
-            while [ -z "$BLE_PIN" ]; do
-                echo -e "${RED}BLE PIN is required.${NC}"
-                read -rsp "BLE PIN: " BLE_PIN
-                echo
-            done
-            echo -e "${GREEN}BLE: ${BLE_ADDRESS}${NC}"
-            ;;
-        *)
-            echo -e "${YELLOW}Invalid selection — defaulting to serial auto-detect.${NC}"
-            TRANSPORT_CHOICE=1
-            NEED_DIALOUT=true
-            ;;
-    esac
-    echo
-fi
+# Radio transport is configured in the web UI (app_settings), not via
+# systemd Environment= lines. Grant dialout so a later serial choice works.
+NEED_DIALOUT=true
 
 # ── frontend install mode ──────────────────────────────────────────────────────
 
@@ -372,19 +270,6 @@ generate_service_file() {
     echo "RestartSec=5"
     echo "Environment=MESHCORE_DATABASE_PATH=${REPO_DIR}/data/meshcore.db"
 
-    # Transport
-    case "$TRANSPORT_CHOICE" in
-        2) echo "Environment=MESHCORE_SERIAL_PORT=$(systemd_escape_env_value "$SERIAL_PORT")" ;;
-        3)
-            echo "Environment=MESHCORE_TCP_HOST=$(systemd_escape_env_value "$TCP_HOST")"
-            echo "Environment=MESHCORE_TCP_PORT=$(systemd_escape_env_value "$TCP_PORT")"
-            ;;
-        4)
-            echo "Environment=MESHCORE_BLE_ADDRESS=$(systemd_escape_env_value "$BLE_ADDRESS")"
-            echo "Environment=MESHCORE_BLE_PIN=$(systemd_escape_env_value "$BLE_PIN")"
-            ;;
-    esac
-
     # Bots
     if [[ ! "$ENABLE_BOTS" =~ ^[Yy] ]]; then
         echo "Environment=MESHCORE_DISABLE_BOTS=true"
@@ -432,12 +317,7 @@ echo
 echo -e "Meshloom is running at ${CYAN}http://$(hostname -I | awk '{print $1}'):8000${NC}"
 echo
 
-case "$TRANSPORT_CHOICE" in
-    1) echo -e "  Transport : ${CYAN}Serial (auto-detect)${NC}" ;;
-    2) echo -e "  Transport : ${CYAN}Serial (${SERIAL_PORT})${NC}" ;;
-    3) echo -e "  Transport : ${CYAN}TCP (${TCP_HOST}:${TCP_PORT})${NC}" ;;
-    4) echo -e "  Transport : ${CYAN}BLE (${BLE_ADDRESS})${NC}" ;;
-esac
+echo -e "  Transport : ${CYAN}Configured in the web interface${NC}"
 if [ "$FRONTEND_MODE" = "build" ]; then
     echo -e "  Frontend  : ${GREEN}Built locally${NC}"
 else

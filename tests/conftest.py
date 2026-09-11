@@ -36,6 +36,7 @@ async def test_db():
         directory,
         messages,
         push_subscriptions,
+        radio_transport,
         raw_packets,
         repeater_telemetry,
         settings,
@@ -51,6 +52,7 @@ async def test_db():
         contact_groups,
         directory,
         messages,
+        radio_transport,
         raw_packets,
         settings,
         fanout_repo,
@@ -76,6 +78,19 @@ async def test_db():
             mod.db = original
         packets_module.db = original_packets_db
         await db.disconnect()
+
+
+@pytest.fixture(autouse=True)
+def _reset_radio_ingest_gate():
+    """Keep the process-wide ingest gate open between tests."""
+    from app.radio import radio_manager
+    from app.services.radio_ingest_gate import allow_ingest
+
+    allow_ingest()
+    radio_manager.connection_desired = True
+    yield
+    allow_ingest()
+    radio_manager.connection_desired = True
 
 
 @pytest.fixture

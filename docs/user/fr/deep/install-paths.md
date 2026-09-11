@@ -13,7 +13,7 @@ Le one-liner de la page [Installer](/docs/install/) couvre le cas courant. Cette
 /bin/bash -c "$(curl -fsSL https://get.meshloom.app)"
 ```
 
-Le `/bin/bash -c` n’est pas décoratif. Le script pose des questions, et un `curl | bash` prive ces questions de terminal. Sur Linux, il demande service systemd natif ou Docker, et ne propose que les transports radio utilisables sur la machine.
+Le `/bin/bash -c` n’est pas décoratif. Le script pose des questions, et un `curl | bash` prive ces questions de terminal. Sur Linux, il demande service systemd natif ou Docker. Docker peut demander USB ou réseau uniquement pour émettre un mapping Compose `devices:`. Le transport radio se configure dans l’interface.
 
 En systemd natif, il installe le paquet `meshloom` via `apt-get` ou `dnf` quand il est disponible. Cette installation pose trois choses :
 
@@ -37,14 +37,14 @@ Depuis un dépôt déjà cloné, l’installeur de checkout reste utilisable. Il
 bash scripts/setup/install_service.sh
 ```
 
-Le script est rejouable. Le relancer plus tard permet de changer le transport, l’activation des bots ou les identifiants d’authentification. Si le service tourne déjà, il l’arrête, réécrit le fichier d’unité, recharge systemd, puis le redémarre avec la nouvelle configuration.
+Le script est rejouable. Le relancer plus tard permet de changer l’activation des bots ou les identifiants d’authentification. Si le service tourne déjà, il l’arrête, réécrit le fichier d’unité, recharge systemd, puis le redémarre avec la nouvelle configuration. Le transport radio se configure dans l’interface, pas dans le fichier d’unité.
 
 ## Docker
 
 L’image est publiée sur `ghcr.io/bagl3y/meshloom`. Le dépôt fournit `docker-compose.example.yml` comme point de départ. Les éléments qui comptent :
 
 - le volume `./data:/app/data`, qui contient la base SQLite
-- le mapping du périphérique radio, ou les variables `MESHCORE_TCP_HOST` / `MESHCORE_TCP_PORT`
+- un mapping `devices:` optionnel pour l’USB (TCP et BLE se configurent dans l’interface)
 - `MESHCORE_DATABASE_PATH: data/meshcore.db`
 - `restart: unless-stopped`
 
@@ -62,13 +62,11 @@ Les clés attendues sont peu nombreuses :
 MESHLOOM_HTTP_PORT=8123
 MESHLOOM_DATA_PATH=/opt/docker/meshloom/data
 MESHCORE_DATABASE_PATH=data/meshcore.db
-MESHCORE_TCP_HOST=192.168.1.100
-MESHCORE_TCP_PORT=5000
 MESHCORE_DISABLE_BOTS=false
 MESHCORE_VAPID_SUBJECT=mailto:you@example.com
 ```
 
-Ne validez pas de vrais hôtes radio, ports, ou adresses VAPID dans le dépôt.
+Ne validez pas de vraies adresses VAPID dans le dépôt. L’hôte et le port radio se règlent dans l’interface.
 
 ## Depuis un checkout
 

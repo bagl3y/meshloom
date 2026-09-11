@@ -44,6 +44,7 @@ app/
 │   ├── radio_commands.py        # Radio config/private-key command workflows
 │   ├── radio_stats.py           # In-memory local radio stats sampling and noise-floor history
 │   ├── radio_runtime.py         # Router/dependency seam over the global RadioManager
+│   ├── radio_transport.py       # UX-owned radio transport snapshot (serial / TCP / BLE)
 │   ├── directory.py             # CoreScope proxy (resolve-hops, nodes, reach, neighbors, search)
 │   └── rf_locate.py             # RF locate identity + 0-hop disk assembly
 ├── radio.py             # RadioManager transport/session state + lock management
@@ -102,6 +103,10 @@ app/
 3. Endpoint broadcasts WS `message` event so all live clients update.
 4. ACK/repeat updates arrive later as `message_acked` events.
 5. Channel resend (`POST /messages/channel/{id}/resend`) strips the sender name prefix by exact match against the current radio name. This assumes the radio name hasn't changed between the original send and the resend. Name changes require an explicit radio config update and are rare, but the `new_timestamp=true` resend path has no time window, so a mismatch is possible if the name was changed between the original send and a later resend.
+
+### Radio transport (UX / `app_settings`, not env)
+
+Transport is configured in the web UI and stored on `app_settings`: `radio_transport` (`serial` / `tcp` / `ble`), `radio_serial_port` (empty = auto-detect), `radio_serial_baudrate`, `radio_tcp_host` / `radio_tcp_port`, `radio_ble_address` / `radio_ble_pin`. Until `radio_transport` is set, the radio stays paused. Do not use `MESHCORE_SERIAL_PORT`, `MESHCORE_TCP_HOST`, or `MESHCORE_BLE_ADDRESS` as the configuration surface.
 
 ### Connection lifecycle
 
@@ -401,6 +406,7 @@ Repository writes should prefer typed models such as `ContactUpsert` over ad hoc
 `max_radio_contacts` is the configured radio contact capacity baseline. Favorites reload first, the app refills non-favorite working-set contacts to about 80% of that capacity, and periodic offload triggers once occupancy reaches about 95%.
 
 `app_settings` fields in active model:
+- `radio_transport`, `radio_serial_port`, `radio_serial_baudrate`, `radio_tcp_host`, `radio_tcp_port`, `radio_ble_address`, `radio_ble_pin`
 - `max_radio_contacts`
 - `auto_decrypt_dm_on_advert`
 - `last_message_times`

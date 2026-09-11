@@ -210,36 +210,30 @@ export function SettingsModal(props: SettingsModalProps) {
       {shouldRenderSection('radio') && (
         <section className={sectionWrapperClass}>
           {renderSectionHeader('radio')}
-          {isSectionVisible('radio') &&
-            (config && appSettings ? (
-              <SettingsRadioSection
-                config={config}
-                health={health}
-                appSettings={appSettings}
-                pageMode={pageMode}
-                onSave={onSave}
-                onSaveAppSettings={onSaveAppSettings}
-                onSetPrivateKey={onSetPrivateKey}
-                onReboot={onReboot}
-                onDisconnect={onDisconnect}
-                onReconnect={onReconnect}
-                onAdvertise={onAdvertise}
-                meshDiscovery={meshDiscovery}
-                meshDiscoveryLoadingTarget={meshDiscoveryLoadingTarget}
-                onDiscoverMesh={onDiscoverMesh}
-                regionDiscovery={regionDiscovery}
-                regionDiscoveryLoading={regionDiscoveryLoading}
-                onDiscoverRegions={onDiscoverRegions}
-                onClose={onClose}
-                className={sectionContentClass}
-              />
-            ) : (
-              <div className={sectionContentClass}>
-                <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                  {t('settings.radio.unavailable')}
-                </div>
-              </div>
-            ))}
+          {isSectionVisible('radio') && (
+            <SettingsRadioSection
+              config={config}
+              health={health}
+              appSettings={appSettings}
+              pageMode={pageMode}
+              onSave={onSave}
+              onSaveAppSettings={onSaveAppSettings}
+              onSetPrivateKey={onSetPrivateKey}
+              onReboot={onReboot}
+              onDisconnect={onDisconnect}
+              onReconnect={onReconnect}
+              onAdvertise={onAdvertise}
+              meshDiscovery={meshDiscovery}
+              meshDiscoveryLoadingTarget={meshDiscoveryLoadingTarget}
+              onDiscoverMesh={onDiscoverMesh}
+              regionDiscovery={regionDiscovery}
+              regionDiscoveryLoading={regionDiscoveryLoading}
+              onDiscoverRegions={onDiscoverRegions}
+              onHealthRefresh={onHealthRefresh}
+              onClose={onClose}
+              className={sectionContentClass}
+            />
+          )}
         </section>
       )}
 

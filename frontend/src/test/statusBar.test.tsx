@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StatusBar } from '../components/StatusBar';
 import i18n from '../i18n';
+import { api } from '../api';
 import type { HealthStatus } from '../types';
 
 const baseHealth: HealthStatus = {
@@ -53,6 +54,100 @@ describe('StatusBar', () => {
       screen.getByRole('status', { name: i18n.t('statusBar.radioDisconnected') })
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: i18n.t('statusBar.reconnect') })).toBeInTheDocument();
+  });
+
+  it('routes Connect to radio settings when no transport is configured', () => {
+    const reconnectSpy = vi.spyOn(api, 'reconnectRadio');
+    const onOpenRadioSettings = vi.fn();
+    render(
+      <StatusBar
+        health={{ ...baseHealth, transport_configured: false }}
+        config={null}
+        onSettingsClick={vi.fn()}
+        onOpenRadioSettings={onOpenRadioSettings}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('statusBar.connect') }));
+
+    expect(window.location.hash).toBe('#settings/radio');
+    expect(onOpenRadioSettings).toHaveBeenCalledTimes(1);
+    expect(reconnectSpy).not.toHaveBeenCalled();
+    reconnectSpy.mockRestore();
+  });
+
+  it('opens the identity modal instead of reconnecting on identity mismatch', () => {
+    const reconnectSpy = vi.spyOn(api, 'reconnectRadio');
+    const onOpenIdentityModal = vi.fn();
+    render(
+      <StatusBar
+        health={{
+          ...baseHealth,
+          radio_state: 'identity_mismatch',
+          identity: {
+            previous_public_key: 'aa'.repeat(32),
+            new_public_key: 'bb'.repeat(32),
+            new_name: 'NewRadio',
+            mesh_contacts: 3,
+            mesh_messages: 12,
+            last_activity: 1700000000,
+          },
+        }}
+        config={null}
+        onSettingsClick={vi.fn()}
+        onOpenIdentityModal={onOpenIdentityModal}
+      />
+    );
+
+    expect(
+      screen.getByRole('status', { name: i18n.t('statusBar.radioIdentityMismatch') })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('statusBar.reviewIdentity') }));
+
+    expect(onOpenIdentityModal).toHaveBeenCalledTimes(1);
+    expect(reconnectSpy).not.toHaveBeenCalled();
+    reconnectSpy.mockRestore();
+  });
+
+  it('opens Radio settings when Connect is used without a configured transport', () => {
+    const onOpenRadioSettings = vi.fn();
+    render(
+      <StatusBar
+        health={{ ...baseHealth, radio_state: 'paused', transport_configured: false }}
+        config={null}
+        onSettingsClick={vi.fn()}
+        onOpenRadioSettings={onOpenRadioSettings}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('statusBar.connect') }));
+    expect(onOpenRadioSettings).toHaveBeenCalled();
+  });
+
+  it('opens the identity modal from the status action during a mismatch', () => {
+    const onOpenIdentityModal = vi.fn();
+    render(
+      <StatusBar
+        health={{
+          ...baseHealth,
+          radio_state: 'identity_mismatch',
+          identity: {
+            previous_public_key: 'aa'.repeat(32),
+            new_public_key: 'bb'.repeat(32),
+            new_name: 'New',
+            mesh_contacts: 2,
+            mesh_messages: 4,
+            last_activity: null,
+          },
+        }}
+        config={null}
+        onSettingsClick={vi.fn()}
+        onOpenIdentityModal={onOpenIdentityModal}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('statusBar.reviewIdentity') }));
+    expect(onOpenIdentityModal).toHaveBeenCalled();
   });
 
   it('shows Radio Paused and a Connect action when reconnect attempts are paused', () => {
