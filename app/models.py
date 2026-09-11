@@ -1520,9 +1520,11 @@ class RadioBleDeviceInfo(BaseModel):
 
 
 class RadioTransportCapabilities(BaseModel):
+    """Transport choices are always offered. Reasons are live-host hints only."""
+
     tcp: bool = True
-    serial: bool = False
-    ble: bool = False
+    serial: bool = True
+    ble: bool = True
     serial_unavailable_reason: str | None = None
     ble_unavailable_reason: str | None = None
 

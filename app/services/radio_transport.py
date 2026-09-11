@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from pathlib import Path
 
 from app.models import RadioTransportKind, RadioTransportSnapshot
 from app.repository.radio_transport import RadioTransportRepository
@@ -122,6 +123,20 @@ def is_tcp(snapshot: RadioTransportSnapshot | None = None) -> bool:
     )
 
 
+def _running_in_container() -> bool:
+    return Path("/.dockerenv").exists() or Path("/run/.containerenv").exists()
+
+
+def serial_ports_unavailable_reason() -> str:
+    """Advisory copy when the host currently lists no serial devices."""
+    if _running_in_container():
+        return "No serial ports are visible. Map the device into the container."
+    return (
+        "No serial ports are visible. Plug in the radio, or check that this "
+        "process can access /dev/ttyUSB* / /dev/ttyACM* (dialout group on Linux)."
+    )
+
+
 async def probe_serial_ports() -> list[tuple[str, str]]:
     """Return (path, description) for visible serial devices. Never raises."""
     from app.radio import detect_serial_devices
@@ -150,30 +165,46 @@ async def probe_serial_ports() -> list[tuple[str, str]]:
     return ports
 
 
-async def probe_ble_available() -> tuple[bool, str | None]:
-    """Return (available, reason). Timeout-bounded, never on the health path."""
+def linux_hci_adapters() -> list[str] | None:
+    """Return hci* names, or None when this host has no sysfs bluetooth class."""
+    root = Path("/sys/class/bluetooth")
+    if not root.is_dir():
+        return None
     try:
-        from bleak import BleakScanner
+        return sorted(path.name for path in root.iterdir() if path.name.startswith("hci"))
+    except OSError:
+        return None
+
+
+async def probe_ble_available() -> tuple[bool, str | None]:
+    """Return (available, reason) without running a discovery scan.
+
+    A scan is reserved for the explicit UI Scan action. Timeouts or an empty
+    result must not hide Bluetooth as a transport choice.
+    """
+    try:
+        import bleak  # noqa: F401
     except Exception:
         return False, "BLE stack (bleak) is not available in this process"
-    try:
-        devices = await asyncio.wait_for(BleakScanner.discover(timeout=2.0), timeout=4.0)
-    except TimeoutError:
-        return False, "BLE scan timed out"
-    except Exception as exc:
-        return False, str(exc) or "No Bluetooth adapter"
-    if devices:
+    adapters = linux_hci_adapters()
+    if adapters is None:
         return True, None
-    return True, None
+    if adapters:
+        return True, None
+    return False, "No Bluetooth adapter"
 
 
 async def scan_ble_devices() -> list[tuple[str, str | None]]:
-    available, reason = await probe_ble_available()
-    if not available:
-        raise RuntimeError(reason or "BLE is not available")
-    from bleak import BleakScanner
-
-    devices = await asyncio.wait_for(BleakScanner.discover(timeout=5.0), timeout=8.0)
+    try:
+        from bleak import BleakScanner
+    except Exception as exc:
+        raise RuntimeError("BLE stack (bleak) is not available in this process") from exc
+    try:
+        devices = await asyncio.wait_for(BleakScanner.discover(timeout=5.0), timeout=8.0)
+    except TimeoutError as exc:
+        raise RuntimeError("BLE scan timed out") from exc
+    except Exception as exc:
+        raise RuntimeError(str(exc) or "No Bluetooth adapter") from exc
     found: list[tuple[str, str | None]] = []
     for device in devices:
         address = getattr(device, "address", None)
@@ -194,10 +225,6 @@ async def build_transport_response():
     snapshot = await get_transport()
     serial_ports = await probe_serial_ports()
     ble_ok, ble_reason = await probe_ble_available()
-    serial_ok = bool(serial_ports) or snapshot.transport == "serial"
-    serial_reason = None
-    if not serial_ports:
-        serial_reason = "No serial ports are visible. On Docker, map the device in Compose."
     return RadioTransportResponse(
         configured=snapshot.configured,
         transport=snapshot.transport,
@@ -210,9 +237,9 @@ async def build_transport_response():
         bound_public_key=snapshot.bound_public_key,
         capabilities=RadioTransportCapabilities(
             tcp=True,
-            serial=serial_ok,
-            ble=ble_ok,
-            serial_unavailable_reason=serial_reason if not serial_ports else None,
+            serial=True,
+            ble=True,
+            serial_unavailable_reason=(None if serial_ports else serial_ports_unavailable_reason()),
             ble_unavailable_reason=None if ble_ok else ble_reason,
         ),
         serial_ports=[

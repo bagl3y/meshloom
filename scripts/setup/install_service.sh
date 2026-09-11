@@ -96,8 +96,10 @@ require_minimum_version() {
 }
 
 # Radio transport is configured in the web UI (app_settings), not via
-# systemd Environment= lines. Grant dialout so a later serial choice works.
+# systemd Environment= lines. Grant dialout / bluetooth so a later USB or
+# BLE choice works even if those devices are not plugged in yet.
 NEED_DIALOUT=true
+NEED_BLUETOOTH=true
 
 # ── frontend install mode ──────────────────────────────────────────────────────
 
@@ -175,18 +177,34 @@ echo
 
 mkdir -p "$REPO_DIR/data"
 
-# ── serial port access ─────────────────────────────────────────────────────────
+# ── serial / bluetooth group access ────────────────────────────────────────────
 
-if [ "$NEED_DIALOUT" = true ] && ! is_root; then
-    if ! id -nG "$CURRENT_USER" | grep -qw dialout; then
-        echo -e "${YELLOW}Adding ${CURRENT_USER} to the 'dialout' group for serial port access...${NC}"
-        as_root usermod -aG dialout "$CURRENT_USER"
-        echo -e "${GREEN}Done. You may need to log out and back in for this to take effect for${NC}"
-        echo -e "${GREEN}manual runs; the service itself handles it via SupplementaryGroups.${NC}"
+grant_group() {
+    local group="$1"
+    local purpose="$2"
+    if ! getent group "$group" >/dev/null 2>&1; then
+        echo -e "${YELLOW}Group '${group}' is not present; skip ${purpose} access.${NC}"
         echo
-    else
-        echo -e "${GREEN}User ${CURRENT_USER} is already in the 'dialout' group.${NC}"
+        return 0
+    fi
+    if id -nG "$CURRENT_USER" | grep -qw "$group"; then
+        echo -e "${GREEN}User ${CURRENT_USER} is already in the '${group}' group.${NC}"
         echo
+        return 0
+    fi
+    echo -e "${YELLOW}Adding ${CURRENT_USER} to the '${group}' group for ${purpose}...${NC}"
+    as_root usermod -aG "$group" "$CURRENT_USER"
+    echo -e "${GREEN}Done. You may need to log out and back in for this to take effect for${NC}"
+    echo -e "${GREEN}manual runs; the service itself handles it via SupplementaryGroups.${NC}"
+    echo
+}
+
+if ! is_root; then
+    if [ "$NEED_DIALOUT" = true ]; then
+        grant_group dialout "serial port"
+    fi
+    if [ "$NEED_BLUETOOTH" = true ]; then
+        grant_group bluetooth "Bluetooth"
     fi
 fi
 
@@ -201,9 +219,10 @@ fi
 echo -e "${YELLOW}Writing systemd service file to ${SERVICE_FILE}...${NC}"
 
 generate_service_file() {
+    local extra_groups=""
     echo "[Unit]"
     echo "Description=Meshloom"
-    echo "After=network.target"
+    echo "After=network.target bluetooth.target"
     echo ""
     echo "[Service]"
     echo "Type=simple"
@@ -214,9 +233,21 @@ generate_service_file() {
     echo "RestartSec=5"
     echo "Environment=MESHCORE_DATABASE_PATH=${REPO_DIR}/data/meshcore.db"
 
-    # Serial group access (root already has device access)
-    if [ "$NEED_DIALOUT" = true ] && ! is_root; then
-        echo "SupplementaryGroups=dialout"
+    # Device group access (root already has device access)
+    if ! is_root; then
+        if [ "$NEED_DIALOUT" = true ] && getent group dialout >/dev/null 2>&1; then
+            extra_groups="dialout"
+        fi
+        if [ "$NEED_BLUETOOTH" = true ] && getent group bluetooth >/dev/null 2>&1; then
+            if [ -n "$extra_groups" ]; then
+                extra_groups="${extra_groups} bluetooth"
+            else
+                extra_groups="bluetooth"
+            fi
+        fi
+        if [ -n "$extra_groups" ]; then
+            echo "SupplementaryGroups=${extra_groups}"
+        fi
     fi
 
     echo ""

@@ -55,11 +55,16 @@ INSTALL_STEP=3
 UI_CLEAR=1
 UI_COLOR=1
 INSTALL_LOG=""
+INSTALLED_VERSION=""
+TARGET_VERSION=""
+UPGRADE_KIND=""
+LANG_SAVED=""
 
 # ── i18n ──────────────────────────────────────────────────────────────────────
 
 t() {
     local key="$1"
+    shift || true
     case "${ML_LANG}:${key}" in
         en:title) echo "Meshloom installation" ;;
         fr:title) echo "Installation Meshloom" ;;
@@ -165,12 +170,30 @@ t() {
         fr:recap_radio_ui) echo "À configurer dans l'interface web" ;;
         en:q_confirm) echo "Start the installation?" ;;
         fr:q_confirm) echo "Lancer l'installation ?" ;;
+        en:q_confirm_upgrade) echo "Upgrade from $1 to $2?" ;;
+        fr:q_confirm_upgrade) echo "Mettre à jour de $1 vers $2 ?" ;;
+        en:q_confirm_reinstall) echo "Reinstall version $1?" ;;
+        fr:q_confirm_reinstall) echo "Réinstaller la version $1 ?" ;;
+        en:q_confirm_upgrade_from) echo "Upgrade from $1?" ;;
+        fr:q_confirm_upgrade_from) echo "Mettre à jour depuis $1 ?" ;;
+        en:step_upgrade) echo "Upgrade" ;;
+        fr:step_upgrade) echo "Mise à jour" ;;
+        en:recap_version) echo "Version" ;;
+        fr:recap_version) echo "Version" ;;
+        en:upgrade_keeps_data) echo "Messages, contacts and radio settings are kept." ;;
+        fr:upgrade_keeps_data) echo "Les messages, contacts et réglages radio sont conservés." ;;
+        en:using_saved_lang) echo "Using the saved language. Override with MESHLOOM_LANG=en or MESHLOOM_LANG=fr." ;;
+        fr:using_saved_lang) echo "Langue mémorisée. Pour changer : MESHLOOM_LANG=en ou MESHLOOM_LANG=fr." ;;
+        en:done_upgrade) echo "Meshloom has been upgraded." ;;
+        fr:done_upgrade) echo "Meshloom a été mis à jour." ;;
         en:sudo_note) echo "Some steps need administrator rights; your password may be requested." ;;
         fr:sudo_note) echo "Certaines étapes nécessitent les droits administrateur ; votre mot de passe peut être demandé." ;;
         en:using_repo) echo "Installing from the Meshloom package repository." ;;
         fr:using_repo) echo "Installation depuis le dépôt de paquets Meshloom." ;;
         en:using_asset) echo "Installing the package from the latest release." ;;
         fr:using_asset) echo "Installation du paquet depuis la dernière version publiée." ;;
+        en:asset_bad) echo "The downloaded package is not usable; falling back to a source install." ;;
+        fr:asset_bad) echo "Le paquet téléchargé est inutilisable ; retour à une installation depuis les sources." ;;
         en:using_clone) echo "No ready-made package for this system; installing from source." ;;
         fr:using_clone) echo "Aucun paquet prêt pour ce système ; installation depuis les sources." ;;
         en:prompt_dir) echo "Installation folder" ;;
@@ -396,6 +419,18 @@ run_quiet() {
     fi
 }
 
+# Like run_quiet but returns the exit status instead of aborting, for steps that
+# have a working fallback (release asset download -> source install).
+run_soft() {
+    ensure_log
+    "$@" >>"$INSTALL_LOG" 2>&1
+}
+
+log_note() {
+    ensure_log
+    printf '%s\n' "$*" >>"$INSTALL_LOG"
+}
+
 # ── detection ─────────────────────────────────────────────────────────────────
 
 detect_os() {
@@ -444,6 +479,232 @@ detect_checkout() {
     fi
 }
 
+user_installer_conf() {
+    printf '%s' "${XDG_CONFIG_HOME:-$HOME/.config}/meshloom/installer.conf"
+}
+
+system_installer_conf() {
+    printf '%s' "/etc/meshloom/installer.conf"
+}
+
+normalize_version() {
+    local v="$1"
+    v="${v#v}"
+    v="${v#V}"
+    v="${v%%+*}"
+    case "$v" in
+        *-*) v="${v%%-*}" ;;
+    esac
+    printf '%s' "$v"
+}
+
+is_installer_lang() {
+    case "$1" in
+        en | fr) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+conf_get() {
+    local file="$1" key="$2" raw=""
+    [ -f "$file" ] || return 1
+    raw="$(sed -n "s/^${key}=//p" "$file" | head -n 1)"
+    raw="$(ui_norm "$raw")"
+    [ -n "$raw" ] || return 1
+    printf '%s' "$raw"
+}
+
+write_installer_conf() {
+    local dest="$1" lang="$2" version="${3:-}"
+    {
+        echo "lang=$lang"
+        if [ -n "$version" ]; then
+            echo "version=$version"
+        fi
+    } >"$dest"
+}
+
+save_user_installer_conf() {
+    local dest prev_version=""
+    dest="$(user_installer_conf)"
+    mkdir -p "$(dirname "$dest")"
+    prev_version="$(conf_get "$dest" version || true)"
+    write_installer_conf "$dest" "$ML_LANG" "${TARGET_VERSION:-$prev_version}"
+}
+
+save_system_installer_conf() {
+    local dest tmp prev_version=""
+    dest="$(system_installer_conf)"
+    tmp="$(mktemp /tmp/meshloom-installer.XXXXXX)"
+    if [ -f "$dest" ]; then
+        prev_version="$(conf_get "$dest" version || true)"
+    fi
+    write_installer_conf "$tmp" "$ML_LANG" "${TARGET_VERSION:-$prev_version}"
+    as_root mkdir -p "$(dirname "$dest")"
+    as_root cp "$tmp" "$dest"
+    as_root chmod 644 "$dest"
+    rm -f "$tmp"
+}
+
+load_saved_language() {
+    local raw=""
+    raw="$(printf '%s' "${MESHLOOM_LANG:-}" | tr 'A-Z' 'a-z')"
+    raw="$(ui_norm "$raw")"
+    if is_installer_lang "$raw"; then
+        ML_LANG="$raw"
+        LANG_SAVED="env"
+        return 0
+    fi
+    raw="$(conf_get "$(system_installer_conf)" lang || true)"
+    raw="$(printf '%s' "$raw" | tr 'A-Z' 'a-z')"
+    if is_installer_lang "$raw"; then
+        ML_LANG="$raw"
+        LANG_SAVED="system"
+        return 0
+    fi
+    raw="$(conf_get "$(user_installer_conf)" lang || true)"
+    raw="$(printf '%s' "$raw" | tr 'A-Z' 'a-z')"
+    if is_installer_lang "$raw"; then
+        ML_LANG="$raw"
+        LANG_SAVED="user"
+        return 0
+    fi
+    return 1
+}
+
+read_project_version() {
+    local dir="$1" v=""
+    [ -n "$dir" ] && [ -d "$dir" ] || return 1
+    if [ -f "${dir}/build_info.json" ]; then
+        v="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${dir}/build_info.json" | head -n 1)"
+    fi
+    if [ -z "$v" ] && [ -f "${dir}/pyproject.toml" ]; then
+        v="$(sed -n 's/^version = "\([^"]*\)".*/\1/p' "${dir}/pyproject.toml" | head -n 1)"
+    fi
+    v="$(normalize_version "$v")"
+    [ -n "$v" ] || return 1
+    printf '%s' "$v"
+}
+
+package_installed_version() {
+    local v=""
+    if command -v dpkg-query >/dev/null 2>&1; then
+        v="$(dpkg-query -W -f='${Version}' meshloom 2>/dev/null || true)"
+        if [ -n "$v" ]; then
+            normalize_version "$v"
+            return 0
+        fi
+    fi
+    if command -v rpm >/dev/null 2>&1; then
+        v="$(rpm -q --qf '%{VERSION}' meshloom 2>/dev/null || true)"
+        case "$v" in
+            "" | *not\ installed*) ;;
+            *)
+                normalize_version "$v"
+                return 0
+                ;;
+        esac
+    fi
+    return 1
+}
+
+unit_workdir() {
+    systemctl show -p WorkingDirectory --value meshloom 2>/dev/null || true
+}
+
+compose_image_version() {
+    local file="$1" v=""
+    [ -f "$file" ] || return 1
+    v="$(sed -n 's/.*meshloom:\([^[:space:]"]*\).*/\1/p' "$file" | head -n 1)"
+    v="$(normalize_version "$v")"
+    if [ -z "$v" ] || [ "$v" = "latest" ]; then
+        return 1
+    fi
+    printf '%s' "$v"
+}
+
+detect_installed_version() {
+    local v="" wd="" conf=""
+    INSTALLED_VERSION=""
+    if v="$(package_installed_version)"; then
+        INSTALLED_VERSION="$v"
+        return 0
+    fi
+    if v="$(read_project_version /opt/meshloom)"; then
+        INSTALLED_VERSION="$v"
+        return 0
+    fi
+    wd="$(unit_workdir)"
+    if [ -n "$wd" ] && [ "$wd" != "/" ] && v="$(read_project_version "$wd")"; then
+        INSTALLED_VERSION="$v"
+        return 0
+    fi
+    for conf in "$(system_installer_conf)" "$(user_installer_conf)"; do
+        v="$(normalize_version "$(conf_get "$conf" version || true)")"
+        if [ -n "$v" ]; then
+            INSTALLED_VERSION="$v"
+            return 0
+        fi
+    done
+    if v="$(compose_image_version "${IN_CHECKOUT:+${IN_CHECKOUT}/docker-compose.yml}")"; then
+        INSTALLED_VERSION="$v"
+        return 0
+    fi
+    if v="$(compose_image_version "${HOME}/meshloom/docker-compose.yml")"; then
+        INSTALLED_VERSION="$v"
+        return 0
+    fi
+    return 1
+}
+
+detect_target_version() {
+    local v="" tag=""
+    TARGET_VERSION=""
+    if [ "$INSTALL_MODE" = "service" ] && [ -n "$IN_CHECKOUT" ]; then
+        if [ "$PKG_MGR" != "apt" ] && [ "$PKG_MGR" != "dnf" ]; then
+            if v="$(read_project_version "$IN_CHECKOUT")"; then
+                TARGET_VERSION="$v"
+                return 0
+            fi
+        elif [ "$PKG_MGR" = "apt" ] && ! http_ok "${PAGES_BASE}/apt/dists/stable/Release"; then
+            if v="$(read_project_version "$IN_CHECKOUT")"; then
+                TARGET_VERSION="$v"
+                return 0
+            fi
+        elif [ "$PKG_MGR" = "dnf" ] && ! http_ok "${PAGES_BASE}/rpm/$(rpm_arch)/repodata/repomd.xml"; then
+            if v="$(read_project_version "$IN_CHECKOUT")"; then
+                TARGET_VERSION="$v"
+                return 0
+            fi
+        fi
+    fi
+    tag="$(latest_release_tag || true)"
+    v="$(normalize_version "$tag")"
+    if [ -n "$v" ]; then
+        TARGET_VERSION="$v"
+        return 0
+    fi
+    if [ -n "$IN_CHECKOUT" ] && v="$(read_project_version "$IN_CHECKOUT")"; then
+        TARGET_VERSION="$v"
+        return 0
+    fi
+    return 1
+}
+
+resolve_upgrade_kind() {
+    UPGRADE_KIND=""
+    detect_installed_version || true
+    detect_target_version || true
+    if [ -z "$INSTALLED_VERSION" ]; then
+        return 0
+    fi
+    if [ -n "$TARGET_VERSION" ] && [ "$INSTALLED_VERSION" != "$TARGET_VERSION" ]; then
+        UPGRADE_KIND="upgrade"
+    else
+        UPGRADE_KIND="reinstall"
+    fi
+}
+
 host_arch() {
     case "$(uname -m)" in
         x86_64 | amd64) echo "amd64" ;;
@@ -471,12 +732,41 @@ latest_release_tag() {
 }
 
 release_asset_url() {
-    local suffix="$1"
+    # Anchored on end-of-URL so sidecar assets (.deb.asc, .rpm.sha256, …) can
+    # never be picked up as the package itself.
+    local suffix="$1" pattern
+    pattern="$(printf '%s' "$suffix" | sed 's/[.[\*^$\\]/\\&/g')"
     curl -fsSL --max-time 15 "$API_RELEASES" 2>/dev/null |
         tr ',' '\n' |
-        sed -n 's/.*"browser_download_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
-        grep -F "$suffix" |
+        sed -n 's/.*"browser_download_url"[[:space:]]*:[[:space:]]*"\(https:[^"]*\)".*/\1/p' |
+        grep -E "${pattern}\$" |
         head -n 1
+}
+
+file_size() {
+    wc -c <"$1" 2>/dev/null | tr -d '[:space:]'
+}
+
+# Leading bytes as lowercase hex, so package magic can be checked without
+# assuming `file` is installed.
+file_magic_hex() {
+    od -An -v -tx1 -N "$2" "$1" 2>/dev/null | tr -d '[:space:]'
+}
+
+# A downloaded file is only handed to apt/dnf if it really is a package.
+# An empty tempfile, a truncated transfer or an HTML error page all fail here.
+pkg_file_is_valid() {
+    local file="$1" kind="$2" size
+    size="$(file_size "$file")"
+    [ -n "$size" ] || return 1
+    # Smallest real Meshloom package is orders of magnitude above this.
+    [ "$size" -ge 4096 ] || return 1
+    case "$kind" in
+        # "!<arch>\n" — ar archive header used by every .deb.
+        deb) [ "$(file_magic_hex "$file" 8)" = "213c617263683e0a" ] ;;
+        rpm) [ "$(file_magic_hex "$file" 4)" = "edabeedb" ] ;;
+        *) return 1 ;;
+    esac
 }
 
 lan_ip() {
@@ -579,6 +869,10 @@ compose_cmd() {
 
 choose_language() {
     local default=1 ans
+    if load_saved_language; then
+        save_user_installer_conf
+        return 0
+    fi
     case "$(printf '%s%s%s' "${LC_ALL:-}" "${LC_MESSAGES:-}" "${LANG:-}" | tr 'A-Z' 'a-z')" in
         *fr*) default=2 ;;
     esac
@@ -590,10 +884,12 @@ choose_language() {
         case "$(printf '%s' "$ans" | tr 'A-Z' 'a-z')" in
             2 | fr | fra | français | francais | french)
                 ML_LANG="fr"
+                save_user_installer_conf
                 return 0
                 ;;
             1 | en | eng | english | anglais)
                 ML_LANG="en"
+                save_user_installer_conf
                 return 0
                 ;;
             *) ui_err "Invalid choice. / Choix invalide." ;;
@@ -607,6 +903,10 @@ choose_install_mode() {
     DOCKER_IDX=""
     BROWSER_IDX=""
     ui_screen "$(t step_method)" 1
+    if [ -n "$LANG_SAVED" ]; then
+        ui_dim "  $(t using_saved_lang)"
+        printf '\n'
+    fi
     printf '  %s : %s' "$(t detected)" "$(os_label)"
     if [ "$DOCKER_KIND" != "none" ]; then
         printf ' · %s' "$(t docker_ready)"
@@ -701,17 +1001,49 @@ recap_radio_label() {
     esac
 }
 
+confirm_question() {
+    case "$UPGRADE_KIND" in
+        upgrade) t q_confirm_upgrade "$INSTALLED_VERSION" "$TARGET_VERSION" ;;
+        reinstall)
+            if [ -n "$TARGET_VERSION" ]; then
+                t q_confirm_reinstall "$TARGET_VERSION"
+            else
+                t q_confirm_upgrade_from "$INSTALLED_VERSION"
+            fi
+            ;;
+        *) t q_confirm ;;
+    esac
+}
+
 confirm_install() {
-    ui_screen "$(t step_install)" "$INSTALL_STEP"
+    local step_label
+    resolve_upgrade_kind
+    if [ -n "$UPGRADE_KIND" ]; then
+        step_label="$(t step_upgrade)"
+    else
+        step_label="$(t step_install)"
+    fi
+    ui_screen "$step_label" "$INSTALL_STEP"
     printf '  %s\n' "$(ui_b "$(t recap)")"
     printf '    %s    %s\n' "$(t recap_mode)" "$(recap_mode_label)"
     printf '    %s    %s\n' "$(t recap_radio)" "$(recap_radio_label)"
+    if [ -n "$INSTALLED_VERSION" ] && [ -n "$TARGET_VERSION" ]; then
+        printf '    %s    %s → %s\n' "$(t recap_version)" "$INSTALLED_VERSION" "$TARGET_VERSION"
+    elif [ -n "$INSTALLED_VERSION" ]; then
+        printf '    %s    %s\n' "$(t recap_version)" "$INSTALLED_VERSION"
+    elif [ -n "$TARGET_VERSION" ]; then
+        printf '    %s    %s\n' "$(t recap_version)" "$TARGET_VERSION"
+    fi
     printf '\n'
+    if [ -n "$UPGRADE_KIND" ]; then
+        ui_wrap 2 70 "$(t upgrade_keeps_data)"
+        printf '\n'
+    fi
     if ! is_root; then
         ui_wrap 2 70 "$(t sudo_note)"
         printf '\n'
     fi
-    if ! ui_yesno "$(t q_confirm)" y; then
+    if ! ui_yesno "$(confirm_question)" y; then
         printf '\n%s\n' "$(t cancelled)"
         exit 130
     fi
@@ -719,6 +1051,13 @@ confirm_install() {
     ui_dim "  $(t working)"
     if ! is_root; then
         command sudo -v
+    fi
+}
+
+persist_installer_state() {
+    save_user_installer_conf
+    if is_root || command -v sudo >/dev/null 2>&1; then
+        save_system_installer_conf || true
     fi
 }
 
@@ -769,27 +1108,36 @@ EOF
     as_root mkdir -p /etc/meshloom
     write_meshloom_env /etc/meshloom/meshloom.env
     start_meshloom_unit
+    persist_installer_state
     phase_ok
 }
 
 install_from_release_asset() {
-    local arch suffix url tmp pkg_ext
+    local arch suffix url tmp pkg_ext pkg_kind
     arch="$(host_arch)"
     [ "$arch" != "unknown" ] || return 1
     if [ "$PKG_MGR" = "apt" ]; then
         suffix="_${arch}.deb"
         pkg_ext=".deb"
+        pkg_kind="deb"
     else
         suffix=".$(rpm_arch).rpm"
         pkg_ext=".rpm"
+        pkg_kind="rpm"
     fi
     url="$(release_asset_url "$suffix")"
     [ -n "$url" ] || return 1
     phase "$(t using_asset)"
     # apt only accepts local files whose name ends in .deb / .ddeb / .changes.
     tmp="$(mktemp "/tmp/meshloom.XXXXXX${pkg_ext}")"
-    run_quiet curl -fL --max-time 180 "$url" -o "$tmp"
-    if [ ! -s "$tmp" ]; then
+    # The download and the validation below must stay between the mktemp and the
+    # apt/dnf call: handing over a freshly created (empty) tempfile is what
+    # produced "could not locate member control.tar" in 4.1.1.
+    if ! run_soft curl -fL --max-time 180 "$url" -o "$tmp" ||
+        ! pkg_file_is_valid "$tmp" "$pkg_kind"; then
+        log_note "release asset unusable: url=${url} bytes=$(file_size "$tmp") magic=$(file_magic_hex "$tmp" 8)"
+        ui_warn "  $(t asset_bad)"
+        printf '  %s: %s\n' "$(t log_at)" "$INSTALL_LOG"
         rm -f "$tmp"
         return 1
     fi
@@ -802,6 +1150,7 @@ install_from_release_asset() {
     as_root mkdir -p /etc/meshloom
     write_meshloom_env /etc/meshloom/meshloom.env
     start_meshloom_unit
+    persist_installer_state
     phase_ok
 }
 
@@ -839,6 +1188,7 @@ run_service_from_source() {
         export MESHLOOM_FRONTEND_MODE="prebuilt"
     fi
     run_quiet bash "${INSTALL_DIR}/scripts/setup/install_service.sh"
+    persist_installer_state
     phase_ok
 }
 
@@ -846,7 +1196,11 @@ print_done_native() {
     local ip
     ip="$(lan_ip)"
     printf '\n'
-    ui_ok "  $(t done)"
+    if [ "$UPGRADE_KIND" = "upgrade" ]; then
+        ui_ok "  $(t done_upgrade)"
+    else
+        ui_ok "  $(t done)"
+    fi
     printf '  %s\n' "$(t open_at)"
     printf '    %s\n' "http://127.0.0.1:8000"
     if [ -n "$ip" ]; then
@@ -880,7 +1234,11 @@ install_native_service() {
     fi
     run_service_from_source
     printf '\n'
-    ui_ok "  $(t done)"
+    if [ "$UPGRADE_KIND" = "upgrade" ]; then
+        ui_ok "  $(t done_upgrade)"
+    else
+        ui_ok "  $(t done)"
+    fi
     ui_dim "  $(t update_git)"
 }
 
@@ -951,8 +1309,13 @@ install_docker_stack() {
         )
         phase_ok
     fi
+    persist_installer_state
     printf '\n'
-    ui_ok "  $(t done)"
+    if [ "$UPGRADE_KIND" = "upgrade" ]; then
+        ui_ok "  $(t done_upgrade)"
+    else
+        ui_ok "  $(t done)"
+    fi
     printf '  %s\n    %s\n' "$(t open_at)" "http://127.0.0.1:8000"
     ui_dim "  $(t update_docker): $(priv "$dc pull") && $(priv "$dc up -d")"
 }

@@ -1,9 +1,15 @@
+from unittest.mock import AsyncMock
+
 import pytest
 
 from app.models import RadioTransportSnapshot
 from app.repository.radio_transport import RadioTransportRepository, validate_transport_update
 from app.services.radio_identity import wipe_mesh_identity_data
-from app.services.radio_transport import maybe_import_legacy_env
+from app.services.radio_transport import (
+    maybe_import_legacy_env,
+    probe_ble_available,
+    serial_ports_unavailable_reason,
+)
 
 
 def test_validate_transport_update_requires_tcp_host() -> None:
@@ -78,3 +84,67 @@ async def test_wipe_mesh_identity_data_keeps_channels(test_db, monkeypatch):
             assert (await cursor.fetchone())[0] == 0
         async with conn.execute("SELECT COUNT(*) FROM channels") as cursor:
             assert (await cursor.fetchone())[0] >= 0
+
+
+def test_serial_reason_mentions_dialout_on_host(monkeypatch) -> None:
+    monkeypatch.setattr("app.services.radio_transport._running_in_container", lambda: False)
+    reason = serial_ports_unavailable_reason()
+    assert "dialout" in reason
+    assert "container" not in reason.lower()
+
+
+def test_serial_reason_mentions_container_when_containerized(monkeypatch) -> None:
+    monkeypatch.setattr("app.services.radio_transport._running_in_container", lambda: True)
+    reason = serial_ports_unavailable_reason()
+    assert "container" in reason.lower()
+
+
+@pytest.mark.asyncio
+async def test_probe_ble_available_does_not_scan(monkeypatch) -> None:
+    scanned = False
+
+    class _Scanner:
+        @staticmethod
+        async def discover(**_kwargs):
+            nonlocal scanned
+            scanned = True
+            return []
+
+    monkeypatch.setattr("app.services.radio_transport.linux_hci_adapters", lambda: None)
+    import bleak
+
+    monkeypatch.setattr(bleak, "BleakScanner", _Scanner, raising=False)
+    available, reason = await probe_ble_available()
+    assert available is True
+    assert reason is None
+    assert scanned is False
+
+
+@pytest.mark.asyncio
+async def test_probe_ble_unavailable_without_adapter(monkeypatch) -> None:
+    monkeypatch.setattr("app.services.radio_transport.linux_hci_adapters", lambda: [])
+    available, reason = await probe_ble_available()
+    assert available is False
+    assert reason == "No Bluetooth adapter"
+
+
+@pytest.mark.asyncio
+async def test_build_transport_response_keeps_all_transports_selectable(
+    test_db, monkeypatch
+) -> None:
+    from app.services.radio_transport import build_transport_response
+
+    monkeypatch.setattr(
+        "app.services.radio_transport.probe_serial_ports",
+        AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(
+        "app.services.radio_transport.probe_ble_available",
+        AsyncMock(return_value=(False, "No Bluetooth adapter")),
+    )
+    response = await build_transport_response()
+    assert response.capabilities.tcp is True
+    assert response.capabilities.serial is True
+    assert response.capabilities.ble is True
+    assert response.capabilities.serial_unavailable_reason is not None
+    assert response.capabilities.ble_unavailable_reason == "No Bluetooth adapter"

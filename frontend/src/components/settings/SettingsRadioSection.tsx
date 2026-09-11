@@ -48,8 +48,8 @@ const EMPTY_TRANSPORT: RadioTransportConfig = {
   bound_public_key: null,
   capabilities: {
     tcp: true,
-    serial: false,
-    ble: false,
+    serial: true,
+    ble: true,
     serial_unavailable_reason: null,
     ble_unavailable_reason: null,
   },
@@ -57,11 +57,7 @@ const EMPTY_TRANSPORT: RadioTransportConfig = {
 };
 
 function defaultKind(transport: RadioTransportConfig): RadioTransportKind {
-  if (transport.transport) return transport.transport;
-  if (transport.capabilities.serial) return 'serial';
-  if (transport.capabilities.tcp) return 'tcp';
-  if (transport.capabilities.ble) return 'ble';
-  return 'serial';
+  return transport.transport ?? 'serial';
 }
 
 function canShareRadioLocation(lat: number, lon: number): boolean {
@@ -222,6 +218,7 @@ function RadioTransportPanel({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [bleDevices, setBleDevices] = useState<RadioBleDeviceInfo[]>([]);
 
   const applySnapshot = (next: RadioTransportConfig) => {
@@ -258,11 +255,21 @@ function RadioTransportPanel({
   }, [t]);
 
   const capabilities = snapshot.capabilities;
-  const showSerial = capabilities.serial || snapshot.transport === 'serial' || kind === 'serial';
-  const showTcp = capabilities.tcp || snapshot.transport === 'tcp' || kind === 'tcp';
-  const showBle = capabilities.ble || snapshot.transport === 'ble' || kind === 'ble';
   const savedPortMissing =
     Boolean(serialPort) && !snapshot.serial_ports.some((port) => port.path === serialPort);
+
+  const handleRefreshHost = async () => {
+    setRefreshing(true);
+    setSaveError(null);
+    try {
+      const next = await api.getRadioTransport();
+      setSnapshot(next);
+    } catch (err) {
+      setSaveError(formatApiError(err, t) || t('settings.radio.loadTransportFailed'));
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleScanBle = async () => {
     setScanning(true);
@@ -320,45 +327,52 @@ function RadioTransportPanel({
       <fieldset className="space-y-2">
         <legend className="sr-only">{t('settings.radio.transport')}</legend>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {showSerial && (
-            <Button
-              type="button"
-              variant="outline"
-              aria-pressed={kind === 'serial'}
-              className={kind === 'serial' ? 'border-primary/50 bg-primary/10' : ''}
-              onClick={() => setKind('serial')}
-            >
-              {t('settings.radio.transportSerial')}
-            </Button>
-          )}
-          {showTcp && (
-            <Button
-              type="button"
-              variant="outline"
-              aria-pressed={kind === 'tcp'}
-              className={kind === 'tcp' ? 'border-primary/50 bg-primary/10' : ''}
-              onClick={() => setKind('tcp')}
-            >
-              {t('settings.radio.transportTcp')}
-            </Button>
-          )}
-          {showBle && (
-            <Button
-              type="button"
-              variant="outline"
-              aria-pressed={kind === 'ble'}
-              className={kind === 'ble' ? 'border-primary/50 bg-primary/10' : ''}
-              onClick={() => setKind('ble')}
-            >
-              {t('settings.radio.transportBle')}
-            </Button>
-          )}
+          <Button
+            type="button"
+            variant="outline"
+            aria-pressed={kind === 'serial'}
+            className={kind === 'serial' ? 'border-primary/50 bg-primary/10' : ''}
+            onClick={() => setKind('serial')}
+          >
+            {t('settings.radio.transportSerial')}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            aria-pressed={kind === 'tcp'}
+            className={kind === 'tcp' ? 'border-primary/50 bg-primary/10' : ''}
+            onClick={() => setKind('tcp')}
+          >
+            {t('settings.radio.transportTcp')}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            aria-pressed={kind === 'ble'}
+            className={kind === 'ble' ? 'border-primary/50 bg-primary/10' : ''}
+            onClick={() => setKind('ble')}
+          >
+            {t('settings.radio.transportBle')}
+          </Button>
         </div>
       </fieldset>
 
       {kind === 'serial' && (
         <div className="space-y-2">
-          <Label htmlFor="radio-serial-port">{t('settings.radio.serialPort')}</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="radio-serial-port">{t('settings.radio.serialPort')}</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void handleRefreshHost()}
+              disabled={refreshing}
+            >
+              {refreshing
+                ? t('settings.radio.serialRefreshing')
+                : t('settings.radio.serialRefresh')}
+            </Button>
+          </div>
           <select
             id="radio-serial-port"
             value={serialPort}
@@ -377,7 +391,7 @@ function RadioTransportPanel({
               </option>
             )}
           </select>
-          {!capabilities.serial && capabilities.serial_unavailable_reason && (
+          {capabilities.serial_unavailable_reason && (
             <p className="text-[0.8125rem] text-muted-foreground">
               {t('settings.radio.serialUnavailable', {
                 reason: capabilities.serial_unavailable_reason,
@@ -426,13 +440,11 @@ function RadioTransportPanel({
               onChange={(e) => setBleAddress(e.target.value)}
               className="font-mono"
             />
-            {capabilities.ble && (
-              <Button type="button" variant="outline" onClick={handleScanBle} disabled={scanning}>
-                {scanning ? t('settings.radio.bleScanning') : t('settings.radio.bleScan')}
-              </Button>
-            )}
+            <Button type="button" variant="outline" onClick={handleScanBle} disabled={scanning}>
+              {scanning ? t('settings.radio.bleScanning') : t('settings.radio.bleScan')}
+            </Button>
           </div>
-          {!capabilities.ble && capabilities.ble_unavailable_reason && (
+          {capabilities.ble_unavailable_reason && (
             <p className="text-[0.8125rem] text-muted-foreground">
               {t('settings.radio.bleUnavailable', {
                 reason: capabilities.ble_unavailable_reason,

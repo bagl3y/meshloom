@@ -321,6 +321,52 @@ describe('SettingsModal', () => {
     ).toBeInTheDocument();
   });
 
+  it('offers serial and bluetooth even when the host probe reports them unavailable', async () => {
+    vi.mocked(api.getRadioTransport).mockResolvedValue({
+      ...baseTransport,
+      configured: false,
+      transport: null,
+      serial_port: '',
+      serial_ports: [],
+      capabilities: {
+        tcp: true,
+        serial: false,
+        ble: false,
+        serial_unavailable_reason: 'No serial ports are visible',
+        ble_unavailable_reason: 'No Bluetooth adapter',
+      },
+    });
+    renderModal({
+      health: { ...baseHealth, transport_configured: false },
+    });
+    openRadioSection();
+
+    expect(
+      await screen.findByRole('button', { name: i18n.t('settings.radio.transportSerial') })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: i18n.t('settings.radio.transportTcp') })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: i18n.t('settings.radio.transportBle') })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        i18n.t('settings.radio.serialUnavailable', {
+          reason: 'No serial ports are visible',
+        })
+      )
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.radio.transportBle') }));
+    expect(
+      screen.getByRole('button', { name: i18n.t('settings.radio.bleScan') })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(i18n.t('settings.radio.bleUnavailable', { reason: 'No Bluetooth adapter' }))
+    ).toBeInTheDocument();
+  });
+
   it('keeps a saved serial port visible when the host reports no ports', async () => {
     vi.mocked(api.getRadioTransport).mockResolvedValue({
       ...baseTransport,

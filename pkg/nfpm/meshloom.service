@@ -1,7 +1,7 @@
 [Unit]
 Description=Meshloom
 Documentation=https://github.com/bagl3y/meshloom
-After=network-online.target
+After=network-online.target bluetooth.target
 Wants=network-online.target
 
 [Service]
