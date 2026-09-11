@@ -95,7 +95,7 @@ def test_installer_conf_round_trip(tmp_path: Path) -> None:
 
 
 def test_is_installer_lang() -> None:
-    assert _bash('is_installer_lang fr && echo yes') == "yes"
+    assert _bash("is_installer_lang fr && echo yes") == "yes"
     result = subprocess.run(
         [
             "bash",
