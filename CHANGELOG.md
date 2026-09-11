@@ -1,3 +1,31 @@
+## [4.1.1] - 2026-09-11
+
+The Linux one-liner can install the latest GitHub `.deb` again. Apt was rejecting a valid package because the tempfile had no `.deb` suffix.
+
+### Highlights
+
+* Service install from the latest published `.deb` / `.rpm` works again on Debian, Ubuntu, and Fedora
+
+### Fixed
+
+* Bug: `apt-get install` of the downloaded release package failed with `Unsupported file /tmp/tmp.… given on commandline` because the tempfile had no `.deb` extension
+
+---
+
+### Français
+
+L’installeur Linux peut à nouveau installer le `.deb` GitHub. Apt refusait un paquet valide parce que le fichier temporaire n’avait pas le suffixe `.deb`.
+
+#### Points forts
+
+* L’installation service depuis le `.deb` / `.rpm` publié fonctionne à nouveau sur Debian, Ubuntu et Fedora
+
+#### Corrections
+
+* Bug : `apt-get install` du paquet téléchargé échouait avec `Unsupported file /tmp/tmp.… given on commandline` parce que le fichier temporaire n’avait pas l’extension `.deb`
+
+---
+
 ## [4.1.0] - 2026-09-11
 
 Flood messages can now show how many CoreScope MQTT observers heard the same packet, and chat metadata no longer wraps into the text.

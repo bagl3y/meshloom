@@ -773,19 +773,21 @@ EOF
 }
 
 install_from_release_asset() {
-    local arch suffix url tmp
+    local arch suffix url tmp pkg_ext
     arch="$(host_arch)"
     [ "$arch" != "unknown" ] || return 1
     if [ "$PKG_MGR" = "apt" ]; then
         suffix="_${arch}.deb"
+        pkg_ext=".deb"
     else
         suffix=".$(rpm_arch).rpm"
+        pkg_ext=".rpm"
     fi
     url="$(release_asset_url "$suffix")"
     [ -n "$url" ] || return 1
     phase "$(t using_asset)"
-    tmp="$(mktemp)"
-    run_quiet curl -fL --max-time 180 "$url" -o "$tmp"
+    # apt only accepts local files whose name ends in .deb / .ddeb / .changes.
+    tmp="$(mktemp "/tmp/meshloom.XXXXXX${pkg_ext}")"
     if [ "$PKG_MGR" = "apt" ]; then
         run_quiet as_root apt-get install -y "$tmp"
     else

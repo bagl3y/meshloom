@@ -26,3 +26,11 @@ def test_install_sh_is_real_utf8() -> None:
     assert "recommandé" in text
     assert "FranÃ§ais" not in text
     assert "recommandÃ©" not in text
+
+
+def test_release_asset_tempfile_uses_package_suffix() -> None:
+    """apt rejects local files that do not end in .deb / .ddeb / .changes."""
+    text = INSTALL_SH.read_text(encoding="utf-8")
+    assert 'mktemp "/tmp/meshloom.XXXXXX${pkg_ext}"' in text
+    assert 'pkg_ext=".deb"' in text
+    assert 'pkg_ext=".rpm"' in text
