@@ -67,6 +67,8 @@ class MessageRepository:
         sender_key: str | None = None,
         transport_code: int | None = None,
         region: str | None = None,
+        packet_hash: str | None = None,
+        observer_reach_eligible: bool | None = None,
     ) -> int | None:
         """Create a message, returning the ID or None if duplicate.
 
@@ -91,14 +93,21 @@ class MessageRepository:
 
         # Normalize sender_key to lowercase so queries can match without LOWER().
         normalized_sender_key = sender_key.lower() if sender_key else sender_key
+        from app.path_utils import canonical_packet_hash
+
+        stored_hash = canonical_packet_hash(packet_hash)
+        eligible_int = (
+            None if observer_reach_eligible is None else int(bool(observer_reach_eligible))
+        )
 
         async with db.tx() as conn:
             async with conn.execute(
                 """
                 INSERT OR IGNORE INTO messages (type, conversation_key, text, sender_timestamp,
                                                 received_at, paths, txt_type, signature, outgoing,
-                                                sender_name, sender_key, transport_code, region)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                sender_name, sender_key, transport_code, region,
+                                                packet_hash, observer_reach_eligible)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     msg_type,
@@ -114,6 +123,8 @@ class MessageRepository:
                     normalized_sender_key,
                     transport_code,
                     region,
+                    stored_hash,
+                    eligible_int,
                 ),
             ) as cursor:
                 rowcount = cursor.rowcount
@@ -364,6 +375,8 @@ class MessageRepository:
         packet_id = None
         transport_code = None
         region = None
+        packet_hash = None
+        observer_reach_eligible = None
         if hasattr(row, "keys"):
             row_keys = row.keys()
             if "packet_id" in row_keys:
@@ -372,6 +385,12 @@ class MessageRepository:
                 transport_code = row["transport_code"]
             if "region" in row_keys:
                 region = row["region"]
+            if "packet_hash" in row_keys:
+                packet_hash = row["packet_hash"]
+            if "observer_reach_eligible" in row_keys:
+                raw_eligible = row["observer_reach_eligible"]
+                if raw_eligible is not None:
+                    observer_reach_eligible = bool(raw_eligible)
 
         return Message(
             id=row["id"],
@@ -390,6 +409,8 @@ class MessageRepository:
             packet_id=packet_id,
             transport_code=transport_code,
             region=region,
+            packet_hash=packet_hash,
+            observer_reach_eligible=observer_reach_eligible,
         )
 
     @staticmethod
@@ -639,6 +660,67 @@ class MessageRepository:
             return None
 
         return MessageRepository._row_to_message(row)
+
+    @staticmethod
+    async def get_by_packet_hash(packet_hash: str) -> "Message | None":
+        """Most recent message with this firmware hash. Prefer outgoing (origin GPS)."""
+        from app.path_utils import canonical_packet_hash
+
+        stored = canonical_packet_hash(packet_hash)
+        if stored is None:
+            return None
+        async with db.readonly() as conn:
+            async with conn.execute(
+                f"SELECT {MessageRepository._message_select('messages')} FROM messages "
+                "WHERE packet_hash = ? ORDER BY outgoing DESC, id DESC LIMIT 1",
+                (stored,),
+            ) as cursor:
+                row = await cursor.fetchone()
+        if not row:
+            return None
+        return MessageRepository._row_to_message(row)
+
+    @staticmethod
+    async def apply_observer_reach(
+        message_id: int,
+        *,
+        packet_hash: str | None = None,
+        observer_reach_eligible: bool | None = None,
+        overwrite_hash: bool = True,
+    ) -> tuple[str | None, bool | None]:
+        """Persist observer-reach fields. RF echo overwrites a computed outgoing hash."""
+        from app.path_utils import canonical_packet_hash
+
+        stored = canonical_packet_hash(packet_hash)
+        eligible_int = (
+            None if observer_reach_eligible is None else int(bool(observer_reach_eligible))
+        )
+        async with db.tx() as conn:
+            if stored is not None:
+                if overwrite_hash:
+                    await conn.execute(
+                        "UPDATE messages SET packet_hash = ? WHERE id = ?",
+                        (stored, message_id),
+                    )
+                else:
+                    await conn.execute(
+                        "UPDATE messages SET packet_hash = COALESCE(packet_hash, ?) WHERE id = ?",
+                        (stored, message_id),
+                    )
+            if eligible_int is not None:
+                await conn.execute(
+                    "UPDATE messages SET observer_reach_eligible = ? WHERE id = ?",
+                    (eligible_int, message_id),
+                )
+            async with conn.execute(
+                "SELECT packet_hash, observer_reach_eligible FROM messages WHERE id = ?",
+                (message_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+        if not row:
+            return stored, observer_reach_eligible
+        raw_eligible = row["observer_reach_eligible"]
+        return row["packet_hash"], None if raw_eligible is None else bool(raw_eligible)
 
     @staticmethod
     async def delete_by_id(message_id: int) -> None:

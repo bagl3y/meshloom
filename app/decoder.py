@@ -234,6 +234,42 @@ def decrypt_group_text(payload: bytes, channel_key: bytes) -> DecryptedGroupText
     )
 
 
+GROUP_TEXT_MAX_UTF8 = 160
+
+
+def encrypt_group_text(channel_key: bytes, timestamp: int, text: str, flags: int = 0) -> bytes:
+    """Inverse of decrypt_group_text. ``text`` is the full stored string (``Name: body``)."""
+    plaintext = timestamp.to_bytes(4, "little") + bytes([flags]) + text.encode("utf-8") + b"\x00"
+    pad_len = (16 - len(plaintext) % 16) % 16
+    if pad_len == 0:
+        pad_len = 16
+    plaintext += bytes(pad_len)
+    cipher = AES.new(channel_key, AES.MODE_ECB)
+    ciphertext = cipher.encrypt(plaintext)
+    channel_secret = channel_key + bytes(16)
+    mac = hmac.new(channel_secret, ciphertext, hashlib.sha256).digest()[:2]
+    channel_hash = hashlib.sha256(channel_key).digest()[:1]
+    return channel_hash + mac + ciphertext
+
+
+def outgoing_group_text_packet_hash(
+    channel_key_hex: str, timestamp: int, text: str, flags: int = 0
+) -> str | None:
+    """Firmware hash for an outgoing channel payload, or None if not reproducible."""
+    from app.path_utils import calculate_payload_packet_hash, canonical_packet_hash
+
+    if len(text.encode("utf-8")) > GROUP_TEXT_MAX_UTF8:
+        return None
+    try:
+        key = bytes.fromhex(channel_key_hex)
+    except ValueError:
+        return None
+    if len(key) != 16:
+        return None
+    payload = encrypt_group_text(key, timestamp, text, flags)
+    return canonical_packet_hash(calculate_payload_packet_hash(PayloadType.GROUP_TEXT, payload))
+
+
 def try_decrypt_packet_with_channel_key(
     raw_packet: bytes, channel_key: bytes
 ) -> DecryptedGroupText | None:

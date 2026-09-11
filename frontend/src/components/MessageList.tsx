@@ -34,7 +34,11 @@ import { useTranslation } from 'react-i18next';
 import { useRichPayloads } from '../contexts/RichPayloadContext';
 import { getDirectContactRoute, type SenderInfo } from '../utils/pathUtils';
 import { ContactAvatar } from './ContactAvatar';
+import { ObserverReachBadge } from './ObserverReachBadge';
+import { ObserverReachModal } from './ObserverReachModal';
 import { HopCountBadge } from './messagePath/HopCountBadge';
+import { useVisibleObserverReach } from '../hooks/useVisibleObserverReach';
+import { isObserverReachEligible } from '../utils/observerReach';
 import {
   MessagePathModalHost,
   type MessagePathModalHostHandle,
@@ -95,6 +99,8 @@ interface MessageListProps {
   onJumpToBottom?: () => void;
   preSorted?: boolean;
   onMessageDeleted?: (messageId: number) => void;
+  directoryEnabled?: boolean;
+  conversationKey?: string;
 }
 
 // Renders a MeshCore Open GIF payload, falling back to the raw text on load error.
@@ -578,6 +584,8 @@ export function MessageList({
   onJumpToBottom,
   preSorted = false,
   onMessageDeleted,
+  directoryEnabled = false,
+  conversationKey,
 }: MessageListProps) {
   const { t } = useTranslation();
   const { renderRichPayloads } = useRichPayloads();
@@ -816,6 +824,14 @@ export function MessageList({
     },
   });
   const virtualRows = virtualizer.getVirtualItems();
+  const visibleIndexes = useMemo(() => virtualRows.map((row) => row.index), [virtualRows]);
+  const { counts: observerReachCounts } = useVisibleObserverReach({
+    directoryEnabled,
+    conversationKey,
+    messages,
+    visibleIndexes,
+  });
+  const [observerReachHash, setObserverReachHash] = useState<string | null>(null);
 
   // Re-measured whenever something above the rows can change height.
   useLayoutEffect(() => {
@@ -1602,6 +1618,13 @@ export function MessageList({
                           />
                         )}
                         {msg.region && <RegionBadge region={msg.region} />}
+                        {directoryEnabled && isObserverReachEligible(msg) && msg.packet_hash && (
+                          <ObserverReachBadge
+                            state={observerReachCounts[msg.packet_hash.toUpperCase()]}
+                            variant="header"
+                            onOpen={() => setObserverReachHash(msg.packet_hash!.toUpperCase())}
+                          />
+                        )}
                       </div>
                     )}
                     <div className="break-words whitespace-pre-wrap">
@@ -1633,6 +1656,13 @@ export function MessageList({
                             />
                           )}
                           {msg.region && <RegionBadge region={msg.region} />}
+                          {directoryEnabled && isObserverReachEligible(msg) && msg.packet_hash && (
+                            <ObserverReachBadge
+                              state={observerReachCounts[msg.packet_hash.toUpperCase()]}
+                              variant="inline"
+                              onOpen={() => setObserverReachHash(msg.packet_hash!.toUpperCase())}
+                            />
+                          )}
                         </>
                       )}
                       {msg.outgoing &&
@@ -1690,6 +1720,16 @@ export function MessageList({
                             ?
                           </span>
                         ))}
+                      {msg.outgoing &&
+                        directoryEnabled &&
+                        isObserverReachEligible(msg) &&
+                        msg.packet_hash && (
+                          <ObserverReachBadge
+                            state={observerReachCounts[msg.packet_hash.toUpperCase()]}
+                            variant="inline"
+                            onOpen={() => setObserverReachHash(msg.packet_hash!.toUpperCase())}
+                          />
+                        )}
                     </div>
                     <MessageReactionBadges emojis={attachedEmojis} />
                     {openActionsId === msg.id && (
@@ -1962,6 +2002,13 @@ export function MessageList({
           signalOverride={packetSignalOverrideRef.current}
         />
       )}
+      <ObserverReachModal
+        packetHash={observerReachHash}
+        open={observerReachHash != null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setObserverReachHash(null);
+        }}
+      />
     </div>
   );
 }

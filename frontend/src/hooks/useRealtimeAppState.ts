@@ -55,7 +55,8 @@ interface UseRealtimeAppStateArgs {
     messageId: number,
     ackCount: number,
     paths?: MessagePath[],
-    packetId?: number | null
+    packetId?: number | null,
+    extras?: { packet_hash?: string | null; observer_reach_eligible?: boolean | null }
   ) => void;
   removeMessage: (messageId: number) => void;
   notifyIncomingMessage?: (msg: Message) => void;
@@ -287,9 +288,10 @@ export function useRealtimeAppState({
         messageId: number,
         ackCount: number,
         paths?: MessagePath[],
-        packetId?: number | null
+        packetId?: number | null,
+        extras?: { packet_hash?: string | null; observer_reach_eligible?: boolean | null }
       ) => {
-        receiveMessageAck(messageId, ackCount, paths, packetId);
+        receiveMessageAck(messageId, ackCount, paths, packetId, extras);
       },
       onMessageDeleted: (messageId: number) => {
         removeMessage(messageId);

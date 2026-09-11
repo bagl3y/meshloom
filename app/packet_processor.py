@@ -36,7 +36,7 @@ from app.models import (
     RawPacketBroadcast,
     RawPacketDecryptedInfo,
 )
-from app.path_utils import calculate_packet_hash
+from app.path_utils import calculate_packet_hash, is_flood_route_type
 from app.region_resolver import resolve_region
 from app.repository import (
     AppSettingsRepository,
@@ -80,6 +80,7 @@ async def create_message_from_decrypted(
     packet_hash: str | None = None,
     transport_code: int | None = None,
     region: str | None = None,
+    observer_reach_eligible: bool | None = True,
 ) -> int | None:
     """Store a decrypted channel message via the shared message service."""
     return await _create_message_from_decrypted(
@@ -99,6 +100,7 @@ async def create_message_from_decrypted(
         packet_hash=packet_hash,
         transport_code=transport_code,
         region=region,
+        observer_reach_eligible=observer_reach_eligible,
     )
 
 
@@ -117,6 +119,7 @@ async def create_dm_message_from_decrypted(
     packet_hash: str | None = None,
     transport_code: int | None = None,
     region: str | None = None,
+    observer_reach_eligible: bool | None = None,
 ) -> int | None:
     """Store a decrypted direct message via the shared message service."""
     return await _create_dm_message_from_decrypted(
@@ -135,6 +138,7 @@ async def create_dm_message_from_decrypted(
         packet_hash=packet_hash,
         transport_code=transport_code,
         region=region,
+        observer_reach_eligible=observer_reach_eligible,
     )
 
 
@@ -207,6 +211,10 @@ async def run_historical_dm_decryption(
                 path_len=path_len,
                 outgoing=outgoing,
                 realtime=False,  # Historical decryption should not trigger fanout
+                packet_hash=calculate_packet_hash(packet_data),
+                observer_reach_eligible=is_flood_route_type(
+                    int(packet_info.route_type) if packet_info is not None else None
+                ),
             )
 
             if msg_id is not None:
@@ -513,6 +521,7 @@ async def _process_group_text(
             packet_hash=packet_hash,
             transport_code=transport_code,
             region=region,
+            observer_reach_eligible=True,
         )
 
         return {
@@ -801,6 +810,9 @@ async def _process_direct_message(
                 packet_hash=packet_hash,
                 transport_code=transport_code,
                 region=region,
+                observer_reach_eligible=is_flood_route_type(
+                    int(packet_info.route_type) if packet_info is not None else None
+                ),
             )
 
             return {

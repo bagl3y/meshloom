@@ -29,7 +29,8 @@ export interface UseWebSocketOptions {
     messageId: number,
     ackCount: number,
     paths?: MessagePath[],
-    packetId?: number | null
+    packetId?: number | null,
+    extras?: { packet_hash?: string | null; observer_reach_eligible?: boolean | null }
   ) => void;
   onMessageDeleted?: (messageId: number) => void;
   onError?: (error: ErrorEvent) => void;
@@ -141,13 +142,31 @@ export function useWebSocket(options: UseWebSocketOptions) {
               ack_count: number;
               paths?: MessagePath[];
               packet_id?: number | null;
+              packet_hash?: string | null;
+              observer_reach_eligible?: boolean | null;
             };
-            handlers.onMessageAcked?.(
-              ackData.message_id,
-              ackData.ack_count,
-              ackData.paths,
-              ackData.packet_id
-            );
+            if (
+              ackData.packet_hash !== undefined ||
+              ackData.observer_reach_eligible !== undefined
+            ) {
+              handlers.onMessageAcked?.(
+                ackData.message_id,
+                ackData.ack_count,
+                ackData.paths,
+                ackData.packet_id,
+                {
+                  packet_hash: ackData.packet_hash,
+                  observer_reach_eligible: ackData.observer_reach_eligible,
+                }
+              );
+            } else {
+              handlers.onMessageAcked?.(
+                ackData.message_id,
+                ackData.ack_count,
+                ackData.paths,
+                ackData.packet_id
+              );
+            }
             break;
           }
           case 'message_deleted':

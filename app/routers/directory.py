@@ -10,6 +10,9 @@ from app.models import (
     DirectoryReachResponse,
     DirectoryResolveHopsRequest,
     DirectoryResolveHopsResponse,
+    PacketObserverReachCountsRequest,
+    PacketObserverReachCountsResponse,
+    PacketObserverReachResponse,
 )
 from app.services.directory import (
     get_directory_node_neighbors,
@@ -18,6 +21,10 @@ from app.services.directory import (
     reset_directory_cache,
     resolve_directory_hops,
     search_directory_nodes,
+)
+from app.services.observer_reach import (
+    get_packet_observer_reach,
+    get_packet_observer_reach_counts,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,6 +47,20 @@ async def get_directory_map_nodes() -> DirectoryMapNodesResponse:
 async def get_directory_node_search(q: str) -> DirectoryNodeSearchResponse:
     """Proxy CoreScope name/key search. Not for hop prefixes — use resolve-hops."""
     return await search_directory_nodes(q)
+
+
+@router.get("/packets/{packet_hash}/reach", response_model=PacketObserverReachResponse)
+async def get_packet_reach(packet_hash: str) -> PacketObserverReachResponse:
+    """CoreScope observers that published this firmware packet hash."""
+    return await get_packet_observer_reach(packet_hash)
+
+
+@router.post("/packets/reach-counts", response_model=PacketObserverReachCountsResponse)
+async def post_packet_reach_counts(
+    request: PacketObserverReachCountsRequest,
+) -> PacketObserverReachCountsResponse:
+    """Batch observer counts for visible flood messages. Max 20 hashes."""
+    return await get_packet_observer_reach_counts(request.hashes)
 
 
 @router.get("/nodes/{pubkey}/reach", response_model=DirectoryReachResponse)

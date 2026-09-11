@@ -59,7 +59,9 @@ CREATE TABLE IF NOT EXISTS messages (
     outgoing INTEGER DEFAULT 0,
     acked INTEGER DEFAULT 0,
     sender_name TEXT,
-    sender_key TEXT
+    sender_key TEXT,
+    packet_hash TEXT,
+    observer_reach_eligible INTEGER
     -- Deduplication: channel echoes/repeats use a content/time unique index so
     -- duplicate observations reconcile onto a single stored row. Legacy
     -- databases may also gain an incoming-DM content index via migration 44.
@@ -199,6 +201,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_pagination
     ON messages(type, conversation_key, received_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_unread_covering
     ON messages(type, conversation_key, outgoing, received_at);
+CREATE INDEX IF NOT EXISTS idx_messages_packet_hash
+    ON messages(packet_hash) WHERE packet_hash IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_raw_packets_message_id ON raw_packets(message_id);
 CREATE INDEX IF NOT EXISTS idx_raw_packets_timestamp ON raw_packets(timestamp);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_packets_payload_hash ON raw_packets(payload_hash);

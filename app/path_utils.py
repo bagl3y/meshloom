@@ -10,6 +10,7 @@ Mode 3 (hash_size=4) is reserved and rejected.
 """
 
 import hashlib
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -392,3 +393,41 @@ def calculate_packet_hash(raw_bytes: bytes) -> str:
         return hash_obj.hexdigest()[:16].upper()
     except Exception:
         return "0" * 16
+
+
+_PACKET_HASH_RE = re.compile(r"^[0-9A-Fa-f]{16}$")
+_ZERO_PACKET_HASH = "0" * 16
+
+
+def calculate_payload_packet_hash(payload_type: int, payload: bytes) -> str:
+    """Firmware packet hash when payload type and payload bytes are already known."""
+    hash_obj = hashlib.sha256()
+    hash_obj.update(bytes([payload_type & 0xFF]))
+    hash_obj.update(payload)
+    return hash_obj.hexdigest()[:16].upper()
+
+
+def canonical_packet_hash(value: str | None) -> str | None:
+    """Return a stored 16-hex uppercase hash, or None for missing/zero/invalid."""
+    if not value:
+        return None
+    text = value.strip()
+    if not _PACKET_HASH_RE.fullmatch(text):
+        return None
+    digest = text.upper()
+    if digest == _ZERO_PACKET_HASH:
+        return None
+    return digest
+
+
+def corescope_packet_hash(value: str) -> str:
+    """CoreScope path/query form: lowercase 16-hex. Raises ValueError if invalid."""
+    stored = canonical_packet_hash(value)
+    if stored is None:
+        raise ValueError("Packet hash must be 16 hex characters")
+    return stored.lower()
+
+
+def is_flood_route_type(route_type: int | None) -> bool:
+    """True for TRANSPORT_FLOOD (0) and FLOOD (1)."""
+    return route_type in (0, 1)

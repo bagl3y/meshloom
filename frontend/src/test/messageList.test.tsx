@@ -18,13 +18,30 @@ import { formatOpenReaction } from '../utils/meshcoreOpenPayloads';
 const apiMocks = vi.hoisted(() => ({
   deleteMessage: vi.fn(async (_id: number) => ({ status: 'ok' })),
   getPacket: vi.fn(),
+  getPacketObserverReachCounts: vi.fn(async (_hashes: string[]) => ({
+    directory_enabled: true,
+    counts: { AABBCCDDEEFF0011: 3 },
+  })),
+  getPacketObserverReach: vi.fn(async (_hash: string) => ({
+    directory_enabled: true,
+    packet_hash: 'AABBCCDDEEFF0011',
+    observer_count: 3,
+    observers: [{ name: 'Lyon', hops: 2, snr: -3 }],
+    max_hops: 2,
+    max_distance_km: 12.4,
+    origin_available: true,
+  })),
 }));
 
 vi.mock('../api', () => ({
   api: {
     deleteMessage: (...args: [number]) => apiMocks.deleteMessage(...args),
     getPacket: (...args: [number]) => apiMocks.getPacket(...args),
+    getPacketObserverReachCounts: (...args: [string[]]) =>
+      apiMocks.getPacketObserverReachCounts(...args),
+    getPacketObserverReach: (...args: [string]) => apiMocks.getPacketObserverReach(...args),
   },
+  formatApiError: (err: unknown) => (err instanceof Error ? err.message : String(err)),
 }));
 
 const scrollIntoViewMock = vi.fn();
@@ -53,6 +70,8 @@ describe('MessageList channel sender rendering', () => {
   beforeEach(() => {
     apiMocks.deleteMessage.mockClear();
     apiMocks.getPacket.mockClear();
+    apiMocks.getPacketObserverReachCounts.mockClear();
+    apiMocks.getPacketObserverReach.mockClear();
     scrollIntoViewMock.mockReset();
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
       configurable: true,
@@ -858,5 +877,82 @@ describe('MessageList Open reactions and replies', () => {
       expect(apiMocks.deleteMessage).toHaveBeenCalledWith(1);
       expect(onMessageDeleted).toHaveBeenCalledWith(1);
     });
+  });
+
+  it('shows the observer ear on flood channel messages when the directory is on', async () => {
+    const user = userEvent.setup();
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            sender_name: 'Alice',
+            packet_hash: 'AABBCCDDEEFF0011',
+            observer_reach_eligible: true,
+            received_at: Math.floor(Date.now() / 1000) - 60,
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+        directoryEnabled
+        conversationKey="C3B889530D4F02DB5662EA13C417F530"
+      />
+    );
+
+    const badge = await screen.findByTestId('observer-reach-badge');
+    expect(badge).toBeInTheDocument();
+    await waitFor(() => {
+      expect(apiMocks.getPacketObserverReachCounts).toHaveBeenCalled();
+    });
+
+    await user.click(badge);
+    expect(
+      await screen.findByRole('heading', { name: i18n.t('messageList.observerReachTitle') })
+    ).toBeInTheDocument();
+    expect(apiMocks.getPacketObserverReach).toHaveBeenCalledWith('AABBCCDDEEFF0011');
+  });
+
+  it('does not show the ear on direct routed DMs', () => {
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            type: 'PRIV',
+            conversation_key: 'ab'.repeat(32),
+            packet_hash: 'AABBCCDDEEFF0011',
+            observer_reach_eligible: false,
+            sender_name: 'Alice',
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+        directoryEnabled
+        conversationKey={'ab'.repeat(32)}
+      />
+    );
+
+    expect(screen.queryByTestId('observer-reach-badge')).not.toBeInTheDocument();
+  });
+
+  it('makes no observer network call when the directory is off', async () => {
+    render(
+      <MessageList
+        messages={[
+          createMessage({
+            sender_name: 'Alice',
+            packet_hash: 'AABBCCDDEEFF0011',
+            observer_reach_eligible: true,
+          }),
+        ]}
+        contacts={[]}
+        loading={false}
+        directoryEnabled={false}
+        conversationKey="C3B889530D4F02DB5662EA13C417F530"
+      />
+    );
+
+    expect(screen.queryByTestId('observer-reach-badge')).not.toBeInTheDocument();
+    apiMocks.getPacketObserverReachCounts.mockClear();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(apiMocks.getPacketObserverReachCounts).not.toHaveBeenCalled();
   });
 });

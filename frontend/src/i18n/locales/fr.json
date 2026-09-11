@@ -85,7 +85,19 @@
     "analyzeUnavailable": "Aucun paquet brut archivé n’est disponible pour ce message, l’analyse ne peut pas être affichée.",
     "analyzePurged": "Le paquet brut archivé de ce message n’est plus disponible. Il a peut-être été purgé depuis Réglages > Base de données ; seuls le message stocké et l’historique de routes fusionné restent.",
     "analyzeLoadFailed": "Impossible de charger le paquet brut archivé de ce message : {{description}}",
-    "packetLoadFailed": "Impossible de charger le paquet brut"
+    "packetLoadFailed": "Impossible de charger le paquet brut",
+    "observerReachAria": "Entendu par {{count}} observateurs CoreScope — voir la portée",
+    "observerReachLoading": "Chargement des observateurs…",
+    "observerReachUnavailable": "Observateurs CoreScope indisponibles",
+    "observerReachTitle": "Observateurs",
+    "observerReachCaveat": "Observateurs vus par cette instance CoreScope seulement. Une zone sans oreille MQTT est un trou, pas la preuve que le flood s’est arrêté. La distance est géodésique, pas le trajet mesh.",
+    "observerReachCount": "Observateurs",
+    "observerReachMaxHops": "Sauts max",
+    "observerReachMaxDistance": "Distance max",
+    "observerReachDistanceUnavailable": "Distance indisponible",
+    "observerReachEmpty": "Aucun observateur n’a publié ce paquet sur cette instance CoreScope.",
+    "observerReachHops": "{{count}} sauts",
+    "observerReachMapAria": "Carte des observateurs qui ont entendu ce paquet"
   },
   "sidebar": {
     "collapse": "Réduire la barre latérale",

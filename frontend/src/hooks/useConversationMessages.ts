@@ -91,7 +91,8 @@ export class ConversationMessageCache {
     messageId: number,
     ackCount: number,
     paths?: MessagePath[],
-    packetId?: number | null
+    packetId?: number | null,
+    extras?: { packet_hash?: string | null; observer_reach_eligible?: boolean | null }
   ): void {
     for (const entry of this.cache.values()) {
       const index = entry.messages.findIndex((message) => message.id === messageId);
@@ -103,6 +104,10 @@ export class ConversationMessageCache {
         acked: Math.max(current.acked, ackCount),
         ...(paths !== undefined && paths.length >= (current.paths?.length ?? 0) && { paths }),
         ...(packetId !== undefined && { packet_id: packetId }),
+        ...(extras?.packet_hash !== undefined && { packet_hash: extras.packet_hash }),
+        ...(extras?.observer_reach_eligible !== undefined && {
+          observer_reach_eligible: extras.observer_reach_eligible,
+        }),
       };
       entry.messages = updated;
       return;
@@ -207,19 +212,29 @@ interface PendingAckUpdate {
   ackCount: number;
   paths?: MessagePath[];
   packetId?: number | null;
+  packetHash?: string | null;
+  observerReachEligible?: boolean | null;
 }
 
 export function mergePendingAck(
   existing: PendingAckUpdate | undefined,
   ackCount: number,
   paths?: MessagePath[],
-  packetId?: number | null
+  packetId?: number | null,
+  extras?: { packet_hash?: string | null; observer_reach_eligible?: boolean | null }
 ): PendingAckUpdate {
+  const extrasPatch = {
+    ...(extras?.packet_hash !== undefined && { packetHash: extras.packet_hash }),
+    ...(extras?.observer_reach_eligible !== undefined && {
+      observerReachEligible: extras.observer_reach_eligible,
+    }),
+  };
   if (!existing) {
     return {
       ackCount,
       ...(paths !== undefined && { paths }),
       ...(packetId !== undefined && { packetId }),
+      ...extrasPatch,
     };
   }
 
@@ -231,6 +246,11 @@ export function mergePendingAck(
       ...(packetId !== undefined && { packetId }),
       ...(packetId === undefined &&
         existing.packetId !== undefined && { packetId: existing.packetId }),
+      packetHash: extras?.packet_hash !== undefined ? extras.packet_hash : existing.packetHash,
+      observerReachEligible:
+        extras?.observer_reach_eligible !== undefined
+          ? extras.observer_reach_eligible
+          : existing.observerReachEligible,
     };
   }
 
@@ -241,18 +261,28 @@ export function mergePendingAck(
   const packetIdChanged = packetId !== undefined && packetId !== existing.packetId;
 
   if (paths === undefined) {
-    if (!packetIdChanged) {
+    if (!packetIdChanged && Object.keys(extrasPatch).length === 0) {
       return existing;
     }
     return {
       ...existing,
-      packetId,
+      ...(packetIdChanged && { packetId }),
+      ...extrasPatch,
     };
   }
 
   const existingPathCount = existing.paths?.length ?? -1;
   if (paths.length >= existingPathCount) {
-    return { ackCount, paths, ...(packetId !== undefined && { packetId }) };
+    return {
+      ackCount,
+      paths,
+      ...(packetId !== undefined && { packetId }),
+      packetHash: extras?.packet_hash !== undefined ? extras.packet_hash : existing.packetHash,
+      observerReachEligible:
+        extras?.observer_reach_eligible !== undefined
+          ? extras.observer_reach_eligible
+          : existing.observerReachEligible,
+    };
   }
 
   if (!packetIdChanged) {
@@ -281,7 +311,8 @@ interface UseConversationMessagesResult {
     messageId: number,
     ackCount: number,
     paths?: MessagePath[],
-    packetId?: number | null
+    packetId?: number | null,
+    extras?: { packet_hash?: string | null; observer_reach_eligible?: boolean | null }
   ) => void;
   reconcileOnReconnect: () => void;
   renameConversationMessages: (oldId: string, newId: string) => void;
@@ -347,9 +378,15 @@ export function useConversationMessages(
   const pendingAcksRef = useRef<Map<number, PendingAckUpdate>>(new Map());
 
   const setPendingAck = useCallback(
-    (messageId: number, ackCount: number, paths?: MessagePath[], packetId?: number | null) => {
+    (
+      messageId: number,
+      ackCount: number,
+      paths?: MessagePath[],
+      packetId?: number | null,
+      extras?: { packet_hash?: string | null; observer_reach_eligible?: boolean | null }
+    ) => {
       const existing = pendingAcksRef.current.get(messageId);
-      const merged = mergePendingAck(existing, ackCount, paths, packetId);
+      const merged = mergePendingAck(existing, ackCount, paths, packetId, extras);
 
       // Update insertion order so most recent updates remain in the buffer longest.
       pendingAcksRef.current.delete(messageId);
@@ -376,6 +413,10 @@ export function useConversationMessages(
       acked: Math.max(msg.acked, pending.ackCount),
       ...(pending.paths !== undefined && { paths: pending.paths }),
       ...(pending.packetId !== undefined && { packet_id: pending.packetId }),
+      ...(pending.packetHash !== undefined && { packet_hash: pending.packetHash }),
+      ...(pending.observerReachEligible !== undefined && {
+        observer_reach_eligible: pending.observerReachEligible,
+      }),
     };
   }, []);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -843,10 +884,16 @@ export function useConversationMessages(
 
   // Update a message's ack count and paths
   const updateMessageAck = useCallback(
-    (messageId: number, ackCount: number, paths?: MessagePath[], packetId?: number | null) => {
+    (
+      messageId: number,
+      ackCount: number,
+      paths?: MessagePath[],
+      packetId?: number | null,
+      extras?: { packet_hash?: string | null; observer_reach_eligible?: boolean | null }
+    ) => {
       const hasMessageLoaded = messagesRef.current.some((m) => m.id === messageId);
       if (!hasMessageLoaded) {
-        setPendingAck(messageId, ackCount, paths, packetId);
+        setPendingAck(messageId, ackCount, paths, packetId, extras);
         return;
       }
 
@@ -869,10 +916,14 @@ export function useConversationMessages(
             acked: nextAck,
             ...(paths !== undefined && { paths: nextPaths }),
             ...(packetId !== undefined && { packet_id: packetId }),
+            ...(extras?.packet_hash !== undefined && { packet_hash: extras.packet_hash }),
+            ...(extras?.observer_reach_eligible !== undefined && {
+              observer_reach_eligible: extras.observer_reach_eligible,
+            }),
           };
           return updated;
         }
-        setPendingAck(messageId, ackCount, paths, packetId);
+        setPendingAck(messageId, ackCount, paths, packetId, extras);
         return prev;
       });
     },
@@ -880,9 +931,15 @@ export function useConversationMessages(
   );
 
   const receiveMessageAck = useCallback(
-    (messageId: number, ackCount: number, paths?: MessagePath[], packetId?: number | null) => {
-      updateMessageAck(messageId, ackCount, paths, packetId);
-      conversationMessageCache.updateAck(messageId, ackCount, paths, packetId);
+    (
+      messageId: number,
+      ackCount: number,
+      paths?: MessagePath[],
+      packetId?: number | null,
+      extras?: { packet_hash?: string | null; observer_reach_eligible?: boolean | null }
+    ) => {
+      updateMessageAck(messageId, ackCount, paths, packetId, extras);
+      conversationMessageCache.updateAck(messageId, ackCount, paths, packetId, extras);
     },
     [updateMessageAck]
   );

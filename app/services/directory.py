@@ -47,6 +47,7 @@ NEIGHBORS_TIMEOUT_SECONDS = 8.0
 NEIGHBORS_CACHE_TTL_SECONDS = 300
 SEARCH_TIMEOUT_SECONDS = 6.0
 SEARCH_CACHE_TTL_SECONDS = 60
+MAX_JSON_BYTES = 2_000_000
 PUBKEY_HEX_LEN = 64
 MAX_HOPS = 64
 _HEX_RE = re.compile(r"^[0-9A-Fa-f]+$")
@@ -307,6 +308,9 @@ async def reset_directory_cache() -> int:
     _reach_cache.clear()
     _neighbors_cache.clear()
     _search_cache.clear()
+    from app.services.observer_reach import reset_observer_reach_cache
+
+    reset_observer_reach_cache()
     return await DirectoryHopCacheRepository.wipe()
 
 
@@ -491,6 +495,45 @@ async def _corescope_get_json(
             status_code=500,
             detail=f"CoreScope request failed (HTTP {response.status_code})",
         )
+    content = getattr(response, "content", None)
+    if isinstance(content, (bytes, bytearray)) and len(content) > MAX_JSON_BYTES:
+        raise HTTPException(status_code=500, detail="CoreScope response too large")
+    try:
+        return response.json()
+    except ValueError as exc:
+        logger.warning("CoreScope %s returned non-JSON", path)
+        raise HTTPException(status_code=500, detail="CoreScope returned non-JSON") from exc
+
+
+async def _corescope_post_json(
+    origin: str,
+    path: str,
+    *,
+    timeout: float,
+    body: dict[str, object],
+    empty_on_404: bool = False,
+) -> object | None:
+    """POST JSON to the saved CoreScope origin. HTTP 5xx/network is 500, never empty."""
+    url = f"{origin}{path}"
+    try:
+        async with httpx.AsyncClient(follow_redirects=False, timeout=timeout) as client:
+            response = await client.post(url, json=body)
+    except httpx.RequestError as exc:
+        logger.warning("CoreScope %s failed: %s", path, exc)
+        raise HTTPException(status_code=500, detail="CoreScope request failed") from exc
+    if response.status_code == 404 and empty_on_404:
+        return None
+    if response.status_code == 400:
+        raise HTTPException(status_code=400, detail="CoreScope rejected the request")
+    if response.status_code != 200:
+        logger.warning("CoreScope %s HTTP %s", path, response.status_code)
+        raise HTTPException(
+            status_code=500,
+            detail=f"CoreScope request failed (HTTP {response.status_code})",
+        )
+    content = getattr(response, "content", None)
+    if isinstance(content, (bytes, bytearray)) and len(content) > MAX_JSON_BYTES:
+        raise HTTPException(status_code=500, detail="CoreScope response too large")
     try:
         return response.json()
     except ValueError as exc:

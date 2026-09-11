@@ -381,6 +381,8 @@ export function ConversationPane({
           onLoadNewer={onLoadNewer}
           onJumpToBottom={onJumpToBottom}
           onMessageDeleted={onMessageDeleted}
+          directoryEnabled={directoryEnabled}
+          conversationKey={activeConversation.id}
         />
       )}
       {showRoomChat && !(activeConversation.type === 'contact' && isPrefixOnlyActiveContact) ? (

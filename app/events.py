@@ -46,6 +46,8 @@ class MessageAckedPayload(TypedDict):
     ack_count: int
     paths: NotRequired[list[MessagePath]]
     packet_id: NotRequired[int | None]
+    packet_hash: NotRequired[str | None]
+    observer_reach_eligible: NotRequired[bool | None]
 
 
 class MessageDeletedPayload(TypedDict):

@@ -71,6 +71,8 @@ def build_message_model(
     packet_id: int | None = None,
     transport_code: int | None = None,
     region: str | None = None,
+    packet_hash: str | None = None,
+    observer_reach_eligible: bool | None = None,
 ) -> Message:
     """Build a Message model with the canonical backend payload shape."""
     return Message(
@@ -91,6 +93,8 @@ def build_message_model(
         packet_id=packet_id,
         transport_code=transport_code,
         region=region,
+        packet_hash=packet_hash,
+        observer_reach_eligible=observer_reach_eligible,
     )
 
 
@@ -122,6 +126,8 @@ async def build_stored_outgoing_channel_message(
     sender_key: str | None,
     channel_name: str | None,
     message_repository=MessageRepository,
+    packet_hash: str | None = None,
+    observer_reach_eligible: bool | None = True,
 ) -> Message:
     """Build the current payload for a stored outgoing channel message."""
     acked_count, paths = await message_repository.get_ack_and_paths(message_id)
@@ -138,6 +144,8 @@ async def build_stored_outgoing_channel_message(
         sender_name=sender_name,
         sender_key=sender_key,
         channel_name=channel_name,
+        packet_hash=packet_hash,
+        observer_reach_eligible=observer_reach_eligible,
     )
 
 
@@ -148,17 +156,21 @@ def broadcast_message_acked(
     paths: list[MessagePath] | None,
     packet_id: int | None,
     broadcast_fn: BroadcastFn,
+    packet_hash: str | None = None,
+    observer_reach_eligible: bool | None = None,
 ) -> None:
     """Broadcast a message_acked payload."""
-    broadcast_fn(
-        "message_acked",
-        {
-            "message_id": message_id,
-            "ack_count": ack_count,
-            "paths": [path.model_dump() for path in paths] if paths else [],
-            "packet_id": packet_id,
-        },
-    )
+    payload: dict[str, Any] = {
+        "message_id": message_id,
+        "ack_count": ack_count,
+        "paths": [path.model_dump() for path in paths] if paths else [],
+        "packet_id": packet_id,
+    }
+    if packet_hash is not None:
+        payload["packet_hash"] = packet_hash
+    if observer_reach_eligible is not None:
+        payload["observer_reach_eligible"] = observer_reach_eligible
+    broadcast_fn("message_acked", payload)
 
 
 async def increment_ack_and_broadcast(
@@ -182,6 +194,9 @@ async def reconcile_duplicate_message(
     rssi: int | None = None,
     snr: float | None = None,
     broadcast_fn: BroadcastFn,
+    packet_hash: str | None = None,
+    observer_reach_eligible: bool | None = None,
+    message_repository=MessageRepository,
 ) -> None:
     logger.debug(
         "Duplicate %s for %s (msg_id=%d, outgoing=%s) - adding path",
@@ -207,6 +222,15 @@ async def reconcile_duplicate_message(
         existing_msg.packet_id if existing_msg.packet_id is not None else packet_id
     )
 
+    stored_hash, stored_eligible = existing_msg.packet_hash, existing_msg.observer_reach_eligible
+    if packet_hash is not None or observer_reach_eligible is not None:
+        stored_hash, stored_eligible = await message_repository.apply_observer_reach(
+            existing_msg.id,
+            packet_hash=packet_hash,
+            observer_reach_eligible=observer_reach_eligible,
+            overwrite_hash=True,
+        )
+
     if existing_msg.outgoing or path is not None:
         broadcast_message_acked(
             message_id=existing_msg.id,
@@ -214,6 +238,8 @@ async def reconcile_duplicate_message(
             paths=paths,
             packet_id=representative_packet_id,
             broadcast_fn=broadcast_fn,
+            packet_hash=stored_hash,
+            observer_reach_eligible=stored_eligible,
         )
 
     if packet_id is not None:
@@ -234,6 +260,8 @@ async def handle_duplicate_message(
     rssi: int | None = None,
     snr: float | None = None,
     broadcast_fn: BroadcastFn,
+    packet_hash: str | None = None,
+    observer_reach_eligible: bool | None = None,
 ) -> None:
     """Handle a duplicate message by updating paths/acks on the existing record."""
     existing_msg = await MessageRepository.get_by_content(
@@ -261,6 +289,8 @@ async def handle_duplicate_message(
         rssi=rssi,
         snr=snr,
         broadcast_fn=broadcast_fn,
+        packet_hash=packet_hash,
+        observer_reach_eligible=observer_reach_eligible,
     )
 
 
@@ -282,6 +312,7 @@ async def create_message_from_decrypted(
     packet_hash: str | None = None,
     transport_code: int | None = None,
     region: str | None = None,
+    observer_reach_eligible: bool | None = True,
 ) -> int | None:
     """Store and broadcast a decrypted channel message."""
     received = received_at or int(time.time())
@@ -308,6 +339,8 @@ async def create_message_from_decrypted(
         sender_key=resolved_sender_key,
         transport_code=transport_code,
         region=region,
+        packet_hash=packet_hash,
+        observer_reach_eligible=observer_reach_eligible,
     )
 
     if msg_id is None:
@@ -324,6 +357,8 @@ async def create_message_from_decrypted(
             rssi=rssi,
             snr=snr,
             broadcast_fn=broadcast_fn,
+            packet_hash=packet_hash,
+            observer_reach_eligible=observer_reach_eligible,
         )
         return None
 
@@ -351,6 +386,8 @@ async def create_message_from_decrypted(
             packet_id=packet_id,
             transport_code=transport_code,
             region=region,
+            packet_hash=packet_hash,
+            observer_reach_eligible=observer_reach_eligible,
         ),
         broadcast_fn=broadcast_fn,
         realtime=realtime,
@@ -410,6 +447,7 @@ async def create_dm_message_from_decrypted(
     packet_hash: str | None = None,
     transport_code: int | None = None,
     region: str | None = None,
+    observer_reach_eligible: bool | None = None,
 ) -> int | None:
     """Store and broadcast a decrypted direct message."""
     from app.services.dm_ingest import ingest_decrypted_direct_message
@@ -429,6 +467,7 @@ async def create_dm_message_from_decrypted(
         packet_hash=packet_hash,
         transport_code=transport_code,
         region=region,
+        observer_reach_eligible=observer_reach_eligible,
     )
     return message.id if message is not None else None
 
@@ -550,6 +589,9 @@ async def create_outgoing_channel_message(
     message_repository=MessageRepository,
 ) -> Message | None:
     """Store and broadcast an outgoing channel message."""
+    from app.decoder import outgoing_group_text_packet_hash
+
+    packet_hash = outgoing_group_text_packet_hash(conversation_key, sender_timestamp, text)
     msg_id = await message_repository.create(
         msg_type="CHAN",
         text=text,
@@ -559,10 +601,13 @@ async def create_outgoing_channel_message(
         outgoing=True,
         sender_name=sender_name,
         sender_key=sender_key,
+        packet_hash=packet_hash,
+        observer_reach_eligible=True,
     )
     if msg_id is None:
         return None
 
+    stored = await message_repository.get_by_id(msg_id)
     message = await build_stored_outgoing_channel_message(
         message_id=msg_id,
         conversation_key=conversation_key,
@@ -573,6 +618,8 @@ async def create_outgoing_channel_message(
         sender_key=sender_key,
         channel_name=channel_name,
         message_repository=message_repository,
+        packet_hash=stored.packet_hash if stored is not None else packet_hash,
+        observer_reach_eligible=(stored.observer_reach_eligible if stored is not None else True),
     )
     if broadcast:
         broadcast_message(message=message, broadcast_fn=broadcast_fn)

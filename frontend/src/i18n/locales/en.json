@@ -85,7 +85,19 @@
     "analyzeUnavailable": "No archival raw packet is available for this message, so packet analysis cannot be shown.",
     "analyzePurged": "The archival raw packet for this message is no longer available. It may have been purged from Settings > Database, so only the stored message and merged route history remain.",
     "analyzeLoadFailed": "Could not load the archival raw packet for this message: {{description}}",
-    "packetLoadFailed": "Failed to load raw packet"
+    "packetLoadFailed": "Failed to load raw packet",
+    "observerReachAria": "Heard by {{count}} CoreScope observers — view reach",
+    "observerReachLoading": "Loading observers…",
+    "observerReachUnavailable": "CoreScope observers unavailable",
+    "observerReachTitle": "Observers",
+    "observerReachCaveat": "Observers seen by this CoreScope instance only. A region with no MQTT ear is a gap, not proof the flood stopped. Distance is geodesic, not the mesh path.",
+    "observerReachCount": "Observers",
+    "observerReachMaxHops": "Max hops",
+    "observerReachMaxDistance": "Max distance",
+    "observerReachDistanceUnavailable": "Distance unavailable",
+    "observerReachEmpty": "No observers have published this packet to this CoreScope instance.",
+    "observerReachHops": "{{count}} hops",
+    "observerReachMapAria": "Map of observers that heard this packet"
   },
   "sidebar": {
     "collapse": "Collapse sidebar",

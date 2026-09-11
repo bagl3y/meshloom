@@ -1255,7 +1255,7 @@ class TestMessageAckedBroadcastShape:
     # Frontend MessageAckedEvent keys (from useWebSocket.ts:113-117)
     # The 'paths' key is optional in the TypeScript interface
     REQUIRED_KEYS = {"message_id", "ack_count"}
-    OPTIONAL_KEYS = {"paths", "packet_id"}
+    OPTIONAL_KEYS = {"paths", "packet_id", "packet_hash", "observer_reach_eligible"}
 
     @pytest.mark.asyncio
     async def test_outgoing_echo_broadcast_shape(self, test_db, captured_broadcasts):

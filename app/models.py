@@ -445,6 +445,17 @@ class Message(BaseModel):
         default=None,
         description="Resolved region name for the transport code, if it matched a known region",
     )
+    packet_hash: str | None = Field(
+        default=None,
+        description="Firmware packet hash (16 hex uppercase) used for CoreScope observer lookup",
+    )
+    observer_reach_eligible: bool | None = Field(
+        default=None,
+        description=(
+            "True when this message can have MQTT observers: all CHAN, and PRIV "
+            "that arrived as TRANSPORT_FLOOD/FLOOD. Persisted so eligibility survives raw-packet purge."
+        ),
+    )
 
 
 class MessagesAroundResponse(BaseModel):
@@ -1165,6 +1176,34 @@ class DirectoryNodeSearchHit(BaseModel):
 class DirectoryNodeSearchResponse(BaseModel):
     nodes: list[DirectoryNodeSearchHit] = Field(default_factory=list)
     directory_enabled: bool = False
+
+
+class ObserverReachEntry(BaseModel):
+    name: str
+    public_key: str | None = None
+    lat: float | None = None
+    lon: float | None = None
+    hops: int | None = None
+    snr: float | None = None
+
+
+class PacketObserverReachResponse(BaseModel):
+    directory_enabled: bool = False
+    packet_hash: str | None = None
+    observer_count: int = 0
+    observers: list[ObserverReachEntry] = Field(default_factory=list)
+    max_hops: int | None = None
+    max_distance_km: float | None = None
+    origin_available: bool = False
+
+
+class PacketObserverReachCountsRequest(BaseModel):
+    hashes: list[str] = Field(default_factory=list, max_length=20)
+
+
+class PacketObserverReachCountsResponse(BaseModel):
+    directory_enabled: bool = False
+    counts: dict[str, int] = Field(default_factory=dict)
 
 
 class LocateCandidate(BaseModel):

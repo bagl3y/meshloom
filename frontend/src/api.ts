@@ -18,6 +18,8 @@ import type {
   DirectoryNodeSearchResponse,
   DirectoryReachResponse,
   DirectoryResolveHopsResponse,
+  PacketObserverReachCountsResponse,
+  PacketObserverReachResponse,
   LocateResponse,
   ContactTelemetryResponse,
   FanoutConfig,
@@ -458,6 +460,15 @@ export const api = {
   resetDirectoryCache: () =>
     fetchJson<{ deleted: number }>('/directory/cache/reset', {
       method: 'POST',
+    }),
+  getPacketObserverReach: (packetHash: string) =>
+    fetchJson<PacketObserverReachResponse>(
+      `/directory/packets/${encodeURIComponent(packetHash)}/reach`
+    ),
+  getPacketObserverReachCounts: (hashes: string[]) =>
+    fetchJson<PacketObserverReachCountsResponse>('/directory/packets/reach-counts', {
+      method: 'POST',
+      body: JSON.stringify({ hashes }),
     }),
 
   getJsonBackup: () => fetchJson<BackupExport>('/settings/backup/json'),

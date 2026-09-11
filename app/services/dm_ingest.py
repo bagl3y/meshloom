@@ -157,6 +157,7 @@ async def _store_direct_message(
     packet_hash: str | None = None,
     transport_code: int | None = None,
     region: str | None = None,
+    observer_reach_eligible: bool | None = None,
     message_repository=MessageRepository,
     contact_repository=ContactRepository,
     raw_packet_repository=RawPacketRepository,
@@ -176,6 +177,8 @@ async def _store_direct_message(
                         rssi=rssi,
                         snr=snr,
                         broadcast_fn=broadcast_fn,
+                        packet_hash=packet_hash,
+                        observer_reach_eligible=observer_reach_eligible,
                     )
                     return None
 
@@ -197,6 +200,8 @@ async def _store_direct_message(
                     rssi=rssi,
                     snr=snr,
                     broadcast_fn=broadcast_fn,
+                    packet_hash=packet_hash,
+                    observer_reach_eligible=observer_reach_eligible,
                 )
                 return None
 
@@ -217,6 +222,8 @@ async def _store_direct_message(
             sender_name=sender_name,
             transport_code=transport_code,
             region=region,
+            packet_hash=packet_hash,
+            observer_reach_eligible=observer_reach_eligible,
         )
         if msg_id is None:
             await handle_duplicate_message(
@@ -232,6 +239,8 @@ async def _store_direct_message(
                 rssi=rssi,
                 snr=snr,
                 broadcast_fn=broadcast_fn,
+                packet_hash=packet_hash,
+                observer_reach_eligible=observer_reach_eligible,
             )
             return None
 
@@ -254,6 +263,8 @@ async def _store_direct_message(
             packet_id=packet_id,
             transport_code=transport_code,
             region=region,
+            packet_hash=packet_hash,
+            observer_reach_eligible=observer_reach_eligible,
         )
         broadcast_message(
             message=message, broadcast_fn=broadcast_fn, realtime=realtime, packet_hash=packet_hash
@@ -291,6 +302,7 @@ async def ingest_decrypted_direct_message(
     packet_hash: str | None = None,
     transport_code: int | None = None,
     region: str | None = None,
+    observer_reach_eligible: bool | None = None,
     contact_repository=ContactRepository,
 ) -> Message | None:
     conversation_key = their_public_key.lower()
@@ -353,6 +365,7 @@ async def ingest_decrypted_direct_message(
         packet_hash=packet_hash,
         transport_code=transport_code,
         region=region,
+        observer_reach_eligible=observer_reach_eligible,
     )
     if message is None:
         return None

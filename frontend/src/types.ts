@@ -417,6 +417,10 @@ export interface Message {
   transport_code?: number | null;
   /** Resolved region name for the transport code, if it matched a known region. */
   region?: string | null;
+  /** Firmware packet hash (16 hex) for CoreScope observer lookup. */
+  packet_hash?: string | null;
+  /** True for CHAN and PRIV flood; persisted so the badge survives raw-packet purge. */
+  observer_reach_eligible?: boolean | null;
 }
 
 export interface MessagesAroundResponse {
@@ -646,6 +650,35 @@ export interface DirectoryMapNode {
 export interface DirectoryMapNodesResponse {
   nodes: DirectoryMapNode[];
 }
+
+export interface ObserverReachEntry {
+  name: string;
+  public_key?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+  hops?: number | null;
+  snr?: number | null;
+}
+
+export interface PacketObserverReachResponse {
+  directory_enabled: boolean;
+  packet_hash?: string | null;
+  observer_count: number;
+  observers: ObserverReachEntry[];
+  max_hops?: number | null;
+  max_distance_km?: number | null;
+  origin_available: boolean;
+}
+
+export interface PacketObserverReachCountsResponse {
+  directory_enabled: boolean;
+  counts: Record<string, number>;
+}
+
+export type ObserverReachCountState =
+  | { status: 'loading' }
+  | { status: 'ok'; count: number }
+  | { status: 'error' };
 
 export interface ContactGroup {
   id: number;
