@@ -24,6 +24,7 @@ SYSTEM_MESHLOOM_STATS_ID = "system:meshloom-stats"  # keep in sync with app.fano
 DEFAULT_BROKER_HOST = "mqtt.meshloom.app"
 DEFAULT_API_BASE = "https://api.meshloom.app"
 DEFAULT_BROKER_PORT = 443
+DEFAULT_WEBSOCKET_PATH = "/mqtt"
 MQTT_KEEPALIVE_SECONDS = 30
 _IATA_RE = re.compile(r"^[A-Z]{3}$")
 _STATS_TIMEOUT_SECONDS = 8.0

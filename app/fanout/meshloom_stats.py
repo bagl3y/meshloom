@@ -19,6 +19,7 @@ from app.fanout.mqtt_community import (
 from app.services.meshloom_community import (
     DEFAULT_BROKER_HOST,
     DEFAULT_BROKER_PORT,
+    DEFAULT_WEBSOCKET_PATH,
     MQTT_KEEPALIVE_SECONDS,
     SYSTEM_MESHLOOM_STATS_ID,
     get_community_effective,
@@ -39,7 +40,7 @@ def _state_to_settings(state: Any) -> SimpleNamespace:
         community_mqtt_iata=state.iata,
         community_mqtt_email="",
         community_mqtt_token_audience=state.mqtt_audience,
-        community_mqtt_websocket_path="/",
+        community_mqtt_websocket_path=DEFAULT_WEBSOCKET_PATH,
     )
 
 

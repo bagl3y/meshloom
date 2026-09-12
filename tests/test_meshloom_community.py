@@ -26,6 +26,7 @@ from app.services.directory import get_directory_node_reach, list_directory_map_
 from app.services.meshloom_community import (
     DEFAULT_API_BASE,
     DEFAULT_BROKER_HOST,
+    DEFAULT_WEBSOCKET_PATH,
     MQTT_KEEPALIVE_SECONDS,
     SYSTEM_MESHLOOM_STATS_ID,
     CommunityEffective,
@@ -417,6 +418,8 @@ class TestKeepaliveAndJwtKwargs:
             kwargs = pub._build_client_kwargs(settings)
         assert kwargs["keepalive"] == MQTT_KEEPALIVE_SECONDS
         assert kwargs["keepalive"] == 30
+        assert kwargs["websocket_path"] == DEFAULT_WEBSOCKET_PATH
+        assert kwargs["websocket_path"] == "/mqtt"
         payload = _jwt_payload(kwargs["password"])
         assert payload["iata"] == "CDG"
         assert payload["aud"] == "mqtt.example.invalid"
@@ -465,6 +468,7 @@ class TestEnvelopeMapping:
     def test_defaults_are_official_meshloom_hosts(self):
         assert DEFAULT_BROKER_HOST == "mqtt.meshloom.app"
         assert DEFAULT_API_BASE == "https://api.meshloom.app"
+        assert DEFAULT_WEBSOCKET_PATH == "/mqtt"
 
 
 class TestOfficialHostDefaults:
