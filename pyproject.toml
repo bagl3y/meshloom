@@ -1,6 +1,6 @@
 [project]
 name = "remoteterm-meshcore"
-version = "4.1.3"
+version = "4.2.0"
 description = "Meshloom - Web interface for MeshCore radio mesh networks"
 readme = "README.md"
 requires-python = ">=3.11"
