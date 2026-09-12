@@ -75,6 +75,24 @@ class TestObservationParsers:
         assert parsed[0].path == ("ab", "cd")
         assert parsed[0].snr == -4.5
 
+    def test_stats_shaped_observers_use_path_field(self):
+        parsed = parse_packet_observations(
+            {
+                "observers": [
+                    {
+                        "name": "Lyon",
+                        "public_key": "aa" * 32,
+                        "path": ["ab", "cd"],
+                        "hops": 2,
+                    }
+                ]
+            }
+        )
+        assert len(parsed) == 1
+        assert parsed[0].observer_name == "Lyon"
+        assert parsed[0].hops == 2
+        assert parsed[0].path == ("ab", "cd")
+
     def test_batch_results(self):
         parsed = parse_batch_observations(
             {
@@ -334,6 +352,88 @@ class TestObserverReachGate:
         assert result.origin_available is True
         assert result.origin_lat == 45.76
         assert result.origin_lon == 4.83
+
+
+class TestCommunityObserverReach:
+    @pytest.mark.asyncio
+    async def test_batch_unavailable_falls_back_to_packet_detail(self, test_db):
+        reset_observer_reach_cache()
+        from app.services.meshloom_community import update_community
+
+        await update_community(enabled=True, iata="LYS")
+
+        async def fake_data(path: str, method: str = "GET", **_kwargs: object) -> object:
+            if path.endswith("/observations"):
+                raise HTTPException(status_code=500, detail="Stats directory unavailable")
+            if "/packets/" in path:
+                return {
+                    "observers": [
+                        {
+                            "name": "Lyon",
+                            "public_key": "aa" * 32,
+                            "path": ["ab", "cd"],
+                            "hops": 2,
+                        }
+                    ]
+                }
+            if path.endswith("/observers"):
+                return {"observers": []}
+            return {}
+
+        with patch(
+            "app.services.directory._community_directory_data",
+            side_effect=fake_data,
+        ):
+            result = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+
+        assert result.directory_enabled is True
+        assert result.counts["AABBCCDDEEFF0011"] == 1
+
+    @pytest.mark.asyncio
+    async def test_ingest_shaped_batch_falls_back_to_packet_detail(self, test_db):
+        reset_observer_reach_cache()
+        from app.services.meshloom_community import update_community
+
+        await update_community(enabled=True, iata="LYS")
+
+        async def fake_data(path: str, method: str = "GET", **_kwargs: object) -> object:
+            if path.endswith("/observations"):
+                return {"accepted": 0}
+            if "/packets/" in path:
+                return {
+                    "observations": [
+                        {"observer_id": "obs-1", "observer_name": "Lyon", "path_json": []}
+                    ]
+                }
+            if path.endswith("/observers"):
+                return {"observers": []}
+            return {}
+
+        with patch(
+            "app.services.directory._community_directory_data",
+            side_effect=fake_data,
+        ):
+            result = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+
+        assert result.counts["AABBCCDDEEFF0011"] == 1
+
+    @pytest.mark.asyncio
+    async def test_community_all_5xx_is_not_zero(self, test_db):
+        reset_observer_reach_cache()
+        from app.services.meshloom_community import update_community
+
+        await update_community(enabled=True, iata="LYS")
+
+        async def fake_data(*_args: object, **_kwargs: object) -> object:
+            raise HTTPException(status_code=500, detail="Stats directory unavailable")
+
+        with patch(
+            "app.services.directory._community_directory_data",
+            side_effect=fake_data,
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+        assert exc.value.status_code == 500
 
 
 class TestObserverReachTtlLru:

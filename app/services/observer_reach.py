@@ -254,8 +254,11 @@ def _parse_one_observation(item: dict[str, object]) -> ParsedObservation:
     public_key = None
     if isinstance(pubkey_raw, str) and len(pubkey_raw.strip()) == 64:
         public_key = pubkey_raw.strip().lower()
-    path_tokens = path_from_path_json(item.get("path_json"))
-    hops = hops_from_path_json(item.get("path_json"))
+    path_field = item.get("path_json")
+    if path_field is None:
+        path_field = item.get("path")
+    path_tokens = path_from_path_json(path_field)
+    hops = hops_from_path_json(path_field)
     if hops is None:
         hops_raw = item.get("hops") or item.get("hop_count")
         if isinstance(hops_raw, int) and hops_raw >= 0:
@@ -482,6 +485,69 @@ async def _fetch_batch_or_fallback(
     return result
 
 
+async def _community_packet_observations(hash_lower: str) -> list[ParsedObservation]:
+    from app.services.directory import _community_directory_data
+
+    payload = await _community_directory_data(f"/v1/directory/packets/{hash_lower}")
+    return parse_packet_observations(payload)
+
+
+async def _community_batch_or_fallback(
+    hashes_lower: list[str],
+) -> dict[str, list[ParsedObservation]]:
+    """Stats batch query, then per-hash GET. CoreScope's observations POST is ingest."""
+    from app.services.directory import _community_directory_data
+
+    parsed: dict[str, list[ParsedObservation]] | None = None
+    try:
+        payload = await _community_directory_data(
+            "/v1/directory/packets/observations",
+            method="POST",
+            body={"hashes": hashes_lower},
+        )
+        parsed = parse_batch_observations(payload) if payload is not None else None
+    except HTTPException as exc:
+        if exc.status_code == 400:
+            raise
+        parsed = None
+
+    result: dict[str, list[ParsedObservation]] = {}
+    missing: list[str] = []
+    for hash_lower in hashes_lower:
+        stored = canonical_packet_hash(hash_lower) or hash_lower.upper()
+        observations = (parsed or {}).get(stored, [])
+        if not _usable_observations(observations):
+            observations = (parsed or {}).get(hash_lower.upper(), [])
+        if _usable_observations(observations):
+            result[hash_lower] = observations
+        else:
+            missing.append(hash_lower)
+    if not missing:
+        return result
+
+    semaphore = asyncio.Semaphore(BATCH_FALLBACK_CONCURRENCY)
+
+    async def one(hash_lower: str) -> tuple[str, list[ParsedObservation]]:
+        async with semaphore:
+            return hash_lower, await _community_packet_observations(hash_lower)
+
+    fetched = await asyncio.gather(*(one(h) for h in missing), return_exceptions=True)
+    errors: list[HTTPException] = []
+    for item in fetched:
+        if isinstance(item, HTTPException):
+            errors.append(item)
+            continue
+        if isinstance(item, BaseException):
+            raise item
+        hash_lower, observations = item
+        result[hash_lower] = observations
+    if not result and errors:
+        raise errors[0]
+    for hash_lower in missing:
+        result.setdefault(hash_lower, [])
+    return result
+
+
 async def get_packet_observer_reach(raw_hash: str) -> PacketObserverReachResponse:
     from app.services.directory import _community_directory_data
     from app.services.meshloom_community import community_enabled
@@ -564,12 +630,7 @@ async def get_packet_observer_reach_counts(hashes: list[str]) -> PacketObserverR
             normalized.append(hash_lower)
 
     if await community_enabled():
-        payload = await _community_directory_data(
-            "/v1/directory/packets/observations",
-            method="POST",
-            body={"hashes": normalized},
-        )
-        parsed = parse_batch_observations(payload) if payload is not None else None
+        fetched = await _community_batch_or_fallback(normalized)
         geos: dict[str, ObserverGeo] = {}
         try:
             geos_payload = await _community_directory_data("/v1/directory/observers")
@@ -578,11 +639,7 @@ async def get_packet_observer_reach_counts(hashes: list[str]) -> PacketObserverR
             geos = {}
         counts: dict[str, int] = {}
         for hash_lower in normalized:
-            stored = canonical_packet_hash(hash_lower) or hash_lower.upper()
-            observations = (parsed or {}).get(stored, [])
-            if not observations and parsed is not None:
-                observations = (parsed or {}).get(hash_lower.upper(), [])
-            entries = _dedup_entries(observations, geos)
+            entries = _dedup_entries(fetched.get(hash_lower, []), geos)
             counts[hash_lower.upper()] = len(entries)
         return PacketObserverReachCountsResponse(directory_enabled=True, counts=counts)
 
