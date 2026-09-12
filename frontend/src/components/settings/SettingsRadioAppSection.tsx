@@ -638,9 +638,16 @@ export function SettingsRadioAppSection({
 
       <div className="space-y-3">
         <h3 className="text-base font-semibold tracking-tight">{t('settings.directoryTitle')}</h3>
-        <p className="text-[0.8125rem] text-muted-foreground">
-          {directoryViaStats ? t('settings.directoryViaStats') : t('settings.directoryHelp')}
-        </p>
+        {directoryViaStats ? (
+          <div
+            data-testid="directory-via-community"
+            className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[0.8125rem] text-warning"
+          >
+            {t('settings.directoryViaStats')}
+          </div>
+        ) : (
+          <p className="text-[0.8125rem] text-muted-foreground">{t('settings.directoryHelp')}</p>
+        )}
         <label
           className={`flex items-start gap-2 ${directoryViaStats ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
         >
@@ -657,7 +664,9 @@ export function SettingsRadioAppSection({
           />
           <div>
             <span className="text-sm">
-              {directoryViaStats ? t('settings.directoryViaStatsEnable') : t('settings.directoryEnable')}
+              {directoryViaStats
+                ? t('settings.directoryViaStatsEnable')
+                : t('settings.directoryEnable')}
             </span>
           </div>
         </label>

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown } from 'lucide-react';
 import { toast } from '../ui/sonner';
 import { api, ApiError, formatApiError } from '../../api';
 import type {
@@ -65,21 +64,15 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
   const [status, setStatus] = useState<CommunityStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [iataDraft, setIataDraft] = useState('');
-  const [brokerDraft, setBrokerDraft] = useState('');
-  const [apiBaseDraft, setApiBaseDraft] = useState('');
   const [bindResult, setBindResult] = useState<CommunityIataBindResult | null>(null);
   const [meStats, setMeStats] = useState<CommunityMeStats | null>(null);
   const [communityStats, setCommunityStats] = useState<CommunityPublicStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'join' | 'enable' | 'bind' | 'override' | 'advanced' | null>(
-    null
-  );
+  const [busy, setBusy] = useState<'join' | 'enable' | 'bind' | 'override' | null>(null);
 
   const applyStatus = useCallback((next: CommunityStatus) => {
     setStatus(next);
     setIataDraft(next.iata);
-    setBrokerDraft(next.broker_host);
-    setApiBaseDraft(next.api_base);
   }, []);
 
   const loadStatus = useCallback(async () => {
@@ -94,20 +87,23 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
     }
   }, [applyStatus, t]);
 
-  const loadStats = useCallback(async (next: CommunityStatus) => {
-    try {
-      const community = await api.getCommunityStats();
-      setCommunityStats(community);
-      if (next.iata) {
-        setMeStats(await api.getCommunityMeStats());
-      } else {
-        setMeStats(null);
+  const loadStats = useCallback(
+    async (next: CommunityStatus) => {
+      try {
+        const community = await api.getCommunityStats();
+        setCommunityStats(community);
+        if (next.iata) {
+          setMeStats(await api.getCommunityMeStats());
+        } else {
+          setMeStats(null);
+        }
+        setStatsError(null);
+      } catch (err) {
+        setStatsError(formatApiError(err, t));
       }
-      setStatsError(null);
-    } catch (err) {
-      setStatsError(formatApiError(err, t));
-    }
-  }, [t]);
+    },
+    [t]
+  );
 
   useEffect(() => {
     void loadStatus();
@@ -205,23 +201,6 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
         await loadStats(status);
       }
       toast.success(t('settings.community.overrideSuccess'));
-    } catch (err) {
-      handleCommunityError(err);
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleSaveAdvanced = async () => {
-    setBusy('advanced');
-    try {
-      applyStatus(
-        await api.updateCommunity({
-          broker_host: brokerDraft.trim(),
-          api_base: apiBaseDraft.trim(),
-        })
-      );
-      toast.success(t('settings.community.saved'));
     } catch (err) {
       handleCommunityError(err);
     } finally {
@@ -476,53 +455,6 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
           </div>
         </>
       )}
-
-      <Separator className="my-6" />
-
-      <details className="group">
-        <summary className="text-sm font-medium text-foreground cursor-pointer select-none flex items-center gap-1">
-          <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-0 -rotate-90" />
-          {t('settings.community.advanced')}
-        </summary>
-        <div className="mt-3 space-y-3">
-          <p className="text-[0.8125rem] text-muted-foreground">
-            {t('settings.community.advancedHelp')}
-          </p>
-          <div className="space-y-1">
-            <Label htmlFor="community-broker">{t('settings.community.brokerHost')}</Label>
-            <Input
-              id="community-broker"
-              value={brokerDraft}
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="mqtt.meshloom.app"
-              onChange={(event) => setBrokerDraft(event.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="community-api-base">{t('settings.community.apiBase')}</Label>
-            <Input
-              id="community-api-base"
-              value={apiBaseDraft}
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="https://api.meshloom.app"
-              onChange={(event) => setApiBaseDraft(event.target.value)}
-            />
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void handleSaveAdvanced()}
-            disabled={busy !== null}
-          >
-            {busy === 'advanced'
-              ? t('settings.community.saving')
-              : t('settings.community.saveAdvanced')}
-          </Button>
-        </div>
-      </details>
     </div>
   );
 }

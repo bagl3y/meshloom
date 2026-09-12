@@ -671,7 +671,7 @@ describe('SettingsModal', () => {
     });
   });
 
-  it('renders Meshloom Stats settings with a join CTA when community is off', async () => {
+  it('renders Meshloom Community settings with a join CTA when community is off', async () => {
     vi.spyOn(api, 'getCommunity').mockResolvedValue({
       enabled: false,
       locked: false,
@@ -693,9 +693,12 @@ describe('SettingsModal', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(i18n.t('settings.community.privacyAccount'))).toBeInTheDocument();
     expect(screen.getByLabelText(i18n.t('settings.community.enable'))).not.toBeDisabled();
+    expect(screen.queryByText('Avancé')).not.toBeInTheDocument();
+    expect(screen.queryByText('Advanced')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/broker/i)).not.toBeInTheDocument();
   });
 
-  it('does not mention Meshloom Stats MQTT inside Fanout', async () => {
+  it('does not mention Meshloom Community MQTT inside Fanout', async () => {
     const { view } = renderModal({
       externalSidebarNav: true,
       desktopSection: 'fanout',
@@ -704,13 +707,13 @@ describe('SettingsModal', () => {
     await waitFor(() => {
       expect(api.getFanoutConfigs).toHaveBeenCalled();
     });
-    expect(view.container).not.toHaveTextContent(/Meshloom Stats/);
+    expect(view.container).not.toHaveTextContent(/Meshloom Community/);
     expect(
       screen.queryByRole('button', { name: i18n.t('settings.community.joinCta') })
     ).not.toBeInTheDocument();
   });
 
-  it('disables Meshloom Stats enable when the operator locked it', async () => {
+  it('disables Meshloom Community enable when the operator locked it', async () => {
     vi.spyOn(api, 'getCommunity').mockResolvedValue({
       enabled: false,
       locked: true,
@@ -1426,7 +1429,7 @@ describe('SettingsModal', () => {
     });
   });
 
-  it('locks the CoreScope URL when Meshloom Stats is on', async () => {
+  it('locks the CoreScope URL when Meshloom Community is on', async () => {
     vi.spyOn(api, 'getCommunity').mockResolvedValue({
       enabled: true,
       locked: false,
@@ -1452,7 +1455,9 @@ describe('SettingsModal', () => {
     });
     expect(checkbox).toBeDisabled();
     expect(screen.getByLabelText(i18n.t('settings.directoryUrl'))).toBeDisabled();
-    expect(screen.getByText(i18n.t('settings.directoryViaStats'))).toBeInTheDocument();
+    const callout = screen.getByTestId('directory-via-community');
+    expect(callout).toHaveTextContent(i18n.t('settings.directoryViaStats'));
+    expect(callout).toHaveClass('border-warning/30', 'bg-warning/10', 'text-warning');
   });
 
   it('shows route badge per tracked repeater', async () => {
