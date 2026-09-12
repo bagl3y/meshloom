@@ -1,3 +1,31 @@
+## [4.2.1] - 2026-09-13
+
+Observer-reach badges work again when Meshloom Community is on. CoreScope’s `POST /api/packets/observations` is ingest, not a batch query; counts now fall back to per-packet detail instead of hiding every ear.
+
+### Highlights
+
+- Flood-message observer ears come back with Community enabled, even without a manual CoreScope URL
+
+### Fixed
+
+- Bug: Community observer-reach counts treated CoreScope `POST /api/packets/observations` as a query. That route is ingest-only, so the directory call failed and the UI hid every badge. Counts now fall back to `GET` packet detail, the same path hop-name resolution already used
+
+---
+
+### Français
+
+Les badges observateurs refonctionnent quand Meshloom Community est activé. Le `POST /api/packets/observations` de CoreScope est un ingest, pas une requête batch ; les comptages retombent sur le détail par paquet au lieu de cacher toutes les oreilles.
+
+#### Points forts
+
+- Les oreilles sur les messages flood reviennent avec Community, même sans URL CoreScope manuelle
+
+#### Corrections
+
+- Bug : les comptages observateurs Community traitaient le `POST /api/packets/observations` CoreScope comme une requête. Cette route est un ingest, l’appel directory échouait, et l’UI cachait chaque badge. Les comptages retombent maintenant sur le détail `GET` par hash, le même chemin que la résolution des nœuds
+
+---
+
 ## [4.2.0] - 2026-09-13
 
 Optional **Meshloom Stats** observer community: join from Settings, bind a 3-letter IATA code, and this server can publish overheard packets to the official Stats hosts. Existing installs stay off until you join.
