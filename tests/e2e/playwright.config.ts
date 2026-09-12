@@ -45,21 +45,7 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: `bash -c '
-      echo "[e2e] $(date +%T.%3N) Starting webServer command..."
-      if [ ! -d frontend/dist ]; then
-        echo "[e2e] $(date +%T.%3N) frontend/dist missing — running npm ci + build"
-        cd frontend && npm ci && npm run build
-        echo "[e2e] $(date +%T.%3N) Frontend build complete"
-      else
-        echo "[e2e] $(date +%T.%3N) frontend/dist exists — skipping build"
-      fi
-      echo "[e2e] $(date +%T.%3N) Seeding radio_transport=serial into the temp DB..."
-      uv run python tests/e2e/seed_radio_transport.py
-      unset MESHCORE_SERIAL_PORT MESHCORE_SERIAL_BAUDRATE MESHCORE_TCP_HOST MESHCORE_TCP_PORT MESHCORE_BLE_ADDRESS MESHCORE_BLE_PIN
-      echo "[e2e] $(date +%T.%3N) Launching uvicorn..."
-      uv run uvicorn app.main:app --host 127.0.0.1 --port 8001
-    '`,
+    command: 'bash tests/e2e/start-webserver.sh',
     cwd: projectRoot,
     port: 8001,
     reuseExistingServer: false,

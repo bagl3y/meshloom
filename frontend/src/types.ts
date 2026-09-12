@@ -436,14 +436,7 @@ export interface ResendChannelMessageResponse {
 }
 
 type ConversationType =
-  | 'contact'
-  | 'channel'
-  | 'raw'
-  | 'map'
-  | 'visualizer'
-  | 'search'
-  | 'trace'
-  | 'locate';
+  'contact' | 'channel' | 'raw' | 'map' | 'visualizer' | 'search' | 'trace' | 'locate';
 
 export interface Conversation {
   type: ConversationType;
@@ -676,9 +669,7 @@ export interface PacketObserverReachCountsResponse {
 }
 
 export type ObserverReachCountState =
-  | { status: 'loading' }
-  | { status: 'ok'; count: number }
-  | { status: 'error' };
+  { status: 'loading' } | { status: 'ok'; count: number } | { status: 'error' };
 
 export interface ContactGroup {
   id: number;

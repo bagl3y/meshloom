@@ -291,6 +291,12 @@ class Database:
             yield self._connection
 
     async def connect(self) -> None:
+        async with self._lock:
+            if self._connection is not None:
+                return
+            await self._connect_unlocked()
+
+    async def _connect_unlocked(self) -> None:
         logger.info("Connecting to database at %s", self.db_path)
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._connection = await aiosqlite.connect(self.db_path)
@@ -347,10 +353,11 @@ class Database:
         logger.debug("Foreign key enforcement enabled")
 
     async def disconnect(self) -> None:
-        if self._connection:
-            await self._connection.close()
-            self._connection = None
-            logger.debug("Database connection closed")
+        async with self._lock:
+            if self._connection:
+                await self._connection.close()
+                self._connection = None
+                logger.debug("Database connection closed")
 
     @property
     def conn(self) -> aiosqlite.Connection:

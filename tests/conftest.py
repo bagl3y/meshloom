@@ -8,14 +8,15 @@ from pathlib import Path
 import httpx
 import pytest
 
-from app.database import Database
-
-# Use an isolated file-backed SQLite DB for tests that import app.main/TestClient.
-# This must be set before app.config/app.database are imported, otherwise the global
-# Database instance will bind to the default runtime DB (data/meshcore.db).
-_TEST_DB_DIR = Path(tempfile.mkdtemp(prefix="meshcore-pytest-"))
+# Isolate the file-backed SQLite DB per xdist worker before app.config/app.database
+# import. setdefault is not enough: forked workers inherit the controller env and
+# would otherwise share one file while TestClient now always runs lifespan.
+_WORKER = os.environ.get("PYTEST_XDIST_WORKER", "main")
+_TEST_DB_DIR = Path(tempfile.mkdtemp(prefix=f"meshcore-pytest-{_WORKER}-"))
 _TEST_DB_PATH = _TEST_DB_DIR / "meshcore.db"
-os.environ.setdefault("MESHCORE_DATABASE_PATH", str(_TEST_DB_PATH))
+os.environ["MESHCORE_DATABASE_PATH"] = str(_TEST_DB_PATH)
+
+from app.database import Database  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)

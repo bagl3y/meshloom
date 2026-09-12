@@ -51,8 +51,7 @@ export type DirectoryHopHit = {
 };
 
 export type HopDisplay =
-  | LocalHopDisplay
-  | { kind: 'directory'; name: string; source: DirectoryHopSource };
+  LocalHopDisplay | { kind: 'directory'; name: string; source: DirectoryHopSource };
 
 /**
  * Layer an optional CoreScope name on top of local policy.

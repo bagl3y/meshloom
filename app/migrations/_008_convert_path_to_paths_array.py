@@ -28,6 +28,13 @@ async def migrate(conn: aiosqlite.Connection) -> None:
             raise
 
     # Migrate existing path data to paths array format
+    cursor = await conn.execute("PRAGMA table_info(messages)")
+    columns = {row[1] for row in await cursor.fetchall()}
+    if "path" not in columns:
+        logger.debug("messages.path already gone, skipping path-to-paths conversion")
+        await conn.commit()
+        return
+
     cursor = await conn.execute(
         "SELECT id, path, received_at FROM messages WHERE path IS NOT NULL AND paths IS NULL"
     )
