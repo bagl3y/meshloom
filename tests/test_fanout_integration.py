@@ -107,20 +107,28 @@ async def mqtt_broker():
 
 @pytest.fixture
 async def integration_db():
-    """In-memory DB with fanout_configs, wired into the repository module.
+    """In-memory DB with fanout_configs, wired into the repository modules.
 
     Database.connect() runs all migrations which create the fanout_configs
     table, so no manual DDL is needed here.
+
+    Settings must be patched too: FanoutManager.load_from_db() now reads
+    Meshloom Stats community state via AppSettingsRepository.
     """
+    import app.repository.settings as settings_mod
+
     test_db = Database(":memory:")
     await test_db.connect()
 
-    original_db = fanout_mod.db
+    original_fanout_db = fanout_mod.db
+    original_settings_db = settings_mod.db
     fanout_mod.db = test_db
+    settings_mod.db = test_db
     try:
         yield test_db
     finally:
-        fanout_mod.db = original_db
+        fanout_mod.db = original_fanout_db
+        settings_mod.db = original_settings_db
         await test_db.disconnect()
 
 
