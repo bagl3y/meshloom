@@ -18,9 +18,9 @@ from app.fanout.community_mqtt import (
 )
 from app.fanout.manager import FanoutManager, is_reserved_fanout_id
 from app.fanout.meshloom_stats import MeshloomStatsPublisher, _state_to_settings
-from app.models import CommunityUpdate
+from app.models import CommunityIataBindRequest, CommunityUpdate
 from app.repository.fanout import FanoutConfigRepository
-from app.routers.community import get_community, get_community_stats, patch_community
+from app.routers.community import get_community, get_community_stats, patch_community, put_me_iata
 from app.routers.fanout import delete_fanout_config, list_fanout_configs, update_fanout_config
 from app.services.directory import get_directory_node_reach, list_directory_map_nodes
 from app.services.meshloom_community import (
@@ -253,6 +253,36 @@ class TestJwtIataClaim:
         assert mint.call_args.kwargs["require_iata"] is True
         assert mint.call_args.kwargs["iata"] == "CDG"
 
+    @pytest.mark.asyncio
+    async def test_first_iata_bind_mints_with_requested_code(self):
+        state = CommunityEffective(
+            enabled=True,
+            locked=False,
+            iata="",
+            broker_host=DEFAULT_BROKER_HOST,
+            api_base=DEFAULT_API_BASE,
+            api_audience="api.example.invalid",
+            mqtt_audience="mqtt.example.invalid",
+        )
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_client = AsyncMock()
+        mock_client.request = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch(
+                "app.services.meshloom_community.get_community_effective",
+                new=AsyncMock(return_value=state),
+            ),
+            patch("app.services.meshloom_community.mint_stats_jwt", return_value="tok") as mint,
+            patch("app.services.meshloom_community.httpx.AsyncClient", return_value=mock_client),
+        ):
+            await stats_request("PUT", "/v1/me/iata", auth=True, iata="lys")
+        mint.assert_called_once()
+        assert mint.call_args.kwargs["require_iata"] is True
+        assert mint.call_args.kwargs["iata"] == "LYS"
+
 
 class TestPublisherRequiresIata:
     def test_not_configured_without_iata(self):
@@ -292,6 +322,27 @@ class TestPublisherRequiresIata:
             patch("app.keystore.has_private_key", return_value=True),
         ):
             assert pub._is_configured() is True
+
+
+class TestFirstIataBind:
+    @pytest.mark.asyncio
+    async def test_put_me_iata_forwards_requested_code(self, test_db):
+        await update_community(enabled=True)
+        payload = {
+            "iata": "LYS",
+            "concordance": "unknown",
+            "honored_for_buckets": False,
+            "distance_km": None,
+        }
+        with patch(
+            "app.routers.community.stats_json",
+            new=AsyncMock(return_value=payload),
+        ) as stats:
+            result = await put_me_iata(CommunityIataBindRequest(iata="lys"))
+        assert stats.await_args.kwargs["iata"] == "lys"
+        assert result.iata == "LYS"
+        state = await get_community_effective()
+        assert state.iata == "LYS"
 
 
 class TestCommunityStatusAndProxies:
@@ -411,6 +462,30 @@ class TestEnvelopeMapping:
             )
         assert exc.value.status_code == 500
 
-    def test_defaults_are_example_invalid(self):
-        assert DEFAULT_BROKER_HOST == "mqtt.example.invalid"
-        assert DEFAULT_API_BASE == "https://api.example.invalid"
+    def test_defaults_are_official_meshloom_hosts(self):
+        assert DEFAULT_BROKER_HOST == "mqtt.meshloom.app"
+        assert DEFAULT_API_BASE == "https://api.meshloom.app"
+
+
+class TestOfficialHostDefaults:
+    @pytest.mark.asyncio
+    async def test_env_overrides_official_defaults(self, test_db, monkeypatch):
+        monkeypatch.setenv("MESHLOOM_COMMUNITY_BROKER_HOST", "mqtt.internal.test")
+        monkeypatch.setenv("MESHLOOM_COMMUNITY_API_BASE", "https://api.internal.test")
+        state = await get_community_effective()
+        assert state.broker_host == "mqtt.internal.test"
+        assert state.api_base == "https://api.internal.test"
+        assert state.mqtt_audience == "mqtt.internal.test"
+        assert state.api_audience == "api.internal.test"
+
+    @pytest.mark.asyncio
+    async def test_placeholder_row_uses_official_defaults(self, test_db):
+        await update_community(
+            broker_host="mqtt.example.invalid",
+            api_base="https://api.example.invalid",
+        )
+        state = await get_community_effective()
+        assert state.broker_host == DEFAULT_BROKER_HOST
+        assert state.api_base == DEFAULT_API_BASE
+        assert state.mqtt_audience == "mqtt.meshloom.app"
+        assert state.api_audience == "api.meshloom.app"

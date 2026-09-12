@@ -60,7 +60,9 @@ async def put_me_iata(body: CommunityIataBindRequest) -> CommunityIataBindResult
     if lat is not None and lon is not None:
         json_body["lat"] = lat
         json_body["lon"] = lon
-    payload = await stats_json("PUT", "/v1/me/iata", auth=True, json_body=json_body)
+    payload = await stats_json(
+        "PUT", "/v1/me/iata", auth=True, json_body=json_body, iata=body.iata
+    )
     if not isinstance(payload, dict):
         raise HTTPException(status_code=502, detail="Stats returned an unexpected body")
     result = CommunityIataBindResult.model_validate(payload)

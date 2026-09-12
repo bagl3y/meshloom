@@ -94,14 +94,15 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
     }
   }, [applyStatus, t]);
 
-  const loadStats = useCallback(async () => {
+  const loadStats = useCallback(async (next: CommunityStatus) => {
     try {
-      const [me, community] = await Promise.all([
-        api.getCommunityMeStats(),
-        api.getCommunityStats(),
-      ]);
-      setMeStats(me);
+      const community = await api.getCommunityStats();
       setCommunityStats(community);
+      if (next.iata) {
+        setMeStats(await api.getCommunityMeStats());
+      } else {
+        setMeStats(null);
+      }
       setStatsError(null);
     } catch (err) {
       setStatsError(formatApiError(err, t));
@@ -119,8 +120,8 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
       setStatsError(null);
       return;
     }
-    void loadStats();
-  }, [status?.enabled, loadStats]);
+    void loadStats(status);
+  }, [status, loadStats]);
 
   const handleCommunityError = (err: unknown) => {
     if (err instanceof ApiError && err.status === 429) {
@@ -145,8 +146,9 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
       applyStatus(await api.updateCommunity({ enabled: true, iata }));
       const result = await api.bindCommunityIata({ iata });
       setBindResult(result);
-      applyStatus(await api.getCommunity());
-      await loadStats();
+      const next = await api.getCommunity();
+      applyStatus(next);
+      await loadStats(next);
       toast.success(t('settings.community.bindSuccess'));
     } catch (err) {
       handleCommunityError(err);
@@ -180,10 +182,12 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
     }
     setBusy('bind');
     try {
+      applyStatus(await api.updateCommunity({ iata }));
       const result = await api.bindCommunityIata({ iata });
       setBindResult(result);
-      applyStatus(await api.getCommunity());
-      await loadStats();
+      const next = await api.getCommunity();
+      applyStatus(next);
+      await loadStats(next);
       toast.success(t('settings.community.bindSuccess'));
     } catch (err) {
       handleCommunityError(err);
@@ -197,7 +201,9 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
     try {
       const result = await api.overrideCommunityIata();
       setBindResult(result);
-      await loadStats();
+      if (status) {
+        await loadStats(status);
+      }
       toast.success(t('settings.community.overrideSuccess'));
     } catch (err) {
       handleCommunityError(err);
@@ -489,6 +495,7 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
               value={brokerDraft}
               autoComplete="off"
               spellCheck={false}
+              placeholder="mqtt.meshloom.app"
               onChange={(event) => setBrokerDraft(event.target.value)}
             />
           </div>
@@ -499,6 +506,7 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
               value={apiBaseDraft}
               autoComplete="off"
               spellCheck={false}
+              placeholder="https://api.meshloom.app"
               onChange={(event) => setApiBaseDraft(event.target.value)}
             />
           </div>

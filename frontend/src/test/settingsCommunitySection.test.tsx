@@ -133,6 +133,31 @@ describe('SettingsCommunitySection', () => {
     });
   });
 
+  it('persists IATA before bind when already enabled', async () => {
+    vi.mocked(api.getCommunity).mockResolvedValue({
+      ...offStatus,
+      enabled: true,
+      publisher_configured: false,
+    });
+    vi.mocked(api.updateCommunity).mockResolvedValue({
+      ...offStatus,
+      enabled: true,
+      iata: 'LYS',
+      publisher_configured: true,
+    });
+
+    render(<SettingsCommunitySection />);
+
+    const iata = await screen.findByLabelText(i18n.t('settings.community.iata'));
+    fireEvent.change(iata, { target: { value: 'lys' } });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.community.bind') }));
+
+    await waitFor(() => {
+      expect(api.updateCommunity).toHaveBeenCalledWith({ iata: 'LYS' });
+      expect(api.bindCommunityIata).toHaveBeenCalledWith({ iata: 'LYS' });
+    });
+  });
+
   it('surfaces the IATA change cap on 429', async () => {
     vi.mocked(api.getCommunity).mockResolvedValue({
       ...offStatus,

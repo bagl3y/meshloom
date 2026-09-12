@@ -21,12 +21,13 @@ from app.models import CommunityStatus
 logger = logging.getLogger(__name__)
 
 SYSTEM_MESHLOOM_STATS_ID = "system:meshloom-stats"  # keep in sync with app.fanout.manager
-DEFAULT_BROKER_HOST = "mqtt.example.invalid"
-DEFAULT_API_BASE = "https://api.example.invalid"
+DEFAULT_BROKER_HOST = "mqtt.meshloom.app"
+DEFAULT_API_BASE = "https://api.meshloom.app"
 DEFAULT_BROKER_PORT = 443
 MQTT_KEEPALIVE_SECONDS = 30
 _IATA_RE = re.compile(r"^[A-Z]{3}$")
 _STATS_TIMEOUT_SECONDS = 8.0
+_PLACEHOLDER_HOST_SUFFIX = ".example.invalid"
 
 
 def _env_raw(name: str) -> str:
@@ -47,11 +48,35 @@ def env_community_iata() -> str:
 
 
 def env_community_broker_host() -> str:
-    return _env_raw("MESHLOOM_COMMUNITY_BROKER_HOST")
+    return _usable_broker_host(_env_raw("MESHLOOM_COMMUNITY_BROKER_HOST"))
 
 
 def env_community_api_base() -> str:
-    return _env_raw("MESHLOOM_COMMUNITY_API_BASE")
+    return _usable_api_base(_env_raw("MESHLOOM_COMMUNITY_API_BASE"))
+
+
+def _is_placeholder_host(host: str) -> bool:
+    return not host or host == "example.invalid" or host.endswith(_PLACEHOLDER_HOST_SUFFIX)
+
+
+def _usable_broker_host(raw: str) -> str:
+    text = (raw or "").strip()
+    if _is_placeholder_host(host_without_scheme(text)):
+        return ""
+    return text
+
+
+def _usable_api_base(raw: str) -> str:
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    try:
+        normalized = normalize_api_base(text)
+    except ValueError:
+        return ""
+    if _is_placeholder_host(host_without_scheme(normalized)):
+        return ""
+    return normalized
 
 
 def _normalize_iata(raw: str) -> str:
@@ -111,8 +136,10 @@ async def get_community_record() -> CommunityRecord:
 async def get_community_effective() -> CommunityEffective:
     row = await get_community_record()
     iata = env_community_iata() or row.iata
-    broker = env_community_broker_host() or row.broker_host or DEFAULT_BROKER_HOST
-    api_base = env_community_api_base() or row.api_base or DEFAULT_API_BASE
+    broker = (
+        env_community_broker_host() or _usable_broker_host(row.broker_host) or DEFAULT_BROKER_HOST
+    )
+    api_base = env_community_api_base() or _usable_api_base(row.api_base) or DEFAULT_API_BASE
     try:
         api_base = normalize_api_base(api_base) or DEFAULT_API_BASE
     except ValueError:
@@ -275,6 +302,7 @@ async def stats_request(
     auth: bool,
     params: dict[str, str | int] | None = None,
     json_body: dict[str, Any] | None = None,
+    iata: str | None = None,
     timeout: float = _STATS_TIMEOUT_SECONDS,
 ) -> httpx.Response:
     """HTTP to Meshloom Stats. Raises 403 when community is off (never calls)."""
@@ -282,10 +310,11 @@ async def stats_request(
     _require_enabled(state)
     headers: dict[str, str] = {}
     if auth:
-        # jwt.md: API `iata` is required for `/v1/me/*` writes, not directory reads.
-        # Directory must keep working when community is on but IATA is still unbound.
+        # jwt.md: API `iata` is required for `/v1/me/*`, not directory reads.
+        # First IATA bind has no stored code yet: mint with the requested code.
+        mint_iata = _normalize_iata(iata) if iata is not None else state.iata
         headers["Authorization"] = (
-            f"Bearer {mint_stats_jwt(audience=state.api_audience, iata=state.iata, require_iata=path.startswith('/v1/me/'))}"
+            f"Bearer {mint_stats_jwt(audience=state.api_audience, iata=mint_iata, require_iata=path.startswith('/v1/me/'))}"
         )
     url = f"{state.api_base}{path}"
     try:
@@ -323,8 +352,11 @@ async def stats_json(
     auth: bool,
     params: dict[str, str | int] | None = None,
     json_body: dict[str, Any] | None = None,
+    iata: str | None = None,
 ) -> object:
-    response = await stats_request(method, path, auth=auth, params=params, json_body=json_body)
+    response = await stats_request(
+        method, path, auth=auth, params=params, json_body=json_body, iata=iata
+    )
     return _json_or_500(response, path=path)
 
 
