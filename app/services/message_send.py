@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import HTTPException
 from meshcore import EventType
 
+from app.loop_lock import LoopBoundLock
 from app.models import ResendChannelMessageResponse
 from app.radio import RadioOperationBusyError
 from app.region_scope import is_unscoped, normalize_region_scope
@@ -68,7 +69,7 @@ RESEND_WINDOW_SECONDS = 30
 WATCHDOG_TEMP_RADIO_SLOT = 0
 
 _pending_outgoing_timestamp_reservations: dict[OutgoingReservationKey, set[int]] = {}
-_outgoing_timestamp_reservations_lock = asyncio.Lock()
+_outgoing_timestamp_reservations_lock = LoopBoundLock()
 
 DM_SEND_MAX_ATTEMPTS = 3
 DEFAULT_DM_ACK_TIMEOUT_MS = 10000

@@ -20,10 +20,12 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from app.loop_lock import LoopBoundLock, LoopBoundSemaphore
+
 logger = logging.getLogger(__name__)
 
 # Limit concurrent bot executions to prevent resource exhaustion
-_bot_semaphore = asyncio.Semaphore(100)
+_bot_semaphore = LoopBoundSemaphore(100)
 
 # Dedicated thread pool for bot execution (separate from default executor)
 _bot_executor = ThreadPoolExecutor(max_workers=100, thread_name_prefix="bot_")
@@ -36,7 +38,7 @@ BOT_EXECUTION_TIMEOUT = 10
 BOT_MESSAGE_SPACING = 2.0
 
 # Global state for rate limiting bot sends
-_bot_send_lock = asyncio.Lock()
+_bot_send_lock = LoopBoundLock()
 _last_bot_send_time: float = 0.0
 
 # global container for persistent data storage between bot executions, will be added to execution namespace

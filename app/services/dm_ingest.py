@@ -1,9 +1,9 @@
-import asyncio
 import logging
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from app.loop_lock import LoopBoundLock
 from app.models import CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM, Contact, ContactUpsert, Message
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from app.decoder import DecryptedDirectMessage
 
 logger = logging.getLogger(__name__)
-_decrypted_dm_store_lock = asyncio.Lock()
+_decrypted_dm_store_lock = LoopBoundLock()
 
 
 @dataclass(frozen=True)
