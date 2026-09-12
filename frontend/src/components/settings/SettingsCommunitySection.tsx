@@ -360,7 +360,7 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
               <p className="text-[0.8125rem] text-muted-foreground">
                 {t(concordanceMessageKey(concordanceSource))}
               </p>
-              {(bindResult?.distance_km != null || bindResult?.distance_km === 0) && (
+              {bindResult?.distance_km != null && (
                 <p className="text-[0.8125rem] text-muted-foreground">
                   {t('settings.community.concordanceDistance', {
                     km: bindResult.distance_km.toFixed(1),

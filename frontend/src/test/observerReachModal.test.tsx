@@ -2,15 +2,26 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { DirectoryResolveHopsResponse, PacketObserverReachResponse } from '../types';
+
 const apiMocks = vi.hoisted(() => ({
-  getPacketObserverReach: vi.fn(),
-  resolveDirectoryHops: vi.fn(async () => ({ resolved: {} })),
+  getPacketObserverReach: vi.fn<(hash: string) => Promise<PacketObserverReachResponse>>(
+    async () => ({
+      directory_enabled: true,
+      observer_count: 0,
+      observers: [],
+      origin_available: false,
+    })
+  ),
+  resolveDirectoryHops: vi.fn<(hops: string[]) => Promise<DirectoryResolveHopsResponse>>(
+    async () => ({ resolved: {} })
+  ),
 }));
 
 vi.mock('../api', () => ({
   api: {
-    getPacketObserverReach: (...args: [string]) => apiMocks.getPacketObserverReach(...args),
-    resolveDirectoryHops: (...args: [string[]]) => apiMocks.resolveDirectoryHops(...args),
+    getPacketObserverReach: (hash: string) => apiMocks.getPacketObserverReach(hash),
+    resolveDirectoryHops: (hops: string[]) => apiMocks.resolveDirectoryHops(hops),
   },
   formatApiError: (err: unknown) => (err instanceof Error ? err.message : String(err)),
 }));
@@ -112,7 +123,7 @@ describe('ObserverReachModal hop path', () => {
       origin_available: false,
     });
     apiMocks.resolveDirectoryHops.mockResolvedValue({
-      resolved: { '1A2B': { name: 'Relay-East', source: 'corescope' } },
+      resolved: { '1A2B': { name: 'Relay-East', source: 'corescope', hash_width: 2 } },
     });
 
     render(<ObserverReachModal packetHash="AABBCCDDEEFF0011" open onOpenChange={() => {}} />);

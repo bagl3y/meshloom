@@ -42,7 +42,7 @@ const apiMocks = vi.hoisted(() => ({
     origin_lat: 45.76,
     origin_lon: 4.83,
   })),
-  resolveDirectoryHops: vi.fn(async () => ({ resolved: {} })),
+  resolveDirectoryHops: vi.fn(async (_hops: string[]) => ({ resolved: {} })),
 }));
 
 vi.mock('react-leaflet', () => ({
@@ -67,8 +67,8 @@ vi.mock('../api', () => ({
     getPacket: (...args: [number]) => apiMocks.getPacket(...args),
     getPacketObserverReachCounts: (...args: [string[]]) =>
       apiMocks.getPacketObserverReachCounts(...args),
-    getPacketObserverReach: (...args: [string]) => apiMocks.getPacketObserverReach(...args),
-    resolveDirectoryHops: (...args: [string[]]) => apiMocks.resolveDirectoryHops(...args),
+    getPacketObserverReach: (hash: string) => apiMocks.getPacketObserverReach(hash),
+    resolveDirectoryHops: (hops: string[]) => apiMocks.resolveDirectoryHops(hops),
   },
   formatApiError: (err: unknown) => (err instanceof Error ? err.message : String(err)),
 }));
