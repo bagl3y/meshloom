@@ -7,6 +7,11 @@ import { api, formatApiError } from '../api';
 import { useDistanceUnit } from '../contexts/DistanceUnitContext';
 import type { ObserverReachEntry, PacketObserverReachResponse } from '../types';
 import { formatDistance } from '../utils/pathUtils';
+import {
+  OSM_RASTER_REFERRER_POLICY,
+  OSM_RASTER_TILE_ATTRIBUTION,
+  OSM_RASTER_TILE_URL,
+} from '../utils/mapTiles';
 import { Button } from './ui/button';
 import {
   Dialog,
@@ -58,8 +63,9 @@ function ObserverMiniMap({ observers }: { observers: ObserverReachEntry[] }) {
       >
         <InvalidateOnResize />
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution={OSM_RASTER_TILE_ATTRIBUTION}
+          url={OSM_RASTER_TILE_URL}
+          referrerPolicy={OSM_RASTER_REFERRER_POLICY}
         />
         {valid.map((observer, index) => (
           <CircleMarker

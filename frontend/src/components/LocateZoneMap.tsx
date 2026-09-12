@@ -12,6 +12,11 @@ import 'leaflet/dist/leaflet.css';
 
 import type { LocateAnchor, LocateDeclaredGps } from '../types';
 import { disksToIntersectionRing, snrToOpacity } from '../utils/locateZone';
+import {
+  OSM_RASTER_REFERRER_POLICY,
+  OSM_RASTER_TILE_ATTRIBUTION,
+  OSM_RASTER_TILE_URL,
+} from '../utils/mapTiles';
 
 function InvalidateOnResize() {
   const map = useMap();
@@ -89,8 +94,9 @@ export function LocateZoneMap({ anchors, declaredGps, showDisks }: LocateZoneMap
         <InvalidateOnResize />
         <FitDisks anchors={anchors} declaredGps={declaredGps} />
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution={OSM_RASTER_TILE_ATTRIBUTION}
+          url={OSM_RASTER_TILE_URL}
+          referrerPolicy={OSM_RASTER_REFERRER_POLICY}
         />
         {showDisks &&
           anchors.map((anchor, index) => (

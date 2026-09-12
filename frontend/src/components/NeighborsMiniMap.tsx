@@ -2,6 +2,11 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import {
+  OSM_RASTER_REFERRER_POLICY,
+  OSM_RASTER_TILE_ATTRIBUTION,
+  OSM_RASTER_TILE_URL,
+} from '../utils/mapTiles';
 
 /** Watches the map container for size changes and tells Leaflet to re-tile. */
 function InvalidateOnResize() {
@@ -59,8 +64,9 @@ export function NeighborsMiniMap({ neighbors, radioLat, radioLon, radioName }: P
       >
         <InvalidateOnResize />
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution={OSM_RASTER_TILE_ATTRIBUTION}
+          url={OSM_RASTER_TILE_URL}
+          referrerPolicy={OSM_RASTER_REFERRER_POLICY}
         />
         {/* Dotted lines from radio to each neighbor */}
         {hasRadio &&

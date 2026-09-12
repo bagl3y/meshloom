@@ -18,6 +18,11 @@ import 'leaflet/dist/leaflet.css';
 import { api, isAbortError } from '../api';
 import { formatTime } from '../utils/messageParser';
 import {
+  OSM_RASTER_REFERRER_POLICY,
+  OSM_RASTER_TILE_ATTRIBUTION,
+  OSM_RASTER_TILE_URL,
+} from '../utils/mapTiles';
+import {
   getContactDisplayName,
   isPrefixOnlyContact,
   isUnknownFullKeyContact,
@@ -1233,8 +1238,9 @@ function ContactTelemetrySection({
                         style={{ background: '#1a1a2e' }}
                       >
                         <TileLayer
-                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                          attribution={OSM_RASTER_TILE_ATTRIBUTION}
+                          url={OSM_RASTER_TILE_URL}
+                          referrerPolicy={OSM_RASTER_REFERRER_POLICY}
                         />
                         <CircleMarker
                           center={[gpsValue!.latitude, gpsValue!.longitude]}

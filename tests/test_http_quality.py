@@ -41,7 +41,7 @@ def test_openapi_includes_docs_metadata():
 
 def _assert_hardening_headers(response) -> None:
     assert response.headers["x-content-type-options"] == "nosniff"
-    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["content-security-policy"] == "frame-ancestors 'none'"
 

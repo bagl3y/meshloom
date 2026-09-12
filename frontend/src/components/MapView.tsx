@@ -28,6 +28,11 @@ import { getRawPacketObservationKey } from '../utils/rawPacketIdentity';
 import { useRawPackets } from '../stores/rawPacketStore';
 import { DirectoryGlobeIcon } from './messagePath/DirectoryGlobeIcon';
 import { cn } from '@/lib/utils';
+import {
+  OSM_RASTER_REFERRER_POLICY,
+  OSM_RASTER_TILE_ATTRIBUTION,
+  OSM_RASTER_TILE_URL,
+} from '../utils/mapTiles';
 
 interface MapViewProps {
   contacts: Contact[];
@@ -53,6 +58,7 @@ interface TileLayerPreset {
   url: string;
   attribution: string;
   background: string;
+  referrerPolicy?: typeof OSM_RASTER_REFERRER_POLICY;
   /** Highest zoom the provider publishes tiles at. When the layer is active,
    *  the map's zoom ceiling is tightened to this value via
    *  `MaxZoomByActiveLayer` so the user cannot zoom into a grey void. */
@@ -70,8 +76,9 @@ const MAP_MAX_ZOOM = 19;
 const TILE_LAYERS: readonly TileLayerPreset[] = [
   {
     id: 'light',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    url: OSM_RASTER_TILE_URL,
+    attribution: OSM_RASTER_TILE_ATTRIBUTION,
+    referrerPolicy: OSM_RASTER_REFERRER_POLICY,
     background: '#1a1a2e',
     maxZoom: 19,
   },
@@ -1202,6 +1209,7 @@ export function MapView({
                   url={layer.url}
                   attribution={layer.attribution}
                   maxZoom={layer.maxZoom}
+                  referrerPolicy={layer.referrerPolicy}
                 />
               </LayersControl.BaseLayer>
             ))}

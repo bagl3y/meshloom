@@ -4,6 +4,11 @@ import { MapContainer, TileLayer, Marker, Tooltip, useMap } from 'react-leaflet'
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { directoryHopLocation, isValidLocation } from '../utils/pathUtils';
+import {
+  OSM_RASTER_REFERRER_POLICY,
+  OSM_RASTER_TILE_ATTRIBUTION,
+  OSM_RASTER_TILE_URL,
+} from '../utils/mapTiles';
 import type { DirectoryHopHit, ResolvedPath, SenderInfo } from '../utils/pathUtils';
 
 interface PathRouteMapProps {
@@ -148,8 +153,9 @@ export function PathRouteMap({
           style={{ background: '#1a1a2e' }}
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution={OSM_RASTER_TILE_ATTRIBUTION}
+            url={OSM_RASTER_TILE_URL}
+            referrerPolicy={OSM_RASTER_REFERRER_POLICY}
           />
           <RouteMapBounds points={points} />
 
