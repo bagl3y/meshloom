@@ -145,3 +145,6 @@ class TestStaleResponseRegression:
 
         assert response.command == "get lat"
         assert response.response == "fresh-lat"
+        dst = mc.commands.send_cmd.await_args.args[0]
+        assert dst["public_key"] == KEY_A
+        assert dst["type"] == 2

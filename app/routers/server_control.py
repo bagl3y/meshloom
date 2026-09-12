@@ -44,6 +44,17 @@ def get_server_contact_label(contact: Contact) -> str:
     return "server"
 
 
+def _send_cmd_destination(contact: Contact) -> dict:
+    """Build the destination meshcore 2.3.9+ ``send_cmd`` actually accepts.
+
+    ``send_cmd`` now reads ``dst["type"]`` to pick ``CLI_CMD`` (chat) vs
+    ``CLI_DATA`` (repeater/room/sensor). A public-key string raises
+    ``TypeError``. Do not pass ``dst_type=`` either: that branch ignores the
+    provided value and forces repeater.
+    """
+    return contact.to_radio_dict()
+
+
 def require_server_capable_contact(
     contact: Contact,
     *,
@@ -434,7 +445,7 @@ async def batch_cli_fetch(
             # cannot be pulled and mis-attributed to this one.
             await _flush_pending_messages(mc)
 
-            send_result = await mc.commands.send_cmd(contact.public_key, cmd)
+            send_result = await mc.commands.send_cmd(_send_cmd_destination(contact), cmd)
             if send_result.type == EventType.ERROR:
                 logger.debug("Command '%s' send error: %s", cmd, send_result.payload)
                 continue
@@ -572,7 +583,7 @@ async def send_contact_cli_command(
         await _flush_pending_messages(mc)
 
         logger.info("Sending command to %s %s: %s", label, contact.public_key[:12], command)
-        send_result = await mc.commands.send_cmd(contact.public_key, command)
+        send_result = await mc.commands.send_cmd(_send_cmd_destination(contact), command)
 
         if send_result.type == EventType.ERROR:
             raise HTTPException(

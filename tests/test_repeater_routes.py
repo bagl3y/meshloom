@@ -472,6 +472,9 @@ class TestRepeaterCommandRoute:
         assert response.command == "ver"
         assert response.response == "firmware: v1.2.3"
         assert response.sender_timestamp == 1700000000
+        dst = mc.commands.send_cmd.await_args.args[0]
+        assert dst["public_key"] == KEY_A
+        assert dst["type"] == 2
 
     @pytest.mark.asyncio
     async def test_response_strips_firmware_prompt_prefix(self, test_db):
@@ -1841,6 +1844,9 @@ class TestBatchCliFetch:
 
         assert results["field_a"] is None  # skipped due to send error
         assert results["field_b"] == "result2"
+        first_dst = mc.commands.send_cmd.await_args_list[0].args[0]
+        assert first_dst["public_key"] == KEY_A
+        assert first_dst["type"] == 2
 
     @pytest.mark.asyncio
     async def test_no_response_leaves_field_none(self):
