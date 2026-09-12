@@ -21,13 +21,13 @@ from app.models import (
 )
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
-    AppSettingsRepository,
     ContactAdvertPathRepository,
     ContactRepository,
     MessageRepository,
 )
 from app.services.directory import (
     ALLOWED_HOP_HEX_LENS,
+    directory_is_available,
     get_directory_node_reach,
     is_valid_map_location,
     resolve_directory_hops,
@@ -362,8 +362,7 @@ def _source_badge(anchors: list[LocateAnchor]) -> LocateSource | None:
 
 async def locate_query(query: str, radius_km: float | None = None) -> LocateResponse:
     radius = clamp_radius_km(radius_km)
-    settings = await AppSettingsRepository.get()
-    directory_enabled = bool(settings.directory_enabled and (settings.directory_url or "").strip())
+    directory_enabled = await directory_is_available()
 
     try:
         identity = await _resolve_identity(query, directory_enabled)

@@ -54,6 +54,7 @@ export function SettingsRadioAppSection({
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [staleDays, setStaleDays] = useState(String(appSettings.stale_contact_days ?? 0));
   const [directoryUrl, setDirectoryUrl] = useState(appSettings.directory_url ?? '');
+  const [communityOn, setCommunityOn] = useState(false);
   const [cacheResetting, setCacheResetting] = useState(false);
 
   const [latestTelemetry, setLatestTelemetry] = useState<
@@ -70,6 +71,11 @@ export function SettingsRadioAppSection({
   const [intervalDraft, setIntervalDraft] = useState<number>(appSettings.telemetry_interval_hours);
 
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const manualDirectoryOn = Boolean(
+    appSettings.directory_enabled && (appSettings.directory_url || '').trim()
+  );
+  const directoryViaStats =
+    communityOn || Boolean(appSettings.directory_available && !manualDirectoryOn);
 
   useEffect(() => {
     setDiscoveryBlockedTypes(appSettings.discovery_blocked_types ?? []);
@@ -77,6 +83,21 @@ export function SettingsRadioAppSection({
     setStaleDays(String(appSettings.stale_contact_days ?? 0));
     setDirectoryUrl(appSettings.directory_url ?? '');
   }, [appSettings]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.getCommunity().then(
+      (status) => {
+        if (!cancelled) setCommunityOn(status.enabled);
+      },
+      () => {
+        if (!cancelled) setCommunityOn(false);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -617,19 +638,27 @@ export function SettingsRadioAppSection({
 
       <div className="space-y-3">
         <h3 className="text-base font-semibold tracking-tight">{t('settings.directoryTitle')}</h3>
-        <p className="text-[0.8125rem] text-muted-foreground">{t('settings.directoryHelp')}</p>
-        <label className="flex items-start gap-2 cursor-pointer">
+        <p className="text-[0.8125rem] text-muted-foreground">
+          {directoryViaStats ? t('settings.directoryViaStats') : t('settings.directoryHelp')}
+        </p>
+        <label
+          className={`flex items-start gap-2 ${directoryViaStats ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+        >
           <input
             type="checkbox"
-            checked={appSettings.directory_enabled ?? false}
+            checked={directoryViaStats ? true : (appSettings.directory_enabled ?? false)}
+            disabled={directoryViaStats}
             onChange={() => {
+              if (directoryViaStats) return;
               const next = !(appSettings.directory_enabled ?? false);
               void persistAppSettings({ directory_enabled: next }, () => {});
             }}
             className="w-4 h-4 rounded border-input accent-primary mt-0.5"
           />
           <div>
-            <span className="text-sm">{t('settings.directoryEnable')}</span>
+            <span className="text-sm">
+              {directoryViaStats ? t('settings.directoryViaStatsEnable') : t('settings.directoryEnable')}
+            </span>
           </div>
         </label>
         <div className="space-y-1">
@@ -641,8 +670,10 @@ export function SettingsRadioAppSection({
             type="url"
             placeholder="https://corescope.example"
             value={directoryUrl}
+            disabled={directoryViaStats}
             onChange={(e) => setDirectoryUrl(e.target.value)}
             onBlur={() => {
+              if (directoryViaStats) return;
               const next = directoryUrl.trim();
               const prev = appSettings.directory_url ?? '';
               if (next === prev) return;

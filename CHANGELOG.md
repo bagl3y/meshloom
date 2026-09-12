@@ -1,3 +1,63 @@
+## [4.2.0] - 2026-09-13
+
+Optional **Meshloom Stats** observer community: join from Settings, bind a 3-letter IATA code, and this server can publish overheard packets to the official Stats hosts. Existing installs stay off until you join.
+
+### Highlights
+
+- New **Settings > Meshloom Stats** pane to join, bind IATA, and see community contribution stats
+- One opt-out stops both publish and community directory calls. Directory can fall back to a manual CoreScope URL in Radio-App
+- Observer-reach detail can show hop paths and origin when the directory returns them
+
+### Added
+
+- Feature: Opt-in Meshloom Stats settings (`/api/community`), IATA bind, and a hidden system MQTT publisher (not listed in Fanout CRUD)
+- Feature: Stats JWT includes `iata`. Existing databases stay opted out; `MESHLOOM_COMMUNITY=1` only seeds new installs
+- Feature: Observer-reach views can render hop paths and origin metadata
+
+### Changed
+
+- Misc: Python, React 19, Vitest 5, and Playwright. Tailwind stays on 3; TypeScript stays on 5
+- Misc: Backup restore keeps the SQLite dump intact but honest, validates directory restore before writes, and bounds in-memory CoreScope caches
+
+### Fixed
+
+- Bug: Repeater CLI `send_cmd` after meshcore 2.3.9 required a contact type
+- Bug: OSM map tiles were blocked; the map now sends a Referer and uses the official tile URL
+- Bug: Module-level asyncio locks broke when pytest-asyncio created a new event loop
+- Bug: Joining Meshloom Stats did not turn on hop names, locate, or observer-reach UI; those stayed gated on the manual CoreScope toggle
+
+---
+
+### Français
+
+Communauté d’observateurs **Meshloom Stats** en option : rejoindre depuis les Réglages, associer un code IATA à 3 lettres, et ce serveur peut publier les paquets entendus vers les hôtes Stats officiels. Les installs existantes restent hors ligne tant que tu n’as pas rejoint.
+
+#### Points forts
+
+- Nouvel onglet **Réglages > Meshloom Stats** pour rejoindre, associer l’IATA, et voir les stats de contribution
+- Un seul opt-out arrête la publication **et** les appels directory communautaires. Le directory peut retomber sur une URL CoreScope manuelle dans Radio-App
+- Le détail observateurs peut afficher les chemins de sauts et l’origine quand le directory les fournit
+
+#### Ajouts
+
+- Fonction : réglages Meshloom Stats opt-in (`/api/community`), association IATA, et publisher MQTT système invisible (pas dans le CRUD Fanout)
+- Fonction : le JWT Stats inclut `iata`. Les bases existantes restent opt-out ; `MESHLOOM_COMMUNITY=1` ne seed que les nouvelles installs
+- Fonction : les vues observateurs peuvent afficher chemins de sauts et métadonnées d’origine
+
+#### Changements
+
+- Divers : Python, React 19, Vitest 5 et Playwright. Tailwind reste en 3 ; TypeScript reste en 5
+- Divers : la restauration de backup garde le dump SQLite intact mais honnête, valide le restore directory avant écriture, et borne les caches CoreScope en mémoire
+
+#### Corrections
+
+- Bug : le CLI répéteur `send_cmd` après meshcore 2.3.9 exigeait un type de contact
+- Bug : les tuiles OSM étaient bloquées ; la carte envoie un Referer et utilise l’URL officielle
+- Bug : les locks asyncio de module cassaient quand pytest-asyncio créait une nouvelle boucle
+- Bug : rejoindre Meshloom Stats n’activait pas l’UI des noms de sauts, locate, ni portée observateurs ; elle restait liée au toggle CoreScope manuel
+
+---
+
 ## [4.1.3] - 2026-09-11
 
 Settings > Radio always offers USB serial, TCP, and Bluetooth. A missing port or a failed BLE scan no longer hides those choices. Re-running the Linux installer is an upgrade: it remembers the language and names the version change.

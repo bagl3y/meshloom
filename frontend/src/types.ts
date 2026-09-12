@@ -599,6 +599,7 @@ export interface AppSettings {
   stale_contact_days?: number;
   directory_enabled?: boolean;
   directory_url?: string;
+  directory_available?: boolean;
 }
 
 export interface AppSettingsUpdate {

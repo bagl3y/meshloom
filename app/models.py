@@ -1082,6 +1082,13 @@ class AppSettings(BaseModel):
         default="",
         description="Operator-supplied CoreScope instance origin (http/https). Empty is fine.",
     )
+    directory_available: bool = Field(
+        default=False,
+        description=(
+            "Computed: Meshloom Stats is on, or a manual CoreScope URL is enabled. "
+            "Not stored. The browser uses this to show hop names / observer reach."
+        ),
+    )
 
 
 class DirectoryHopHit(BaseModel):

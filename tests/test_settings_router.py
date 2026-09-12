@@ -57,6 +57,23 @@ class TestUpdateSettings:
         assert result.max_radio_contacts == 200  # default
 
     @pytest.mark.asyncio
+    async def test_directory_available_when_community_on(self, test_db):
+        from app.routers.settings import get_settings
+        from app.services.meshloom_community import update_community
+
+        await update_community(enabled=True, iata="LYS")
+        result = await get_settings()
+        assert result.directory_available is True
+        assert result.directory_enabled is False
+
+    @pytest.mark.asyncio
+    async def test_directory_available_false_by_default(self, test_db):
+        from app.routers.settings import get_settings
+
+        result = await get_settings()
+        assert result.directory_available is False
+
+    @pytest.mark.asyncio
     async def test_flood_scope_round_trip(self, test_db):
         """Flood scope should be saved and retrieved correctly."""
         result = await update_settings(AppSettingsUpdate(flood_scope="MyRegion"))

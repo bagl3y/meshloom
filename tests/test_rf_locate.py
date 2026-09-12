@@ -156,6 +156,22 @@ class TestLocateLocalZeroHop:
         assert result.directory_enabled is False
         assert result.empty_reason == "directory_off"
 
+    @pytest.mark.asyncio
+    async def test_community_on_without_manual_url_is_not_directory_off(self, test_db):
+        from app.models import DirectoryReachResponse
+        from app.services.meshloom_community import update_community
+
+        await update_community(enabled=True, iata="LYS")
+        key = "11" * 32
+        empty_reach = DirectoryReachResponse(directory_enabled=True)
+        with patch(
+            "app.services.rf_locate.get_directory_node_reach",
+            new=AsyncMock(return_value=empty_reach),
+        ):
+            result = await locate_query(key)
+        assert result.directory_enabled is True
+        assert result.empty_reason == "no_anchors"
+
 
 class TestLocateDirectoryReach:
     @pytest.mark.asyncio

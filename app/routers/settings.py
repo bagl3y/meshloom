@@ -215,10 +215,16 @@ def _build_schedule(
     )
 
 
+async def _settings_response() -> AppSettings:
+    from app.services.directory import annotate_directory_available
+
+    return await annotate_directory_available(await AppSettingsRepository.get())
+
+
 @router.get("", response_model=AppSettings)
 async def get_settings() -> AppSettings:
     """Get current application settings."""
-    return await AppSettingsRepository.get()
+    return await _settings_response()
 
 
 @router.patch("", response_model=AppSettings)
@@ -363,9 +369,11 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
             logger.info("known_regions changed; scheduling region backfill")
             asyncio.create_task(backfill_message_regions(result.known_regions))
 
-        return result
+        from app.services.directory import annotate_directory_available
 
-    return await AppSettingsRepository.get()
+        return await annotate_directory_available(result)
+
+    return await _settings_response()
 
 
 @router.post("/favorites/toggle", response_model=FavoriteToggleResponse)

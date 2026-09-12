@@ -230,6 +230,16 @@ describe('SettingsModal', () => {
     vi.spyOn(api, 'getRadioTransport').mockResolvedValue(baseTransport);
     vi.spyOn(api, 'updateRadioTransport').mockResolvedValue(baseTransport);
     vi.spyOn(api, 'scanRadioBle').mockResolvedValue({ devices: [] });
+    vi.spyOn(api, 'getCommunity').mockResolvedValue({
+      enabled: false,
+      locked: false,
+      iata: '',
+      broker_host: '',
+      api_base: '',
+      publisher_configured: false,
+      publisher_connected: false,
+      env_seeded: false,
+    });
   });
 
   afterEach(() => {
@@ -1414,6 +1424,35 @@ describe('SettingsModal', () => {
         expect.objectContaining({ directory_enabled: true })
       );
     });
+  });
+
+  it('locks the CoreScope URL when Meshloom Stats is on', async () => {
+    vi.spyOn(api, 'getCommunity').mockResolvedValue({
+      enabled: true,
+      locked: false,
+      iata: 'LYS',
+      broker_host: 'mqtt.meshloom.app',
+      api_base: 'https://api.meshloom.app',
+      publisher_configured: true,
+      publisher_connected: true,
+      env_seeded: false,
+    });
+
+    renderModal({
+      externalSidebarNav: true,
+      desktopSection: 'radio-app',
+      appSettings: {
+        ...baseSettings,
+        directory_available: true,
+      },
+    });
+
+    const checkbox = await screen.findByRole('checkbox', {
+      name: i18n.t('settings.directoryViaStatsEnable'),
+    });
+    expect(checkbox).toBeDisabled();
+    expect(screen.getByLabelText(i18n.t('settings.directoryUrl'))).toBeDisabled();
+    expect(screen.getByText(i18n.t('settings.directoryViaStats'))).toBeInTheDocument();
   });
 
   it('shows route badge per tracked repeater', async () => {

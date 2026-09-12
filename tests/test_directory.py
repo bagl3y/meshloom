@@ -131,6 +131,31 @@ class TestParseCorescopeResolved:
         assert parsed["FFFF"] is None
 
 
+class TestDirectoryAvailable:
+    @pytest.mark.asyncio
+    async def test_off_without_url_is_false(self, test_db):
+        from app.services.directory import directory_is_available
+
+        assert await directory_is_available() is False
+
+    @pytest.mark.asyncio
+    async def test_manual_corescope_is_true(self, test_db):
+        from app.services.directory import directory_is_available
+
+        await AppSettingsRepository.update(
+            directory_enabled=True, directory_url="https://corescope.test"
+        )
+        assert await directory_is_available() is True
+
+    @pytest.mark.asyncio
+    async def test_community_on_without_manual_url_is_true(self, test_db):
+        from app.services.directory import directory_is_available
+        from app.services.meshloom_community import update_community
+
+        await update_community(enabled=True, iata="LYS")
+        assert await directory_is_available() is True
+
+
 class TestResolveDirectoryHops:
     @pytest.mark.asyncio
     async def test_disabled_is_noop(self, test_db):

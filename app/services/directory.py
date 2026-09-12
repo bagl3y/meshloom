@@ -13,6 +13,7 @@ import httpx
 from fastapi import HTTPException
 
 from app.models import (
+    AppSettings,
     DirectoryHopHit,
     DirectoryMapNode,
     DirectoryMapNodesResponse,
@@ -255,6 +256,20 @@ def _hit_from_cache(row: object, hash_width: int) -> DirectoryHopHit | None:
         lat=getattr(row, "lat", None),
         lon=getattr(row, "lon", None),
     )
+
+
+async def directory_is_available() -> bool:
+    """True when Meshloom Stats is on, or a manual CoreScope URL is enabled."""
+    from app.services.meshloom_community import community_enabled
+
+    if await community_enabled():
+        return True
+    settings = await AppSettingsRepository.get()
+    return bool(settings.directory_enabled and (settings.directory_url or "").strip())
+
+
+async def annotate_directory_available(settings: AppSettings) -> AppSettings:
+    return settings.model_copy(update={"directory_available": await directory_is_available()})
 
 
 async def _community_directory_data(
