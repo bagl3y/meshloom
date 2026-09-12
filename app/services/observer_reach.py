@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import math
+import re
 import time
 from dataclasses import dataclass
 
@@ -59,6 +60,9 @@ class ObserverGeo:
     lon: float | None
 
 
+_HOP_TOKEN_RE = re.compile(r"^[0-9a-fA-F]{2,6}$")
+
+
 @dataclass(frozen=True)
 class ParsedObservation:
     observer_id: str
@@ -66,6 +70,7 @@ class ParsedObservation:
     public_key: str | None
     hops: int | None
     snr: float | None
+    path: tuple[str, ...] = ()
 
 
 def reset_observer_reach_cache() -> None:
@@ -81,20 +86,52 @@ def validate_packet_hash_param(raw: str) -> str:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-def hops_from_path_json(path_json: object) -> int | None:
-    """Hop count is len(path_json). CoreScope does not guarantee a hop_count field."""
+def _parse_path_json_list(path_json: object) -> list[object] | None:
     parsed: object = path_json
     if isinstance(path_json, str):
         text = path_json.strip()
         if not text:
-            return 0
+            return []
         try:
             parsed = json.loads(text)
         except ValueError:
             return None
     if isinstance(parsed, list):
-        return len(parsed)
+        return parsed
     return None
+
+
+def _hop_token(item: object) -> str | None:
+    raw: object = item
+    if isinstance(item, dict):
+        raw = item.get("hash") or item.get("prefix") or item.get("hop") or item.get("id")
+    if not isinstance(raw, str):
+        return None
+    token = raw.strip()
+    if not token or not _HOP_TOKEN_RE.fullmatch(token) or len(token) % 2 != 0:
+        return None
+    return token.lower()
+
+
+def path_from_path_json(path_json: object) -> list[str] | None:
+    """Hop prefixes from CoreScope path_json. None if the field is not a list."""
+    parsed = _parse_path_json_list(path_json)
+    if parsed is None:
+        return None
+    hops: list[str] = []
+    for item in parsed:
+        token = _hop_token(item)
+        if token is not None:
+            hops.append(token)
+    return hops
+
+
+def hops_from_path_json(path_json: object) -> int | None:
+    """Hop count is len(path_json). CoreScope does not guarantee a hop_count field."""
+    parsed = _parse_path_json_list(path_json)
+    if parsed is None:
+        return None
+    return len(parsed)
 
 
 def parse_packet_observations(payload: object) -> list[ParsedObservation]:
@@ -202,6 +239,7 @@ def _count_only_observations(value: object) -> list[ParsedObservation]:
             public_key=None,
             hops=None,
             snr=None,
+            path=(),
         )
         for index in range(raw)
     ]
@@ -216,17 +254,22 @@ def _parse_one_observation(item: dict[str, object]) -> ParsedObservation:
     public_key = None
     if isinstance(pubkey_raw, str) and len(pubkey_raw.strip()) == 64:
         public_key = pubkey_raw.strip().lower()
+    path_tokens = path_from_path_json(item.get("path_json"))
     hops = hops_from_path_json(item.get("path_json"))
     if hops is None:
         hops_raw = item.get("hops") or item.get("hop_count")
         if isinstance(hops_raw, int) and hops_raw >= 0:
             hops = hops_raw
+    path = tuple(path_tokens) if path_tokens is not None else ()
+    if hops is None and path:
+        hops = len(path)
     return ParsedObservation(
         observer_id=observer_id,
         observer_name=name,
         public_key=public_key,
         hops=hops,
         snr=_as_float(item.get("snr")),
+        path=path,
     )
 
 
@@ -308,14 +351,20 @@ def _dedup_entries(
                 lon=lon,
                 hops=obs.hops,
                 snr=obs.snr,
+                path=list(obs.path),
             )
             continue
         next_hops = existing.hops
+        next_path = existing.path
         if obs.hops is not None and (next_hops is None or obs.hops > next_hops):
             next_hops = obs.hops
+            next_path = list(obs.path)
+        elif not next_path and obs.path:
+            next_path = list(obs.path)
         by_key[dedup_key] = existing.model_copy(
             update={
                 "hops": next_hops,
+                "path": next_path,
                 "snr": obs.snr if existing.snr is None else existing.snr,
                 "lat": existing.lat if existing.lat is not None else lat,
                 "lon": existing.lon if existing.lon is not None else lon,
@@ -434,16 +483,39 @@ async def _fetch_batch_or_fallback(
 
 
 async def get_packet_observer_reach(raw_hash: str) -> PacketObserverReachResponse:
+    from app.services.directory import _community_directory_data
+    from app.services.meshloom_community import community_enabled
+
+    hash_lower = validate_packet_hash_param(raw_hash)
+    if await community_enabled():
+        payload = await _community_directory_data(f"/v1/directory/packets/{hash_lower}")
+        observations = parse_packet_observations(payload)
+        try:
+            geos_payload = await _community_directory_data("/v1/directory/observers")
+            geos = parse_corescope_observers(geos_payload)
+        except HTTPException:
+            geos = {}
+        entries = _dedup_entries(observations, geos)
+        return await _finish_observer_reach(hash_lower, entries, directory_enabled=True)
+
     origin = await _require_directory_origin()
     if origin is None:
         return PacketObserverReachResponse(directory_enabled=False)
-    hash_lower = validate_packet_hash_param(raw_hash)
     observations = await _fetch_packet_observations(origin, hash_lower)
     try:
         geos = await _fetch_observers(origin)
     except HTTPException:
         geos = {}
     entries = _dedup_entries(observations, geos)
+    return await _finish_observer_reach(hash_lower, entries, directory_enabled=True)
+
+
+async def _finish_observer_reach(
+    hash_lower: str,
+    entries: list[ObserverReachEntry],
+    *,
+    directory_enabled: bool,
+) -> PacketObserverReachResponse:
     message = await MessageRepository.get_by_packet_hash(hash_lower)
     origin_coords = await resolve_origin_coords(message)
     max_hops = None
@@ -459,21 +531,25 @@ async def get_packet_observer_reach(raw_hash: str) -> PacketObserverReachRespons
             max_distance_km = (
                 distance if max_distance_km is None else max(max_distance_km, distance)
             )
+    origin_lat = origin_coords[0] if origin_coords is not None else None
+    origin_lon = origin_coords[1] if origin_coords is not None else None
     return PacketObserverReachResponse(
-        directory_enabled=True,
+        directory_enabled=directory_enabled,
         packet_hash=hash_lower.upper(),
         observer_count=len(entries),
         observers=entries,
         max_hops=max_hops,
         max_distance_km=max_distance_km,
         origin_available=origin_coords is not None,
+        origin_lat=origin_lat,
+        origin_lon=origin_lon,
     )
 
 
 async def get_packet_observer_reach_counts(hashes: list[str]) -> PacketObserverReachCountsResponse:
-    origin = await _require_directory_origin()
-    if origin is None:
-        return PacketObserverReachCountsResponse(directory_enabled=False)
+    from app.services.directory import _community_directory_data
+    from app.services.meshloom_community import community_enabled
+
     if len(hashes) > MESHLOOM_BATCH_MAX:
         raise HTTPException(
             status_code=400,
@@ -486,6 +562,33 @@ async def get_packet_observer_reach_counts(hashes: list[str]) -> PacketObserverR
         if hash_lower not in seen:
             seen.add(hash_lower)
             normalized.append(hash_lower)
+
+    if await community_enabled():
+        payload = await _community_directory_data(
+            "/v1/directory/packets/observations",
+            method="POST",
+            body={"hashes": normalized},
+        )
+        parsed = parse_batch_observations(payload) if payload is not None else None
+        geos: dict[str, ObserverGeo] = {}
+        try:
+            geos_payload = await _community_directory_data("/v1/directory/observers")
+            geos = parse_corescope_observers(geos_payload)
+        except HTTPException:
+            geos = {}
+        counts: dict[str, int] = {}
+        for hash_lower in normalized:
+            stored = canonical_packet_hash(hash_lower) or hash_lower.upper()
+            observations = (parsed or {}).get(stored, [])
+            if not observations and parsed is not None:
+                observations = (parsed or {}).get(hash_lower.upper(), [])
+            entries = _dedup_entries(observations, geos)
+            counts[hash_lower.upper()] = len(entries)
+        return PacketObserverReachCountsResponse(directory_enabled=True, counts=counts)
+
+    origin = await _require_directory_origin()
+    if origin is None:
+        return PacketObserverReachCountsResponse(directory_enabled=False)
     fetched = await _fetch_batch_or_fallback(origin, normalized)
     geos: dict[str, ObserverGeo] = {}
     if fetched:

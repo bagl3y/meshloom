@@ -41,6 +41,23 @@ _TOKEN_RENEWAL_THRESHOLD = _TOKEN_LIFETIME - 300  # 50 minutes
 _STATS_REFRESH_INTERVAL = 300  # 5 minutes
 _STATS_MIN_CACHE_SECS = 60  # Don't re-fetch stats within 60s
 
+# Shared across LetsMesh community MQTT and the Meshloom Stats publisher so
+# both do not take the radio lock for get_stats / device_info in the same window.
+_shared_device_info: dict[str, str] | None = None
+_shared_stats: dict[str, Any] | None = None
+_shared_stats_supported: bool | None = None
+_shared_last_stats_fetch: float = 0.0
+
+
+def reset_shared_radio_stats_cache() -> None:
+    """Clear the process-wide radio stats cache (tests / radio identity change)."""
+    global _shared_device_info, _shared_stats, _shared_stats_supported, _shared_last_stats_fetch
+    _shared_device_info = None
+    _shared_stats = None
+    _shared_stats_supported = None
+    _shared_last_stats_fetch = 0.0
+
+
 # Route type mapping: bottom 2 bits of first byte
 _ROUTE_MAP = {0: "F", 1: "F", 2: "D", 3: "T"}
 
@@ -80,6 +97,7 @@ def _generate_jwt_token(
     *,
     audience: str = _DEFAULT_BROKER,
     email: str = "",
+    iata: str = "",
 ) -> str:
     """Generate a JWT token for community MQTT authentication.
 
@@ -88,6 +106,9 @@ def _generate_jwt_token(
 
     Optional ``email`` embeds a node-claiming identity so the community
     aggregator can associate this radio with an owner.
+
+    Optional ``iata`` is required by Meshloom Stats MQTT/API. LetsMesh tokens
+    omit it — do not add a default IATA here.
     """
     header = {"alg": "Ed25519", "typ": "JWT"}
     now = int(time.time())
@@ -102,6 +123,9 @@ def _generate_jwt_token(
     }
     if email:
         payload["email"] = email
+    iata_code = iata.upper().strip()
+    if iata_code:
+        payload["iata"] = iata_code
 
     header_b64 = _base64url_encode(json.dumps(header, separators=(",", ":")).encode())
     payload_b64 = _base64url_encode(json.dumps(payload, separators=(",", ":")).encode())
@@ -360,7 +384,11 @@ class CommunityMqttPublisher(BaseMqttPublisher):
 
     async def _fetch_device_info(self) -> dict[str, str]:
         """Fetch firmware model/version from the radio (cached for the connection)."""
+        global _shared_device_info
         if self._cached_device_info is not None:
+            return self._cached_device_info
+        if _shared_device_info is not None:
+            self._cached_device_info = _shared_device_info
             return self._cached_device_info
 
         from app.radio import RadioDisconnectedError, RadioOperationBusyError
@@ -391,6 +419,7 @@ class CommunityMqttPublisher(BaseMqttPublisher):
                             "model": "unknown",
                             "firmware_version": f"v{fw_ver}" if fw_ver else "unknown",
                         }
+                    _shared_device_info = self._cached_device_info
                     return self._cached_device_info
         except (RadioOperationBusyError, RadioDisconnectedError):
             pass
@@ -402,6 +431,7 @@ class CommunityMqttPublisher(BaseMqttPublisher):
 
     async def _fetch_stats(self) -> dict[str, Any] | None:
         """Fetch core + radio stats from the radio (best-effort, cached)."""
+        global _shared_stats, _shared_last_stats_fetch, _shared_stats_supported
         if self._stats_supported is False:
             return self._cached_stats
 
@@ -409,6 +439,11 @@ class CommunityMqttPublisher(BaseMqttPublisher):
         if (
             now - self._last_stats_fetch
         ) < _STATS_MIN_CACHE_SECS and self._cached_stats is not None:
+            return self._cached_stats
+        if _shared_stats is not None and (now - _shared_last_stats_fetch) < _STATS_MIN_CACHE_SECS:
+            self._cached_stats = _shared_stats
+            self._last_stats_fetch = _shared_last_stats_fetch
+            self._stats_supported = _shared_stats_supported
             return self._cached_stats
 
         from app.radio import RadioDisconnectedError, RadioOperationBusyError
@@ -439,6 +474,9 @@ class CommunityMqttPublisher(BaseMqttPublisher):
                 if result:
                     self._cached_stats = result
                     self._last_stats_fetch = now
+                    _shared_stats = result
+                    _shared_last_stats_fetch = now
+                    _shared_stats_supported = True
                     return self._cached_stats
 
         except (RadioOperationBusyError, RadioDisconnectedError):

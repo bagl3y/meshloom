@@ -35,11 +35,30 @@ const apiMocks = vi.hoisted(() => ({
     directory_enabled: true,
     packet_hash: 'AABBCCDDEEFF0011',
     observer_count: 3,
-    observers: [{ name: 'Lyon', hops: 2, snr: -3 }],
+    observers: [{ name: 'Lyon', hops: 2, snr: -3, path: ['ab', 'cd'] }],
     max_hops: 2,
     max_distance_km: 12.4,
     origin_available: true,
+    origin_lat: 45.76,
+    origin_lon: 4.83,
   })),
+  resolveDirectoryHops: vi.fn(async () => ({ resolved: {} })),
+}));
+
+vi.mock('react-leaflet', () => ({
+  MapContainer: () => null,
+  TileLayer: () => null,
+  Marker: () => null,
+  CircleMarker: () => null,
+  Popup: () => null,
+  Tooltip: () => null,
+  Polyline: () => null,
+  useMap: () => ({
+    getContainer: () => document.createElement('div'),
+    invalidateSize: () => undefined,
+    setView: () => undefined,
+    fitBounds: () => undefined,
+  }),
 }));
 
 vi.mock('../api', () => ({
@@ -49,6 +68,7 @@ vi.mock('../api', () => ({
     getPacketObserverReachCounts: (...args: [string[]]) =>
       apiMocks.getPacketObserverReachCounts(...args),
     getPacketObserverReach: (...args: [string]) => apiMocks.getPacketObserverReach(...args),
+    resolveDirectoryHops: (...args: [string[]]) => apiMocks.resolveDirectoryHops(...args),
   },
   formatApiError: (err: unknown) => (err instanceof Error ? err.message : String(err)),
 }));

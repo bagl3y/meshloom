@@ -10,6 +10,12 @@ from app.fanout.base import FanoutModule
 
 logger = logging.getLogger(__name__)
 _DISPATCH_TIMEOUT_SECONDS = 30.0
+SYSTEM_MESHLOOM_STATS_ID = "system:meshloom-stats"
+
+
+def is_reserved_fanout_id(config_id: str) -> bool:
+    return config_id == SYSTEM_MESHLOOM_STATS_ID or config_id.startswith("system:")
+
 
 # Type string -> module class mapping
 _MODULE_TYPES: dict[str, type] = {}
@@ -140,6 +146,37 @@ class FanoutManager:
         configs = await FanoutConfigRepository.get_enabled()
         for cfg in configs:
             await self._start_module(cfg)
+        await self.sync_system_modules()
+
+    async def sync_system_modules(self) -> None:
+        """Start or stop the Meshloom Stats publisher from community state."""
+        from app.fanout.meshloom_stats import MeshloomStatsModule
+        from app.services.meshloom_community import get_community_effective
+
+        state = await get_community_effective()
+        existing = self._modules.get(SYSTEM_MESHLOOM_STATS_ID)
+        if not state.enabled:
+            if existing is not None:
+                await self.remove_config(SYSTEM_MESHLOOM_STATS_ID)
+            return
+        if existing is not None:
+            await self.remove_config(SYSTEM_MESHLOOM_STATS_ID)
+        module = MeshloomStatsModule(SYSTEM_MESHLOOM_STATS_ID, {}, name="Meshloom Stats")
+        try:
+            await module.start()
+            self._modules[SYSTEM_MESHLOOM_STATS_ID] = (
+                module,
+                {"messages": "none", "raw_packets": "all"},
+            )
+            self._clear_module_error(SYSTEM_MESHLOOM_STATS_ID)
+        except Exception as exc:
+            logger.exception("Failed to start Meshloom Stats publisher")
+            self._set_module_error(SYSTEM_MESHLOOM_STATS_ID, _format_error_detail(exc))
+
+    async def reload_system_module(self, config_id: str) -> None:
+        if config_id != SYSTEM_MESHLOOM_STATS_ID:
+            return
+        await self.sync_system_modules()
 
     async def _start_module(self, cfg: dict[str, Any]) -> None:
         """Instantiate and start a single module from a config dict."""
@@ -322,6 +359,8 @@ class FanoutManager:
         result: dict[str, dict[str, str | None]] = {}
         all_ids = set(_configs_cache) | set(self._modules) | set(self._module_errors)
         for config_id in all_ids:
+            if is_reserved_fanout_id(config_id):
+                continue
             info = _configs_cache.get(config_id, {})
             if info.get("enabled") is False:
                 continue

@@ -65,6 +65,7 @@ from app.radio_sync import (
 )
 from app.routers import (
     channels,
+    community,
     contact_groups,
     contacts,
     debug,
@@ -137,6 +138,13 @@ async def lifespan(app: FastAPI):
 
     snapshot = await maybe_import_legacy_env(existing_database=existing_database)
     radio_manager.connection_desired = snapshot.configured
+
+    from app.services.meshloom_community import seed_community_from_env
+
+    try:
+        await seed_community_from_env(new_install=not existing_database)
+    except Exception:
+        logger.exception("Failed to seed Meshloom Stats community from env")
     if not snapshot.configured:
         logger.info("Radio transport is not configured; connection attempts stay paused")
 
@@ -255,6 +263,7 @@ async def log_server_errors(request: Request, call_next):
 app.include_router(health.router, prefix="/api")
 app.include_router(debug.router, prefix="/api")
 app.include_router(fanout.router, prefix="/api")
+app.include_router(community.router, prefix="/api")
 app.include_router(radio.router, prefix="/api")
 app.include_router(contacts.router, prefix="/api")
 app.include_router(contact_groups.router, prefix="/api")

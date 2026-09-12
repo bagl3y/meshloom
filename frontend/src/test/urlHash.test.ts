@@ -201,6 +201,13 @@ describe('settings URL hashes', () => {
   it('builds a stable settings hash', () => {
     expect(getSettingsHash('local')).toBe('#settings/local');
   });
+
+  it('parses the Meshloom Stats community settings hash', () => {
+    window.location.hash = '#settings/community';
+
+    expect(parseHashSettingsSection()).toBe('community');
+    expect(getSettingsHash('community')).toBe('#settings/community');
+  });
 });
 
 describe('resolveChannelFromHashToken', () => {

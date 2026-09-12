@@ -44,6 +44,10 @@
     "observerReachDistanceUnavailable": "Distance unavailable",
     "observerReachEmpty": "No observers have published this packet to this CoreScope instance.",
     "observerReachHops": "{{count}} hops",
+    "observerReachDirect": "direct",
+    "observerReachExpandPath": "Show hops for {{name}}",
+    "observerReachCollapsePath": "Hide hops for {{name}}",
+    "observerReachOrigin": "Origin",
     "observerReachMapAria": "Map of observers that heard this packet"
   },
   "chatHeader": {

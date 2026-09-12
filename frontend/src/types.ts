@@ -651,6 +651,15 @@ export interface ObserverReachEntry {
   lon?: number | null;
   hops?: number | null;
   snr?: number | null;
+  path?: string[];
+}
+
+export interface ObserverReachMapHop {
+  prefix: string;
+  hopIndex: number;
+  lat: number;
+  lon: number;
+  name: string | null;
 }
 
 export interface PacketObserverReachResponse {
@@ -661,6 +670,8 @@ export interface PacketObserverReachResponse {
   max_hops?: number | null;
   max_distance_km?: number | null;
   origin_available: boolean;
+  origin_lat?: number | null;
+  origin_lon?: number | null;
 }
 
 export interface PacketObserverReachCountsResponse {
@@ -1028,4 +1039,50 @@ export interface StatisticsResponse {
   region_scope_24h: RegionScopeStats;
   packets_per_hour_72h: PacketsPerHourBucket[];
   noise_floor_24h: NoiseFloorHistoryStats;
+}
+
+/** Local Meshloom Stats join state. Browser talks only to the Meshloom backend. */
+export interface CommunityStatus {
+  enabled: boolean;
+  locked: boolean;
+  iata: string;
+  broker_host: string;
+  api_base: string;
+  publisher_configured: boolean;
+  publisher_connected: boolean;
+  env_seeded: boolean;
+}
+
+export interface CommunityUpdate {
+  enabled?: boolean;
+  iata?: string;
+  broker_host?: string;
+  api_base?: string;
+}
+
+export interface CommunityIataBindRequest {
+  iata: string;
+  lat?: number;
+  lon?: number;
+}
+
+export interface CommunityIataBindResult {
+  iata: string;
+  concordance: string;
+  honored_for_buckets: boolean;
+  distance_km: number | null;
+}
+
+export interface CommunityMeStats {
+  unique_hashes_24h: number;
+  unique_hashes_7d: number;
+  iata: string;
+  concordance: string;
+  rank_in_iata: number | null;
+}
+
+export interface CommunityPublicStats {
+  observers_online: number;
+  iata_active: number;
+  unique_hashes_24h: number;
 }

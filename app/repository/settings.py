@@ -451,6 +451,72 @@ class AppSettingsRepository:
             )
         return current
 
+    @staticmethod
+    async def get_community() -> Any:
+        """Load Meshloom Stats community columns. Not part of AppSettings."""
+        from app.services.meshloom_community import CommunityRecord
+
+        async with db.readonly() as conn:
+            async with conn.execute(
+                """
+                SELECT community_enabled, community_iata, community_broker_host, community_api_base
+                FROM app_settings WHERE id = 1
+                """
+            ) as cursor:
+                row = await cursor.fetchone()
+        if not row:
+            return CommunityRecord(enabled=False, iata="", broker_host="", api_base="")
+        try:
+            enabled = bool(row["community_enabled"])
+        except (KeyError, TypeError):
+            enabled = False
+        try:
+            iata = (row["community_iata"] or "").upper().strip()
+        except (KeyError, TypeError):
+            iata = ""
+        try:
+            broker_host = row["community_broker_host"] or ""
+        except (KeyError, TypeError):
+            broker_host = ""
+        try:
+            api_base = row["community_api_base"] or ""
+        except (KeyError, TypeError):
+            api_base = ""
+        return CommunityRecord(
+            enabled=enabled, iata=iata, broker_host=broker_host, api_base=api_base
+        )
+
+    @staticmethod
+    async def update_community(
+        *,
+        enabled: bool | None = None,
+        iata: str | None = None,
+        broker_host: str | None = None,
+        api_base: str | None = None,
+    ) -> Any:
+        """Update Meshloom Stats community columns. Only provided fields change."""
+        updates: list[str] = []
+        params: list[Any] = []
+        if enabled is not None:
+            updates.append("community_enabled = ?")
+            params.append(1 if enabled else 0)
+        if iata is not None:
+            updates.append("community_iata = ?")
+            params.append(iata)
+        if broker_host is not None:
+            updates.append("community_broker_host = ?")
+            params.append(broker_host)
+        if api_base is not None:
+            updates.append("community_api_base = ?")
+            params.append(api_base)
+        if updates:
+            async with db.tx() as conn:
+                await conn.execute(
+                    f"UPDATE app_settings SET {', '.join(updates)} WHERE id = 1",
+                    params,
+                )
+        return await AppSettingsRepository.get_community()
+
 
 class StatisticsRepository:
     @staticmethod

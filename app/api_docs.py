@@ -81,6 +81,10 @@ API_TAGS_METADATA: list[dict[str, Any]] = [
         "description": "MQTT, bots, webhooks, Apprise, SQS, Home Assistant, and map upload integrations.",
     },
     {
+        "name": "community",
+        "description": "Meshloom Stats opt-in: join state, IATA bind, and contribution proxies.",
+    },
+    {
         "name": "statistics",
         "description": "Aggregated mesh, message, packet, channel, and contact statistics.",
     },

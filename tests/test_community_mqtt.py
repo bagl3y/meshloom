@@ -22,6 +22,7 @@ from app.fanout.community_mqtt import (
     _format_raw_packet,
     _generate_jwt_token,
     _get_client_version,
+    reset_shared_radio_stats_cache,
 )
 from app.fanout.mqtt_community import (
     MqttCommunityModule,
@@ -31,6 +32,13 @@ from app.fanout.mqtt_community import (
 )
 from app.keystore import ed25519_sign_expanded
 from app.path_utils import calculate_packet_hash as _calculate_packet_hash
+
+
+@pytest.fixture(autouse=True)
+def _reset_shared_radio_stats_cache() -> None:
+    reset_shared_radio_stats_cache()
+    yield
+    reset_shared_radio_stats_cache()
 
 
 def _make_test_keys() -> tuple[bytes, bytes]:

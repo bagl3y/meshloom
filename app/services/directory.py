@@ -257,8 +257,49 @@ def _hit_from_cache(row: object, hash_width: int) -> DirectoryHopHit | None:
     )
 
 
+async def _community_directory_data(
+    path: str,
+    *,
+    params: dict[str, str | int] | None = None,
+    method: str = "GET",
+    body: dict[str, object] | None = None,
+) -> object | None:
+    """Stats directory payload when community is on; None means use directory_url."""
+    from app.services.meshloom_community import (
+        community_enabled,
+        stats_directory_get,
+        stats_directory_post,
+    )
+
+    if not await community_enabled():
+        return None
+    if method == "POST":
+        return await stats_directory_post(path, body or {})
+    return await stats_directory_get(path, params=params)
+
+
 async def resolve_directory_hops(hops: list[str]) -> DirectoryResolveHopsResponse:
     prefixes = validate_hop_prefixes(hops)
+    stats_data = await _community_directory_data(
+        "/v1/directory/resolve-hops",
+        params={"hops": ",".join(prefixes)} if prefixes else {"hops": ""},
+    )
+    if stats_data is not None:
+        fetched = parse_corescope_resolved_hits(stats_data)
+        resolved: dict[str, DirectoryHopHit] = {}
+        for prefix in prefixes:
+            parsed = fetched.get(prefix)
+            if parsed and parsed.name:
+                resolved[prefix] = DirectoryHopHit(
+                    name=parsed.name,
+                    source="corescope",
+                    hash_width=hash_width_for_prefix(prefix),
+                    public_key=parsed.public_key,
+                    lat=parsed.lat,
+                    lon=parsed.lon,
+                )
+        return DirectoryResolveHopsResponse(resolved=resolved)
+
     settings = await AppSettingsRepository.get()
     origin = (settings.directory_url or "").strip()
     if not settings.directory_enabled or not origin:
@@ -426,6 +467,14 @@ async def _fetch_corescope_nodes_page(
 async def list_directory_map_nodes() -> DirectoryMapNodesResponse:
     """Repeater GPS pins from CoreScope. Empty when the directory is off."""
     global _nodes_cache
+    stats_data = await _community_directory_data(
+        "/v1/directory/nodes",
+        params={"role": "repeater", "limit": NODES_PAGE_SIZE, "offset": 0},
+    )
+    if stats_data is not None:
+        nodes, _total = parse_corescope_map_nodes(stats_data)
+        return DirectoryMapNodesResponse(nodes=nodes)
+
     settings = await AppSettingsRepository.get()
     origin = (settings.directory_url or "").strip()
     if not settings.directory_enabled or not origin:
@@ -684,6 +733,9 @@ def parse_corescope_node_search(payload: object) -> DirectoryNodeSearchResponse:
 
 async def get_directory_node_reach(pubkey: str) -> DirectoryReachResponse:
     key = validate_directory_pubkey(pubkey)
+    stats_data = await _community_directory_data(f"/v1/directory/nodes/{key}/reach")
+    if stats_data is not None:
+        return parse_corescope_reach(stats_data, key)
     origin = await _require_directory_origin()
     if origin is None:
         return DirectoryReachResponse()
@@ -708,6 +760,9 @@ async def get_directory_node_reach(pubkey: str) -> DirectoryReachResponse:
 
 async def get_directory_node_neighbors(pubkey: str) -> DirectoryNeighborsResponse:
     key = validate_directory_pubkey(pubkey)
+    stats_data = await _community_directory_data(f"/v1/directory/nodes/{key}/neighbors")
+    if stats_data is not None:
+        return parse_corescope_neighbors(stats_data)
     origin = await _require_directory_origin()
     if origin is None:
         return DirectoryNeighborsResponse()
@@ -734,6 +789,9 @@ async def search_directory_nodes(query: str) -> DirectoryNodeSearchResponse:
     q = query.strip()
     if not q:
         raise HTTPException(status_code=400, detail="Search query is required")
+    stats_data = await _community_directory_data("/v1/directory/nodes/search", params={"q": q})
+    if stats_data is not None:
+        return parse_corescope_node_search(stats_data)
     origin = await _require_directory_origin()
     if origin is None:
         return DirectoryNodeSearchResponse()

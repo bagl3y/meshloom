@@ -1976,6 +1976,7 @@ export function MessageList({
         onOpenChange={(isOpen) => {
           if (!isOpen) setObserverReachHash(null);
         }}
+        contacts={contacts}
       />
     </div>
   );

@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.fanout.bot_exec import _analyze_bot_signature
-from app.fanout.manager import fanout_manager
+from app.fanout.manager import fanout_manager, is_reserved_fanout_id
 from app.repository.fanout import FanoutConfigRepository
 
 logger = logging.getLogger(__name__)
@@ -404,7 +404,8 @@ def _bot_system_disabled_detail() -> str | None:
 @router.get("")
 async def list_fanout_configs() -> list[dict]:
     """List all fanout configs."""
-    return await FanoutConfigRepository.get_all()
+    configs = await FanoutConfigRepository.get_all()
+    return [cfg for cfg in configs if not is_reserved_fanout_id(cfg["id"])]
 
 
 @router.post("")
@@ -443,6 +444,8 @@ async def create_fanout_config(body: FanoutConfigCreate) -> dict:
 @router.patch("/{config_id}")
 async def update_fanout_config(config_id: str, body: FanoutConfigUpdate) -> dict:
     """Update a fanout config. Triggers module reload."""
+    if is_reserved_fanout_id(config_id):
+        raise HTTPException(status_code=403, detail="Reserved system module")
     existing = await FanoutConfigRepository.get(config_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Fanout config not found")
@@ -477,6 +480,8 @@ async def update_fanout_config(config_id: str, body: FanoutConfigUpdate) -> dict
 @router.delete("/{config_id}")
 async def delete_fanout_config(config_id: str) -> dict:
     """Delete a fanout config."""
+    if is_reserved_fanout_id(config_id):
+        raise HTTPException(status_code=403, detail="Reserved system module")
     existing = await FanoutConfigRepository.get(config_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Fanout config not found")

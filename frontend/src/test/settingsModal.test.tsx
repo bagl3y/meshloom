@@ -661,6 +661,69 @@ describe('SettingsModal', () => {
     });
   });
 
+  it('renders Meshloom Stats settings with a join CTA when community is off', async () => {
+    vi.spyOn(api, 'getCommunity').mockResolvedValue({
+      enabled: false,
+      locked: false,
+      iata: '',
+      broker_host: '',
+      api_base: '',
+      publisher_configured: false,
+      publisher_connected: false,
+      env_seeded: false,
+    });
+
+    renderModal({
+      externalSidebarNav: true,
+      desktopSection: 'community',
+    });
+
+    expect(
+      await screen.findByRole('button', { name: i18n.t('settings.community.joinCta') })
+    ).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.community.privacyAccount'))).toBeInTheDocument();
+    expect(screen.getByLabelText(i18n.t('settings.community.enable'))).not.toBeDisabled();
+  });
+
+  it('does not mention Meshloom Stats MQTT inside Fanout', async () => {
+    const { view } = renderModal({
+      externalSidebarNav: true,
+      desktopSection: 'fanout',
+    });
+
+    await waitFor(() => {
+      expect(api.getFanoutConfigs).toHaveBeenCalled();
+    });
+    expect(view.container).not.toHaveTextContent(/Meshloom Stats/);
+    expect(
+      screen.queryByRole('button', { name: i18n.t('settings.community.joinCta') })
+    ).not.toBeInTheDocument();
+  });
+
+  it('disables Meshloom Stats enable when the operator locked it', async () => {
+    vi.spyOn(api, 'getCommunity').mockResolvedValue({
+      enabled: false,
+      locked: true,
+      iata: '',
+      broker_host: '',
+      api_base: '',
+      publisher_configured: false,
+      publisher_connected: false,
+      env_seeded: false,
+    });
+
+    renderModal({
+      externalSidebarNav: true,
+      desktopSection: 'community',
+    });
+
+    expect(await screen.findByText(i18n.t('settings.community.locked'))).toBeInTheDocument();
+    expect(screen.getByLabelText(i18n.t('settings.community.enable'))).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: i18n.t('settings.community.joinCta') })
+    ).toBeDisabled();
+  });
+
   it('renders selected section from external sidebar nav on desktop mode', async () => {
     renderModal({
       externalSidebarNav: true,

@@ -1185,6 +1185,7 @@ class ObserverReachEntry(BaseModel):
     lon: float | None = None
     hops: int | None = None
     snr: float | None = None
+    path: list[str] = Field(default_factory=list)
 
 
 class PacketObserverReachResponse(BaseModel):
@@ -1195,6 +1196,8 @@ class PacketObserverReachResponse(BaseModel):
     max_hops: int | None = None
     max_distance_km: float | None = None
     origin_available: bool = False
+    origin_lat: float | None = None
+    origin_lon: float | None = None
 
 
 class PacketObserverReachCountsRequest(BaseModel):
@@ -1571,3 +1574,50 @@ class RadioIdentityActionResponse(BaseModel):
     radio_state: RadioHealthState
     bound_public_key: str | None = None
     connected: bool = False
+
+
+class CommunityStatus(BaseModel):
+    """Local Meshloom Stats community join state (OSS-owned, not a fanout row)."""
+
+    enabled: bool
+    locked: bool
+    iata: str
+    broker_host: str
+    api_base: str
+    publisher_configured: bool
+    publisher_connected: bool = False
+    env_seeded: bool = False
+
+
+class CommunityUpdate(BaseModel):
+    enabled: bool | None = None
+    iata: str | None = Field(default=None, max_length=3)
+    broker_host: str | None = None
+    api_base: str | None = None
+
+
+class CommunityIataBindRequest(BaseModel):
+    iata: str = Field(pattern=r"^[A-Za-z]{3}$")
+    lat: float | None = None
+    lon: float | None = None
+
+
+class CommunityIataBindResult(BaseModel):
+    iata: str
+    concordance: str
+    honored_for_buckets: bool
+    distance_km: float | None = None
+
+
+class CommunityMeStats(BaseModel):
+    unique_hashes_24h: int
+    unique_hashes_7d: int
+    iata: str
+    concordance: str
+    rank_in_iata: int | None = None
+
+
+class CommunityPublicStats(BaseModel):
+    observers_online: int
+    iata_active: int
+    unique_hashes_24h: int

@@ -58,6 +58,12 @@ import type {
   TrackedTelemetryContactsResponse,
   TrackedTelemetryResponse,
   StatisticsResponse,
+  CommunityIataBindRequest,
+  CommunityIataBindResult,
+  CommunityMeStats,
+  CommunityPublicStats,
+  CommunityStatus,
+  CommunityUpdate,
   TraceResponse,
   UnreadCounts,
 } from './types';
@@ -577,6 +583,25 @@ export const api = {
 
   // Statistics
   getStatistics: () => fetchJson<StatisticsResponse>('/statistics'),
+
+  // Meshloom Stats community (browser talks only to this backend)
+  getCommunity: () => fetchJson<CommunityStatus>('/community'),
+  updateCommunity: (update: CommunityUpdate) =>
+    fetchJson<CommunityStatus>('/community', {
+      method: 'PATCH',
+      body: JSON.stringify(update),
+    }),
+  getCommunityMeStats: () => fetchJson<CommunityMeStats>('/community/me/stats'),
+  bindCommunityIata: (body: CommunityIataBindRequest) =>
+    fetchJson<CommunityIataBindResult>('/community/me/iata', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  overrideCommunityIata: () =>
+    fetchJson<CommunityIataBindResult>('/community/me/iata/override', {
+      method: 'POST',
+    }),
+  getCommunityStats: () => fetchJson<CommunityPublicStats>('/community/stats'),
 
   // Granular repeater endpoints
   repeaterLogin: (publicKey: string, password: string) =>

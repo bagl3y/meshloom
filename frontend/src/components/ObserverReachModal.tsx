@@ -1,17 +1,25 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 import { api, formatApiError } from '../api';
 import { useDistanceUnit } from '../contexts/DistanceUnitContext';
-import type { ObserverReachEntry, PacketObserverReachResponse } from '../types';
-import { formatDistance } from '../utils/pathUtils';
+import type {
+  Contact,
+  ObserverReachEntry,
+  ObserverReachMapHop,
+  PacketObserverReachResponse,
+} from '../types';
 import {
-  OSM_RASTER_REFERRER_POLICY,
-  OSM_RASTER_TILE_ATTRIBUTION,
-  OSM_RASTER_TILE_URL,
-} from '../utils/mapTiles';
+  directoryHopLocation,
+  findContactsByPrefix,
+  formatDistance,
+  isValidLocation,
+  resolveHopDisplay,
+  resolveLocalHopDisplay,
+  type DirectoryHopHit,
+  type PathHop,
+} from '../utils/pathUtils';
 import { Button } from './ui/button';
 import {
   Dialog,
@@ -22,85 +30,75 @@ import {
   DialogTitle,
 } from './ui/dialog';
 
-function InvalidateOnResize() {
-  const map = useMap();
-  useEffect(() => {
-    const container = map.getContainer();
-    const observer = new ResizeObserver(() => {
-      map.invalidateSize();
-    });
-    observer.observe(container);
-    const timer = window.setTimeout(() => {
-      map.invalidateSize();
-    }, 150);
-    return () => {
-      observer.disconnect();
-      window.clearTimeout(timer);
-    };
-  }, [map]);
-  return null;
+const EMPTY_CONTACTS: Contact[] = [];
+
+const ObserverReachMap = lazy(() =>
+  import('./ObserverReachMap').then((mod) => ({ default: mod.ObserverReachMap }))
+);
+
+function observerRowKey(observer: ObserverReachEntry, index: number): string {
+  return `${observer.public_key ?? observer.name}-${index}`;
 }
 
-function ObserverMiniMap({ observers }: { observers: ObserverReachEntry[] }) {
-  const { t } = useTranslation();
-  const valid = observers.filter(
-    (item): item is ObserverReachEntry & { lat: number; lon: number } =>
-      item.lat != null && item.lon != null
-  );
-  if (valid.length === 0) return null;
-  const center: [number, number] = [valid[0].lat, valid[0].lon];
-  return (
-    <div
-      className="h-48 rounded border border-border overflow-hidden"
-      role="img"
-      aria-label={t('messageList.observerReachMapAria')}
-    >
-      <MapContainer
-        center={center}
-        zoom={6}
-        className="h-48 w-full"
-        style={{ background: '#1a1a2e' }}
-      >
-        <InvalidateOnResize />
-        <TileLayer
-          attribution={OSM_RASTER_TILE_ATTRIBUTION}
-          url={OSM_RASTER_TILE_URL}
-          referrerPolicy={OSM_RASTER_REFERRER_POLICY}
-        />
-        {valid.map((observer, index) => (
-          <CircleMarker
-            key={`${observer.public_key ?? observer.name}-${index}`}
-            center={[observer.lat, observer.lon]}
-            radius={6}
-            pathOptions={{
-              color: '#000',
-              fillColor: '#3b82f6',
-              fillOpacity: 0.8,
-              weight: 1,
-            }}
-          >
-            <Popup>
-              <span className="text-sm">{observer.name}</span>
-            </Popup>
-          </CircleMarker>
-        ))}
-      </MapContainer>
-    </div>
-  );
+function observerPath(observer: ObserverReachEntry): string[] {
+  return observer.path ?? [];
+}
+
+function toPathHop(prefix: string, contacts: Contact[]): PathHop {
+  const normalized = prefix.toUpperCase();
+  return {
+    prefix: normalized,
+    matches: findContactsByPrefix(normalized, contacts, true),
+    distanceFromPrev: null,
+  };
+}
+
+function hopMapLocation(
+  hop: PathHop,
+  directory?: DirectoryHopHit | null
+): { lat: number; lon: number; name: string } | null {
+  const local = resolveLocalHopDisplay(hop);
+  if (local.kind === 'known' && isValidLocation(local.contact.lat, local.contact.lon)) {
+    return {
+      lat: local.contact.lat!,
+      lon: local.contact.lon!,
+      name: local.contact.name || hop.prefix,
+    };
+  }
+  return directoryHopLocation(hop, directory);
+}
+
+function hopDisplayName(hop: PathHop, directory?: DirectoryHopHit | null): string | null {
+  const display = resolveHopDisplay(hop, directory);
+  if (display.kind === 'known') {
+    return display.contact.name || hop.prefix;
+  }
+  if (display.kind === 'directory') {
+    return display.name;
+  }
+  return null;
 }
 
 interface ObserverReachModalProps {
   packetHash: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  contacts?: Contact[];
 }
 
-export function ObserverReachModal({ packetHash, open, onOpenChange }: ObserverReachModalProps) {
+export function ObserverReachModal({
+  packetHash,
+  open,
+  onOpenChange,
+  contacts = EMPTY_CONTACTS,
+}: ObserverReachModalProps) {
   const { t } = useTranslation();
   const { distanceUnit } = useDistanceUnit();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<PacketObserverReachResponse | null>(null);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [directoryHits, setDirectoryHits] = useState<Record<string, DirectoryHopHit>>({});
 
   useEffect(() => {
     if (!open || !packetHash) return;
@@ -108,6 +106,8 @@ export function ObserverReachModal({ packetHash, open, onOpenChange }: ObserverR
     setLoading(true);
     setError(null);
     setDetail(null);
+    setExpandedKey(null);
+    setDirectoryHits({});
     void api
       .getPacketObserverReach(packetHash)
       .then((payload) => {
@@ -126,11 +126,67 @@ export function ObserverReachModal({ packetHash, open, onOpenChange }: ObserverR
     };
   }, [open, packetHash, t]);
 
+  useEffect(() => {
+    if (!detail) {
+      setDirectoryHits({});
+      return;
+    }
+    const prefixes = new Set<string>();
+    for (const observer of detail.observers) {
+      for (const raw of observerPath(observer)) {
+        const hop = toPathHop(raw, contacts);
+        if (resolveLocalHopDisplay(hop).kind === 'unknown') {
+          prefixes.add(hop.prefix);
+        }
+      }
+    }
+    if (prefixes.size === 0) {
+      setDirectoryHits((current) => (Object.keys(current).length === 0 ? current : {}));
+      return;
+    }
+    let cancelled = false;
+    void api.resolveDirectoryHops([...prefixes]).then(
+      (res) => {
+        if (!cancelled) setDirectoryHits(res.resolved);
+      },
+      () => {
+        if (!cancelled) setDirectoryHits({});
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [detail, contacts]);
+
   const observers = detail?.observers ?? [];
   const distanceLabel =
     detail?.max_distance_km != null
       ? formatDistance(detail.max_distance_km, distanceUnit)
       : t('messageList.observerReachDistanceUnavailable');
+  const origin =
+    detail?.origin_lat != null && detail.origin_lon != null
+      ? { lat: detail.origin_lat, lon: detail.origin_lon }
+      : null;
+  const selectedHops = useMemo((): ObserverReachMapHop[] => {
+    const selected = observers.find(
+      (observer, index) => observerRowKey(observer, index) === expandedKey
+    );
+    if (!selected) return [];
+    const hops: ObserverReachMapHop[] = [];
+    for (const [hopIndex, prefix] of observerPath(selected).entries()) {
+      const hop = toPathHop(prefix, contacts);
+      const location = hopMapLocation(hop, directoryHits[hop.prefix]);
+      if (!location) continue;
+      hops.push({
+        prefix: hop.prefix,
+        hopIndex,
+        lat: location.lat,
+        lon: location.lon,
+        name: hopDisplayName(hop, directoryHits[hop.prefix]),
+      });
+    }
+    return hops;
+  }, [observers, expandedKey, contacts, directoryHits]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -175,24 +231,98 @@ export function ObserverReachModal({ packetHash, open, onOpenChange }: ObserverR
               </p>
             )}
             {observers.length > 0 && (
-              <ul className="max-h-40 overflow-auto rounded border border-border divide-y divide-border">
-                {observers.map((observer, index) => (
-                  <li
-                    key={`${observer.public_key ?? observer.name}-${index}`}
-                    className="px-2 py-1.5 text-sm flex items-center justify-between gap-2"
-                  >
-                    <span className="min-w-0 truncate">{observer.name}</span>
-                    <span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">
-                      {observer.hops != null
-                        ? t('messageList.observerReachHops', { count: observer.hops })
-                        : '—'}
-                      {observer.snr != null ? ` · ${observer.snr.toFixed(1)} dB` : ''}
-                    </span>
-                  </li>
-                ))}
+              <ul className="max-h-64 overflow-auto rounded border border-border divide-y divide-border">
+                {observers.map((observer, index) => {
+                  const key = observerRowKey(observer, index);
+                  const path = observerPath(observer);
+                  const expandable = path.length > 0;
+                  const expanded = expandedKey === key;
+                  return (
+                    <li key={key} className="text-sm">
+                      {expandable ? (
+                        <button
+                          type="button"
+                          className="w-full px-2 py-1.5 flex items-center justify-between gap-2 text-left hover:bg-accent/50 transition-colors"
+                          aria-expanded={expanded}
+                          aria-label={
+                            expanded
+                              ? t('messageList.observerReachCollapsePath', { name: observer.name })
+                              : t('messageList.observerReachExpandPath', { name: observer.name })
+                          }
+                          onClick={() => setExpandedKey(expanded ? null : key)}
+                        >
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            {expanded ? (
+                              <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            )}
+                            <span className="truncate">{observer.name}</span>
+                          </span>
+                          <span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">
+                            {observer.hops != null
+                              ? observer.hops === 0
+                                ? t('messageList.observerReachDirect')
+                                : t('messageList.observerReachHops', { count: observer.hops })
+                              : '—'}
+                            {observer.snr != null ? ` · ${observer.snr.toFixed(1)} dB` : ''}
+                          </span>
+                        </button>
+                      ) : (
+                        <div className="px-2 py-1.5 flex items-center justify-between gap-2">
+                          <span className="min-w-0 truncate pl-4">{observer.name}</span>
+                          <span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">
+                            {observer.hops != null
+                              ? observer.hops === 0
+                                ? t('messageList.observerReachDirect')
+                                : t('messageList.observerReachHops', { count: observer.hops })
+                              : '—'}
+                            {observer.snr != null ? ` · ${observer.snr.toFixed(1)} dB` : ''}
+                          </span>
+                        </div>
+                      )}
+                      {expanded && (
+                        <ol className="px-2 pb-2 pl-7 space-y-1">
+                          {path.map((prefix, hopIndex) => {
+                            const hop = toPathHop(prefix, contacts);
+                            const name = hopDisplayName(hop, directoryHits[hop.prefix]);
+                            return (
+                              <li
+                                key={`${hop.prefix}-${hopIndex}`}
+                                className="text-[0.6875rem] text-muted-foreground"
+                              >
+                                <span className="text-foreground/80">
+                                  {t('path.hop', { n: hopIndex + 1 })}
+                                </span>{' '}
+                                <span className="font-mono text-primary">{hop.prefix}</span>
+                                {name ? ` · ${name}` : ''}
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
-            <ObserverMiniMap observers={observers} />
+            <Suspense
+              fallback={
+                <div
+                  className="h-56 rounded border border-border bg-muted/30 animate-pulse"
+                  aria-hidden
+                />
+              }
+            >
+              <ObserverReachMap
+                observers={observers}
+                origin={origin}
+                selectedKey={expandedKey}
+                selectedHops={selectedHops}
+                observerKey={observerRowKey}
+                onSelect={(key) => setExpandedKey((current) => (current === key ? null : key))}
+              />
+            </Suspense>
           </div>
         )}
         <DialogFooter>

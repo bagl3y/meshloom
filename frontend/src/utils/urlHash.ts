@@ -1,7 +1,10 @@
 import type { Channel, Contact, Conversation } from '../types';
 import { findPublicChannel, PUBLIC_CHANNEL_NAME } from './publicChannel';
 import { getContactDisplayName } from './pubkey';
-import type { SettingsSection } from '../components/settings/settingsConstants';
+import {
+  SETTINGS_SECTION_ORDER,
+  type SettingsSection,
+} from '../components/settings/settingsConstants';
 
 interface ParsedHashConversation {
   type: 'channel' | 'contact' | 'raw' | 'map' | 'visualizer' | 'search' | 'trace' | 'locate';
@@ -15,15 +18,7 @@ interface ParsedHashConversation {
   locateKey?: string;
 }
 
-const SETTINGS_SECTIONS: SettingsSection[] = [
-  'radio',
-  'local',
-  'radio-app',
-  'fanout',
-  'database',
-  'statistics',
-  'about',
-];
+const SETTINGS_SECTIONS: SettingsSection[] = SETTINGS_SECTION_ORDER;
 
 // Parse URL hash to get conversation
 // (e.g., #channel/ABCDEF0123456789ABCDEF0123456789 or #contact/<64-char-pubkey>).

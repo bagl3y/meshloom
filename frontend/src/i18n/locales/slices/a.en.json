@@ -88,6 +88,7 @@
     "aria": "Settings",
     "radio": "Radio",
     "local": "Local Configuration",
+    "community": "Meshloom Stats",
     "radioApp": "Radio-App Management",
     "database": "Database",
     "fanout": "MQTT & Automation",

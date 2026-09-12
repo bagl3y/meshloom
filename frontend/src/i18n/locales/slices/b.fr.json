@@ -44,6 +44,10 @@
     "observerReachDistanceUnavailable": "Distance indisponible",
     "observerReachEmpty": "Aucun observateur n’a publié ce paquet sur cette instance CoreScope.",
     "observerReachHops": "{{count}} sauts",
+    "observerReachDirect": "direct",
+    "observerReachExpandPath": "Voir les sauts de {{name}}",
+    "observerReachCollapsePath": "Masquer les sauts de {{name}}",
+    "observerReachOrigin": "Origine",
     "observerReachMapAria": "Carte des observateurs qui ont entendu ce paquet"
   },
   "chatHeader": {

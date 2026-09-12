@@ -65,3 +65,18 @@ body {
 .leaflet-control {
   z-index: 10 !important;
 }
+
+.observer-reach-hop-label {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #fff !important;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.observer-reach-hop-label::before {
+  display: none !important;
+}

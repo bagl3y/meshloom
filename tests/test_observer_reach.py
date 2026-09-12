@@ -14,6 +14,7 @@ from app.services.observer_reach import (
     parse_batch_observations,
     parse_corescope_observers,
     parse_packet_observations,
+    path_from_path_json,
     reset_observer_reach_cache,
 )
 
@@ -48,6 +49,10 @@ class TestPathJsonHops:
         assert hops_from_path_json('["aa","bb"]') == 2
         assert hops_from_path_json("[]") == 0
         assert hops_from_path_json("{") is None
+        assert path_from_path_json(["aa", "bb", "cc"]) == ["aa", "bb", "cc"]
+        assert path_from_path_json('["AA","bb"]') == ["aa", "bb"]
+        assert path_from_path_json([{"prefix": "1A2B"}]) == ["1a2b"]
+        assert path_from_path_json("{") is None
 
 
 class TestObservationParsers:
@@ -67,6 +72,7 @@ class TestObservationParsers:
         assert len(parsed) == 1
         assert parsed[0].observer_id == "obs-1"
         assert parsed[0].hops == 2
+        assert parsed[0].path == ("ab", "cd")
         assert parsed[0].snr == -4.5
 
     def test_batch_results(self):
@@ -282,6 +288,52 @@ class TestObserverReachGate:
             with pytest.raises(HTTPException) as exc:
                 await get_packet_observer_reach("AABBCCDDEEFF0011")
         assert exc.value.status_code == 500
+
+    @pytest.mark.asyncio
+    async def test_detail_includes_hop_path_and_origin(self, test_db):
+        reset_observer_reach_cache()
+        await AppSettingsRepository.update(
+            directory_enabled=True, directory_url="https://corescope.test"
+        )
+        packet = MagicMock()
+        packet.status_code = 200
+        packet.json.return_value = {
+            "observations": [
+                {
+                    "observer_id": "obs-1",
+                    "observer_name": "Lyon",
+                    "snr": -4.5,
+                    "path_json": ["ab", "cd"],
+                }
+            ]
+        }
+        packet.content = b"{}"
+        observers = MagicMock()
+        observers.status_code = 200
+        observers.json.return_value = {
+            "observers": [{"id": "obs-1", "name": "Lyon", "lat": 45.75, "lon": 4.85}]
+        }
+        observers.content = b"{}"
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=[packet, observers])
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("app.services.directory.httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "app.services.observer_reach.resolve_origin_coords",
+                new=AsyncMock(return_value=(45.76, 4.83)),
+            ),
+        ):
+            result = await get_packet_observer_reach("AABBCCDDEEFF0011")
+
+        assert result.observers[0].path == ["ab", "cd"]
+        assert result.observers[0].hops == 2
+        assert result.origin_available is True
+        assert result.origin_lat == 45.76
+        assert result.origin_lon == 4.83
 
 
 class TestObserverReachTtlLru:

@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 import sys
 import time
 from abc import ABC, abstractmethod
@@ -55,6 +56,7 @@ class BaseMqttPublisher(ABC):
     _backoff_max: int = 30
     _log_prefix: str = "MQTT"
     _not_configured_timeout: float | None = None  # None = block forever
+    _full_jitter_backoff: bool = False
 
     def __init__(self) -> None:
         self._client: aiomqtt.Client | None = None
@@ -323,7 +325,8 @@ class BaseMqttPublisher(ABC):
                 )
 
                 try:
-                    await asyncio.sleep(backoff)
+                    delay = random.uniform(0, backoff) if self._full_jitter_backoff else backoff
+                    await asyncio.sleep(delay)
                 except asyncio.CancelledError:
                     return
                 backoff = min(backoff * 2, self._backoff_max)

@@ -494,4 +494,64 @@ describe('fetchJson (via api methods)', () => {
       expect(url).toBe('./api/messages');
     });
   });
+
+  describe('Meshloom Stats community client', () => {
+    const communityStatus = {
+      enabled: false,
+      locked: false,
+      iata: '',
+      broker_host: 'mqtt.example.invalid',
+      api_base: 'https://api.example.invalid',
+      publisher_configured: false,
+      publisher_connected: false,
+      env_seeded: false,
+    };
+
+    it('GETs /community', async () => {
+      installMockFetch();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(communityStatus),
+      });
+
+      await expect(api.getCommunity()).resolves.toEqual(communityStatus);
+      expect(mockFetch.mock.calls[0][0]).toBe('./api/community');
+    });
+
+    it('PATCHes /community', async () => {
+      installMockFetch();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ ...communityStatus, enabled: true, iata: 'CDG' }),
+      });
+
+      await api.updateCommunity({ enabled: true, iata: 'CDG' });
+
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).toBe('./api/community');
+      expect(options.method).toBe('PATCH');
+      expect(options.body).toBe(JSON.stringify({ enabled: true, iata: 'CDG' }));
+    });
+
+    it('GETs me stats, public stats, and IATA bind/override', async () => {
+      installMockFetch();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+
+      await api.getCommunityMeStats();
+      await api.getCommunityStats();
+      await api.bindCommunityIata({ iata: 'CDG' });
+      await api.overrideCommunityIata();
+
+      expect(mockFetch.mock.calls[0][0]).toBe('./api/community/me/stats');
+      expect(mockFetch.mock.calls[1][0]).toBe('./api/community/stats');
+      expect(mockFetch.mock.calls[2][0]).toBe('./api/community/me/iata');
+      expect(mockFetch.mock.calls[2][1].method).toBe('PUT');
+      expect(mockFetch.mock.calls[2][1].body).toBe(JSON.stringify({ iata: 'CDG' }));
+      expect(mockFetch.mock.calls[3][0]).toBe('./api/community/me/iata/override');
+      expect(mockFetch.mock.calls[3][1].method).toBe('POST');
+    });
+  });
 });
