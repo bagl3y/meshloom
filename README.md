@@ -22,7 +22,7 @@ On Linux the installer offers a native systemd service or Docker. Radio transpor
 /bin/bash -c "$(curl -fsSL https://get.meshloom.app)"
 ```
 
-Then open http://127.0.0.1:8000 and choose the radio under **Settings > Radio**. User-facing docs live in [`docs/user/`](docs/user/) and are published at https://meshloom.app/docs/.
+Then open http://127.0.0.1:8000 and choose the radio under **Settings > Radio**. A new install joins Meshloom Community unless you set `MESHLOOM_COMMUNITY=0`; leave or bind an IATA code under **Settings > Community**. User-facing docs live in [`docs/user/`](docs/user/) and are published at https://meshloom.app/docs/.
 
 From a checkout (development): [CONTRIBUTING.md](CONTRIBUTING.md). Docker image: `ghcr.io/bagl3y/meshloom`. Portainer, HTTPS, systemd, and extra environment variables: [README_ADVANCED.md](README_ADVANCED.md).
 

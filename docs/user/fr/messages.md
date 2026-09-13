@@ -35,6 +35,8 @@ Les messages de salon reviennent souvent en plusieurs exemplaires : chaque rép�
 
 Un message de salon qu’on vient d’envoyer garde un bouton de renvoi pendant trente secondes, pour le cas où il n’a manifestement atteint personne.
 
+L’envoi est bloqué si le brouillon ferait déborder le paquet radio. Meshloom ne tronque plus un message trop long à l’envoi.
+
 ## Salons hashtag
 
 Retenir une clé de trente-deux caractères hexadécimaux pour organiser une conversation est pénible. Les salons hashtag résolvent ça : la clé est **calculée à partir du nom**.

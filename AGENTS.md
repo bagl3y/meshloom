@@ -369,6 +369,7 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | POST | `/api/messages/channel` | Send channel message |
 | POST | `/api/messages/channel/{message_id}/resend` | Resend channel message (default: byte-perfect within 30s; `?new_timestamp=true`: fresh timestamp, no time limit, creates new message row) |
 | GET | `/api/packets/undecrypted/count` | Count of undecrypted packets |
+| GET | `/api/packets/undecrypted/group-text-samples` | Bounded newest-first sample of stored undecrypted GroupText for the channel finder |
 | GET | `/api/packets/{packet_id}` | Fetch one stored raw packet by row ID for on-demand inspection |
 | POST | `/api/packets/region-backfill` | Re-resolve region scope for stored channel messages with retained raw packets |
 | POST | `/api/packets/decrypt/historical` | Decrypt stored packets |
@@ -404,6 +405,15 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | GET | `/api/push/preferences` | Global push defaults, conversation overrides, and VAPID subject |
 | PATCH | `/api/push/preferences` | Update defaults and/or stored VAPID subject |
 | PUT | `/api/push/preferences/conversations/{key}` | Set (`true`/`false`) or clear (`null`) one conversation override |
+| GET | `/api/community` | Meshloom Community join state |
+| PATCH | `/api/community` | Enable/disable Community and set IATA / host overrides |
+| GET | `/api/community/airports` | IATA airport search |
+| GET | `/api/community/me/stats` | This node's contribution stats |
+| PUT | `/api/community/me/iata` | Bind IATA on the Stats host |
+| POST | `/api/community/me/iata/override` | Confirm an IATA concordance override |
+| GET | `/api/community/stats` | Public community stats |
+| GET | `/api/community/iata/{code}/hashtags` | Shared hashtag names for an IATA code |
+| PUT | `/api/community/me/hashtags` | Publish local/discovered hashtag names (names only) |
 | WS | `/api/ws` | Real-time updates |
 
 ## Key Concepts

@@ -1,3 +1,37 @@
+## [4.3.0] - 2026-09-13
+
+This release adds an optional shared directory of nearby nodes, gathers every notification setting into one screen, and makes conversations easier to read.
+
+### What's new
+
+- **A shared directory of the nodes around you.** New databases join Meshloom Community, where this radio can publish the packets it overhears. Pooling those observations is what lets Meshloom name the repeaters a message passed through, show who else heard it, and narrow down where a node is. Set your area by searching for the nearest airport by name in Settings > Community; a banner asks for that code until you save one, and you can dismiss the banner if you would rather not join. Leaving is a single toggle in the same place, and existing databases are never opted in for you.
+- **One screen for notifications.** Settings > Notifications now holds your registered devices, what notifies you by default, per-conversation exceptions, and the contact address Apple requires. Notifications come from the browser, so they still arrive when the Meshloom tab is closed; the old in-tab desktop alerts are gone. The bell in a conversation header is now a plain on/off switch, and Meshloom can also tell you the first time it hears a new companion, repeater, or sensor.
+- **A channel finder that looks further back.** It now searches the channel packets you already stored but could not read, instead of only what arrived while the page was open. It also tries a bundled list of common MeshCore channel names, plus the hashtag names shared by nodes near your airport when Community is on — names only, never keys.
+- **A more readable conversation.** The message column is centered on screen, and the sidebar shows an excerpt of the last message in each thread. Send now refuses a message that is too long for one radio packet instead of quietly cutting it short.
+
+Also: new and upgraded databases get a `#meshloom` channel, and an existing `#remoteterm` is left alone. Dark map tiles accept an optional CARTO API key. Clicking an observer badge no longer hangs on “Loading observers…”.
+
+To create a new database without joining Community: `MESHLOOM_COMMUNITY=0`.
+
+---
+
+### Français
+
+Cette version ajoute un annuaire partagé des nœuds proches, en option, regroupe tous les réglages de notification sur un seul écran et rend les conversations plus lisibles.
+
+#### Quoi de neuf
+
+- **Un annuaire partagé des nœuds autour de vous.** Les nouvelles bases rejoignent Meshloom Community, où cette radio peut publier les paquets qu’elle capte. C’est la mise en commun de ces observations qui permet à Meshloom de nommer les répéteurs traversés par un message, de montrer qui d’autre l’a entendu et de situer approximativement un nœud. Définissez votre zone en cherchant l’aéroport le plus proche par son nom dans Réglages > Community : un bandeau réclame ce code jusqu’à ce que vous l’enregistriez, et vous pouvez le masquer si vous préférez ne pas participer. Quitter tient à un seul interrupteur au même endroit, et les bases existantes ne sont jamais inscrites à votre place.
+- **Un seul écran pour les notifications.** Réglages > Notifications regroupe désormais vos appareils enregistrés, ce qui vous prévient par défaut, les exceptions par conversation et l’adresse de contact qu’Apple exige. Les notifications viennent du navigateur : elles arrivent donc même quand l’onglet Meshloom est fermé, et les anciennes alertes affichées dans l’onglet disparaissent. La cloche d’une conversation est maintenant un simple interrupteur, et Meshloom peut aussi vous signaler la première fois qu’il entend un nouveau compagnon, répéteur ou capteur.
+- **Un chercheur de salons qui remonte plus loin.** Il fouille maintenant les paquets de salon déjà stockés mais illisibles, au lieu des seuls paquets arrivés pendant que la page était ouverte. Il essaie aussi une liste fournie de noms de salons MeshCore courants, ainsi que les noms de hashtags partagés par les nœuds proches de votre aéroport quand Community est activé — les noms seulement, jamais les clés.
+- **Une conversation plus lisible.** La colonne des messages est centrée à l’écran et la barre latérale affiche un extrait du dernier message de chaque fil. L’envoi refuse désormais un message trop long pour un paquet radio, au lieu de le tronquer sans le dire.
+
+Aussi : les bases neuves et mises à jour reçoivent un salon `#meshloom`, et un `#remoteterm` existant est laissé en place. Les tuiles sombres de la carte acceptent une clé d’API CARTO optionnelle. Un clic sur un badge d’observateur ne reste plus bloqué sur « Chargement des observateurs… ».
+
+Pour créer une base neuve sans rejoindre Community : `MESHLOOM_COMMUNITY=0`.
+
+---
+
 ## [4.2.1] - 2026-09-13
 
 Observer-reach badges work again when Meshloom Community is on. CoreScope’s `POST /api/packets/observations` is ingest, not a batch query; counts now fall back to per-packet detail instead of hiding every ear.
@@ -5,22 +39,10 @@ Observer-reach badges work again when Meshloom Community is on. CoreScope’s `P
 ### Highlights
 
 - Flood-message observer ears come back with Community enabled, even without a manual CoreScope URL
-- New installs join Meshloom Community by default, with a banner until an IATA airport code is saved. Operators who opt out can dismiss that banner permanently
-
-### Added
-
-- Feature: Airport IATA search in Community settings (nearest-airport helper + IATA directory link)
-- Feature: Opted-out operators can permanently dismiss the Community setup banner (per browser)
-
-### Changed
-
-- Misc: Brand-new databases seed Community on unless `MESHLOOM_COMMUNITY=0`. Existing databases stay as stored
-- Misc: Internal package, backup, and browser-storage identifiers use the `meshloom` prefix. Leftover `remoteterm-` localStorage keys are copied once. New installs seed `#meshloom` instead of `#remoteterm`
 
 ### Fixed
 
 - Bug: Community observer-reach counts treated CoreScope `POST /api/packets/observations` as a query. That route is ingest-only, so the directory call failed and the UI hid every badge. Counts now fall back to `GET` packet detail, the same path hop-name resolution already used
-- Bug: Clicking an observer badge hung on “Loading observers…”. The modal detail path called Stats GET packet detail without the batch fallback the count already used, and a language-function identity change could cancel the in-flight request so the spinner never cleared
 
 ---
 
@@ -31,22 +53,10 @@ Les badges observateurs refonctionnent quand Meshloom Community est activé. Le 
 #### Points forts
 
 - Les oreilles sur les messages flood reviennent avec Community, même sans URL CoreScope manuelle
-- Les installs neuves rejoignent Meshloom Community par défaut, avec une bannière tant qu’un code IATA d’aéroport n’est pas enregistré. Un opérateur qui a opt-out peut masquer cette bannière définitivement
-
-#### Ajouts
-
-- Fonction : recherche d’aéroport IATA dans les réglages Community (aéroport le plus proche + lien annuaire IATA)
-- Fonction : un opérateur opt-out peut masquer définitivement la bannière Community (par navigateur)
-
-#### Changements
-
-- Divers : une base toute neuve seed Community on sauf `MESHLOOM_COMMUNITY=0`. Les bases existantes restent telles quelles
-- Divers : les identifiants internes (paquet, backup, localStorage) passent au préfixe `meshloom`. Les clés `remoteterm-` restantes sont copiées une fois. Les installs neuves seedent `#meshloom` au lieu de `#remoteterm`
 
 #### Corrections
 
 - Bug : les comptages observateurs Community traitaient le `POST /api/packets/observations` CoreScope comme une requête. Cette route est un ingest, l’appel directory échouait, et l’UI cachait chaque badge. Les comptages retombent maintenant sur le détail `GET` par hash, le même chemin que la résolution des nœuds
-- Bug : un clic sur le badge observateur restait bloqué sur « Chargement des observateurs… ». Le détail de la modale appelait le GET Stats sans le fallback batch déjà utilisé pour le count, et un changement d’identité de la fonction i18n pouvait annuler la requête en vol, donc le spinner ne se fermait jamais
 
 ---
 

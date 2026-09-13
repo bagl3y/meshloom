@@ -67,4 +67,8 @@ Below the conversations is a **Tools** section:
 
 The **Add channel/contact** button opens conversation creation: a contact by public key, a channel by key, or a hashtag channel by name.
 
+A new install shows a **Community** banner until an airport IATA code is saved under **Settings > Community**. You can leave Community from that pane. See [Meshloom Community](/en/docs/deep/community/).
+
+**Settings > Notifications** is where Web Push lives (this device, defaults, exceptions, VAPID subject). There are no in-tab desktop alerts.
+
 To send something: [Messages](/en/docs/messages/).

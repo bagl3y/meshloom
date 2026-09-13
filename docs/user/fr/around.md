@@ -44,6 +44,7 @@ Les paquets qu’on n’a pas su déchiffrer ne sont pas perdus pour autant, et 
 - **Trace de route** envoie un paquet de test qui traverse des répéteurs connus et revient à votre radio. Cela mesure une route plutôt que de la déduire.
 - **Recherche de messages** cherche dans tout l’historique stocké, messages directs et salons confondus. Un résultat cliqué ouvre la conversation à cet endroit précis, avec le contexte autour.
 - Les **Statistiques**, dans les réglages, agrègent ce que le nœud a vu : volumes, activité par période, salons les plus actifs.
+- Le **chercheur de salons** essaie des noms hashtag sur les GroupText non déchiffrés — ceux de la session et un échantillon déjà stocké. Les noms Community et une liste MeshCore embarquée sont essayés quand ils sont disponibles. Il fonctionne aussi avec Community coupé.
 
 ## Ça prend de la place
 

@@ -44,6 +44,7 @@ Packets that could not be decrypted are not necessarily lost. They are what make
 - **Route trace** sends a test packet through known repeaters and back to your radio. It measures a route instead of inferring one.
 - **Message search** searches the entire stored history, across direct messages and channels. Clicking a result opens the conversation at that exact point, with surrounding context.
 - **Statistics**, in Settings, aggregate what the node has seen: volumes, activity by period, and the busiest channels.
+- **Channel finder** tries hashtag names against undecrypted GroupText — packets heard in this session and a sample of stored ones. Community names and a bundled MeshCore list are tried when available. It still works with Community off.
 
 ## It takes space
 

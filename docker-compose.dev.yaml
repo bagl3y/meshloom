@@ -14,4 +14,6 @@ services:
       MESHCORE_DATABASE_PATH: "${MESHCORE_DATABASE_PATH}"
       MESHCORE_DISABLE_BOTS: "${MESHCORE_DISABLE_BOTS}"
       MESHCORE_VAPID_SUBJECT: "${MESHCORE_VAPID_SUBJECT}"
+      # New empty data volumes join Community. Set 0 to seed opted out.
+      # MESHLOOM_COMMUNITY: "0"
     restart: unless-stopped

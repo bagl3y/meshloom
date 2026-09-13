@@ -41,7 +41,7 @@ Meshloom also adds what a radio alone cannot: a map of heard nodes, a visualizer
 
 ## What Meshloom is not
 
-It is not firmware: the radio keeps its own, and Meshloom does not replace it. It is not an online service: nothing goes to a third party by default; everything runs on your machine.
+It is not firmware: the radio keeps its own, and Meshloom does not replace it. The server runs on your machine. A **new install** joins [Meshloom Community](/en/docs/deep/community/) unless you opt out — that can publish overheard raw packets to the official Stats hosts. Existing databases stay as they were.
 
 One thing to know before starting: **Meshloom takes control of the radio’s contacts and rooms.** It loads, unloads, and replaces them according to what it considers useful. That is how it gets past the device’s memory limit. It is a poor fit if you often switch radios and expect each device to keep its own favourites.
 

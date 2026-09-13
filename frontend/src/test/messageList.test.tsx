@@ -815,7 +815,10 @@ describe('MessageList Open reactions and replies', () => {
 
     await user.click(screen.getByTestId('message-react-trigger'));
 
-    expect(screen.getByTestId('message-quick-reactions')).toBeInTheDocument();
+    const picker = screen.getByTestId('message-quick-reactions');
+    expect(picker).toBeInTheDocument();
+    expect(picker).toHaveClass('right-0');
+    expect(picker).not.toHaveClass('left-0');
   });
 
   it('does not emit a keyless tapback when reacting', async () => {

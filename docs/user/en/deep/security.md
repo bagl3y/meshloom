@@ -46,7 +46,9 @@ When enabled, `GET /api/radio/private-key` returns the key as hexadecimal. Enabl
 
 ## What fanout sends out
 
-Community MQTT is locked to raw packets and never carries decoded conversation text. Private MQTT, webhooks, Apprise, and SQS can carry full message text according to their scope. [Push notifications](/en/docs/deep/push/) are the only feature requiring Internet egress.
+Community MQTT (a Fanout module you configure) is locked to raw packets and never carries decoded conversation text. Private MQTT, webhooks, Apprise, and SQS can carry full message text according to their scope.
+
+Internet egress is required for [push notifications](/en/docs/deep/push/) and, when joined, [Meshloom Community](/en/docs/deep/community/) (raw-packet publish, directory, hashtag-name share). An install that opts out of both can stay isolated.
 
 ## A reasonable posture
 

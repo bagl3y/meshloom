@@ -35,6 +35,8 @@ Channel messages often come back several times: every repeater relaying one brin
 
 A channel message you have just sent keeps a resend button for thirty seconds, in case it clearly reached nobody.
 
+Send is blocked when the draft would overflow the radio packet. Meshloom no longer truncates an over-limit message on send.
+
 ## Hashtag channels
 
 Remembering a 32-character hexadecimal key for a conversation is inconvenient. Hashtag channels solve that: the key is **calculated from the name**.

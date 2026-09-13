@@ -41,7 +41,7 @@ Meshloom ajoute aussi ce qu’une radio seule ne peut pas faire : une carte des 
 
 ## Ce que Meshloom n’est pas
 
-Ce n’est pas un firmware : la radio garde le sien, Meshloom ne le remplace pas. Ce n’est pas un service en ligne : rien ne part chez un tiers par défaut, tout tourne sur votre machine.
+Ce n’est pas un firmware : la radio garde le sien, Meshloom ne le remplace pas. Le serveur tourne sur votre machine. Une **installation neuve** rejoint [Meshloom Community](/docs/deep/community/) sauf opt-out : des paquets bruts entendus peuvent alors partir vers les hôtes Stats officiels. Les bases existantes restent telles quelles.
 
 Et un point à connaître avant de commencer : **Meshloom prend le contrôle des contacts et des salons de la radio.** Il les charge, les décharge et les remplace selon ce qu’il juge utile. C’est ce qui permet de dépasser la mémoire de l’appareil. En revanche, c’est un mauvais choix si vous changez souvent de radio en comptant sur l’appareil pour garder ses propres favoris de son côté.
 

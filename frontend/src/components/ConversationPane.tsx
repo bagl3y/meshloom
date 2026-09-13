@@ -327,7 +327,7 @@ export function ConversationPane({
       )}
       {showRoomChat && <div data-toast-anchor="conversation" aria-hidden="true" />}
       {showRoomChat && (
-        <div className="mx-auto flex w-full max-w-[42rem] flex-1 min-h-0 flex-col">
+        <div className="mx-auto flex w-full max-w-none flex-1 min-h-0 flex-col lg:max-w-[52rem] 2xl:max-w-[64rem]">
           <MessageList
             key={activeConversation.id}
             messages={messages}

@@ -5,7 +5,7 @@ level: deep
 order: 16
 ---
 
-Fanout redistributes mesh events to other systems: private MQTT, community MQTT, bots, webhooks, Apprise, SQS, and map uploads. Configurations live in `fanout_configs`.
+Fanout redistributes mesh events to other systems: private MQTT, community MQTT, bots, webhooks, Apprise, SQS, and map uploads. Configurations live in `fanout_configs`. [Meshloom Community](/en/docs/deep/community/) is a separate join state, not a Fanout row.
 
 | Method | Endpoint | Effect |
 |---------|----------|-------|

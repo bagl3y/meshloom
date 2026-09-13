@@ -64,9 +64,10 @@ MESHLOOM_DATA_PATH=/opt/docker/meshloom/data
 MESHCORE_DATABASE_PATH=data/meshcore.db
 MESHCORE_DISABLE_BOTS=false
 MESHCORE_VAPID_SUBJECT=mailto:you@example.com
+# MESHLOOM_COMMUNITY=0
 ```
 
-`MESHCORE_VAPID_SUBJECT` n’est qu’un repli si le sujet VAPID de Réglages → Notifications est vide. Ne validez pas de vraies adresses VAPID dans le dépôt. L’hôte et le port radio se règlent dans l’interface.
+`MESHCORE_VAPID_SUBJECT` n’est qu’un repli si le sujet VAPID de Réglages → Notifications est vide. Ne validez pas de vraies adresses VAPID dans le dépôt. L’hôte et le port radio se règlent dans l’interface. Un volume de données vide rejoint Community sauf `MESHLOOM_COMMUNITY=0`. Voir [Meshloom Community](/docs/deep/community/).
 
 ## Depuis un checkout
 

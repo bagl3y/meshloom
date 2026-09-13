@@ -44,6 +44,9 @@ Tant que `radio_transport` n’est pas défini, la radio reste en pause. Ne déf
 | `MESHCORE_DATABASE_PATH` | `data/meshcore.db` | Emplacement de la base SQLite |
 | `MESHCORE_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `MESHCORE_VAPID_SUBJECT` | `mailto:noreply@meshcore.local` | Repli du sujet VAPID si `app_settings.vapid_subject` est vide |
+| `MESHLOOM_COMMUNITY` | *(on pour une base neuve)* | Seed Community sur une base toute neuve. Absent ou `1` = on ; `0` / `false` / `off` = opt-out. Les bases existantes ne sont jamais basculées |
+| `MESHLOOM_COMMUNITY_IATA` | *(vide)* | Code IATA à 3 lettres optionnel à seeder sur une base neuve |
+| `MESHLOOM_COMMUNITY_LOCKED` | `false` | À `1`, l’interface ne peut pas activer Community |
 
 Le sujet VAPID se règle d’abord dans **Réglages → Notifications**. `MESHCORE_VAPID_SUBJECT` n’est utilisé que si ce champ est vide. Apple exige un `mailto:` ou un `https:` réel : APNs rejette le domaine `.local` par défaut avec `403 BadJwtToken`. Google FCM l’accepte. Voir [Notifications push](/docs/deep/push/) et la [documentation Apple](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers).
 
@@ -96,6 +99,6 @@ Ce qui suit vit dans `app_settings` et se pilote depuis l’interface ou `PATCH 
 - `push_defaults`, `push_conversation_overrides`, `vapid_subject` — règles et sujet VAPID du push web (l’ancien `push_conversations` n’est plus la surface de préférence)
 - `vapid_private_key`, `vapid_public_key` — paire VAPID générée au premier démarrage
 
-Les intégrations MQTT, bots, webhooks, Apprise et SQS ne sont pas dans `app_settings` : elles vivent dans la table `fanout_configs` et se gèrent via `/api/fanout`. Voir [Fanout](/docs/deep/fanout/).
+Les intégrations MQTT, bots, webhooks, Apprise et SQS ne sont pas dans `app_settings` : elles vivent dans la table `fanout_configs` et se gèrent via `/api/fanout`. L’état Community est stocké sur `app_settings` mais n’est pas dans `GET` / `PATCH /api/settings` : utiliser `/api/community`. Voir [Fanout](/docs/deep/fanout/) et [Meshloom Community](/docs/deep/community/).
 
 Les conséquences radio de `max_radio_contacts`, `flood_scope` et `path_hash_mode` sont détaillées dans [Radio, contacts et salons](/docs/deep/radio/).

@@ -13,7 +13,7 @@ There are no in-tab desktop notifications. Web Push is the only notification sur
 
 **HTTPS.** A service worker requires a secure context. A self-signed certificate is enough; see [HTTPS](/en/docs/deep/https/).
 
-**Outbound Internet from the server.** Push services are external: Google FCM, Mozilla autopush, or APNs. This is the only Meshloom feature that needs Internet egress.
+**Outbound Internet from the server.** Push services are external: Google FCM, Mozilla autopush, or APNs. [Meshloom Community](/en/docs/deep/community/) also needs egress when it is on.
 
 ## VAPID keys
 

@@ -13,6 +13,9 @@ These are intended for diagnosing or working around radios that behave oddly, or
 | `MESHCORE_LOAD_WITH_AUTOEVICT` | false | Enable autoevict mode for contact loading ([docs](#autoevict-mode)) |
 | `__CLOWNTOWN_DO_CLOCK_WRAPAROUND` | false | Highly experimental: if the radio clock is ahead of system time, try forcing the clock to `0xFFFFFFFF`, wait for uint32 wraparound, and then retry normal time sync before falling back to reboot ([docs](#clock-wraparound)) |
 | `MESHCORE_ENABLE_LOCAL_PRIVATE_KEY_EXPORT` | false | Enable `GET /api/radio/private-key` to return the in-memory private key as hex for backup or migration. Only enable on a trusted network. Import via `PUT /api/radio/private-key` is always available. ([docs](#private-key-export)) |
+| `MESHLOOM_COMMUNITY` | on for new DBs | Seed Meshloom Community on a brand-new database. Unset or `1` seeds on; `0` / `false` / `off` seeds opted out. Existing databases are never flipped. |
+| `MESHLOOM_COMMUNITY_IATA` | *(none)* | Optional 3-letter IATA to seed on a brand-new database |
+| `MESHLOOM_COMMUNITY_LOCKED` | false | When `1`, the UI cannot enable Community |
 
 By default the app relies on radio events plus MeshCore auto-fetch for incoming messages, and also runs a low-frequency hourly audit poll. That audit checks both:
 

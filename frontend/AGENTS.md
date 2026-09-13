@@ -93,6 +93,9 @@ frontend/src/
 │   ├── textReplace.ts          # Shared message text substitution helpers
 │   ├── pathHopWidthPreference.ts # LocalStorage persistence for hop-width display toggle
 │   ├── richPayloadPreference.ts  # LocalStorage persistence for rich payload rendering toggle
+│   ├── hashtagKey.ts             # Hashtag name → channel key
+│   ├── tryHashtagCandidates.ts   # Try names against a GroupText packet
+│   ├── communityBannerPreference.ts # Per-browser Community banner dismiss
 │   ├── visualizerUtils.ts      # 3D visualizer node types, colors, particles
 │   ├── visualizerSettings.ts   # LocalStorage persistence for visualizer options
 │   ├── a11y.ts                 # Keyboard accessibility helper
@@ -129,7 +132,8 @@ frontend/src/
 │   ├── PacketVisualizer3D.tsx
 │   ├── PathModal.tsx
 │   ├── PathRouteMap.tsx
-│   ├── CrackerPanel.tsx
+│   ├── CrackerPanel.tsx        # Hashtag finder: live + stored GroupText, Community/bundled names
+│   ├── CommunitySetupBanner.tsx # IATA / opt-out banner until Community setup is done
 │   ├── BotCodeEditor.tsx
 │   ├── ContactAvatar.tsx
 │   ├── ContactInfoPane.tsx     # Contact detail sheet (stats, name history, paths)
@@ -152,7 +156,7 @@ frontend/src/
 │   │   ├── SettingsRadioSection.tsx      # Name, keys, advert interval, max contacts, radio preset, freq/bw/sf/cr, txPower, lat/lon, reboot, mesh discovery
 │   │   ├── SettingsLocalSection.tsx      # Browser-local settings: theme, relative font scale, local label, reopen last conversation
 │   │   ├── SettingsNotificationsSection.tsx # Web Push: this device, defaults, exceptions, VAPID subject
-│   │   ├── SettingsCommunitySection.tsx  # Meshloom Community / CoreScope directory
+│   │   ├── SettingsCommunitySection.tsx  # Meshloom Community join, IATA, contribution stats
 │   │   ├── SettingsFanoutSection.tsx     # Fanout integrations: MQTT, bots, config CRUD
 │   │   ├── SettingsRadioAppSection.tsx    # Radio-App Management: tracked telemetry, contact management, blocked lists
 │   │   ├── SettingsDatabaseSection.tsx   # Database: DB size, storage cleanup, auto-decrypt

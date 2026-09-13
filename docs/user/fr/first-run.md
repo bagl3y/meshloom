@@ -67,4 +67,8 @@ Sous les conversations, une section **Outils** :
 
 Le bouton **Ajouter canal/contact** ouvre la création d’une conversation : un contact par sa clé publique, un salon par sa clé, ou un salon hashtag par son nom.
 
+Une install neuve affiche une bannière **Community** tant qu’un code IATA d’aéroport n’est pas enregistré dans **Réglages > Community**. On peut quitter Community depuis cet onglet. Voir [Meshloom Community](/docs/deep/community/).
+
+**Réglages > Notifications** est l’endroit du Web Push (cet appareil, défauts, exceptions, sujet VAPID). Il n’y a plus d’alertes bureau dans l’onglet.
+
 Pour envoyer quelque chose : [Messages](/docs/messages/).

@@ -5,7 +5,7 @@ level: deep
 order: 16
 ---
 
-Le fanout est le bus qui redistribue les événements du mesh vers l’extérieur. Toutes les intégrations passent par lui : MQTT privé, MQTT communautaire, bots, webhooks, Apprise, SQS, et l’envoi de publicités vers la carte publique.
+Le fanout est le bus qui redistribue les événements du mesh vers l’extérieur. Toutes les intégrations passent par lui : MQTT privé, MQTT communautaire, bots, webhooks, Apprise, SQS, et l’envoi de publicités vers la carte publique. [Meshloom Community](/docs/deep/community/) est un état d’adhésion séparé, pas une ligne Fanout.
 
 Chaque intégration est une configuration stockée en base, dans la table `fanout_configs`. Elles se gèrent depuis Réglages > Intégrations, ou via l’API :
 

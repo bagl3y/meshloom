@@ -85,6 +85,7 @@ app/
     ├── statistics.py
     ├── directory.py
     ├── locate.py
+    ├── community.py         # Meshloom Community join, IATA, hashtag names, Stats proxies
     ├── push.py
     └── ws.py
 ```
@@ -312,6 +313,7 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 
 ### Packets
 - `GET /packets/undecrypted/count`
+- `GET /packets/undecrypted/group-text-samples` — bounded newest-first sample of stored undecrypted GroupText for the channel finder
 - `POST /packets/region-backfill` — re-resolve region scope for stored channel messages that still have a retained raw packet (region is otherwise only tagged at ingest); returns `{scanned, scoped, named}`
 - `GET /packets/{packet_id}` — fetch one stored raw packet by row ID for on-demand inspection
 - `POST /packets/decrypt/historical`
@@ -364,6 +366,17 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 - `GET /push/preferences` — defaults, conversation overrides, and stored VAPID subject
 - `PATCH /push/preferences` — update defaults and/or VAPID subject
 - `PUT /push/preferences/conversations/{key}` — set (`true`/`false`) or clear (`null`) one override
+
+### Community
+- `GET /community` — join state (enabled, IATA, locked)
+- `PATCH /community` — enable/disable and set IATA / host overrides
+- `GET /community/airports` — IATA airport search
+- `GET /community/me/stats` — this node's contribution stats
+- `PUT /community/me/iata` — bind IATA on the Stats host
+- `POST /community/me/iata/override` — confirm an IATA concordance override
+- `GET /community/stats` — public community stats
+- `GET /community/iata/{code}/hashtags` — shared hashtag names for an IATA code
+- `PUT /community/me/hashtags` — publish local/discovered hashtag names (names only)
 
 ### WebSocket
 - `WS /ws`
@@ -457,6 +470,7 @@ tests/
 ├── test_channel_sender_backfill.py # Sender-key backfill uniqueness rules for channel messages
 ├── test_channels_router.py     # Channels router endpoints
 ├── test_community_mqtt.py      # Community MQTT publisher (JWT, packet format, hash, broadcast)
+├── test_meshloom_community.py  # Meshloom Community join, IATA seed, hashtag share, Stats proxies
 ├── test_config.py              # Configuration validation
 ├── test_contact_reconciliation_service.py # Prefix/contact reconciliation service helpers
 ├── test_contacts_router.py     # Contacts router endpoints

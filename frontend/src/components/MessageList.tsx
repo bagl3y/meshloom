@@ -1768,7 +1768,10 @@ export function MessageList({
                         <div
                           data-testid="message-quick-reactions"
                           data-react-menu={msg.id}
-                          className="absolute bottom-[calc(100%+0.25rem)] left-0 z-50 flex items-center rounded-full border border-border bg-card px-0.5 py-0.5 shadow-lg"
+                          className={cn(
+                            'absolute bottom-full z-50 mb-1 flex items-center rounded-full border border-border bg-card px-0.5 py-0.5 shadow-lg',
+                            msg.outgoing ? 'left-0' : 'right-0'
+                          )}
                         >
                           {QUICK_EMOJIS.map((emoji) => (
                             <Button

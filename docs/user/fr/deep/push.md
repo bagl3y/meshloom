@@ -15,7 +15,7 @@ Il n’y a plus de notifications de bureau dans l’onglet. Seul le Web Push est
 
 **Un accès Internet sortant depuis le serveur.** Les notifications ne partent pas de Meshloom vers le navigateur : elles passent par le service de push du navigateur — Google FCM pour Chrome et Android, Mozilla autopush pour Firefox, APNs pour Safari et iOS. Le serveur doit pouvoir les joindre.
 
-C’est la seule fonctionnalité de Meshloom qui exige une sortie Internet. Le reste fonctionne sur un réseau isolé.
+[Meshloom Community](/docs/deep/community/) exige aussi une sortie Internet une fois activé. Sans Community ni push, le reste peut tourner sur un réseau isolé.
 
 ## Clés VAPID
 

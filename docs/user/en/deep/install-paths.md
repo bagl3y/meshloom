@@ -58,9 +58,10 @@ MESHLOOM_DATA_PATH=/opt/docker/meshloom/data
 MESHCORE_DATABASE_PATH=data/meshcore.db
 MESHCORE_DISABLE_BOTS=false
 MESHCORE_VAPID_SUBJECT=mailto:you@example.com
+# MESHLOOM_COMMUNITY=0
 ```
 
-`MESHCORE_VAPID_SUBJECT` is only the fallback when the Settings → Notifications VAPID subject is empty. Do not commit real VAPID addresses. Radio host and port are set in the web UI.
+`MESHCORE_VAPID_SUBJECT` is only the fallback when the Settings → Notifications VAPID subject is empty. Do not commit real VAPID addresses. Radio host and port are set in the web UI. A new empty data volume joins Community unless `MESHLOOM_COMMUNITY=0`. See [Meshloom Community](/en/docs/deep/community/).
 
 ## From a checkout
 
