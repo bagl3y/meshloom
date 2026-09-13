@@ -920,6 +920,20 @@ export interface PushSubscriptionInfo {
   failure_count: number;
 }
 
+export interface PushDefaults {
+  new_contact: boolean;
+  new_dm: boolean;
+  advert_repeater: boolean;
+  advert_companion: boolean;
+  advert_sensor: boolean;
+}
+
+export interface PushPreferences {
+  defaults: PushDefaults;
+  overrides: Record<string, boolean>;
+  vapid_subject: string;
+}
+
 export interface TraceResponse {
   remote_snr: number | null;
   local_snr: number | null;

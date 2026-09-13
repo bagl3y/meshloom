@@ -40,9 +40,6 @@ interface ConversationPaneProps {
   channels: Channel[];
   config: RadioConfig | null;
   health: HealthStatus | null;
-  notificationsSupported: boolean;
-  notificationsEnabled: boolean;
-  notificationsPermission: NotificationPermission | 'unsupported';
   messages: Message[];
   preSorted?: boolean;
   messagesLoading: boolean;
@@ -82,7 +79,6 @@ interface ConversationPaneProps {
   onDismissUnreadMarker: () => void;
   onSendMessage: (text: string) => Promise<void>;
   onMessageDeleted?: (messageId: number) => void;
-  onToggleNotifications: () => void;
   pushSupported?: boolean;
   pushSubscribed?: boolean;
   pushEnabledForConversation?: boolean;
@@ -127,9 +123,6 @@ export function ConversationPane({
   channels,
   config,
   health,
-  notificationsSupported,
-  notificationsEnabled,
-  notificationsPermission,
   messages,
   preSorted,
   messagesLoading,
@@ -163,12 +156,9 @@ export function ConversationPane({
   onDismissUnreadMarker,
   onSendMessage,
   onMessageDeleted,
-  onToggleNotifications,
   pushSupported,
-  pushSubscribed,
   pushEnabledForConversation,
   onTogglePush,
-  onOpenPushSettings,
   trackedTelemetryRepeaters,
   onToggleTrackedTelemetry,
   repeaterAutoLoginKey,
@@ -281,15 +271,11 @@ export function ConversationPane({
           key={activeConversation.id}
           conversation={activeConversation}
           contacts={contacts}
-          notificationsSupported={notificationsSupported}
-          notificationsEnabled={notificationsEnabled}
-          notificationsPermission={notificationsPermission}
           radioLat={config?.lat ?? null}
           radioLon={config?.lon ?? null}
           radioName={config?.name ?? null}
           onTrace={onTrace}
           onPathDiscovery={onPathDiscovery}
-          onToggleNotifications={onToggleNotifications}
           onToggleFavorite={onToggleFavorite}
           onDeleteContact={onDeleteContact}
           onOpenContactInfo={onOpenContactInfo}
@@ -311,17 +297,11 @@ export function ConversationPane({
         contacts={contacts}
         channels={channels}
         config={config}
-        notificationsSupported={notificationsSupported}
-        notificationsEnabled={notificationsEnabled}
-        notificationsPermission={notificationsPermission}
         pushSupported={pushSupported}
-        pushSubscribed={pushSubscribed}
         pushEnabledForConversation={pushEnabledForConversation}
         onTogglePush={onTogglePush}
-        onOpenPushSettings={onOpenPushSettings}
         onTrace={onTrace}
         onPathDiscovery={onPathDiscovery}
-        onToggleNotifications={onToggleNotifications}
         onToggleFavorite={onToggleFavorite}
         onToggleMute={onToggleMute}
         onSetChannelFloodScopeOverride={onSetChannelFloodScopeOverride}

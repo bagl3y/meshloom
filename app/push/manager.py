@@ -1,17 +1,23 @@
 """Web Push dispatch manager.
 
-Checks the global push-enabled conversation list (stored in app_settings)
-and sends push notifications to ALL registered devices when a matching
-incoming message arrives.
+Conversation enablement uses ``policy.conversation_is_enabled`` plus a
+separate muted-channel circuit breaker. First-seen contact alerts are
+sent out-of-band to subscriptions and never go through WebSocket.
 """
+
+from __future__ import annotations
 
 import asyncio
 import json
 import logging
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from pywebpush import WebPushException
 
+from app.channel_constants import is_public_channel_key
+from app.push.policy import conversation_is_enabled
 from app.push.send import send_push
 from app.push.vapid import get_vapid_claims, get_vapid_private_key
 from app.repository.channels import ChannelRepository
@@ -32,13 +38,51 @@ def _state_key_for_message(data: dict) -> str:
     return f"channel-{conversation_key}"
 
 
+def _first_seen_titles(data: dict, lang: str) -> tuple[str, str]:
+    name = (data.get("name") or "").strip()
+    contact_type = int(data.get("contact_type") or data.get("type") or 0)
+    pubkey = str(data.get("public_key") or "")
+    label = name or (pubkey[:12] if pubkey else "")
+
+    if lang == "en":
+        if contact_type == 2:
+            title = f"New repeater: {label}" if label else "New repeater"
+        elif contact_type == 4:
+            title = f"New sensor: {label}" if label else "New sensor"
+        else:
+            title = f"New contact: {label}" if label else "New contact"
+        body = f"{label} appeared on the mesh" if label else "First seen on the mesh"
+    else:
+        if contact_type == 2:
+            title = f"Nouveau répéteur : {label}" if label else "Nouveau répéteur"
+        elif contact_type == 4:
+            title = f"Nouveau capteur : {label}" if label else "Nouveau capteur"
+        else:
+            title = f"Nouveau contact : {label}" if label else "Nouveau contact"
+        body = f"{label} est apparu sur le mesh" if label else "Première apparition sur le mesh"
+    return title, body
+
+
 def _build_payload(data: dict, language: str = "fr") -> str:
-    """Build the push notification JSON payload from a message event."""
+    """Build the push notification JSON payload from a message or first-seen event."""
+    lang = language if language in ("fr", "en") else "fr"
+
+    if data.get("event") == "first_seen":
+        title, body = _first_seen_titles(data, lang)
+        pubkey = str(data.get("public_key") or "")
+        return json.dumps(
+            {
+                "title": title,
+                "body": body,
+                "tag": f"meshcore-first-seen-{pubkey}",
+                "url_hash": f"#contact/{pubkey}" if pubkey else "",
+            }
+        )
+
     msg_type = data.get("type", "")
     text = data.get("text", "")
     sender_name = data.get("sender_name") or ""
     channel_name = data.get("channel_name") or ""
-    lang = language if language in ("fr", "en") else "fr"
 
     if msg_type == "PRIV":
         if lang == "en":
@@ -98,26 +142,66 @@ class PushManager:
         if data.get("outgoing"):
             return
 
-        # Check the global conversation list
         state_key = _state_key_for_message(data)
+        msg_type = data.get("type", "")
+        conversation_key = str(data.get("conversation_key") or "")
+
         try:
-            push_conversations = await AppSettingsRepository.get_push_conversations()
+            defaults = await AppSettingsRepository.get_push_defaults()
+            overrides = await AppSettingsRepository.get_push_conversation_overrides()
         except Exception:
-            logger.debug("Push dispatch: failed to load push_conversations", exc_info=True)
+            logger.debug("Push dispatch: failed to load push preferences", exc_info=True)
             return
 
-        if state_key not in push_conversations:
-            return
-
-        # Skip muted channels
-        if data.get("type") == "CHAN" and data.get("conversation_key"):
+        is_hashtag = False
+        is_public = False
+        channel = None
+        if msg_type == "CHAN" and conversation_key:
+            is_public = is_public_channel_key(conversation_key)
             try:
-                ch = await ChannelRepository.get_by_key(data["conversation_key"])
-                if ch and ch.muted:
-                    return
+                channel = await ChannelRepository.get_by_key(conversation_key)
             except Exception:
-                logger.debug("Push dispatch: failed to check channel mute state", exc_info=True)
+                logger.debug("Push dispatch: failed to load channel", exc_info=True)
+            if channel is not None:
+                is_hashtag = bool(channel.is_hashtag)
 
+        if not conversation_is_enabled(
+            state_key=state_key,
+            message_type=msg_type,
+            defaults=defaults,
+            overrides=overrides,
+            is_hashtag=is_hashtag,
+            is_public=is_public,
+        ):
+            return
+
+        # Muted-channel circuit breaker — separate from conversation policy.
+        if msg_type == "CHAN" and channel is not None and channel.muted:
+            return
+
+        await self._send_to_all_subscriptions(
+            lambda sub: _build_payload(data, sub.get("language") or "fr")
+        )
+
+    async def dispatch_event(self, data: dict) -> None:
+        """Send a push payload to all subscriptions. Not a WebSocket event."""
+        await self._send_to_all_subscriptions(
+            lambda sub: _build_payload(data, sub.get("language") or "fr")
+        )
+
+    async def dispatch_first_seen(self, contact: Mapping[str, Any]) -> None:
+        """Send a first-seen contact alert to all subscriptions (no WebSocket)."""
+        public_key = str(contact.get("public_key") or "")
+        await self.dispatch_event(
+            {
+                "event": "first_seen",
+                "public_key": public_key,
+                "name": contact.get("name") or "",
+                "contact_type": contact.get("type", 0),
+            }
+        )
+
+    async def _send_to_all_subscriptions(self, payload_for_sub: Callable[[dict], str]) -> None:
         try:
             subs = await PushSubscriptionRepository.get_all()
         except Exception:
@@ -133,18 +217,12 @@ class PushManager:
             return
 
         results = await asyncio.gather(
-            *(
-                self._send_one(
-                    sub,
-                    _build_payload(data, sub.get("language") or "fr"),
-                    vapid_key,
-                )
-                for sub in subs
-            ),
+            *(self._send_one(sub, payload_for_sub(sub), vapid_key) for sub in subs),
             return_exceptions=True,
         )
+        await self._record_outcomes(results)
 
-        # Batch-update all delivery outcomes in one transaction.
+    async def _record_outcomes(self, results: list[Any]) -> None:
         success_ids: list[str] = []
         failure_ids: list[str] = []
         remove_ids: list[str] = []

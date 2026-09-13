@@ -22,6 +22,7 @@ import {
 
 import { SettingsRadioSection } from './settings/SettingsRadioSection';
 import { SettingsLocalSection } from './settings/SettingsLocalSection';
+import { SettingsNotificationsSection } from './settings/SettingsNotificationsSection';
 import { SettingsCommunitySection } from './settings/SettingsCommunitySection';
 import { SettingsRadioAppSection } from './settings/SettingsRadioAppSection';
 import { SettingsFanoutSection } from './settings/SettingsFanoutSection';
@@ -121,6 +122,7 @@ export function SettingsModal(props: SettingsModalProps) {
   const [expandedSections, setExpandedSections] = useState<Record<SettingsSection, boolean>>({
     radio: false,
     local: false,
+    notifications: false,
     community: false,
     'radio-app': false,
     fanout: false,
@@ -245,6 +247,17 @@ export function SettingsModal(props: SettingsModalProps) {
           {isSectionVisible('local') && (
             <SettingsLocalSection
               onLocalLabelChange={onLocalLabelChange}
+              className={sectionContentClass}
+            />
+          )}
+        </section>
+      )}
+
+      {shouldRenderSection('notifications') && (
+        <section className={sectionWrapperClass}>
+          {renderSectionHeader('notifications')}
+          {isSectionVisible('notifications') && (
+            <SettingsNotificationsSection
               contacts={contacts}
               channels={channels}
               className={sectionContentClass}

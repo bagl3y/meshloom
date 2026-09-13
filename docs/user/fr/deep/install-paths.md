@@ -66,7 +66,7 @@ MESHCORE_DISABLE_BOTS=false
 MESHCORE_VAPID_SUBJECT=mailto:you@example.com
 ```
 
-Ne validez pas de vraies adresses VAPID dans le dépôt. L’hôte et le port radio se règlent dans l’interface.
+`MESHCORE_VAPID_SUBJECT` n’est qu’un repli si le sujet VAPID de Réglages → Notifications est vide. Ne validez pas de vraies adresses VAPID dans le dépôt. L’hôte et le port radio se règlent dans l’interface.
 
 ## Depuis un checkout
 

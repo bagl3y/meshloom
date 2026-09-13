@@ -41,6 +41,8 @@ import type {
   RadioTraceResponse,
   RadioDiscoveryTarget,
   PathDiscoveryResponse,
+  PushDefaults,
+  PushPreferences,
   PushSubscriptionInfo,
   ResendChannelMessageResponse,
   RepeaterAclResponse,
@@ -690,10 +692,15 @@ export const api = {
     fetchJson<{ deleted: boolean }>(`/push/subscriptions/${id}`, { method: 'DELETE' }),
   testPushSubscription: (id: string) =>
     fetchJson<{ status: string }>(`/push/subscriptions/${id}/test`, { method: 'POST' }),
-  getPushConversations: () => fetchJson<string[]>('/push/conversations'),
-  togglePushConversation: (key: string) =>
-    fetchJson<string[]>('/push/conversations/toggle', {
-      method: 'POST',
-      body: JSON.stringify({ key }),
+  getPushPreferences: () => fetchJson<PushPreferences>('/push/preferences'),
+  patchPushPreferences: (partial: { defaults?: Partial<PushDefaults>; vapid_subject?: string }) =>
+    fetchJson<PushPreferences>('/push/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify(partial),
+    }),
+  setPushConversationOverride: (key: string, override: boolean | null) =>
+    fetchJson<PushPreferences>(`/push/preferences/conversations/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ override }),
     }),
 };

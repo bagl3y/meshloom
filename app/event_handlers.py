@@ -275,7 +275,7 @@ async def on_new_contact(event: "Event") -> None:
     # the air (adverts, messages, path updates). Contacts synced from the
     # radio's internal DB without any RF activity stay NULL until a real
     # RF observation fills them in.
-    await ContactRepository.upsert(contact_upsert)
+    inserted = await ContactRepository.upsert_reporting_insert(contact_upsert)
     promoted_keys = await promote_prefix_contacts_for_contact(
         public_key=public_key,
         log=logger,
@@ -309,6 +309,16 @@ async def on_new_contact(event: "Event") -> None:
                     "contact": db_contact.model_dump(),
                 },
             )
+
+    if inserted:
+        from app.push.first_seen import maybe_notify_contact_first_seen
+
+        notify_contact = db_contact or Contact(**contact_upsert.model_dump(exclude_none=True))
+        await maybe_notify_contact_first_seen(
+            notify_contact,
+            origin="radio_event",
+            promoted_keys=promoted_keys,
+        )
 
 
 async def on_ack(event: "Event") -> None:

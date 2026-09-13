@@ -5,18 +5,34 @@ import { usePushSubscription } from '../hooks/usePushSubscription';
 import i18n from '../i18n';
 import fEn from '../i18n/locales/slices/f.en.json';
 import fFr from '../i18n/locales/slices/f.fr.json';
+import { PUBLIC_CHANNEL_KEY } from '../utils/publicChannel';
 
 i18n.addResourceBundle('en', 'translation', fEn, true, true);
 i18n.addResourceBundle('fr', 'translation', fFr, true, true);
 
+const ALL_ON_DEFAULTS = {
+  new_contact: true,
+  new_dm: true,
+  advert_repeater: true,
+  advert_companion: true,
+  advert_sensor: true,
+};
+
+const EMPTY_PREFERENCES = {
+  defaults: ALL_ON_DEFAULTS,
+  overrides: {} as Record<string, boolean>,
+  vapid_subject: '',
+};
+
 const mocks = vi.hoisted(() => ({
   api: {
     getPushSubscriptions: vi.fn(),
-    getPushConversations: vi.fn(),
+    getPushPreferences: vi.fn(),
     getVapidPublicKey: vi.fn(),
     pushSubscribe: vi.fn(),
     deletePushSubscription: vi.fn(),
-    togglePushConversation: vi.fn(),
+    setPushConversationOverride: vi.fn(),
+    patchPushPreferences: vi.fn(),
     testPushSubscription: vi.fn(),
   },
   toast: {
@@ -117,7 +133,7 @@ describe('usePushSubscription', () => {
       },
     });
 
-    mocks.api.getPushConversations.mockResolvedValue([]);
+    mocks.api.getPushPreferences.mockResolvedValue({ ...EMPTY_PREFERENCES, overrides: {} });
     mocks.api.getPushSubscriptions.mockResolvedValue([
       {
         id: 'sub-1',
@@ -235,5 +251,110 @@ describe('usePushSubscription', () => {
       language: expect.any(String),
     });
     expect(result.current.currentSubscriptionId).toBe('sub-2');
+  });
+
+  it('loads preferences on mount and evaluates conversations via policy', async () => {
+    const { result } = renderHook(() => usePushSubscription());
+
+    await waitFor(() => {
+      expect(result.current.preferences).toEqual(EMPTY_PREFERENCES);
+    });
+
+    expect(result.current.overrideEntries).toEqual([]);
+    expect(
+      result.current.isConversationPushEnabled(`channel-${PUBLIC_CHANNEL_KEY}`, {
+        messageType: 'CHAN',
+        isPublic: true,
+      })
+    ).toBe(true);
+    expect(
+      result.current.isConversationPushEnabled('channel-dd'.padEnd(16 + 8, 'd'), {
+        messageType: 'CHAN',
+      })
+    ).toBe(false);
+    expect(
+      result.current.isConversationPushEnabled('contact-aa'.padEnd(8 + 64, 'a'), {
+        messageType: 'PRIV',
+      })
+    ).toBe(true);
+  });
+
+  it('writes a conversation override and exposes override keys only', async () => {
+    const key = 'channel-private';
+    const updated = {
+      defaults: ALL_ON_DEFAULTS,
+      overrides: { [key]: true },
+      vapid_subject: '',
+    };
+    mocks.api.setPushConversationOverride.mockResolvedValue(updated);
+
+    const { result } = renderHook(() => usePushSubscription());
+    await waitFor(() => {
+      expect(result.current.preferences).not.toBeNull();
+    });
+
+    await act(async () => {
+      await result.current.setConversationOverride(key, true);
+    });
+
+    expect(mocks.api.setPushConversationOverride).toHaveBeenCalledWith(key, true);
+    expect(result.current.preferences).toEqual(updated);
+    expect(result.current.overrideEntries).toEqual([key]);
+    expect(result.current.isConversationPushEnabled(key, { messageType: 'CHAN' })).toBe(true);
+  });
+
+  it('clears a conversation override with null', async () => {
+    const key = `channel-${PUBLIC_CHANNEL_KEY}`;
+    mocks.api.getPushPreferences.mockResolvedValue({
+      defaults: ALL_ON_DEFAULTS,
+      overrides: { [key]: false },
+      vapid_subject: '',
+    });
+    mocks.api.setPushConversationOverride.mockResolvedValue(EMPTY_PREFERENCES);
+
+    const { result } = renderHook(() => usePushSubscription());
+    await waitFor(() => {
+      expect(result.current.overrideEntries).toEqual([key]);
+    });
+
+    await act(async () => {
+      await result.current.setConversationOverride(key, null);
+    });
+
+    expect(mocks.api.setPushConversationOverride).toHaveBeenCalledWith(key, null);
+    expect(result.current.preferences).toEqual(EMPTY_PREFERENCES);
+    expect(result.current.overrideEntries).toEqual([]);
+  });
+
+  it('patches defaults and vapid_subject', async () => {
+    const updated = {
+      defaults: { ...ALL_ON_DEFAULTS, new_dm: false },
+      overrides: {},
+      vapid_subject: 'mailto:ops@example.com',
+    };
+    mocks.api.patchPushPreferences.mockResolvedValue(updated);
+
+    const { result } = renderHook(() => usePushSubscription());
+    await waitFor(() => {
+      expect(result.current.preferences).not.toBeNull();
+    });
+
+    await act(async () => {
+      await result.current.patchPreferences({
+        defaults: { new_dm: false },
+        vapid_subject: 'mailto:ops@example.com',
+      });
+    });
+
+    expect(mocks.api.patchPushPreferences).toHaveBeenCalledWith({
+      defaults: { new_dm: false },
+      vapid_subject: 'mailto:ops@example.com',
+    });
+    expect(result.current.preferences).toEqual(updated);
+    expect(
+      result.current.isConversationPushEnabled('contact-aa'.padEnd(8 + 64, 'a'), {
+        messageType: 'PRIV',
+      })
+    ).toBe(false);
   });
 });

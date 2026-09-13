@@ -10,7 +10,12 @@ from pydantic import BaseModel, Field
 from pywebpush import WebPushException
 
 from app.push.send import send_push
-from app.push.vapid import get_vapid_claims, get_vapid_private_key, get_vapid_public_key
+from app.push.vapid import (
+    get_vapid_claims,
+    get_vapid_private_key,
+    get_vapid_public_key,
+    set_cached_vapid_subject,
+)
 from app.repository.push_subscriptions import PushSubscriptionRepository
 from app.repository.settings import AppSettingsRepository
 
@@ -39,11 +44,51 @@ class PushSubscriptionUpdate(BaseModel):
     language: Literal["fr", "en"] | None = None
 
 
-class PushConversationToggle(BaseModel):
-    key: str = Field(min_length=1)
+class PushDefaultsModel(BaseModel):
+    new_contact: bool
+    new_dm: bool
+    advert_repeater: bool
+    advert_companion: bool
+    advert_sensor: bool
 
 
-# ─��� Endpoints ────────────────────────────────────────────────────────────
+class PushDefaultsPatch(BaseModel):
+    new_contact: bool | None = None
+    new_dm: bool | None = None
+    advert_repeater: bool | None = None
+    advert_companion: bool | None = None
+    advert_sensor: bool | None = None
+
+
+class PushPreferencesResponse(BaseModel):
+    defaults: PushDefaultsModel
+    overrides: dict[str, bool]
+    vapid_subject: str
+
+
+class PushPreferencesPatch(BaseModel):
+    defaults: PushDefaultsPatch | None = None
+    vapid_subject: str | None = None
+
+
+class PushConversationOverrideBody(BaseModel):
+    override: bool | None = None
+
+
+def _validate_vapid_subject(subject: str) -> str:
+    """Empty stores as '' (env fallback). Non-empty must be mailto: or https:."""
+    stored = subject.strip()
+    if not stored:
+        return ""
+    if not (stored.startswith("mailto:") or stored.startswith("https:")):
+        raise HTTPException(
+            status_code=400,
+            detail="vapid_subject must be a mailto: or https: URI",
+        )
+    return stored
+
+
+# ── Endpoints ────────────────────────────────────────────────────────────
 
 
 @router.get("/vapid-public-key", response_model=VapidPublicKeyResponse)
@@ -161,16 +206,57 @@ async def test_push(subscription_id: str) -> dict:
         raise HTTPException(status_code=422, detail=f"Push delivery failed: {e}") from None
 
 
-# ── Global push conversation management ──────────────────────────────────
+# ── Preferences ──────────────────────────────────────────────────────────
 
 
-@router.get("/conversations")
-async def get_push_conversations() -> list[str]:
-    """Return the global list of push-enabled conversation state keys."""
-    return await AppSettingsRepository.get_push_conversations()
+@router.get("/preferences", response_model=PushPreferencesResponse)
+async def get_push_preferences() -> PushPreferencesResponse:
+    """Return global push defaults, per-conversation overrides, and VAPID subject."""
+    defaults = await AppSettingsRepository.get_push_defaults()
+    overrides = await AppSettingsRepository.get_push_conversation_overrides()
+    vapid_subject = await AppSettingsRepository.get_vapid_subject()
+    return PushPreferencesResponse(
+        defaults=PushDefaultsModel(**defaults),
+        overrides=overrides,
+        vapid_subject=vapid_subject,
+    )
 
 
-@router.post("/conversations/toggle")
-async def toggle_push_conversation(body: PushConversationToggle) -> list[str]:
-    """Add or remove a conversation from the global push list."""
-    return await AppSettingsRepository.toggle_push_conversation(body.key)
+@router.patch("/preferences", response_model=PushPreferencesResponse)
+async def patch_push_preferences(body: PushPreferencesPatch) -> PushPreferencesResponse:
+    """Partially update push defaults and/or the stored VAPID subject."""
+    if body.defaults is not None:
+        patch = body.defaults.model_dump(exclude_none=True)
+        if patch:
+            await AppSettingsRepository.set_push_defaults(patch)
+    if body.vapid_subject is not None:
+        stored = _validate_vapid_subject(body.vapid_subject)
+        await AppSettingsRepository.set_vapid_subject(stored)
+        set_cached_vapid_subject(stored)
+    return await get_push_preferences()
+
+
+@router.put(
+    "/preferences/conversations/{key}",
+    response_model=PushPreferencesResponse,
+)
+async def put_push_conversation_override(
+    key: str, body: PushConversationOverrideBody
+) -> PushPreferencesResponse:
+    """Set (true/false) or clear (null) one conversation override."""
+    if not key:
+        raise HTTPException(status_code=400, detail="Conversation key is required")
+    await AppSettingsRepository.set_push_conversation_override(key, body.override)
+    return await get_push_preferences()
+
+
+@router.api_route("/conversations", methods=["GET", "POST"], include_in_schema=False)
+async def removed_push_conversations() -> None:
+    """Removed in favor of GET/PATCH /push/preferences."""
+    raise HTTPException(status_code=404, detail="Use /api/push/preferences")
+
+
+@router.api_route("/conversations/toggle", methods=["GET", "POST"], include_in_schema=False)
+async def removed_push_conversation_toggle() -> None:
+    """Removed in favor of PUT /push/preferences/conversations/{key}."""
+    raise HTTPException(status_code=404, detail="Use /api/push/preferences")

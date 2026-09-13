@@ -143,18 +143,39 @@ async def wipe_mesh_identity_data() -> None:
     deny_ingest()
     async with db.tx() as conn:
         async with conn.execute(
-            "SELECT push_conversations FROM app_settings WHERE id = 1"
+            """
+            SELECT push_conversations, push_conversation_overrides
+            FROM app_settings WHERE id = 1
+            """
         ) as cursor:
             row = await cursor.fetchone()
         push: list[str] = []
-        if row and row[0]:
-            try:
-                parsed = json.loads(row[0])
-                if isinstance(parsed, list):
-                    push = [str(item) for item in parsed if isinstance(item, str)]
-            except (json.JSONDecodeError, TypeError):
-                push = []
+        overrides: dict[str, bool] = {}
+        if row is not None:
+            raw_push = row["push_conversations"]
+            if raw_push:
+                try:
+                    parsed = json.loads(raw_push)
+                    if isinstance(parsed, list):
+                        push = [str(item) for item in parsed if isinstance(item, str)]
+                except (json.JSONDecodeError, TypeError):
+                    push = []
+            raw_overrides = row["push_conversation_overrides"]
+            if raw_overrides:
+                try:
+                    parsed = json.loads(raw_overrides)
+                    if isinstance(parsed, dict):
+                        overrides = {
+                            str(key): bool(value)
+                            for key, value in parsed.items()
+                            if isinstance(key, str)
+                        }
+                except (json.JSONDecodeError, TypeError):
+                    overrides = {}
         kept_push = [item for item in push if not item.startswith("contact-")]
+        kept_overrides = {
+            key: value for key, value in overrides.items() if not key.startswith("contact-")
+        }
 
         await conn.execute("DELETE FROM raw_packets")
         await conn.execute("DELETE FROM messages")
@@ -177,10 +198,11 @@ async def wipe_mesh_identity_data() -> None:
                 last_advert_time = 0,
                 tracked_telemetry_repeaters = '[]',
                 tracked_telemetry_contacts = '[]',
-                push_conversations = ?
+                push_conversations = ?,
+                push_conversation_overrides = ?
             WHERE id = 1
             """,
-            (json.dumps(kept_push),),
+            (json.dumps(kept_push), json.dumps(kept_overrides)),
         )
 
     dm_ack_tracker.clear_all()

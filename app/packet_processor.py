@@ -624,7 +624,7 @@ async def _process_advertisement(
 
     # Upsert the contact BEFORE recording advert paths so the parent row
     # exists when foreign key enforcement is enabled.
-    await ContactRepository.upsert(contact_upsert)
+    inserted = await ContactRepository.upsert_reporting_insert(contact_upsert)
 
     # Keep recent unique advert paths for all contacts.
     await ContactAdvertPathRepository.record_observation(
@@ -662,6 +662,16 @@ async def _process_advertisement(
         broadcast_event(
             "contact",
             Contact(**contact_upsert.model_dump(exclude_none=True)).model_dump(),
+        )
+
+    if inserted:
+        from app.push.first_seen import maybe_notify_contact_first_seen
+
+        notify_contact = db_contact or Contact(**contact_upsert.model_dump(exclude_none=True))
+        await maybe_notify_contact_first_seen(
+            notify_contact,
+            origin="rf_advert",
+            promoted_keys=promoted_keys,
         )
 
     # For new contacts, optionally attempt to decrypt any historical DMs we may have stored

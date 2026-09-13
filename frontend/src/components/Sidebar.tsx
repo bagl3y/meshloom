@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Bell,
   BellOff,
   Cable,
   ChartNetwork,
@@ -121,7 +120,6 @@ type ConversationRow = {
   name: string;
   unreadCount: number;
   isMention: boolean;
-  notificationsEnabled: boolean;
   muted?: boolean;
   contact?: Contact;
 };
@@ -135,7 +133,7 @@ type CollapseState = {
   repeaters: boolean;
 };
 
-const SIDEBAR_COLLAPSE_STATE_KEY = 'remoteterm-sidebar-collapse-state';
+const SIDEBAR_COLLAPSE_STATE_KEY = 'meshloom-sidebar-collapse-state';
 
 const DEFAULT_COLLAPSE_STATE: CollapseState = {
   tools: false,
@@ -178,7 +176,6 @@ interface SidebarProps {
   crackerRunning: boolean;
   onToggleCracker: () => void;
   onMarkAllRead: () => void;
-  isConversationNotificationsEnabled?: (type: 'channel' | 'contact', id: string) => boolean;
   blockedKeys?: string[];
   blockedNames?: string[];
   /** Desktop icon-rail collapse. Uncontrolled when omitted (reads localStorage). */
@@ -209,7 +206,6 @@ export function Sidebar({
   crackerRunning,
   onToggleCracker,
   onMarkAllRead,
-  isConversationNotificationsEnabled,
   blockedKeys = [],
   blockedNames = [],
   desktopCollapsed: desktopCollapsedProp,
@@ -643,7 +639,6 @@ export function Sidebar({
     name: channel.name,
     unreadCount: channel.muted ? 0 : getUnreadCount('channel', channel.key),
     isMention: channel.muted ? false : hasMention('channel', channel.key),
-    notificationsEnabled: isConversationNotificationsEnabled?.('channel', channel.key) ?? false,
     muted: channel.muted,
   });
 
@@ -654,8 +649,6 @@ export function Sidebar({
     name: getContactDisplayName(contact.name, contact.public_key, contact.last_advert),
     unreadCount: getUnreadCount('contact', contact.public_key),
     isMention: hasMention('contact', contact.public_key),
-    notificationsEnabled:
-      isConversationNotificationsEnabled?.('contact', contact.public_key) ?? false,
     contact,
   });
 
@@ -735,17 +728,7 @@ export function Sidebar({
               <BellOff className="h-3.5 w-3.5 text-muted-foreground" />
             </span>
           ) : (
-            <>
-              {row.notificationsEnabled && (
-                <span
-                  aria-label={t('sidebar.notificationsEnabled')}
-                  title={t('sidebar.notificationsEnabled')}
-                >
-                  <Bell className="h-3.5 w-3.5 text-muted-foreground" />
-                </span>
-              )}
-              {!desktopCollapsed && unreadBadge}
-            </>
+            !desktopCollapsed && unreadBadge
           )}
         </span>
       </div>

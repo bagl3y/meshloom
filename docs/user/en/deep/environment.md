@@ -39,9 +39,9 @@ Until `radio_transport` is set, the radio stays paused. Do not set `MESHCORE_SER
 |----------|---------|-------------|
 | `MESHCORE_DATABASE_PATH` | `data/meshcore.db` | SQLite database path |
 | `MESHCORE_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
-| `MESHCORE_VAPID_SUBJECT` | `mailto:noreply@meshcore.local` | VAPID token subject |
+| `MESHCORE_VAPID_SUBJECT` | `mailto:noreply@meshcore.local` | VAPID subject fallback when `app_settings.vapid_subject` is empty |
 
-For Apple devices, `MESHCORE_VAPID_SUBJECT` must be a real `mailto:` or `https:` value. APNs rejects the `.local` default with `403 BadJwtToken`.
+Set the VAPID subject in **Settings → Notifications** first. `MESHCORE_VAPID_SUBJECT` is used only when that field is empty. Apple requires a real `mailto:` or `https:` value; APNs rejects the `.local` default with `403 BadJwtToken`. See [Push notifications](/en/docs/deep/push/) and [Apple's web push documentation](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers).
 
 ## Security
 
@@ -79,6 +79,7 @@ These live in `app_settings` and are controlled through the UI or `PATCH /api/se
 - `tracked_telemetry_repeaters`, `tracked_telemetry_contacts`, `telemetry_interval_hours`
 - `auto_resend_channel`
 - `last_message_times`
-- `push_conversations`, `vapid_private_key`, `vapid_public_key`
+- `push_defaults`, `push_conversation_overrides`, `vapid_subject` — push rules and VAPID subject (legacy `push_conversations` is no longer the preference surface)
+- `vapid_private_key`, `vapid_public_key`
 
 MQTT, bots, webhooks, Apprise, and SQS live in `fanout_configs`, not `app_settings`. See [Fanout](/en/docs/deep/fanout/) and [Radio, contacts, and channels](/en/docs/deep/radio/).

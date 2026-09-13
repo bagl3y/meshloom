@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Bell,
   Database,
   Globe,
   Info,
@@ -11,11 +12,20 @@ import {
 } from 'lucide-react';
 
 export type SettingsSection =
-  'radio' | 'local' | 'community' | 'radio-app' | 'database' | 'fanout' | 'statistics' | 'about';
+  | 'radio'
+  | 'local'
+  | 'notifications'
+  | 'community'
+  | 'radio-app'
+  | 'database'
+  | 'fanout'
+  | 'statistics'
+  | 'about';
 
 export const SETTINGS_SECTION_ORDER: SettingsSection[] = [
   'radio',
   'local',
+  'notifications',
   'community',
   'fanout',
   'radio-app',
@@ -28,6 +38,7 @@ export const SETTINGS_SECTION_ORDER: SettingsSection[] = [
 export const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
   radio: 'settingsNav.radio',
   local: 'settingsNav.local',
+  notifications: 'settingsNav.notifications',
   community: 'settingsNav.community',
   'radio-app': 'settingsNav.radioApp',
   database: 'settingsNav.database',
@@ -39,6 +50,7 @@ export const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
 export const SETTINGS_SECTION_ICONS: Record<SettingsSection, LucideIcon> = {
   radio: RadioTower,
   local: MonitorCog,
+  notifications: Bell,
   community: Globe,
   'radio-app': SlidersHorizontal,
   database: Database,

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../api';
 import { toast } from './ui/sonner';
 import { Button } from './ui/button';
-import { Bell, Info, Route, Star, Trash2 } from 'lucide-react';
+import { Info, Route, Star, Trash2 } from 'lucide-react';
 import { DirectTraceIcon } from './DirectTraceIcon';
 import { RepeaterLogin } from './RepeaterLogin';
 import { ServerLoginStatusBanner } from './ServerLoginStatusBanner';
@@ -36,15 +36,11 @@ export { formatDuration, formatClockDrift } from './repeater/repeaterPaneShared'
 interface RepeaterDashboardProps {
   conversation: Conversation;
   contacts: Contact[];
-  notificationsSupported: boolean;
-  notificationsEnabled: boolean;
-  notificationsPermission: NotificationPermission | 'unsupported';
   radioLat: number | null;
   radioLon: number | null;
   radioName: string | null;
   onTrace: () => void;
   onPathDiscovery: (publicKey: string) => Promise<PathDiscoveryResponse>;
-  onToggleNotifications: () => void;
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
   onDeleteContact: (publicKey: string) => void;
   onOpenContactInfo?: (publicKey: string) => void;
@@ -57,15 +53,11 @@ interface RepeaterDashboardProps {
 export function RepeaterDashboard({
   conversation,
   contacts,
-  notificationsSupported,
-  notificationsEnabled,
-  notificationsPermission,
   radioLat,
   radioLon,
   radioName,
   onTrace,
   onPathDiscovery,
-  onToggleNotifications,
   onToggleFavorite,
   onDeleteContact,
   onOpenContactInfo,
@@ -249,33 +241,6 @@ export function RepeaterDashboard({
           >
             <DirectTraceIcon className="h-4 w-4 text-muted-foreground" />
           </button>
-          {notificationsSupported && (
-            <button
-              className="flex items-center gap-1 rounded px-1 py-1 hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={onToggleNotifications}
-              title={
-                notificationsEnabled
-                  ? t('notifications.disableTitle')
-                  : notificationsPermission === 'denied'
-                    ? t('notifications.blockedTitle')
-                    : t('notifications.enableTitle')
-              }
-              aria-label={
-                notificationsEnabled ? t('notifications.disable') : t('notifications.enable')
-              }
-            >
-              <Bell
-                className={`h-4 w-4 ${notificationsEnabled ? 'text-status-connected' : 'text-muted-foreground'}`}
-                fill={notificationsEnabled ? 'currentColor' : 'none'}
-                aria-hidden="true"
-              />
-              {notificationsEnabled && (
-                <span className="hidden md:inline text-[0.6875rem] font-medium text-status-connected">
-                  {t('notifications.on')}
-                </span>
-              )}
-            </button>
-          )}
           <button
             className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => onToggleFavorite('contact', conversation.id)}

@@ -59,7 +59,6 @@ interface UseRealtimeAppStateArgs {
     extras?: { packet_hash?: string | null; observer_reach_eligible?: boolean | null }
   ) => void;
   removeMessage: (messageId: number) => void;
-  notifyIncomingMessage?: (msg: Message) => void;
   /** Buffer cap override. Defaults to the store's own cap; tests use it to force eviction. */
   maxRawPackets?: number;
 }
@@ -109,7 +108,6 @@ export function useRealtimeAppState({
   removeConversationMessages,
   receiveMessageAck,
   removeMessage,
-  notifyIncomingMessage,
   maxRawPackets = MAX_RAW_PACKETS,
 }: UseRealtimeAppStateArgs): UseWebSocketOptions {
   const mergeChannelIntoList = useCallback(
@@ -227,10 +225,6 @@ export function useRealtimeAppState({
             hasMention: checkMention(msg.text),
           });
         }
-
-        if (!msg.outgoing && isNewMessage && !isMutedChannel) {
-          notifyIncomingMessage?.(msg);
-        }
       },
       onContact: (contact: Contact) => {
         setContacts((prev) => mergeContactIntoList(prev, contact));
@@ -322,7 +316,6 @@ export function useRealtimeAppState({
       setChannels,
       setContacts,
       setHealth,
-      notifyIncomingMessage,
     ]
   );
 }

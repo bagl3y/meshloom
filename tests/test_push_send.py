@@ -14,7 +14,7 @@ from app.push.send import (
     IPv4HTTPAdapter,
     send_push,
 )
-from app.push.vapid import get_vapid_claims
+from app.push.vapid import get_vapid_claims, set_cached_vapid_subject
 
 
 @pytest.mark.asyncio
@@ -76,6 +76,13 @@ async def test_send_push_retries_with_ipv4_session_after_connect_timeout():
     )
 
 
+@pytest.fixture(autouse=True)
+def _reset_vapid_subject_cache():
+    set_cached_vapid_subject("")
+    yield
+    set_cached_vapid_subject("")
+
+
 def test_get_vapid_claims_defaults_to_meshcore_local():
     """Default subject is unchanged so existing deployments behave identically."""
     assert get_vapid_claims() == {"sub": "mailto:noreply@meshcore.local"}
@@ -85,6 +92,33 @@ def test_get_vapid_claims_honors_configured_subject(monkeypatch):
     """MESHCORE_VAPID_SUBJECT overrides the outgoing subject (required for APNs/iOS)."""
     monkeypatch.setattr("app.config.settings.vapid_subject", "mailto:ops@example.net")
     assert get_vapid_claims() == {"sub": "mailto:ops@example.net"}
+
+
+def test_get_vapid_claims_prefers_cached_db_subject_over_env(monkeypatch):
+    monkeypatch.setattr("app.config.settings.vapid_subject", "mailto:env@example.net")
+    set_cached_vapid_subject("mailto:db@example.com")
+    assert get_vapid_claims() == {"sub": "mailto:db@example.com"}
+    set_cached_vapid_subject("")
+    assert get_vapid_claims() == {"sub": "mailto:env@example.net"}
+
+
+@pytest.mark.asyncio
+async def test_ensure_vapid_keys_seeds_subject_cache_from_db(test_db, monkeypatch):
+    from app.push.vapid import ensure_vapid_keys
+    from app.repository.settings import AppSettingsRepository
+
+    monkeypatch.setattr("app.config.settings.vapid_subject", "mailto:env@example.net")
+    await AppSettingsRepository.set_vapid_subject("mailto:db@example.com")
+    await ensure_vapid_keys()
+    assert get_vapid_claims() == {"sub": "mailto:db@example.com"}
+
+
+@pytest.mark.asyncio
+async def test_set_cached_vapid_subject_after_empty_falls_back_to_env(monkeypatch):
+    monkeypatch.setattr("app.config.settings.vapid_subject", "mailto:env@example.net")
+    set_cached_vapid_subject("mailto:db@example.com")
+    set_cached_vapid_subject("")
+    assert get_vapid_claims() == {"sub": "mailto:env@example.net"}
 
 
 def test_build_payload_defaults_to_french_titles():
@@ -166,3 +200,425 @@ async def test_push_subscription_persists_language(test_db):
     updated = await PushSubscriptionRepository.update(defaulted["id"], language="en")
     assert updated is not None
     assert updated["language"] == "en"
+
+
+def test_build_payload_first_seen_french_and_english():
+    from app.push.manager import _build_payload
+
+    fr = json.loads(
+        _build_payload(
+            {
+                "event": "first_seen",
+                "public_key": "aa" * 32,
+                "name": "Alice",
+                "contact_type": 1,
+            }
+        )
+    )
+    assert fr["title"] == "Nouveau contact : Alice"
+    assert fr["tag"] == "meshcore-first-seen-" + "aa" * 32
+    assert fr["url_hash"] == "#contact/" + "aa" * 32
+
+    en = json.loads(
+        _build_payload(
+            {
+                "event": "first_seen",
+                "public_key": "bb" * 32,
+                "name": "Hill",
+                "contact_type": 2,
+            },
+            language="en",
+        )
+    )
+    assert en["title"] == "New repeater: Hill"
+    assert en["tag"] == "meshcore-first-seen-" + "bb" * 32
+
+
+# ── dispatch_message / first-seen ────────────────────────────────────────
+
+
+async def _add_push_sub(*, language: str = "fr") -> dict:
+    from app.repository.push_subscriptions import PushSubscriptionRepository
+
+    return await PushSubscriptionRepository.create(
+        endpoint=f"https://push.example.test/{language}",
+        p256dh="p256",
+        auth="auth",
+        language=language,
+    )
+
+
+def _patch_push_send(monkeypatch) -> list[dict]:
+    sent: list[dict] = []
+
+    async def fake_send(**kwargs):
+        sent.append(kwargs)
+        return 201
+
+    monkeypatch.setattr("app.push.manager.get_vapid_private_key", lambda: "test-vapid-key")
+    monkeypatch.setattr("app.push.manager.send_push", fake_send)
+    return sent
+
+
+@pytest.mark.asyncio
+async def test_dispatch_message_sends_for_default_dm(test_db, monkeypatch):
+    from app.push.manager import push_manager
+
+    await _add_push_sub()
+    sent = _patch_push_send(monkeypatch)
+    await push_manager.dispatch_message(
+        {
+            "type": "PRIV",
+            "outgoing": False,
+            "conversation_key": "aa" * 32,
+            "text": "hello",
+            "sender_name": "Alice",
+        }
+    )
+    assert len(sent) == 1
+    payload = json.loads(sent[0]["payload"])
+    assert payload["title"] == "Message de Alice"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_message_override_false_skips_dm(test_db, monkeypatch):
+    from app.push.manager import push_manager
+    from app.repository.settings import AppSettingsRepository
+
+    key = "aa" * 32
+    await _add_push_sub()
+    sent = _patch_push_send(monkeypatch)
+    await AppSettingsRepository.set_push_conversation_override(f"contact-{key}", False)
+    await push_manager.dispatch_message(
+        {
+            "type": "PRIV",
+            "outgoing": False,
+            "conversation_key": key,
+            "text": "hello",
+            "sender_name": "Alice",
+        }
+    )
+    assert sent == []
+
+
+@pytest.mark.asyncio
+async def test_dispatch_message_muted_channel_skips_even_with_override(test_db, monkeypatch):
+    from app.channel_constants import PUBLIC_CHANNEL_KEY
+    from app.push.manager import push_manager
+    from app.repository import ChannelRepository
+    from app.repository.settings import AppSettingsRepository
+
+    await _add_push_sub()
+    sent = _patch_push_send(monkeypatch)
+    await ChannelRepository.upsert(key=PUBLIC_CHANNEL_KEY, name="Public", is_hashtag=False)
+    await ChannelRepository.set_muted(PUBLIC_CHANNEL_KEY, True)
+    await AppSettingsRepository.set_push_conversation_override(
+        f"channel-{PUBLIC_CHANNEL_KEY}", True
+    )
+    await push_manager.dispatch_message(
+        {
+            "type": "CHAN",
+            "outgoing": False,
+            "conversation_key": PUBLIC_CHANNEL_KEY,
+            "text": "hi",
+            "channel_name": "Public",
+        }
+    )
+    assert sent == []
+
+
+@pytest.mark.asyncio
+async def test_dispatch_message_public_without_override_sends(test_db, monkeypatch):
+    from app.channel_constants import PUBLIC_CHANNEL_KEY
+    from app.push.manager import push_manager
+
+    await _add_push_sub()
+    sent = _patch_push_send(monkeypatch)
+    await push_manager.dispatch_message(
+        {
+            "type": "CHAN",
+            "outgoing": False,
+            "conversation_key": PUBLIC_CHANNEL_KEY,
+            "text": "hi",
+            "channel_name": "Public",
+        }
+    )
+    assert len(sent) == 1
+
+
+@pytest.mark.asyncio
+async def test_dispatch_message_hashtag_without_override_sends(test_db, monkeypatch):
+    from app.push.manager import push_manager
+    from app.repository import ChannelRepository
+
+    hashtag_key = "cc" * 16
+    await ChannelRepository.upsert(key=hashtag_key, name="#ops", is_hashtag=True)
+    await _add_push_sub()
+    sent = _patch_push_send(monkeypatch)
+    await push_manager.dispatch_message(
+        {
+            "type": "CHAN",
+            "outgoing": False,
+            "conversation_key": hashtag_key,
+            "text": "hi",
+            "channel_name": "#ops",
+        }
+    )
+    assert len(sent) == 1
+
+
+@pytest.mark.asyncio
+async def test_dispatch_message_private_channel_without_override_skips(test_db, monkeypatch):
+    from app.push.manager import push_manager
+    from app.repository import ChannelRepository
+
+    private_key = "dd" * 16
+    await ChannelRepository.upsert(key=private_key, name="secret", is_hashtag=False)
+    await _add_push_sub()
+    sent = _patch_push_send(monkeypatch)
+    await push_manager.dispatch_message(
+        {
+            "type": "CHAN",
+            "outgoing": False,
+            "conversation_key": private_key,
+            "text": "hi",
+            "channel_name": "secret",
+        }
+    )
+    assert sent == []
+
+
+@pytest.mark.asyncio
+async def test_first_seen_type1_notifies_if_either_toggle(test_db, monkeypatch):
+    from app.models import Contact
+    from app.push.first_seen import maybe_notify_contact_first_seen
+    from app.radio import radio_manager
+    from app.repository.settings import AppSettingsRepository
+
+    monkeypatch.setattr(radio_manager, "_setup_complete", True)
+    await _add_push_sub()
+    sent = _patch_push_send(monkeypatch)
+    contact = Contact(public_key="aa" * 32, name="Alice", type=1)
+
+    await AppSettingsRepository.set_push_defaults(
+        {
+            "new_contact": True,
+            "advert_companion": False,
+            "advert_repeater": False,
+            "advert_sensor": False,
+        }
+    )
+    await maybe_notify_contact_first_seen(contact, origin="rf_advert")
+    assert len(sent) == 1
+
+    sent.clear()
+    await AppSettingsRepository.set_push_defaults(
+        {
+            "new_contact": False,
+            "advert_companion": True,
+            "advert_repeater": False,
+            "advert_sensor": False,
+        }
+    )
+    await maybe_notify_contact_first_seen(contact, origin="rf_advert")
+    assert len(sent) == 1
+
+    sent.clear()
+    await AppSettingsRepository.set_push_defaults(
+        {
+            "new_contact": False,
+            "advert_companion": False,
+            "advert_repeater": True,
+            "advert_sensor": True,
+        }
+    )
+    await maybe_notify_contact_first_seen(contact, origin="rf_advert")
+    assert sent == []
+
+
+@pytest.mark.asyncio
+async def test_first_seen_type_0_and_3_skip(test_db, monkeypatch):
+    from app.models import Contact
+    from app.push.first_seen import maybe_notify_contact_first_seen
+    from app.radio import radio_manager
+
+    monkeypatch.setattr(radio_manager, "_setup_complete", True)
+    await _add_push_sub()
+    sent = _patch_push_send(monkeypatch)
+
+    await maybe_notify_contact_first_seen(
+        Contact(public_key="aa" * 32, name="Unknown", type=0),
+        origin="rf_advert",
+    )
+    await maybe_notify_contact_first_seen(
+        Contact(public_key="bb" * 32, name="Room", type=3),
+        origin="radio_event",
+    )
+    assert sent == []
+
+
+@pytest.mark.asyncio
+async def test_first_seen_existing_prefix_skips(test_db, monkeypatch):
+    from app.models import Contact
+    from app.push.first_seen import maybe_notify_contact_first_seen
+    from app.radio import radio_manager
+    from app.repository import ContactRepository
+
+    monkeypatch.setattr(radio_manager, "_setup_complete", True)
+    prefix = "aabbccddeeff"
+    full_key = prefix + "11" * 26
+    await ContactRepository.upsert({"public_key": prefix, "name": "Alice", "type": 0})
+    await _add_push_sub()
+    sent = _patch_push_send(monkeypatch)
+
+    await maybe_notify_contact_first_seen(
+        Contact(public_key=full_key, name="Alice", type=1),
+        origin="rf_advert",
+    )
+    assert sent == []
+
+    await maybe_notify_contact_first_seen(
+        Contact(public_key="cc" * 32, name="Bob", type=1),
+        origin="rf_advert",
+        promoted_keys=[prefix],
+    )
+    assert sent == []
+
+
+@pytest.mark.asyncio
+async def test_first_seen_incomplete_setup_skips(test_db, monkeypatch):
+    from app.models import Contact
+    from app.push.first_seen import maybe_notify_contact_first_seen
+    from app.radio import radio_manager
+
+    monkeypatch.setattr(radio_manager, "_setup_complete", False)
+    await _add_push_sub()
+    sent = _patch_push_send(monkeypatch)
+    await maybe_notify_contact_first_seen(
+        Contact(public_key="aa" * 32, name="Alice", type=1),
+        origin="rf_advert",
+    )
+    assert sent == []
+
+
+@pytest.mark.asyncio
+async def test_on_new_contact_insert_notifies_radio_event(test_db, monkeypatch):
+    from unittest.mock import AsyncMock, patch
+
+    from app.event_handlers import on_new_contact
+    from app.radio import radio_manager
+
+    monkeypatch.setattr(radio_manager, "_setup_complete", True)
+
+    class MockEvent:
+        payload = {
+            "public_key": "ee" * 32,
+            "adv_name": "Eve",
+            "type": 1,
+            "flags": 0,
+        }
+
+    with (
+        patch("app.event_handlers.broadcast_event"),
+        patch(
+            "app.push.first_seen.maybe_notify_contact_first_seen",
+            new_callable=AsyncMock,
+        ) as notify,
+    ):
+        await on_new_contact(MockEvent())
+
+    notify.assert_awaited_once()
+    assert notify.await_args.kwargs["origin"] == "radio_event"
+
+
+@pytest.mark.asyncio
+async def test_on_new_contact_existing_does_not_notify(test_db, monkeypatch):
+    from unittest.mock import AsyncMock, patch
+
+    from app.event_handlers import on_new_contact
+    from app.radio import radio_manager
+    from app.repository import ContactRepository
+
+    monkeypatch.setattr(radio_manager, "_setup_complete", True)
+    await ContactRepository.upsert({"public_key": "ee" * 32, "name": "Eve", "type": 1})
+
+    class MockEvent:
+        payload = {
+            "public_key": "ee" * 32,
+            "adv_name": "Eve",
+            "type": 1,
+            "flags": 0,
+        }
+
+    with (
+        patch("app.event_handlers.broadcast_event"),
+        patch(
+            "app.push.first_seen.maybe_notify_contact_first_seen",
+            new_callable=AsyncMock,
+        ) as notify,
+    ):
+        await on_new_contact(MockEvent())
+
+    notify.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_contact_insert_notifies_manual(test_db, client, monkeypatch):
+    from unittest.mock import AsyncMock, patch
+
+    from app.radio import radio_manager
+
+    monkeypatch.setattr(radio_manager, "_setup_complete", True)
+    with (
+        patch("app.websocket.broadcast_event"),
+        patch(
+            "app.push.first_seen.maybe_notify_contact_first_seen",
+            new_callable=AsyncMock,
+        ) as notify,
+    ):
+        response = await client.post(
+            "/api/contacts",
+            json={"public_key": "ff" * 32, "name": "Fay", "type": 1},
+        )
+
+    assert response.status_code == 200
+    notify.assert_awaited_once()
+    assert notify.await_args.kwargs["origin"] == "manual"
+
+
+@pytest.mark.asyncio
+async def test_process_advertisement_insert_notifies_rf_advert(test_db, monkeypatch):
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.decoder import ParsedAdvertisement
+    from app.packet_processor import _process_advertisement
+    from app.radio import radio_manager
+
+    monkeypatch.setattr(radio_manager, "_setup_complete", True)
+    pubkey = "ab" * 32
+    packet_info = MagicMock()
+    packet_info.path_length = 0
+    packet_info.path = b""
+    packet_info.payload = b""
+
+    with (
+        patch("app.packet_processor.broadcast_event"),
+        patch("app.packet_processor.parse_advertisement") as mock_parse,
+        patch("app.packet_processor.verify_advert_signature", return_value=True),
+        patch(
+            "app.push.first_seen.maybe_notify_contact_first_seen",
+            new_callable=AsyncMock,
+        ) as notify,
+    ):
+        mock_parse.return_value = ParsedAdvertisement(
+            public_key=pubkey,
+            name="Ada",
+            timestamp=1000,
+            lat=None,
+            lon=None,
+            device_role=1,
+        )
+        await _process_advertisement(b"", timestamp=1000, packet_info=packet_info)
+
+    notify.assert_awaited_once()
+    assert notify.await_args.kwargs["origin"] == "rf_advert"

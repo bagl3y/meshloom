@@ -18,11 +18,21 @@ logger = logging.getLogger(__name__)
 
 _cached_private_key: str = ""
 _cached_public_key: str = ""
+_cached_subject: str = ""
+
+
+def set_cached_vapid_subject(subject: str) -> None:
+    """Update the in-memory VAPID subject. Empty means fall back to env."""
+    global _cached_subject
+    _cached_subject = subject or ""
 
 
 async def ensure_vapid_keys() -> tuple[str, str]:
     """Read or generate VAPID keys. Call once at startup after DB connect."""
     global _cached_private_key, _cached_public_key
+
+    stored_subject = await AppSettingsRepository.get_vapid_subject()
+    set_cached_vapid_subject(stored_subject)
 
     private, public = await AppSettingsRepository.get_vapid_keys()
     if private and public:
@@ -64,9 +74,10 @@ def get_vapid_private_key() -> str:
 def get_vapid_claims() -> dict[str, str]:
     """VAPID JWT claims for Web Push.
 
-    The ``sub`` (subject) claim is configurable via ``MESHCORE_VAPID_SUBJECT``.
+    Precedence: non-empty DB-cached subject, then ``MESHCORE_VAPID_SUBJECT``.
     Apple's push service (APNs) rejects subjects on reserved TLDs such as
     ``.local`` with ``403 BadJwtToken``, so iOS/Safari operators must set this
     to a real ``mailto:`` or ``https:`` contact.
     """
-    return {"sub": settings.vapid_subject}
+    subject = _cached_subject if _cached_subject else settings.vapid_subject
+    return {"sub": subject}

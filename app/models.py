@@ -1341,14 +1341,18 @@ class BackupExport(BaseModel):
     """Safer JSON export of contacts, channels, settings, and groups.
 
     Does not include messages, raw packets, the radio private key, or VAPID keys.
+    Push notification prefs are included; restore must not emit first-seen.
     """
 
-    format: str = "remoteterm-backup-v1"
+    format: str = "meshloom-backup-v1"
     exported_at: int = 0
     contacts: list[BackupContact] = Field(default_factory=list)
     channels: list[BackupChannel] = Field(default_factory=list)
     settings: AppSettings | None = None
     groups: list[ContactGroup] = Field(default_factory=list)
+    push_defaults: dict[str, bool] | None = None
+    push_conversation_overrides: dict[str, bool] | None = None
+    vapid_subject: str | None = None
 
 
 class BackupRestoreRequest(BackupExport):

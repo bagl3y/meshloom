@@ -116,9 +116,6 @@ const contacts: Contact[] = [
 const defaultProps = {
   conversation,
   contacts,
-  notificationsSupported: true,
-  notificationsEnabled: false,
-  notificationsPermission: 'granted' as const,
   radioLat: null,
   radioLon: null,
   radioName: null,
@@ -126,7 +123,6 @@ const defaultProps = {
   onPathDiscovery: vi.fn(async () => {
     throw new Error('unused');
   }),
-  onToggleNotifications: vi.fn(),
   onToggleFavorite: vi.fn(),
   onDeleteContact: vi.fn(),
   trackedTelemetryRepeaters: [] as string[],
@@ -231,21 +227,6 @@ describe('RepeaterDashboard', () => {
     expect(mockHook.loadAll).toHaveBeenCalledTimes(1);
   });
 
-  it('shows enabled notification state and toggles when clicked', () => {
-    render(
-      <RepeaterDashboard
-        {...defaultProps}
-        notificationsEnabled
-        onToggleNotifications={defaultProps.onToggleNotifications}
-      />
-    );
-
-    fireEvent.click(screen.getByText(i18n.t('notifications.on')));
-
-    expect(screen.getByText(i18n.t('notifications.on'))).toBeInTheDocument();
-    expect(defaultProps.onToggleNotifications).toHaveBeenCalledTimes(1);
-  });
-
   it('shows login error when present', () => {
     mockHook.loginError = i18n.t('toast.loginFailed');
 
@@ -255,7 +236,7 @@ describe('RepeaterDashboard', () => {
   });
 
   it('returns to an empty login form when re-entering the password', () => {
-    const storageKey = `remoteterm-server-password:repeater:${REPEATER_KEY}`;
+    const storageKey = `meshloom-server-password:repeater:${REPEATER_KEY}`;
     localStorage.setItem(storageKey, JSON.stringify({ password: 'wrong-password' }));
     mockHook.loggedIn = true;
     mockHook.lastLoginAttempt = {

@@ -29,7 +29,7 @@ from app.repository import (
 
 logger = logging.getLogger(__name__)
 
-BACKUP_FORMAT = "remoteterm-backup-v1"
+BACKUP_FORMAT = "meshloom-backup-v1"  # older files may still say remoteterm-backup-v1
 
 PRIVATE_KEY_WARNING = "The radio private key is stored in memory only and is NOT in this backup."
 
@@ -94,6 +94,12 @@ async def export_json() -> BackupExport:
         channels=[_channel_to_backup(c) for c in channels],
         settings=settings,
         groups=groups,
+        push_defaults={
+            key: bool(value)
+            for key, value in (await AppSettingsRepository.get_push_defaults()).items()
+        },
+        push_conversation_overrides=await AppSettingsRepository.get_push_conversation_overrides(),
+        vapid_subject=await AppSettingsRepository.get_vapid_subject(),
     )
 
 
@@ -169,6 +175,17 @@ async def restore_json(request: BackupRestoreRequest) -> BackupRestoreResult:
 
             await DirectoryHopCacheRepository.wipe()
             reset_directory_nodes_cache()
+        settings_updated = True
+    if request.push_defaults is not None:
+        await AppSettingsRepository.set_push_defaults(request.push_defaults)
+        settings_updated = True
+    if request.push_conversation_overrides is not None:
+        await AppSettingsRepository.set_push_conversation_overrides(
+            request.push_conversation_overrides
+        )
+        settings_updated = True
+    if request.vapid_subject is not None:
+        await AppSettingsRepository.set_vapid_subject(request.vapid_subject)
         settings_updated = True
 
     groups_upserted = 0

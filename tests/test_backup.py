@@ -50,7 +50,7 @@ class TestJsonBackup:
         await ContactGroupRepository.set_members(group.id, [key])
 
         export = await export_json()
-        assert export.format == "remoteterm-backup-v1"
+        assert export.format == "meshloom-backup-v1"
         assert any(c.public_key == key for c in export.contacts)
         assert any(c.name == "public" for c in export.channels)
         assert export.settings is not None
@@ -59,6 +59,13 @@ class TestJsonBackup:
         assert export.settings.directory_url == ""
         assert export.groups[0].name == "Home"
         assert export.groups[0].public_keys == [key]
+
+    @pytest.mark.asyncio
+    async def test_restore_accepts_legacy_remoteterm_format(self, test_db):
+        result = await restore_json(
+            BackupRestoreRequest(confirm=True, format="remoteterm-backup-v1")
+        )
+        assert result.contacts_upserted == 0
 
     @pytest.mark.asyncio
     async def test_restore_requires_confirm(self, test_db):
@@ -208,3 +215,41 @@ class TestBackupExportShape:
         assert isinstance(export, BackupExport)
         assert export.contacts == []
         assert export.settings is not None
+
+    @pytest.mark.asyncio
+    async def test_push_pref_fields_roundtrip(self, test_db):
+        from app.repository.settings import DEFAULT_PUSH_DEFAULTS
+
+        await AppSettingsRepository.set_push_defaults({**DEFAULT_PUSH_DEFAULTS, "new_dm": False})
+        await AppSettingsRepository.set_push_conversation_overrides(
+            {"channel-PUBLIC": True, "contact-" + "aa" * 32: False}
+        )
+        await AppSettingsRepository.set_vapid_subject("mailto:ops@example.com")
+
+        export = await export_json()
+        assert export.push_defaults == {**DEFAULT_PUSH_DEFAULTS, "new_dm": False}
+        assert export.push_conversation_overrides == {
+            "channel-PUBLIC": True,
+            "contact-" + "aa" * 32: False,
+        }
+        assert export.vapid_subject == "mailto:ops@example.com"
+
+        await AppSettingsRepository.set_push_defaults(DEFAULT_PUSH_DEFAULTS)
+        await AppSettingsRepository.set_push_conversation_overrides({})
+        await AppSettingsRepository.set_vapid_subject("")
+
+        result = await restore_json(
+            BackupRestoreRequest(
+                confirm=True,
+                push_defaults=export.push_defaults,
+                push_conversation_overrides=export.push_conversation_overrides,
+                vapid_subject=export.vapid_subject,
+            )
+        )
+        assert result.settings_updated is True
+        assert await AppSettingsRepository.get_push_defaults() == export.push_defaults
+        assert (
+            await AppSettingsRepository.get_push_conversation_overrides()
+            == export.push_conversation_overrides
+        )
+        assert await AppSettingsRepository.get_vapid_subject() == "mailto:ops@example.com"

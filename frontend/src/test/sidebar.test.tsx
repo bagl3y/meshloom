@@ -52,7 +52,6 @@ function renderSidebar(overrides?: {
   mentions?: Record<string, boolean>;
   lastMessageTimes?: ConversationTimes;
   channels?: Channel[];
-  isConversationNotificationsEnabled?: (type: 'channel' | 'contact', id: string) => boolean;
 }) {
   const aliceName = 'Alice';
   const roomName = 'Ops Board';
@@ -88,7 +87,6 @@ function renderSidebar(overrides?: {
       crackerRunning={false}
       onToggleCracker={vi.fn()}
       onMarkAllRead={vi.fn()}
-      isConversationNotificationsEnabled={overrides?.isConversationNotificationsEnabled}
     />
   );
 
@@ -331,41 +329,26 @@ describe('Sidebar section summaries', () => {
     expect(new Set(selectedIds)).toEqual(new Set([channelA.key, channelB.key]));
   });
 
-  it('shows a notification bell for conversations with notifications enabled', () => {
-    const { aliceName } = renderSidebar({
+  it('shows a muted bell for muted channels and no desktop notification bell', () => {
+    const mutedFlight = {
+      ...makeChannel('BB'.repeat(16), '#flight'),
+      favorite: true,
+      muted: true,
+    };
+    renderSidebar({
       unreadCounts: {},
-      isConversationNotificationsEnabled: (type, id) =>
-        (type === 'contact' && id === '11'.repeat(32)) ||
-        (type === 'channel' && id === 'BB'.repeat(16)),
+      channels: [
+        makeChannel('AA'.repeat(16), 'Public'),
+        mutedFlight,
+        makeChannel('CC'.repeat(16), '#ops'),
+      ],
     });
 
-    const aliceRow = screen.getByText(aliceName).closest('div');
     const flightRow = screen.getByText('#flight').closest('div');
-    if (!aliceRow || !flightRow) throw new Error('Missing sidebar rows');
+    if (!flightRow) throw new Error('Missing sidebar row');
 
-    expect(
-      within(aliceRow).getByLabelText(i18n.t('sidebar.notificationsEnabled'))
-    ).toBeInTheDocument();
-    expect(
-      within(flightRow).getByLabelText(i18n.t('sidebar.notificationsEnabled'))
-    ).toBeInTheDocument();
-  });
-
-  it('keeps the notification bell to the left of the unread pill when both are present', () => {
-    const { aliceName } = renderSidebar({
-      unreadCounts: {
-        [getStateKey('contact', '11'.repeat(32))]: 3,
-      },
-      isConversationNotificationsEnabled: (type, id) =>
-        type === 'contact' && id === '11'.repeat(32),
-    });
-
-    const aliceRow = screen.getByText(aliceName).closest('div');
-    if (!aliceRow) throw new Error('Missing Alice row');
-
-    const bell = within(aliceRow).getByLabelText(i18n.t('sidebar.notificationsEnabled'));
-    const unread = within(aliceRow).getByText('3');
-    expect(bell.compareDocumentPosition(unread) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(flightRow).getByLabelText(i18n.t('sidebar.muted'))).toBeInTheDocument();
+    expect(screen.queryByLabelText(i18n.t('sidebar.notificationsEnabled'))).not.toBeInTheDocument();
   });
 
   it('shows the trace tool row and selects it', () => {
@@ -804,7 +787,7 @@ describe('Sidebar section summaries', () => {
   });
 
   it('seeds favorites sort from the legacy global sort order when section prefs are missing', () => {
-    localStorage.setItem('remoteterm-sortOrder', 'alpha');
+    localStorage.setItem('meshloom-sortOrder', 'alpha');
 
     const publicChannel = makeChannel(PUBLIC_CHANNEL_KEY, 'Public');
     const zed = makeContact('11'.repeat(32), 'Zed', 1, { last_advert: 150, favorite: true });

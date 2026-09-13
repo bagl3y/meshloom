@@ -60,7 +60,7 @@ MESHCORE_DISABLE_BOTS=false
 MESHCORE_VAPID_SUBJECT=mailto:you@example.com
 ```
 
-Do not commit real VAPID addresses. Radio host and port are set in the web UI.
+`MESHCORE_VAPID_SUBJECT` is only the fallback when the Settings → Notifications VAPID subject is empty. Do not commit real VAPID addresses. Radio host and port are set in the web UI.
 
 ## From a checkout
 

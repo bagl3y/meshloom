@@ -9,16 +9,17 @@ const defaultState: PushSubscriptionState = {
   isSubscribed: false,
   currentSubscriptionId: null,
   allSubscriptions: [],
-  pushConversations: [],
+  preferences: null,
+  overrideEntries: [],
   loading: false,
   subscribe: noopAsyncNull,
   unsubscribe: noopAsync,
-  toggleConversation: noopAsync,
   isConversationPushEnabled: () => false,
+  setConversationOverride: noopAsync,
+  patchPreferences: noopAsync,
   deleteSubscription: noopAsync,
   testPush: noopAsync,
   refreshSubscriptions: async () => [],
-  refreshConversations: noopAsync,
 };
 
 const PushSubscriptionContext = createContext<PushSubscriptionState>(defaultState);

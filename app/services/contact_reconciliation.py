@@ -2,7 +2,12 @@
 
 import logging
 
-from app.repository import ContactNameHistoryRepository, ContactRepository, MessageRepository
+from app.repository import (
+    AppSettingsRepository,
+    ContactNameHistoryRepository,
+    ContactRepository,
+    MessageRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +26,10 @@ async def promote_prefix_contacts_for_contact(
             "Promoted %d prefix contact placeholder(s) for %s",
             len(promoted),
             normalized_key[:12],
+        )
+        await AppSettingsRepository.remap_push_conversation_override_keys(
+            [f"contact-{old_key}" for old_key in promoted],
+            f"contact-{normalized_key}",
         )
     return promoted
 

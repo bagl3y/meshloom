@@ -125,7 +125,10 @@ CREATE TABLE IF NOT EXISTS app_settings (
     community_enabled INTEGER DEFAULT 0,
     community_iata TEXT DEFAULT '',
     community_broker_host TEXT DEFAULT '',
-    community_api_base TEXT DEFAULT ''
+    community_api_base TEXT DEFAULT '',
+    push_defaults TEXT DEFAULT '{"new_contact": true, "new_dm": true, "advert_repeater": true, "advert_companion": true, "advert_sensor": true}',
+    push_conversation_overrides TEXT DEFAULT '{}',
+    vapid_subject TEXT DEFAULT ''
 );
 INSERT OR IGNORE INTO app_settings (id) VALUES (1);
 

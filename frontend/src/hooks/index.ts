@@ -9,5 +9,4 @@ export { useContactsAndChannels } from './useContactsAndChannels';
 export { useRealtimeAppState } from './useRealtimeAppState';
 export { useConversationActions } from './useConversationActions';
 export { useConversationNavigation } from './useConversationNavigation';
-export { useBrowserNotifications } from './useBrowserNotifications';
 export { useFaviconBadge, useUnreadTitle } from './useFaviconBadge';

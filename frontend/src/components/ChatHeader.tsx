@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Trans, useTranslation } from 'react-i18next';
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Bell, BellOff, ChevronsLeftRight, Globe2, Info, Route, Star, Trash2 } from 'lucide-react';
 import { toast } from './ui/sonner';
 import { DirectTraceIcon } from './DirectTraceIcon';
@@ -21,17 +21,11 @@ interface ChatHeaderProps {
   contacts: Contact[];
   channels: Channel[];
   config: RadioConfig | null;
-  notificationsSupported: boolean;
-  notificationsEnabled: boolean;
-  notificationsPermission: NotificationPermission | 'unsupported';
   onTrace: () => void;
   onPathDiscovery: (publicKey: string) => Promise<PathDiscoveryResponse>;
-  onToggleNotifications: () => void;
   pushSupported?: boolean;
-  pushSubscribed?: boolean;
   pushEnabledForConversation?: boolean;
   onTogglePush?: () => void;
-  onOpenPushSettings?: () => void;
   onToggleFavorite: (type: 'channel' | 'contact', id: string) => void;
   onToggleMute?: (key: string) => void;
   onSetChannelFloodScopeOverride?: (key: string, floodScopeOverride: string) => void;
@@ -47,17 +41,11 @@ export function ChatHeader({
   contacts,
   channels,
   config,
-  notificationsSupported,
-  notificationsEnabled,
-  notificationsPermission,
   onTrace,
   onPathDiscovery,
-  onToggleNotifications,
   pushSupported,
-  pushSubscribed,
   pushEnabledForConversation,
   onTogglePush,
-  onOpenPushSettings,
   onToggleFavorite,
   onToggleMute,
   onSetChannelFloodScopeOverride,
@@ -72,28 +60,13 @@ export function ChatHeader({
   const [pathDiscoveryOpen, setPathDiscoveryOpen] = useState(false);
   const [channelOverrideOpen, setChannelOverrideOpen] = useState(false);
   const [pathHashModeOverrideOpen, setPathHashModeOverrideOpen] = useState(false);
-  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
-  const notifDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setShowKey(false);
     setPathDiscoveryOpen(false);
     setChannelOverrideOpen(false);
     setPathHashModeOverrideOpen(false);
-    setNotifDropdownOpen(false);
   }, [conversation.id]);
-
-  // Close notification dropdown on outside click
-  useEffect(() => {
-    if (!notifDropdownOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (notifDropdownRef.current && !notifDropdownRef.current.contains(e.target as Node)) {
-        setNotifDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [notifDropdownOpen]);
 
   const activeChannel =
     conversation.type === 'channel'
@@ -321,127 +294,45 @@ export function ChatHeader({
             <DirectTraceIcon className="h-4 w-4 text-muted-foreground" />
           </button>
         )}
-        {(notificationsSupported ||
-          pushSupported ||
-          (conversation.type === 'channel' && onToggleMute)) &&
-          !activeContactIsRoomServer && (
-            <div className="relative" ref={notifDropdownRef}>
-              <button
-                className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => setNotifDropdownOpen((v) => !v)}
-                title={t('chatHeader.notifications')}
-                aria-label={t('chatHeader.notifications')}
-                aria-expanded={notifDropdownOpen}
-              >
-                {activeChannel?.muted ? (
-                  <BellOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                ) : (
-                  <Bell
-                    className={cn(
-                      'h-4 w-4',
-                      notificationsEnabled || pushEnabledForConversation
-                        ? 'text-primary'
-                        : 'text-muted-foreground'
-                    )}
-                    fill={
-                      notificationsEnabled || pushEnabledForConversation ? 'currentColor' : 'none'
-                    }
-                    aria-hidden="true"
-                  />
-                )}
-              </button>
-              {notifDropdownOpen && (
-                <div className="absolute right-[-4.5rem] sm:right-0 top-full z-50 mt-1 w-[calc(100vw-2rem)] sm:w-72 max-w-72 rounded-md border border-border bg-popover p-3 shadow-lg space-y-3">
-                  {notificationsSupported && (
-                    <label className="flex items-start gap-2.5 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 accent-primary h-4 w-4 shrink-0"
-                        checked={notificationsEnabled}
-                        disabled={notificationsPermission === 'denied'}
-                        onChange={onToggleNotifications}
-                      />
-                      <div className="min-w-0">
-                        <span className="text-sm font-medium text-foreground block leading-tight">
-                          {t('chatHeader.desktopNotif')}
-                        </span>
-                        <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
-                          {notificationsPermission === 'denied'
-                            ? t('chatHeader.desktopNotifBlocked')
-                            : t('chatHeader.desktopNotifHelp')}
-                        </span>
-                      </div>
-                    </label>
-                  )}
-                  {pushSupported && onTogglePush && (
-                    <>
-                      <label className="flex items-start gap-2.5 cursor-pointer group">
-                        <input
-                          type="checkbox"
-                          className="mt-0.5 accent-primary h-4 w-4 shrink-0"
-                          checked={!!pushEnabledForConversation}
-                          onChange={onTogglePush}
-                        />
-                        <div className="min-w-0">
-                          <span className="text-sm font-medium text-foreground block leading-tight">
-                            {t('chatHeader.webPush')}
-                          </span>
-                          <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
-                            {pushSubscribed
-                              ? t('chatHeader.webPushHelp')
-                              : t('chatHeader.webPushHelpHttps')}
-                          </span>
-                        </div>
-                      </label>
-                      <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
-                        {t('chatHeader.httpsNote')}
-                      </span>
-                      {onOpenPushSettings && (
-                        <p className="text-xs text-muted-foreground leading-snug mt-1.5">
-                          <Trans
-                            i18nKey="chatHeader.pushManage"
-                            components={{
-                              settings: (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setNotifDropdownOpen(false);
-                                    onOpenPushSettings();
-                                  }}
-                                  className="text-primary hover:underline transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                />
-                              ),
-                            }}
-                          />
-                        </p>
-                      )}
-                    </>
-                  )}
-                  {conversation.type === 'channel' && onToggleMute && (
-                    <>
-                      <hr className="border-border" />
-                      <label className="flex items-start gap-2.5 cursor-pointer group">
-                        <input
-                          type="checkbox"
-                          className="mt-0.5 accent-primary h-4 w-4 shrink-0"
-                          checked={!!activeChannel?.muted}
-                          onChange={() => onToggleMute(conversation.id)}
-                        />
-                        <div className="min-w-0">
-                          <span className="text-sm font-medium text-foreground block leading-tight">
-                            {t('chatHeader.muteChannel')}
-                          </span>
-                          <span className="text-xs text-muted-foreground leading-snug block mt-0.5">
-                            {t('chatHeader.muteChannelHelp')}
-                          </span>
-                        </div>
-                      </label>
-                    </>
-                  )}
-                </div>
+        {pushSupported && onTogglePush && (
+          <button
+            className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => void onTogglePush()}
+            title={t('chatHeader.notifications')}
+            aria-label={t('chatHeader.notifications')}
+            aria-pressed={!!pushEnabledForConversation}
+          >
+            <Bell
+              className={cn(
+                'h-4 w-4',
+                pushEnabledForConversation ? 'text-primary' : 'text-muted-foreground'
               )}
-            </div>
-          )}
+              fill={pushEnabledForConversation ? 'currentColor' : 'none'}
+              aria-hidden="true"
+            />
+          </button>
+        )}
+        {conversation.type === 'channel' && onToggleMute && (
+          <button
+            className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => onToggleMute(conversation.id)}
+            title={
+              activeChannel?.muted ? t('chatHeader.unmuteChannel') : t('chatHeader.muteChannel')
+            }
+            aria-label={
+              activeChannel?.muted ? t('chatHeader.unmuteChannel') : t('chatHeader.muteChannel')
+            }
+            aria-pressed={!!activeChannel?.muted}
+          >
+            <BellOff
+              className={cn(
+                'h-4 w-4',
+                activeChannel?.muted ? 'text-primary' : 'text-muted-foreground'
+              )}
+              aria-hidden="true"
+            />
+          </button>
+        )}
         {conversation.type === 'channel' && onSetChannelFloodScopeOverride && (
           <button
             className="flex shrink-0 items-center gap-1 rounded px-1 py-1 text-lg leading-none transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

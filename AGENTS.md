@@ -398,11 +398,12 @@ All endpoints are prefixed with `/api` (e.g., `/api/health`).
 | GET | `/api/push/vapid-public-key` | VAPID public key for browser push subscription |
 | POST | `/api/push/subscribe` | Register/upsert a push subscription |
 | GET | `/api/push/subscriptions` | List all push subscriptions |
-| PATCH | `/api/push/subscriptions/{id}` | Update subscription label or filter preferences |
+| PATCH | `/api/push/subscriptions/{id}` | Update subscription label or language |
 | DELETE | `/api/push/subscriptions/{id}` | Delete a push subscription |
 | POST | `/api/push/subscriptions/{id}/test` | Send a test push notification |
-| GET | `/api/push/conversations` | Global list of push-enabled conversation state keys |
-| POST | `/api/push/conversations/toggle` | Add or remove a conversation from the global push list |
+| GET | `/api/push/preferences` | Global push defaults, conversation overrides, and VAPID subject |
+| PATCH | `/api/push/preferences` | Update defaults and/or stored VAPID subject |
+| PUT | `/api/push/preferences/conversations/{key}` | Set (`true`/`false`) or clear (`null`) one conversation override |
 | WS | `/api/ws` | Real-time updates |
 
 ## Key Concepts
@@ -460,14 +461,16 @@ Community MQTT forwards raw packets only. Its derived `path` field, when present
 
 ### Web Push Notifications
 
-Web Push is a standalone subsystem (`app/push/`) that sends browser push notifications for incoming messages even when the browser tab is closed. It is **not** a fanout module — it manages its own per-browser subscriptions, while the set of push-enabled conversations is stored once per server instance.
+Web Push is a standalone subsystem (`app/push/`) that sends browser push notifications for incoming messages even when the browser tab is closed. It is **not** a fanout module — it manages its own per-browser subscriptions. Defaults and per-conversation overrides are stored once per server instance. There are no in-tab desktop notifications.
 
 - **Requires HTTPS** (self-signed certificates work) and outbound internet from the server to reach browser push services (Google FCM, Mozilla autopush).
 - VAPID key pair is auto-generated on first startup and stored in `app_settings`.
-- Each browser subscription is stored in `push_subscriptions` with device identity and delivery state. The set of push-enabled conversations is stored globally in `app_settings.push_conversations`, so all subscribed browsers receive the same configured rooms/DMs.
+- VAPID subject is edited in Settings → Notifications (`app_settings.vapid_subject`). Empty falls back to `MESHCORE_VAPID_SUBJECT`. Apple requires a real `mailto:` or `https:` contact.
+- Each browser subscription is stored in `push_subscriptions`. Enablement uses `push_defaults` plus `push_conversation_overrides` (`app/push/policy.py`). Public and hashtag channels default ON; private-key channels default OFF; `PRIV` (including rooms) follows `new_dm`. Channel mute is a separate circuit breaker.
+- First-seen contact alerts (`app/push/first_seen.py`) fire only on a new contact-row insert after radio setup (companion / repeater / sensor). Unknown and room types never trigger them. They are not a WebSocket event.
 - `broadcast_event()` in `websocket.py` dispatches to `push_manager.dispatch_message()` alongside fanout for `message` events.
 - Expired subscriptions (HTTP 404/410 from push service) are auto-deleted.
-- Frontend: service worker (`sw.js`) handles push display and notification click navigation. The `BellRing` icon in `ChatHeader` toggles per-conversation push. Device management lives in Settings > Local.
+- Frontend: service worker (`sw.js`) handles push display and notification click navigation. Settings → Notifications (`#settings/notifications`) owns devices, defaults, exceptions, and VAPID subject. The `ChatHeader` bell is a simple conversation override (rooms included); first click with no subscription only subscribes. `RepeaterDashboard` has no bell. Mute uses a dedicated header button.
 
 ### Server-Side Decryption
 
@@ -511,9 +514,12 @@ mc.subscribe(EventType.ACK, handler)
 | `MESHCORE_LOAD_WITH_AUTOEVICT` | `false` | Enable autoevict contact loading: sets `AUTO_ADD_OVERWRITE_OLDEST` on the radio so adds never fail with TABLE_FULL, skips the removal phase during reconcile, and allows blind loading when `get_contacts` fails. Loaded contacts are not radio-favorited and may be evicted by new adverts when the table is full. |
 | `MESHCORE_SKIP_POST_CONNECT_SYNC` | `false` | Debug/diagnostic escape hatch: skip the contact/channel sync-and-offload, startup advertisement, and pending-message drain during post-connect setup, and do not start the periodic sync/advert/message-poll/telemetry background loops. Handler registration, key export, time sync, flood-scope apply, and auto message fetching still run. Useful when the radio's contact/channel state must be left untouched; not for normal operation. |
 | `MESHCORE_ENABLE_LOCAL_PRIVATE_KEY_EXPORT` | `false` | Enable `GET /api/radio/private-key` to return the in-memory private key as hex. Disabled by default; only enable on a trusted network where you need to retrieve the key (e.g. for backup or migration). |
-| `MESHCORE_VAPID_SUBJECT` | `mailto:noreply@meshcore.local` | Subject (`sub`) claim for Web Push VAPID tokens; must be a `mailto:` or `https:` contact. Apple's push service (APNs) rejects the default `.local` domain with `403 BadJwtToken`, so iOS/Safari operators must set this to a real address. Google FCM (Chrome/Android) accepts the default. |
+| `MESHCORE_VAPID_SUBJECT` | `mailto:noreply@meshcore.local` | Fallback VAPID JWT `sub` when `app_settings.vapid_subject` is empty. Must be a `mailto:` or `https:` contact. Apple's APNs rejects the default `.local` domain with `403 BadJwtToken`, so iOS/Safari operators must set a real address in Settings → Notifications or here. Google FCM (Chrome/Android) accepts the default. |
+| `MESHLOOM_COMMUNITY` | *(on for new DBs)* | Seed Meshloom Community on a brand-new database. Unset or `1` seeds on; `0`/`false`/`off` seeds opted out. Existing databases are never flipped by this env. |
+| `MESHLOOM_COMMUNITY_IATA` | *(none)* | Optional 3-letter IATA to seed on a brand-new database |
+| `MESHLOOM_COMMUNITY_LOCKED` | `false` | When `1`, the UI cannot enable Community |
 
-**Note:** Runtime app settings are stored in the database (`app_settings` table), not environment variables. These include radio transport (`radio_transport`, `radio_serial_port`, `radio_serial_baudrate`, `radio_tcp_host`, `radio_tcp_port`, `radio_ble_address`, `radio_ble_pin`), plus `max_radio_contacts`, `auto_decrypt_dm_on_advert`, `advert_interval`, `last_advert_time`, `last_message_times`, `flood_scope`, `known_regions`, `blocked_keys`, `blocked_names`, `discovery_blocked_types`, `tracked_telemetry_repeaters`, `tracked_telemetry_contacts`, `auto_resend_channel`, and `telemetry_interval_hours`. Empty `radio_serial_port` means auto-detect. Until `radio_transport` is set, the radio stays paused. `max_radio_contacts` is the configured radio contact capacity baseline used by background maintenance: favorites reload first, non-favorite fill targets about 80% of that value, and full offload/reload triggers around 95% occupancy. They are configured via the web UI (`GET/PATCH /api/settings` for most fields; radio transport is a dedicated UX surface). MQTT, bot, webhook, Apprise, and SQS configs are stored in the `fanout_configs` table, managed via `/api/fanout`. If the radio's channel slots appear unstable or another client is mutating them underneath this app, operators can force the old always-reconfigure send path with `MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE=true`.
+**Note:** Runtime app settings are stored in the database (`app_settings` table), not environment variables. These include radio transport (`radio_transport`, `radio_serial_port`, `radio_serial_baudrate`, `radio_tcp_host`, `radio_tcp_port`, `radio_ble_address`, `radio_ble_pin`), plus `max_radio_contacts`, `auto_decrypt_dm_on_advert`, `advert_interval`, `last_advert_time`, `last_message_times`, `flood_scope`, `known_regions`, `blocked_keys`, `blocked_names`, `discovery_blocked_types`, `tracked_telemetry_repeaters`, `tracked_telemetry_contacts`, `auto_resend_channel`, `telemetry_interval_hours`, `push_defaults`, `push_conversation_overrides`, and `vapid_subject`. Empty `radio_serial_port` means auto-detect. Until `radio_transport` is set, the radio stays paused. `max_radio_contacts` is the configured radio contact capacity baseline used by background maintenance: favorites reload first, non-favorite fill targets about 80% of that value, and full offload/reload triggers around 95% occupancy. They are configured via the web UI (`GET/PATCH /api/settings` for most fields; radio transport is a dedicated UX surface). MQTT, bot, webhook, Apprise, and SQS configs are stored in the `fanout_configs` table, managed via `/api/fanout`. If the radio's channel slots appear unstable or another client is mutating them underneath this app, operators can force the old always-reconfigure send path with `MESHCORE_FORCE_CHANNEL_SLOT_RECONFIGURE=true`.
 
 Byte-perfect channel retries are user-triggered via `POST /api/messages/channel/{message_id}/resend` and are allowed for 30 seconds after the original send.
 

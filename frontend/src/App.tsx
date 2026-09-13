@@ -14,7 +14,6 @@ import {
   useConversationActions,
   useConversationNavigation,
   useRealtimeAppState,
-  useBrowserNotifications,
   useFaviconBadge,
   useUnreadTitle,
 } from './hooks';
@@ -27,6 +26,7 @@ import { RichPayloadProvider } from './contexts/RichPayloadContext';
 import { usePush } from './contexts/PushSubscriptionContext';
 import { messageContainsMention } from './utils/messageParser';
 import { getStateKey } from './utils/conversationState';
+import { isPublicChannelKey } from './utils/publicChannel';
 import type { BulkCreateHashtagChannelsResult, Channel, Conversation, Message } from './types';
 import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM } from './types';
 import { shouldAutoFocusInput } from './utils/autoFocusInput';
@@ -42,6 +42,23 @@ interface NewMessagePrefillRequest {
   tab: 'hashtag';
   hashtagName: string;
   nonce: number;
+}
+
+function conversationPushPolicy(
+  conversation: Conversation,
+  channels: Channel[]
+): { messageType: 'PRIV' | 'CHAN'; isHashtag?: boolean; isPublic?: boolean } | null {
+  if (conversation.type === 'contact') {
+    return { messageType: 'PRIV' };
+  }
+  if (conversation.type === 'channel') {
+    return {
+      messageType: 'CHAN',
+      isHashtag: channels.find((channel) => channel.key === conversation.id)?.is_hashtag,
+      isPublic: isPublicChannelKey(conversation.id),
+    };
+  }
+  return null;
 }
 
 /**
@@ -86,13 +103,6 @@ export function App() {
   const [bulkAddResult, setBulkAddResult] = useState<BulkCreateHashtagChannelsResult | null>(null);
   const [repeaterAutoLoginKey, setRepeaterAutoLoginKey] = useState<string | null>(null);
   const [visibilityVersion, setVisibilityVersion] = useState(0);
-  const {
-    notificationsSupported,
-    notificationsPermission,
-    isConversationNotificationsEnabled,
-    toggleConversationNotifications,
-    notifyIncomingMessage,
-  } = useBrowserNotifications();
   const pushSubscription = usePush();
   const {
     showNewMessage,
@@ -418,7 +428,6 @@ export function App() {
     removeConversationMessages,
     receiveMessageAck,
     removeMessage,
-    notifyIncomingMessage,
   });
   const handleIdentityAdopted = useCallback(async () => {
     resetClientStateAfterIdentityAdopt();
@@ -579,7 +588,6 @@ export function App() {
     onMarkAllRead: () => {
       void markAllRead();
     },
-    isConversationNotificationsEnabled,
     blockedKeys: appSettings?.blocked_keys ?? [],
     blockedNames: appSettings?.blocked_names ?? [],
   };
@@ -633,49 +641,41 @@ export function App() {
     onSendMessage: handleSendMessage,
     onMessageDeleted: removeMessage,
     onDismissUnreadMarker: () => setChannelUnreadMarker(null),
-    notificationsSupported,
-    notificationsPermission,
-    notificationsEnabled:
-      activeConversation?.type === 'contact' || activeConversation?.type === 'channel'
-        ? isConversationNotificationsEnabled(activeConversation.type, activeConversation.id)
-        : false,
-    onToggleNotifications: () => {
-      if (activeConversation?.type === 'contact' || activeConversation?.type === 'channel') {
-        void toggleConversationNotifications(
-          activeConversation.type,
-          activeConversation.id,
-          activeConversation.name
-        );
-      }
-    },
     pushSupported: pushSubscription.isSupported,
     pushSubscribed: pushSubscription.isSubscribed,
-    pushEnabledForConversation:
-      activeConversation?.type === 'contact' || activeConversation?.type === 'channel'
-        ? pushSubscription.isConversationPushEnabled(
-            getStateKey(activeConversation.type, activeConversation.id)
-          )
-        : false,
+    pushEnabledForConversation: (() => {
+      if (
+        !activeConversation ||
+        (activeConversation.type !== 'contact' && activeConversation.type !== 'channel')
+      ) {
+        return false;
+      }
+      const policy = conversationPushPolicy(activeConversation, channels);
+      if (!policy) return false;
+      return pushSubscription.isConversationPushEnabled(
+        getStateKey(activeConversation.type, activeConversation.id),
+        policy
+      );
+    })(),
     onTogglePush: async () => {
       if (
         !activeConversation ||
         (activeConversation.type !== 'contact' && activeConversation.type !== 'channel')
-      )
+      ) {
         return;
-      const key = getStateKey(activeConversation.type, activeConversation.id);
-      const pushEnabled = pushSubscription.isConversationPushEnabled(key);
-
-      if (!pushEnabled && !pushSubscription.isSubscribed) {
-        const subscriptionId = await pushSubscription.subscribe();
-        if (!subscriptionId) {
-          return;
-        }
       }
-
-      await pushSubscription.toggleConversation(key);
+      const policy = conversationPushPolicy(activeConversation, channels);
+      if (!policy) return;
+      if (!pushSubscription.isSubscribed) {
+        await pushSubscription.subscribe();
+        return;
+      }
+      const key = getStateKey(activeConversation.type, activeConversation.id);
+      const currentlyEffective = pushSubscription.isConversationPushEnabled(key, policy);
+      await pushSubscription.setConversationOverride(key, !currentlyEffective);
     },
     onOpenPushSettings: () => {
-      setSettingsSection('local');
+      setSettingsSection('notifications');
       if (!showSettings) handleToggleSettingsView();
     },
     trackedTelemetryRepeaters: appSettings?.tracked_telemetry_repeaters ?? [],

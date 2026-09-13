@@ -36,34 +36,7 @@ class ContactRepository:
             return contact.to_upsert()
         return ContactUpsert.model_validate(contact)
 
-    @staticmethod
-    async def upsert(contact: ContactUpsert | Contact | Mapping[str, Any]) -> None:
-        contact_row = ContactRepository._coerce_contact_upsert(contact)
-        if (
-            contact_row.direct_path is None
-            and contact_row.direct_path_len is None
-            and contact_row.direct_path_hash_mode is None
-        ):
-            direct_path = None
-            direct_path_len = None
-            direct_path_hash_mode = None
-        else:
-            direct_path, direct_path_len, direct_path_hash_mode = normalize_contact_route(
-                contact_row.direct_path,
-                contact_row.direct_path_len,
-                contact_row.direct_path_hash_mode,
-            )
-        route_override_path, route_override_len, route_override_hash_mode = (
-            normalize_route_override(
-                contact_row.route_override_path,
-                contact_row.route_override_len,
-                contact_row.route_override_hash_mode,
-            )
-        )
-
-        async with db.tx() as conn:
-            async with conn.execute(
-                """
+    _UPSERT_SQL = """
                 INSERT INTO contacts (public_key, name, type, flags, direct_path, direct_path_len,
                                       direct_path_hash_mode, direct_path_updated_at,
                                       route_override_path, route_override_len,
@@ -104,29 +77,81 @@ class ContactRepository:
                     on_radio = COALESCE(excluded.on_radio, contacts.on_radio),
                     last_contacted = COALESCE(excluded.last_contacted, contacts.last_contacted),
                     first_seen = COALESCE(contacts.first_seen, excluded.first_seen)
-                """,
-                (
-                    contact_row.public_key.lower(),
-                    contact_row.name,
-                    contact_row.type,
-                    contact_row.flags,
-                    direct_path,
-                    direct_path_len,
-                    direct_path_hash_mode,
-                    contact_row.direct_path_updated_at,
-                    route_override_path,
-                    route_override_len,
-                    route_override_hash_mode,
-                    contact_row.last_advert,
-                    contact_row.lat,
-                    contact_row.lon,
-                    contact_row.last_seen,
-                    contact_row.on_radio,
-                    contact_row.last_contacted,
-                    contact_row.first_seen,
-                ),
-            ):
+                """
+
+    @staticmethod
+    def _upsert_params(
+        contact: ContactUpsert | Contact | Mapping[str, Any],
+    ) -> tuple[str, tuple[Any, ...]]:
+        contact_row = ContactRepository._coerce_contact_upsert(contact)
+        if (
+            contact_row.direct_path is None
+            and contact_row.direct_path_len is None
+            and contact_row.direct_path_hash_mode is None
+        ):
+            direct_path = None
+            direct_path_len = None
+            direct_path_hash_mode = None
+        else:
+            direct_path, direct_path_len, direct_path_hash_mode = normalize_contact_route(
+                contact_row.direct_path,
+                contact_row.direct_path_len,
+                contact_row.direct_path_hash_mode,
+            )
+        route_override_path, route_override_len, route_override_hash_mode = (
+            normalize_route_override(
+                contact_row.route_override_path,
+                contact_row.route_override_len,
+                contact_row.route_override_hash_mode,
+            )
+        )
+        public_key = contact_row.public_key.lower()
+        return public_key, (
+            public_key,
+            contact_row.name,
+            contact_row.type,
+            contact_row.flags,
+            direct_path,
+            direct_path_len,
+            direct_path_hash_mode,
+            contact_row.direct_path_updated_at,
+            route_override_path,
+            route_override_len,
+            route_override_hash_mode,
+            contact_row.last_advert,
+            contact_row.lat,
+            contact_row.lon,
+            contact_row.last_seen,
+            contact_row.on_radio,
+            contact_row.last_contacted,
+            contact_row.first_seen,
+        )
+
+    @staticmethod
+    async def upsert(contact: ContactUpsert | Contact | Mapping[str, Any]) -> None:
+        _public_key, params = ContactRepository._upsert_params(contact)
+        async with db.tx() as conn:
+            async with conn.execute(ContactRepository._UPSERT_SQL, params):
                 pass
+
+    @staticmethod
+    async def upsert_reporting_insert(contact: ContactUpsert | Contact | Mapping[str, Any]) -> bool:
+        """Upsert a contact and report whether the row was newly inserted.
+
+        SELECT + INSERT share one ``db.tx()``. Do not call ``get_by_key()``
+        here — the DB lock is not re-entrant. Returns True only when the
+        public key did not already exist.
+        """
+        public_key, params = ContactRepository._upsert_params(contact)
+        async with db.tx() as conn:
+            async with conn.execute(
+                "SELECT 1 FROM contacts WHERE public_key = ?",
+                (public_key,),
+            ) as cursor:
+                existed = await cursor.fetchone() is not None
+            async with conn.execute(ContactRepository._UPSERT_SQL, params):
+                pass
+            return not existed
 
     @staticmethod
     def _row_to_contact(row) -> Contact:
@@ -587,6 +612,28 @@ class ContactRepository:
             ) as cursor:
                 rowcount = cursor.rowcount
         return rowcount > 0
+
+    @staticmethod
+    async def list_prefix_placeholder_keys(full_key: str) -> list[str]:
+        """Return shorter stored keys that are prefixes of ``full_key``.
+
+        Same identity rule as ``promote_prefix_placeholders``: length < 64
+        and ``full_key`` starts with the stored key.
+        """
+        normalized = full_key.lower()
+        async with db.readonly() as conn:
+            async with conn.execute(
+                """
+                SELECT public_key
+                FROM contacts
+                WHERE length(public_key) < 64
+                  AND ? LIKE public_key || '%'
+                ORDER BY length(public_key) DESC, public_key
+                """,
+                (normalized,),
+            ) as cursor:
+                rows = list(await cursor.fetchall())
+        return [row["public_key"] for row in rows]
 
     @staticmethod
     async def promote_prefix_placeholders(full_key: str) -> list[str]:

@@ -208,6 +208,13 @@ describe('settings URL hashes', () => {
     expect(parseHashSettingsSection()).toBe('community');
     expect(getSettingsHash('community')).toBe('#settings/community');
   });
+
+  it('parses the notifications settings hash', () => {
+    window.location.hash = '#settings/notifications';
+
+    expect(parseHashSettingsSection()).toBe('notifications');
+    expect(getSettingsHash('notifications')).toBe('#settings/notifications');
+  });
 });
 
 describe('resolveChannelFromHashToken', () => {

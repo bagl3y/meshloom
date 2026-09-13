@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
     toggleFavorite: vi.fn(),
     updateSettings: vi.fn(),
     getHealth: vi.fn(),
+    getCommunity: vi.fn(),
     sendAdvertisement: vi.fn(),
     rebootRadio: vi.fn(),
     createChannel: vi.fn(),
@@ -34,7 +35,7 @@ const mocks = vi.hoisted(() => ({
     isSupported: false,
     isSubscribed: false,
     subscribe: vi.fn<() => Promise<string | null>>(async () => null),
-    toggleConversation: vi.fn(async () => {}),
+    setConversationOverride: vi.fn(async () => {}),
     isConversationPushEnabled: vi.fn(() => false),
   },
   hookFns: {
@@ -66,11 +67,12 @@ vi.mock('../contexts/PushSubscriptionContext', () => ({
     isSubscribed: mocks.push.isSubscribed,
     currentSubscriptionId: mocks.push.isSubscribed ? 'sub-1' : null,
     allSubscriptions: [],
-    pushConversations: [],
+    overrideEntries: [],
+    preferences: null,
     loading: false,
     subscribe: mocks.push.subscribe,
     unsubscribe: vi.fn(async () => {}),
-    toggleConversation: mocks.push.toggleConversation,
+    setConversationOverride: mocks.push.setConversationOverride,
     isConversationPushEnabled: mocks.push.isConversationPushEnabled,
     deleteSubscription: vi.fn(async () => {}),
     testPush: vi.fn(async () => {}),
@@ -356,7 +358,7 @@ describe('App favorite toggle flow', () => {
     });
   });
 
-  it('subscribes this browser before enabling web push for a conversation', async () => {
+  it('subscribes this browser on the first push-bell click without setting an override', async () => {
     mocks.push.isSupported = true;
     mocks.push.isSubscribed = false;
     mocks.push.subscribe.mockResolvedValue('sub-1');
@@ -370,16 +372,39 @@ describe('App favorite toggle flow', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: i18n.t('chatHeader.notifications') }));
-    fireEvent.click(
-      screen.getByRole('checkbox', {
-        name: (accessibleName) => accessibleName.includes(i18n.t('chatHeader.webPush')),
-      })
-    );
 
     await waitFor(() => {
       expect(mocks.push.subscribe).toHaveBeenCalledTimes(1);
-      expect(mocks.push.toggleConversation).toHaveBeenCalledWith(`channel-${publicChannel.key}`);
     });
+    expect(mocks.push.setConversationOverride).not.toHaveBeenCalled();
+  });
+
+  it('toggles the conversation override once this browser is already subscribed', async () => {
+    mocks.push.isSupported = true;
+    mocks.push.isSubscribed = true;
+    mocks.push.isConversationPushEnabled.mockReturnValue(false);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: i18n.t('chatHeader.notifications') })
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('chatHeader.notifications') }));
+
+    await waitFor(() => {
+      expect(mocks.push.setConversationOverride).toHaveBeenCalledWith(
+        `channel-${publicChannel.key}`,
+        true
+      );
+    });
+    expect(mocks.push.isConversationPushEnabled).toHaveBeenCalledWith(
+      `channel-${publicChannel.key}`,
+      expect.objectContaining({ messageType: 'CHAN', isPublic: true })
+    );
+    expect(mocks.push.subscribe).not.toHaveBeenCalled();
   });
 
   it('does not enable web push when subscription setup fails', async () => {
@@ -396,15 +421,10 @@ describe('App favorite toggle flow', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: i18n.t('chatHeader.notifications') }));
-    fireEvent.click(
-      screen.getByRole('checkbox', {
-        name: (accessibleName) => accessibleName.includes(i18n.t('chatHeader.webPush')),
-      })
-    );
 
     await waitFor(() => {
       expect(mocks.push.subscribe).toHaveBeenCalledTimes(1);
     });
-    expect(mocks.push.toggleConversation).not.toHaveBeenCalled();
+    expect(mocks.push.setConversationOverride).not.toHaveBeenCalled();
   });
 });

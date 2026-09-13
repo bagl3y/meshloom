@@ -56,9 +56,11 @@ app/
 ├── websocket.py         # WS manager + broadcast helpers
 ├── security.py          # Optional app-wide HTTP Basic auth middleware for HTTP + WS
 ├── push/                # Web Push notification subsystem
-│   ├── vapid.py                 # VAPID key generation, storage, caching
+│   ├── vapid.py                 # VAPID key generation, storage, caching; DB subject then env fallback
 │   ├── send.py                  # pywebpush wrapper (async via thread executor)
-│   └── manager.py               # Push dispatch: filter, build payload, concurrent send
+│   ├── policy.py                # Conversation enablement (override > PRIV/new_dm > public/hashtag ON > private OFF)
+│   ├── first_seen.py            # First-seen contact alert (new DB insert only, after setup)
+│   └── manager.py               # Message + first-seen dispatch; muted-channel circuit breaker
 ├── fanout/              # Fanout bus: MQTT, bots, webhooks, Apprise, SQS (see fanout/AGENTS_fanout.md)
 ├── telemetry_interval.py # Shared telemetry interval math for tracked-repeater scheduler
 ├── path_utils.py        # Path hex rendering and hop-width helpers
@@ -232,8 +234,9 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 
 - **Not a fanout module** — Web Push manages per-browser subscriptions (N browsers, each with its own endpoint and delivery state), unlike fanout which is one-config-to-one-destination.
 - **VAPID keys**: auto-generated P-256 key pair on first startup, stored in `app_settings.vapid_private_key` / `vapid_public_key`. Cached in-module by `app/push/vapid.py`.
-- **VAPID subject**: the JWT `sub` claim comes from `get_vapid_claims()` in `app/push/vapid.py`, configurable via `MESHCORE_VAPID_SUBJECT` (default `mailto:noreply@meshcore.local`). Apple's APNs rejects `.local` subjects with `403 BadJwtToken`, so iOS/Safari deployments must set a real `mailto:`/`https:` contact.
-- **Dispatch**: `broadcast_event()` in `websocket.py` fires `push_manager.dispatch_message(data)` alongside fanout for `message` events. The manager checks the global `app_settings.push_conversations` list, then sends to all currently registered subscriptions via `pywebpush` (run in a thread executor).
+- **VAPID subject**: `get_vapid_claims()` uses a non-empty `app_settings.vapid_subject` (Settings → Notifications / `PATCH /push/preferences`), then falls back to `MESHCORE_VAPID_SUBJECT` (default `mailto:noreply@meshcore.local`). Apple's APNs rejects `.local` subjects with `403 BadJwtToken`; iOS/Safari deployments must set a real `mailto:`/`https:` contact.
+- **Dispatch**: `broadcast_event()` in `websocket.py` fires `push_manager.dispatch_message(data)` alongside fanout for `message` events. Enablement is `policy.conversation_is_enabled` (`push_defaults` + `push_conversation_overrides`; Public/`#` ON, private-key channels OFF, `PRIV` including rooms via `new_dm`). Muted channels are a separate circuit breaker. First-seen alerts go through `dispatch_first_seen` (not a WebSocket event) after a new contact-row insert. Sends use `pywebpush` in a thread executor.
+- **Preferences API**: `GET`/`PATCH /push/preferences` and `PUT /push/preferences/conversations/{key}` `{override}`. `GET`/`POST /push/conversations` return 404. Migration 071 turns defaults ON and imports legacy `push_conversations` entries as `true` overrides.
 - **Stale cleanup**: HTTP 404/410 from the push service triggers immediate subscription deletion.
 - **Subscriptions stored** in `push_subscriptions` table with `UNIQUE(endpoint)` for upsert semantics.
 - Requires HTTPS (self-signed OK) and outbound internet to reach browser push services.
@@ -354,11 +357,12 @@ Web Push is a standalone subsystem in `app/push/`, separate from the fanout modu
 - `GET /push/vapid-public-key` — VAPID public key for browser `PushManager.subscribe()`
 - `POST /push/subscribe` — register/upsert push subscription (keyed by endpoint URL)
 - `GET /push/subscriptions` — list all push subscriptions
-- `PATCH /push/subscriptions/{id}` — update label or filter preferences
+- `PATCH /push/subscriptions/{id}` — update label or language
 - `DELETE /push/subscriptions/{id}` — delete subscription
 - `POST /push/subscriptions/{id}/test` — send test notification
-- `GET /push/conversations` — global list of push-enabled conversation state keys
-- `POST /push/conversations/toggle` — add or remove a conversation from the global push list
+- `GET /push/preferences` — defaults, conversation overrides, and stored VAPID subject
+- `PATCH /push/preferences` — update defaults and/or VAPID subject
+- `PUT /push/preferences/conversations/{key}` — set (`true`/`false`) or clear (`null`) one override
 
 ### WebSocket
 - `WS /ws`
@@ -394,7 +398,7 @@ Main tables:
 - `contact_telemetry_history` (time-series LPP telemetry snapshots for tracked contacts; same schema as repeater table)
 - `fanout_configs` (MQTT, bot, webhook, Apprise, SQS integration configs)
 - `push_subscriptions` (Web Push browser subscriptions with delivery metadata; UNIQUE on endpoint)
-- `app_settings` (includes `vapid_private_key` and `vapid_public_key` for Web Push VAPID signing)
+- `app_settings` (includes `push_defaults`, `push_conversation_overrides`, `vapid_subject`, plus `vapid_private_key` / `vapid_public_key` for Web Push)
 
 Contact route state is canonicalized on the backend:
 - stored route inputs: `direct_path`, `direct_path_len`, `direct_path_hash_mode`, `direct_path_updated_at`, plus optional `route_override_*`
@@ -420,8 +424,9 @@ Repository writes should prefer typed models such as `ContactUpsert` over ad hoc
 - `tracked_telemetry_repeaters`, `tracked_telemetry_contacts`
 - `auto_resend_channel`
 - `telemetry_interval_hours`
+- `push_defaults`, `push_conversation_overrides`, `vapid_subject`, `vapid_private_key`, `vapid_public_key`
 
-Note: MQTT, community MQTT, and bot configs were migrated to the `fanout_configs` table (migrations 36-38).
+Note: MQTT, community MQTT, and bot configs were migrated to the `fanout_configs` table (migrations 36-38). Push conversation enablement is `push_defaults` + overrides, not the legacy `push_conversations` list.
 
 ## Security Posture (intentional)
 

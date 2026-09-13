@@ -796,6 +796,27 @@ describe('SettingsModal', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('lists notifications after local in the accordion nav', () => {
+    renderModal({ mobile: true });
+    const sectionToggles = screen
+      .getAllByRole('button')
+      .filter((button) => button.getAttribute('aria-expanded') !== null);
+    const labels = sectionToggles.map((button) => button.textContent ?? '');
+    const localIdx = labels.findIndex((label) => label.includes(i18n.t('settingsNav.local')));
+    const notificationsIdx = labels.findIndex((label) =>
+      label.includes(i18n.t('settingsNav.notifications'))
+    );
+
+    expect(localIdx).toBeGreaterThanOrEqual(0);
+    expect(notificationsIdx).toBe(localIdx + 1);
+
+    fireEvent.click(sectionToggles[notificationsIdx]);
+    expect(screen.getByText(i18n.t('settings.notifications.thisDevice'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.notifications.defaults'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.notifications.exceptions'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.notifications.vapidSubject'))).toBeInTheDocument();
+  });
+
   it('lists the new Windows 95 and iPhone themes', () => {
     renderModal();
     openLocalSection();

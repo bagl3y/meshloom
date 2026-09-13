@@ -292,7 +292,7 @@ async def create_contact(
         type=request.type,
         on_radio=False,
     )
-    await ContactRepository.upsert(contact_upsert)
+    inserted = await ContactRepository.upsert_reporting_insert(contact_upsert)
     logger.info("Created contact %s", lower_key[:12])
     promoted_keys = await promote_prefix_contacts_for_contact(
         public_key=lower_key,
@@ -315,6 +315,14 @@ async def create_contact(
         raise HTTPException(status_code=500, detail="Contact was created but could not be reloaded")
     await _broadcast_contact_update(stored)
     await _broadcast_contact_resolution(promoted_keys, stored)
+    if inserted:
+        from app.push.first_seen import maybe_notify_contact_first_seen
+
+        await maybe_notify_contact_first_seen(
+            stored,
+            origin="manual",
+            promoted_keys=promoted_keys,
+        )
     return stored
 
 

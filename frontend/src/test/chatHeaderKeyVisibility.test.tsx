@@ -29,14 +29,10 @@ const noop = () => {};
 const baseProps = {
   contacts: [],
   config: null,
-  notificationsSupported: true,
-  notificationsEnabled: false,
-  notificationsPermission: 'granted' as const,
   onTrace: noop,
   onPathDiscovery: vi.fn(async () => {
     throw new Error('unused');
   }) as (_: string) => Promise<PathDiscoveryResponse>,
-  onToggleNotifications: noop,
   onToggleFavorite: noop,
   onSetChannelFloodScopeOverride: noop,
   onDeleteChannel: noop,
@@ -166,37 +162,9 @@ describe('ChatHeader key visibility', () => {
     expect(screen.getAllByText('#Esperance')).toHaveLength(2);
   });
 
-  it('shows filled bell when notifications are enabled and toggles via dropdown', () => {
+  it('shows a filled push bell and toggles on click', () => {
     const conversation: Conversation = { type: 'contact', id: '11'.repeat(32), name: 'Alice' };
-    const onToggleNotifications = vi.fn();
-
-    render(
-      <ChatHeader
-        {...baseProps}
-        conversation={conversation}
-        channels={[]}
-        notificationsEnabled
-        onToggleNotifications={onToggleNotifications}
-      />
-    );
-
-    // Bell button should be present; open the dropdown
-    const bellBtn = screen.getByRole('button', { name: i18n.t('chatHeader.notifications') });
-    fireEvent.click(bellBtn);
-
-    // Desktop notifications checkbox should be checked
-    const checkbox = screen.getByRole('checkbox', {
-      name: (accessibleName) => accessibleName.includes(i18n.t('chatHeader.desktopNotif')),
-    });
-    expect(checkbox).toBeChecked();
-
-    // Toggling calls the handler
-    fireEvent.click(checkbox);
-    expect(onToggleNotifications).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps desktop notifications available when web push is also supported', () => {
-    const conversation: Conversation = { type: 'contact', id: '13'.repeat(32), name: 'Alice' };
+    const onTogglePush = vi.fn();
 
     render(
       <ChatHeader
@@ -204,27 +172,37 @@ describe('ChatHeader key visibility', () => {
         conversation={conversation}
         channels={[]}
         pushSupported
-        pushSubscribed
         pushEnabledForConversation
-        onTogglePush={vi.fn()}
+        onTogglePush={onTogglePush}
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: i18n.t('chatHeader.notifications') }));
-
-    expect(
-      screen.getByRole('checkbox', {
-        name: (accessibleName) => accessibleName.includes(i18n.t('chatHeader.desktopNotif')),
-      })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('checkbox', {
-        name: (accessibleName) => accessibleName.includes(i18n.t('chatHeader.webPush')),
-      })
-    ).toBeInTheDocument();
+    const bellBtn = screen.getByRole('button', { name: i18n.t('chatHeader.notifications') });
+    expect(bellBtn).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(bellBtn);
+    expect(onTogglePush).toHaveBeenCalledTimes(1);
   });
 
-  it('hides trace and notification controls for room-server contacts', () => {
+  it('mutes a channel from a dedicated bell-off button', () => {
+    const key = 'AB'.repeat(16);
+    const channel = makeChannel(key, '#flightless', true);
+    const conversation: Conversation = { type: 'channel', id: key, name: '#flightless' };
+    const onToggleMute = vi.fn();
+
+    render(
+      <ChatHeader
+        {...baseProps}
+        conversation={conversation}
+        channels={[channel]}
+        onToggleMute={onToggleMute}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('chatHeader.muteChannel') }));
+    expect(onToggleMute).toHaveBeenCalledWith(key);
+  });
+
+  it('hides trace controls for room-server contacts but keeps the push bell', () => {
     const pubKey = '41'.repeat(32);
     const contact: Contact = {
       public_key: pubKey,
@@ -247,7 +225,14 @@ describe('ChatHeader key visibility', () => {
     const conversation: Conversation = { type: 'contact', id: pubKey, name: 'Ops Board' };
 
     render(
-      <ChatHeader {...baseProps} conversation={conversation} channels={[]} contacts={[contact]} />
+      <ChatHeader
+        {...baseProps}
+        conversation={conversation}
+        channels={[]}
+        contacts={[contact]}
+        pushSupported
+        onTogglePush={vi.fn()}
+      />
     );
 
     expect(
@@ -257,8 +242,8 @@ describe('ChatHeader key visibility', () => {
       screen.queryByRole('button', { name: i18n.t('chatHeader.directTrace') })
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: i18n.t('chatHeader.notifications') })
-    ).not.toBeInTheDocument();
+      screen.getByRole('button', { name: i18n.t('chatHeader.notifications') })
+    ).toBeInTheDocument();
   });
 
   it('hides the delete button for the canonical Public channel', () => {

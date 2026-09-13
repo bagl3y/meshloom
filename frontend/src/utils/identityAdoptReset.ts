@@ -3,8 +3,6 @@ import { resetRawPacketStore } from '../stores/rawPacketStore';
 import { CONVERSATION_DRAFT_PREFIX } from './conversationDrafts';
 import { LAST_VIEWED_CONVERSATION_KEY, getLastViewedConversation } from './lastViewedConversation';
 
-const NOTIFICATION_MAP_KEY = 'meshcore_browser_notifications_enabled_by_conversation';
-
 function isContactScopedKey(key: string): boolean {
   return key.includes('contact-');
 }
@@ -42,16 +40,5 @@ export function resetClientStateAfterIdentityAdopt(): void {
     // localStorage may be unavailable
   }
 
-  try {
-    const raw = localStorage.getItem(NOTIFICATION_MAP_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (!parsed || typeof parsed !== 'object') return;
-    const kept = Object.fromEntries(
-      Object.entries(parsed).filter(([key]) => !key.startsWith('contact-'))
-    );
-    localStorage.setItem(NOTIFICATION_MAP_KEY, JSON.stringify(kept));
-  } catch {
-    // localStorage may be unavailable
-  }
+  // Push conversation prefs live on the server; no localStorage cleanup here.
 }

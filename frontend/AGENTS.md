@@ -63,8 +63,7 @@ frontend/src/
 │   ├── useAppSettings.ts           # Settings, favorites, preferences migration
 │   ├── useConversationRouter.ts    # URL hash → active conversation routing
 │   ├── useContactsAndChannels.ts   # Contact/channel loading, creation, deletion
-│   ├── useBrowserNotifications.ts  # Per-conversation browser notification preferences + dispatch
-│   ├── usePushSubscription.ts      # Web Push subscription lifecycle, per-conversation filters
+│   ├── usePushSubscription.ts      # Web Push subscribe/unsubscribe, defaults, conversation overrides
 │   ├── useFaviconBadge.ts          # Browser tab unread badge state
 │   ├── useEntranceSettled.ts       # Defers entrance animation work until layout settles
 │   └── useRememberedServerPassword.ts # Browser-local repeater/room password persistence
@@ -82,6 +81,7 @@ frontend/src/
 ├── utils/
 │   ├── urlHash.ts              # Hash parsing and encoding
 │   ├── conversationState.ts    # State keys, in-memory + localStorage helpers
+│   ├── pushPolicy.ts           # Mirror of backend conversation_is_enabled
 │   ├── messageParser.ts        # Message text → rendered segments
 │   ├── pathUtils.ts            # Distance/validation helpers for paths + map
 │   ├── pubkey.ts               # getContactDisplayName (12-char prefix fallback)
@@ -113,7 +113,7 @@ frontend/src/
 ├── components/
 │   ├── StatusBar.tsx
 │   ├── Sidebar.tsx
-│   ├── ChatHeader.tsx          # Conversation header (trace, favorite, delete)
+│   ├── ChatHeader.tsx          # Conversation header (push bell, channel mute, trace, favorite, delete)
 │   ├── MessageList.tsx
 │   ├── MessageInput.tsx
 │   ├── NewMessageModal.tsx
@@ -136,7 +136,7 @@ frontend/src/
 │   ├── ContactStatusInfo.tsx   # Contact status info component
 │   ├── ContactPathDiscoveryModal.tsx # Forward/return path discovery dialog
 │   ├── ContactRoutingOverrideModal.tsx # Manual direct-route override editor
-│   ├── RepeaterDashboard.tsx   # Layout shell — delegates to repeater/ panes
+│   ├── RepeaterDashboard.tsx   # Layout shell — delegates to repeater/ panes (no push bell)
 │   ├── RepeaterLogin.tsx       # Repeater login form (password + guest)
 │   ├── RoomServerPanel.tsx     # Room-server auth gate + status banner ahead of room chat
 │   ├── ServerLoginStatusBanner.tsx # Shared repeater/room login state banner
@@ -151,6 +151,8 @@ frontend/src/
 │   │   ├── settingsConstants.ts          # Settings section type, ordering, labels
 │   │   ├── SettingsRadioSection.tsx      # Name, keys, advert interval, max contacts, radio preset, freq/bw/sf/cr, txPower, lat/lon, reboot, mesh discovery
 │   │   ├── SettingsLocalSection.tsx      # Browser-local settings: theme, relative font scale, local label, reopen last conversation
+│   │   ├── SettingsNotificationsSection.tsx # Web Push: this device, defaults, exceptions, VAPID subject
+│   │   ├── SettingsCommunitySection.tsx  # Meshloom Community / CoreScope directory
 │   │   ├── SettingsFanoutSection.tsx     # Fanout integrations: MQTT, bots, config CRUD
 │   │   ├── SettingsRadioAppSection.tsx    # Radio-App Management: tracked telemetry, contact management, blocked lists
 │   │   ├── SettingsDatabaseSection.tsx   # Database: DB size, storage cleanup, auto-decrypt
@@ -220,7 +222,7 @@ frontend/src/
     ├── useConversationMessages.race.test.ts
     ├── useConversationNavigation.test.ts
     ├── useAppShell.test.ts
-    ├── useBrowserNotifications.test.ts
+    ├── usePushSubscription.test.ts
     ├── useFaviconBadge.test.ts
     ├── useRepeaterDashboard.test.ts
     ├── useRememberedServerPassword.test.ts
@@ -359,7 +361,7 @@ Supported routes:
 - `#contact/{publicKey}`
 - `#contact/{publicKey}/{label}`
 
-Where `{section}` is one of `radio`, `local`, `radio-app`, `database`, `fanout`, `statistics`, or `about`.
+Where `{section}` is one of `radio`, `local`, `notifications`, `community`, `radio-app`, `database`, `fanout`, `statistics`, or `about`.
 
 Legacy name-based channel/contact hashes are still accepted for compatibility.
 
@@ -412,6 +414,8 @@ Note: MQTT, bot, and community MQTT settings were migrated to the `fanout_config
 
 `UnreadCounts` includes `counts`, `mentions`, `last_message_times`, `last_read_ats`, and `first_unread_ids`.
 
+`PushPreferences` is `{defaults, overrides, vapid_subject}` from `GET /api/push/preferences`, not part of `AppSettings`. `PushDefaults` is `new_contact`, `new_dm`, `advert_repeater`, `advert_companion`, `advert_sensor`.
+
 The unread divider is anchored to `first_unread_ids` — the id of the oldest unread message per conversation — not to a timestamp. `MessageList` locates it with `findIndex(msg.id === unreadMarkerMessageId)`, which returns `-1` when that message is not in the loaded window; that is the signal to offer "Jump to unread" (routed through the `targetMessageId`/`getMessagesAround` path) rather than render a divider. Locating by timestamp instead would return index 0 whenever the boundary sits further back than the loaded window, silently placing the divider on the wrong message.
 
 Counts are incremented live over WebSocket while `first_unread_ids` only arrives with a full `/read-state/unreads` fetch, so `useUnreadCounts.incrementUnread` seeds the boundary itself on the read→unread transition. A channel going unread while the app is open would otherwise have a count but no boundary, and no divider at all.
@@ -449,7 +453,7 @@ State: `useConversationNavigation` controls open/close via `infoPaneChannelKey`.
 
 ## Repeater Dashboard
 
-For repeater contacts (`type=2`), `ConversationPane.tsx` renders `RepeaterDashboard` instead of the normal chat UI (ChatHeader + MessageList + MessageInput).
+For repeater contacts (`type=2`), `ConversationPane.tsx` renders `RepeaterDashboard` instead of the normal chat UI (ChatHeader + MessageList + MessageInput). There is no push bell on that dashboard.
 
 **Login**: `RepeaterLogin` component — password or guest login via `POST /api/contacts/{key}/repeater/login`. The frontend sends exactly one request; the backend internally escalates a timed-out login to one flood retry (see `app/AGENTS.md` § "Server login route escalation"), so a single call may take up to two response windows. Do not add a client-side login retry loop on top — a `LOGIN_FAILED` result means the password was refused, not that the route needs another attempt.
 
@@ -480,14 +484,15 @@ The `SearchView` component (`components/SearchView.tsx`) provides full-text sear
 
 ## Web Push Notifications
 
-Web Push allows notifications even when the browser tab is closed. Requires HTTPS (self-signed OK).
+Web Push allows notifications even when the browser tab is closed. Requires HTTPS (self-signed OK). There is no `useBrowserNotifications` / desktop-notification path.
 
 - **Service worker**: `frontend/public/sw.js` handles `push` events (show notification) and `notificationclick` (focus/open tab, navigate via `url_hash`). Registered in `main.tsx` on secure contexts only.
-- **`usePushSubscription` hook**: manages the full subscription lifecycle — subscribe (register SW → `PushManager.subscribe()` → POST to backend), unsubscribe, global push-conversation toggles, device listing, and deletion.
-- **ChatHeader integration**: `BellRing` icon (amber when active) appears next to the existing desktop notification `Bell` on secure contexts. First click subscribes the browser and enables push for that conversation; subsequent clicks toggle the conversation on/off.
-- **Settings > Local**: `PushDeviceManagement` component shows subscription status, lists all registered devices with test/delete buttons. Uses `usePushSubscription` hook directly.
+- **`usePushSubscription` hook**: subscribe (register SW → `PushManager.subscribe()` → POST to backend), unsubscribe, `GET`/`PATCH /push/preferences`, `PUT /push/preferences/conversations/{key}`, device listing, and deletion. Enablement mirrors `app/push/policy.py` via `utils/pushPolicy.ts`.
+- **Settings → Notifications** (`#settings/notifications`, `SettingsNotificationsSection`): this-device subscribe, registered devices (test/delete), default toggles, exception chips, VAPID subject. Not Settings → Local.
+- **ChatHeader bell**: simple override toggle on contacts, channels, and rooms. First click with no subscription only calls `subscribe()` and does not invert the override. Later clicks `PUT` `{override: !currentlyEffective}`. `RepeaterDashboard` has no bell.
+- **Channel mute**: dedicated `BellOff` button; backend circuit breaker, independent of the conversation override.
 - Auto-generates device labels from User-Agent (e.g., "Chrome on macOS").
-- `PushSubscriptionInfo` type in `types.ts`; API methods in `api.ts`.
+- `PushPreferences` / `PushDefaults` / `PushSubscriptionInfo` in `types.ts`; API methods in `api.ts`.
 
 ## Styling
 
@@ -503,7 +508,7 @@ Key conventions documented in the reference:
 - **Text sizes** use `rem`-based Tailwind values so they scale with the user's font-size slider. Do not use hard-locked `px` values (e.g., `text-[10px]`). The canonical sizes are `text-[0.625rem]` (10px), `text-[0.6875rem]` (11px), `text-[0.8125rem]` (13px), plus standard Tailwind `text-xs`/`text-sm`/`text-base`/`text-lg`/`text-xl`.
 - **Group titles** (sub-section headings within settings tabs) use `<h3 className="text-base font-semibold tracking-tight">`. These separate major groups like "Connection", "Identity", "MQTT Broker". When a group contains named sub-items (e.g. "Contact Management" → "Blocked Contacts", "Bulk Delete"), use `<h4 className="text-sm font-semibold">` for the children and nest them inside the parent group's `div` instead of separating with `<Separator />`.
 - **Helper / description text** uses `text-[0.8125rem] text-muted-foreground` (13px). This is for explanatory paragraphs under inputs or sections — not for metadata, timestamps, or alert text which stay at `text-xs`.
-- **Metadata labels** use `text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium` for compact category tags like "Push-enabled conversations" or "Registered Devices".
+- **Metadata labels** use `text-[0.625rem] uppercase tracking-wider text-muted-foreground font-medium` for compact category tags like "Registered Devices".
 - **Buttons** use the shadcn `<Button>` component. Semantic color overrides (danger, warning, success) use `variant="outline"` with `className="border-{color}/50 text-{color} hover:bg-{color}/10"`.
 - **Badges/tags** use `text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded` with `bg-muted` (neutral) or `bg-primary/10` (active).
 - **Clickable text** (copy-to-clipboard, navigational links) uses `role="button" tabIndex={0}` with `cursor-pointer hover:text-primary transition-colors`.

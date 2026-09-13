@@ -1,7 +1,8 @@
 import json
 import logging
 import time
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, TypedDict
 
 import aiosqlite
 
@@ -16,6 +17,66 @@ SECONDS_1H = 3600
 SECONDS_24H = 86400
 SECONDS_72H = 259200
 SECONDS_7D = 604800
+
+DEFAULT_PUSH_DEFAULTS: dict[str, bool] = {
+    "new_contact": True,
+    "new_dm": True,
+    "advert_repeater": True,
+    "advert_companion": True,
+    "advert_sensor": True,
+}
+
+
+class PushDefaults(TypedDict):
+    new_contact: bool
+    new_dm: bool
+    advert_repeater: bool
+    advert_companion: bool
+    advert_sensor: bool
+
+
+def _parse_push_defaults(raw: object) -> PushDefaults:
+    parsed: dict[str, Any] = {}
+    if raw:
+        try:
+            loaded = json.loads(raw) if isinstance(raw, str) else raw
+            if isinstance(loaded, dict):
+                parsed = loaded
+        except (json.JSONDecodeError, TypeError):
+            parsed = {}
+    return PushDefaults(
+        new_contact=bool(parsed["new_contact"]) if "new_contact" in parsed else True,
+        new_dm=bool(parsed["new_dm"]) if "new_dm" in parsed else True,
+        advert_repeater=bool(parsed["advert_repeater"]) if "advert_repeater" in parsed else True,
+        advert_companion=bool(parsed["advert_companion"]) if "advert_companion" in parsed else True,
+        advert_sensor=bool(parsed["advert_sensor"]) if "advert_sensor" in parsed else True,
+    )
+
+
+def _coerce_push_defaults(defaults: Mapping[str, bool]) -> PushDefaults:
+    merged = dict(DEFAULT_PUSH_DEFAULTS)
+    for key in DEFAULT_PUSH_DEFAULTS:
+        if key in defaults:
+            merged[key] = bool(defaults[key])
+    return PushDefaults(
+        new_contact=merged["new_contact"],
+        new_dm=merged["new_dm"],
+        advert_repeater=merged["advert_repeater"],
+        advert_companion=merged["advert_companion"],
+        advert_sensor=merged["advert_sensor"],
+    )
+
+
+def _parse_push_overrides(raw: object) -> dict[str, bool]:
+    if not raw:
+        return {}
+    try:
+        loaded = json.loads(raw) if isinstance(raw, str) else raw
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    if not isinstance(loaded, dict):
+        return {}
+    return {str(key): bool(value) for key, value in loaded.items() if isinstance(key, str)}
 
 
 class AppSettingsRepository:
@@ -450,6 +511,115 @@ class AppSettingsRepository:
                 (json.dumps(current),),
             )
         return current
+
+    @staticmethod
+    async def get_push_defaults() -> PushDefaults:
+        """Return global push-notification defaults. Not part of AppSettings."""
+        async with db.readonly() as conn:
+            async with conn.execute(
+                "SELECT push_defaults FROM app_settings WHERE id = 1"
+            ) as cursor:
+                row = await cursor.fetchone()
+        return _parse_push_defaults(row["push_defaults"] if row else None)
+
+    @staticmethod
+    async def set_push_defaults(defaults: Mapping[str, bool]) -> PushDefaults:
+        """Replace global push-notification defaults. Unknown keys are ignored."""
+        merged = _coerce_push_defaults(defaults)
+        async with db.tx() as conn:
+            await conn.execute(
+                "UPDATE app_settings SET push_defaults = ? WHERE id = 1",
+                (json.dumps(merged),),
+            )
+        return merged
+
+    @staticmethod
+    async def get_push_conversation_overrides() -> dict[str, bool]:
+        """Return explicit per-conversation push overrides. Not part of AppSettings."""
+        async with db.readonly() as conn:
+            return await AppSettingsRepository._get_push_overrides_in_conn(conn)
+
+    @staticmethod
+    async def _get_push_overrides_in_conn(conn: aiosqlite.Connection) -> dict[str, bool]:
+        async with conn.execute(
+            "SELECT push_conversation_overrides FROM app_settings WHERE id = 1"
+        ) as cursor:
+            row = await cursor.fetchone()
+        return _parse_push_overrides(row["push_conversation_overrides"] if row else None)
+
+    @staticmethod
+    async def set_push_conversation_overrides(overrides: Mapping[str, bool]) -> dict[str, bool]:
+        """Replace the full per-conversation override map."""
+        stored = {str(key): bool(value) for key, value in overrides.items()}
+        async with db.tx() as conn:
+            await conn.execute(
+                "UPDATE app_settings SET push_conversation_overrides = ? WHERE id = 1",
+                (json.dumps(stored),),
+            )
+        return stored
+
+    @staticmethod
+    async def set_push_conversation_override(key: str, value: bool | None) -> dict[str, bool]:
+        """Write (true/false) or remove (None) one conversation override."""
+        async with db.tx() as conn:
+            current = await AppSettingsRepository._get_push_overrides_in_conn(conn)
+            if value is None:
+                current.pop(key, None)
+            else:
+                current[key] = bool(value)
+            await conn.execute(
+                "UPDATE app_settings SET push_conversation_overrides = ? WHERE id = 1",
+                (json.dumps(current),),
+            )
+        return current
+
+    @staticmethod
+    async def remap_push_conversation_override_keys(
+        old_keys: list[str], new_key: str
+    ) -> dict[str, bool]:
+        """Move override entries from old_keys to new_key when the target is absent."""
+        async with db.tx() as conn:
+            current = await AppSettingsRepository._get_push_overrides_in_conn(conn)
+            changed = False
+            for old_key in old_keys:
+                if old_key not in current:
+                    continue
+                value = current.pop(old_key)
+                changed = True
+                if new_key not in current:
+                    current[new_key] = value
+            if changed:
+                await conn.execute(
+                    "UPDATE app_settings SET push_conversation_overrides = ? WHERE id = 1",
+                    (json.dumps(current),),
+                )
+        return current
+
+    @staticmethod
+    async def get_vapid_subject() -> str:
+        """Return the stored VAPID subject. Empty means fall back to env (Vague B)."""
+        async with db.readonly() as conn:
+            async with conn.execute(
+                "SELECT vapid_subject FROM app_settings WHERE id = 1"
+            ) as cursor:
+                row = await cursor.fetchone()
+        if not row:
+            return ""
+        try:
+            return row["vapid_subject"] or ""
+        except (KeyError, TypeError):
+            return ""
+
+    @staticmethod
+    async def set_vapid_subject(subject: str) -> str:
+        """Persist the VAPID subject. Empty string clears the DB override."""
+        stored = subject or ""
+        async with db.tx() as conn:
+            await conn.execute(
+                "UPDATE app_settings SET vapid_subject = ? WHERE id = 1",
+                (stored,),
+            )
+        return stored
 
     @staticmethod
     async def get_community() -> Any:

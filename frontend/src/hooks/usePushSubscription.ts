@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from '../components/ui/sonner';
 import { api } from '../api';
 import i18n from '../i18n';
-import type { PushSubscriptionInfo } from '../types';
+import type { PushDefaults, PushPreferences, PushSubscriptionInfo } from '../types';
+import { conversationIsEnabled } from '../utils/pushPolicy';
 import { getSavedLanguage } from '../utils/languagePreference';
 
 function generateLabel(): string {
@@ -84,30 +85,39 @@ function getApplicationServerKeyBytes(
   return new Uint8Array(key);
 }
 
+export type ConversationPushContext = {
+  messageType: 'PRIV' | 'CHAN';
+  isHashtag?: boolean;
+  isPublic?: boolean;
+};
+
 export interface PushSubscriptionState {
   isSupported: boolean;
   isSubscribed: boolean;
   currentSubscriptionId: string | null;
   allSubscriptions: PushSubscriptionInfo[];
-  /** Global list of push-enabled conversation state keys (device-independent). */
-  pushConversations: string[];
+  preferences: PushPreferences | null;
+  /** Keys present in ``preferences.overrides`` — not an enabled-conversation list. */
+  overrideEntries: string[];
   loading: boolean;
   subscribe: () => Promise<string | null>;
   unsubscribe: () => Promise<void>;
-  /** Toggle a conversation in the global push list (device-independent). */
-  toggleConversation: (conversationKey: string) => Promise<void>;
-  isConversationPushEnabled: (conversationKey: string) => boolean;
+  isConversationPushEnabled: (stateKey: string, ctx: ConversationPushContext) => boolean;
+  setConversationOverride: (key: string, override: boolean | null) => Promise<void>;
+  patchPreferences: (partial: {
+    defaults?: Partial<PushDefaults>;
+    vapid_subject?: string;
+  }) => Promise<void>;
   deleteSubscription: (subscriptionId: string) => Promise<void>;
   testPush: (subscriptionId: string) => Promise<void>;
   refreshSubscriptions: () => Promise<PushSubscriptionInfo[]>;
-  refreshConversations: () => Promise<void>;
 }
 
 export function usePushSubscription(): PushSubscriptionState {
   const [isSupported, setIsSupported] = useState(false);
   const [currentSubscriptionId, setCurrentSubscriptionId] = useState<string | null>(null);
   const [allSubscriptions, setAllSubscriptions] = useState<PushSubscriptionInfo[]>([]);
-  const [pushConversations, setPushConversations] = useState<string[]>([]);
+  const [preferences, setPreferences] = useState<PushPreferences | null>(null);
   const [loading, setLoading] = useState(false);
   const vapidKeyRef = useRef<string | null>(null);
 
@@ -132,6 +142,11 @@ export function usePushSubscription(): PushSubscriptionState {
       'Notification' in window;
     setIsSupported(supported);
 
+    api
+      .getPushPreferences()
+      .then(setPreferences)
+      .catch(() => {});
+
     if (supported) {
       // Always load all registered devices so Settings can manage them even
       // when this particular browser isn't subscribed.
@@ -146,12 +161,6 @@ export function usePushSubscription(): PushSubscriptionState {
           const existing = await subsPromise;
           reconcileCurrentSubscription(existing, sub?.endpoint ?? null);
         })
-        .catch(() => {});
-
-      // Load global conversation list
-      api
-        .getPushConversations()
-        .then(setPushConversations)
         .catch(() => {});
     }
   }, [reconcileCurrentSubscription]);
@@ -171,15 +180,6 @@ export function usePushSubscription(): PushSubscriptionState {
       return [];
     }
   }, [reconcileCurrentSubscription]);
-
-  const refreshConversations = useCallback(async () => {
-    try {
-      const convos = await api.getPushConversations();
-      setPushConversations(convos);
-    } catch {
-      // best effort
-    }
-  }, []);
 
   const subscribe = useCallback(async (): Promise<string | null> => {
     if (!isSupported) return null;
@@ -256,20 +256,40 @@ export function usePushSubscription(): PushSubscriptionState {
     }
   }, [currentSubscriptionId, refreshSubscriptions]);
 
-  const toggleConversation = useCallback(async (conversationKey: string) => {
+  const setConversationOverride = useCallback(async (key: string, override: boolean | null) => {
     try {
-      const updated = await api.togglePushConversation(conversationKey);
-      setPushConversations(updated);
+      const updated = await api.setPushConversationOverride(key, override);
+      setPreferences(updated);
     } catch {
       toast.error(i18n.t('notifications.pushPrefsFailed'));
     }
   }, []);
 
-  const isConversationPushEnabled = useCallback(
-    (conversationKey: string): boolean => {
-      return pushConversations.includes(conversationKey);
+  const patchPreferences = useCallback(
+    async (partial: { defaults?: Partial<PushDefaults>; vapid_subject?: string }) => {
+      try {
+        const updated = await api.patchPushPreferences(partial);
+        setPreferences(updated);
+      } catch {
+        toast.error(i18n.t('notifications.pushPrefsFailed'));
+      }
     },
-    [pushConversations]
+    []
+  );
+
+  const isConversationPushEnabled = useCallback(
+    (stateKey: string, ctx: ConversationPushContext): boolean => {
+      if (!preferences) return false;
+      return conversationIsEnabled({
+        stateKey,
+        messageType: ctx.messageType,
+        defaults: preferences.defaults,
+        overrides: preferences.overrides,
+        isHashtag: ctx.isHashtag,
+        isPublic: ctx.isPublic,
+      });
+    },
+    [preferences]
   );
 
   const deleteSubscription = useCallback(
@@ -304,15 +324,16 @@ export function usePushSubscription(): PushSubscriptionState {
     isSubscribed: !!currentSubscriptionId,
     currentSubscriptionId,
     allSubscriptions,
-    pushConversations,
+    preferences,
+    overrideEntries: preferences ? Object.keys(preferences.overrides) : [],
     loading,
     subscribe,
     unsubscribe,
-    toggleConversation,
     isConversationPushEnabled,
+    setConversationOverride,
+    patchPreferences,
     deleteSubscription,
     testPush,
     refreshSubscriptions,
-    refreshConversations,
   };
 }
