@@ -42,14 +42,16 @@ class TestRawPacketGroupTextSamples:
             1001,
         )
 
-        scanned, packet_count, samples = (
-            await RawPacketRepository.get_undecrypted_group_text_samples(
-                max_hashes=1,
-                max_per_hash=4,
-                max_scan=10,
-                received_since=0,
-                batch_size=1,
-            )
+        (
+            scanned,
+            packet_count,
+            samples,
+        ) = await RawPacketRepository.get_undecrypted_group_text_samples(
+            max_hashes=1,
+            max_per_hash=4,
+            max_scan=10,
+            received_since=0,
+            batch_size=1,
         )
 
         assert old_id < new_id
@@ -72,14 +74,16 @@ class TestRawPacketGroupTextSamples:
             1002,
         )
 
-        scanned, packet_count, samples = (
-            await RawPacketRepository.get_undecrypted_group_text_samples(
-                max_hashes=1,
-                max_per_hash=2,
-                max_scan=10,
-                received_since=0,
-                batch_size=1,
-            )
+        (
+            scanned,
+            packet_count,
+            samples,
+        ) = await RawPacketRepository.get_undecrypted_group_text_samples(
+            max_hashes=1,
+            max_per_hash=2,
+            max_scan=10,
+            received_since=0,
+            batch_size=1,
         )
 
         assert scanned == 3

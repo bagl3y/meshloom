@@ -146,9 +146,7 @@ class TestUndecryptedGroupTextSamples:
                 now + index,
             )
 
-        response = await client.get(
-            "/api/packets/undecrypted/group-text-samples?max_per_hash=2"
-        )
+        response = await client.get("/api/packets/undecrypted/group-text-samples?max_per_hash=2")
 
         assert response.status_code == 200
         data = response.json()
@@ -161,7 +159,7 @@ class TestUndecryptedGroupTextSamples:
     async def test_clamps_query_limits_and_returns_response_shape(self, test_db, client):
         now = int(time.time())
         await RawPacketRepository.create(
-            _group_text_packet(0xA3, b"\xAB\xCD", 0x11),
+            _group_text_packet(0xA3, b"\xab\xcd", 0x11),
             now,
         )
 

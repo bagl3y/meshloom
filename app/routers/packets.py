@@ -154,13 +154,11 @@ async def get_undecrypted_group_text_samples(
     received_since_days = min(max(received_since_days, 1), 3650)
     received_since = int(time.time()) - (received_since_days * 86400)
 
-    scanned, packet_count, rows = (
-        await RawPacketRepository.get_undecrypted_group_text_samples(
-            max_hashes=max_hashes,
-            max_per_hash=max_per_hash,
-            max_scan=max_scan,
-            received_since=received_since,
-        )
+    scanned, packet_count, rows = await RawPacketRepository.get_undecrypted_group_text_samples(
+        max_hashes=max_hashes,
+        max_per_hash=max_per_hash,
+        max_scan=max_scan,
+        received_since=received_since,
     )
     samples = [
         UndecryptedGroupTextSample(
