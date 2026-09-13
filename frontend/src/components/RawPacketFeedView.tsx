@@ -32,6 +32,7 @@ import { createDecoderOptions } from '../utils/rawPacketInspector';
 import { useRawPacketStatsSession, useRawPackets } from '../stores/rawPacketStore';
 import { getContactDisplayName } from '../utils/pubkey';
 import { cn } from '@/lib/utils';
+import { TOOL_PANE_HEADER_CLASS } from './toolPaneHeader';
 import i18n from '../i18n';
 
 const TIMELINE_FILL_COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'];
@@ -722,11 +723,11 @@ export function RawPacketFeedView({ contacts, channels }: RawPacketFeedViewProps
   );
   return (
     <>
-      <div className="border-b border-border px-4 py-2.5">
+      <div className={TOOL_PANE_HEADER_CLASS}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="font-semibold text-base text-foreground">{t('rawPacket.title')}</h2>
-            <p className="hidden md:block text-xs text-muted-foreground">
+            <h2 className="text-foreground">{t('rawPacket.title')}</h2>
+            <p className="hidden text-xs font-normal text-muted-foreground md:block">
               {t('rawPacket.collectingSince', {
                 time: formatTimestamp(rawPacketStatsSession.sessionStartedAt),
               })}

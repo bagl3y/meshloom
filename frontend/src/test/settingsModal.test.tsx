@@ -984,17 +984,27 @@ describe('SettingsModal', () => {
     expect(localStorage.getItem(LAST_VIEWED_CONVERSATION_KEY)).toBeNull();
   });
 
-  it('defaults the path-hop-width toggle to off and persists enabling it', () => {
+  it('stores a CARTO API key locally', () => {
+    renderModal();
+    openLocalSection();
+
+    const input = screen.getByLabelText(i18n.t('settings.cartoKey'));
+    fireEvent.change(input, { target: { value: '  carto-test  ' } });
+
+    expect(localStorage.getItem('meshloom-carto-api-key')).toBe('carto-test');
+  });
+
+  it('defaults the path-hop-width toggle to on and persists disabling it', () => {
     renderModal();
     openLocalSection();
 
     const checkbox = screen.getByLabelText(i18n.t('settings.local.pathHopWidth'));
-    expect(checkbox).not.toBeChecked();
+    expect(checkbox).toBeChecked();
     expect(localStorage.getItem(SHOW_PATH_HOP_WIDTH_KEY)).toBeNull();
 
     fireEvent.click(checkbox);
 
-    expect(localStorage.getItem(SHOW_PATH_HOP_WIDTH_KEY)).toBe('true');
+    expect(localStorage.getItem(SHOW_PATH_HOP_WIDTH_KEY)).toBe('false');
   });
 
   it('defaults distance units to metric and stores local changes', () => {

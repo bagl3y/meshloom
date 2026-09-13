@@ -1515,7 +1515,7 @@ export function MessageList({
                 <div
                   data-message-id={msg.id}
                   className={cn(
-                    'group/row flex items-start',
+                    'group/row flex w-full items-start',
                     msg.outgoing && 'flex-row-reverse self-end',
                     isFirstInGroup && !isFirstMessage && 'mt-3'
                   )}
@@ -1627,7 +1627,7 @@ export function MessageList({
                     </div>
                     <div
                       data-testid="message-meta"
-                      className="mt-0.5 flex flex-nowrap items-baseline gap-x-1.5 whitespace-nowrap text-[0.625rem] text-muted-foreground"
+                      className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 text-[0.625rem] text-muted-foreground"
                     >
                       <span>{formatTime(msg.received_at)}</span>
                       {directoryEnabled && isObserverReachEligible(msg) && msg.packet_hash && (

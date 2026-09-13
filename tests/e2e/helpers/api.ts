@@ -204,7 +204,9 @@ export interface UnreadCounts {
   counts: Record<string, number>;
   mentions: Record<string, boolean>;
   last_message_times: Record<string, number>;
+  last_message_previews: Record<string, string>;
   last_read_ats: Record<string, number | null>;
+  first_unread_ids?: Record<string, number | null>;
 }
 
 export function getUnreads(): Promise<UnreadCounts> {

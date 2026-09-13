@@ -8,7 +8,7 @@ interface PathHopWidthContextValue {
 const noop = () => {};
 
 const PathHopWidthContext = createContext<PathHopWidthContextValue>({
-  showPathHopWidth: false,
+  showPathHopWidth: true,
   setShowPathHopWidth: noop,
 });
 

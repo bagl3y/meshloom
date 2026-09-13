@@ -246,8 +246,24 @@ describe('useRealtimeAppState', () => {
 
     expect(fns.setContacts).toHaveBeenCalledWith(expect.any(Function));
     expect(args.removeConversationMessages).toHaveBeenCalledWith(incomingDm.conversation_key);
+    expect(args.removeConversationState).toHaveBeenCalledWith(
+      `contact-${incomingDm.conversation_key}`
+    );
     expect(args.setActiveConversation).toHaveBeenCalledWith(null);
     expect(pendingDeleteFallbackRef.current).toBe(true);
+  });
+
+  it('deleting a channel drops its unread/preview conversation state', () => {
+    const { args, fns } = createRealtimeArgs();
+    const { result } = renderHook(() => useRealtimeAppState(args));
+
+    act(() => {
+      result.current.onChannelDeleted?.(publicChannel.key);
+    });
+
+    expect(fns.setChannels).toHaveBeenCalledWith(expect.any(Function));
+    expect(args.removeConversationMessages).toHaveBeenCalledWith(publicChannel.key);
+    expect(args.removeConversationState).toHaveBeenCalledWith(`channel-${publicChannel.key}`);
   });
 
   it('resolves a prefix-only contact into a full key and updates active conversation state', () => {

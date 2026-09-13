@@ -16,6 +16,7 @@ import { calibrateRadiusKm } from '../utils/locateZone';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { LocateZoneMap } from './LocateZoneMap';
+import { TOOL_PANE_HEADER_CLASS } from './toolPaneHeader';
 
 interface LocatePaneProps {
   contacts: Contact[];
@@ -173,12 +174,14 @@ export function LocatePane({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto" data-testid="locate-pane">
-      <div className="shrink-0 border-b border-border px-4 py-3">
-        <h2 className="flex items-center gap-2 text-base font-semibold">
+      <div className={`${TOOL_PANE_HEADER_CLASS} shrink-0`}>
+        <h2 className="flex items-center gap-2">
           <Crosshair className="h-4 w-4" aria-hidden="true" />
           {t('locate.title')}
         </h2>
-        <p className="mt-1 max-w-3xl text-[0.8125rem] text-muted-foreground">{t('locate.help')}</p>
+        <p className="mt-1 max-w-3xl text-[0.8125rem] font-normal text-muted-foreground">
+          {t('locate.help')}
+        </p>
       </div>
 
       <form

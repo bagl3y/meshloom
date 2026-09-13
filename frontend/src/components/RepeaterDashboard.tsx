@@ -67,6 +67,7 @@ export function RepeaterDashboard({
   onAutoLoginConsumed,
 }: RepeaterDashboardProps) {
   const { t } = useTranslation();
+  const [showKey, setShowKey] = useState(false);
   const [pathDiscoveryOpen, setPathDiscoveryOpen] = useState(false);
   const contact = contacts.find((c) => c.public_key === conversation.id) ?? null;
   const hasAdvertLocation = isValidLocation(contact?.lat ?? null, contact?.lon ?? null);
@@ -140,7 +141,22 @@ export function RepeaterDashboard({
     void loginAsGuest().then(() => loadAll());
   }, [autoLoginAndLoadAll, onAutoLoginConsumed, loginAsGuest, loadAll]);
 
+  useEffect(() => {
+    setShowKey(false);
+    setPathDiscoveryOpen(false);
+  }, [conversation.id]);
+
   const isFav = contact?.favorite ?? false;
+  const isHiddenContactKey = conversation.id.length >= 64 && !showKey;
+
+  const copyContactKey = (event: { stopPropagation: () => void }) => {
+    event.stopPropagation();
+    void navigator.clipboard.writeText(conversation.id);
+    toast.success(t('chatHeader.contactKeyCopied'));
+  };
+
+  const headerActionClass =
+    'inline-flex h-9 w-9 items-center justify-center rounded p-2 text-lg leading-none transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
   const handleRepeaterLogin = async (nextPassword: string) => {
     await login(nextPassword);
@@ -190,19 +206,43 @@ export function RepeaterDashboard({
                   <span className="truncate">{conversation.name}</span>
                 )}
               </h2>
-              <span
-                className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] text-muted-foreground transition-colors hover:text-primary"
-                role="button"
-                tabIndex={0}
-                onKeyDown={handleKeyboardActivate}
-                onClick={() => {
-                  navigator.clipboard.writeText(conversation.id);
-                  toast.success(t('toast.contactKeyCopied'));
-                }}
-                title={t('repeater.copyKey')}
-              >
-                {conversation.id}
-              </span>
+              {isHiddenContactKey ? (
+                <>
+                  <span
+                    className="min-w-0 flex-shrink font-mono text-[0.6875rem] text-muted-foreground transition-colors hover:text-primary"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={handleKeyboardActivate}
+                    onClick={copyContactKey}
+                    title={t('chatHeader.clickToCopy')}
+                    aria-label={t('chatHeader.copyContactKey')}
+                  >
+                    {conversation.id.slice(0, 12)}
+                  </span>
+                  <button
+                    className="min-w-0 flex-shrink text-[0.6875rem] font-mono text-muted-foreground transition-colors hover:text-primary"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowKey(true);
+                    }}
+                    title={t('chatHeader.revealKey')}
+                  >
+                    {t('chatHeader.showKey')}
+                  </button>
+                </>
+              ) : (
+                <span
+                  className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] text-muted-foreground transition-colors hover:text-primary"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={handleKeyboardActivate}
+                  onClick={copyContactKey}
+                  title={t('chatHeader.clickToCopy')}
+                  aria-label={t('chatHeader.copyContactKey')}
+                >
+                  {conversation.id}
+                </span>
+              )}
             </span>
           </span>
         </span>
@@ -211,7 +251,7 @@ export function RepeaterDashboard({
             <ContactStatusInfo contact={contact} ourLat={radioLat} ourLon={radioLon} />
           </div>
         )}
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1.5">
           {loggedIn && (
             <Button
               variant="outline"
@@ -225,7 +265,7 @@ export function RepeaterDashboard({
           )}
           {contact && (
             <button
-              className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={headerActionClass}
               onClick={() => setPathDiscoveryOpen(true)}
               title={t('repeater.pathDiscoveryTitle')}
               aria-label={t('repeater.pathDiscovery')}
@@ -234,7 +274,7 @@ export function RepeaterDashboard({
             </button>
           )}
           <button
-            className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={headerActionClass}
             onClick={onTrace}
             title={t('repeater.directTrace')}
             aria-label={t('repeater.directTrace')}
@@ -242,7 +282,7 @@ export function RepeaterDashboard({
             <DirectTraceIcon className="h-4 w-4 text-muted-foreground" />
           </button>
           <button
-            className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={headerActionClass}
             onClick={() => onToggleFavorite('contact', conversation.id)}
             title={isFav ? t('repeater.favoriteRemoveTitle') : t('repeater.favoriteAddTitle')}
             aria-label={isFav ? t('repeater.favoriteRemove') : t('repeater.favoriteAdd')}
@@ -254,7 +294,10 @@ export function RepeaterDashboard({
             )}
           </button>
           <button
-            className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(
+              headerActionClass,
+              'ml-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive'
+            )}
             onClick={() => onDeleteContact(conversation.id)}
             title={t('repeater.delete')}
             aria-label={t('repeater.delete')}

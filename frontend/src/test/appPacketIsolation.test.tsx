@@ -82,6 +82,7 @@ vi.mock('../hooks', async (importOriginal) => {
       unreadCounts: {},
       mentions: {},
       lastMessageTimes: {},
+      lastMessagePreviews: {},
       unreadLastReadAts: {},
       firstUnreadIds: {},
       recordMessageEvent: vi.fn(),

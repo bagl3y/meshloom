@@ -134,6 +134,57 @@ export function ChatHeader({
     }
   };
 
+  const isHiddenContactKey =
+    conversation.type === 'contact' && conversation.id.length >= 64 && !showKey;
+
+  const copyConversationKey = (event: { stopPropagation: () => void }) => {
+    event.stopPropagation();
+    void navigator.clipboard.writeText(conversation.id);
+    toast.success(
+      conversation.type === 'channel'
+        ? t('chatHeader.channelKeyCopied')
+        : t('chatHeader.contactKeyCopied')
+    );
+  };
+
+  const headerActionClass =
+    'inline-flex h-9 w-9 items-center justify-center rounded p-2 text-lg leading-none transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  const headerActionDisabledClass = `${headerActionClass} disabled:cursor-not-allowed disabled:opacity-50`;
+
+  const showKeyButton = (
+    <button
+      className="min-w-0 flex-shrink text-[0.6875rem] font-mono text-muted-foreground transition-colors hover:text-primary"
+      onClick={(e) => {
+        e.stopPropagation();
+        setShowKey(true);
+      }}
+      title={t('chatHeader.revealKey')}
+    >
+      {t('chatHeader.showKey')}
+    </button>
+  );
+
+  const renderCopyableKey = (display: string, compact = false) => (
+    <span
+      className={cn(
+        'min-w-0 font-mono text-[0.6875rem] text-muted-foreground transition-colors hover:text-primary',
+        compact ? 'flex-shrink' : 'flex-1 truncate'
+      )}
+      role="button"
+      tabIndex={0}
+      onKeyDown={handleKeyboardActivate}
+      onClick={copyConversationKey}
+      title={t('chatHeader.clickToCopy')}
+      aria-label={
+        conversation.type === 'channel'
+          ? t('chatHeader.copyChannelKey')
+          : t('chatHeader.copyContactKey')
+      }
+    >
+      {display}
+    </span>
+  );
+
   return (
     <header
       className={cn(
@@ -197,42 +248,16 @@ export function ChatHeader({
                 )}
               </h2>
               {isPrivateChannel && !showKey ? (
-                <button
-                  className="min-w-0 flex-shrink text-[0.6875rem] font-mono text-muted-foreground transition-colors hover:text-primary"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowKey(true);
-                  }}
-                  title={t('chatHeader.revealKey')}
-                >
-                  {t('chatHeader.showKey')}
-                </button>
+                showKeyButton
+              ) : isHiddenContactKey ? (
+                <>
+                  {renderCopyableKey(conversation.id.slice(0, 12), true)}
+                  {showKeyButton}
+                </>
               ) : (
-                <span
-                  className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] text-muted-foreground transition-colors hover:text-primary"
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={handleKeyboardActivate}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigator.clipboard.writeText(conversation.id);
-                    toast.success(
-                      conversation.type === 'channel'
-                        ? t('chatHeader.channelKeyCopied')
-                        : t('chatHeader.contactKeyCopied')
-                    );
-                  }}
-                  title={t('chatHeader.clickToCopy')}
-                  aria-label={
-                    conversation.type === 'channel'
-                      ? t('chatHeader.copyChannelKey')
-                      : t('chatHeader.copyContactKey')
-                  }
-                >
-                  {conversation.type === 'channel'
-                    ? conversation.id.toLowerCase()
-                    : conversation.id}
-                </span>
+                renderCopyableKey(
+                  conversation.type === 'channel' ? conversation.id.toLowerCase() : conversation.id
+                )
               )}
             </span>
             {conversation.type === 'channel' && activeFloodScopeBadge && (
@@ -263,10 +288,10 @@ export function ChatHeader({
           />
         </div>
       )}
-      <div className="flex items-center justify-end gap-0.5">
+      <div className="flex items-center justify-end gap-1.5">
         {conversation.type === 'contact' && !activeContactIsRoomServer && (
           <button
-            className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={headerActionDisabledClass}
             onClick={() => setPathDiscoveryOpen(true)}
             title={
               activeContactIsPrefixOnly
@@ -281,7 +306,7 @@ export function ChatHeader({
         )}
         {conversation.type === 'contact' && !activeContactIsRoomServer && (
           <button
-            className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={headerActionDisabledClass}
             onClick={onTrace}
             title={
               activeContactIsPrefixOnly
@@ -296,7 +321,7 @@ export function ChatHeader({
         )}
         {pushSupported && onTogglePush && (
           <button
-            className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={headerActionClass}
             onClick={() => void onTogglePush()}
             title={t('chatHeader.notifications')}
             aria-label={t('chatHeader.notifications')}
@@ -314,7 +339,7 @@ export function ChatHeader({
         )}
         {conversation.type === 'channel' && onToggleMute && (
           <button
-            className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={headerActionClass}
             onClick={() => onToggleMute(conversation.id)}
             title={
               activeChannel?.muted ? t('chatHeader.unmuteChannel') : t('chatHeader.muteChannel')
@@ -335,7 +360,7 @@ export function ChatHeader({
         )}
         {conversation.type === 'channel' && onSetChannelFloodScopeOverride && (
           <button
-            className="flex shrink-0 items-center gap-1 rounded px-1 py-1 text-lg leading-none transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex shrink-0 items-center gap-1 rounded p-2 text-lg leading-none transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={handleEditFloodScopeOverride}
             title={t('chatHeader.regionalOverride')}
             aria-label={t('chatHeader.regionalOverride')}
@@ -353,7 +378,7 @@ export function ChatHeader({
         )}
         {showPathHashModeOverride && (
           <button
-            className="flex shrink-0 items-center gap-1 rounded px-1 py-1 text-lg leading-none transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-1 rounded p-2 text-lg leading-none transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={handleEditPathHashModeOverride}
             title={t('chatHeader.pathHashOverride')}
             aria-label={t('chatHeader.pathHashOverride')}
@@ -366,7 +391,7 @@ export function ChatHeader({
         )}
         {(conversation.type === 'channel' || conversation.type === 'contact') && (
           <button
-            className="p-1 rounded hover:bg-accent text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={headerActionClass}
             onClick={() =>
               onToggleFavorite(conversation.type as 'channel' | 'contact', conversation.id)
             }
@@ -382,7 +407,10 @@ export function ChatHeader({
         )}
         {!(conversation.type === 'channel' && isPublicChannelKey(conversation.id)) && (
           <button
-            className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive text-lg leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(
+              headerActionClass,
+              'ml-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive'
+            )}
             onClick={() => {
               if (conversation.type === 'channel') {
                 onDeleteChannel(conversation.id);

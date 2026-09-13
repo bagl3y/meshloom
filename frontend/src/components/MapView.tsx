@@ -33,6 +33,7 @@ import {
   OSM_RASTER_TILE_ATTRIBUTION,
   OSM_RASTER_TILE_URL,
 } from '../utils/mapTiles';
+import { getSavedCartoApiKey } from '../utils/cartoPreference';
 
 interface MapViewProps {
   contacts: Contact[];
@@ -49,10 +50,12 @@ interface MapViewProps {
 }
 
 // --- Tile layer presets ---
-// Every provider here is free and works without an API key. Attribution strings
-// follow each provider's requirements; do not remove them. If you add a new
-// provider, verify its terms of service (especially for Esri / Google-style
-// satellite tiles) before committing.
+// Providers here are free. CARTO dark raster tiles optionally take a free API
+// key (Settings → Local); without one they may show a watermark. Other layers
+// work without a key. Attribution strings follow each provider's requirements;
+// do not remove them. If you add a new provider, verify its terms of service
+// (especially for Esri / Google-style satellite tiles) before committing.
+// Raster-only transitional fix: Neighbors / Locate / Path stay on OSM.
 interface TileLayerPreset {
   id: string;
   url: string;
@@ -73,6 +76,16 @@ interface TileLayerPreset {
 const MAP_MIN_ZOOM = 2;
 const MAP_MAX_ZOOM = 19;
 
+/** CARTO dark raster URL. `{r}` stays before `.png`; `?key=` is appended when set. */
+export const CARTO_DARK_TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+
+export function cartoDarkTileUrl(apiKey: string): string {
+  const trimmed = apiKey.trim();
+  return trimmed
+    ? `${CARTO_DARK_TILE_URL}?key=${encodeURIComponent(trimmed)}`
+    : CARTO_DARK_TILE_URL;
+}
+
 const TILE_LAYERS: readonly TileLayerPreset[] = [
   {
     id: 'light',
@@ -84,7 +97,7 @@ const TILE_LAYERS: readonly TileLayerPreset[] = [
   },
   {
     id: 'dark',
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    url: CARTO_DARK_TILE_URL,
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
     background: '#0d0d0d',
@@ -1206,7 +1219,7 @@ export function MapView({
                 checked={layer.id === selectedLayerId}
               >
                 <TileLayer
-                  url={layer.url}
+                  url={layer.id === 'dark' ? cartoDarkTileUrl(getSavedCartoApiKey()) : layer.url}
                   attribution={layer.attribution}
                   maxZoom={layer.maxZoom}
                   referrerPolicy={layer.referrerPolicy}

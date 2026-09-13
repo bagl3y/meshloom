@@ -259,7 +259,7 @@ High-level state is delegated to hooks:
 - `useConversationNavigation`: search target, conversation selection reset, and info-pane state
 - `useConversationActions`: send/resend/trace/path-discovery/block handlers and channel override updates
 - `useConversationMessages`: conversation switch loading, embedded conversation-scoped cache, jump-target loading, pagination, dedup/update helpers, reconnect reconciliation, and pending ACK buffering
-- `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps, server `last_read_ats`, and `first_unread_ids` (the unread-divider anchor)
+- `useUnreadCounts`: unread counters, mention tracking, recent-sort timestamps, last-message previews, server `last_read_ats`, and `first_unread_ids` (the unread-divider anchor)
 - `useRealtimeAppState`: typed WS event application, reconnect recovery, cache/unread coordination
 - `useRepeaterDashboard`: repeater dashboard state (login, pane data/retries, console, actions)
 
@@ -412,7 +412,7 @@ Note: MQTT, bot, and community MQTT settings were migrated to the `fanout_config
 
 `RawPacket.decrypted_info` includes `channel_key` and `contact_key` for MQTT topic routing.
 
-`UnreadCounts` includes `counts`, `mentions`, `last_message_times`, `last_read_ats`, and `first_unread_ids`.
+`UnreadCounts` includes `counts`, `mentions`, `last_message_times`, `last_message_previews`, `last_read_ats`, and `first_unread_ids`. Sidebar rows show a compact excerpt + time from `last_message_previews` (hidden when the desktop rail is collapsed). Live WS updates go through `recordMessageEvent`; `contact_resolved` rename/remove keeps the preview map aligned.
 
 `PushPreferences` is `{defaults, overrides, vapid_subject}` from `GET /api/push/preferences`, not part of `AppSettings`. `PushDefaults` is `new_contact`, `new_dm`, `advert_repeater`, `advert_companion`, `advert_sensor`.
 

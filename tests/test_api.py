@@ -1042,6 +1042,9 @@ class TestReadStateEndpoints:
         # Last message times should include all conversations
         assert result["last_message_times"][f"channel-{chan_key}"] == 1003
         assert result["last_message_times"][f"contact-{contact_key}"] == 1005
+        # Outgoing channel send is a valid last-message preview.
+        assert result["last_message_previews"][f"channel-{chan_key}"] == "Me: outgoing"
+        assert result["last_message_previews"][f"contact-{contact_key}"] == "hi @[TeStUsEr] there"
         assert result["last_read_ats"][f"channel-{chan_key}"] == 1000
         assert result["last_read_ats"][f"contact-{contact_key}"] == 1000
 
@@ -1088,6 +1091,128 @@ class TestReadStateEndpoints:
 
         assert result["counts"][f"channel-{chan_key}"] == 3
         assert result["first_unread_ids"][f"channel-{chan_key}"] == min(ids)
+
+    @pytest.mark.asyncio
+    async def test_last_message_preview_breaks_same_second_ties_by_id(self, test_db):
+        """Newest-second ties must pick the highest id, inverse of first_unread_ids."""
+        chan_key = "PREVIEWTIE1PREVIEWTIE1PREVIEWTIE1"
+        await ChannelRepository.upsert(key=chan_key, name="Busy")
+
+        await MessageRepository.create(
+            msg_type="CHAN",
+            text="Bob: earlier second",
+            received_at=1001,
+            conversation_key=chan_key,
+            sender_timestamp=1001,
+        )
+        await MessageRepository.create(
+            msg_type="CHAN",
+            text="Bob: later same second",
+            received_at=1001,
+            conversation_key=chan_key,
+            sender_timestamp=1001,
+        )
+
+        result = await MessageRepository.get_unread_counts(None)
+
+        assert result["last_message_times"][f"channel-{chan_key}"] == 1001
+        assert result["last_message_previews"][f"channel-{chan_key}"] == "Bob: later same second"
+
+    @pytest.mark.asyncio
+    async def test_last_message_preview_allows_outgoing(self, test_db):
+        """An outgoing send can be the conversation's last-message preview."""
+        contact_key = "ef01" * 16
+        await _insert_contact(contact_key, "Bob")
+        await MessageRepository.create(
+            msg_type="PRIV",
+            text="incoming older",
+            received_at=1001,
+            conversation_key=contact_key,
+            sender_timestamp=1001,
+        )
+        await MessageRepository.create(
+            msg_type="PRIV",
+            text="my latest reply",
+            received_at=1002,
+            conversation_key=contact_key,
+            sender_timestamp=1002,
+            outgoing=True,
+        )
+
+        result = await MessageRepository.get_unread_counts(None)
+
+        assert result["last_message_times"][f"contact-{contact_key}"] == 1002
+        assert result["last_message_previews"][f"contact-{contact_key}"] == "my latest reply"
+
+    @pytest.mark.asyncio
+    async def test_last_message_preview_excludes_blocked_incoming(self, test_db):
+        """Blocked incoming traffic must not become the last-message preview."""
+        blocked_key = "aa" * 32
+        normal_key = "bb" * 32
+        chan_key = "PREVIEWBLOCK1PREVIEWBLOCK1PREVIE"
+        await _insert_contact(blocked_key, "Blocked")
+        await _insert_contact(normal_key, "Normal")
+        await ChannelRepository.upsert(key=chan_key, name="#test")
+
+        await MessageRepository.create(
+            msg_type="PRIV",
+            text="blocked dm",
+            received_at=2000,
+            conversation_key=blocked_key,
+            sender_timestamp=2000,
+        )
+        await MessageRepository.create(
+            msg_type="PRIV",
+            text="normal dm",
+            received_at=2001,
+            conversation_key=normal_key,
+            sender_timestamp=2001,
+        )
+        await MessageRepository.create(
+            msg_type="CHAN",
+            text="Blocked: spam that would win",
+            received_at=3002,
+            conversation_key=chan_key,
+            sender_timestamp=3002,
+            sender_name="Blocked",
+            sender_key=blocked_key,
+        )
+        await MessageRepository.create(
+            msg_type="CHAN",
+            text="Normal: allowed preview",
+            received_at=3001,
+            conversation_key=chan_key,
+            sender_timestamp=3001,
+            sender_name="Normal",
+            sender_key=normal_key,
+        )
+
+        result = await MessageRepository.get_unread_counts(blocked_keys=[blocked_key])
+
+        assert f"contact-{blocked_key}" not in result["last_message_times"]
+        assert f"contact-{blocked_key}" not in result["last_message_previews"]
+        assert result["last_message_times"][f"contact-{normal_key}"] == 2001
+        assert result["last_message_previews"][f"contact-{normal_key}"] == "normal dm"
+        assert result["last_message_times"][f"channel-{chan_key}"] == 3001
+        assert result["last_message_previews"][f"channel-{chan_key}"] == "Normal: allowed preview"
+
+    @pytest.mark.asyncio
+    async def test_last_message_preview_truncates_long_text(self, test_db):
+        """Sidebar previews are capped at ~120 characters."""
+        chan_key = "PREVIEWLONG1PREVIEWLONG1PREVIEWL"
+        await ChannelRepository.upsert(key=chan_key, name="Long")
+        long_text = "X" * 200
+        await MessageRepository.create(
+            msg_type="CHAN",
+            text=long_text,
+            received_at=1001,
+            conversation_key=chan_key,
+            sender_timestamp=1001,
+        )
+
+        result = await MessageRepository.get_unread_counts(None)
+
+        assert result["last_message_previews"][f"channel-{chan_key}"] == "X" * 120
 
     @pytest.mark.asyncio
     async def test_first_unread_id_ignores_muted_and_outgoing(self, test_db):
@@ -1157,6 +1282,7 @@ class TestReadStateEndpoints:
         assert data["counts"][f"channel-{chan_key}"] == 1
         assert data["mentions"][f"channel-{chan_key}"] is True
         assert data["last_read_ats"][f"channel-{chan_key}"] == 0
+        assert data["last_message_previews"][f"channel-{chan_key}"] == "hey @[RadioUser] check this"
 
     @pytest.mark.asyncio
     async def test_unreads_endpoint_no_radio_skips_mentions(self, test_db, client):

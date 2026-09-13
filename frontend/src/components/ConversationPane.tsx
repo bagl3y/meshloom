@@ -8,6 +8,7 @@ import { RawPacketFeedView } from './RawPacketFeedView';
 import { RoomServerPanel } from './RoomServerPanel';
 import { LocatePane, locateConversation } from './LocatePane';
 import { TracePane } from './TracePane';
+import { TOOL_PANE_HEADER_CLASS } from './toolPaneHeader';
 import type {
   Channel,
   Contact,
@@ -202,7 +203,7 @@ export function ConversationPane({
   if (activeConversation.type === 'map') {
     return (
       <>
-        <h2 className="flex justify-between items-center px-4 py-2.5 border-b border-border font-semibold text-base">
+        <h2 className={`${TOOL_PANE_HEADER_CLASS} flex items-center justify-between`}>
           {t('conversation.nodeMap')}
         </h2>
         <div className="flex-1 overflow-hidden">
@@ -326,66 +327,68 @@ export function ConversationPane({
       )}
       {showRoomChat && <div data-toast-anchor="conversation" aria-hidden="true" />}
       {showRoomChat && (
-        <MessageList
-          key={activeConversation.id}
-          messages={messages}
-          preSorted={preSorted}
-          contacts={contacts}
-          channels={channels}
-          loading={messagesLoading}
-          loadingOlder={loadingOlder}
-          hasOlderMessages={hasOlderMessages}
-          unreadMarkerMessageId={
-            activeConversation.type === 'channel' ? unreadMarkerMessageId : undefined
-          }
-          onNavigateToUnread={
-            activeConversation.type === 'channel' ? onNavigateToUnread : undefined
-          }
-          onDismissUnreadMarker={
-            activeConversation.type === 'channel' ? onDismissUnreadMarker : undefined
-          }
-          onSenderClick={onSenderClick}
-          onSendMessage={onSendMessage}
-          onChannelReferenceClick={onChannelReferenceClick}
-          onLoadOlder={onLoadOlder}
-          onResendChannelMessage={
-            activeConversation.type === 'channel' ? onResendChannelMessage : undefined
-          }
-          radioName={config?.name}
-          config={config}
-          onOpenContactInfo={onOpenContactInfo}
-          targetMessageId={targetMessageId}
-          onTargetReached={onTargetReached}
-          hasNewerMessages={hasNewerMessages}
-          loadingNewer={loadingNewer}
-          onLoadNewer={onLoadNewer}
-          onJumpToBottom={onJumpToBottom}
-          onMessageDeleted={onMessageDeleted}
-          directoryEnabled={directoryEnabled}
-          conversationKey={activeConversation.id}
-        />
+        <div className="mx-auto flex w-full max-w-[42rem] flex-1 min-h-0 flex-col">
+          <MessageList
+            key={activeConversation.id}
+            messages={messages}
+            preSorted={preSorted}
+            contacts={contacts}
+            channels={channels}
+            loading={messagesLoading}
+            loadingOlder={loadingOlder}
+            hasOlderMessages={hasOlderMessages}
+            unreadMarkerMessageId={
+              activeConversation.type === 'channel' ? unreadMarkerMessageId : undefined
+            }
+            onNavigateToUnread={
+              activeConversation.type === 'channel' ? onNavigateToUnread : undefined
+            }
+            onDismissUnreadMarker={
+              activeConversation.type === 'channel' ? onDismissUnreadMarker : undefined
+            }
+            onSenderClick={onSenderClick}
+            onSendMessage={onSendMessage}
+            onChannelReferenceClick={onChannelReferenceClick}
+            onLoadOlder={onLoadOlder}
+            onResendChannelMessage={
+              activeConversation.type === 'channel' ? onResendChannelMessage : undefined
+            }
+            radioName={config?.name}
+            config={config}
+            onOpenContactInfo={onOpenContactInfo}
+            targetMessageId={targetMessageId}
+            onTargetReached={onTargetReached}
+            hasNewerMessages={hasNewerMessages}
+            loadingNewer={loadingNewer}
+            onLoadNewer={onLoadNewer}
+            onJumpToBottom={onJumpToBottom}
+            onMessageDeleted={onMessageDeleted}
+            directoryEnabled={directoryEnabled}
+            conversationKey={activeConversation.id}
+          />
+          {!(activeConversation.type === 'contact' && isPrefixOnlyActiveContact) ? (
+            <MessageInput
+              ref={messageInputRef}
+              onSend={onSendMessage}
+              disabled={!health?.radio_connected}
+              conversationType={activeConversation.type}
+              conversationId={
+                activeConversation.type === 'contact' || activeConversation.type === 'channel'
+                  ? activeConversation.id
+                  : undefined
+              }
+              senderName={config?.name}
+              radioLat={config?.lat}
+              radioLon={config?.lon}
+              placeholder={
+                !health?.radio_connected
+                  ? t('chat.radioNotConnected')
+                  : t('chat.messageTo', { name: activeConversation.name })
+              }
+            />
+          ) : null}
+        </div>
       )}
-      {showRoomChat && !(activeConversation.type === 'contact' && isPrefixOnlyActiveContact) ? (
-        <MessageInput
-          ref={messageInputRef}
-          onSend={onSendMessage}
-          disabled={!health?.radio_connected}
-          conversationType={activeConversation.type}
-          conversationId={
-            activeConversation.type === 'contact' || activeConversation.type === 'channel'
-              ? activeConversation.id
-              : undefined
-          }
-          senderName={config?.name}
-          radioLat={config?.lat}
-          radioLon={config?.lon}
-          placeholder={
-            !health?.radio_connected
-              ? t('chat.radioNotConnected')
-              : t('chat.messageTo', { name: activeConversation.name })
-          }
-        />
-      ) : null}
     </>
   );
 }

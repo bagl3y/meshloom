@@ -123,6 +123,7 @@
     "running": "en cours",
     "idle": "inactif",
     "muted": "Canal en sourdine",
+    "yesterday": "Hier",
     "notificationsEnabled": "Notifications activées",
     "unreadMessages_one": "{{count}} message non lu",
     "unreadMessages_other": "{{count}} messages non lus",

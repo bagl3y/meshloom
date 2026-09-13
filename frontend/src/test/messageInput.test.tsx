@@ -88,6 +88,11 @@ describe('MessageInput', () => {
       fireEvent.change(getInput(), { target: { value: 'Hello' } });
       expect(getSendButton()).toBeDisabled();
     });
+
+    it('exposes a More overflow trigger for composer tools', () => {
+      renderInput({ conversationType: 'contact' });
+      expect(screen.getByRole('button', { name: i18n.t('chat.more') })).toBeInTheDocument();
+    });
   });
 
   describe('byte counter display', () => {
@@ -122,6 +127,17 @@ describe('MessageInput', () => {
       const bytes = byteLen('🥝'); // Should be 4
       expect(bytes).toBe(4);
       expect(screen.getByText(new RegExp(`${bytes}/156`))).toBeTruthy();
+    });
+
+    it('shows the mobile counter from the UTF-8 warning threshold, not character count', () => {
+      renderInput({ conversationType: 'contact' });
+      // 101 ASCII chars used to open the mobile counter; warning threshold is 140 bytes.
+      fireEvent.change(getInput(), { target: { value: 'x'.repeat(101) } });
+      expect(screen.getAllByText(/101\/156/)).toHaveLength(1);
+
+      // 70 × "é" = 140 bytes / 70 chars — below the old char>100 gate, at the warning threshold.
+      fireEvent.change(getInput(), { target: { value: 'é'.repeat(70) } });
+      expect(screen.getAllByText(/140\/156/)).toHaveLength(2);
     });
   });
 
@@ -167,7 +183,7 @@ describe('MessageInput', () => {
       ).toBeGreaterThan(0);
     });
 
-    it('shows truncation warning when exceeding DM hard limit', () => {
+    it('shows too-long warning when exceeding DM hard limit', () => {
       renderInput({ conversationType: 'contact' });
       // DM hard limit = 156 bytes
       const text = 'x'.repeat(157);
@@ -175,7 +191,7 @@ describe('MessageInput', () => {
       // Rendered in both desktop and mobile variants
       expect(
         screen.getAllByText(
-          (_, node) => node?.textContent?.includes(i18n.t('chat.truncated')) ?? false
+          (_, node) => node?.textContent?.includes(i18n.t('chat.tooLong')) ?? false
         ).length
       ).toBeGreaterThan(0);
     });
@@ -183,22 +199,94 @@ describe('MessageInput', () => {
     it('shows no warning for short messages', () => {
       renderInput({ conversationType: 'contact' });
       fireEvent.change(getInput(), { target: { value: 'Hello' } });
-      expect(screen.queryByText(i18n.t('chat.truncated'))).toBeNull();
+      expect(screen.queryByText(i18n.t('chat.tooLong'))).toBeNull();
       expect(screen.queryByText(i18n.t('chat.multiHopWarn'))).toBeNull();
     });
   });
 
-  describe('send button remains enabled past hard limit (current behavior)', () => {
-    it('does not disable send button when over hard limit', () => {
-      // NOTE: This documents the current behavior where canSubmit only checks
-      // text.trim().length > 0, NOT the limit state. This is related to
-      // hitlist item 1.1 — the send button stays enabled even over the limit.
+  describe('send blocked at hard limit', () => {
+    const DM_HARD_LIMIT = 156;
+
+    async function expectSendViaButtonAndEnter(value: string, shouldSend: boolean) {
+      const { unmount } = renderInput({ conversationType: 'contact' });
+      fireEvent.change(getInput(), { target: { value } });
+      if (shouldSend) {
+        expect(getSendButton()).toBeEnabled();
+        fireEvent.click(getSendButton());
+        await waitFor(() => {
+          expect(onSend).toHaveBeenCalledTimes(1);
+        });
+      } else {
+        expect(getSendButton()).toBeDisabled();
+        fireEvent.click(getSendButton());
+        expect(onSend).not.toHaveBeenCalled();
+      }
+      unmount();
+      onSend.mockClear();
+
+      renderInput({ conversationType: 'contact' });
+      fireEvent.change(getInput(), { target: { value } });
+      fireEvent.keyDown(getInput(), { key: 'Enter' });
+      if (shouldSend) {
+        await waitFor(() => {
+          expect(onSend).toHaveBeenCalledTimes(1);
+        });
+      } else {
+        expect(onSend).not.toHaveBeenCalled();
+      }
+    }
+
+    it('disables send button when over hard limit', () => {
       renderInput({ conversationType: 'contact' });
       const text = 'x'.repeat(200); // Well over 156 byte limit
       fireEvent.change(getInput(), { target: { value: text } });
+      expect(getSendButton()).toBeDisabled();
+    });
 
-      // Button is still enabled — canSubmit only checks non-empty text
+    it('allows button and Enter at limit-1', async () => {
+      await expectSendViaButtonAndEnter('x'.repeat(DM_HARD_LIMIT - 1), true);
+    });
+
+    it('blocks button and Enter at the exact hard limit', async () => {
+      await expectSendViaButtonAndEnter('x'.repeat(DM_HARD_LIMIT), false);
+    });
+
+    it('blocks button and Enter past the hard limit', async () => {
+      await expectSendViaButtonAndEnter('x'.repeat(DM_HARD_LIMIT + 1), false);
+    });
+
+    it('blocks channel send when UTF-8 accented bytes hit the name-adjusted limit', async () => {
+      // "José" = 5 UTF-8 bytes (é is 2). Hard limit = 156 - 5 - 2 = 149.
+      const senderName = 'José';
+      const hardLimit = 156 - byteLen(senderName) - 2;
+      expect(hardLimit).toBe(149);
+
+      // "é" is 2 bytes: 74 × é = 148 (limit-1), 75 × é = 150 (over).
+      // Mix with "x" to hit the exact limit: 74 × é + "x" = 149.
+      const under = 'é'.repeat(74); // 148 bytes, 74 chars — a char-length check would still allow 75 é
+      const atLimit = `${under}x`; // 149 bytes
+      const over = 'é'.repeat(75); // 150 bytes, still only 75 chars vs 149-char hard limit
+
+      const { unmount } = renderInput({ conversationType: 'channel', senderName });
+      fireEvent.change(getInput(), { target: { value: under } });
       expect(getSendButton()).toBeEnabled();
+      fireEvent.click(getSendButton());
+      await waitFor(() => {
+        expect(onSend).toHaveBeenCalledTimes(1);
+      });
+      unmount();
+      onSend.mockClear();
+
+      renderInput({ conversationType: 'channel', senderName });
+      fireEvent.change(getInput(), { target: { value: atLimit } });
+      expect(getSendButton()).toBeDisabled();
+      fireEvent.keyDown(getInput(), { key: 'Enter' });
+      expect(onSend).not.toHaveBeenCalled();
+
+      fireEvent.change(getInput(), { target: { value: over } });
+      expect(getSendButton()).toBeDisabled();
+      fireEvent.keyDown(getInput(), { key: 'Enter' });
+      expect(onSend).not.toHaveBeenCalled();
     });
   });
 
@@ -396,7 +484,7 @@ describe('MessageInput', () => {
       });
     });
 
-    it('toasts when sharing location without radio coordinates', () => {
+    it('disables the location button without radio GPS', () => {
       render(
         <MessageInput
           onSend={onSend}
@@ -406,9 +494,25 @@ describe('MessageInput', () => {
         />
       );
 
+      expect(screen.getByTestId('share-location-trigger')).toBeDisabled();
       fireEvent.click(screen.getByTestId('share-location-trigger'));
       expect(onSend).not.toHaveBeenCalled();
-      expect(mockToast.error).toHaveBeenCalledWith(i18n.t('share.noLocation'));
+      expect(mockToast.error).not.toHaveBeenCalled();
+    });
+
+    it('disables the location button when radio coordinates are 0,0', () => {
+      render(
+        <MessageInput
+          onSend={onSend}
+          disabled={false}
+          conversationType="channel"
+          conversationId={channelId}
+          radioLat={0}
+          radioLon={0}
+        />
+      );
+
+      expect(screen.getByTestId('share-location-trigger')).toBeDisabled();
     });
 
     it('prefixes a reply mention when sending a GIF', async () => {

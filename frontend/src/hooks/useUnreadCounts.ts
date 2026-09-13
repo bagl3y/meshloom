@@ -10,6 +10,8 @@ import {
 import type { Channel, Contact, Conversation, Message, UnreadCounts } from '../types';
 import { takePrefetchOrFetch } from '../prefetch';
 
+const PREVIEW_MAX_LEN = 120;
+
 type UnreadTrackedConversation = Conversation & { type: 'channel' | 'contact' };
 
 function isUnreadTrackedConversation(
@@ -23,6 +25,8 @@ interface UseUnreadCountsResult {
   /** Tracks which conversations have unread messages that mention the user */
   mentions: Record<string, boolean>;
   lastMessageTimes: ConversationTimes;
+  /** stateKey -> last message text (truncated), for the sidebar excerpt line. */
+  lastMessagePreviews: Record<string, string>;
   unreadLastReadAts: Record<string, number | null>;
   /** stateKey -> id of the oldest unread message, for placing the unread divider. */
   firstUnreadIds: Record<string, number | null>;
@@ -46,6 +50,7 @@ export function useUnreadCounts(
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [mentions, setMentions] = useState<Record<string, boolean>>({});
   const [lastMessageTimes, setLastMessageTimes] = useState<ConversationTimes>(getLastMessageTimes);
+  const [lastMessagePreviews, setLastMessagePreviews] = useState<Record<string, string>>({});
   const [unreadLastReadAts, setUnreadLastReadAts] = useState<Record<string, number | null>>({});
   const [firstUnreadIds, setFirstUnreadIds] = useState<Record<string, number | null>>({});
 
@@ -81,6 +86,11 @@ export function useUnreadCounts(
         setLastMessageTime(key, ts);
       }
       setLastMessageTimes(getLastMessageTimes());
+    }
+
+    const previews = data.last_message_previews ?? {};
+    if (Object.keys(previews).length > 0) {
+      setLastMessagePreviews((prev) => ({ ...prev, ...previews }));
     }
   }, []);
 
@@ -214,6 +224,10 @@ export function useUnreadCounts(
       const timestamp = msg.received_at || Math.floor(Date.now() / 1000);
       const updated = setLastMessageTime(stateKey, timestamp);
       setLastMessageTimes(updated);
+      setLastMessagePreviews((prev) => ({
+        ...prev,
+        [stateKey]: (msg.text ?? '').slice(0, PREVIEW_MAX_LEN),
+      }));
 
       if (!isActiveConversation && !msg.outgoing && isNewMessage) {
         incrementUnread(stateKey, msg.id, hasMention);
@@ -249,6 +263,14 @@ export function useUnreadCounts(
       return next;
     });
 
+    setLastMessagePreviews((prev) => {
+      if (!(oldStateKey in prev)) return prev;
+      const next = { ...prev };
+      next[newStateKey] = next[newStateKey] ?? next[oldStateKey];
+      delete next[oldStateKey];
+      return next;
+    });
+
     setLastMessageTimes(renameConversationTimeKey(oldStateKey, newStateKey));
   }, []);
 
@@ -277,6 +299,12 @@ export function useUnreadCounts(
       delete next[stateKey];
       return next;
     });
+    setLastMessagePreviews((prev) => {
+      if (!(stateKey in prev)) return prev;
+      const next = { ...prev };
+      delete next[stateKey];
+      return next;
+    });
   }, []);
 
   // Mark all conversations as read
@@ -298,6 +326,7 @@ export function useUnreadCounts(
     unreadCounts,
     mentions,
     lastMessageTimes,
+    lastMessagePreviews,
     unreadLastReadAts,
     firstUnreadIds,
     recordMessageEvent,

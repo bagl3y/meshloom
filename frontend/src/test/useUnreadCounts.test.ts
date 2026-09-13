@@ -103,6 +103,7 @@ describe('useUnreadCounts', () => {
       counts: {},
       mentions: {},
       last_message_times: {},
+      last_message_previews: {},
       first_unread_ids: {},
       last_read_ats: {},
     });
@@ -135,6 +136,7 @@ describe('useUnreadCounts', () => {
       counts: { [`channel-${CHANNEL_KEY}`]: 5 },
       mentions: { [`channel-${CHANNEL_KEY}`]: true },
       last_message_times: {},
+      last_message_previews: {},
       first_unread_ids: {},
       last_read_ats: { [`channel-${CHANNEL_KEY}`]: 1234 },
     });
@@ -161,6 +163,7 @@ describe('useUnreadCounts', () => {
       counts: { [`contact-${CONTACT_KEY}`]: 3 },
       mentions: {},
       last_message_times: {},
+      last_message_previews: {},
       first_unread_ids: {},
       last_read_ats: { [`contact-${CONTACT_KEY}`]: 2345 },
     });
@@ -188,6 +191,7 @@ describe('useUnreadCounts', () => {
       },
       mentions: {},
       last_message_times: {},
+      last_message_previews: {},
       first_unread_ids: {},
       last_read_ats: {},
     });
@@ -239,6 +243,7 @@ describe('useUnreadCounts', () => {
         [getStateKey('channel', CHANNEL_KEY)]: true,
       },
       last_message_times: {},
+      last_message_previews: {},
       first_unread_ids: {},
       last_read_ats: {},
     });
@@ -282,6 +287,7 @@ describe('useUnreadCounts', () => {
       counts: {},
       mentions: {},
       last_message_times: {},
+      last_message_previews: {},
       first_unread_ids: {},
       last_read_ats: {},
     });
@@ -297,6 +303,7 @@ describe('useUnreadCounts', () => {
       counts: { [`channel-${CHANNEL_KEY}`]: 7 },
       mentions: {},
       last_message_times: {},
+      last_message_previews: {},
       first_unread_ids: {},
       last_read_ats: { [`channel-${CHANNEL_KEY}`]: 3456 },
     });
@@ -325,6 +332,7 @@ describe('useUnreadCounts', () => {
       counts: { [`channel-${addedChannelKey}`]: 2 },
       mentions: {},
       last_message_times: {},
+      last_message_previews: {},
       first_unread_ids: {},
       last_read_ats: {},
     });
@@ -355,6 +363,7 @@ describe('useUnreadCounts', () => {
       counts: { [`contact-${addedContactKey}`]: 1 },
       mentions: {},
       last_message_times: {},
+      last_message_previews: {},
       first_unread_ids: {},
       last_read_ats: {},
     });
@@ -376,6 +385,7 @@ describe('useUnreadCounts', () => {
       counts: { [`channel-${CHANNEL_KEY}`]: 5 },
       mentions: {},
       last_message_times: {},
+      last_message_previews: {},
       first_unread_ids: {},
       last_read_ats: {},
     });
@@ -395,6 +405,7 @@ describe('useUnreadCounts', () => {
       counts: { [`channel-${CHANNEL_KEY}`]: 5 },
       mentions: {},
       last_message_times: {},
+      last_message_previews: {},
       first_unread_ids: {},
       last_read_ats: {},
     });
@@ -437,6 +448,7 @@ describe('useUnreadCounts', () => {
     expect(result.current.unreadCounts[getStateKey('channel', CHANNEL_KEY)]).toBe(1);
     expect(result.current.mentions[getStateKey('channel', CHANNEL_KEY)]).toBe(true);
     expect(result.current.lastMessageTimes[getStateKey('channel', CHANNEL_KEY)]).toBe(1700001234);
+    expect(result.current.lastMessagePreviews[getStateKey('channel', CHANNEL_KEY)]).toBe('hello');
   });
 
   it('recordMessageEvent skips unread increment for active or non-new messages but still tracks time', async () => {
@@ -478,6 +490,8 @@ describe('useUnreadCounts', () => {
     expect(result.current.unreadCounts[getStateKey('channel', CHANNEL_KEY)]).toBeUndefined();
     expect(result.current.lastMessageTimes[getStateKey('contact', CONTACT_KEY)]).toBe(1700002000);
     expect(result.current.lastMessageTimes[getStateKey('channel', CHANNEL_KEY)]).toBe(1700002001);
+    expect(result.current.lastMessagePreviews[getStateKey('contact', CONTACT_KEY)]).toBe('hello');
+    expect(result.current.lastMessagePreviews[getStateKey('channel', CHANNEL_KEY)]).toBe('hello');
   });
 
   it('seeds the first-unread boundary when a conversation goes unread over the socket', async () => {
@@ -489,6 +503,7 @@ describe('useUnreadCounts', () => {
       counts: {},
       mentions: {},
       last_message_times: {},
+      last_message_previews: {},
       first_unread_ids: {},
       last_read_ats: {},
     });
@@ -526,6 +541,7 @@ describe('useUnreadCounts', () => {
       counts: {},
       mentions: {},
       last_message_times: {},
+      last_message_previews: {},
       first_unread_ids: {},
       last_read_ats: {},
     });
@@ -548,5 +564,82 @@ describe('useUnreadCounts', () => {
       await result.current.markAllRead();
     });
     expect(result.current.firstUnreadIds).toEqual({});
+  });
+
+  it('applyUnreads merges last-message previews from the server snapshot', async () => {
+    const mocks = await getMockedApi();
+    mocks.getUnreads.mockResolvedValue({
+      counts: {},
+      mentions: {},
+      last_message_times: { [`channel-${CHANNEL_KEY}`]: 1700003000 },
+      last_message_previews: { [`channel-${CHANNEL_KEY}`]: 'latest from server' },
+      first_unread_ids: {},
+      last_read_ats: {},
+    });
+
+    const { result } = renderWith({ channels: [makeChannel(CHANNEL_KEY, 'Test')] });
+    await act(async () => {
+      await vi.waitFor(() => expect(mocks.getUnreads).toHaveBeenCalled());
+    });
+    expect(result.current.lastMessagePreviews[`channel-${CHANNEL_KEY}`]).toBe('latest from server');
+  });
+
+  it('recordMessageEvent truncates live previews to 120 characters', async () => {
+    const mocks = await getMockedApi();
+    const { result } = renderWith({});
+    await act(async () => {
+      await vi.waitFor(() => expect(mocks.getUnreads).toHaveBeenCalled());
+    });
+
+    await act(async () => {
+      result.current.recordMessageEvent({
+        msg: makeMessage({
+          type: 'CHAN',
+          conversation_key: CHANNEL_KEY,
+          text: 'Y'.repeat(200),
+        }),
+        activeConversation: false,
+        isNewMessage: true,
+      });
+    });
+
+    expect(result.current.lastMessagePreviews[getStateKey('channel', CHANNEL_KEY)]).toBe(
+      'Y'.repeat(120)
+    );
+  });
+
+  it('renames and removes last-message previews with conversation identity', async () => {
+    const mocks = await getMockedApi();
+    const { result } = renderWith({});
+    await act(async () => {
+      await vi.waitFor(() => expect(mocks.getUnreads).toHaveBeenCalled());
+    });
+
+    const oldKey = getStateKey('contact', 'abc123def456');
+    const newKey = getStateKey('contact', CONTACT_KEY);
+
+    await act(async () => {
+      result.current.recordMessageEvent({
+        msg: makeMessage({
+          type: 'PRIV',
+          conversation_key: 'abc123def456',
+          text: 'prefix preview',
+        }),
+        activeConversation: false,
+        isNewMessage: true,
+      });
+    });
+    expect(result.current.lastMessagePreviews[oldKey]).toBe('prefix preview');
+
+    await act(async () => {
+      result.current.renameConversationState(oldKey, newKey);
+    });
+    expect(result.current.lastMessagePreviews[oldKey]).toBeUndefined();
+    expect(result.current.lastMessagePreviews[newKey]).toBe('prefix preview');
+
+    await act(async () => {
+      result.current.removeConversationState(newKey);
+    });
+    expect(result.current.lastMessagePreviews[newKey]).toBeUndefined();
   });
 });

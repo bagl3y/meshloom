@@ -24,6 +24,7 @@ import {
   STATUS_DOT_PULSE_CHANGE_EVENT,
   STATUS_DOT_PULSE_DURATION_MS,
   STATUS_DOT_PULSE_PACKET_EVENT,
+  STATUS_DOT_PULSE_SIZE_PX,
   getStatusDotPulseEnabled,
   pulseColorFor,
   type StatusDotPulseKind,
@@ -236,7 +237,7 @@ export function StatusBar({
       <div className="flex items-center gap-1.5" role="status" aria-label={statusLabel}>
         <div
           className={cn(
-            'w-2 h-2 rounded-full transition-colors',
+            'w-2 h-2 rounded-full transition-[width,height,background-color,box-shadow]',
             radioState === 'initializing' || radioState === 'connecting' || identityGate
               ? 'bg-warning'
               : connected
@@ -245,7 +246,15 @@ export function StatusBar({
                   : 'bg-status-connected shadow-[0_0_6px_hsl(var(--status-connected)/0.5)]'
                 : 'bg-status-disconnected'
           )}
-          style={connected && pulseKind ? { backgroundColor: pulseColorFor(pulseKind) } : undefined}
+          style={
+            connected && pulseKind
+              ? {
+                  backgroundColor: pulseColorFor(pulseKind),
+                  width: STATUS_DOT_PULSE_SIZE_PX,
+                  height: STATUS_DOT_PULSE_SIZE_PX,
+                }
+              : undefined
+          }
           aria-hidden="true"
         />
         <span className="hidden lg:inline text-muted-foreground">{statusLabel}</span>

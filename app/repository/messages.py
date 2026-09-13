@@ -813,7 +813,7 @@ class MessageRepository:
         blocked_keys: list[str] | None = None,
         blocked_names: list[str] | None = None,
     ) -> dict:
-        """Get unread message counts, mention flags, and last message times for all conversations.
+        """Get unread counts, mention flags, last-message times/previews, and read boundaries.
 
         Args:
             name: User's display name for @[name] mention detection. If None, mentions are skipped.
@@ -821,12 +821,13 @@ class MessageRepository:
             blocked_names: Display names whose messages should be excluded from counts.
 
         Returns:
-            Dict with 'counts', 'mentions', 'last_message_times', 'last_read_ats',
-            and 'first_unread_ids' keys.
+            Dict with 'counts', 'mentions', 'last_message_times',
+            'last_message_previews', 'last_read_ats', and 'first_unread_ids' keys.
         """
         counts: dict[str, int] = {}
         mention_flags: dict[str, bool] = {}
         last_message_times: dict[str, int] = {}
+        last_message_previews: dict[str, str] = {}
         last_read_ats: dict[str, int | None] = {}
         # id of the oldest unread message per conversation.
         first_unread_ids: dict[str, int | None] = {}
@@ -954,12 +955,26 @@ class MessageRepository:
                 prefix = "channel" if row["type"] == "CHAN" else "contact"
                 first_unread_ids[f"{prefix}-{row['conversation_key']}"] = row["id"]
 
+            # Newest message per conversation. ROW_NUMBER rather than MAX(received_at)
+            # with a bare text column: sender timestamps are whole seconds, so several
+            # messages routinely share the newest second. Ordering by
+            # (received_at DESC, id DESC) is the inverse of first_unread_ids and
+            # returns both the timestamp and a short preview in this same 5th query.
             async with conn.execute(
                 f"""
-                SELECT type, conversation_key, MAX(received_at) as last_message_time
-                FROM messages
-                {last_time_where_sql}
-                GROUP BY type, conversation_key
+                WITH ranked AS (
+                    SELECT type, conversation_key, received_at, text,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY type, conversation_key
+                               ORDER BY received_at DESC, id DESC
+                           ) AS rn
+                    FROM messages
+                    {last_time_where_sql}
+                )
+                SELECT type, conversation_key, received_at AS last_message_time,
+                       SUBSTR(COALESCE(text, ''), 1, 120) AS last_message_preview
+                FROM ranked
+                WHERE rn = 1
                 """,
                 last_time_params,
             ) as cursor:
@@ -968,6 +983,7 @@ class MessageRepository:
                 prefix = "channel" if row["type"] == "CHAN" else "contact"
                 state_key = f"{prefix}-{row['conversation_key']}"
                 last_message_times[state_key] = row["last_message_time"]
+                last_message_previews[state_key] = row["last_message_preview"] or ""
 
         # Only include last_read_ats for conversations that actually have messages.
         # Without this filter, every contact heard via advertisement (even without
@@ -978,6 +994,7 @@ class MessageRepository:
             "counts": counts,
             "mentions": mention_flags,
             "last_message_times": last_message_times,
+            "last_message_previews": last_message_previews,
             "last_read_ats": last_read_ats,
             "first_unread_ids": first_unread_ids,
         }

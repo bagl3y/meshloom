@@ -975,6 +975,8 @@ export interface UnreadCounts {
   counts: Record<string, number>;
   mentions: Record<string, boolean>;
   last_message_times: Record<string, number>;
+  /** stateKey -> last message text, truncated to ~120 characters. */
+  last_message_previews: Record<string, string>;
   last_read_ats: Record<string, number | null>;
   /** stateKey -> id of the oldest unread message. Locates the unread divider. */
   first_unread_ids: Record<string, number | null>;

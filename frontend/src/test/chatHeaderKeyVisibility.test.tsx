@@ -98,13 +98,65 @@ describe('ChatHeader key visibility', () => {
     expect(screen.getByText(i18n.t('chatHeader.showKey'))).toBeInTheDocument();
   });
 
-  it('shows key directly for contacts', () => {
+  it('hides the full contact key behind a 12-char prefix and Show Key', () => {
     const pubKey = '11'.repeat(32);
     const conversation: Conversation = { type: 'contact', id: pubKey, name: 'Alice' };
 
     render(<ChatHeader {...baseProps} conversation={conversation} channels={[]} />);
 
+    expect(screen.getByText(pubKey.slice(0, 12))).toBeInTheDocument();
+    expect(screen.queryByText(pubKey)).not.toBeInTheDocument();
+    expect(screen.getByText(i18n.t('chatHeader.showKey'))).toBeInTheDocument();
+  });
+
+  it('reveals the full contact key when Show Key is clicked', () => {
+    const pubKey = '13'.repeat(32);
+    const conversation: Conversation = { type: 'contact', id: pubKey, name: 'Alice' };
+
+    render(<ChatHeader {...baseProps} conversation={conversation} channels={[]} />);
+
+    fireEvent.click(screen.getByText(i18n.t('chatHeader.showKey')));
+
     expect(screen.getByText(pubKey)).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('chatHeader.showKey'))).not.toBeInTheDocument();
+  });
+
+  it('copies the full contact key when the prefix is clicked', () => {
+    const pubKey = '14'.repeat(32);
+    const conversation: Conversation = { type: 'contact', id: pubKey, name: 'Alice' };
+
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<ChatHeader {...baseProps} conversation={conversation} channels={[]} />);
+
+    fireEvent.click(screen.getByText(pubKey.slice(0, 12)));
+
+    expect(writeText).toHaveBeenCalledWith(pubKey);
+  });
+
+  it('copies the full contact key when the revealed key is clicked', () => {
+    const pubKey = '15'.repeat(32);
+    const conversation: Conversation = { type: 'contact', id: pubKey, name: 'Alice' };
+
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<ChatHeader {...baseProps} conversation={conversation} channels={[]} />);
+
+    fireEvent.click(screen.getByText(i18n.t('chatHeader.showKey')));
+    fireEvent.click(screen.getByText(pubKey));
+
+    expect(writeText).toHaveBeenCalledWith(pubKey);
+  });
+
+  it('shows a prefix-only contact key without a Show Key control', () => {
+    const prefix = 'abcdef123456';
+    const conversation: Conversation = { type: 'contact', id: prefix, name: 'Unknown' };
+
+    render(<ChatHeader {...baseProps} conversation={conversation} channels={[]} />);
+
+    expect(screen.getByText(prefix)).toBeInTheDocument();
     expect(screen.queryByText(i18n.t('chatHeader.showKey'))).not.toBeInTheDocument();
   });
 

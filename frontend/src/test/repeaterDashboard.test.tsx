@@ -2,9 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { RepeaterDashboard } from '../components/RepeaterDashboard';
 import i18n from '../i18n';
+import bEn from '../i18n/locales/slices/b.en.json';
+import bFr from '../i18n/locales/slices/b.fr.json';
 import fEn from '../i18n/locales/slices/f.en.json';
 import fFr from '../i18n/locales/slices/f.fr.json';
 
+i18n.addResourceBundle('en', 'translation', bEn, true, true);
+i18n.addResourceBundle('fr', 'translation', bFr, true, true);
 i18n.addResourceBundle('en', 'translation', fEn, true, true);
 i18n.addResourceBundle('fr', 'translation', fFr, true, true);
 import type { UseRepeaterDashboardResult } from '../hooks/useRepeaterDashboard';
@@ -596,6 +600,43 @@ describe('RepeaterDashboard', () => {
     // The trace button has title "Direct Trace"
     fireEvent.click(screen.getByTitle(i18n.t('repeater.directTrace')));
     expect(defaultProps.onTrace).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the full repeater key behind a 12-char prefix and Show Key', () => {
+    render(<RepeaterDashboard {...defaultProps} />);
+
+    expect(screen.getByText(REPEATER_KEY.slice(0, 12))).toBeInTheDocument();
+    expect(screen.queryByText(REPEATER_KEY)).not.toBeInTheDocument();
+    expect(screen.getByText(i18n.t('chatHeader.showKey'))).toBeInTheDocument();
+  });
+
+  it('reveals the full repeater key when Show Key is clicked', () => {
+    render(<RepeaterDashboard {...defaultProps} />);
+
+    fireEvent.click(screen.getByText(i18n.t('chatHeader.showKey')));
+
+    expect(screen.getByText(REPEATER_KEY)).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('chatHeader.showKey'))).not.toBeInTheDocument();
+  });
+
+  it('copies the full repeater key when the prefix is clicked', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<RepeaterDashboard {...defaultProps} />);
+
+    fireEvent.click(screen.getByText(REPEATER_KEY.slice(0, 12)));
+
+    expect(writeText).toHaveBeenCalledWith(REPEATER_KEY);
+  });
+
+  it('uses larger header action hit targets', () => {
+    render(<RepeaterDashboard {...defaultProps} />);
+
+    const deleteBtn = screen.getByRole('button', { name: i18n.t('repeater.delete') });
+    expect(deleteBtn.className).toContain('p-2');
+    expect(deleteBtn.className).toContain('h-9');
+    expect(deleteBtn.className).toContain('ml-1.5');
   });
 
   it('console shows placeholder when empty', () => {

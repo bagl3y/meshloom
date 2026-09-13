@@ -1,6 +1,8 @@
 {
   "chat": {
-    "unknownError": "Unknown error"
+    "unknownError": "Unknown error",
+    "more": "More",
+    "tooLong": "too long — shorten to send"
   },
   "messageList": {
     "loading": "Loading messages...",
@@ -54,7 +56,7 @@
     "viewContactInfo": "View contact info",
     "viewInfoFor": "View info for {{name}}",
     "showKey": "Show Key",
-    "revealKey": "Reveal channel key",
+    "revealKey": "Reveal key",
     "clickToCopy": "Click to copy",
     "copyChannelKey": "Copy channel key",
     "copyContactKey": "Copy contact key",

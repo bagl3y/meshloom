@@ -5,6 +5,7 @@ import type { Channel, Contact, RawPacket, RadioConfig } from '../types';
 import { PacketVisualizer3D } from './PacketVisualizer3D';
 import { RawPacketList } from './RawPacketList';
 import { RawPacketInspectorDialog } from './RawPacketDetailModal';
+import { TOOL_PANE_HEADER_CLASS } from './toolPaneHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { cn } from '@/lib/utils';
 import { getVisualizerSettings, saveVisualizerSettings } from '../utils/visualizerSettings';
@@ -54,7 +55,7 @@ export function VisualizerView({ contacts, channels, config }: VisualizerViewPro
   return (
     <div ref={containerRef} className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="flex justify-between items-center px-4 py-3 border-b border-border font-medium text-lg">
+      <div className={cn(TOOL_PANE_HEADER_CLASS, 'flex items-center justify-between')}>
         <span>{paneFullScreen ? t('visualizer.titleFullscreen') : t('visualizer.title')}</span>
         <button
           className="hidden md:inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

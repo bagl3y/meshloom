@@ -175,6 +175,13 @@ describe('MessageList channel sender rendering', () => {
     expect(meta).toHaveTextContent('✓4');
     expect(meta).not.toHaveTextContent('Bonsoir comment ils vont tous?');
     expect(screen.getByText('Bonsoir comment ils vont tous?')).toBeInTheDocument();
+    expect(meta).toHaveClass('flex-wrap');
+    expect(meta).not.toHaveClass('whitespace-nowrap');
+    expect(meta).not.toHaveClass('flex-nowrap');
+    const row = meta.closest('[data-message-id]');
+    expect(row).toHaveClass('w-full');
+    const bubble = meta.parentElement;
+    expect(bubble).toHaveClass('w-max', 'max-w-[85%]', 'pr-7');
   });
 
   it('keeps the incoming sender name above the body, not in the metadata row', () => {
@@ -225,16 +232,18 @@ describe('MessageList channel sender rendering', () => {
 
   it('hides the width by default (toggle off) and shows only the hop count', () => {
     render(
-      <MessageList
-        messages={[
-          createMessage({
-            sender_name: 'Alice',
-            paths: [{ path: 'AABBCCDD', path_len: 2, received_at: 1700000001 }],
-          }),
-        ]}
-        contacts={[]}
-        loading={false}
-      />
+      <PathHopWidthProvider showPathHopWidth={false} setShowPathHopWidth={() => {}}>
+        <MessageList
+          messages={[
+            createMessage({
+              sender_name: 'Alice',
+              paths: [{ path: 'AABBCCDD', path_len: 2, received_at: 1700000001 }],
+            }),
+          ]}
+          contacts={[]}
+          loading={false}
+        />
+      </PathHopWidthProvider>
     );
 
     expect(screen.getByText('(2)')).toBeInTheDocument();

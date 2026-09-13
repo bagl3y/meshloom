@@ -123,6 +123,7 @@
     "running": "running",
     "idle": "idle",
     "muted": "Channel muted",
+    "yesterday": "Yesterday",
     "notificationsEnabled": "Notifications enabled",
     "unreadMessages_one": "{{count}} unread message",
     "unreadMessages_other": "{{count}} unread messages",

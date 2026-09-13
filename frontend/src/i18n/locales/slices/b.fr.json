@@ -1,6 +1,8 @@
 {
   "chat": {
-    "unknownError": "Erreur inconnue"
+    "unknownError": "Erreur inconnue",
+    "more": "Plus",
+    "tooLong": "trop long — raccourcissez pour envoyer"
   },
   "messageList": {
     "loading": "Chargement des messages…",
@@ -54,7 +56,7 @@
     "viewContactInfo": "Voir la fiche du contact",
     "viewInfoFor": "Voir la fiche de {{name}}",
     "showKey": "Afficher la clé",
-    "revealKey": "Révéler la clé du salon",
+    "revealKey": "Révéler la clé",
     "clickToCopy": "Cliquer pour copier",
     "copyChannelKey": "Copier la clé du salon",
     "copyContactKey": "Copier la clé du contact",

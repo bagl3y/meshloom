@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import {
   BellOff,
   Cable,
@@ -98,6 +99,23 @@ function sortOrderLabelKey(order: SortOrder): string {
   }
 }
 
+/** Compact last-message clock for the sidebar excerpt line. */
+export function formatSidebarPreviewTime(timestamp: number): string {
+  const date = new Date(timestamp * 1000);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfThatDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const dayDiff = Math.round((startOfToday - startOfThatDay) / 86_400_000);
+
+  if (dayDiff === 0) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+  if (dayDiff === 1) {
+    return i18n.t('sidebar.yesterday');
+  }
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
 // Human phrase for aria/title, describing what the order sorts by.
 function sortOrderDescriptionKey(order: SortOrder): string {
   switch (order) {
@@ -169,6 +187,7 @@ interface SidebarProps {
   onSelectConversation: (conversation: Conversation) => void;
   onNewMessage: (event?: React.MouseEvent<HTMLButtonElement>) => void;
   lastMessageTimes: ConversationTimes;
+  lastMessagePreviews?: Record<string, string>;
   unreadCounts: Record<string, number>;
   /** Tracks which conversations have unread messages that mention the user */
   mentions: Record<string, boolean>;
@@ -200,6 +219,7 @@ export function Sidebar({
   onSelectConversation,
   onNewMessage,
   lastMessageTimes,
+  lastMessagePreviews = {},
   unreadCounts,
   mentions,
   showCracker,
@@ -658,6 +678,9 @@ export function Sidebar({
       (row.type === 'contact' &&
         row.contact?.type !== CONTACT_TYPE_REPEATER &&
         row.unreadCount > 0);
+    const stateKey = getStateKey(row.type, row.id);
+    const previewText = (lastMessagePreviews[stateKey] ?? '').replace(/\s+/g, ' ').trim();
+    const previewAt = lastMessageTimes[stateKey];
 
     const unreadBadge = row.unreadCount > 0 && !row.muted && (
       <span
@@ -677,7 +700,7 @@ export function Sidebar({
     return (
       <div
         key={row.key}
-        title={row.name}
+        title={previewText ? `${row.name}\n${previewText}` : row.name}
         className={cn(
           'px-3 py-2 cursor-pointer flex items-center gap-2 border-l-2 border-transparent hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           isActive(row.type, row.id) && 'bg-accent border-l-primary',
@@ -717,20 +740,35 @@ export function Sidebar({
           )}
           {desktopCollapsed && unreadBadge}
         </span>
-        <span
-          className={cn('name flex-1 truncate text-[0.8125rem]', desktopCollapsed && 'md:hidden')}
-        >
-          {row.name}
-        </span>
-        <span className={cn('ml-auto flex items-center gap-1', desktopCollapsed && 'md:hidden')}>
-          {row.muted ? (
-            <span aria-label={t('sidebar.muted')} title={t('sidebar.muted')}>
-              <BellOff className="h-3.5 w-3.5 text-muted-foreground" />
+        <div className={cn('min-w-0 flex-1', desktopCollapsed && 'md:hidden')}>
+          <div className="flex items-center gap-1">
+            <span className="name flex-1 truncate text-[0.8125rem]">{row.name}</span>
+            <span className="ml-auto flex items-center gap-1">
+              {row.muted ? (
+                <span aria-label={t('sidebar.muted')} title={t('sidebar.muted')}>
+                  <BellOff className="h-3.5 w-3.5 text-muted-foreground" />
+                </span>
+              ) : (
+                !desktopCollapsed && unreadBadge
+              )}
             </span>
-          ) : (
-            !desktopCollapsed && unreadBadge
-          )}
-        </span>
+          </div>
+          {previewText ? (
+            <div
+              data-testid="conversation-preview"
+              className={cn('flex items-center gap-1.5', desktopCollapsed && 'md:hidden')}
+            >
+              <span className="min-w-0 flex-1 truncate text-[0.625rem] text-muted-foreground">
+                {previewText}
+              </span>
+              {previewAt ? (
+                <span className="shrink-0 text-[0.625rem] tabular-nums text-muted-foreground">
+                  {formatSidebarPreviewTime(previewAt)}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
     );
   };

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Sidebar, channelRailMonogram } from '../components/Sidebar';
+import { Sidebar, channelRailMonogram, formatSidebarPreviewTime } from '../components/Sidebar';
 import i18n from '../i18n';
 import { CONTACT_TYPE_REPEATER, CONTACT_TYPE_ROOM, type Channel, type Contact } from '../types';
 import { getStateKey, type ConversationTimes } from '../utils/conversationState';
@@ -51,7 +51,9 @@ function renderSidebar(overrides?: {
   unreadCounts?: Record<string, number>;
   mentions?: Record<string, boolean>;
   lastMessageTimes?: ConversationTimes;
+  lastMessagePreviews?: Record<string, string>;
   channels?: Channel[];
+  desktopCollapsed?: boolean;
 }) {
   const aliceName = 'Alice';
   const roomName = 'Ops Board';
@@ -81,7 +83,9 @@ function renderSidebar(overrides?: {
       onSelectConversation={onSelectConversation}
       onNewMessage={vi.fn()}
       lastMessageTimes={overrides?.lastMessageTimes ?? {}}
+      lastMessagePreviews={overrides?.lastMessagePreviews ?? {}}
       unreadCounts={unreadCounts}
+      desktopCollapsed={overrides?.desktopCollapsed}
       mentions={overrides?.mentions ?? {}}
       showCracker={false}
       crackerRunning={false}
@@ -853,6 +857,62 @@ describe('Sidebar section summaries', () => {
       .map((node) => node.textContent);
     expect(monograms).toEqual(expect.arrayContaining(['PU', 'FL', 'OP']));
     expect(monograms).not.toContain('#');
+  });
+});
+
+describe('Sidebar last-message previews', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('shows the excerpt and a compact time on the second line', () => {
+    const now = new Date();
+    const todayNoon = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 5, 0);
+    const todayTs = Math.floor(todayNoon.getTime() / 1000);
+    const yesterdayNoon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 9, 0, 0);
+    const yesterdayTs = Math.floor(yesterdayNoon.getTime() / 1000);
+    const aliceKey = '11'.repeat(32);
+    const flightKey = 'BB'.repeat(16);
+
+    renderSidebar({
+      lastMessageTimes: {
+        [getStateKey('contact', aliceKey)]: todayTs,
+        [getStateKey('channel', flightKey)]: yesterdayTs,
+      },
+      lastMessagePreviews: {
+        [getStateKey('contact', aliceKey)]: 'See you at the tower',
+        [getStateKey('channel', flightKey)]: 'Winds are up',
+      },
+    });
+
+    const previews = screen.getAllByTestId('conversation-preview');
+    expect(previews.some((node) => node.textContent?.includes('See you at the tower'))).toBe(true);
+    expect(previews.some((node) => node.textContent?.includes('Winds are up'))).toBe(true);
+    expect(
+      previews.some((node) => node.textContent?.includes(formatSidebarPreviewTime(todayTs)))
+    ).toBe(true);
+    expect(previews.some((node) => node.textContent?.includes(i18n.t('sidebar.yesterday')))).toBe(
+      true
+    );
+  });
+
+  it('hides the excerpt line when the desktop rail is collapsed', () => {
+    const aliceKey = '11'.repeat(32);
+    renderSidebar({
+      desktopCollapsed: true,
+      lastMessageTimes: {
+        [getStateKey('contact', aliceKey)]: 1700000000,
+      },
+      lastMessagePreviews: {
+        [getStateKey('contact', aliceKey)]: 'hidden on the rail',
+      },
+    });
+
+    const preview = screen
+      .getByText('hidden on the rail')
+      .closest('[data-testid="conversation-preview"]');
+    expect(preview).toHaveClass('md:hidden');
+    expect(preview?.parentElement).toHaveClass('md:hidden');
   });
 });
 

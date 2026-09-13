@@ -10,7 +10,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { MapPin, Smile, Sticker, X } from 'lucide-react';
+import { MapPin, Plus, Send, Smile, Sticker, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from './ui/button';
 import { toast } from './ui/sonner';
@@ -95,8 +95,10 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
   const [replyQuote, setReplyQuote] = useState<{ sender: string; quote: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [composerPanel, setComposerPanel] = useState<'gif' | 'emoji' | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const textRef = useRef(text);
   textRef.current = text;
   const draftIdentity = draftIdentityOf(conversationType, conversationId);
@@ -147,6 +149,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
       setText('');
       setReplyQuote(null);
       setComposerPanel(null);
+      setMoreOpen(false);
       return;
     }
     const loaded = loadConversationDraft(next.type, next.id);
@@ -154,6 +157,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
     textRef.current = loaded;
     setReplyQuote(null);
     setComposerPanel(null);
+    setMoreOpen(false);
   }, [conversationType, conversationId]);
 
   useEffect(() => {
@@ -202,7 +206,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
     if (!limits) return { limitState: 'normal', warningMessage: null };
 
     if (textByteLen >= limits.hardLimit) {
-      return { limitState: 'error', warningMessage: t('chat.truncated') };
+      return { limitState: 'error', warningMessage: t('chat.tooLong') };
     }
     if (textByteLen >= limits.dangerAt) {
       return { limitState: 'danger', warningMessage: t('chat.multiHopWarn') };
@@ -219,7 +223,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
     async (e: FormEvent) => {
       e.preventDefault();
       const trimmed = text.trim();
-      if (!trimmed || sending || disabled) return;
+      if (!trimmed || sending || disabled || limitState === 'error') return;
 
       setSending(true);
       try {
@@ -244,7 +248,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
       // Refocus after React re-enables the textarea
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
-    [text, sending, disabled, onSend, draftIdentity, t]
+    [text, sending, disabled, limitState, onSend, draftIdentity, t]
   );
 
   const persistDraft = useCallback(
@@ -340,6 +344,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
   );
 
   const sendLocation = useCallback(() => {
+    setMoreOpen(false);
     const wire = formatLocation(radioLat ?? 0, radioLon ?? 0, senderName || 'pin');
     if (!wire) {
       toast.error(t('share.noLocation'));
@@ -347,6 +352,13 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
     }
     void sendPayload(wire);
   }, [radioLat, radioLon, sendPayload, senderName, t]);
+
+  const hasShareableLocation =
+    radioLat != null &&
+    radioLon != null &&
+    Number.isFinite(radioLat) &&
+    Number.isFinite(radioLon) &&
+    !(radioLat === 0 && radioLon === 0);
 
   useEffect(() => {
     if (!composerPanel) return;
@@ -366,12 +378,30 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
     };
   }, [composerPanel]);
 
-  const canSubmit = text.trim().length > 0;
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && moreMenuRef.current?.contains(target)) return;
+      setMoreOpen(false);
+    };
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setMoreOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [moreOpen]);
+
+  const canSubmit = text.trim().length > 0 && limitState !== 'error';
 
   // Show counter for messages (not raw).
-  // Desktop: always visible. Mobile: only show count after 100 characters.
+  // Desktop: always visible. Mobile: only after the UTF-8 warning threshold.
   const showCharCounter = limits !== null;
-  const showMobileCounterValue = text.length > 100;
+  const showMobileCounterValue = limits !== null && textByteLen >= limits.warningAt;
 
   return (
     <form
@@ -416,44 +446,77 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
             disabled={disabled || sending}
           />
         )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-10 w-10 flex-shrink-0"
-          aria-label={t('chat.emoji')}
-          aria-expanded={composerPanel === 'emoji'}
-          data-testid="emoji-picker-trigger"
-          disabled={disabled || sending}
-          onClick={() => setComposerPanel((open) => (open === 'emoji' ? null : 'emoji'))}
-        >
-          <Smile className="h-5 w-5" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-10 w-10 flex-shrink-0"
-          aria-label={t('chat.gif')}
-          aria-expanded={composerPanel === 'gif'}
-          data-testid="gif-picker-trigger"
-          disabled={disabled || sending}
-          onClick={() => setComposerPanel((open) => (open === 'gif' ? null : 'gif'))}
-        >
-          <Sticker className="h-5 w-5" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-10 w-10 flex-shrink-0"
-          aria-label={t('share.shareLocation')}
-          data-testid="share-location-trigger"
-          disabled={disabled || sending}
-          onClick={sendLocation}
-        >
-          <MapPin className="h-5 w-5" />
-        </Button>
+        <div ref={moreMenuRef} className="relative flex-shrink-0 sm:contents">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 sm:hidden"
+            aria-label={t('chat.more')}
+            aria-expanded={moreOpen}
+            data-testid="composer-more-trigger"
+            disabled={disabled || sending}
+            onClick={() => {
+              setMoreOpen((open) => !open);
+              setComposerPanel(null);
+            }}
+          >
+            <Plus className="h-5 w-5" />
+          </Button>
+          <div
+            className={cn(
+              moreOpen
+                ? 'absolute bottom-full left-0 z-20 mb-1 flex items-center gap-0.5 rounded-md border border-border bg-background p-1 shadow-md'
+                : 'hidden',
+              'sm:contents'
+            )}
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 flex-shrink-0"
+              aria-label={t('chat.emoji')}
+              aria-expanded={composerPanel === 'emoji'}
+              data-testid="emoji-picker-trigger"
+              disabled={disabled || sending}
+              onClick={() => {
+                setMoreOpen(false);
+                setComposerPanel((open) => (open === 'emoji' ? null : 'emoji'));
+              }}
+            >
+              <Smile className="h-5 w-5" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 flex-shrink-0"
+              aria-label={t('chat.gif')}
+              aria-expanded={composerPanel === 'gif'}
+              data-testid="gif-picker-trigger"
+              disabled={disabled || sending}
+              onClick={() => {
+                setMoreOpen(false);
+                setComposerPanel((open) => (open === 'gif' ? null : 'gif'));
+              }}
+            >
+              <Sticker className="h-5 w-5" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 flex-shrink-0"
+              aria-label={t('share.shareLocation')}
+              data-testid="share-location-trigger"
+              disabled={disabled || sending || !hasShareableLocation}
+              onClick={sendLocation}
+            >
+              <MapPin className="h-5 w-5" />
+            </Button>
+          </div>
+        </div>
         <textarea
           ref={textareaRef}
           name="chat-message-input"
@@ -478,9 +541,11 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(fu
         <Button
           type="submit"
           disabled={disabled || sending || !canSubmit}
-          className="flex-shrink-0"
+          className="h-10 w-10 flex-shrink-0 px-0 sm:w-auto sm:px-4"
+          aria-label={sending ? t('chat.sending') : t('chat.send')}
         >
-          {sending ? t('chat.sending') : t('chat.send')}
+          <Send className="h-4 w-4 sm:hidden" aria-hidden="true" />
+          <span className="hidden sm:inline">{sending ? t('chat.sending') : t('chat.send')}</span>
         </Button>
       </div>
       {showCharCounter && (

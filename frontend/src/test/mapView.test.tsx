@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import './eSlices';
 import { MapView } from '../components/MapView';
+import { setSavedCartoApiKey } from '../utils/cartoPreference';
 import { api } from '../api';
 import i18n from '../i18n';
 import type { Contact } from '../types';
@@ -25,7 +26,7 @@ vi.mock('react-leaflet', () => {
   (LayersControlMock as unknown as { BaseLayer: typeof BaseLayer }).BaseLayer = BaseLayer;
   return {
     MapContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-    TileLayer: () => null,
+    TileLayer: ({ url }: { url: string }) => <div data-testid="tile-layer" data-url={url} />,
     CircleMarker: forwardRef<
       HTMLDivElement,
       { children: React.ReactNode; pathOptions?: { fillColor?: string; color?: string } }
@@ -56,6 +57,22 @@ describe('MapView', () => {
   beforeEach(() => {
     vi.mocked(api.getDirectoryMapNodes).mockReset();
     vi.mocked(api.getDirectoryMapNodes).mockResolvedValue({ nodes: [] });
+    localStorage.clear();
+  });
+
+  it('appends key= to the CARTO dark tile URL when a key is set', () => {
+    setSavedCartoApiKey('test-carto-key');
+
+    render(<MapView contacts={[]} />);
+
+    const darkUrl = screen
+      .getAllByTestId('tile-layer')
+      .map((el) => el.getAttribute('data-url'))
+      .find((url) => url?.includes('dark_all'));
+
+    expect(darkUrl).toBe(
+      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=test-carto-key'
+    );
   });
 
   it('renders a never-heard fallback for a focused contact without last_seen', () => {

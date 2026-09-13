@@ -8,7 +8,7 @@ interface RichPayloadContextValue {
 const noop = () => {};
 
 const RichPayloadContext = createContext<RichPayloadContextValue>({
-  renderRichPayloads: false,
+  renderRichPayloads: true,
   setRenderRichPayloads: noop,
 });
 

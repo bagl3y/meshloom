@@ -960,7 +960,7 @@ class RadioRegionDiscoveryResponse(BaseModel):
 
 
 class UnreadCounts(BaseModel):
-    """Aggregated unread counts, mention flags, and last message times for all conversations."""
+    """Aggregated unread counts, mention flags, last-message times/previews, and read boundaries."""
 
     counts: dict[str, int] = Field(
         default_factory=dict, description="Map of stateKey -> unread count"
@@ -970,6 +970,13 @@ class UnreadCounts(BaseModel):
     )
     last_message_times: dict[str, int] = Field(
         default_factory=dict, description="Map of stateKey -> last message timestamp"
+    )
+    last_message_previews: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Map of stateKey -> last message text, truncated to ~120 characters. "
+            "Same row as last_message_times (ROW_NUMBER by received_at DESC, id DESC)."
+        ),
     )
     first_unread_ids: dict[str, int | None] = Field(
         default_factory=dict,

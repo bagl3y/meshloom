@@ -26,6 +26,7 @@ import {
 } from './ui/dialog';
 import { Input } from './ui/input';
 import { cn } from '@/lib/utils';
+import { TOOL_PANE_HEADER_CLASS } from './toolPaneHeader';
 
 type TraceSortMode = 'alpha' | 'recent' | 'distance' | 'traced';
 type CustomHopBytes = 1 | 2 | 4;
@@ -542,9 +543,11 @@ export function TracePane({ contacts, config, onRunTracePath }: TracePaneProps) 
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto lg:overflow-hidden">
-      <div className="shrink-0 border-b border-border px-4 py-3">
-        <h2 className="text-base font-semibold">{t('trace.title')}</h2>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t('trace.help')}</p>
+      <div className={cn(TOOL_PANE_HEADER_CLASS, 'shrink-0')}>
+        <h2>{t('trace.title')}</h2>
+        <p className="mt-1 max-w-3xl text-sm font-normal text-muted-foreground">
+          {t('trace.help')}
+        </p>
       </div>
 
       <div className="flex flex-1 flex-col gap-4 p-4 lg:min-h-0 lg:flex-row lg:overflow-hidden">

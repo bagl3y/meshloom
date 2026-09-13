@@ -66,6 +66,7 @@ describe('SettingsCommunitySection', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(i18n.t('settings.community.privacyAccount'))).toBeInTheDocument();
     expect(screen.getByText(i18n.t('settings.community.privacyPrivateKey'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('settings.community.privacyHashtags'))).toBeInTheDocument();
     expect(screen.getByLabelText(i18n.t('settings.community.enable'))).not.toBeDisabled();
   });
 
@@ -141,8 +142,8 @@ describe('SettingsCommunitySection', () => {
     render(<SettingsCommunitySection />);
 
     expect(await screen.findByText(i18n.t('settings.community.meTitle'))).toBeInTheDocument();
-    expect(screen.getByText('11')).toBeInTheDocument();
-    expect(screen.getByText('8')).toBeInTheDocument();
+    expect(await screen.findByText('11')).toBeInTheDocument();
+    expect(await screen.findByText('8')).toBeInTheDocument();
     expect(screen.getByText(i18n.t('settings.community.concordanceWarn'))).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.community.iAmSure') }));
