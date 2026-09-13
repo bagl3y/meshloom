@@ -14,13 +14,17 @@ from app.repository import (
     RawPacketRepository,
 )
 from app.services.observer_reach import (
+    ParsedReach,
     get_packet_observer_reach,
     get_packet_observer_reach_counts,
     hops_from_path_json,
     parse_batch_observations,
+    parse_batch_reach,
     parse_corescope_observers,
     parse_packet_observations,
+    parse_packet_reach,
     path_from_path_json,
+    payload_sealed,
     reset_observer_reach_cache,
     resolve_origin_coords,
 )
@@ -123,6 +127,40 @@ class TestObservationParsers:
         )
         assert parsed is not None
         assert len(parsed["AABBCCDDEEFF0011"]) == 4
+
+    def test_missing_sealed_is_not_final(self):
+        assert payload_sealed({"observers": []}) is False
+        assert parse_packet_reach({"observers": [{"observer_id": "a"}]}).sealed is False
+        parsed = parse_batch_reach(
+            {"results": {"aabbccddeeff0011": {"observers": [{"observer_id": "a"}]}}}
+        )
+        assert parsed is not None
+        assert parsed["AABBCCDDEEFF0011"].sealed is False
+
+    def test_per_hash_sealed_true(self):
+        reach = parse_packet_reach(
+            {
+                "observers": [{"observer_id": "a"}],
+                "sealed": True,
+            }
+        )
+        assert len(reach.observations) == 1
+        assert reach.sealed is True
+
+    def test_batch_entry_sealed_true(self):
+        parsed = parse_batch_reach(
+            {
+                "results": {
+                    "aabbccddeeff0011": {
+                        "observers": [{"observer_id": "a"}],
+                        "sealed": True,
+                    }
+                }
+            }
+        )
+        assert parsed is not None
+        assert parsed["AABBCCDDEEFF0011"].sealed is True
+        assert len(parsed["AABBCCDDEEFF0011"].observations) == 1
 
     def test_observers_join(self):
         geos = parse_corescope_observers(
@@ -252,6 +290,7 @@ class TestObserverReachGate:
 
         assert result.directory_enabled is True
         assert result.counts["AABBCCDDEEFF0011"] == 1
+        assert result.sealed["AABBCCDDEEFF0011"] is False
         mock_client.post.assert_not_called()
 
     @pytest.mark.asyncio
@@ -506,43 +545,7 @@ class TestCommunityObserverReach:
         assert exc.value.status_code == 500
 
     @pytest.mark.asyncio
-    async def test_community_live_poll_bypasses_reach_cache(self, test_db):
-        reset_observer_reach_cache()
-        from app.services.meshloom_community import update_community
-
-        await update_community(enabled=True, iata="LYS")
-        calls: list[str] = []
-
-        async def fake_data(path: str, method: str = "GET", **_kwargs: object) -> object:
-            calls.append(path)
-            if path.endswith("/observations"):
-                return {
-                    "results": {
-                        "AABBCCDDEEFF0011": [
-                            {
-                                "observer_id": "obs-1",
-                                "observer_name": "Lyon",
-                                "path_json": ["ab"],
-                            }
-                        ]
-                    }
-                }
-            if path.endswith("/observers"):
-                return {"observers": []}
-            return {}
-
-        with patch(
-            "app.services.directory._community_directory_data",
-            side_effect=fake_data,
-        ):
-            first = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
-            second = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
-        assert first.counts["AABBCCDDEEFF0011"] == 1
-        assert second.counts["AABBCCDDEEFF0011"] == 1
-        assert sum(1 for path in calls if path.endswith("/observations")) == 2
-
-    @pytest.mark.asyncio
-    async def test_community_frozen_poll_uses_year_cache(self, test_db):
+    async def test_unsealed_result_uses_live_ttl(self, test_db):
         reset_observer_reach_cache()
         from app.services.meshloom_community import update_community
         from app.services import observer_reach
@@ -556,13 +559,15 @@ class TestCommunityObserverReach:
             if path.endswith("/observations"):
                 return {
                     "results": {
-                        "AABBCCDDEEFF0011": [
-                            {
-                                "observer_id": "obs-1",
-                                "observer_name": "Lyon",
-                                "path_json": ["ab"],
-                            }
-                        ]
+                        "AABBCCDDEEFF0011": {
+                            "observers": [
+                                {
+                                    "observer_id": "obs-1",
+                                    "observer_name": "Lyon",
+                                    "path_json": ["ab"],
+                                }
+                            ]
+                        }
                     }
                 }
             if path.endswith("/observers"):
@@ -577,11 +582,11 @@ class TestCommunityObserverReach:
             patch.object(observer_reach.time, "time", side_effect=lambda: clock["now"]),
         ):
             first = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
-            clock["now"] = 1_000.0 + observer_reach.COMMUNITY_LIVE_REACH_SECONDS - 1
             second = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
-            clock["now"] = 1_000.0 + observer_reach.COMMUNITY_LIVE_REACH_SECONDS + 1
+            clock["now"] = 1_000.0 + observer_reach.LIVE_REACH_TTL_SECONDS + 0.1
             third = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
         assert first.counts["AABBCCDDEEFF0011"] == 1
+        assert first.sealed["AABBCCDDEEFF0011"] is False
         assert second.counts["AABBCCDDEEFF0011"] == 1
         assert third.counts["AABBCCDDEEFF0011"] == 1
         assert sum(1 for path in calls if path.endswith("/observations")) == 2
@@ -610,7 +615,7 @@ class TestCommunityObserverReach:
         assert not any("/packets/aabbccddeeff0011" in item.lower() for item in calls)
 
     @pytest.mark.asyncio
-    async def test_community_does_not_year_cache_empty_observations(self, test_db):
+    async def test_unsealed_empty_uses_live_ttl(self, test_db):
         reset_observer_reach_cache()
         from app.services.meshloom_community import update_community
         from app.services import observer_reach
@@ -632,11 +637,207 @@ class TestCommunityObserverReach:
             ),
             patch.object(observer_reach.time, "time", side_effect=lambda: clock["now"]),
         ):
-            await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
-            clock["now"] = 1_000.0 + observer_reach.COMMUNITY_LIVE_REACH_SECONDS
-            await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
-            await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
-        assert sum(1 for path in calls if path.endswith("/observations")) == 3
+            first = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+            second = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+            clock["now"] = 1_000.0 + observer_reach.LIVE_REACH_TTL_SECONDS + 0.1
+            third = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+        assert first.counts["AABBCCDDEEFF0011"] == 0
+        assert first.sealed["AABBCCDDEEFF0011"] is False
+        assert second.counts["AABBCCDDEEFF0011"] == 0
+        assert third.counts["AABBCCDDEEFF0011"] == 0
+        assert sum(1 for path in calls if path.endswith("/observations")) == 2
+
+    @pytest.mark.asyncio
+    async def test_per_hash_sealed_is_surfaced(self, test_db):
+        reset_observer_reach_cache()
+        from app.services.meshloom_community import update_community
+
+        await update_community(enabled=True, iata="LYS")
+
+        async def fake_data(path: str, method: str = "GET", **_kwargs: object) -> object:
+            if path.endswith("/observations"):
+                raise HTTPException(status_code=500, detail="Stats directory unavailable")
+            if "/packets/" in path:
+                return {
+                    "observers": [
+                        {
+                            "name": "Lyon",
+                            "public_key": "aa" * 32,
+                            "path": ["ab"],
+                            "hops": 1,
+                        }
+                    ],
+                    "sealed": True,
+                }
+            if path.endswith("/observers"):
+                return {"observers": []}
+            return {}
+
+        with patch(
+            "app.services.directory._community_directory_data",
+            side_effect=fake_data,
+        ):
+            result = await get_packet_observer_reach("AABBCCDDEEFF0011")
+        assert result.observer_count == 1
+        assert result.sealed is True
+
+    @pytest.mark.asyncio
+    async def test_batch_sealed_is_surfaced_per_hash(self, test_db):
+        reset_observer_reach_cache()
+        from app.services.meshloom_community import update_community
+
+        await update_community(enabled=True, iata="LYS")
+
+        async def fake_data(path: str, method: str = "GET", **_kwargs: object) -> object:
+            if path.endswith("/observations"):
+                return {
+                    "results": {
+                        "AABBCCDDEEFF0011": {
+                            "observers": [
+                                {
+                                    "observer_id": "obs-1",
+                                    "observer_name": "Lyon",
+                                    "path_json": ["ab"],
+                                }
+                            ],
+                            "sealed": True,
+                        }
+                    }
+                }
+            return {}
+
+        with patch(
+            "app.services.directory._community_directory_data",
+            side_effect=fake_data,
+        ):
+            result = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+        assert result.counts["AABBCCDDEEFF0011"] == 1
+        assert result.sealed["AABBCCDDEEFF0011"] is True
+
+    @pytest.mark.asyncio
+    async def test_missing_sealed_field_is_not_final(self, test_db):
+        reset_observer_reach_cache()
+        from app.services.meshloom_community import update_community
+
+        await update_community(enabled=True, iata="LYS")
+
+        async def fake_data(path: str, method: str = "GET", **_kwargs: object) -> object:
+            if path.endswith("/observations"):
+                return {
+                    "results": {
+                        "AABBCCDDEEFF0011": {
+                            "observers": [
+                                {
+                                    "observer_id": "obs-1",
+                                    "observer_name": "Lyon",
+                                    "path_json": ["ab"],
+                                }
+                            ]
+                        }
+                    }
+                }
+            if "/packets/" in path:
+                return {
+                    "observers": [
+                        {"observer_id": "obs-1", "observer_name": "Lyon", "path_json": []}
+                    ]
+                }
+            if path.endswith("/observers"):
+                return {"observers": []}
+            return {}
+
+        with patch(
+            "app.services.directory._community_directory_data",
+            side_effect=fake_data,
+        ):
+            counts = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+            detail = await get_packet_observer_reach("AABBCCDDEEFF0011")
+        assert counts.sealed["AABBCCDDEEFF0011"] is False
+        assert detail.sealed is False
+
+    @pytest.mark.asyncio
+    async def test_sealed_result_is_served_from_cache(self, test_db):
+        reset_observer_reach_cache()
+        from app.services.meshloom_community import update_community
+        from app.services import observer_reach
+
+        await update_community(enabled=True, iata="LYS")
+        calls: list[str] = []
+        clock = {"now": 1_000.0}
+
+        async def fake_data(path: str, method: str = "GET", **_kwargs: object) -> object:
+            calls.append(path)
+            if path.endswith("/observations"):
+                return {
+                    "results": {
+                        "AABBCCDDEEFF0011": {
+                            "observers": [
+                                {
+                                    "observer_id": "obs-1",
+                                    "observer_name": "Lyon",
+                                    "path_json": ["ab"],
+                                }
+                            ],
+                            "sealed": True,
+                        }
+                    }
+                }
+            return {}
+
+        with (
+            patch(
+                "app.services.directory._community_directory_data",
+                side_effect=fake_data,
+            ),
+            patch.object(observer_reach.time, "time", side_effect=lambda: clock["now"]),
+        ):
+            first = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+            clock["now"] = 1_000.0 + observer_reach.LIVE_REACH_TTL_SECONDS + 60.0
+            second = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+        assert first.sealed["AABBCCDDEEFF0011"] is True
+        assert second.counts["AABBCCDDEEFF0011"] == 1
+        assert second.sealed["AABBCCDDEEFF0011"] is True
+        assert sum(1 for path in calls if path.endswith("/observations")) == 1
+
+    @pytest.mark.asyncio
+    async def test_upstream_failure_is_not_cached_as_empty(self, test_db):
+        reset_observer_reach_cache()
+        from app.services.meshloom_community import update_community
+
+        await update_community(enabled=True, iata="LYS")
+        fail = True
+
+        async def fake_data(path: str, method: str = "GET", **_kwargs: object) -> object:
+            if fail:
+                raise HTTPException(status_code=500, detail="Stats directory unavailable")
+            if path.endswith("/observations"):
+                return {
+                    "results": {
+                        "AABBCCDDEEFF0011": {
+                            "observers": [
+                                {
+                                    "observer_id": "obs-1",
+                                    "observer_name": "Lyon",
+                                    "path_json": ["ab"],
+                                }
+                            ],
+                            "sealed": True,
+                        }
+                    }
+                }
+            return {}
+
+        with patch(
+            "app.services.directory._community_directory_data",
+            side_effect=fake_data,
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+            assert exc.value.status_code == 500
+            fail = False
+            result = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+        assert result.counts["AABBCCDDEEFF0011"] == 1
+        assert result.sealed["AABBCCDDEEFF0011"] is True
 
 
 class TestObserverReachTtlLru:
@@ -660,12 +861,13 @@ class TestObserverReachTtlLru:
         observer_reach._reach_cache = TtlLruCache(2)
         try:
             now = 1_000.0
-            observer_reach._reach_cache.set(("o", "aa"), [], now + 90, now)
-            observer_reach._reach_cache.set(("o", "bb"), [], now + 90, now)
-            observer_reach._reach_cache.set(("o", "cc"), [], now + 90, now)
+            empty = ParsedReach(observations=[])
+            observer_reach._reach_cache.set(("o", "aa"), empty, now + 90, now)
+            observer_reach._reach_cache.set(("o", "bb"), empty, now + 90, now)
+            observer_reach._reach_cache.set(("o", "cc"), empty, now + 90, now)
             assert observer_reach._reach_cache.get(("o", "aa"), now) is None
-            assert observer_reach._reach_cache.get(("o", "bb"), now) == []
-            assert observer_reach._reach_cache.get(("o", "cc"), now) == []
+            assert observer_reach._reach_cache.get(("o", "bb"), now) == empty
+            assert observer_reach._reach_cache.get(("o", "cc"), now) == empty
         finally:
             observer_reach._reach_cache = original
             reset_observer_reach_cache()

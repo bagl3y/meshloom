@@ -12,9 +12,27 @@ import {
 
 const DEBOUNCE_MS = 250;
 const BATCH_MAX = 20;
+const RETRY_BACKOFF_MS = 30_000;
+const RETRY_BACKOFF_MAX_MS = 4 * 60_000;
 
-const countCache = new Map<string, { at: number; state: ObserverReachCountState }>();
+type CountCacheEntry = {
+  at: number;
+  state: ObserverReachCountState;
+  sealed: boolean;
+  failures: number;
+};
+
+const countCache = new Map<string, CountCacheEntry>();
 const lastFetchAt = new Map<string, number>();
+
+function retryBackoffMs(failures: number): number {
+  const exp = Math.max(failures - 1, 0);
+  return Math.min(RETRY_BACKOFF_MS * 2 ** exp, RETRY_BACKOFF_MAX_MS);
+}
+
+function responseSealed(sealed: Record<string, boolean> | undefined, hash: string): boolean {
+  return sealed?.[hash] === true || sealed?.[hash.toLowerCase()] === true;
+}
 
 function cacheKey(originConversation: string, hash: string): string {
   return `${originConversation}:${hash.toUpperCase()}`;
@@ -83,15 +101,18 @@ export function useVisibleObserverReach(options: {
           consider(msg.received_at * 1000 + OUTGOING_REACH_DELAY_MS - now);
           continue;
         }
-        const interval = observerReachPollIntervalMs(messageAgeMs(msg, now));
-        if (interval == null) continue;
         const hash = msg.packet_hash!.toUpperCase();
-        const last = lastFetchAt.get(cacheKey(startedFor, hash));
+        const key = cacheKey(startedFor, hash);
+        const entry = countCache.get(key);
+        if (entry?.sealed) continue;
+        const interval = observerReachPollIntervalMs(messageAgeMs(msg, now));
+        const last = lastFetchAt.get(key);
         if (last == null) {
           consider(1);
           continue;
         }
-        consider(interval - (now - last));
+        const waitFor = interval ?? retryBackoffMs(entry?.failures ?? 1);
+        consider(waitFor - (now - last));
       }
       return soonest;
     };
@@ -117,10 +138,11 @@ export function useVisibleObserverReach(options: {
         const last = lastFetchAt.get(key);
         const msg = messagesRef.current.find((item) => item.packet_hash?.toUpperCase() === hash);
         const interval = msg != null ? observerReachPollIntervalMs(messageAgeMs(msg, now)) : null;
-        const due =
-          interval == null
-            ? cached == null
-            : last == null || now - last >= interval;
+        const due = cached?.sealed
+          ? false
+          : interval != null
+            ? last == null || now - last >= interval
+            : last == null || now - last >= retryBackoffMs(cached?.failures ?? 0);
         if (due) {
           toFetch.push(hash);
           if (cached) {
@@ -150,7 +172,13 @@ export function useVisibleObserverReach(options: {
             for (const hash of requested) {
               const state: ObserverReachCountState = { status: 'error' };
               const key = cacheKey(startedFor, hash);
-              countCache.set(key, { at: fetchedAt, state });
+              const prev = countCache.get(key);
+              countCache.set(key, {
+                at: fetchedAt,
+                state,
+                sealed: false,
+                failures: (prev?.failures ?? 0) + 1,
+              });
               lastFetchAt.set(key, fetchedAt);
               disabled[hash] = state;
             }
@@ -160,10 +188,18 @@ export function useVisibleObserverReach(options: {
           const fetched: Record<string, ObserverReachCountState> = {};
           for (const hash of requested) {
             const count = response.counts[hash] ?? response.counts[hash.toLowerCase()];
+            const sealed = responseSealed(response.sealed, hash);
             const state: ObserverReachCountState =
               typeof count === 'number' ? { status: 'ok', count } : { status: 'error' };
             const key = cacheKey(startedFor, hash);
-            countCache.set(key, { at: fetchedAt, state });
+            const prev = countCache.get(key);
+            const final = sealed && state.status === 'ok';
+            countCache.set(key, {
+              at: fetchedAt,
+              state,
+              sealed: final,
+              failures: final ? 0 : (prev?.failures ?? 0) + 1,
+            });
             lastFetchAt.set(key, fetchedAt);
             fetched[hash] = state;
           }
@@ -175,7 +211,13 @@ export function useVisibleObserverReach(options: {
           for (const hash of requested) {
             const state: ObserverReachCountState = { status: 'error' };
             const key = cacheKey(startedFor, hash);
-            countCache.set(key, { at: fetchedAt, state });
+            const prev = countCache.get(key);
+            countCache.set(key, {
+              at: fetchedAt,
+              state,
+              sealed: false,
+              failures: (prev?.failures ?? 0) + 1,
+            });
             lastFetchAt.set(key, fetchedAt);
             failed[hash] = state;
           }

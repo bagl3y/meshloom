@@ -1233,6 +1233,7 @@ class PacketObserverReachResponse(BaseModel):
     origin_available: bool = False
     origin_lat: float | None = None
     origin_lon: float | None = None
+    sealed: bool = False
 
 
 class PacketObserverReachCountsRequest(BaseModel):
@@ -1242,6 +1243,7 @@ class PacketObserverReachCountsRequest(BaseModel):
 class PacketObserverReachCountsResponse(BaseModel):
     directory_enabled: bool = False
     counts: dict[str, int] = Field(default_factory=dict)
+    sealed: dict[str, bool] = Field(default_factory=dict)
 
 
 class LocateCandidate(BaseModel):

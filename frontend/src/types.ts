@@ -688,11 +688,13 @@ export interface PacketObserverReachResponse {
   origin_available: boolean;
   origin_lat?: number | null;
   origin_lon?: number | null;
+  sealed?: boolean;
 }
 
 export interface PacketObserverReachCountsResponse {
   directory_enabled: boolean;
   counts: Record<string, number>;
+  sealed?: Record<string, boolean>;
 }
 
 export type ObserverReachCountState =

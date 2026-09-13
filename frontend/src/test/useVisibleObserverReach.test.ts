@@ -43,6 +43,7 @@ describe('useVisibleObserverReach', () => {
     getCounts.mockResolvedValue({
       directory_enabled: true,
       counts: { AABBCCDDEEFF0011: 2 },
+      sealed: { AABBCCDDEEFF0011: false },
     });
   });
 
@@ -75,7 +76,12 @@ describe('useVisibleObserverReach', () => {
     expect(getCounts).toHaveBeenCalledTimes(2);
   });
 
-  it('does not loop-refetch a 15-minute-old message', async () => {
+  it('does not loop-refetch a sealed 15-minute-old message', async () => {
+    getCounts.mockResolvedValue({
+      directory_enabled: true,
+      counts: { AABBCCDDEEFF0011: 2 },
+      sealed: { AABBCCDDEEFF0011: true },
+    });
     const receivedAt = Math.floor(Date.now() / 1000) - 15 * 60;
     renderHook(() =>
       useVisibleObserverReach({
@@ -95,6 +101,69 @@ describe('useVisibleObserverReach', () => {
       await vi.advanceTimersByTimeAsync(120_000);
     });
     expect(getCounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refetch a sealed count', async () => {
+    getCounts.mockResolvedValue({
+      directory_enabled: true,
+      counts: { AABBCCDDEEFF0011: 3 },
+      sealed: { AABBCCDDEEFF0011: true },
+    });
+    const receivedAt = Math.floor(Date.now() / 1000) - 15 * 60;
+    renderHook(() =>
+      useVisibleObserverReach({
+        directoryEnabled: true,
+        conversationKey: 'C3B889530D4F02DB5662EA13C417F530',
+        messages: [channelMessage(receivedAt)],
+        visibleIndexes: [0],
+      })
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(getCounts).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+    });
+    expect(getCounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries an error after the backoff instead of caching it forever', async () => {
+    getCounts.mockRejectedValueOnce(new Error('down'));
+    getCounts.mockResolvedValue({
+      directory_enabled: true,
+      counts: { AABBCCDDEEFF0011: 2 },
+      sealed: { AABBCCDDEEFF0011: true },
+    });
+    const receivedAt = Math.floor(Date.now() / 1000) - 15 * 60;
+    renderHook(() =>
+      useVisibleObserverReach({
+        directoryEnabled: true,
+        conversationKey: 'C3B889530D4F02DB5662EA13C417F530',
+        messages: [channelMessage(receivedAt)],
+        visibleIndexes: [0],
+      })
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(getCounts).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(29_000);
+    });
+    expect(getCounts).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_050);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(getCounts).toHaveBeenCalledTimes(2);
   });
 
   it('keeps counts when the messages array is replaced with the same hashes', async () => {

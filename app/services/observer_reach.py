@@ -38,9 +38,10 @@ SPEC_TIMEOUT_SECONDS = 5.0
 REACH_CACHE_TTL_SECONDS = 90.0
 OBSERVERS_CACHE_TTL_SECONDS = 600.0
 SPEC_CACHE_TTL_SECONDS = 600.0
-# Community ears follow the client poll: pass through for 10 min, then keep a year.
-COMMUNITY_LIVE_REACH_SECONDS = 600.0
-COMMUNITY_FROZEN_REACH_TTL_SECONDS = 365 * 24 * 3600.0
+# Sealed sets are final; 24h avoids a Stats round-trip after a short restart.
+SEALED_REACH_TTL_SECONDS = 86400.0
+# Unsealed sets still change; 8s matches the live poll cadence.
+LIVE_REACH_TTL_SECONDS = 8.0
 COMMUNITY_OBSERVERS_LIVE_TTL_SECONDS = 8.0
 BATCH_FALLBACK_CONCURRENCY = 4
 CORESCOPE_BATCH_MAX = 200
@@ -50,11 +51,9 @@ REACH_CACHE_MAX = 512
 OBSERVERS_CACHE_MAX = 16
 SPEC_BATCH_CACHE_MAX = 16
 
-_reach_cache: TtlLruCache[tuple[str, str], list[ParsedObservation]] = TtlLruCache(REACH_CACHE_MAX)
+_reach_cache: TtlLruCache[tuple[str, str], ParsedReach] = TtlLruCache(REACH_CACHE_MAX)
 _observers_cache: TtlLruCache[str, dict[str, ObserverGeo]] = TtlLruCache(OBSERVERS_CACHE_MAX)
 _spec_batch_cache: TtlLruCache[str, bool] = TtlLruCache(SPEC_BATCH_CACHE_MAX)
-_community_reach_first_seen: dict[tuple[str, str], float] = {}
-_community_last_obs: dict[tuple[str, str], list[ParsedObservation]] = {}
 
 
 @dataclass(frozen=True)
@@ -79,12 +78,16 @@ class ParsedObservation:
     path: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class ParsedReach:
+    observations: list[ParsedObservation]
+    sealed: bool = False
+
+
 def reset_observer_reach_cache() -> None:
     _reach_cache.clear()
     _observers_cache.clear()
     _spec_batch_cache.clear()
-    _community_reach_first_seen.clear()
-    _community_last_obs.clear()
 
 
 def validate_packet_hash_param(raw: str) -> str:
@@ -142,6 +145,22 @@ def hops_from_path_json(path_json: object) -> int | None:
     return len(parsed)
 
 
+def payload_sealed(payload: object) -> bool:
+    """True only when the server explicitly marks the observer set final.
+
+    A missing ``sealed`` field is treated as not final so older Stats
+    deployments keep the live cache policy.
+    """
+    if not isinstance(payload, dict):
+        return False
+    if payload.get("sealed") is True:
+        return True
+    nested = payload.get("packet")
+    if isinstance(nested, dict) and nested.get("sealed") is True:
+        return True
+    return False
+
+
 def parse_packet_observations(payload: object) -> list[ParsedObservation]:
     """Defensive parser for GET /api/packets/{hash} or a single observations list."""
     if payload is None:
@@ -162,28 +181,43 @@ def parse_packet_observations(payload: object) -> list[ParsedObservation]:
     return [_parse_one_observation(item) for item in items if isinstance(item, dict)]
 
 
-def parse_batch_observations(payload: object) -> dict[str, list[ParsedObservation]] | None:
-    """Return hash → observations if the body looks like a query result, else None."""
+def parse_packet_reach(payload: object) -> ParsedReach:
+    return ParsedReach(
+        observations=parse_packet_observations(payload),
+        sealed=payload_sealed(payload),
+    )
+
+
+def parse_batch_reach(payload: object) -> dict[str, ParsedReach] | None:
+    """Return hash → observations+sealed if the body looks like a query result."""
     if not isinstance(payload, dict):
         return None
     results = payload.get("results")
     if not isinstance(results, dict):
         return None
-    parsed: dict[str, list[ParsedObservation]] = {}
+    parsed: dict[str, ParsedReach] = {}
     for raw_hash, value in results.items():
         if not isinstance(raw_hash, str):
             continue
         stored = canonical_packet_hash(raw_hash)
         if stored is None:
             continue
-        if isinstance(value, dict) and "observations" in value:
-            observations = parse_packet_observations(value)
-        else:
-            observations = parse_packet_observations(value)
+        observations = parse_packet_observations(value)
         if not _usable_observations(observations):
             observations = _count_only_observations(value)
-        parsed[stored] = observations
+        parsed[stored] = ParsedReach(
+            observations=observations,
+            sealed=payload_sealed(value),
+        )
     return parsed
+
+
+def parse_batch_observations(payload: object) -> dict[str, list[ParsedObservation]] | None:
+    """Return hash → observations if the body looks like a query result, else None."""
+    parsed = parse_batch_reach(payload)
+    if parsed is None:
+        return None
+    return {stored: item.observations for stored, item in parsed.items()}
 
 
 def parse_corescope_observers(payload: object) -> dict[str, ObserverGeo]:
@@ -422,7 +456,7 @@ async def _fetch_packet_observations(origin: str, hash_lower: str) -> list[Parse
     cache_key = (origin, hash_lower)
     cached = _reach_cache.get(cache_key, now)
     if cached is not None:
-        return cached
+        return cached.observations
     payload = await _corescope_get_json(
         origin,
         f"/api/packets/{hash_lower}",
@@ -430,7 +464,12 @@ async def _fetch_packet_observations(origin: str, hash_lower: str) -> list[Parse
         empty_on_404=True,
     )
     observations = parse_packet_observations(payload)
-    _reach_cache.set(cache_key, observations, now + REACH_CACHE_TTL_SECONDS, now)
+    _reach_cache.set(
+        cache_key,
+        ParsedReach(observations=observations),
+        now + REACH_CACHE_TTL_SECONDS,
+        now,
+    )
     return observations
 
 
@@ -443,7 +482,7 @@ async def _fetch_batch_or_fallback(
     for hash_lower in hashes_lower:
         cached = _reach_cache.get((origin, hash_lower), now)
         if cached is not None:
-            result[hash_lower] = cached
+            result[hash_lower] = cached.observations
         else:
             missing.append(hash_lower)
     if not missing:
@@ -472,7 +511,7 @@ async def _fetch_batch_or_fallback(
                 if _usable_observations(observations):
                     _reach_cache.set(
                         (origin, hash_lower),
-                        observations,
+                        ParsedReach(observations=observations),
                         now + REACH_CACHE_TTL_SECONDS,
                         now,
                     )
@@ -503,60 +542,34 @@ def _community_reach_key(hash_lower: str) -> tuple[str, str]:
     return (_COMMUNITY_ORIGIN, hash_lower)
 
 
-def _remember_community_reach(hash_lower: str, now: float) -> tuple[str, str]:
-    key = _community_reach_key(hash_lower)
-    _community_reach_first_seen.setdefault(key, now)
-    return key
+def _community_reach_ttl(sealed: bool) -> float:
+    return SEALED_REACH_TTL_SECONDS if sealed else LIVE_REACH_TTL_SECONDS
 
 
-async def _community_reach_should_freeze(hash_lower: str, now: float) -> bool:
-    message = await MessageRepository.get_by_packet_hash(hash_lower)
-    if message is not None:
-        return now - float(message.received_at) >= COMMUNITY_LIVE_REACH_SECONDS
-    first = _community_reach_first_seen.get(_community_reach_key(hash_lower))
-    return first is not None and now - first >= COMMUNITY_LIVE_REACH_SECONDS
+def _cache_community_reach(hash_lower: str, reach: ParsedReach, now: float) -> None:
+    _reach_cache.set(
+        _community_reach_key(hash_lower),
+        reach,
+        now + _community_reach_ttl(reach.sealed),
+        now,
+    )
 
 
-async def _cache_community_reach(
-    hash_lower: str,
-    observations: list[ParsedObservation],
-    now: float,
-) -> None:
-    key = _remember_community_reach(hash_lower, now)
-    if observations:
-        _community_last_obs[key] = observations
-    if not observations or not await _community_reach_should_freeze(hash_lower, now):
-        return
-    _reach_cache.set(key, observations, now + COMMUNITY_FROZEN_REACH_TTL_SECONDS, now)
+def _cached_community_reach(hash_lower: str, now: float) -> ParsedReach | None:
+    return _reach_cache.get(_community_reach_key(hash_lower), now)
 
 
-async def _cached_community_reach(
-    hash_lower: str, now: float
-) -> list[ParsedObservation] | None:
-    if not await _community_reach_should_freeze(hash_lower, now):
-        return None
-    key = _community_reach_key(hash_lower)
-    cached = _reach_cache.get(key, now)
-    if cached is not None:
-        return cached
-    last = _community_last_obs.get(key)
-    if last:
-        _reach_cache.set(key, last, now + COMMUNITY_FROZEN_REACH_TTL_SECONDS, now)
-        return last
-    return None
-
-
-async def _community_packet_observations(hash_lower: str) -> list[ParsedObservation]:
+async def _community_packet_observations(hash_lower: str) -> ParsedReach:
     from app.services.directory import _community_directory_data
 
     now = time.time()
-    cached = await _cached_community_reach(hash_lower, now)
+    cached = _cached_community_reach(hash_lower, now)
     if cached is not None:
         return cached
     payload = await _community_directory_data(f"/v1/directory/packets/{hash_lower}")
-    observations = parse_packet_observations(payload)
-    await _cache_community_reach(hash_lower, observations, now)
-    return observations
+    reach = parse_packet_reach(payload)
+    _cache_community_reach(hash_lower, reach, now)
+    return reach
 
 
 async def _community_observers() -> dict[str, ObserverGeo]:
@@ -576,31 +589,30 @@ async def _community_observers() -> dict[str, ObserverGeo]:
 
 async def _community_batch_or_fallback(
     hashes_lower: list[str],
-) -> dict[str, list[ParsedObservation]]:
+) -> dict[str, ParsedReach]:
     """Stats batch query, then per-hash GET. CoreScope's observations POST is ingest."""
     from app.services.directory import _community_directory_data
 
     now = time.time()
-    result: dict[str, list[ParsedObservation]] = {}
+    result: dict[str, ParsedReach] = {}
     missing: list[str] = []
     for hash_lower in hashes_lower:
-        cached = await _cached_community_reach(hash_lower, now)
+        cached = _cached_community_reach(hash_lower, now)
         if cached is not None:
             result[hash_lower] = cached
         else:
-            _remember_community_reach(hash_lower, now)
             missing.append(hash_lower)
     if not missing:
         return result
 
-    parsed: dict[str, list[ParsedObservation]] | None = None
+    parsed: dict[str, ParsedReach] | None = None
     try:
         payload = await _community_directory_data(
             "/v1/directory/packets/observations",
             method="POST",
             body={"hashes": missing},
         )
-        parsed = parse_batch_observations(payload) if payload is not None else None
+        parsed = parse_batch_reach(payload) if payload is not None else None
     except HTTPException as exc:
         if exc.status_code == 400:
             raise
@@ -609,12 +621,14 @@ async def _community_batch_or_fallback(
     still_missing: list[str] = []
     for hash_lower in missing:
         stored = canonical_packet_hash(hash_lower) or hash_lower.upper()
-        observations = (parsed or {}).get(stored, [])
-        if not _usable_observations(observations):
-            observations = (parsed or {}).get(hash_lower.upper(), [])
-        if _usable_observations(observations) or parsed is not None:
-            await _cache_community_reach(hash_lower, observations, now)
-            result[hash_lower] = observations
+        reach = (parsed or {}).get(stored)
+        if reach is None or not _usable_observations(reach.observations):
+            reach = (parsed or {}).get(hash_lower.upper(), reach)
+        if reach is not None or parsed is not None:
+            if reach is None:
+                reach = ParsedReach(observations=[])
+            _cache_community_reach(hash_lower, reach, now)
+            result[hash_lower] = reach
         else:
             still_missing.append(hash_lower)
     if not still_missing:
@@ -622,7 +636,7 @@ async def _community_batch_or_fallback(
 
     semaphore = asyncio.Semaphore(BATCH_FALLBACK_CONCURRENCY)
 
-    async def one(hash_lower: str) -> tuple[str, list[ParsedObservation]]:
+    async def one(hash_lower: str) -> tuple[str, ParsedReach]:
         async with semaphore:
             return hash_lower, await _community_packet_observations(hash_lower)
 
@@ -634,12 +648,12 @@ async def _community_batch_or_fallback(
             continue
         if isinstance(item, BaseException):
             raise item
-        hash_lower, observations = item
-        result[hash_lower] = observations
+        hash_lower, reach = item
+        result[hash_lower] = reach
     if not result and errors:
         raise errors[0]
     for hash_lower in still_missing:
-        result.setdefault(hash_lower, [])
+        result.setdefault(hash_lower, ParsedReach(observations=[]))
     return result
 
 
@@ -649,13 +663,15 @@ async def get_packet_observer_reach(raw_hash: str) -> PacketObserverReachRespons
     hash_lower = validate_packet_hash_param(raw_hash)
     if await community_enabled():
         fetched = await _community_batch_or_fallback([hash_lower])
-        observations = fetched.get(hash_lower, [])
+        reach = fetched.get(hash_lower, ParsedReach(observations=[]))
         try:
             geos = await _community_observers()
         except HTTPException:
             geos = {}
-        entries = _dedup_entries(observations, geos)
-        return await _finish_observer_reach(hash_lower, entries, directory_enabled=True)
+        entries = _dedup_entries(reach.observations, geos)
+        return await _finish_observer_reach(
+            hash_lower, entries, directory_enabled=True, sealed=reach.sealed
+        )
 
     origin = await _require_directory_origin()
     if origin is None:
@@ -674,6 +690,7 @@ async def _finish_observer_reach(
     entries: list[ObserverReachEntry],
     *,
     directory_enabled: bool,
+    sealed: bool = False,
 ) -> PacketObserverReachResponse:
     message = await MessageRepository.get_by_packet_hash(hash_lower)
     origin_coords = await resolve_origin_coords(message)
@@ -702,6 +719,7 @@ async def _finish_observer_reach(
         origin_available=origin_coords is not None,
         origin_lat=origin_lat,
         origin_lon=origin_lon,
+        sealed=sealed,
     )
 
 
@@ -725,10 +743,16 @@ async def get_packet_observer_reach_counts(hashes: list[str]) -> PacketObserverR
         fetched = await _community_batch_or_fallback(normalized)
         geos: dict[str, ObserverGeo] = {}
         counts: dict[str, int] = {}
+        sealed: dict[str, bool] = {}
         for hash_lower in normalized:
-            entries = _dedup_entries(fetched.get(hash_lower, []), geos)
-            counts[hash_lower.upper()] = len(entries)
-        return PacketObserverReachCountsResponse(directory_enabled=True, counts=counts)
+            reach = fetched.get(hash_lower, ParsedReach(observations=[]))
+            entries = _dedup_entries(reach.observations, geos)
+            key = hash_lower.upper()
+            counts[key] = len(entries)
+            sealed[key] = reach.sealed
+        return PacketObserverReachCountsResponse(
+            directory_enabled=True, counts=counts, sealed=sealed
+        )
 
     origin = await _require_directory_origin()
     if origin is None:
@@ -741,7 +765,10 @@ async def get_packet_observer_reach_counts(hashes: list[str]) -> PacketObserverR
         except HTTPException:
             geos = {}
     counts: dict[str, int] = {}
+    sealed = {hash_lower.upper(): False for hash_lower in normalized}
     for hash_lower in normalized:
         entries = _dedup_entries(fetched.get(hash_lower, []), geos)
         counts[hash_lower.upper()] = len(entries)
-    return PacketObserverReachCountsResponse(directory_enabled=True, counts=counts)
+    return PacketObserverReachCountsResponse(
+        directory_enabled=True, counts=counts, sealed=sealed
+    )
