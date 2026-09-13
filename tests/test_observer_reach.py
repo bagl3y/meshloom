@@ -547,8 +547,8 @@ class TestCommunityObserverReach:
     @pytest.mark.asyncio
     async def test_unsealed_result_uses_live_ttl(self, test_db):
         reset_observer_reach_cache()
-        from app.services.meshloom_community import update_community
         from app.services import observer_reach
+        from app.services.meshloom_community import update_community
 
         await update_community(enabled=True, iata="LYS")
         calls: list[str] = []
@@ -617,8 +617,8 @@ class TestCommunityObserverReach:
     @pytest.mark.asyncio
     async def test_unsealed_empty_uses_live_ttl(self, test_db):
         reset_observer_reach_cache()
-        from app.services.meshloom_community import update_community
         from app.services import observer_reach
+        from app.services.meshloom_community import update_community
 
         await update_community(enabled=True, iata="LYS")
         calls: list[str] = []
@@ -758,8 +758,8 @@ class TestCommunityObserverReach:
     @pytest.mark.asyncio
     async def test_sealed_result_is_served_from_cache(self, test_db):
         reset_observer_reach_cache()
-        from app.services.meshloom_community import update_community
         from app.services import observer_reach
+        from app.services.meshloom_community import update_community
 
         await update_community(enabled=True, iata="LYS")
         calls: list[str] = []

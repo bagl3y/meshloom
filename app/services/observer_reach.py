@@ -156,9 +156,7 @@ def payload_sealed(payload: object) -> bool:
     if payload.get("sealed") is True:
         return True
     nested = payload.get("packet")
-    if isinstance(nested, dict) and nested.get("sealed") is True:
-        return True
-    return False
+    return isinstance(nested, dict) and nested.get("sealed") is True
 
 
 def parse_packet_observations(payload: object) -> list[ParsedObservation]:
@@ -581,9 +579,7 @@ async def _community_observers() -> dict[str, ObserverGeo]:
         return cached
     payload = await _community_directory_data("/v1/directory/observers")
     geos = parse_corescope_observers(payload)
-    _observers_cache.set(
-        _COMMUNITY_ORIGIN, geos, now + COMMUNITY_OBSERVERS_LIVE_TTL_SECONDS, now
-    )
+    _observers_cache.set(_COMMUNITY_ORIGIN, geos, now + COMMUNITY_OBSERVERS_LIVE_TTL_SECONDS, now)
     return geos
 
 
@@ -769,6 +765,4 @@ async def get_packet_observer_reach_counts(hashes: list[str]) -> PacketObserverR
     for hash_lower in normalized:
         entries = _dedup_entries(fetched.get(hash_lower, []), geos)
         counts[hash_lower.upper()] = len(entries)
-    return PacketObserverReachCountsResponse(
-        directory_enabled=True, counts=counts, sealed=sealed
-    )
+    return PacketObserverReachCountsResponse(directory_enabled=True, counts=counts, sealed=sealed)
