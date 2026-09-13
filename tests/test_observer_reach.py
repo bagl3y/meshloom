@@ -5,8 +5,8 @@ import pytest
 from fastapi import HTTPException
 
 from app.decoder import outgoing_group_text_packet_hash
-from app.path_utils import calculate_packet_hash, canonical_packet_hash
 from app.models import Message
+from app.path_utils import calculate_packet_hash, canonical_packet_hash
 from app.repository import (
     AmbiguousPublicKeyPrefixError,
     AppSettingsRepository,
@@ -379,7 +379,9 @@ class TestObserverReachGate:
             patch(
                 "app.services.observer_reach.ContactRepository.get_by_key_or_prefix",
                 new=AsyncMock(
-                    side_effect=AmbiguousPublicKeyPrefixError("aabbccddeeff", ["aa" * 32, "ab" * 32])
+                    side_effect=AmbiguousPublicKeyPrefixError(
+                        "aabbccddeeff", ["aa" * 32, "ab" * 32]
+                    )
                 ),
             ),
         ):
