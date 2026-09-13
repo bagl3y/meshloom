@@ -35,6 +35,11 @@ async def _insert_raw_packets(count: int, decrypted: bool = False, age_days: int
     return ids
 
 
+def _group_text_packet(channel_hash: int, cipher_mac: bytes, ciphertext_byte: int) -> bytes:
+    """Build a minimal zero-hop GROUP_TEXT packet."""
+    return bytes([0x15, 0x00, channel_hash]) + cipher_mac + bytes([ciphertext_byte]) * 16
+
+
 class TestUndecryptedCount:
     """Test GET /api/packets/undecrypted/count."""
 
@@ -54,6 +59,121 @@ class TestUndecryptedCount:
 
         assert response.status_code == 200
         assert response.json()["count"] == 3
+
+
+class TestUndecryptedGroupTextSamples:
+    """Test GET /api/packets/undecrypted/group-text-samples."""
+
+    @pytest.mark.asyncio
+    async def test_groups_hashes_and_keeps_distinct_samples(self, test_db, client):
+        now = int(time.time())
+        packet_a1 = _group_text_packet(0xA3, b"\x01\x02", 0x11)
+        packet_a2 = _group_text_packet(0xA3, b"\x03\x04", 0x22)
+        packet_b = _group_text_packet(0xB4, b"\x05\x06", 0x33)
+        ids = []
+        for offset, packet in enumerate((packet_a1, packet_a2, packet_b)):
+            packet_id, _ = await RawPacketRepository.create(packet, now + offset)
+            ids.append(packet_id)
+
+        response = await client.get("/api/packets/undecrypted/group-text-samples")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["hash_count"] == 2
+        assert data["packet_count"] == 3
+        assert data["scanned"] == 3
+        assert [sample["packet_id"] for sample in data["samples"]] == list(reversed(ids))
+        assert [(sample["channel_hash"], sample["cipher_mac"]) for sample in data["samples"]] == [
+            ("b4", "0506"),
+            ("a3", "0304"),
+            ("a3", "0102"),
+        ]
+        assert data["samples"][0]["data"] == packet_b.hex()
+
+    @pytest.mark.asyncio
+    async def test_excludes_packets_older_than_received_window(self, test_db, client):
+        now = int(time.time())
+        await RawPacketRepository.create(
+            _group_text_packet(0xA1, b"\x01\x02", 0x11),
+            now - (31 * 86400),
+        )
+        recent_id, _ = await RawPacketRepository.create(
+            _group_text_packet(0xB2, b"\x03\x04", 0x22),
+            now,
+        )
+
+        response = await client.get(
+            "/api/packets/undecrypted/group-text-samples?received_since_days=30"
+        )
+
+        assert response.status_code == 200
+        assert response.json()["samples"] == [
+            {
+                "channel_hash": "b2",
+                "packet_id": recent_id,
+                "data": _group_text_packet(0xB2, b"\x03\x04", 0x22).hex(),
+                "timestamp": now,
+                "cipher_mac": "0304",
+            }
+        ]
+        assert response.json()["scanned"] == 1
+
+    @pytest.mark.asyncio
+    async def test_honors_max_scan(self, test_db, client):
+        now = int(time.time())
+        for index in range(4):
+            await RawPacketRepository.create(
+                _group_text_packet(0xA0 + index, bytes([index, index + 1]), 0x10 + index),
+                now + index,
+            )
+
+        response = await client.get(
+            "/api/packets/undecrypted/group-text-samples?max_hashes=200&max_scan=2"
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["scanned"] == 2
+        assert data["packet_count"] == 2
+        assert len(data["samples"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_honors_max_per_hash(self, test_db, client):
+        now = int(time.time())
+        for index in range(4):
+            await RawPacketRepository.create(
+                _group_text_packet(0xA3, bytes([index, index + 1]), 0x10 + index),
+                now + index,
+            )
+
+        response = await client.get(
+            "/api/packets/undecrypted/group-text-samples?max_per_hash=2"
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["hash_count"] == 1
+        assert data["packet_count"] == 4
+        assert data["scanned"] == 4
+        assert len(data["samples"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_clamps_query_limits_and_returns_response_shape(self, test_db, client):
+        now = int(time.time())
+        await RawPacketRepository.create(
+            _group_text_packet(0xA3, b"\xAB\xCD", 0x11),
+            now,
+        )
+
+        response = await client.get(
+            "/api/packets/undecrypted/group-text-samples"
+            "?max_hashes=0&max_per_hash=0&max_scan=0&received_since_days=0"
+        )
+
+        assert response.status_code == 200
+        assert set(response.json()) == {"hash_count", "packet_count", "scanned", "samples"}
+        assert response.json()["samples"][0]["channel_hash"] == "a3"
+        assert response.json()["samples"][0]["cipher_mac"] == "abcd"
 
 
 class TestRegionBackfill:

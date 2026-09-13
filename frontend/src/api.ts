@@ -23,6 +23,7 @@ import type {
   LocateResponse,
   ContactTelemetryResponse,
   FanoutConfig,
+  GroupTextSamplesResponse,
   HealthStatus,
   MaintenanceResult,
   Message,
@@ -60,6 +61,7 @@ import type {
   TrackedTelemetryContactsResponse,
   TrackedTelemetryResponse,
   StatisticsResponse,
+  CommunityHashtagsResponse,
   CommunityIataBindRequest,
   CommunityIataBindResult,
   CommunityMeStats,
@@ -389,6 +391,17 @@ export const api = {
   // Packets
   getPacket: (packetId: number) => fetchJson<RawPacket>(`/packets/${packetId}`),
   getUndecryptedPacketCount: () => fetchJson<{ count: number }>('/packets/undecrypted/count'),
+  getGroupTextSamples: (receivedSinceDays = 30) => {
+    const params = new URLSearchParams({
+      max_hashes: '80',
+      max_per_hash: '4',
+      max_scan: '8000',
+      received_since_days: String(receivedSinceDays),
+    });
+    return fetchJson<GroupTextSamplesResponse>(
+      `/packets/undecrypted/group-text-samples?${params.toString()}`
+    );
+  },
   decryptHistoricalPackets: (params: {
     key_type: 'channel' | 'contact';
     channel_key?: string;
@@ -605,6 +618,13 @@ export const api = {
       method: 'POST',
     }),
   getCommunityStats: () => fetchJson<CommunityPublicStats>('/community/stats'),
+  getCommunityHashtags: (iata: string) =>
+    fetchJson<CommunityHashtagsResponse>(`/community/iata/${encodeURIComponent(iata)}/hashtags`),
+  putCommunityHashtags: (names: string[]) =>
+    fetchJson<CommunityHashtagsResponse>('/community/me/hashtags', {
+      method: 'PUT',
+      body: JSON.stringify({ names }),
+    }),
   searchCommunityAirports: async (
     query: string,
     locale?: string

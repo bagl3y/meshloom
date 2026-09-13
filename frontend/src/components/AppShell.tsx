@@ -85,7 +85,7 @@ interface AppShellProps {
     SettingsModalProps,
     'open' | 'pageMode' | 'externalSidebarNav' | 'desktopSection' | 'onClose' | 'onLocalLabelChange'
   >;
-  crackerProps: Omit<CrackerPanelProps, 'visible' | 'onRunningChange'>;
+  crackerProps: Omit<CrackerPanelProps, 'visible' | 'onRunningChange' | 'onQueueChange'>;
   newMessageModalProps: NewMessageModalProps;
   bulkAddChannelResultModalProps: BulkAddChannelResultModalProps;
   contactInfoPaneProps: ContactInfoPaneProps;
@@ -128,6 +128,7 @@ export function AppShell({
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(
     getSavedDesktopSidebarCollapsed
   );
+  const [crackerQueueCount, setCrackerQueueCount] = useState(0);
 
   const handleToggleDesktopSidebar = useCallback(() => {
     setDesktopSidebarCollapsed((prev) => {
@@ -313,6 +314,7 @@ export function AppShell({
   ) : (
     <Sidebar
       {...sidebarProps}
+      crackerQueueCount={crackerQueueCount}
       desktopCollapsed={desktopSidebarCollapsed}
       onToggleDesktopCollapsed={handleToggleDesktopSidebar}
     />
@@ -439,7 +441,7 @@ export function AppShell({
       <div
         className={cn(
           'border-t border-border bg-background transition-all duration-200 overflow-hidden',
-          showCracker ? 'h-[275px]' : 'h-0'
+          showCracker ? 'h-[min(42vh,420px)]' : 'h-0'
         )}
       >
         {crackerMounted.current && (
@@ -454,6 +456,7 @@ export function AppShell({
               {...crackerProps}
               visible={showCracker}
               onRunningChange={onCrackerRunningChange}
+              onQueueChange={setCrackerQueueCount}
             />
           </Suspense>
         )}

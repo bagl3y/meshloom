@@ -99,6 +99,7 @@ function sortOrderLabelKey(order: SortOrder): string {
   }
 }
 
+// Human phrase for aria/title, describing what the order sorts by.
 /** Compact last-message clock for the sidebar excerpt line. */
 export function formatSidebarPreviewTime(timestamp: number): string {
   const date = new Date(timestamp * 1000);
@@ -116,7 +117,6 @@ export function formatSidebarPreviewTime(timestamp: number): string {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-// Human phrase for aria/title, describing what the order sorts by.
 function sortOrderDescriptionKey(order: SortOrder): string {
   switch (order) {
     case 'alpha':
@@ -193,6 +193,7 @@ interface SidebarProps {
   mentions: Record<string, boolean>;
   showCracker: boolean;
   crackerRunning: boolean;
+  crackerQueueCount?: number;
   onToggleCracker: () => void;
   onMarkAllRead: () => void;
   blockedKeys?: string[];
@@ -224,6 +225,7 @@ export function Sidebar({
   mentions,
   showCracker,
   crackerRunning,
+  crackerQueueCount = 0,
   onToggleCracker,
   onMarkAllRead,
   blockedKeys = [],
@@ -929,7 +931,8 @@ export function Sidebar({
                   crackerRunning ? 'text-primary' : 'text-muted-foreground'
                 )}
               >
-                ({crackerRunning ? t('sidebar.running') : t('sidebar.idle')})
+                ({crackerRunning ? t('sidebar.running') : t('sidebar.idle')}
+                {crackerQueueCount > 0 ? ` · ${crackerQueueCount}` : ''})
               </span>
             </>
           ),

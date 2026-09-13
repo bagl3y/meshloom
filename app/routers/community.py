@@ -9,6 +9,8 @@ from fastapi import APIRouter, HTTPException
 
 from app.models import (
     CommunityAirportSearchResponse,
+    CommunityHashtagPut,
+    CommunityHashtagsResponse,
     CommunityIataBindRequest,
     CommunityIataBindResult,
     CommunityMeStats,
@@ -91,3 +93,24 @@ async def get_community_stats() -> CommunityPublicStats:
     if not isinstance(payload, dict):
         raise HTTPException(status_code=502, detail="Stats returned an unexpected body")
     return CommunityPublicStats.model_validate(payload)
+
+
+@router.get("/iata/{code}/hashtags", response_model=CommunityHashtagsResponse)
+async def get_iata_hashtags(code: str) -> CommunityHashtagsResponse:
+    payload = await stats_json("GET", f"/v1/iata/{code.upper()}/hashtags", auth=False)
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=502, detail="Stats returned an unexpected body")
+    return CommunityHashtagsResponse.model_validate(payload)
+
+
+@router.put("/me/hashtags", response_model=CommunityHashtagsResponse)
+async def put_me_hashtags(body: CommunityHashtagPut) -> CommunityHashtagsResponse:
+    payload = await stats_json(
+        "PUT",
+        "/v1/me/hashtags",
+        auth=True,
+        json_body={"names": body.names},
+    )
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=502, detail="Stats returned an unexpected body")
+    return CommunityHashtagsResponse.model_validate(payload)

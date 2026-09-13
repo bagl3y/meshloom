@@ -497,20 +497,75 @@ export function App() {
     messageInputRef,
   });
   const handleCreateCrackedChannel = useCallback(
-    async (name: string, key: string) => {
+    async (name: string, key: string, tryHistorical: boolean) => {
       const created = await api.createChannel(name, key);
       const updatedChannels = await api.getChannels();
       setChannels(updatedChannels);
-      await api.decryptHistoricalPackets({
-        key_type: 'channel',
-        channel_key: created.key,
-      });
-      void fetchUndecryptedCount().catch((error) => {
-        console.error('Failed to refresh undecrypted count after cracked channel create:', error);
-      });
+      try {
+        if (tryHistorical) {
+          await api.decryptHistoricalPackets({
+            key_type: 'channel',
+            channel_key: created.key,
+          });
+          toast.success(t('cracker.decryptStarted'));
+        }
+      } finally {
+        void fetchUndecryptedCount().catch((error) => {
+          console.error('Failed to refresh undecrypted count after cracked channel create:', error);
+        });
+      }
     },
-    [fetchUndecryptedCount, setChannels]
+    [fetchUndecryptedCount, setChannels, t]
   );
+
+  const [communityHashtagNames, setCommunityHashtagNames] = useState<string[]>([]);
+  const localHashtagsSyncedRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const community = await api.getCommunity();
+        if (!community.enabled || !/^[A-Z]{3}$/.test(community.iata)) return;
+        const { hashtags } = await api.getCommunityHashtags(community.iata);
+        if (cancelled) return;
+        setCommunityHashtagNames(hashtags.map((item) => item.name));
+        if (!localHashtagsSyncedRef.current) {
+          const localNames = channelsRef.current
+            .filter((channel) => channel.is_hashtag)
+            .map((channel) => channel.name.replace(/^#/, ''))
+            .filter(Boolean);
+          if (localNames.length > 0) {
+            localHashtagsSyncedRef.current = true;
+            await api.putCommunityHashtags(localNames.slice(0, 50));
+          }
+        }
+      } catch {
+        // Community off or Stats unreachable — the finder still works offline.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showCracker]);
+
+  const handleHashtagDiscovered = useCallback((name: string) => {
+    void api
+      .putCommunityHashtags([name])
+      .then((payload) => {
+        setCommunityHashtagNames((previous) => {
+          const next = new Set(previous);
+          next.add(name);
+          for (const item of payload.hashtags) {
+            next.add(item.name);
+          }
+          return [...next];
+        });
+      })
+      .catch((error) => {
+        console.error('Failed to publish discovered hashtag name:', error);
+      });
+  }, []);
 
   const handleRepeaterAutoLogin = useCallback(
     (publicKey: string, displayName: string) => {
@@ -736,6 +791,8 @@ export function App() {
   const crackerProps = {
     channels,
     onChannelCreate: handleCreateCrackedChannel,
+    priorityNames: communityHashtagNames,
+    onHashtagDiscovered: handleHashtagDiscovered,
   };
   const newMessageModalProps = {
     undecryptedCount,

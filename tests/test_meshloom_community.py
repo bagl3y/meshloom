@@ -18,9 +18,16 @@ from app.fanout.community_mqtt import (
 )
 from app.fanout.manager import FanoutManager, is_reserved_fanout_id
 from app.fanout.meshloom_stats import MeshloomStatsPublisher, _state_to_settings
-from app.models import CommunityIataBindRequest, CommunityUpdate
+from app.models import CommunityHashtagPut, CommunityIataBindRequest, CommunityUpdate
 from app.repository.fanout import FanoutConfigRepository
-from app.routers.community import get_community, get_community_stats, patch_community, put_me_iata
+from app.routers.community import (
+    get_community,
+    get_community_stats,
+    get_iata_hashtags,
+    patch_community,
+    put_me_hashtags,
+    put_me_iata,
+)
 from app.routers.fanout import delete_fanout_config, list_fanout_configs, update_fanout_config
 from app.services.directory import get_directory_node_reach, list_directory_map_nodes
 from app.services.meshloom_community import (
@@ -360,6 +367,38 @@ class TestCommunityStatusAndProxies:
         with pytest.raises(HTTPException) as exc:
             await get_community_stats()
         assert exc.value.status_code == 403
+
+
+class TestCommunityHashtagProxies:
+    @pytest.mark.asyncio
+    async def test_get_iata_hashtags_is_anonymous(self):
+        payload = {"hashtags": [{"name": "meshcore", "hash_byte": "d9"}]}
+        with patch(
+            "app.routers.community.stats_json",
+            new=AsyncMock(return_value=payload),
+        ) as stats:
+            result = await get_iata_hashtags("cdg")
+
+        stats.assert_awaited_once_with("GET", "/v1/iata/CDG/hashtags", auth=False)
+        assert result.hashtags[0].name == "meshcore"
+        assert result.hashtags[0].hash_byte == "d9"
+
+    @pytest.mark.asyncio
+    async def test_put_me_hashtags_is_authenticated(self):
+        payload = {"hashtags": [{"name": "meshcore", "hash_byte": "d9"}]}
+        with patch(
+            "app.routers.community.stats_json",
+            new=AsyncMock(return_value=payload),
+        ) as stats:
+            result = await put_me_hashtags(CommunityHashtagPut(names=["meshcore"]))
+
+        stats.assert_awaited_once_with(
+            "PUT",
+            "/v1/me/hashtags",
+            auth=True,
+            json_body={"names": ["meshcore"]},
+        )
+        assert result.hashtags[0].name == "meshcore"
 
 
 class TestCommunityLocked:

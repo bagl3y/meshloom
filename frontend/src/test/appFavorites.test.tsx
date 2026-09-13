@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
     updateSettings: vi.fn(),
     getHealth: vi.fn(),
     getCommunity: vi.fn(),
+    getCommunityHashtags: vi.fn(),
+    putCommunityHashtags: vi.fn(),
     sendAdvertisement: vi.fn(),
     rebootRadio: vi.fn(),
     createChannel: vi.fn(),

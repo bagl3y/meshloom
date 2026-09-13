@@ -534,6 +534,27 @@ class RawPacketDetail(BaseModel):
     )
 
 
+class UndecryptedGroupTextSample(BaseModel):
+    """One distinct encrypted GROUP_TEXT sample."""
+
+    channel_hash: str = Field(description="Lowercase two-character channel-hash hex")
+    packet_id: int
+    data: str = Field(description="Lowercase hex-encoded full raw packet")
+    timestamp: int = Field(description="Unix timestamp when the RF packet was heard")
+    cipher_mac: str = Field(description="Lowercase four-character cipher-MAC hex")
+
+
+class UndecryptedGroupTextSamplesResponse(BaseModel):
+    """Bounded sample of recent undecrypted GROUP_TEXT packets."""
+
+    hash_count: int = Field(description="Distinct channel hashes represented in samples")
+    packet_count: int = Field(
+        description="GROUP_TEXT rows encountered among scanned undecrypted rows in the time window"
+    )
+    scanned: int = Field(description="Undecrypted rows walked before a configured stop condition")
+    samples: list[UndecryptedGroupTextSample] = Field(default_factory=list)
+
+
 class SendMessageRequest(BaseModel):
     text: str = Field(min_length=1)
 
@@ -1639,6 +1660,19 @@ class CommunityPublicStats(BaseModel):
     observers_online: int
     iata_active: int
     unique_hashes_24h: int
+
+
+class CommunityHashtag(BaseModel):
+    name: str
+    hash_byte: str = Field(description="Lowercase two-character SHA256(key)[0] hex")
+
+
+class CommunityHashtagsResponse(BaseModel):
+    hashtags: list[CommunityHashtag]
+
+
+class CommunityHashtagPut(BaseModel):
+    names: list[str] = Field(max_length=50)
 
 
 class CommunityAirportHit(BaseModel):

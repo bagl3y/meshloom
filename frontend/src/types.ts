@@ -580,6 +580,21 @@ export interface RawPacket {
   region?: string | null;
 }
 
+export interface GroupTextSample {
+  channel_hash: string;
+  packet_id: number;
+  data: string;
+  timestamp: number;
+  cipher_mac: string;
+}
+
+export interface GroupTextSamplesResponse {
+  hash_count: number;
+  packet_count: number;
+  scanned: number;
+  samples: GroupTextSample[];
+}
+
 export interface AppSettings {
   max_radio_contacts: number;
   auto_decrypt_dm_on_advert: boolean;
@@ -1102,6 +1117,15 @@ export interface CommunityPublicStats {
   observers_online: number;
   iata_active: number;
   unique_hashes_24h: number;
+}
+
+export interface CommunityHashtag {
+  name: string;
+  hash_byte: string;
+}
+
+export interface CommunityHashtagsResponse {
+  hashtags: CommunityHashtag[];
 }
 
 export interface CommunityAirportHit {

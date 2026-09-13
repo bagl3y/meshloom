@@ -11,6 +11,7 @@ from app.repository import (
     ContactNameHistoryRepository,
     ContactRepository,
     MessageRepository,
+    RawPacketRepository,
 )
 
 
@@ -27,6 +28,64 @@ async def _create_message(test_db, **overrides) -> int:
     msg_id = await MessageRepository.create(**defaults)
     assert msg_id is not None
     return msg_id
+
+
+class TestRawPacketGroupTextSamples:
+    @pytest.mark.asyncio
+    async def test_scans_newest_first_and_stops_at_hash_limit(self, test_db):
+        old_id, _ = await RawPacketRepository.create(
+            bytes([0x15, 0x00, 0xA1, 0x01, 0x02]) + bytes([0x11]) * 16,
+            1000,
+        )
+        new_id, _ = await RawPacketRepository.create(
+            bytes([0x15, 0x00, 0xB2, 0x03, 0x04]) + bytes([0x22]) * 16,
+            1001,
+        )
+
+        scanned, packet_count, samples = (
+            await RawPacketRepository.get_undecrypted_group_text_samples(
+                max_hashes=1,
+                max_per_hash=4,
+                max_scan=10,
+                received_since=0,
+                batch_size=1,
+            )
+        )
+
+        assert old_id < new_id
+        assert samples[0][0] == "b2"
+        assert samples[0][1] == new_id
+        assert all(sample[0] == "b2" for sample in samples)
+
+    @pytest.mark.asyncio
+    async def test_keeps_filling_known_hash_after_new_hash_skipped(self, test_db):
+        await RawPacketRepository.create(
+            bytes([0x15, 0x00, 0xB2, 0x01, 0x02]) + bytes([0x11]) * 16,
+            1000,
+        )
+        await RawPacketRepository.create(
+            bytes([0x15, 0x00, 0xA1, 0x03, 0x04]) + bytes([0x22]) * 16,
+            1001,
+        )
+        await RawPacketRepository.create(
+            bytes([0x15, 0x00, 0xB2, 0x05, 0x06]) + bytes([0x33]) * 16,
+            1002,
+        )
+
+        scanned, packet_count, samples = (
+            await RawPacketRepository.get_undecrypted_group_text_samples(
+                max_hashes=1,
+                max_per_hash=2,
+                max_scan=10,
+                received_since=0,
+                batch_size=1,
+            )
+        )
+
+        assert scanned == 3
+        assert packet_count == 3
+        assert [sample[0] for sample in samples] == ["b2", "b2"]
+        assert {sample[4] for sample in samples} == {"0102", "0506"}
 
 
 class TestMessageRepositoryAddPath:

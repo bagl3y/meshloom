@@ -1,4 +1,5 @@
 import logging
+import time
 from hashlib import sha256
 from sqlite3 import OperationalError
 
@@ -8,7 +9,12 @@ from pydantic import BaseModel, Field
 
 from app.database import db
 from app.decoder import parse_packet, try_decrypt_packet_with_channel_key
-from app.models import RawPacketDecryptedInfo, RawPacketDetail
+from app.models import (
+    RawPacketDecryptedInfo,
+    RawPacketDetail,
+    UndecryptedGroupTextSample,
+    UndecryptedGroupTextSamplesResponse,
+)
 from app.packet_processor import create_message_from_decrypted, run_historical_dm_decryption
 from app.region_resolver import resolve_region
 from app.repository import (
@@ -129,6 +135,49 @@ async def get_undecrypted_count() -> dict:
     """Get the count of undecrypted packets."""
     count = await RawPacketRepository.get_undecrypted_count()
     return {"count": count}
+
+
+@router.get(
+    "/undecrypted/group-text-samples",
+    response_model=UndecryptedGroupTextSamplesResponse,
+)
+async def get_undecrypted_group_text_samples(
+    max_hashes: int = 80,
+    max_per_hash: int = 4,
+    max_scan: int = 8000,
+    received_since_days: int = 30,
+) -> UndecryptedGroupTextSamplesResponse:
+    """Return a bounded newest-first sample of recent undecrypted GROUP_TEXT packets."""
+    max_hashes = min(max(max_hashes, 1), 200)
+    max_per_hash = min(max(max_per_hash, 1), 16)
+    max_scan = min(max(max_scan, 1), 50000)
+    received_since_days = min(max(received_since_days, 1), 3650)
+    received_since = int(time.time()) - (received_since_days * 86400)
+
+    scanned, packet_count, rows = (
+        await RawPacketRepository.get_undecrypted_group_text_samples(
+            max_hashes=max_hashes,
+            max_per_hash=max_per_hash,
+            max_scan=max_scan,
+            received_since=received_since,
+        )
+    )
+    samples = [
+        UndecryptedGroupTextSample(
+            channel_hash=channel_hash,
+            packet_id=packet_id,
+            data=data.hex(),
+            timestamp=timestamp,
+            cipher_mac=cipher_mac,
+        )
+        for channel_hash, packet_id, data, timestamp, cipher_mac in rows
+    ]
+    return UndecryptedGroupTextSamplesResponse(
+        hash_count=len({sample.channel_hash for sample in samples}),
+        packet_count=packet_count,
+        scanned=scanned,
+        samples=samples,
+    )
 
 
 @router.post("/region-backfill")

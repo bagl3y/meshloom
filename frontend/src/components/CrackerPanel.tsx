@@ -6,8 +6,17 @@ import type { RawPacket, Channel } from '../types';
 import { api } from '../api';
 import { toast } from './ui/sonner';
 import { cn } from '@/lib/utils';
-import { extractPacketPayloadHex } from '../utils/pathUtils';
 import { getRawPackets, useRawPackets } from '../stores/rawPacketStore';
+import {
+  extractGroupTextFields,
+  mergePriorityWordlist,
+  partitionWordlistNames,
+  tryHashtagCandidates,
+  tryHashtagName,
+} from '../utils/tryHashtagCandidates';
+import { MESHCORE_CHANNEL_NAMES } from '../data/meshcoreChannels';
+
+const EMPTY_PRIORITY_NAMES: string[] = [];
 
 function CrackerPacketSubscription({ onPackets }: { onPackets: (packets: RawPacket[]) => void }) {
   const packets = useRawPackets();
@@ -21,12 +30,16 @@ interface CrackedChannel {
   channelName: string;
   key: string;
   packetId: number;
+  channelHash: string;
   message: string;
   crackedAt: number;
 }
 
 interface QueueItem {
   packet: RawPacket;
+  identity: string;
+  channelHash: string;
+  historical: boolean;
   attempts: number;
   lastAttemptLength: number;
   status: 'pending' | 'cracking' | 'cracked' | 'failed';
@@ -34,15 +47,21 @@ interface QueueItem {
 
 export interface CrackerPanelProps {
   channels: Channel[];
-  onChannelCreate: (name: string, key: string) => Promise<void>;
+  onChannelCreate: (name: string, key: string, tryHistorical: boolean) => Promise<void>;
+  priorityNames?: string[];
+  onHashtagDiscovered?: (name: string) => void;
   onRunningChange?: (running: boolean) => void;
+  onQueueChange?: (count: number) => void;
   visible?: boolean;
 }
 
 export function CrackerPanel({
   channels,
   onChannelCreate,
+  priorityNames = EMPTY_PRIORITY_NAMES,
+  onHashtagDiscovered,
   onRunningChange,
+  onQueueChange,
   visible = false,
 }: CrackerPanelProps) {
   const { t } = useTranslation();
@@ -54,31 +73,48 @@ export function CrackerPanel({
   const [maxLength, setMaxLength] = useState(6);
   const [maxLengthInput, setMaxLengthInput] = useState('6');
   const [retryFailedAtNextLength, setRetryFailedAtNextLength] = useState(false);
-  const [decryptHistorical, setDecryptHistorical] = useState(true);
+  const [includeHistorical, setIncludeHistorical] = useState(true);
+  const [includeOlder, setIncludeOlder] = useState(false);
   const [turboMode, setTurboMode] = useState(false);
   const [twoWordMode, setTwoWordMode] = useState(false);
   const [progress, setProgress] = useState<ProgressReport | null>(null);
-  const [queue, setQueue] = useState<Map<number, QueueItem>>(new Map());
+  const [queue, setQueue] = useState<Map<string, QueueItem>>(new Map());
   const [crackedChannels, setCrackedChannels] = useState<CrackedChannel[]>([]);
   const [wordlistLoaded, setWordlistLoaded] = useState(false);
   const [gpuAvailable, setGpuAvailable] = useState<boolean | null>(null);
   const [undecryptedPacketCount, setUndecryptedPacketCount] = useState<number | null>(null);
   const [skippedDuplicates, setSkippedDuplicates] = useState(0);
+  const [historicalStats, setHistoricalStats] = useState<{
+    hashCount: number;
+    packetCount: number;
+  } | null>(null);
+  const [historicalLoading, setHistoricalLoading] = useState(false);
+  const [currentIdentity, setCurrentIdentity] = useState<string | null>(null);
 
   const crackerRef = useRef<GroupTextCracker | null>(null);
   const noSleepRef = useRef<NoSleep | null>(null);
   const isRunningRef = useRef(false);
   const abortedRef = useRef(false);
   const isProcessingRef = useRef(false);
-  const queueRef = useRef<Map<number, QueueItem>>(new Map());
+  const queueRef = useRef<Map<string, QueueItem>>(new Map());
   const retryFailedRef = useRef(false);
   const maxLengthRef = useRef(6);
-  const decryptHistoricalRef = useRef(true);
+  const includeHistoricalRef = useRef(true);
   const turboModeRef = useRef(false);
   const twoWordModeRef = useRef(false);
-  const undecryptedIdsRef = useRef<Set<number>>(new Set());
   const seenPayloadsRef = useRef<Set<string>>(new Set());
   const existingChannelKeysRef = useRef<Set<string>>(new Set());
+  const englishWordlistRef = useRef<string[] | null>(null);
+
+  const priorityPartitions = useMemo(
+    () => partitionWordlistNames([...MESHCORE_CHANNEL_NAMES, ...priorityNames]),
+    [priorityNames]
+  );
+  const verbatimNamesRef = useRef(priorityPartitions.verbatim);
+
+  useEffect(() => {
+    verbatimNamesRef.current = priorityPartitions.verbatim;
+  }, [priorityPartitions.verbatim]);
 
   // Initialize cracker and NoSleep
   useEffect(() => {
@@ -104,7 +140,17 @@ export function CrackerPanel({
     import('meshcore-hashtag-cracker/wordlist')
       .then(({ ENGLISH_WORDLIST }) => {
         if (crackerRef.current) {
-          crackerRef.current.setWordlist(ENGLISH_WORDLIST);
+          englishWordlistRef.current = ENGLISH_WORDLIST;
+          let wordlist = ENGLISH_WORDLIST;
+          try {
+            wordlist = mergePriorityWordlist(
+              [...priorityPartitions.dictionary, ...MESHCORE_CHANNEL_NAMES],
+              ENGLISH_WORDLIST
+            );
+          } catch (err) {
+            console.error('Failed to merge priority channel names:', err);
+          }
+          crackerRef.current.setWordlist(wordlist);
           setWordlistLoaded(true);
         }
       })
@@ -114,7 +160,22 @@ export function CrackerPanel({
           description: t('cracker.wordlistFailedDetail'),
         });
       });
-  }, [visible, wordlistLoaded, t]);
+  }, [visible, wordlistLoaded, priorityPartitions.dictionary, t]);
+
+  useEffect(() => {
+    const english = englishWordlistRef.current;
+    if (!wordlistLoaded || !crackerRef.current || !english) return;
+    try {
+      crackerRef.current.setWordlist(
+        mergePriorityWordlist(
+          [...priorityPartitions.dictionary, ...MESHCORE_CHANNEL_NAMES],
+          english
+        )
+      );
+    } catch (err) {
+      console.error('Failed to refresh priority channel names:', err);
+    }
+  }, [priorityPartitions.dictionary, wordlistLoaded]);
 
   // Fetch undecrypted packet count
   useEffect(() => {
@@ -146,52 +207,44 @@ export function CrackerPanel({
     [packets]
   );
 
-  // Update queue when packets change (deduplicated by payload)
-  // Note: We intentionally depend on .length only to avoid re-running on every array identity change
-  useEffect(() => {
+  const enqueuePackets = useCallback((items: Array<{ packet: RawPacket; historical: boolean }>) => {
     let newSkipped = 0;
-
     setQueue((prev) => {
-      const newQueue = new Map(prev);
+      const next = new Map(prev);
       let changed = false;
-
-      for (const packet of undecryptedGroupText) {
-        if (!newQueue.has(packet.id)) {
-          // Extract payload and check for duplicates
-          const payload = extractPacketPayloadHex(packet.data);
-          if (payload && seenPayloadsRef.current.has(payload)) {
-            // Skip - we already have a packet with this payload queued
-            newSkipped++;
-            continue;
-          }
-
-          // Track this payload as seen
-          if (payload) {
-            seenPayloadsRef.current.add(payload);
-          }
-
-          newQueue.set(packet.id, {
-            packet,
-            attempts: 0,
-            lastAttemptLength: 0,
-            status: 'pending',
-          });
-          changed = true;
+      for (const { packet, historical } of items) {
+        const fields = extractGroupTextFields(packet.data);
+        if (!fields) continue;
+        const identity = `${fields.cipherMac}:${fields.ciphertext}`;
+        if (seenPayloadsRef.current.has(identity)) {
+          newSkipped += 1;
+          continue;
         }
+        seenPayloadsRef.current.add(identity);
+        next.set(identity, {
+          packet,
+          identity,
+          channelHash: fields.channelHash,
+          historical,
+          attempts: 0,
+          lastAttemptLength: 0,
+          status: 'pending',
+        });
+        changed = true;
       }
-
-      if (changed) {
-        queueRef.current = newQueue;
-        return newQueue;
-      }
-      return prev;
+      if (!changed) return prev;
+      queueRef.current = next;
+      return next;
     });
-
     if (newSkipped > 0) {
       setSkippedDuplicates((prev) => prev + newSkipped);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [undecryptedGroupText.length]);
+  }, []);
+
+  // Update queue when packets change (deduplicated by cipher MAC + ciphertext)
+  useEffect(() => {
+    enqueuePackets(undecryptedGroupText.map((packet) => ({ packet, historical: false })));
+  }, [enqueuePackets, undecryptedGroupText]);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -211,8 +264,8 @@ export function CrackerPanel({
   }, [maxLength]);
 
   useEffect(() => {
-    decryptHistoricalRef.current = decryptHistorical;
-  }, [decryptHistorical]);
+    includeHistoricalRef.current = includeHistorical;
+  }, [includeHistorical]);
 
   useEffect(() => {
     turboModeRef.current = turboMode;
@@ -222,11 +275,6 @@ export function CrackerPanel({
     twoWordModeRef.current = twoWordMode;
   }, [twoWordMode]);
 
-  // Keep undecrypted IDs ref in sync - used to skip packets already decrypted by other means
-  useEffect(() => {
-    undecryptedIdsRef.current = new Set(undecryptedGroupText.map((p) => p.id));
-  }, [undecryptedGroupText]);
-
   // Notify parent of running state changes
   useEffect(() => {
     onRunningChange?.(isRunning);
@@ -234,8 +282,11 @@ export function CrackerPanel({
 
   // Stats (cracking count is implicit - if progress is shown, we're cracking one)
   const pendingCount = Array.from(queue.values()).filter((q) => q.status === 'pending').length;
-  const crackedCount = Array.from(queue.values()).filter((q) => q.status === 'cracked').length;
   const failedCount = Array.from(queue.values()).filter((q) => q.status === 'failed').length;
+
+  useEffect(() => {
+    onQueueChange?.(queue.size);
+  }, [onQueueChange, queue.size]);
 
   // Process next packet in queue
   const processNext = useCallback(async () => {
@@ -247,12 +298,12 @@ export function CrackerPanel({
 
     // Find next pending packet
     let nextItem: QueueItem | null = null;
-    let nextId: number | null = null;
+    let nextIdentity: string | null = null;
 
-    for (const [id, item] of currentQueue.entries()) {
+    for (const [identity, item] of currentQueue.entries()) {
       if (item.status === 'pending') {
         nextItem = item;
-        nextId = id;
+        nextIdentity = identity;
         break;
       }
     }
@@ -265,11 +316,11 @@ export function CrackerPanel({
       if (failedItems.length > 0) {
         // Sort by lastAttemptLength ascending and pick the first (lowest)
         failedItems.sort((a, b) => a[1].lastAttemptLength - b[1].lastAttemptLength);
-        [nextId, nextItem] = failedItems[0];
+        [nextIdentity, nextItem] = failedItems[0];
       }
     }
 
-    if (!nextItem || nextId === null) {
+    if (!nextItem || nextIdentity === null) {
       // Nothing to process right now, but keep running and check again later
       if (isRunningRef.current) {
         setTimeout(() => processNext(), 1000);
@@ -277,54 +328,65 @@ export function CrackerPanel({
       return;
     }
 
-    // Check if this packet is still undecrypted - it may have been decrypted
-    // by historical decrypt when we cracked another packet from the same channel
-    if (!undecryptedIdsRef.current.has(nextId)) {
-      // Already decrypted by other means, remove from queue and continue
-      setQueue((prev) => {
-        const updated = new Map(prev);
-        updated.delete(nextId);
-        return updated;
-      });
-      if (isRunningRef.current) {
-        setTimeout(() => processNext(), 10);
-      }
-      return;
-    }
-
     // Lock processing
     isProcessingRef.current = true;
+    setCurrentIdentity(nextIdentity);
+    setQueue((prev) => {
+      const updated = new Map(prev);
+      const item = updated.get(nextIdentity!);
+      if (item) updated.set(nextIdentity!, { ...item, status: 'cracking' });
+      return updated;
+    });
 
     const currentMaxLength = maxLengthRef.current;
     const isRetry = nextItem.lastAttemptLength > 0;
     const targetLength = isRetry ? nextItem.lastAttemptLength + 1 : currentMaxLength;
+    const validSeconds = nextItem.historical && includeOlder ? 3650 * 86400 : 30 * 86400;
 
     try {
-      const result = await crackerRef.current.crack(
-        nextItem.packet.data,
-        {
-          maxLength: targetLength,
-          useSenderFilter: true,
-          useTimestampFilter: true,
-          useUtf8Filter: true,
-          useTwoWordCombinations: twoWordModeRef.current,
-          ...(turboModeRef.current && { gpuDispatchMs: 10000 }),
-          // For retries, skip dictionary and shorter lengths - we already checked those
-          ...(isRetry && {
-            useDictionary: false,
-            useTwoWordCombinations: false,
-            startingLength: targetLength,
-          }),
-        },
-        (prog) => {
-          setProgress(prog);
-        }
-      );
+      const candidate = tryHashtagCandidates(nextItem.packet.data, verbatimNamesRef.current, {
+        validSeconds,
+      });
+      const result = candidate
+        ? {
+            found: true,
+            roomName: candidate.roomName,
+            key: candidate.key,
+            decryptedMessage: candidate.message,
+          }
+        : await crackerRef.current.crack(
+            nextItem.packet.data,
+            {
+              maxLength: targetLength,
+              useSenderFilter: true,
+              useTimestampFilter: true,
+              useUtf8Filter: true,
+              validSeconds,
+              useTwoWordCombinations: twoWordModeRef.current,
+              ...(turboModeRef.current && { gpuDispatchMs: 10000 }),
+              // For retries, skip dictionary and shorter lengths - we already checked those
+              ...(isRetry && {
+                useDictionary: false,
+                useTwoWordCombinations: false,
+                startingLength: targetLength,
+              }),
+            },
+            (prog) => {
+              setProgress(prog);
+            }
+          );
 
       if (abortedRef.current) {
         abortedRef.current = false;
         isProcessingRef.current = false;
         setProgress(null);
+        setCurrentIdentity(null);
+        setQueue((prev) => {
+          const updated = new Map(prev);
+          const item = updated.get(nextIdentity!);
+          if (item) updated.set(nextIdentity!, { ...item, status: 'pending' });
+          return updated;
+        });
         return;
       }
 
@@ -332,9 +394,9 @@ export function CrackerPanel({
         // Success!
         setQueue((prev) => {
           const updated = new Map(prev);
-          const item = updated.get(nextId!);
+          const item = updated.get(nextIdentity!);
           if (item) {
-            updated.set(nextId!, {
+            updated.set(nextIdentity!, {
               ...item,
               status: 'cracked',
               attempts: item.attempts + 1,
@@ -347,7 +409,8 @@ export function CrackerPanel({
         const newCracked: CrackedChannel = {
           channelName: result.roomName,
           key: result.key,
-          packetId: nextId!,
+          packetId: nextItem.packet.id,
+          channelHash: nextItem.channelHash,
           message: result.decryptedMessage || '',
           crackedAt: Date.now(),
         };
@@ -358,29 +421,37 @@ export function CrackerPanel({
         if (!existingChannelKeysRef.current.has(keyUpper)) {
           try {
             const channelName = '#' + result.roomName;
-            await onChannelCreate(channelName, result.key);
-            // Optionally decrypt any other historical packets with this newly discovered key
-            // This prevents wasting cracking cycles on packets from the same channel
-            if (decryptHistoricalRef.current) {
-              await api.decryptHistoricalPackets({
-                key_type: 'channel',
-                channel_name: channelName,
-              });
-            }
+            await onChannelCreate(channelName, result.key, includeHistoricalRef.current);
           } catch (err) {
-            console.error('Failed to create channel or decrypt historical:', err);
+            console.error('Failed to create channel:', err);
             toast.error(t('cracker.saveFailed'), {
               description: err instanceof Error ? err.message : t('cracker.saveFailedDetail'),
             });
+            throw err;
           }
         }
+
+        onHashtagDiscovered?.(result.roomName);
+        setQueue((prev) => {
+          const updated = new Map(prev);
+          for (const [identity, item] of updated) {
+            if (
+              tryHashtagName(item.packet.data, result.roomName!, {
+                useTimestampFilter: false,
+              })
+            ) {
+              updated.delete(identity);
+            }
+          }
+          return updated;
+        });
       } else {
         // Failed
         setQueue((prev) => {
           const updated = new Map(prev);
-          const item = updated.get(nextId!);
+          const item = updated.get(nextIdentity!);
           if (item) {
-            updated.set(nextId!, {
+            updated.set(nextIdentity!, {
               ...item,
               status: 'failed',
               attempts: item.attempts + 1,
@@ -394,9 +465,9 @@ export function CrackerPanel({
       console.error('Cracking error:', err);
       setQueue((prev) => {
         const updated = new Map(prev);
-        const item = updated.get(nextId!);
+        const item = updated.get(nextIdentity!);
         if (item) {
-          updated.set(nextId!, {
+          updated.set(nextIdentity!, {
             ...item,
             status: 'failed',
             attempts: item.attempts + 1,
@@ -410,15 +481,16 @@ export function CrackerPanel({
     // Unlock processing
     isProcessingRef.current = false;
     setProgress(null);
+    setCurrentIdentity(null);
 
     // Continue processing if still running
     if (isRunningRef.current) {
       setTimeout(() => processNext(), 100);
     }
-  }, [onChannelCreate, t]);
+  }, [includeOlder, onChannelCreate, onHashtagDiscovered, t]);
 
   // Start/stop handlers
-  const handleStart = () => {
+  const handleStart = async () => {
     if (!gpuAvailable) {
       toast.error(t('cracker.webgpuTitle'), {
         description:
@@ -428,11 +500,41 @@ export function CrackerPanel({
       });
       return;
     }
+    if (includeHistorical) {
+      setHistoricalLoading(true);
+      try {
+        const response = await api.getGroupTextSamples(includeOlder ? 3650 : 30);
+        setHistoricalStats({
+          hashCount: response.hash_count,
+          packetCount: response.packet_count,
+        });
+        enqueuePackets(
+          response.samples.map((sample) => ({
+            historical: true,
+            packet: {
+              id: sample.packet_id,
+              timestamp: sample.timestamp,
+              data: sample.data,
+              payload_type: 'GROUP_TEXT',
+              snr: null,
+              rssi: null,
+              decrypted: false,
+              decrypted_info: null,
+            },
+          }))
+        );
+      } catch (err) {
+        console.error('Failed to load historical GroupText samples:', err);
+        toast.error(t('cracker.samplesFailed'));
+      } finally {
+        setHistoricalLoading(false);
+      }
+    }
     setIsRunning(true);
     isRunningRef.current = true;
     abortedRef.current = false;
     noSleepRef.current?.enable();
-    processNext();
+    setTimeout(() => processNext(), 0);
   };
 
   const handleStop = () => {
@@ -442,6 +544,23 @@ export function CrackerPanel({
     crackerRef.current?.abort();
     noSleepRef.current?.disable();
   };
+
+  const currentItem = currentIdentity ? queue.get(currentIdentity) : null;
+  const currentHashItems = currentItem
+    ? Array.from(queue.values()).filter((item) => item.channelHash === currentItem.channelHash)
+    : [];
+  const currentSampleIndex = currentItem
+    ? Math.max(1, currentHashItems.findIndex((item) => item.identity === currentItem.identity) + 1)
+    : 0;
+  const hashGroups = Array.from(
+    Array.from(queue.values()).reduce((groups, item) => {
+      const group = groups.get(item.channelHash) ?? [];
+      group.push(item);
+      groups.set(item.channelHash, group);
+      return groups;
+    }, new Map<string, QueueItem[]>())
+  );
+  const historicalAvailable = (historicalStats?.packetCount ?? 0) > 0;
 
   return (
     <div className="flex flex-col h-full p-3 gap-3 bg-background border-t border-border overflow-auto">
@@ -492,13 +611,24 @@ export function CrackerPanel({
         <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
           <input
             type="checkbox"
-            checked={decryptHistorical}
-            onChange={(e) => setDecryptHistorical(e.target.checked)}
+            checked={includeHistorical}
+            onChange={(e) => setIncludeHistorical(e.target.checked)}
             className="rounded"
           />
           {t('cracker.decryptHistorical')}
         </label>
-        {decryptHistorical && (
+        {includeHistorical && (
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeOlder}
+              onChange={(e) => setIncludeOlder(e.target.checked)}
+              className="rounded"
+            />
+            {t('cracker.includeOlder')}
+          </label>
+        )}
+        {includeHistorical && (
           <span className="text-xs text-muted-foreground">
             {undecryptedPacketCount !== null && undecryptedPacketCount > 0
               ? t('cracker.historicalCount', {
@@ -530,8 +660,8 @@ export function CrackerPanel({
       </div>
 
       <button
-        onClick={isRunning ? handleStop : handleStart}
-        disabled={!wordlistLoaded || gpuAvailable === false}
+        onClick={isRunning ? handleStop : () => void handleStart()}
+        disabled={!wordlistLoaded || gpuAvailable === false || historicalLoading}
         className={cn(
           'w-48 px-4 py-1.5 rounded text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           isRunning
@@ -546,68 +676,132 @@ export function CrackerPanel({
             ? t('cracker.gpuUnavailable')
             : !wordlistLoaded
               ? t('cracker.loadingDict')
-              : t('cracker.findChannels')}
+              : historicalLoading
+                ? t('cracker.loadingSamples')
+                : t('cracker.findChannels')}
       </button>
 
-      {/* Status */}
-      <div className="flex gap-4 text-sm">
-        <span className="text-muted-foreground">
-          {t('cracker.pending')} <span className="text-foreground font-medium">{pendingCount}</span>
-        </span>
-        <span className="text-muted-foreground">
-          {t('cracker.found')} <span className="text-success font-medium">{crackedCount}</span>
-        </span>
-        <span className="text-muted-foreground">
-          {t('cracker.failed')} <span className="text-destructive font-medium">{failedCount}</span>
-        </span>
-        {skippedDuplicates > 0 && (
-          <span className="text-muted-foreground">
-            {t('cracker.skipped')}{' '}
-            <span className="text-muted-foreground font-medium">{skippedDuplicates}</span>
-          </span>
-        )}
-      </div>
-
-      {/* Progress */}
-      {progress && (
-        <div className="space-y-1">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>
-              {progress.phase === 'wordlist'
-                ? t('cracker.phaseWordlist')
-                : progress.phase === 'wordlist-pairs'
-                  ? t('cracker.phasePairs')
-                  : progress.phase === 'bruteforce'
-                    ? t('cracker.bruteforceLength', { length: progress.currentLength })
-                    : t('cracker.phasePubkey')}
-              {progress.phase !== 'bruteforce' ? ': ' : ': '}
-              {progress.currentPosition}
-            </span>
-            <span>
-              {progress.rateKeysPerSec >= 1e9
-                ? `${(progress.rateKeysPerSec / 1e9).toFixed(2)} Gkeys/s`
-                : `${(progress.rateKeysPerSec / 1e6).toFixed(1)} Mkeys/s`}{' '}
-              • {t('cracker.eta')}{' '}
-              {progress.etaSeconds < 60
-                ? `${Math.round(progress.etaSeconds)}s`
-                : `${Math.round(progress.etaSeconds / 60)}m`}
-            </span>
+      <div className="rounded-md border border-border bg-muted/20 p-2.5 space-y-2">
+        {isRunning && pendingCount === 0 && !currentItem ? (
+          <div className="flex items-center gap-2 text-[0.8125rem]" role="status">
+            <span className="h-2 w-2 rounded-full bg-primary animate-pulse" aria-hidden="true" />
+            <span>{t('cracker.waitingTraffic')}</span>
           </div>
-          <div
-            className="h-2 bg-muted rounded overflow-hidden"
-            role="progressbar"
-            aria-valuenow={Math.round(progress.percent)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={t('cracker.progressAria')}
-          >
+        ) : currentItem ? (
+          <div className="space-y-1.5" role="status">
+            <div className="flex justify-between gap-3 text-[0.6875rem] text-muted-foreground">
+              <span>
+                {progress
+                  ? progress.phase === 'wordlist'
+                    ? t('cracker.phaseWordlist')
+                    : progress.phase === 'wordlist-pairs'
+                      ? t('cracker.phasePairs')
+                      : progress.phase === 'bruteforce'
+                        ? t('cracker.bruteforceLength', { length: progress.currentLength })
+                        : t('cracker.phasePubkey')
+                  : t('cracker.phaseCandidates')}{' '}
+                · {t('cracker.hashByte', { hash: currentItem.channelHash })} ·{' '}
+                {t('cracker.sampleProgress', {
+                  current: currentSampleIndex,
+                  total: currentHashItems.length,
+                })}
+              </span>
+              {progress && (
+                <span>
+                  {progress.rateKeysPerSec >= 1e9
+                    ? `${(progress.rateKeysPerSec / 1e9).toFixed(2)} Gkeys/s`
+                    : `${(progress.rateKeysPerSec / 1e6).toFixed(1)} Mkeys/s`}{' '}
+                  · {t('cracker.eta')}{' '}
+                  {progress.etaSeconds < 60
+                    ? `${Math.round(progress.etaSeconds)}s`
+                    : `${Math.round(progress.etaSeconds / 60)}m`}
+                </span>
+              )}
+              {!progress && <span>— · {t('cracker.eta')} —</span>}
+            </div>
             <div
-              className="h-full bg-primary transition-all duration-200"
-              style={{ width: `${progress.percent}%` }}
-            />
+              className="h-2 bg-muted rounded overflow-hidden"
+              role="progressbar"
+              aria-valuenow={Math.round(progress?.percent ?? 0)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={t('cracker.progressAria')}
+            >
+              <div
+                className="h-full bg-primary transition-all duration-200"
+                style={{ width: `${progress?.percent ?? 0}%` }}
+              />
+            </div>
           </div>
+        ) : (
+          <p className="text-[0.8125rem] text-muted-foreground" role="status">
+            {historicalAvailable
+              ? t('cracker.idleHistorical', {
+                  hashes: historicalStats?.hashCount ?? 0,
+                  packets: historicalStats?.packetCount ?? 0,
+                  samples: queue.size,
+                })
+              : gpuAvailable === false
+                ? t('cracker.idleNoGpu')
+                : !wordlistLoaded
+                  ? t('cracker.idleNoWordlist')
+                  : t('cracker.idleNoGroupText')}
+          </p>
+        )}
+
+        {(hashGroups.length > 0 || crackedChannels.length > 0) && (
+          <div className="flex flex-wrap gap-1.5" aria-label={t('cracker.hashQueue')}>
+            {hashGroups.map(([hash, items]) => {
+              const status = items.some((item) => item.status === 'cracking')
+                ? 'cracking'
+                : items.some((item) => item.status === 'pending')
+                  ? 'pending'
+                  : 'failed';
+              return (
+                <span
+                  key={hash}
+                  className={cn(
+                    'text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded border',
+                    status === 'cracking'
+                      ? 'bg-primary/10 border-primary/30 text-primary'
+                      : status === 'failed'
+                        ? 'bg-destructive/10 border-destructive/30 text-destructive'
+                        : 'bg-muted border-border text-muted-foreground'
+                  )}
+                >
+                  {hash} · {items.length} ·{' '}
+                  {t(`cracker.chip${status[0].toUpperCase()}${status.slice(1)}`)}
+                </span>
+              );
+            })}
+            {crackedChannels.map((channel) => (
+              <span
+                key={`${channel.channelHash}:${channel.key}`}
+                className="text-[0.625rem] uppercase tracking-wider px-1.5 py-0.5 rounded border bg-success/10 border-success/30 text-success"
+              >
+                {channel.channelHash} · 1 · {t('cracker.chipFound', { name: channel.channelName })}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="flex gap-3 text-[0.6875rem] text-muted-foreground">
+          <span>
+            {t('cracker.pending')} <span>{pendingCount}</span>
+          </span>
+          <span>
+            {t('cracker.found')} <span>{crackedChannels.length}</span>
+          </span>
+          <span>
+            {t('cracker.failed')} <span>{failedCount}</span>
+          </span>
+          {skippedDuplicates > 0 && (
+            <span>
+              {t('cracker.skipped')} {skippedDuplicates}
+            </span>
+          )}
         </div>
-      )}
+      </div>
 
       {/* GPU status */}
       {gpuAvailable === false && (

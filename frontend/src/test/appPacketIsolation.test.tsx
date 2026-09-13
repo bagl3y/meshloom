@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
     getContacts: vi.fn(),
     getHealth: vi.fn(),
     getCommunity: vi.fn(),
+    getCommunityHashtags: vi.fn(),
+    putCommunityHashtags: vi.fn(),
   },
   hookFns: {
     observeMessage: vi.fn(() => ({ added: false, activeConversation: false })),
@@ -203,6 +205,8 @@ describe('overheard packets and the chat render path', () => {
       publisher_connected: false,
       env_seeded: false,
     });
+    mocks.api.getCommunityHashtags.mockResolvedValue({ hashtags: [] });
+    mocks.api.putCommunityHashtags.mockResolvedValue({ hashtags: [] });
   });
 
   it('does not re-render the message list when packets arrive', async () => {
