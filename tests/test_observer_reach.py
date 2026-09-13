@@ -6,7 +6,13 @@ from fastapi import HTTPException
 
 from app.decoder import outgoing_group_text_packet_hash
 from app.path_utils import calculate_packet_hash, canonical_packet_hash
-from app.repository import AppSettingsRepository, MessageRepository, RawPacketRepository
+from app.models import Message
+from app.repository import (
+    AmbiguousPublicKeyPrefixError,
+    AppSettingsRepository,
+    MessageRepository,
+    RawPacketRepository,
+)
 from app.services.observer_reach import (
     get_packet_observer_reach,
     get_packet_observer_reach_counts,
@@ -16,6 +22,7 @@ from app.services.observer_reach import (
     parse_packet_observations,
     path_from_path_json,
     reset_observer_reach_cache,
+    resolve_origin_coords,
 )
 
 
@@ -353,6 +360,31 @@ class TestObserverReachGate:
         assert result.origin_lat == 45.76
         assert result.origin_lon == 4.83
 
+    @pytest.mark.asyncio
+    async def test_ambiguous_origin_prefix_is_skipped(self, test_db):
+        message = Message(
+            id=1,
+            type="CHAN",
+            conversation_key="cc" * 16,
+            text="hi",
+            received_at=1,
+            sender_key="aabbccddeeff",
+            outgoing=False,
+        )
+        with (
+            patch(
+                "app.services.observer_reach.ContactRepository.get_by_key",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "app.services.observer_reach.ContactRepository.get_by_key_or_prefix",
+                new=AsyncMock(
+                    side_effect=AmbiguousPublicKeyPrefixError("aabbccddeeff", ["aa" * 32, "ab" * 32])
+                ),
+            ),
+        ):
+            assert await resolve_origin_coords(message) is None
+
 
 class TestCommunityObserverReach:
     @pytest.mark.asyncio
@@ -388,6 +420,42 @@ class TestCommunityObserverReach:
 
         assert result.directory_enabled is True
         assert result.counts["AABBCCDDEEFF0011"] == 1
+
+    @pytest.mark.asyncio
+    async def test_detail_uses_batch_path_when_packet_get_fails(self, test_db):
+        reset_observer_reach_cache()
+        from app.services.meshloom_community import update_community
+
+        await update_community(enabled=True, iata="LYS")
+
+        async def fake_data(path: str, method: str = "GET", **_kwargs: object) -> object:
+            if path.endswith("/observations"):
+                return {
+                    "results": {
+                        "AABBCCDDEEFF0011": [
+                            {
+                                "observer_id": "obs-1",
+                                "observer_name": "Lyon",
+                                "path_json": ["ab"],
+                            }
+                        ]
+                    }
+                }
+            if "/packets/" in path:
+                raise HTTPException(status_code=500, detail="packet get unavailable")
+            if path.endswith("/observers"):
+                return {"observers": []}
+            return {}
+
+        with patch(
+            "app.services.directory._community_directory_data",
+            side_effect=fake_data,
+        ):
+            result = await get_packet_observer_reach("AABBCCDDEEFF0011")
+
+        assert result.directory_enabled is True
+        assert result.observer_count == 1
+        assert result.observers[0].name == "Lyon"
 
     @pytest.mark.asyncio
     async def test_ingest_shaped_batch_falls_back_to_packet_detail(self, test_db):

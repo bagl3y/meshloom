@@ -1,4 +1,4 @@
-export const FONT_SCALE_KEY = 'remoteterm-font-scale';
+export const FONT_SCALE_KEY = 'meshloom-font-scale';
 export const DEFAULT_FONT_SCALE = 100;
 export const MIN_FONT_SCALE = 25;
 export const MAX_FONT_SCALE = 400;

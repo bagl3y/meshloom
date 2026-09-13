@@ -1,5 +1,5 @@
 [project]
-name = "remoteterm-meshcore"
+name = "meshloom"
 version = "4.2.1"
 description = "Meshloom - Web interface for MeshCore radio mesh networks"
 readme = "README.md"

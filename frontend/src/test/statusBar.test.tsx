@@ -166,19 +166,19 @@ describe('StatusBar', () => {
   });
 
   it('toggles between classic and light themes from the shortcut button', () => {
-    localStorage.setItem('remoteterm-theme', 'cyberpunk');
+    localStorage.setItem('meshloom-theme', 'cyberpunk');
 
     render(<StatusBar health={baseHealth} config={null} onSettingsClick={vi.fn()} />);
 
     const themeToggle = screen.getByRole('button', { name: i18n.t('statusBar.themeLight') });
     fireEvent.click(themeToggle);
 
-    expect(localStorage.getItem('remoteterm-theme')).toBe('light');
+    expect(localStorage.getItem('meshloom-theme')).toBe('light');
     expect(document.documentElement.dataset.theme).toBe('light');
 
     fireEvent.click(screen.getByRole('button', { name: i18n.t('statusBar.themeClassic') }));
 
-    expect(localStorage.getItem('remoteterm-theme')).toBe('original');
+    expect(localStorage.getItem('meshloom-theme')).toBe('original');
     expect(document.documentElement.dataset.theme).toBeUndefined();
   });
 
@@ -208,7 +208,7 @@ describe('StatusBar', () => {
 
     it('clicking toggle while OS prefers dark overrides follow-os into explicit light', () => {
       setPrefersLight(false);
-      localStorage.setItem('remoteterm-theme', 'follow-os');
+      localStorage.setItem('meshloom-theme', 'follow-os');
 
       render(<StatusBar health={baseHealth} config={null} onSettingsClick={vi.fn()} />);
 
@@ -216,13 +216,13 @@ describe('StatusBar', () => {
       const toggle = screen.getByRole('button', { name: i18n.t('statusBar.themeLight') });
       fireEvent.click(toggle);
 
-      expect(localStorage.getItem('remoteterm-theme')).toBe('light');
+      expect(localStorage.getItem('meshloom-theme')).toBe('light');
       expect(document.documentElement.dataset.theme).toBe('light');
     });
 
     it('clicking toggle while OS prefers light overrides follow-os into explicit dark', () => {
       setPrefersLight(true);
-      localStorage.setItem('remoteterm-theme', 'follow-os');
+      localStorage.setItem('meshloom-theme', 'follow-os');
 
       render(<StatusBar health={baseHealth} config={null} onSettingsClick={vi.fn()} />);
 
@@ -230,7 +230,7 @@ describe('StatusBar', () => {
       const toggle = screen.getByRole('button', { name: i18n.t('statusBar.themeClassic') });
       fireEvent.click(toggle);
 
-      expect(localStorage.getItem('remoteterm-theme')).toBe('original');
+      expect(localStorage.getItem('meshloom-theme')).toBe('original');
       expect(document.documentElement.dataset.theme).toBeUndefined();
     });
   });

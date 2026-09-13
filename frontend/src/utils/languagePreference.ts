@@ -1,6 +1,6 @@
 // Browser-local UI language. Default French on this fork; English is fallback.
 
-export const LANGUAGE_STORAGE_KEY = 'remoteterm-language';
+export const LANGUAGE_STORAGE_KEY = 'meshloom-language';
 
 export const APP_LANGUAGES = ['fr', 'en'] as const;
 

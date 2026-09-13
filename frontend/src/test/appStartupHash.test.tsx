@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
     getUndecryptedPacketCount: vi.fn(),
     getChannels: vi.fn(),
     getContacts: vi.fn(),
+    getCommunity: vi.fn(),
   },
 }));
 

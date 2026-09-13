@@ -2,7 +2,7 @@
 // into an icon rail. Mobile sheet navigation is unaffected. Off (expanded)
 // by default.
 
-export const DESKTOP_SIDEBAR_COLLAPSED_KEY = 'remoteterm-desktop-sidebar-collapsed';
+export const DESKTOP_SIDEBAR_COLLAPSED_KEY = 'meshloom-desktop-sidebar-collapsed';
 
 export function getSavedDesktopSidebarCollapsed(): boolean {
   try {

@@ -5,10 +5,22 @@ Observer-reach badges work again when Meshloom Community is on. CoreScope’s `P
 ### Highlights
 
 - Flood-message observer ears come back with Community enabled, even without a manual CoreScope URL
+- New installs join Meshloom Community by default, with a banner until an IATA airport code is saved. Operators who opt out can dismiss that banner permanently
+
+### Added
+
+- Feature: Airport IATA search in Community settings (nearest-airport helper + IATA directory link)
+- Feature: Opted-out operators can permanently dismiss the Community setup banner (per browser)
+
+### Changed
+
+- Misc: Brand-new databases seed Community on unless `MESHLOOM_COMMUNITY=0`. Existing databases stay as stored
+- Misc: Internal package, backup, and browser-storage identifiers use the `meshloom` prefix. Leftover `remoteterm-` localStorage keys are copied once. New installs seed `#meshloom` instead of `#remoteterm`
 
 ### Fixed
 
 - Bug: Community observer-reach counts treated CoreScope `POST /api/packets/observations` as a query. That route is ingest-only, so the directory call failed and the UI hid every badge. Counts now fall back to `GET` packet detail, the same path hop-name resolution already used
+- Bug: Clicking an observer badge hung on “Loading observers…”. The modal detail path called Stats GET packet detail without the batch fallback the count already used, and a language-function identity change could cancel the in-flight request so the spinner never cleared
 
 ---
 
@@ -19,10 +31,22 @@ Les badges observateurs refonctionnent quand Meshloom Community est activé. Le 
 #### Points forts
 
 - Les oreilles sur les messages flood reviennent avec Community, même sans URL CoreScope manuelle
+- Les installs neuves rejoignent Meshloom Community par défaut, avec une bannière tant qu’un code IATA d’aéroport n’est pas enregistré. Un opérateur qui a opt-out peut masquer cette bannière définitivement
+
+#### Ajouts
+
+- Fonction : recherche d’aéroport IATA dans les réglages Community (aéroport le plus proche + lien annuaire IATA)
+- Fonction : un opérateur opt-out peut masquer définitivement la bannière Community (par navigateur)
+
+#### Changements
+
+- Divers : une base toute neuve seed Community on sauf `MESHLOOM_COMMUNITY=0`. Les bases existantes restent telles quelles
+- Divers : les identifiants internes (paquet, backup, localStorage) passent au préfixe `meshloom`. Les clés `remoteterm-` restantes sont copiées une fois. Les installs neuves seedent `#meshloom` au lieu de `#remoteterm`
 
 #### Corrections
 
 - Bug : les comptages observateurs Community traitaient le `POST /api/packets/observations` CoreScope comme une requête. Cette route est un ingest, l’appel directory échouait, et l’UI cachait chaque badge. Les comptages retombent maintenant sur le détail `GET` par hash, le même chemin que la résolution des nœuds
+- Bug : un clic sur le badge observateur restait bloqué sur « Chargement des observateurs… ». Le détail de la modale appelait le GET Stats sans le fallback batch déjà utilisé pour le count, et un changement d’identité de la fonction i18n pouvait annuler la requête en vol, donc le spinner ne se fermait jamais
 
 ---
 

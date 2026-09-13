@@ -6,7 +6,7 @@ type StoredPassword = {
   password: string;
 };
 
-const STORAGE_KEY_PREFIX = 'remoteterm-server-password';
+const STORAGE_KEY_PREFIX = 'meshloom-server-password';
 const inMemoryPasswords = new Map<string, StoredPassword>();
 
 function getStorageKey(kind: ServerLoginKind, publicKey: string): string {

@@ -64,6 +64,7 @@ import type {
   CommunityIataBindResult,
   CommunityMeStats,
   CommunityPublicStats,
+  CommunityAirportHit,
   CommunityStatus,
   CommunityUpdate,
   TraceResponse,
@@ -604,6 +605,17 @@ export const api = {
       method: 'POST',
     }),
   getCommunityStats: () => fetchJson<CommunityPublicStats>('/community/stats'),
+  searchCommunityAirports: async (
+    query: string,
+    locale?: string
+  ): Promise<CommunityAirportHit[]> => {
+    const params = new URLSearchParams({ q: query });
+    if (locale) params.set('locale', locale);
+    const payload = await fetchJson<{ airports: CommunityAirportHit[] }>(
+      `/community/airports?${params.toString()}`
+    );
+    return payload.airports;
+  },
 
   // Granular repeater endpoints
   repeaterLogin: (publicKey: string, password: string) =>

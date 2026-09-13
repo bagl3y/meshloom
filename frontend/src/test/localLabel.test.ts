@@ -15,7 +15,7 @@ describe('localLabel utilities', () => {
 
     it('returns stored label', () => {
       localStorage.setItem(
-        'remoteterm-local-label',
+        'meshloom-local-label',
         JSON.stringify({ text: 'Dev', color: '#ff0000' })
       );
       const label = getLocalLabel();
@@ -24,21 +24,21 @@ describe('localLabel utilities', () => {
     });
 
     it('handles corrupted JSON gracefully', () => {
-      localStorage.setItem('remoteterm-local-label', '{bad json');
+      localStorage.setItem('meshloom-local-label', '{bad json');
       const label = getLocalLabel();
       expect(label.text).toBe('');
       expect(label.color).toBe('#062d60');
     });
 
     it('handles partial stored data', () => {
-      localStorage.setItem('remoteterm-local-label', JSON.stringify({ text: 'Hi' }));
+      localStorage.setItem('meshloom-local-label', JSON.stringify({ text: 'Hi' }));
       const label = getLocalLabel();
       expect(label.text).toBe('Hi');
       expect(label.color).toBe('#062d60'); // falls back to default color
     });
 
     it('handles non-string values in stored data', () => {
-      localStorage.setItem('remoteterm-local-label', JSON.stringify({ text: 123, color: true }));
+      localStorage.setItem('meshloom-local-label', JSON.stringify({ text: 123, color: true }));
       const label = getLocalLabel();
       expect(label.text).toBe(''); // non-string falls back
       expect(label.color).toBe('#062d60');
@@ -48,7 +48,7 @@ describe('localLabel utilities', () => {
   describe('setLocalLabel', () => {
     it('stores label to localStorage', () => {
       setLocalLabel('Test', '#00ff00');
-      const raw = localStorage.getItem('remoteterm-local-label');
+      const raw = localStorage.getItem('meshloom-local-label');
       expect(raw).not.toBeNull();
       const parsed = JSON.parse(raw!);
       expect(parsed.text).toBe('Test');

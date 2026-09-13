@@ -17,7 +17,7 @@ class TestStatisticsEmpty:
 
         assert result["contact_count"] == 0
         assert result["repeater_count"] == 0
-        assert result["channel_count"] == 1  # #remoteterm seed from migration 33
+        assert result["channel_count"] == 1  # #meshloom seed from migration 33
         assert result["total_packets"] == 0
         assert result["decrypted_packets"] == 0
         assert result["undecrypted_packets"] == 0
@@ -91,7 +91,7 @@ class TestStatisticsCounts:
         await conn.commit()
 
         result = await StatisticsRepository.get_all()
-        assert result["channel_count"] == 2  # test-chan + #remoteterm seed
+        assert result["channel_count"] == 2  # test-chan + #meshloom seed
 
     @pytest.mark.asyncio
     async def test_message_type_counts(self, test_db):

@@ -97,10 +97,10 @@ release_ensure_buildx_builder() {
         return
     fi
 
-    if docker buildx inspect remoteterm-multiarch >/dev/null 2>&1; then
-        docker buildx use remoteterm-multiarch >/dev/null
+    if docker buildx inspect meshloom-multiarch >/dev/null 2>&1; then
+        docker buildx use meshloom-multiarch >/dev/null
     else
-        docker buildx create --name remoteterm-multiarch --use >/dev/null
+        docker buildx create --name meshloom-multiarch --use >/dev/null
     fi
     docker buildx inspect --bootstrap >/dev/null
 }

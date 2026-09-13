@@ -1,4 +1,4 @@
-export const DISTANCE_UNIT_KEY = 'remoteterm-distance-unit';
+export const DISTANCE_UNIT_KEY = 'meshloom-distance-unit';
 
 export const DISTANCE_UNITS = ['imperial', 'metric', 'smoots'] as const;
 

@@ -1,6 +1,6 @@
 import { getStateKey } from './conversationState';
 
-export const CONVERSATION_DRAFT_PREFIX = 'remoteterm-conversation-draft:';
+export const CONVERSATION_DRAFT_PREFIX = 'meshloom-conversation-draft:';
 
 export function conversationDraftStorageKey(type: 'channel' | 'contact', id: string): string {
   return `${CONVERSATION_DRAFT_PREFIX}${getStateKey(type, id)}`;

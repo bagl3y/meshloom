@@ -19,7 +19,7 @@ from app.models import (
     PacketObserverReachResponse,
 )
 from app.path_utils import canonical_packet_hash, corescope_packet_hash
-from app.repository import ContactRepository, MessageRepository
+from app.repository import AmbiguousPublicKeyPrefixError, ContactRepository, MessageRepository
 from app.services.directory import (
     _as_float,
     _corescope_get_json,
@@ -315,9 +315,12 @@ async def resolve_origin_coords(message: Message | None) -> tuple[float, float] 
             keys.append(message.sender_key)
         keys.append(message.conversation_key)
     for key in keys:
-        contact = await ContactRepository.get_by_key(key)
-        if contact is None:
-            contact = await ContactRepository.get_by_key_or_prefix(key)
+        try:
+            contact = await ContactRepository.get_by_key(key)
+            if contact is None:
+                contact = await ContactRepository.get_by_key_or_prefix(key)
+        except AmbiguousPublicKeyPrefixError:
+            continue
         if contact is None or contact.lat is None or contact.lon is None:
             continue
         if not _is_valid_map_location(float(contact.lat), float(contact.lon)):
@@ -554,8 +557,8 @@ async def get_packet_observer_reach(raw_hash: str) -> PacketObserverReachRespons
 
     hash_lower = validate_packet_hash_param(raw_hash)
     if await community_enabled():
-        payload = await _community_directory_data(f"/v1/directory/packets/{hash_lower}")
-        observations = parse_packet_observations(payload)
+        fetched = await _community_batch_or_fallback([hash_lower])
+        observations = fetched.get(hash_lower, [])
         try:
             geos_payload = await _community_directory_data("/v1/directory/observers")
             geos = parse_corescope_observers(geos_payload)

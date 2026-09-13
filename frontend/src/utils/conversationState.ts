@@ -9,8 +9,8 @@
  * across devices - see useUnreadCounts hook.
  */
 
-const SORT_ORDER_KEY = 'remoteterm-sortOrder';
-const SIDEBAR_SECTION_SORT_ORDERS_KEY = 'remoteterm-sidebar-section-sort-orders';
+const SORT_ORDER_KEY = 'meshloom-sortOrder';
+const SIDEBAR_SECTION_SORT_ORDERS_KEY = 'meshloom-sidebar-section-sort-orders';
 
 export type ConversationTimes = Record<string, number>;
 // 'type-*' orders group by contact/channel type first, then apply the sub-order.

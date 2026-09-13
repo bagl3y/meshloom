@@ -2,7 +2,7 @@
 // `g:<id>` payloads does not need a key (they load from media.giphy.com).
 // Search/trending require a key from https://developers.giphy.com/dashboard/
 
-export const GIPHY_API_KEY_STORAGE = 'remoteterm-giphy-api-key';
+export const GIPHY_API_KEY_STORAGE = 'meshloom-giphy-api-key';
 
 function envGiphyApiKey(): string {
   const env = import.meta.env.VITE_GIPHY_API_KEY;

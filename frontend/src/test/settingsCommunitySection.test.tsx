@@ -81,6 +81,37 @@ describe('SettingsCommunitySection', () => {
     ).toBeDisabled();
   });
 
+  it('explains IATA as the nearest airport and offers a search', async () => {
+    vi.spyOn(api, 'searchCommunityAirports').mockResolvedValue([
+      {
+        iata: 'LYS',
+        name: 'Lyon-Saint-Exupéry',
+        city: 'Lyon',
+        country: 'France',
+        label: 'Lyon, France (LYS)',
+      },
+    ]);
+    vi.mocked(api.getCommunity).mockResolvedValue({
+      ...offStatus,
+      enabled: true,
+    });
+
+    render(<SettingsCommunitySection />);
+
+    expect(
+      await screen.findByText(i18n.t('settings.community.iataHelp'), { exact: false })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: i18n.t('settings.community.iataDirectory') })
+    ).toHaveAttribute('href', 'https://www.iata.org/en/publications/directories/code-search/');
+
+    fireEvent.change(screen.getByLabelText(i18n.t('settings.community.iataSearch')), {
+      target: { value: 'Lyon' },
+    });
+    fireEvent.click(await screen.findByRole('option', { name: /LYS/ }));
+    expect(screen.getByLabelText(i18n.t('settings.community.iata'))).toHaveValue('LYS');
+  });
+
   it('explains that publish is off when enabled without IATA', async () => {
     vi.mocked(api.getCommunity).mockResolvedValue({
       ...offStatus,

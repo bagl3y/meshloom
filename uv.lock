@@ -1764,7 +1764,7 @@ wheels = [
 ]
 
 [[package]]
-name = "remoteterm-meshcore"
+name = "meshloom"
 version = "4.2.1"
 source = { virtual = "." }
 dependencies = [

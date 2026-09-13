@@ -1101,3 +1101,11 @@ export interface CommunityPublicStats {
   iata_active: number;
   unique_hashes_24h: number;
 }
+
+export interface CommunityAirportHit {
+  iata: string;
+  name: string;
+  city: string;
+  country: string;
+  label: string;
+}

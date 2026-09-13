@@ -1,4 +1,4 @@
-const KEY = 'remoteterm-auto-focus-input';
+const KEY = 'meshloom-auto-focus-input';
 
 export function getAutoFocusInputEnabled(): boolean {
   try {

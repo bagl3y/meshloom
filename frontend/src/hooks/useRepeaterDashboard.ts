@@ -28,7 +28,7 @@ const RETRY_DELAY_MS = 2000;
 const MAX_CACHED_REPEATERS = 20;
 const MAX_STORED_CONSOLE_ENTRIES = 100;
 
-export const REPEATER_CONSOLE_HISTORY_KEY_PREFIX = 'remoteterm-repeater-console-history';
+export const REPEATER_CONSOLE_HISTORY_KEY_PREFIX = 'meshloom-repeater-console-history';
 
 interface ConsoleEntry {
   command: string;

@@ -4,14 +4,15 @@ import aiosqlite
 import pytest
 
 from app.migrations import run_migrations, set_version
+from app.migrations._072_seed_meshloom_channel import MESHLOOM_CHANNEL_KEY
 
 
 class TestMigration033:
-    """Test migration 033: seed #remoteterm channel."""
+    """Test migration 033: seed #meshloom channel."""
 
     @pytest.mark.asyncio
-    async def test_migration_seeds_remoteterm_channel(self):
-        """Migration inserts the #remoteterm channel for new installs."""
+    async def test_migration_seeds_meshloom_channel(self):
+        """Migration inserts the #meshloom channel for new installs."""
         conn = await aiosqlite.connect(":memory:")
         conn.row_factory = aiosqlite.Row
         try:
@@ -41,11 +42,11 @@ class TestMigration033:
 
             cursor = await conn.execute(
                 "SELECT key, name, is_hashtag, on_radio FROM channels WHERE key = ?",
-                ("8959AE053F2201801342A1DBDDA184F6",),
+                (MESHLOOM_CHANNEL_KEY,),
             )
             row = await cursor.fetchone()
             assert row is not None
-            assert row["name"] == "#remoteterm"
+            assert row["name"] == "#meshloom"
             assert row["is_hashtag"] == 1
             assert row["on_radio"] == 0
         finally:
@@ -53,7 +54,7 @@ class TestMigration033:
 
     @pytest.mark.asyncio
     async def test_migration_does_not_overwrite_existing_channel(self):
-        """Migration is a no-op if #remoteterm already exists."""
+        """Migration is a no-op if #meshloom already exists."""
         conn = await aiosqlite.connect(":memory:")
         conn.row_factory = aiosqlite.Row
         try:
@@ -76,10 +77,9 @@ class TestMigration033:
                     community_mqtt_email TEXT DEFAULT ''
                 )
             """)
-            # Pre-existing channel with on_radio=1 (user added it to radio)
             await conn.execute(
                 "INSERT INTO channels (key, name, is_hashtag, on_radio) VALUES (?, ?, ?, ?)",
-                ("8959AE053F2201801342A1DBDDA184F6", "#remoteterm", 1, 1),
+                (MESHLOOM_CHANNEL_KEY, "#meshloom", 1, 1),
             )
             await conn.commit()
 
@@ -87,9 +87,9 @@ class TestMigration033:
 
             cursor = await conn.execute(
                 "SELECT on_radio FROM channels WHERE key = ?",
-                ("8959AE053F2201801342A1DBDDA184F6",),
+                (MESHLOOM_CHANNEL_KEY,),
             )
             row = await cursor.fetchone()
-            assert row["on_radio"] == 1  # Not overwritten
+            assert row["on_radio"] == 1
         finally:
             await conn.close()

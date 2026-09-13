@@ -1,4 +1,4 @@
-const LOCAL_LABEL_KEY = 'remoteterm-local-label';
+const LOCAL_LABEL_KEY = 'meshloom-local-label';
 
 export interface LocalLabel {
   text: string;

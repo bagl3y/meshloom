@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 RELEASE_BUILD_INFO_FILENAME = "build_info.json"
-PROJECT_NAME = "remoteterm-meshcore"
+PROJECT_NAME = "meshloom"
 
 
 @dataclass(frozen=True)

@@ -378,7 +378,7 @@ describe('TracePane', () => {
     const relayA = makeContact('11'.repeat(32), 'Relay Alpha');
     const relayB = makeContact('22'.repeat(32), 'Relay Beta');
     localStorage.setItem(
-      'remoteterm-recent-traces',
+      'meshloom-recent-traces',
       JSON.stringify([
         {
           ranAt: 1,

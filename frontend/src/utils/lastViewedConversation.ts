@@ -1,8 +1,8 @@
 import type { Conversation } from '../types';
 import { parseHashConversation } from './urlHash';
 
-export const REOPEN_LAST_CONVERSATION_KEY = 'remoteterm-reopen-last-conversation';
-export const LAST_VIEWED_CONVERSATION_KEY = 'remoteterm-last-viewed-conversation';
+export const REOPEN_LAST_CONVERSATION_KEY = 'meshloom-reopen-last-conversation';
+export const LAST_VIEWED_CONVERSATION_KEY = 'meshloom-last-viewed-conversation';
 
 const SUPPORTED_TYPES: Conversation['type'][] = [
   'contact',

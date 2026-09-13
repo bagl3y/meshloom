@@ -383,6 +383,13 @@ class TestExistingDbDoesNotAutoEnable:
         assert state.enabled is False
 
     @pytest.mark.asyncio
+    async def test_new_install_defaults_on(self, test_db, monkeypatch):
+        monkeypatch.delenv("MESHLOOM_COMMUNITY", raising=False)
+        await seed_community_from_env(new_install=True)
+        state = await get_community_effective()
+        assert state.enabled is True
+
+    @pytest.mark.asyncio
     async def test_new_install_can_seed_enable(self, test_db, monkeypatch):
         monkeypatch.setenv("MESHLOOM_COMMUNITY", "1")
         monkeypatch.setenv("MESHLOOM_COMMUNITY_IATA", "lyo")
@@ -390,6 +397,13 @@ class TestExistingDbDoesNotAutoEnable:
         state = await get_community_effective()
         assert state.enabled is True
         assert state.iata == "LYO"
+
+    @pytest.mark.asyncio
+    async def test_new_install_can_seed_off(self, test_db, monkeypatch):
+        monkeypatch.setenv("MESHLOOM_COMMUNITY", "0")
+        await seed_community_from_env(new_install=True)
+        state = await get_community_effective()
+        assert state.enabled is False
 
 
 class TestKeepaliveAndJwtKwargs:
@@ -493,3 +507,42 @@ class TestOfficialHostDefaults:
         assert state.api_base == DEFAULT_API_BASE
         assert state.mqtt_audience == "mqtt.meshloom.app"
         assert state.api_audience == "api.meshloom.app"
+
+
+class TestAirportSearch:
+    @pytest.mark.asyncio
+    async def test_short_query_is_empty(self):
+        from app.services.meshloom_community import search_community_airports
+
+        assert await search_community_airports("L") == []
+
+    @pytest.mark.asyncio
+    async def test_parses_fx_port_hits(self, monkeypatch):
+        from app.services import meshloom_community
+
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = [
+            {
+                "ap": "LYS",
+                "airportname": "Lyon-Saint-Exupéry",
+                "cityonly": "Lyon",
+                "country": "France",
+                "shortdisplayname": "Lyon, France (LYS)",
+            },
+            {"ap": "XX", "airportname": "too-short"},
+        ]
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        monkeypatch.setattr(
+            meshloom_community.httpx, "AsyncClient", MagicMock(return_value=mock_client)
+        )
+
+        hits = await meshloom_community.search_community_airports("Lyon", locale="fr")
+        assert len(hits) == 1
+        assert hits[0].iata == "LYS"
+        assert hits[0].name == "Lyon-Saint-Exupéry"
+        mock_client.get.assert_awaited()
+        assert mock_client.get.await_args.kwargs["params"]["locale"] == "fr"

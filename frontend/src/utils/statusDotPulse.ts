@@ -1,7 +1,7 @@
-export const STATUS_DOT_PULSE_CHANGE_EVENT = 'remoteterm-status-dot-pulse-change';
-export const STATUS_DOT_PULSE_PACKET_EVENT = 'remoteterm-status-dot-pulse-packet';
+export const STATUS_DOT_PULSE_CHANGE_EVENT = 'meshloom-status-dot-pulse-change';
+export const STATUS_DOT_PULSE_PACKET_EVENT = 'meshloom-status-dot-pulse-packet';
 
-const STORAGE_KEY = 'remoteterm-status-dot-pulse';
+const STORAGE_KEY = 'meshloom-status-dot-pulse';
 
 export type StatusDotPulseKind = 'channel' | 'dm' | 'advert' | 'other';
 

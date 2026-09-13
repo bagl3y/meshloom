@@ -1632,3 +1632,15 @@ class CommunityPublicStats(BaseModel):
     observers_online: int
     iata_active: int
     unique_hashes_24h: int
+
+
+class CommunityAirportHit(BaseModel):
+    iata: str
+    name: str
+    city: str
+    country: str
+    label: str
+
+
+class CommunityAirportSearchResponse(BaseModel):
+    airports: list[CommunityAirportHit]

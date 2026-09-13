@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from '../ui/sonner';
 import { api, ApiError, formatApiError } from '../../api';
 import type {
+  CommunityAirportHit,
   CommunityIataBindResult,
   CommunityMeStats,
   CommunityPublicStats,
@@ -15,6 +16,7 @@ import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 
 const IATA_RE = /^[A-Za-z]{3}$/;
+const IATA_DIRECTORY_URL = 'https://www.iata.org/en/publications/directories/code-search/';
 
 function normalizeIata(raw: string): string {
   return raw
@@ -50,6 +52,108 @@ function concordanceMessageKey(
   return 'settings.community.concordanceUnknown';
 }
 
+function IataHelp() {
+  const { t } = useTranslation();
+  return (
+    <p className="text-[0.8125rem] text-muted-foreground">
+      {t('settings.community.iataHelp')}{' '}
+      <a
+        href={IATA_DIRECTORY_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="cursor-pointer underline underline-offset-2 hover:text-primary transition-colors"
+      >
+        {t('settings.community.iataDirectory')}
+      </a>
+    </p>
+  );
+}
+
+function IataAirportSearch({
+  disabled,
+  onPick,
+}: {
+  disabled?: boolean;
+  onPick: (iata: string) => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const [query, setQuery] = useState('');
+  const [hits, setHits] = useState<CommunityAirportHit[]>([]);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setHits([]);
+      setOpen(false);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void api.searchCommunityAirports(trimmed, i18n.language).then(
+        (rows) => {
+          if (cancelled) return;
+          setHits(rows);
+          setOpen(rows.length > 0);
+        },
+        () => {
+          if (!cancelled) {
+            setHits([]);
+            setOpen(false);
+          }
+        }
+      );
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [query, i18n.language]);
+
+  return (
+    <div className="space-y-1">
+      <Label htmlFor="community-iata-search">{t('settings.community.iataSearch')}</Label>
+      <Input
+        id="community-iata-search"
+        value={query}
+        disabled={disabled}
+        autoComplete="off"
+        spellCheck={false}
+        placeholder={t('settings.community.iataSearchPlaceholder')}
+        onChange={(event) => setQuery(event.target.value)}
+        onFocus={() => {
+          if (hits.length > 0) setOpen(true);
+        }}
+      />
+      {open && hits.length > 0 && (
+        <ul
+          role="listbox"
+          aria-label={t('settings.community.iataSearch')}
+          className="max-h-48 overflow-auto rounded-md border border-border bg-card py-1"
+        >
+          {hits.map((hit) => (
+            <li key={hit.iata}>
+              <button
+                type="button"
+                role="option"
+                className="flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-sm hover:bg-accent"
+                onClick={() => {
+                  onPick(hit.iata);
+                  setQuery(hit.label);
+                  setOpen(false);
+                }}
+              >
+                <span>{hit.label}</span>
+                <span className="font-medium text-muted-foreground">{hit.iata}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function StatRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between items-center gap-4">
@@ -59,7 +163,13 @@ function StatRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function SettingsCommunitySection({ className }: { className?: string }) {
+export function SettingsCommunitySection({
+  className,
+  onStatusChange,
+}: {
+  className?: string;
+  onStatusChange?: (status: CommunityStatus) => void;
+}) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<CommunityStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -70,10 +180,14 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
   const [statsError, setStatsError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'join' | 'enable' | 'bind' | 'override' | null>(null);
 
-  const applyStatus = useCallback((next: CommunityStatus) => {
-    setStatus(next);
-    setIataDraft(next.iata);
-  }, []);
+  const applyStatus = useCallback(
+    (next: CommunityStatus) => {
+      setStatus(next);
+      setIataDraft(next.iata);
+      onStatusChange?.(next);
+    },
+    [onStatusChange]
+  );
 
   const loadStatus = useCallback(async () => {
     try {
@@ -281,10 +395,9 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
               onChange={(event) => setIataDraft(normalizeIata(event.target.value))}
               className="w-24 uppercase"
             />
-            <p className="text-[0.8125rem] text-muted-foreground">
-              {t('settings.community.iataHelp')}
-            </p>
+            <IataHelp />
           </div>
+          <IataAirportSearch disabled={busy !== null || status.locked} onPick={setIataDraft} />
           <Button
             type="button"
             onClick={() => void handleJoin()}
@@ -321,9 +434,8 @@ export function SettingsCommunitySection({ className }: { className?: string }) 
                 {busy === 'bind' ? t('settings.community.binding') : t('settings.community.bind')}
               </Button>
             </div>
-            <p className="text-[0.8125rem] text-muted-foreground">
-              {t('settings.community.iataHelp')}
-            </p>
+            <IataHelp />
+            <IataAirportSearch disabled={busy !== null} onPick={setIataDraft} />
           </div>
 
           {!status.publisher_configured && (

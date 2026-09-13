@@ -113,8 +113,8 @@ const TILE_LAYERS: readonly TileLayerPreset[] = [
   },
 ] as const;
 
-const MAP_LAYER_STORAGE_KEY = 'remoteterm-map-layer';
-const LEGACY_DARK_MAP_STORAGE_KEY = 'remoteterm-dark-map';
+const MAP_LAYER_STORAGE_KEY = 'meshloom-map-layer';
+const LEGACY_DARK_MAP_STORAGE_KEY = 'meshloom-dark-map';
 
 function getSavedLayerId(): string {
   try {
@@ -190,7 +190,7 @@ const MAP_SINCE_PRESETS = [
 type MapSinceId = (typeof MAP_SINCE_PRESETS)[number]['id'] | 'custom';
 
 const DEFAULT_MAP_SINCE_ID: MapSinceId = '7d';
-const MAP_SINCE_STORAGE_KEY = 'remoteterm-map-since';
+const MAP_SINCE_STORAGE_KEY = 'meshloom-map-since';
 
 /** Relative presets drift as time passes, so recompute the cutoff on this cadence. */
 const MAP_SINCE_TICK_MS = 60_000;

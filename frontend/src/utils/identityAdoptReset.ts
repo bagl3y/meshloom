@@ -29,7 +29,7 @@ export function resetClientStateAfterIdentityAdopt(): void {
       if (key.startsWith(CONVERSATION_DRAFT_PREFIX) && isContactScopedKey(key)) {
         keysToRemove.push(key);
       }
-      if (key.includes('remoteterm-server-password:') && isContactScopedKey(key)) {
+      if (key.includes('-server-password:') && isContactScopedKey(key)) {
         keysToRemove.push(key);
       }
     }

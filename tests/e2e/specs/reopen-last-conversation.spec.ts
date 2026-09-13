@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { createChannel, deleteChannel } from '../helpers/api';
 
-const REOPEN_LAST_CONVERSATION_KEY = 'remoteterm-reopen-last-conversation';
-const LAST_VIEWED_CONVERSATION_KEY = 'remoteterm-last-viewed-conversation';
+const REOPEN_LAST_CONVERSATION_KEY = 'meshloom-reopen-last-conversation';
+const LAST_VIEWED_CONVERSATION_KEY = 'meshloom-last-viewed-conversation';
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

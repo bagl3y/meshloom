@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { useSwipeable } from 'react-swipeable';
 
+import { CommunitySetupBanner } from './CommunitySetupBanner';
 import { StatusBar } from './StatusBar';
 import { Sidebar } from './Sidebar';
 import { ConversationPane } from './ConversationPane';
@@ -32,6 +33,8 @@ import {
   getSavedDesktopSidebarCollapsed,
   setSavedDesktopSidebarCollapsed,
 } from '../utils/sidebarRailPreference';
+import { api } from '../api';
+import type { CommunityStatus } from '../types';
 import type { CrackerPanelProps } from './CrackerPanel';
 import type { SearchViewProps } from './SearchView';
 import type { SettingsModalProps } from './SettingsModal';
@@ -168,6 +171,20 @@ export function AppShell({
   }
 
   const [identityModalForced, setIdentityModalForced] = useState(false);
+  const [communityStatus, setCommunityStatus] = useState<CommunityStatus | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.resolve(api.getCommunity?.()).then(
+      (status) => {
+        if (!cancelled && status) setCommunityStatus(status);
+      },
+      () => undefined
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const crackerMounted = useRef(false);
   if (showCracker) {
@@ -192,7 +209,7 @@ export function AppShell({
     measure();
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
-  }, [hasLocalLabel, activeType, activeId, showSettings]);
+  }, [hasLocalLabel, activeType, activeId, showSettings, communityStatus]);
 
   const settingsSidebarContent = (
     <nav
@@ -330,6 +347,13 @@ export function AppShell({
         onOpenIdentityModal={() => setIdentityModalForced(true)}
         onMenuClick={showSettings ? undefined : () => onSidebarOpenChange(true)}
       />
+      {communityStatus && !(showSettings && settingsSection === 'community') && (
+        <CommunitySetupBanner
+          enabled={communityStatus.enabled}
+          iata={communityStatus.iata}
+          onOpenSettings={() => handleOpenSettings('community')}
+        />
+      )}
       <div data-toast-anchor="statusbar" aria-hidden="true" />
 
       <div className="flex flex-1 overflow-hidden">
@@ -403,6 +427,7 @@ export function AppShell({
                     desktopSection={settingsSection}
                     onClose={onCloseSettingsView}
                     onLocalLabelChange={onLocalLabelChange}
+                    onCommunityStatusChange={setCommunityStatus}
                   />
                 </Suspense>
               </div>

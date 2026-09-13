@@ -1,5 +1,5 @@
 {
-  "name": "remoteterm-e2e",
+  "name": "meshloom-e2e",
   "private": true,
   "scripts": {
     "test": "playwright test",

@@ -150,7 +150,7 @@ describe('RoomServerPanel', () => {
     });
     expect(screen.getByLabelText(i18n.t('repeater.passwordAria'))).toHaveValue('');
     expect(screen.queryByText(i18n.t('repeater.reenterPassword'))).not.toBeInTheDocument();
-    expect(localStorage.getItem(`remoteterm-server-password:room:${roomContact.public_key}`)).toBe(
+    expect(localStorage.getItem(`meshloom-server-password:room:${roomContact.public_key}`)).toBe(
       null
     );
   });
@@ -177,7 +177,7 @@ describe('RoomServerPanel', () => {
   });
   it('auto-logs in once when a password is already remembered', async () => {
     localStorage.setItem(
-      `remoteterm-server-password:room:${roomContact.public_key}`,
+      `meshloom-server-password:room:${roomContact.public_key}`,
       JSON.stringify({ password: 'remembered-password' })
     );
     mockApi.roomLogin.mockResolvedValue({ status: 'ok', authenticated: true, message: null });
@@ -204,7 +204,7 @@ describe('RoomServerPanel', () => {
 
   it('does not retry the auto-login after it fails', async () => {
     localStorage.setItem(
-      `remoteterm-server-password:room:${roomContact.public_key}`,
+      `meshloom-server-password:room:${roomContact.public_key}`,
       JSON.stringify({ password: 'remembered-password' })
     );
     mockApi.roomLogin.mockRejectedValue(new Error('room server unreachable'));

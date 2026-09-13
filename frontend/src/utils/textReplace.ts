@@ -1,5 +1,5 @@
-const ENABLED_KEY = 'remoteterm-text-replace-enabled';
-const MAP_KEY = 'remoteterm-text-replace-map';
+const ENABLED_KEY = 'meshloom-text-replace-enabled';
+const MAP_KEY = 'meshloom-text-replace-map';
 
 const DEFAULT_MAP: Record<string, string> = {
   А: 'A',

@@ -7,7 +7,7 @@ export interface Theme {
   metaThemeColor: string;
 }
 
-export const THEME_CHANGE_EVENT = 'remoteterm-theme-change';
+export const THEME_CHANGE_EVENT = 'meshloom-theme-change';
 
 export const FOLLOW_OS_THEME_ID = 'follow-os';
 
@@ -93,7 +93,7 @@ export const THEMES: Theme[] = [
   },
 ];
 
-const THEME_KEY = 'remoteterm-theme';
+const THEME_KEY = 'meshloom-theme';
 
 export function getSavedTheme(): string {
   try {

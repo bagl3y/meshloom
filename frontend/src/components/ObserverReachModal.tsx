@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 import { api, formatApiError } from '../api';
+import i18n from '../i18n';
 import { useDistanceUnit } from '../contexts/DistanceUnitContext';
 import type {
   Contact,
@@ -116,7 +117,7 @@ export function ObserverReachModal({
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setError(formatApiError(err, t));
+        setError(formatApiError(err, i18n.t));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -124,7 +125,7 @@ export function ObserverReachModal({
     return () => {
       cancelled = true;
     };
-  }, [open, packetHash, t]);
+  }, [open, packetHash]);
 
   useEffect(() => {
     if (!detail) {

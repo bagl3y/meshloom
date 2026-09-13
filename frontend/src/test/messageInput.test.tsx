@@ -299,7 +299,7 @@ describe('MessageInput', () => {
     });
 
     it('sends a GIF chosen from Giphy search results', async () => {
-      localStorage.setItem('remoteterm-giphy-api-key', 'test-key');
+      localStorage.setItem('meshloom-giphy-api-key', 'test-key');
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({

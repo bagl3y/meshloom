@@ -7,8 +7,10 @@ import './themes.css';
 import './styles.css';
 import { getSavedTheme, applyTheme, initFollowOSListener } from './utils/theme';
 import { applyFontScale, getSavedFontScale } from './utils/fontScale';
+import { migrateLegacyLocalStoragePrefix } from './utils/legacyStoragePrefix';
 import { PushSubscriptionProvider } from './contexts/PushSubscriptionContext';
 
+migrateLegacyLocalStoragePrefix();
 // Apply saved theme before first render
 applyTheme(getSavedTheme());
 // Re-apply when the OS color-scheme preference changes, if on "Follow OS".

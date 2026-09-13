@@ -1,7 +1,8 @@
 """Meshloom Stats community state, JWT mint, and HTTP client.
 
-Community is one opt-out: off means no Stats MQTT publish and no Stats HTTP.
-Env names are MESHLOOM_* only — do not invent MESHCORE_COMMUNITY aliases.
+Community is on for new installs and one opt-out: off means no Stats MQTT
+publish and no Stats HTTP. Env names are MESHLOOM_* only — do not invent
+MESHCORE_COMMUNITY aliases.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from urllib.parse import urlsplit
 import httpx
 from fastapi import HTTPException
 
-from app.models import CommunityStatus
+from app.models import CommunityAirportHit, CommunityStatus
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,11 @@ DEFAULT_BROKER_PORT = 443
 DEFAULT_WEBSOCKET_PATH = "/mqtt"
 MQTT_KEEPALIVE_SECONDS = 30
 _IATA_RE = re.compile(r"^[A-Z]{3}$")
+AIRPORT_SEARCH_URL = "https://api.fx-port.com/api/v1/flights/airports"
+AIRPORT_SEARCH_TIMEOUT_SECONDS = 5.0
+_AIRPORT_QUERY_MIN = 2
+_AIRPORT_QUERY_MAX = 48
+_AIRPORT_HITS_MAX = 12
 _STATS_TIMEOUT_SECONDS = 8.0
 _PLACEHOLDER_HOST_SUFFIX = ".example.invalid"
 
@@ -40,8 +46,9 @@ def community_locked() -> bool:
 
 
 def env_community_opt_in() -> bool:
-    """True only when MESHLOOM_COMMUNITY=1. Unset or 0 is opted out."""
-    return _env_raw("MESHLOOM_COMMUNITY") == "1"
+    """New installs default on. MESHLOOM_COMMUNITY=0/false/off seeds opted out."""
+    raw = _env_raw("MESHLOOM_COMMUNITY").lower()
+    return raw not in {"0", "false", "off", "no"}
 
 
 def env_community_iata() -> str:
@@ -186,7 +193,9 @@ async def seed_community_from_env(*, new_install: bool) -> None:
         api_base=api_base,
     )
     if enabled:
-        logger.info("Seeded Meshloom Stats community on from MESHLOOM_COMMUNITY=1")
+        logger.info("Seeded Meshloom Community on for new install")
+    else:
+        logger.info("Seeded Meshloom Community off from MESHLOOM_COMMUNITY")
 
 
 async def update_community(
@@ -388,3 +397,67 @@ async def stats_directory_get(
 async def stats_directory_post(path: str, json_body: dict[str, Any]) -> object:
     payload = await stats_json("POST", path, auth=True, json_body=json_body)
     return unwrap_directory_envelope(payload)
+
+
+def _airport_locale(locale: str) -> str:
+    return "fr" if locale.lower().startswith("fr") else "en"
+
+
+def _airport_hit(item: object) -> CommunityAirportHit | None:
+    if not isinstance(item, dict):
+        return None
+    raw_iata = item.get("ap") or item.get("iata") or item.get("id")
+    if not isinstance(raw_iata, str):
+        return None
+    iata = raw_iata.strip().upper()
+    if not _IATA_RE.fullmatch(iata):
+        return None
+    name = item.get("airportname") or item.get("name") or iata
+    city = item.get("cityonly") or item.get("cityname") or ""
+    country = item.get("country") or ""
+    label_raw = item.get("shortdisplayname") or item.get("displayname")
+    label = label_raw.strip() if isinstance(label_raw, str) and label_raw.strip() else iata
+    return CommunityAirportHit(
+        iata=iata,
+        name=name.strip() if isinstance(name, str) and name.strip() else iata,
+        city=city.strip() if isinstance(city, str) else "",
+        country=country.strip() if isinstance(country, str) else "",
+        label=label,
+    )
+
+
+async def search_community_airports(query: str, *, locale: str = "en") -> list[CommunityAirportHit]:
+    """Open FX-Port airport autocomplete. Empty on failure — this is convenience, not directory."""
+    text = (query or "").strip()
+    if len(text) < _AIRPORT_QUERY_MIN:
+        return []
+    text = text[:_AIRPORT_QUERY_MAX]
+    try:
+        async with httpx.AsyncClient(
+            follow_redirects=True, timeout=AIRPORT_SEARCH_TIMEOUT_SECONDS
+        ) as client:
+            response = await client.get(
+                AIRPORT_SEARCH_URL,
+                params={"query": text, "locale": _airport_locale(locale)},
+            )
+    except httpx.RequestError as exc:
+        logger.warning("Airport IATA search failed: %s", exc)
+        return []
+    if response.status_code != 200:
+        return []
+    try:
+        payload = response.json()
+    except ValueError:
+        return []
+    items = payload if isinstance(payload, list) else []
+    hits: list[CommunityAirportHit] = []
+    seen: set[str] = set()
+    for item in items:
+        hit = _airport_hit(item)
+        if hit is None or hit.iata in seen:
+            continue
+        seen.add(hit.iata)
+        hits.append(hit)
+        if len(hits) >= _AIRPORT_HITS_MAX:
+            break
+    return hits

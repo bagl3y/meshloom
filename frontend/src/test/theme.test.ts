@@ -48,7 +48,7 @@ describe('theme module', () => {
     applyTheme(FOLLOW_OS_THEME_ID);
 
     // Saved value is the follow-os preference, but the DOM reflects the resolved theme.
-    expect(localStorage.getItem('remoteterm-theme')).toBe(FOLLOW_OS_THEME_ID);
+    expect(localStorage.getItem('meshloom-theme')).toBe(FOLLOW_OS_THEME_ID);
     expect(getSavedTheme()).toBe(FOLLOW_OS_THEME_ID);
     expect(document.documentElement.dataset.theme).toBe('light');
     expect(getEffectiveTheme()).toBe('light');
@@ -59,7 +59,7 @@ describe('theme module', () => {
 
     applyTheme(FOLLOW_OS_THEME_ID);
 
-    expect(localStorage.getItem('remoteterm-theme')).toBe(FOLLOW_OS_THEME_ID);
+    expect(localStorage.getItem('meshloom-theme')).toBe(FOLLOW_OS_THEME_ID);
     // Original has no data-theme attribute, it's the default.
     expect(document.documentElement.dataset.theme).toBeUndefined();
     expect(getEffectiveTheme()).toBe('original');

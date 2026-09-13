@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from app.models import (
+    CommunityAirportSearchResponse,
     CommunityIataBindRequest,
     CommunityIataBindResult,
     CommunityMeStats,
@@ -18,6 +19,7 @@ from app.models import (
 from app.services.meshloom_community import (
     community_status,
     radio_gps_or_none,
+    search_community_airports,
     stats_json,
     update_community,
 )
@@ -29,6 +31,13 @@ router = APIRouter(prefix="/community", tags=["community"])
 @router.get("", response_model=CommunityStatus)
 async def get_community() -> CommunityStatus:
     return await community_status()
+
+
+@router.get("/airports", response_model=CommunityAirportSearchResponse)
+async def search_airports(q: str = "", locale: str = "en") -> CommunityAirportSearchResponse:
+    return CommunityAirportSearchResponse(
+        airports=await search_community_airports(q, locale=locale)
+    )
 
 
 @router.patch("", response_model=CommunityStatus)
