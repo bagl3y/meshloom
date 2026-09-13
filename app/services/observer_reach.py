@@ -38,6 +38,10 @@ SPEC_TIMEOUT_SECONDS = 5.0
 REACH_CACHE_TTL_SECONDS = 90.0
 OBSERVERS_CACHE_TTL_SECONDS = 600.0
 SPEC_CACHE_TTL_SECONDS = 600.0
+# Community ears follow the client poll: pass through for 10 min, then keep a year.
+COMMUNITY_LIVE_REACH_SECONDS = 600.0
+COMMUNITY_FROZEN_REACH_TTL_SECONDS = 365 * 24 * 3600.0
+COMMUNITY_OBSERVERS_LIVE_TTL_SECONDS = 8.0
 BATCH_FALLBACK_CONCURRENCY = 4
 CORESCOPE_BATCH_MAX = 200
 MESHLOOM_BATCH_MAX = 20
@@ -49,6 +53,8 @@ SPEC_BATCH_CACHE_MAX = 16
 _reach_cache: TtlLruCache[tuple[str, str], list[ParsedObservation]] = TtlLruCache(REACH_CACHE_MAX)
 _observers_cache: TtlLruCache[str, dict[str, ObserverGeo]] = TtlLruCache(OBSERVERS_CACHE_MAX)
 _spec_batch_cache: TtlLruCache[str, bool] = TtlLruCache(SPEC_BATCH_CACHE_MAX)
+_community_reach_first_seen: dict[tuple[str, str], float] = {}
+_community_last_obs: dict[tuple[str, str], list[ParsedObservation]] = {}
 
 
 @dataclass(frozen=True)
@@ -77,6 +83,8 @@ def reset_observer_reach_cache() -> None:
     _reach_cache.clear()
     _observers_cache.clear()
     _spec_batch_cache.clear()
+    _community_reach_first_seen.clear()
+    _community_last_obs.clear()
 
 
 def validate_packet_hash_param(raw: str) -> str:
@@ -491,21 +499,63 @@ async def _fetch_batch_or_fallback(
 _COMMUNITY_ORIGIN = "community"
 
 
+def _community_reach_key(hash_lower: str) -> tuple[str, str]:
+    return (_COMMUNITY_ORIGIN, hash_lower)
+
+
+def _remember_community_reach(hash_lower: str, now: float) -> tuple[str, str]:
+    key = _community_reach_key(hash_lower)
+    _community_reach_first_seen.setdefault(key, now)
+    return key
+
+
+async def _community_reach_should_freeze(hash_lower: str, now: float) -> bool:
+    message = await MessageRepository.get_by_packet_hash(hash_lower)
+    if message is not None:
+        return now - float(message.received_at) >= COMMUNITY_LIVE_REACH_SECONDS
+    first = _community_reach_first_seen.get(_community_reach_key(hash_lower))
+    return first is not None and now - first >= COMMUNITY_LIVE_REACH_SECONDS
+
+
+async def _cache_community_reach(
+    hash_lower: str,
+    observations: list[ParsedObservation],
+    now: float,
+) -> None:
+    key = _remember_community_reach(hash_lower, now)
+    if observations:
+        _community_last_obs[key] = observations
+    if not observations or not await _community_reach_should_freeze(hash_lower, now):
+        return
+    _reach_cache.set(key, observations, now + COMMUNITY_FROZEN_REACH_TTL_SECONDS, now)
+
+
+async def _cached_community_reach(
+    hash_lower: str, now: float
+) -> list[ParsedObservation] | None:
+    if not await _community_reach_should_freeze(hash_lower, now):
+        return None
+    key = _community_reach_key(hash_lower)
+    cached = _reach_cache.get(key, now)
+    if cached is not None:
+        return cached
+    last = _community_last_obs.get(key)
+    if last:
+        _reach_cache.set(key, last, now + COMMUNITY_FROZEN_REACH_TTL_SECONDS, now)
+        return last
+    return None
+
+
 async def _community_packet_observations(hash_lower: str) -> list[ParsedObservation]:
     from app.services.directory import _community_directory_data
 
     now = time.time()
-    cached = _reach_cache.get((_COMMUNITY_ORIGIN, hash_lower), now)
+    cached = await _cached_community_reach(hash_lower, now)
     if cached is not None:
         return cached
     payload = await _community_directory_data(f"/v1/directory/packets/{hash_lower}")
     observations = parse_packet_observations(payload)
-    _reach_cache.set(
-        (_COMMUNITY_ORIGIN, hash_lower),
-        observations,
-        now + REACH_CACHE_TTL_SECONDS,
-        now,
-    )
+    await _cache_community_reach(hash_lower, observations, now)
     return observations
 
 
@@ -518,7 +568,9 @@ async def _community_observers() -> dict[str, ObserverGeo]:
         return cached
     payload = await _community_directory_data("/v1/directory/observers")
     geos = parse_corescope_observers(payload)
-    _observers_cache.set(_COMMUNITY_ORIGIN, geos, now + OBSERVERS_CACHE_TTL_SECONDS, now)
+    _observers_cache.set(
+        _COMMUNITY_ORIGIN, geos, now + COMMUNITY_OBSERVERS_LIVE_TTL_SECONDS, now
+    )
     return geos
 
 
@@ -532,10 +584,11 @@ async def _community_batch_or_fallback(
     result: dict[str, list[ParsedObservation]] = {}
     missing: list[str] = []
     for hash_lower in hashes_lower:
-        cached = _reach_cache.get((_COMMUNITY_ORIGIN, hash_lower), now)
+        cached = await _cached_community_reach(hash_lower, now)
         if cached is not None:
             result[hash_lower] = cached
         else:
+            _remember_community_reach(hash_lower, now)
             missing.append(hash_lower)
     if not missing:
         return result
@@ -559,13 +612,8 @@ async def _community_batch_or_fallback(
         observations = (parsed or {}).get(stored, [])
         if not _usable_observations(observations):
             observations = (parsed or {}).get(hash_lower.upper(), [])
-        if _usable_observations(observations):
-            _reach_cache.set(
-                (_COMMUNITY_ORIGIN, hash_lower),
-                observations,
-                now + REACH_CACHE_TTL_SECONDS,
-                now,
-            )
+        if _usable_observations(observations) or parsed is not None:
+            await _cache_community_reach(hash_lower, observations, now)
             result[hash_lower] = observations
         else:
             still_missing.append(hash_lower)
@@ -676,10 +724,6 @@ async def get_packet_observer_reach_counts(hashes: list[str]) -> PacketObserverR
     if await community_enabled():
         fetched = await _community_batch_or_fallback(normalized)
         geos: dict[str, ObserverGeo] = {}
-        try:
-            geos = await _community_observers()
-        except HTTPException:
-            geos = {}
         counts: dict[str, int] = {}
         for hash_lower in normalized:
             entries = _dedup_entries(fetched.get(hash_lower, []), geos)

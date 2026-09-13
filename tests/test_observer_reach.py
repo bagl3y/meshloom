@@ -506,7 +506,7 @@ class TestCommunityObserverReach:
         assert exc.value.status_code == 500
 
     @pytest.mark.asyncio
-    async def test_community_second_poll_uses_reach_cache(self, test_db):
+    async def test_community_live_poll_bypasses_reach_cache(self, test_db):
         reset_observer_reach_cache()
         from app.services.meshloom_community import update_community
 
@@ -539,7 +539,104 @@ class TestCommunityObserverReach:
             second = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
         assert first.counts["AABBCCDDEEFF0011"] == 1
         assert second.counts["AABBCCDDEEFF0011"] == 1
-        assert sum(1 for path in calls if path.endswith("/observations")) == 1
+        assert sum(1 for path in calls if path.endswith("/observations")) == 2
+
+    @pytest.mark.asyncio
+    async def test_community_frozen_poll_uses_year_cache(self, test_db):
+        reset_observer_reach_cache()
+        from app.services.meshloom_community import update_community
+        from app.services import observer_reach
+
+        await update_community(enabled=True, iata="LYS")
+        calls: list[str] = []
+        clock = {"now": 1_000.0}
+
+        async def fake_data(path: str, method: str = "GET", **_kwargs: object) -> object:
+            calls.append(path)
+            if path.endswith("/observations"):
+                return {
+                    "results": {
+                        "AABBCCDDEEFF0011": [
+                            {
+                                "observer_id": "obs-1",
+                                "observer_name": "Lyon",
+                                "path_json": ["ab"],
+                            }
+                        ]
+                    }
+                }
+            if path.endswith("/observers"):
+                return {"observers": []}
+            return {}
+
+        with (
+            patch(
+                "app.services.directory._community_directory_data",
+                side_effect=fake_data,
+            ),
+            patch.object(observer_reach.time, "time", side_effect=lambda: clock["now"]),
+        ):
+            first = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+            clock["now"] = 1_000.0 + observer_reach.COMMUNITY_LIVE_REACH_SECONDS - 1
+            second = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+            clock["now"] = 1_000.0 + observer_reach.COMMUNITY_LIVE_REACH_SECONDS + 1
+            third = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+        assert first.counts["AABBCCDDEEFF0011"] == 1
+        assert second.counts["AABBCCDDEEFF0011"] == 1
+        assert third.counts["AABBCCDDEEFF0011"] == 1
+        assert sum(1 for path in calls if path.endswith("/observations")) == 2
+
+    @pytest.mark.asyncio
+    async def test_community_live_empty_batch_skips_per_hash_get(self, test_db):
+        reset_observer_reach_cache()
+        from app.services.meshloom_community import update_community
+
+        await update_community(enabled=True, iata="LYS")
+        calls: list[str] = []
+
+        async def fake_data(path: str, method: str = "GET", **_kwargs: object) -> object:
+            calls.append(f"{method} {path}")
+            if path.endswith("/observations"):
+                return {"results": {"AABBCCDDEEFF0011": []}}
+            return {}
+
+        with patch(
+            "app.services.directory._community_directory_data",
+            side_effect=fake_data,
+        ):
+            result = await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+        assert result.counts["AABBCCDDEEFF0011"] == 0
+        assert any(item.endswith("/observations") for item in calls)
+        assert not any("/packets/aabbccddeeff0011" in item.lower() for item in calls)
+
+    @pytest.mark.asyncio
+    async def test_community_does_not_year_cache_empty_observations(self, test_db):
+        reset_observer_reach_cache()
+        from app.services.meshloom_community import update_community
+        from app.services import observer_reach
+
+        await update_community(enabled=True, iata="LYS")
+        calls: list[str] = []
+        clock = {"now": 1_000.0}
+
+        async def fake_data(path: str, method: str = "GET", **_kwargs: object) -> object:
+            calls.append(path)
+            if path.endswith("/observations"):
+                return {"results": {"AABBCCDDEEFF0011": []}}
+            return {}
+
+        with (
+            patch(
+                "app.services.directory._community_directory_data",
+                side_effect=fake_data,
+            ),
+            patch.object(observer_reach.time, "time", side_effect=lambda: clock["now"]),
+        ):
+            await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+            clock["now"] = 1_000.0 + observer_reach.COMMUNITY_LIVE_REACH_SECONDS
+            await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+            await get_packet_observer_reach_counts(["AABBCCDDEEFF0011"])
+        assert sum(1 for path in calls if path.endswith("/observations")) == 3
 
 
 class TestObserverReachTtlLru:

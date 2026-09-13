@@ -8,7 +8,6 @@ import {
   messageAgeMs,
   observerReachPollIntervalMs,
   OUTGOING_REACH_DELAY_MS,
-  STALE_REACH_CACHE_MS,
 } from '../utils/observerReach';
 
 const DEBOUNCE_MS = 250;
@@ -120,7 +119,7 @@ export function useVisibleObserverReach(options: {
         const interval = msg != null ? observerReachPollIntervalMs(messageAgeMs(msg, now)) : null;
         const due =
           interval == null
-            ? cached == null || now - cached.at >= STALE_REACH_CACHE_MS
+            ? cached == null
             : last == null || now - last >= interval;
         if (due) {
           toFetch.push(hash);

@@ -92,7 +92,7 @@ describe('useVisibleObserverReach', () => {
     expect(getCounts).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(120_000);
     });
     expect(getCounts).toHaveBeenCalledTimes(1);
   });
