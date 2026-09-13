@@ -176,9 +176,12 @@ class RawPacketRepository:
                             )
             if scanned >= max_scan:
                 break
-            if fingerprints and all(len(seen) >= max_per_hash for seen in fingerprints.values()):
-                if len(fingerprints) >= max_hashes:
-                    break
+            if (
+                fingerprints
+                and len(fingerprints) >= max_hashes
+                and all(len(seen) >= max_per_hash for seen in fingerprints.values())
+            ):
+                break
 
         return scanned, packet_count, samples
 
