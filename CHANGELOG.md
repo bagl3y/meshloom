@@ -1,3 +1,33 @@
+## [4.4.0] - 2026-09-13
+
+This release is about the ears on your messages — the badge showing which other radios heard a packet. They come back when they were missing, they stop announcing a direct hop for a node on the other side of the country, and they stop asking the shared directory the same settled question forever.
+
+### What's new
+
+- **Every listener counts again.** The shared directory reports some of the radios it knows without a public key, and Meshloom was quietly discarding exactly those. That is why messages showed no ear at all, or fewer than had really heard them. All of them are counted now, and a radio known through two different directories counts once instead of twice.
+- **Distant nodes no longer look like neighbours.** Hop details are passed along as the directory reports them, instead of being rebuilt on the way through, so an observer hundreds of kilometres away is no longer shown as a direct contact at zero hops.
+- **A count that fails to load tries again.** If the directory was unreachable on the first attempt, the badge stayed empty until you reloaded the page. Meshloom now retries, spacing the attempts out so an unreachable directory is not hammered.
+- **Settled counts stay settled.** A message older than ten minutes will never gain a new listener, so the directory now says when a count is final and Meshloom keeps it. Scrolling back through a long conversation no longer asks again about every message you pass.
+
+Also: a count is only treated as final once an answer has actually been received, so a directory that was briefly down no longer freezes an empty badge in place for good.
+
+---
+
+### Français
+
+Cette version porte sur les oreilles de vos messages — le badge qui indique quelles autres radios ont entendu un paquet. Elles reviennent quand elles manquaient, elles cessent d’annoncer un saut direct pour un nœud à l’autre bout du pays, et elles cessent de reposer indéfiniment à l’annuaire partagé une question déjà tranchée.
+
+#### Quoi de neuf
+
+- **Chaque auditeur compte à nouveau.** L’annuaire partagé signale certaines des radios qu’il connaît sans clé publique, et Meshloom écartait silencieusement celles-là précisément. D’où des messages sans aucune oreille, ou avec moins d’oreilles que de radios les ayant réellement entendus. Toutes sont désormais comptées, et une radio connue via deux annuaires différents compte une fois au lieu de deux.
+- **Les nœuds lointains ne passent plus pour des voisins.** Les détails de saut sont transmis tels que l’annuaire les rapporte, au lieu d’être reconstruits au passage : un observateur à des centaines de kilomètres n’est plus présenté comme un contact direct à zéro saut.
+- **Un comptage qui échoue réessaie.** Si l’annuaire était injoignable au premier essai, le badge restait vide jusqu’au rechargement de la page. Meshloom réessaie maintenant, en espaçant les tentatives pour ne pas marteler un annuaire hors service.
+- **Les comptages tranchés le restent.** Un message de plus de dix minutes ne gagnera jamais un nouvel auditeur : l’annuaire indique donc quand un comptage est définitif, et Meshloom le conserve. Remonter une longue conversation ne réinterroge plus chaque message traversé.
+
+Aussi : un comptage n’est considéré comme définitif qu’une fois une réponse réellement reçue, si bien qu’un annuaire momentanément hors service ne fige plus un badge vide pour de bon.
+
+---
+
 ## [4.3.0] - 2026-09-13
 
 This release adds an optional shared directory of nearby nodes, gathers every notification setting into one screen, and makes conversations easier to read.
