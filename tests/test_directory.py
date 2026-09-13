@@ -213,6 +213,35 @@ class TestResolveDirectoryHops:
         assert mock_client.get.call_args.kwargs["params"]["hops"] == "A1B2"
 
     @pytest.mark.asyncio
+    async def test_community_hops_use_sqlite_cache(self, test_db):
+        from app.services.meshloom_community import update_community
+
+        await update_community(enabled=True, iata="LYS")
+        calls = {"n": 0}
+
+        async def fake_data(*_args: object, **_kwargs: object) -> object:
+            calls["n"] += 1
+            return {
+                "resolved": {
+                    "A1B2": {
+                        "name": "HillTop",
+                        "confidence": "unique",
+                        "conflicts": [],
+                    }
+                }
+            }
+
+        with patch(
+            "app.services.directory._community_directory_data",
+            side_effect=fake_data,
+        ):
+            first = await resolve_directory_hops(["A1B2"])
+            second = await resolve_directory_hops(["A1B2"])
+        assert first.resolved["A1B2"].name == "HillTop"
+        assert second.resolved["A1B2"].name == "HillTop"
+        assert calls["n"] == 1
+
+    @pytest.mark.asyncio
     async def test_reset_wipes_directory_cache_only(self, test_db):
         await DirectoryHopCacheRepository.upsert("A1B2", 2, "HillTop", "corescope", 9_999_999_999)
         result = await post_reset_directory_cache()
@@ -357,6 +386,38 @@ class TestListDirectoryMapNodes:
         assert mock_client.get.call_count == 1
         assert mock_client.get.call_args.args[0] == "https://corescope.test/api/nodes"
         assert mock_client.get.call_args.kwargs["params"]["role"] == "repeater"
+
+    @pytest.mark.asyncio
+    async def test_community_nodes_cache_skips_second_stats_call(self, test_db):
+        from app.services.meshloom_community import update_community
+
+        reset_directory_nodes_cache()
+        await update_community(enabled=True, iata="LYS")
+        calls = {"n": 0}
+
+        async def fake_data(*_args: object, **_kwargs: object) -> object:
+            calls["n"] += 1
+            return {
+                "nodes": [
+                    {
+                        "public_key": "11" * 32,
+                        "name": "NetRelay",
+                        "role": "repeater",
+                        "lat": 45.0,
+                        "lon": 5.0,
+                    }
+                ]
+            }
+
+        with patch(
+            "app.services.directory._community_directory_data",
+            side_effect=fake_data,
+        ):
+            first = await list_directory_map_nodes()
+            second = await list_directory_map_nodes()
+        assert first.nodes[0].name == "NetRelay"
+        assert second.nodes[0].name == "NetRelay"
+        assert calls["n"] == 1
 
 
 class TestDirectoryReach:

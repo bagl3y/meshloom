@@ -237,6 +237,11 @@ async def update_community(
         broker_host=next_broker if broker_host is not None else None,
         api_base=next_api if api_base is not None else None,
     )
+    from app.services.directory import reset_directory_nodes_cache
+    from app.services.observer_reach import reset_observer_reach_cache
+
+    reset_directory_nodes_cache()
+    reset_observer_reach_cache()
     state = await get_community_effective()
     await _reload_system_publisher()
     return state

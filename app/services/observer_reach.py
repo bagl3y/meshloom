@@ -488,11 +488,38 @@ async def _fetch_batch_or_fallback(
     return result
 
 
+_COMMUNITY_ORIGIN = "community"
+
+
 async def _community_packet_observations(hash_lower: str) -> list[ParsedObservation]:
     from app.services.directory import _community_directory_data
 
+    now = time.time()
+    cached = _reach_cache.get((_COMMUNITY_ORIGIN, hash_lower), now)
+    if cached is not None:
+        return cached
     payload = await _community_directory_data(f"/v1/directory/packets/{hash_lower}")
-    return parse_packet_observations(payload)
+    observations = parse_packet_observations(payload)
+    _reach_cache.set(
+        (_COMMUNITY_ORIGIN, hash_lower),
+        observations,
+        now + REACH_CACHE_TTL_SECONDS,
+        now,
+    )
+    return observations
+
+
+async def _community_observers() -> dict[str, ObserverGeo]:
+    from app.services.directory import _community_directory_data
+
+    now = time.time()
+    cached = _observers_cache.get(_COMMUNITY_ORIGIN, now)
+    if cached is not None:
+        return cached
+    payload = await _community_directory_data("/v1/directory/observers")
+    geos = parse_corescope_observers(payload)
+    _observers_cache.set(_COMMUNITY_ORIGIN, geos, now + OBSERVERS_CACHE_TTL_SECONDS, now)
+    return geos
 
 
 async def _community_batch_or_fallback(
@@ -501,12 +528,24 @@ async def _community_batch_or_fallback(
     """Stats batch query, then per-hash GET. CoreScope's observations POST is ingest."""
     from app.services.directory import _community_directory_data
 
+    now = time.time()
+    result: dict[str, list[ParsedObservation]] = {}
+    missing: list[str] = []
+    for hash_lower in hashes_lower:
+        cached = _reach_cache.get((_COMMUNITY_ORIGIN, hash_lower), now)
+        if cached is not None:
+            result[hash_lower] = cached
+        else:
+            missing.append(hash_lower)
+    if not missing:
+        return result
+
     parsed: dict[str, list[ParsedObservation]] | None = None
     try:
         payload = await _community_directory_data(
             "/v1/directory/packets/observations",
             method="POST",
-            body={"hashes": hashes_lower},
+            body={"hashes": missing},
         )
         parsed = parse_batch_observations(payload) if payload is not None else None
     except HTTPException as exc:
@@ -514,18 +553,23 @@ async def _community_batch_or_fallback(
             raise
         parsed = None
 
-    result: dict[str, list[ParsedObservation]] = {}
-    missing: list[str] = []
-    for hash_lower in hashes_lower:
+    still_missing: list[str] = []
+    for hash_lower in missing:
         stored = canonical_packet_hash(hash_lower) or hash_lower.upper()
         observations = (parsed or {}).get(stored, [])
         if not _usable_observations(observations):
             observations = (parsed or {}).get(hash_lower.upper(), [])
         if _usable_observations(observations):
+            _reach_cache.set(
+                (_COMMUNITY_ORIGIN, hash_lower),
+                observations,
+                now + REACH_CACHE_TTL_SECONDS,
+                now,
+            )
             result[hash_lower] = observations
         else:
-            missing.append(hash_lower)
-    if not missing:
+            still_missing.append(hash_lower)
+    if not still_missing:
         return result
 
     semaphore = asyncio.Semaphore(BATCH_FALLBACK_CONCURRENCY)
@@ -534,7 +578,7 @@ async def _community_batch_or_fallback(
         async with semaphore:
             return hash_lower, await _community_packet_observations(hash_lower)
 
-    fetched = await asyncio.gather(*(one(h) for h in missing), return_exceptions=True)
+    fetched = await asyncio.gather(*(one(h) for h in still_missing), return_exceptions=True)
     errors: list[HTTPException] = []
     for item in fetched:
         if isinstance(item, HTTPException):
@@ -546,13 +590,12 @@ async def _community_batch_or_fallback(
         result[hash_lower] = observations
     if not result and errors:
         raise errors[0]
-    for hash_lower in missing:
+    for hash_lower in still_missing:
         result.setdefault(hash_lower, [])
     return result
 
 
 async def get_packet_observer_reach(raw_hash: str) -> PacketObserverReachResponse:
-    from app.services.directory import _community_directory_data
     from app.services.meshloom_community import community_enabled
 
     hash_lower = validate_packet_hash_param(raw_hash)
@@ -560,8 +603,7 @@ async def get_packet_observer_reach(raw_hash: str) -> PacketObserverReachRespons
         fetched = await _community_batch_or_fallback([hash_lower])
         observations = fetched.get(hash_lower, [])
         try:
-            geos_payload = await _community_directory_data("/v1/directory/observers")
-            geos = parse_corescope_observers(geos_payload)
+            geos = await _community_observers()
         except HTTPException:
             geos = {}
         entries = _dedup_entries(observations, geos)
@@ -616,7 +658,6 @@ async def _finish_observer_reach(
 
 
 async def get_packet_observer_reach_counts(hashes: list[str]) -> PacketObserverReachCountsResponse:
-    from app.services.directory import _community_directory_data
     from app.services.meshloom_community import community_enabled
 
     if len(hashes) > MESHLOOM_BATCH_MAX:
@@ -636,8 +677,7 @@ async def get_packet_observer_reach_counts(hashes: list[str]) -> PacketObserverR
         fetched = await _community_batch_or_fallback(normalized)
         geos: dict[str, ObserverGeo] = {}
         try:
-            geos_payload = await _community_directory_data("/v1/directory/observers")
-            geos = parse_corescope_observers(geos_payload)
+            geos = await _community_observers()
         except HTTPException:
             geos = {}
         counts: dict[str, int] = {}

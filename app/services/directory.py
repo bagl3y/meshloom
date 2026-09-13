@@ -293,39 +293,52 @@ async def _community_directory_data(
     return await stats_directory_get(path, params=params)
 
 
+def _hits_from_stats_or_corescope(
+    prefixes: list[str],
+    fetched: dict[str, ParsedDirectoryHop | None],
+) -> dict[str, DirectoryHopHit]:
+    resolved: dict[str, DirectoryHopHit] = {}
+    for prefix in prefixes:
+        parsed = fetched.get(prefix)
+        if parsed and parsed.name:
+            resolved[prefix] = DirectoryHopHit(
+                name=parsed.name,
+                source="corescope",
+                hash_width=hash_width_for_prefix(prefix),
+                public_key=parsed.public_key,
+                lat=parsed.lat,
+                lon=parsed.lon,
+            )
+    return resolved
+
+
+async def _write_hop_cache(
+    prefixes: list[str],
+    fetched: dict[str, ParsedDirectoryHop | None],
+) -> None:
+    expires_at = int(time.time()) + CACHE_TTL_SECONDS
+    for prefix in prefixes:
+        if prefix not in fetched:
+            continue
+        parsed = fetched[prefix]
+        await DirectoryHopCacheRepository.upsert(
+            prefix,
+            hash_width_for_prefix(prefix),
+            parsed.name if parsed else None,
+            DIRECTORY_SOURCE_CORESCOPE,
+            expires_at,
+            public_key=parsed.public_key if parsed else None,
+            lat=parsed.lat if parsed else None,
+            lon=parsed.lon if parsed else None,
+        )
+
+
 async def resolve_directory_hops(hops: list[str]) -> DirectoryResolveHopsResponse:
     prefixes = validate_hop_prefixes(hops)
-    stats_data = await _community_directory_data(
-        "/v1/directory/resolve-hops",
-        params={"hops": ",".join(prefixes)} if prefixes else {"hops": ""},
-    )
-    if stats_data is not None:
-        fetched = parse_corescope_resolved_hits(stats_data)
-        resolved: dict[str, DirectoryHopHit] = {}
-        for prefix in prefixes:
-            parsed = fetched.get(prefix)
-            if parsed and parsed.name:
-                resolved[prefix] = DirectoryHopHit(
-                    name=parsed.name,
-                    source="corescope",
-                    hash_width=hash_width_for_prefix(prefix),
-                    public_key=parsed.public_key,
-                    lat=parsed.lat,
-                    lon=parsed.lon,
-                )
-        return DirectoryResolveHopsResponse(resolved=resolved)
-
-    settings = await AppSettingsRepository.get()
-    origin = (settings.directory_url or "").strip()
-    if not settings.directory_enabled or not origin:
-        return DirectoryResolveHopsResponse()
-
     keys = [(prefix, hash_width_for_prefix(prefix)) for prefix in prefixes]
     cached = await DirectoryHopCacheRepository.get_many(keys)
     resolved: dict[str, DirectoryHopHit] = {}
     misses: list[str] = []
-    now = int(time.time())
-
     for prefix, hash_width in keys:
         row = cached.get((prefix, hash_width))
         if row is None or row.expired:
@@ -335,35 +348,27 @@ async def resolve_directory_hops(hops: list[str]) -> DirectoryResolveHopsRespons
         if hit:
             resolved[prefix] = hit
 
-    if misses:
-        fetched = await _fetch_corescope_hops(origin, misses)
-        expires_at = now + CACHE_TTL_SECONDS
-        for prefix in misses:
-            if prefix not in fetched:
-                continue
-            parsed = fetched[prefix]
-            name = parsed.name if parsed else None
-            hash_width = hash_width_for_prefix(prefix)
-            await DirectoryHopCacheRepository.upsert(
-                prefix,
-                hash_width,
-                name,
-                DIRECTORY_SOURCE_CORESCOPE,
-                expires_at,
-                public_key=parsed.public_key if parsed else None,
-                lat=parsed.lat if parsed else None,
-                lon=parsed.lon if parsed else None,
-            )
-            if parsed and parsed.name:
-                resolved[prefix] = DirectoryHopHit(
-                    name=parsed.name,
-                    source="corescope",
-                    hash_width=hash_width,
-                    public_key=parsed.public_key,
-                    lat=parsed.lat,
-                    lon=parsed.lon,
-                )
+    if not misses:
+        return DirectoryResolveHopsResponse(resolved=resolved)
 
+    stats_data = await _community_directory_data(
+        "/v1/directory/resolve-hops",
+        params={"hops": ",".join(misses)},
+    )
+    if stats_data is not None:
+        fetched = parse_corescope_resolved_hits(stats_data)
+        await _write_hop_cache(misses, fetched)
+        resolved.update(_hits_from_stats_or_corescope(misses, fetched))
+        return DirectoryResolveHopsResponse(resolved=resolved)
+
+    settings = await AppSettingsRepository.get()
+    origin = (settings.directory_url or "").strip()
+    if not settings.directory_enabled or not origin:
+        return DirectoryResolveHopsResponse(resolved=resolved)
+
+    fetched = await _fetch_corescope_hops(origin, misses)
+    await _write_hop_cache(misses, fetched)
+    resolved.update(_hits_from_stats_or_corescope(misses, fetched))
     return DirectoryResolveHopsResponse(resolved=resolved)
 
 
@@ -482,12 +487,16 @@ async def _fetch_corescope_nodes_page(
 async def list_directory_map_nodes() -> DirectoryMapNodesResponse:
     """Repeater GPS pins from CoreScope. Empty when the directory is off."""
     global _nodes_cache
+    now = time.time()
+    if _nodes_cache is not None and _nodes_cache[0] > now and _nodes_cache[1] == "community":
+        return DirectoryMapNodesResponse(nodes=list(_nodes_cache[2]))
     stats_data = await _community_directory_data(
         "/v1/directory/nodes",
         params={"role": "repeater", "limit": NODES_PAGE_SIZE, "offset": 0},
     )
     if stats_data is not None:
         nodes, _total = parse_corescope_map_nodes(stats_data)
+        _nodes_cache = (now + NODES_CACHE_TTL_SECONDS, "community", nodes)
         return DirectoryMapNodesResponse(nodes=nodes)
 
     settings = await AppSettingsRepository.get()
